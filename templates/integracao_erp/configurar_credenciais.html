@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Configurar Credenciais do ERP</h5>
+                <a href="{{ url_for('integracao_erp.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <p><i class="fas fa-info-circle"></i> <strong>Informação:</strong></p>
+                    <p>Configure suas credenciais de acesso ao sistema ERP SOX.</p>
+                    <p>Estas credenciais serão utilizadas para a importação automática dos relatórios.</p>
+                    <p>Suas credenciais são armazenadas de forma segura e criptografada no banco de dados.</p>
+                </div>
+
+                <form method="POST" action="{{ url_for('integracao_erp.configurar_credenciais') }}">
+                    <div class="mb-3">
+                        <label for="usuario_erp" class="form-label">Usuário do ERP</label>
+                        <input type="text" class="form-control" id="usuario_erp" name="usuario_erp" 
+                               value="{{ credenciais.usuario if credenciais else '' }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="senha_erp" class="form-label">Senha do ERP</label>
+                        <input type="password" class="form-control" id="senha_erp" name="senha_erp" 
+                               placeholder="{% if credenciais %}Digite para alterar a senha atual{% else %}Digite sua senha do ERP{% endif %}" 
+                               {% if not credenciais %}required{% endif %}>
+                        {% if credenciais %}
+                        <div class="form-text">Deixe em branco para manter a senha atual.</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {{ 'Atualizar' if credenciais else 'Salvar' }} Credenciais
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

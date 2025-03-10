@@ -1,0 +1,542 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Editar Itens do Checklist - {{ modelo.nome }}</h5>
+                <div>
+                    <a href="{{ url_for('checklist.listar_modelos') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <div class="d-flex">
+                        <div class="me-3">
+                            <i class="fas fa-info-circle fa-2x"></i>
+                        </div>
+                        <div>
+                            <h5 class="alert-heading">Informações do Modelo</h5>
+                            <p class="mb-0"><strong>Tipo de Equipamento:</strong> {{ modelo.tipo_equipamento }}</p>
+                            <p class="mb-0"><strong>Frequência:</strong> 
+                                {% if modelo.frequencia == 'diario' %}Diário
+                                {% elif modelo.frequencia == 'semanal' %}Semanal
+                                {% elif modelo.frequencia == 'quinzenal' %}Quinzenal
+                                {% elif modelo.frequencia == 'mensal' %}Mensal
+                                {% elif modelo.frequencia == 'trimestral' %}Trimestral
+                                {% elif modelo.frequencia == 'semestral' %}Semestral
+                                {% elif modelo.frequencia == 'anual' %}Anual
+                                {% endif %}
+                            </p>
+                            <p class="mb-0"><strong>Descrição:</strong> {{ modelo.descricao or 'Não informada' }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Adicionar novo item -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Adicionar novo item</h6>
+                    </div>
+                    <div class="card-body">
+                        <form id="formNovoItem">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="texto" class="form-label">Texto da Pergunta/Item *</label>
+                                    <input type="text" class="form-control" id="texto" required>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="tipo_resposta" class="form-label">Tipo de Resposta *</label>
+                                    <select class="form-select" id="tipo_resposta" required>
+                                        <option value="">Selecione...</option>
+                                        <option value="sim_nao">Sim/Não</option>
+                                        <option value="valor_numerico">Valor Numérico</option>
+                                        <option value="texto">Texto</option>
+                                        <option value="selecao">Seleção (múltipla escolha)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="obrigatorio" class="form-label">Obrigatório?</label>
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="obrigatorio" checked>
+                                        <label class="form-check-label" for="obrigatorio">Sim</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Configurações específicas de cada tipo de resposta -->
+                            <div id="configNumerico" class="tipo-config mb-3" style="display: none;">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label for="valor_minimo" class="form-label">Valor Mínimo</label>
+                                        <input type="number" class="form-control" id="valor_minimo" step="any">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="valor_maximo" class="form-label">Valor Máximo</label>
+                                        <input type="number" class="form-control" id="valor_maximo" step="any">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="unidade" class="form-label">Unidade</label>
+                                        <input type="text" class="form-control" id="unidade" placeholder="Ex: kg, mm, °C">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="configSelecao" class="tipo-config mb-3" style="display: none;">
+                                <label class="form-label">Opções</label>
+                                <div id="opcoesContainer">
+                                    <div class="input-group mb-2">
+                                        <input type="text" class="form-control opcao-input" placeholder="Opção 1">
+                                        <button class="btn btn-outline-danger btn-remover-opcao" type="button">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnAddOpcao">
+                                    <i class="fas fa-plus"></i> Adicionar Opção
+                                </button>
+                            </div>
+                            
+                            <div class="d-flex justify-content-end">
+                                <button type="submit" class="btn btn-primary" id="btnSalvarItem">
+                                    <i class="fas fa-plus"></i> Adicionar Item
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Lista de itens existentes -->
+                <h5 class="mb-3">Itens do Checklist</h5>
+                <div id="listaItens" class="list-group mb-3">
+                    {% if itens %}
+                        {% for item in itens %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ item.id }}">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold">{{ item.texto }} 
+                                    {% if item.obrigatorio %}
+                                    <span class="badge bg-danger">Obrigatório</span>
+                                    {% endif %}
+                                </div>
+                                <small class="text-muted">
+                                    {% if item.tipo_resposta == 'sim_nao' %}
+                                        Tipo: Sim/Não
+                                    {% elif item.tipo_resposta == 'valor_numerico' %}
+                                        Tipo: Valor Numérico 
+                                        {% if item.valor_minimo is not none %} | Min: {{ item.valor_minimo }}{% endif %}
+                                        {% if item.valor_maximo is not none %} | Max: {{ item.valor_maximo }}{% endif %}
+                                        {% if item.unidade %} | Unidade: {{ item.unidade }}{% endif %}
+                                    {% elif item.tipo_resposta == 'texto' %}
+                                        Tipo: Texto
+                                    {% elif item.tipo_resposta == 'selecao' %}
+                                        Tipo: Seleção | Opções: {{ item.valores_possiveis|default('[]')|replace('"', '')|replace('[', '')|replace(']', '')|replace(',', ', ') }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <div class="d-flex">
+                                <button class="btn btn-sm btn-outline-warning btn-editar-item me-1" data-id="{{ item.id }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger btn-remover-item" data-id="{{ item.id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                                <span class="ms-2 handle" title="Arrastar para reordenar">
+                                    <i class="fas fa-grip-vertical"></i>
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> Nenhum item adicionado. Use o formulário acima para adicionar itens ao checklist.
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <button class="btn btn-success" id="btnSalvarOrdem" {% if not itens %}disabled{% endif %}>
+                        <i class="fas fa-save"></i> Salvar Ordem
+                    </button>
+                    <a href="{{ url_for('checklist.listar_modelos') }}" class="btn btn-primary">
+                        <i class="fas fa-check"></i> Concluir
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edição de Item -->
+<div class="modal fade" id="editarItemModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditarItem">
+                    <input type="hidden" id="editar_item_id">
+                    <div class="mb-3">
+                        <label for="editar_texto" class="form-label">Texto da Pergunta/Item *</label>
+                        <input type="text" class="form-control" id="editar_texto" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_tipo_resposta" class="form-label">Tipo de Resposta *</label>
+                        <select class="form-select" id="editar_tipo_resposta" required disabled>
+                            <option value="sim_nao">Sim/Não</option>
+                            <option value="valor_numerico">Valor Numérico</option>
+                            <option value="texto">Texto</option>
+                            <option value="selecao">Seleção (múltipla escolha)</option>
+                        </select>
+                        <div class="form-text text-warning">O tipo de resposta não pode ser alterado.</div>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="editar_obrigatorio">
+                            <label class="form-check-label" for="editar_obrigatorio">Item obrigatório</label>
+                        </div>
+                    </div>
+                    
+                    <!-- Configurações de valor numérico -->
+                    <div id="editar_configNumerico" class="editar-tipo-config mb-3" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="editar_valor_minimo" class="form-label">Valor Mínimo</label>
+                                <input type="number" class="form-control" id="editar_valor_minimo" step="any">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="editar_valor_maximo" class="form-label">Valor Máximo</label>
+                                <input type="number" class="form-control" id="editar_valor_maximo" step="any">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="editar_unidade" class="form-label">Unidade</label>
+                                <input type="text" class="form-control" id="editar_unidade" placeholder="Ex: kg, mm, °C">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Configurações de seleção -->
+                    <div id="editar_configSelecao" class="editar-tipo-config mb-3" style="display: none;">
+                        <label class="form-label">Opções</label>
+                        <div id="editar_opcoesContainer">
+                            <!-- As opções serão adicionadas dinamicamente via JavaScript -->
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="editar_btnAddOpcao">
+                            <i class="fas fa-plus"></i> Adicionar Opção
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarEdicao">Salvar Alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Configuração de drag-and-drop para reordenar os itens
+    const listaItens = document.getElementById('listaItens');
+    new Sortable(listaItens, {
+        handle: '.handle',
+        animation: 150,
+        onEnd: function() {
+            document.getElementById('btnSalvarOrdem').disabled = false;
+        }
+    });
+    
+    // Mostrar/esconder configurações específicas conforme o tipo de resposta
+    document.getElementById('tipo_resposta').addEventListener('change', function() {
+        const tipoResposta = this.value;
+        document.querySelectorAll('.tipo-config').forEach(el => el.style.display = 'none');
+        
+        if (tipoResposta === 'valor_numerico') {
+            document.getElementById('configNumerico').style.display = 'block';
+        } else if (tipoResposta === 'selecao') {
+            document.getElementById('configSelecao').style.display = 'block';
+        }
+    });
+    
+    // Adicionar opção à seleção
+    document.getElementById('btnAddOpcao').addEventListener('click', function() {
+        const container = document.getElementById('opcoesContainer');
+        const opcaoCounter = container.children.length + 1;
+        
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        div.innerHTML = `
+            <input type="text" class="form-control opcao-input" placeholder="Opção ${opcaoCounter}">
+            <button class="btn btn-outline-danger btn-remover-opcao" type="button">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        
+        container.appendChild(div);
+        
+        // Adicionar evento para remover opção
+        div.querySelector('.btn-remover-opcao').addEventListener('click', function() {
+            div.remove();
+        });
+    });
+    
+    // Remover opção de seleção
+    document.querySelectorAll('.btn-remover-opcao').forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.closest('.input-group').remove();
+        });
+    });
+    
+    // Enviar formulário de novo item
+    document.getElementById('formNovoItem').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const texto = document.getElementById('texto').value;
+        const tipoResposta = document.getElementById('tipo_resposta').value;
+        const obrigatorio = document.getElementById('obrigatorio').checked;
+        
+        // Dados específicos conforme o tipo de resposta
+        let dados = {
+            texto: texto,
+            tipo_resposta: tipoResposta,
+            obrigatorio: obrigatorio,
+            ordem: document.querySelectorAll('#listaItens .list-group-item').length + 1
+        };
+        
+        if (tipoResposta === 'valor_numerico') {
+            dados.valor_minimo = document.getElementById('valor_minimo').value || null;
+            dados.valor_maximo = document.getElementById('valor_maximo').value || null;
+            dados.unidade = document.getElementById('unidade').value || null;
+        } else if (tipoResposta === 'selecao') {
+            const opcoes = [];
+            document.querySelectorAll('#opcoesContainer .opcao-input').forEach(input => {
+                if (input.value.trim()) {
+                    opcoes.push(input.value.trim());
+                }
+            });
+            dados.valores_possiveis = opcoes;
+        }
+        
+        // Enviar requisição para adicionar item
+        fetch('/checklist/modelos/{{ modelo.id }}/item', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Item adicionado com sucesso!');
+                window.location.reload(); // Recarregar para mostrar o novo item
+            } else {
+                alert('Erro ao adicionar item: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao processar requisição');
+        });
+    });
+    
+    // Salvar ordem dos itens
+    document.getElementById('btnSalvarOrdem').addEventListener('click', function() {
+        const itens = document.querySelectorAll('#listaItens .list-group-item');
+        const itemIds = Array.from(itens).map(item => item.dataset.id);
+        
+        fetch('/checklist/modelos/{{ modelo.id }}/reordenar', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ item_ids: itemIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Ordem salva com sucesso!');
+                this.disabled = true;
+            } else {
+                alert('Erro ao salvar ordem: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao processar requisição');
+        });
+    });
+    
+    // Remover item
+    document.querySelectorAll('.btn-remover-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!confirm('Tem certeza que deseja remover este item?')) {
+                return;
+            }
+            
+            const itemId = this.dataset.id;
+            
+            fetch('/checklist/modelos/item/' + itemId, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    this.closest('.list-group-item').remove();
+                    alert('Item removido com sucesso!');
+                } else {
+                    alert('Erro ao remover item: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao processar requisição');
+            });
+        });
+    });
+    
+    // Editar item
+    document.querySelectorAll('.btn-editar-item').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const itemId = this.dataset.id;
+            const item = this.closest('.list-group-item');
+            const texto = item.querySelector('.fw-bold').childNodes[0].textContent.trim();
+            
+            // Extrair informações detalhadas do item via dataset
+            const itemInfo = JSON.parse(JSON.stringify(item.dataset));
+            
+            document.getElementById('editar_item_id').value = itemId;
+            document.getElementById('editar_texto').value = texto;
+            document.getElementById('editar_tipo_resposta').value = itemInfo.tipoResposta;
+            document.getElementById('editar_obrigatorio').checked = itemInfo.obrigatorio === "true";
+            
+            if (itemInfo.tipoResposta === 'valor_numerico') {
+                document.getElementById('editar_configNumerico').style.display = 'block';
+                document.getElementById('editar_valor_minimo').value = itemInfo.valorMinimo || '';
+                document.getElementById('editar_valor_maximo').value = itemInfo.valorMaximo || '';
+                document.getElementById('editar_unidade').value = itemInfo.unidade || '';
+            } else if (itemInfo.tipoResposta === 'selecao') {
+                document.getElementById('editar_configSelecao').style.display = 'block';
+                
+                // Preencher opções
+                const opcoesContainer = document.getElementById('editar_opcoesContainer');
+                opcoesContainer.innerHTML = '';
+                
+                if (itemInfo.valoresPossiveis) {
+                    const opcoes = JSON.parse(itemInfo.valoresPossiveis);
+                    opcoes.forEach((opcao, index) => {
+                        const div = document.createElement('div');
+                        div.className = 'input-group mb-2';
+                        div.innerHTML = `
+                            <input type="text" class="form-control opcao-input" value="${opcao}">
+                            <button class="btn btn-outline-danger btn-remover-opcao" type="button">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        `;
+                        opcoesContainer.appendChild(div);
+                        
+                        // Adicionar evento para remover opção
+                        div.querySelector('.btn-remover-opcao').addEventListener('click', function() {
+                            div.remove();
+                        });
+                    });
+                }
+            }
+            
+            // Abrir modal
+            const modal = new bootstrap.Modal(document.getElementById('editarItemModal'));
+            modal.show();
+        });
+    });
+    
+    // Adicionar opção ao editar
+    document.getElementById('editar_btnAddOpcao').addEventListener('click', function() {
+        const container = document.getElementById('editar_opcoesContainer');
+        const opcaoCounter = container.children.length + 1;
+        
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        div.innerHTML = `
+            <input type="text" class="form-control opcao-input" placeholder="Opção ${opcaoCounter}">
+            <button class="btn btn-outline-danger btn-remover-opcao" type="button">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        
+        container.appendChild(div);
+        
+        // Adicionar evento para remover opção
+        div.querySelector('.btn-remover-opcao').addEventListener('click', function() {
+            div.remove();
+        });
+    });
+    
+    // Salvar edição de item
+    document.getElementById('btnSalvarEdicao').addEventListener('click', function() {
+        const itemId = document.getElementById('editar_item_id').value;
+        const texto = document.getElementById('editar_texto').value;
+        const tipoResposta = document.getElementById('editar_tipo_resposta').value;
+        const obrigatorio = document.getElementById('editar_obrigatorio').checked;
+        
+        if (!texto) {
+            alert('Preencha o texto do item');
+            return;
+        }
+        
+        // Dados específicos conforme o tipo de resposta
+        let dados = {
+            texto: texto,
+            tipo_resposta: tipoResposta,
+            obrigatorio: obrigatorio
+        };
+        
+        if (tipoResposta === 'valor_numerico') {
+            dados.valor_minimo = document.getElementById('editar_valor_minimo').value || null;
+            dados.valor_maximo = document.getElementById('editar_valor_maximo').value || null;
+            dados.unidade = document.getElementById('editar_unidade').value || null;
+        } else if (tipoResposta === 'selecao') {
+            const opcoes = [];
+            document.querySelectorAll('#editar_opcoesContainer .opcao-input').forEach(input => {
+                if (input.value.trim()) {
+                    opcoes.push(input.value.trim());
+                }
+            });
+            dados.valores_possiveis = opcoes;
+        }
+        
+        // Enviar requisição para atualizar item
+        fetch('/checklist/modelos/item/' + itemId, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Item atualizado com sucesso!');
+                
+                // Fechar modal e recarregar página
+                bootstrap.Modal.getInstance(document.getElementById('editarItemModal')).hide();
+                window.location.reload();
+            } else {
+                alert('Erro ao atualizar item: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao processar requisição');
+        });
+    });
+});
+</script>
+{% endblock %}

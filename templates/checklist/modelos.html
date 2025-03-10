@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Modelos de Checklist</h5>
+                <div>
+                    {% if pode_editar %}
+                    <a href="{{ url_for('checklist.novo_modelo') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-plus"></i> Novo Modelo
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('checklist.index') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Filtros -->
+                <form method="GET" action="{{ url_for('checklist.listar_modelos') }}" class="mb-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="nome" class="form-label">Nome</label>
+                                <input type="text" class="form-control" id="nome" name="nome" value="{{ filtros.nome }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="tipo" class="form-label">Tipo de Equipamento</label>
+                                <select class="form-select" id="tipo" name="tipo">
+                                    <option value="">Todos</option>
+                                    {% for tipo in tipos_equipamento %}
+                                    <option value="{{ tipo }}" {% if filtros.tipo == tipo %}selected{% endif %}>{{ tipo }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="frequencia" class="form-label">Frequência</label>
+                                <select class="form-select" id="frequencia" name="frequencia">
+                                    <option value="">Todas</option>
+                                    <option value="diario" {% if filtros.frequencia == 'diario' %}selected{% endif %}>Diário</option>
+                                    <option value="semanal" {% if filtros.frequencia == 'semanal' %}selected{% endif %}>Semanal</option>
+                                    <option value="quinzenal" {% if filtros.frequencia == 'quinzenal' %}selected{% endif %}>Quinzenal</option>
+                                    <option value="mensal" {% if filtros.frequencia == 'mensal' %}selected{% endif %}>Mensal</option>
+                                    <option value="trimestral" {% if filtros.frequencia == 'trimestral' %}selected{% endif %}>Trimestral</option>
+                                    <option value="semestral" {% if filtros.frequencia == 'semestral' %}selected{% endif %}>Semestral</option>
+                                    <option value="anual" {% if filtros.frequencia == 'anual' %}selected{% endif %}>Anual</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                <!-- Listagem de modelos -->
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Tipo de Equipamento</th>
+                                <th>Frequência</th>
+                                <th>Itens</th>
+                                <th>Status</th>
+                                <th>Criado por</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if modelos %}
+                                {% for modelo in modelos %}
+                                <tr>
+                                    <td>{{ modelo.id }}</td>
+                                    <td>{{ modelo.nome }}</td>
+                                    <td>{{ modelo.tipo_equipamento }}</td>
+                                    <td>
+                                        {% if modelo.frequencia == 'diario' %}Diário
+                                        {% elif modelo.frequencia == 'semanal' %}Semanal
+                                        {% elif modelo.frequencia == 'quinzenal' %}Quinzenal
+                                        {% elif modelo.frequencia == 'mensal' %}Mensal
+                                        {% elif modelo.frequencia == 'trimestral' %}Trimestral
+                                        {% elif modelo.frequencia == 'semestral' %}Semestral
+                                        {% elif modelo.frequencia == 'anual' %}Anual
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ modelo.total_itens }}</td>
+                                    <td>
+                                        {% if modelo.ativo %}
+                                        <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ modelo.criador_nome }}</td>
+                                    <td>
+                                        {% if pode_editar %}
+                                        <div class="btn-group">
+                                            <a href="{{ url_for('checklist.editar_itens', modelo_id=modelo.id) }}" class="btn btn-sm btn-primary" title="Editar Itens">
+                                                <i class="fas fa-tasks"></i>
+                                            </a>
+                                            <a href="{{ url_for('checklist.editar_modelo', modelo_id=modelo.id) }}" class="btn btn-sm btn-warning" title="Editar Modelo">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                        </div>
+                                        {% endif %}
+                                        <a href="{{ url_for('checklist.novo_checklist') }}?modelo_id={{ modelo.id }}" class="btn btn-sm btn-success" title="Novo Checklist">
+                                            <i class="fas fa-plus"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center">Nenhum modelo encontrado</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

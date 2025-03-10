@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Novo Modelo de Checklist</h5>
+                <a href="{{ url_for('checklist.listar_modelos') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('checklist.novo_modelo') }}">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome do Modelo *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                        <div class="form-text">Ex: Checklist Preventivo de Empilhadeira, Inspeção de Caminhão, etc.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="tipo_equipamento" class="form-label">Tipo de Equipamento *</label>
+                        <input type="text" class="form-control" id="tipo_equipamento" name="tipo_equipamento" required>
+                        <div class="form-text">Ex: Empilhadeira, Caminhão, Máquina CNC, etc.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="frequencia" class="form-label">Frequência de Verificação *</label>
+                        <select class="form-select" id="frequencia" name="frequencia" required>
+                            <option value="">Selecione...</option>
+                            <option value="diario">Diário</option>
+                            <option value="semanal">Semanal</option>
+                            <option value="quinzenal">Quinzenal</option>
+                            <option value="mensal">Mensal</option>
+                            <option value="trimestral">Trimestral</option>
+                            <option value="semestral">Semestral</option>
+                            <option value="anual">Anual</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                        <div class="form-text">Uma breve descrição do objetivo do checklist e quando deve ser usado.</div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Após criar o modelo, você será redirecionado para a tela de adição de itens.
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Criar Modelo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

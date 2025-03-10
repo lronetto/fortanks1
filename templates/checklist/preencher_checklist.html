@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 mx-auto mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Preenchimento de Checklist</h5>
+                <a href="{{ url_for('checklist.listar_checklists') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>Modelo:</strong> {{ checklist.modelo_nome }}</p>
+                            <p class="mb-1"><strong>Equipamento:</strong> {{ checklist.equipamento_nome }}</p>
+                            <p class="mb-1"><strong>ID/Código:</strong> {{ checklist.equipamento_id }}</p>
+                            {% if checklist.equipamento_local %}
+                            <p class="mb-1"><strong>Local:</strong> {{ checklist.equipamento_local }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>Status:</strong> 
+                                <span class="badge bg-warning">Em andamento</span>
+                            </p>
+                            <p class="mb-1"><strong>Data de Criação:</strong> {{ checklist.data_preenchimento.strftime('%d/%m/%Y %H:%M') }}</p>
+                            <p class="mb-1"><strong>Responsável:</strong> {{ session.nome }}</p>
+                        </div>
+                    </div>
+                    {% if checklist.observacoes %}
+                    <hr>
+                    <p class="mb-0"><strong>Observações:</strong> {{ checklist.observacoes }}</p>
+                    {% endif %}
+                </div>
+
+                <form method="POST" action="{{ url_for('checklist.preencher_checklist', checklist_id=checklist.id) }}">
+                    <input type="hidden" name="acao" value="salvar">
+                    
+                    <!-- Itens do checklist -->
+                    <div class="mb-4">
+                        {% if itens %}
+                            {% for item in itens %}
+                                <div class="card mb-3 {{ 'border-danger' if item.obrigatorio else '' }}">
+                                    <div class="card-header d-flex justify-content-between align-items-center {{ 'bg-danger text-white' if item.obrigatorio else 'bg-light' }}">
+                                        <h6 class="mb-0">{{ loop.index }}. {{ item.texto }}</h6>
+                                        {% if item.obrigatorio %}
+                                        <span class="badge bg-light text-danger">Obrigatório</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="card-body">
+                                        {% set resposta = respostas[item.id] if item.id in respostas else None %}
+                                        {% set prefix = "item_" ~ item.id ~ "_" %}
+                                        
+                                        <!-- Campos específicos conforme o tipo de resposta -->
+                                        {% if item.tipo_resposta == 'sim_nao' %}
+                                            <div class="mb-3">
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="radio" name="{{ prefix }}booleana" id="{{ prefix }}sim" value="sim" 
+                                                        {{ 'checked' if resposta and resposta.resposta_booleana else '' }}>
+                                                    <label class="form-check-label" for="{{ prefix }}sim">Sim</label>
+                                                </div>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="radio" name="{{ prefix }}booleana" id="{{ prefix }}nao" value="nao" 
+                                                        {{ 'checked' if resposta and not resposta.resposta_booleana else '' }}>
+                                                    <label class="form-check-label" for="{{ prefix }}nao">Não</label>
+                                                </div>
+                                            </div>
+                                        {% elif item.tipo_resposta == 'valor_numerico' %}
+                                            <div class="row mb-3">
+                                                <div class="col-md-4">
+                                                    <label for="{{ prefix }}numerica" class="form-label">Valor</label>
+                                                    <div class="input-group">
+                                                        <input type="number" class="form-control" id="{{ prefix }}numerica" name="{{ prefix }}numerica" step="any"
+                                                            {% if item.valor_minimo is not none %}min="{{ item.valor_minimo }}"{% endif %}
+                                                            {% if item.valor_maximo is not none %}max="{{ item.valor_maximo }}"{% endif %}
+                                                            value="{{ resposta.resposta_numerica if resposta and resposta.resposta_numerica is not none else '' }}">
+                                                        {% if item.unidade %}
+                                                        <span class="input-group-text">{{ item.unidade }}</span>
+                                                        {% endif %}
+                                                    </div>
+                                                    {% if item.valor_minimo is not none or item.valor_maximo is not none %}
+                                                    <div class="form-text">
+                                                        Faixa: 
+                                                        {% if item.valor_minimo is not none %}Min: {{ item.valor_minimo }}{% endif %}
+                                                        {% if item.valor_minimo is not none and item.valor_maximo is not none %} - {% endif %}
+                                                        {% if item.valor_maximo is not none %}Max: {{ item.valor_maximo }}{% endif %}
+                                                        {% if item.unidade %} {{ item.unidade }}{% endif %}
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        {% elif item.tipo_resposta == 'texto' %}
+                                            <div class="mb-3">
+                                                <label for="{{ prefix }}texto" class="form-label">Resposta</label>
+                                                <textarea class="form-control" id="{{ prefix }}texto" name="{{ prefix }}texto" rows="2">{{ resposta.resposta_texto if resposta else '' }}</textarea>
+                                            </div>
+                                        {% elif item.tipo_resposta == 'selecao' %}
+                                            <div class="mb-3">
+                                                {% set valores = item.valores_possiveis|from_json if item.valores_possiveis else [] %}
+                                                {% set resposta_texto = resposta.resposta_texto if resposta else '' %}
+                                                
+                                                {% for valor in valores %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="{{ prefix }}texto" id="{{ prefix ~ loop.index }}" value="{{ valor }}" 
+                                                        {{ 'checked' if resposta_texto == valor else '' }}>
+                                                    <label class="form-check-label" for="{{ prefix ~ loop.index }}">{{ valor }}</label>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                        
+                                        <!-- Conformidade (para todos os tipos) -->
+                                        <div class="mb-3">
+                                            <label class="form-label">Conformidade</label>
+                                            <div class="btn-group" role="group">
+                                                <input type="radio" class="btn-check" name="{{ prefix }}conformidade" id="{{ prefix }}conforme" value="conforme" 
+                                                    {{ 'checked' if not resposta or resposta.conformidade == 'conforme' else '' }} autocomplete="off">
+                                                <label class="btn btn-outline-success" for="{{ prefix }}conforme">Conforme</label>
+                                                
+                                                <input type="radio" class="btn-check" name="{{ prefix }}conformidade" id="{{ prefix }}nao_conforme" value="nao_conforme" 
+                                                    {{ 'checked' if resposta and resposta.conformidade == 'nao_conforme' else '' }} autocomplete="off">
+                                                <label class="btn btn-outline-danger" for="{{ prefix }}nao_conforme">Não Conforme</label>
+                                                
+                                                <input type="radio" class="btn-check" name="{{ prefix }}conformidade" id="{{ prefix }}nao_aplicavel" value="nao_aplicavel" 
+                                                    {{ 'checked' if resposta and resposta.conformidade == 'nao_aplicavel' else '' }} autocomplete="off">
+                                                <label class="btn btn-outline-secondary" for="{{ prefix }}nao_aplicavel">Não Aplicável</label>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Observação (para todos os tipos) -->
+                                        <div class="mb-0">
+                                            <label for="{{ prefix }}observacao" class="form-label">Observação</label>
+                                            <textarea class="form-control" id="{{ prefix }}observacao" name="{{ prefix }}observacao" rows="2">{{ resposta.observacao if resposta else '' }}</textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i> Nenhum item encontrado para este modelo de checklist.
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Botões de ação -->
+                    <div class="d-flex justify-content-between">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save"></i> Salvar Progresso
+                        </button>
+                        <button type="submit" class="btn btn-primary" onclick="document.querySelector('input[name=concluir]').value='true';">
+                            <i class="fas fa-check-circle"></i> Concluir Checklist
+                        </button>
+                    </div>
+                    <input type="hidden" name="concluir" value="false">
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Validação de itens obrigatórios antes de concluir
+    document.querySelector('button[onclick="document.querySelector(\'input[name=concluir]\').value=\'true\';"]').addEventListener('click', function(e) {
+        const itensObrigatorios = document.querySelectorAll('.card.border-danger');
+        let todosPrenchidos = true;
+        
+        itensObrigatorios.forEach(item => {
+            const itemId = item.querySelector('.card-body').querySelector('input, textarea, select').name.split('_')[1];
+            const tipoResposta = item.querySelector('.card-body').dataset.tipo;
+            let respondido = false;
+            
+            if (tipoResposta === 'sim_nao') {
+                respondido = document.querySelector(`input[name="item_${itemId}_booleana"]:checked`) !== null;
+            } else if (tipoResposta === 'valor_numerico') {
+                respondido = document.querySelector(`input[name="item_${itemId}_numerica"]`).value.trim() !== '';
+            } else if (tipoResposta === 'texto') {
+                respondido = document.querySelector(`textarea[name="item_${itemId}_texto"]`).value.trim() !== '';
+            } else if (tipoResposta === 'selecao') {
+                respondido = document.querySelector(`input[name="item_${itemId}_texto"]:checked`) !== null;
+            }
+            
+            if (!respondido) {
+                todosPrenchidos = false;
+                item.classList.add('border-danger');
+                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+        
+        if (!todosPrenchidos) {
+            e.preventDefault();
+            alert('Por favor, preencha todos os itens obrigatórios antes de concluir o checklist.');
+        }
+    });
+    
+    // Criar helper para converter string de JSON para objeto
+    Handlebars.registerHelper('from_json', function(context) {
+        if (!context) return [];
+        try {
+            return JSON.parse(context);
+        } catch (e) {
+            console.error('Erro ao converter JSON:', e);
+            return [];
+        }
+    });
+});
+</script>
+{% endblock %}

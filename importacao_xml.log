@@ -1,0 +1,90 @@
+2025-03-10 14:20:26,126 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.5.148:5000
+2025-03-10 14:20:26,128 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-03-10 14:20:26,130 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 14:20:26,736 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 14:20:26,738 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 14:20:33,775 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:20:33] "GET / HTTP/1.1" 200 -
+2025-03-10 14:20:34,739 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:20:34] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2025-03-10 14:20:48,805 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:20:48] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-03-10 14:20:48,952 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:20:48] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 14:20:55,505 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:20:55] "GET /integracao_erp/ HTTP/1.1" 200 -
+2025-03-10 14:23:23,622 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:23:23] "GET /integracao_erp/importar_automatico HTTP/1.1" 200 -
+2025-03-10 14:33:15,964 - werkzeug - INFO -  * Detected change in 'C:\\Users\\lrone\\OneDrive\\Documentos\\python\\fortanks1\\fortanks1\\modulo_integracao_erp\\app.py', reloading
+2025-03-10 14:33:16,087 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 14:35:50,942 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.5.148:5000
+2025-03-10 14:35:50,944 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-03-10 14:35:50,947 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 14:35:51,521 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 14:35:51,523 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 14:36:02,621 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:02] "[32mGET / HTTP/1.1[0m" 302 -
+2025-03-10 14:36:02,734 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:02] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 14:36:06,147 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:06] "GET /integracao_erp/ HTTP/1.1" 200 -
+2025-03-10 14:36:10,653 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:10] "[35m[1mGET /integracao_erp/importar_automatico HTTP/1.1[0m" 500 -
+2025-03-10 14:36:10,807 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:10] "GET /integracao_erp/importar_automatico?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-03-10 14:36:10,808 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:10] "GET /integracao_erp/importar_automatico?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-03-10 14:36:10,923 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:10] "GET /integracao_erp/importar_automatico?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-03-10 14:36:10,924 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:10] "GET /integracao_erp/importar_automatico?__debugger__=yes&cmd=resource&f=console.png&s=H6beFsrgR6mhiuOBIDyz HTTP/1.1" 200 -
+2025-03-10 14:36:11,000 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:36:11] "[36mGET /integracao_erp/importar_automatico?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 14:37:13,677 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.5.148:5000
+2025-03-10 14:37:13,678 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-03-10 14:37:13,681 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 14:37:14,405 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 14:37:14,407 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 14:37:19,656 - asyncio - DEBUG - Using proactor: IocpProactor
+2025-03-10 14:37:19,669 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:37:19] "GET /integracao_erp/importar_automatico HTTP/1.1" 200 -
+2025-03-10 14:38:04,758 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 14:38:04] "GET /integracao_erp/ HTTP/1.1" 200 -
+2025-03-10 15:54:17,608 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:17] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 15:54:31,204 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:31] "[35m[1mGET /importacao_nf/ HTTP/1.1[0m" 500 -
+2025-03-10 15:54:31,355 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:31] "GET /importacao_nf/?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-03-10 15:54:31,361 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:31] "GET /importacao_nf/?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-03-10 15:54:31,662 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:31] "GET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-03-10 15:54:31,663 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:31] "GET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png&s=Wd8vGZ0LhQyYzBBEWxbW HTTP/1.1" 200 -
+2025-03-10 15:54:31,752 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:31] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 15:54:40,377 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:40] "GET /integracao_erp/ HTTP/1.1" 200 -
+2025-03-10 15:54:50,091 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:54:50] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 15:55:21,106 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:55:21] "[32mPOST /solicitar HTTP/1.1[0m" 302 -
+2025-03-10 15:55:21,175 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:55:21] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 15:59:07,966 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:59:07] "[35m[1mGET /importacao_nf/ HTTP/1.1[0m" 500 -
+2025-03-10 15:59:08,043 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:59:08] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+2025-03-10 15:59:08,044 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:59:08] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+2025-03-10 15:59:08,492 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:59:08] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png&s=Wd8vGZ0LhQyYzBBEWxbW HTTP/1.1[0m" 304 -
+2025-03-10 15:59:08,493 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 15:59:08] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:00:10,256 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.5.148:5000
+2025-03-10 16:00:10,257 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2025-03-10 16:00:10,259 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 16:00:10,986 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 16:00:10,988 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 16:00:12,507 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:12] "[35m[1mGET /importacao_nf/ HTTP/1.1[0m" 500 -
+2025-03-10 16:00:12,658 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:12] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+2025-03-10 16:00:12,658 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:12] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+2025-03-10 16:00:12,992 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:12] "GET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png&s=6PbkHgIcPogsOfEL0NOu HTTP/1.1" 200 -
+2025-03-10 16:00:12,994 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:12] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:00:13,049 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:13] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:00:14,716 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:14] "[35m[1mGET /importacao_nf/ HTTP/1.1[0m" 500 -
+2025-03-10 16:00:14,779 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:14] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+2025-03-10 16:00:14,783 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:14] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+2025-03-10 16:00:15,011 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:15] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png&s=6PbkHgIcPogsOfEL0NOu HTTP/1.1[0m" 304 -
+2025-03-10 16:00:15,015 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:15] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:00:15,080 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:15] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:00:16,372 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:16] "[35m[1mGET /importacao_nf/ HTTP/1.1[0m" 500 -
+2025-03-10 16:00:16,435 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:16] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+2025-03-10 16:00:16,437 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:16] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+2025-03-10 16:00:16,720 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:16] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:00:16,722 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:16] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png&s=6PbkHgIcPogsOfEL0NOu HTTP/1.1[0m" 304 -
+2025-03-10 16:00:16,760 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:00:16] "[36mGET /importacao_nf/?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+2025-03-10 16:01:07,667 - werkzeug - INFO -  * Detected change in 'C:\\Users\\lrone\\OneDrive\\Documentos\\python\\fortanks1\\fortanks1\\modulo_importacao_nf\\app.py', reloading
+2025-03-10 16:01:07,756 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 16:01:08,436 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 16:01:08,438 - werkzeug - INFO -  * Debugger PIN: 933-660-374

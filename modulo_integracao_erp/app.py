@@ -47,55 +47,74 @@ def get_db_connection():
 # Função para baixar arquivos do ERP via Playwright
 
 
-async def download_xls_from_erp(credenciais):
+async def download_erp_report(credentials):
     """
-    Faz login no ERP e baixa os arquivos XLS necessários
+    Faz login no ERP SOX e baixa o relatório de Custo Analítico
 
     Args:
-        credenciais (dict): Dicionário com credenciais de acesso ao ERP
+        credentials (dict): Dicionário com credenciais e configurações
+            - username: Nome de usuário
+            - password: Senha
+            - periodo: Período do relatório (opcional)
+            - output_path: Caminho para salvar o arquivo (opcional)
+            - headless: Se True, executa navegador sem interface (opcional)
 
     Returns:
         str: Caminho para o arquivo baixado ou None em caso de erro
     """
-    temp_dir = tempfile.mkdtemp()
-    downloaded_file = None
-
     try:
+        output_path = credentials.get('output_path', 'base.xls')
+
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
-            page = await browser.new_page()
+            # Iniciar o navegador (com modo headless configurável)
+            browser = await p.chromium.launch(
+                headless=credentials.get('headless', False)
+            )
+
+            # Configurar a página com timeout adequado
+            page = await browser.new_page(
+                viewport={'width': 1280, 'height': 800}
+            )
+
+            # Acessar página de login
             await page.goto("https://www.sox.com.br/")
-            await page.locator("iframe[name=\"login\"]").content_frame.locator(
-                "input[name=\"login\"]").fill("leandrofor")
-            await page.locator("iframe[name=\"login\"]").content_frame.locator(
-                "input[name=\"senha\"]").fill("netto$%")
-            await page.locator("iframe[name=\"login\"]").content_frame.get_by_role(
-                "button", name="Acessar").click()
-            await page.locator("iframe[name=\"menu\"]").content_frame.get_by_text(
-                "FINANCEIRO").click()
-            await page.locator("iframe[name=\"menu\"]").content_frame.get_by_text(
-                "Custo Analítico").click()
-            await page.locator("frame[name=\"conteudo\"]").content_frame.get_by_role(
-                "link", name="Filtrar").click()
-            # time.sleep(10)
 
-            async with page.expect_download() as download_info:
-                async with page.expect_popup() as page1_info:
-                    downloadPromise = page.wait_for_event('download')
-                    await page.locator("frame[name=\"conteudo\"]").content_frame.get_by_role(
-                        "link", name="Relatório Excel").click()
-                    download = await downloadPromise
-                    await download.save_as('base.xls')
-                    # page.on('download', download=> download.path().then(console.log))
-                page1 = page1_info.value
-            download = download_info.value
+            # Login com credenciais
+            login_frame = await page.locator("iframe[name=\"login\"]").content_frame
+            await login_frame.locator("input[name=\"login\"]").fill(credentials.get('username', 'leandrofor'))
+            await login_frame.locator("input[name=\"senha\"]").fill(credentials.get('password', 'netto$%'))
+            await login_frame.get_by_role("button", name="Acessar").click()
 
-            return downloaded_file
+            # Acessar menu Financeiro > Custo Analítico
+            menu_frame = await page.locator("iframe[name=\"menu\"]").content_frame
+            await menu_frame.get_by_text("FINANCEIRO").click()
+            await menu_frame.get_by_text("Custo Analítico").click()
+
+            # Filtrar e baixar relatório em Excel
+            content_frame = await page.locator("frame[name=\"conteudo\"]").content_frame
+            await content_frame.get_by_role("link", name="Filtrar").click()
+
+            # Configurar período do relatório, se fornecido
+            if credentials.get('periodo'):
+                # Adicionar lógica para selecionar período específico
+                # Esta parte depende da interface específica do ERP
+                pass
+
+            # Esperar pelo download
+            download_promise = page.wait_for_event('download')
+            await content_frame.get_by_role("link", name="Relatório Excel").click()
+            download = await download_promise
+
+            # Salvar o arquivo
+            await download.save_as(output_path)
+
+            # Fechar o navegador
+            await browser.close()
+
+            return output_path
 
     except Exception as e:
-        logger.error(f"Erro ao baixar arquivo do ERP: {str(e)}")
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        logger.error(f"Erro na automação do ERP: {str(e)}", exc_info=True)
         return None
 
 # Função para extrair dados do arquivo XLS (formato HTML)
@@ -238,14 +257,14 @@ def salvar_dados_no_banco(dados):
         dados (list): Lista de dicionários com os dados a serem salvos
 
     Returns:
-        tuple: (sucesso, mensagem)
+        tuple: (sucesso, mensagem, contador)
     """
     if not dados:
-        return False, "Nenhum dado para importar"
+        return False, "Nenhum dado para importar", 0
 
     connection = get_db_connection()
     if not connection:
-        return False, "Erro de conexão com o banco de dados"
+        return False, "Erro de conexão com o banco de dados", 0
 
     try:
         cursor = connection.cursor()
@@ -293,14 +312,75 @@ def salvar_dados_no_banco(dados):
         cursor.close()
         connection.close()
 
-        return True, f"{records_insert} registros importados com sucesso"
+        return True, f"{records_insert} registros importados com sucesso", records_insert
 
     except Exception as e:
         connection.rollback()
         cursor.close()
         connection.close()
         logger.error(f"Erro ao salvar dados no banco: {str(e)}")
-        return False, f"Erro ao salvar dados: {str(e)}"
+        return False, f"Erro ao salvar dados: {str(e)}", 0
+
+# Funções auxiliares para gerenciar importação
+
+
+def registrar_importacao_iniciada(usuario_id):
+    """Registra o início de uma importação no banco de dados"""
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            INSERT INTO erp_importacoes 
+            (usuario_id, tipo, data_inicio, status)
+            VALUES (%s, 'AUTOMATICA', NOW(), 'ERRO')
+        """, [usuario_id])
+        importacao_id = cursor.lastrowid
+        connection.commit()
+        return importacao_id
+    except Exception as e:
+        logger.error(f"Erro ao registrar importação: {e}")
+        return None
+    finally:
+        if connection:
+            connection.close()
+
+
+def registrar_importacao_finalizada(importacao_id, status, mensagem, total_registros=0, valor_total=0):
+    """Atualiza o registro de importação com o resultado"""
+    if not importacao_id:
+        return
+
+    connection = get_db_connection()
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            UPDATE erp_importacoes 
+            SET status = %s, 
+                mensagem = %s,
+                total_registros = %s,
+                valor_total = %s,
+                data_fim = NOW()
+            WHERE id = %s
+        """, [status, mensagem, total_registros, valor_total, importacao_id])
+        connection.commit()
+    except Exception as e:
+        logger.error(f"Erro ao finalizar importação: {e}")
+    finally:
+        if connection:
+            connection.close()
+
+
+def limpar_arquivos_temporarios(arquivo_path):
+    """Remove arquivos e diretórios temporários"""
+    try:
+        if os.path.exists(arquivo_path):
+            temp_dir = os.path.dirname(arquivo_path)
+            if os.path.exists(arquivo_path):
+                os.remove(arquivo_path)
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+    except Exception as e:
+        logger.error(f"Erro ao limpar arquivos temporários: {e}")
 
 # Rota principal - dashboard de integração
 
@@ -381,6 +461,10 @@ def importar_manual():
             return redirect(request.url)
 
         try:
+            # Registrar início da importação
+            importacao_id = registrar_importacao_iniciada(
+                session['id_usuario'])
+
             # Criar diretório temporário
             temp_dir = tempfile.mkdtemp()
             file_path = os.path.join(temp_dir, "arquivo_importacao.xls")
@@ -392,10 +476,16 @@ def importar_manual():
             dados = extrair_dados_xls(file_path)
 
             # Salvar os dados no banco
-            sucesso, mensagem = salvar_dados_no_banco(dados)
+            sucesso, mensagem, records_insert = salvar_dados_no_banco(dados)
+
+            # Atualizar registro de importação
+            status = 'SUCESSO' if sucesso else 'ERRO'
+            valor_total = sum(d['valor'] for d in dados) if dados else 0
+            registrar_importacao_finalizada(
+                importacao_id, status, mensagem, len(dados), valor_total)
 
             # Limpar arquivos temporários
-            shutil.rmtree(temp_dir)
+            limpar_arquivos_temporarios(file_path)
 
             if sucesso:
                 flash(mensagem, 'success')
@@ -404,6 +494,8 @@ def importar_manual():
 
         except Exception as e:
             flash(f'Erro durante a importação: {str(e)}', 'danger')
+            if 'importacao_id' in locals():
+                registrar_importacao_finalizada(importacao_id, 'ERRO', str(e))
 
     return render_template('integracao_erp/importar_manual.html')
 
@@ -411,52 +503,60 @@ def importar_manual():
 
 
 @mod_integracao_erp.route('/importar_automatico', methods=['GET', 'POST'])
-def importar_automatico():
+async def importar_automatico():
     if 'logado' not in session or session['cargo'] != 'admin':
         flash('Acesso restrito para administradores', 'danger')
         return redirect(url_for('dashboard'))
 
     if request.method == 'POST':
         # Obter credenciais do formulário
-        credenciais = {
-            'url_login': request.form.get('url_login'),
-            'usuario': request.form.get('usuario'),
-            'senha': request.form.get('senha'),
-            'url_relatorio': request.form.get('url_relatorio'),
-            'tipo_relatorio': request.form.get('tipo_relatorio'),
-            'periodo': request.form.get('periodo')
+        credentials = {
+            'username': request.form.get('usuario'),
+            'password': request.form.get('senha'),
+            'headless': request.form.get('modo_headless') == 'on',
+            'periodo': request.form.get('periodo', 'atual'),
+            'output_path': os.path.join(tempfile.mkdtemp(), 'relatorio_erp.xls')
         }
 
-        # Verificar se todos os campos foram preenchidos
-        if not all([credenciais['url_login'], credenciais['usuario'], credenciais['senha'], credenciais['url_relatorio']]):
-            flash('Todos os campos são obrigatórios', 'warning')
-            return redirect(request.url)
-
         try:
+            # Registrar início da importação
+            importacao_id = registrar_importacao_iniciada(
+                session['id_usuario'])
+
             # Baixar o arquivo do ERP
-            arquivo_path = download_xls_from_erp(credenciais)
+            arquivo_path = await download_erp_report(credentials)
 
             if not arquivo_path:
                 flash('Não foi possível baixar o arquivo do ERP', 'danger')
+                registrar_importacao_finalizada(
+                    importacao_id, 'ERRO', 'Falha no download do arquivo')
                 return redirect(request.url)
 
             # Processar o arquivo
             dados = extrair_dados_xls(arquivo_path)
 
             # Salvar os dados no banco
-            sucesso, mensagem = salvar_dados_no_banco(dados)
+            sucesso, mensagem, records_insert = salvar_dados_no_banco(dados)
+
+            # Atualizar registro de importação
+            status = 'SUCESSO' if sucesso else 'ERRO'
+            valor_total = sum(d['valor'] for d in dados) if dados else 0
+            registrar_importacao_finalizada(
+                importacao_id, status, mensagem, len(dados), valor_total)
 
             # Limpar arquivos temporários
-            if os.path.exists(os.path.dirname(arquivo_path)):
-                shutil.rmtree(os.path.dirname(arquivo_path))
+            limpar_arquivos_temporarios(arquivo_path)
 
             if sucesso:
-                flash(mensagem, 'success')
+                flash(
+                    f'Importação automática concluída: {mensagem}', 'success')
             else:
-                flash(mensagem, 'danger')
+                flash(f'Erro durante a importação: {mensagem}', 'danger')
 
         except Exception as e:
             flash(f'Erro durante a importação automática: {str(e)}', 'danger')
+            if 'importacao_id' in locals():
+                registrar_importacao_finalizada(importacao_id, 'ERRO', str(e))
 
     return render_template('integracao_erp/importar_automatico.html')
 
@@ -679,6 +779,53 @@ def api_dados_categoria():
             connection.close()
         return jsonify({'error': str(e), 'data': []}), 500
 
+# API para listar histórico de importações
+
+
+@mod_integracao_erp.route('/api/importacoes')
+def api_importacoes():
+    if 'logado' not in session:
+        return jsonify({'error': 'Não autorizado', 'data': []}), 401
+
+    connection = get_db_connection()
+    if not connection:
+        return jsonify({'error': 'Erro de conexão com o banco de dados', 'data': []}), 500
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+
+        # Obter histórico de importações
+        cursor.execute("""
+            SELECT i.*, u.nome as usuario_nome 
+            FROM erp_importacoes i
+            LEFT JOIN usuarios u ON i.usuario_id = u.id
+            ORDER BY i.data_inicio DESC
+            LIMIT 10
+        """)
+
+        dados = cursor.fetchall()
+
+        # Converter valores para tipos apropriados para serialização JSON
+        for item in dados:
+            if 'data_inicio' in item and item['data_inicio']:
+                item['data_inicio'] = item['data_inicio'].strftime(
+                    '%Y-%m-%d %H:%M:%S')
+            if 'data_fim' in item and item['data_fim']:
+                item['data_fim'] = item['data_fim'].strftime(
+                    '%Y-%m-%d %H:%M:%S')
+            if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
+                item['valor_total'] = float(item['valor_total'])
+
+        cursor.close()
+        connection.close()
+
+        return jsonify({'data': dados})
+    except Exception as e:
+        logger.error(f"Erro ao buscar histórico de importações: {e}")
+        if connection:
+            connection.close()
+        return jsonify({'error': str(e), 'data': []}), 500
+
 # Configuração inicial do módulo
 
 
@@ -704,5 +851,82 @@ def init_app(app):
                     'relatorios'), 'icon': 'fas fa-chart-bar'},
             ]
         return {'menu_items': menu_items}
+
+    # Adicionar as rotas assíncronas
+    @app.route('/integracao_erp/executar_importacao_automatica', methods=['POST'])
+    async def executar_importacao_automatica():
+        if 'logado' not in session or session['cargo'] != 'admin':
+            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+
+        credentials = {
+            'username': request.form.get('usuario'),
+            'password': request.form.get('senha'),
+            'headless': request.form.get('modo_headless') == 'on',
+            'periodo': request.form.get('periodo', 'atual'),
+            'output_path': os.path.join(tempfile.mkdtemp(), 'relatorio_erp.xls')
+        }
+
+        importacao_id = registrar_importacao_iniciada(session['id_usuario'])
+
+        try:
+            # Função assíncrona para executar a importação em background
+            async def execute_import():
+                try:
+                    # Baixar arquivo do ERP
+                    logger.info("Iniciando download do relatório do ERP...")
+                    arquivo_path = await download_erp_report(credentials)
+
+                    if not arquivo_path or not os.path.exists(arquivo_path):
+                        logger.error("Falha ao baixar o arquivo")
+                        registrar_importacao_finalizada(
+                            importacao_id, 'ERRO', 'Falha no download do arquivo')
+                        return
+
+                    logger.info(f"Arquivo baixado: {arquivo_path}")
+
+                    # Processar o arquivo
+                    dados = extrair_dados_xls(arquivo_path)
+
+                    if not dados:
+                        logger.warning("Nenhum dado encontrado no arquivo")
+                        registrar_importacao_finalizada(
+                            importacao_id, 'ERRO', 'Nenhum dado encontrado no arquivo')
+                        return
+
+                    # Salvar no banco
+                    sucesso, mensagem, records_insert = salvar_dados_no_banco(
+                        dados)
+
+                    # Atualizar registro
+                    status = 'SUCESSO' if sucesso else 'ERRO'
+                    valor_total = sum(d['valor']
+                                      for d in dados) if dados else 0
+                    registrar_importacao_finalizada(
+                        importacao_id, status, mensagem, len(dados), valor_total)
+
+                    # Limpar arquivos
+                    limpar_arquivos_temporarios(arquivo_path)
+
+                    logger.info(f"Importação concluída: {mensagem}")
+
+                except Exception as e:
+                    logger.error(
+                        f"Erro na execução da importação: {str(e)}", exc_info=True)
+                    registrar_importacao_finalizada(
+                        importacao_id, 'ERRO', str(e))
+
+            # Iniciar a tarefa em background
+            asyncio.create_task(execute_import())
+
+            return jsonify({
+                'success': True,
+                'message': 'Importação iniciada em segundo plano',
+                'importacao_id': importacao_id
+            })
+
+        except Exception as e:
+            logger.error(f"Erro ao iniciar importação: {str(e)}")
+            registrar_importacao_finalizada(importacao_id, 'ERRO', str(e))
+            return jsonify({'success': False, 'message': str(e)}), 500
 
     return app

@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Novo Checklist</h5>
+                <a href="{{ url_for('checklist.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('checklist.novo_checklist') }}">
+                    <div class="mb-3">
+                        <label for="modelo_id" class="form-label">Modelo de Checklist *</label>
+                        <select class="form-select" id="modelo_id" name="modelo_id" required>
+                            <option value="">Selecione um modelo...</option>
+                            {% for modelo in modelos %}
+                            <option value="{{ modelo.id }}" data-desc="{{ modelo.descricao }}" data-tipo="{{ modelo.tipo_equipamento }}" data-freq="{{ modelo.frequencia }}" data-itens="{{ modelo.total_itens }}">
+                                {{ modelo.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div id="modelo_info" class="alert alert-info mb-3" style="display: none;">
+                        <div class="d-flex">
+                            <div class="me-3">
+                                <i class="fas fa-info-circle fa-2x"></i>
+                            </div>
+                            <div>
+                                <h6 class="alert-heading">Informações do Modelo</h6>
+                                <p class="mb-0"><strong>Tipo de Equipamento:</strong> <span id="info_tipo"></span></p>
+                                <p class="mb-0"><strong>Frequência:</strong> <span id="info_freq"></span></p>
+                                <p class="mb-0"><strong>Total de Itens:</strong> <span id="info_itens"></span></p>
+                                <p class="mb-0"><strong>Descrição:</strong> <span id="info_desc"></span></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="equipamento_id" class="form-label">ID/Código do Equipamento *</label>
+                            <input type="text" class="form-control" id="equipamento_id" name="equipamento_id" required>
+                            <div class="form-text">Ex: Número de série, tag, placa, ou outro identificador único</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="equipamento_nome" class="form-label">Nome/Descrição do Equipamento *</label>
+                            <input type="text" class="form-control" id="equipamento_nome" name="equipamento_nome" required>
+                            <div class="form-text">Ex: Empilhadeira Toyota 8FG25, Caminhão VW 17.280, etc.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="equipamento_local" class="form-label">Local/Setor do Equipamento</label>
+                        <input type="text" class="form-control" id="equipamento_local" name="equipamento_local">
+                        <div class="form-text">Ex: Galpão 3, Linha de Produção 2, Expedição, etc.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                        <div class="form-text">Informações adicionais sobre o equipamento ou sobre a verificação</div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> Após criar o checklist, você será redirecionado para o preenchimento dos itens.
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-clipboard-check"></i> Criar e Preencher Checklist
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Mostrar informações do modelo selecionado
+    document.getElementById('modelo_id').addEventListener('change', function() {
+        const modeloInfo = document.getElementById('modelo_info');
+        
+        if (this.value) {
+            // Obter informações do modelo selecionado
+            const option = this.options[this.selectedIndex];
+            const tipo = option.dataset.tipo;
+            const freq = option.dataset.freq;
+            const itens = option.dataset.itens;
+            const desc = option.dataset.desc || 'Não informada';
+            
+            // Preencher informações
+            document.getElementById('info_tipo').textContent = tipo;
+            document.getElementById('info_itens').textContent = itens;
+            document.getElementById('info_desc').textContent = desc;
+            
+            // Converter frequência para formato mais amigável
+            let freqText = '';
+            switch (freq) {
+                case 'diario': freqText = 'Diário'; break;
+                case 'semanal': freqText = 'Semanal'; break;
+                case 'quinzenal': freqText = 'Quinzenal'; break;
+                case 'mensal': freqText = 'Mensal'; break;
+                case 'trimestral': freqText = 'Trimestral'; break;
+                case 'semestral': freqText = 'Semestral'; break;
+                case 'anual': freqText = 'Anual'; break;
+                default: freqText = freq;
+            }
+            document.getElementById('info_freq').textContent = freqText;
+            
+            // Mostrar bloco de informações
+            modeloInfo.style.display = 'block';
+            
+            // Preencher ID do equipamento como sugestão, se estiver vazio
+            const equipamentoId = document.getElementById('equipamento_id');
+            if (!equipamentoId.value) {
+                const dataAtual = new Date().toISOString().slice(0,10).replace(/-/g,"");
+                const sugestaoId = `${tipo.substring(0,3).toUpperCase()}-${dataAtual}-${Math.floor(Math.random()*1000).toString().padStart(3,'0')}`;
+                equipamentoId.value = sugestaoId;
+            }
+        } else {
+            // Esconder bloco de informações
+            modeloInfo.style.display = 'none';
+        }
+    });
+    
+    // Se houver um parâmetro modelo_id na URL, selecionar automaticamente
+    const urlParams = new URLSearchParams(window.location.search);
+    const modeloId = urlParams.get('modelo_id');
+    if (modeloId) {
+        const selectModelo = document.getElementById('modelo_id');
+        selectModelo.value = modeloId;
+        
+        // Disparar evento change para mostrar as informações
+        const event = new Event('change');
+        selectModelo.dispatchEvent(event);
+    }
+});
+</script>
+{% endblock %}
