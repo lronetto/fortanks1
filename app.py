@@ -1,6 +1,7 @@
 # app.py - Aplicativo principal
 from modulo_importacao_nf.app import mod_importacao_nf
 from modulo_integracao_erp import mod_integracao_erp, init_app
+from modulo_checklist import
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from flask_mysqldb import MySQL
 import os
@@ -59,6 +60,7 @@ def inject_now():
 # Registrar o Blueprint
 app.register_blueprint(mod_importacao_nf, url_prefix='/importacao_nf')
 app.register_blueprint(mod_integracao_erp, url_prefix='/integracao_erp')
+app.register_blueprint(mod_checklist, url_prefix='/checklist')
 
 # Atualizar o menu no context processor
 
