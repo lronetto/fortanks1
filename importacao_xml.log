@@ -150,3 +150,9 @@
 2025-03-10 20:18:53,322 - werkzeug - INFO -  * Debugger PIN: 933-660-374
 2025-03-10 20:27:50,610 - werkzeug - INFO -  * Detected change in 'C:\\Users\\lrone\\OneDrive\\Documentos\\python\\fortanks1\\fortanks1\\modulo_checklist\\app.py', reloading
 2025-03-10 20:27:50,708 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 20:27:51,456 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 20:27:51,458 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 20:27:58,956 - checklist - ERROR - Erro ao criar checklist: 1146 (42S02): Table 'sistema_solicitacoes.checklist_equipamentos' doesn't exist
+2025-03-10 20:27:58,971 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 20:27:58] "GET /checklist/checklists/novo HTTP/1.1" 200 -
+2025-03-10 20:28:05,886 - checklist - ERROR - Erro ao obter estatísticas: 1146 (42S02): Table 'sistema_solicitacoes.checklist_equipamentos' doesn't exist
+2025-03-10 20:28:05,897 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 20:28:05] "GET /checklist/ HTTP/1.1" 200 -
