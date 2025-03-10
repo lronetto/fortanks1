@@ -88,3 +88,19 @@
 2025-03-10 16:01:07,756 - werkzeug - INFO -  * Restarting with stat
 2025-03-10 16:01:08,436 - werkzeug - WARNING -  * Debugger is active!
 2025-03-10 16:01:08,438 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 16:01:11,923 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:01:11] "GET /importacao_nf/ HTTP/1.1" 200 -
+2025-03-10 16:01:12,256 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:01:12] "GET /importacao_nf/api/notas_recentes HTTP/1.1" 200 -
+2025-03-10 16:01:26,781 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:01:26] "GET /importacao_nf/importar_xml HTTP/1.1" 200 -
+2025-03-10 16:04:38,744 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:04:38] "[32mGET /logout HTTP/1.1[0m" 302 -
+2025-03-10 16:04:38,778 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:04:38] "GET / HTTP/1.1" 200 -
+2025-03-10 16:14:17,323 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:17] "[32mPOST /login HTTP/1.1[0m" 302 -
+2025-03-10 16:14:17,401 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:17] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 16:14:23,888 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:23] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 16:14:26,379 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:26] "GET /importacao_nf/ HTTP/1.1" 200 -
+2025-03-10 16:14:26,756 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:26] "GET /importacao_nf/api/notas_recentes HTTP/1.1" 200 -
+2025-03-10 16:14:27,471 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:27] "[35m[1mGET /relatorios/centro_custo HTTP/1.1[0m" 500 -
+2025-03-10 16:14:27,612 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:27] "GET /relatorios/centro_custo?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+2025-03-10 16:14:27,614 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:27] "GET /relatorios/centro_custo?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+2025-03-10 16:14:27,773 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:27] "GET /relatorios/centro_custo?__debugger__=yes&cmd=resource&f=console.png&s=QQeVtbM6xjBfNWndX6NV HTTP/1.1" 200 -
+2025-03-10 16:14:27,774 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:27] "GET /relatorios/centro_custo?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+2025-03-10 16:14:27,842 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 16:14:27] "[36mGET /relatorios/centro_custo?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
