@@ -1,7 +1,7 @@
 # app.py - Aplicativo principal
 from modulo_importacao_nf.app import mod_importacao_nf
 from modulo_integracao_erp import mod_integracao_erp, init_app
-from modulo_checklist import
+from modulo_checklist import mod_checklist
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from flask_mysqldb import MySQL
 import os
@@ -79,6 +79,8 @@ def inject_menu_data():
                 'relatorio_centro_custo'), 'icon': 'fas fa-chart-bar'},
             {'name': 'Integração ERP', 'url': url_for(
                 'integracao_erp.index'), 'icon': 'fas fa-sync'},
+            {'name': 'Ckecklists', 'url': url_for(
+                'checklist.index')}
         ] if 'logado' in session else []
     }
 
