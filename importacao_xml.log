@@ -123,3 +123,20 @@
 2025-03-10 19:53:52,745 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:53:52] "GET /dashboard HTTP/1.1" 200 -
 2025-03-10 19:55:26,939 - werkzeug - INFO -  * Detected change in 'C:\\Users\\lrone\\OneDrive\\Documentos\\python\\fortanks1\\fortanks1\\app.py', reloading
 2025-03-10 19:55:27,017 - werkzeug - INFO -  * Restarting with stat
+2025-03-10 19:55:27,875 - werkzeug - WARNING -  * Debugger is active!
+2025-03-10 19:55:27,878 - werkzeug - INFO -  * Debugger PIN: 933-660-374
+2025-03-10 19:55:32,720 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:55:32] "GET /dashboard HTTP/1.1" 200 -
+2025-03-10 19:55:35,673 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:55:35] "GET /checklist/ HTTP/1.1" 200 -
+2025-03-10 19:55:40,539 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:55:40] "GET /checklist/checklists/novo HTTP/1.1" 200 -
+2025-03-10 19:55:46,867 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:55:46] "GET /checklist/ HTTP/1.1" 200 -
+2025-03-10 19:55:49,820 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:55:49] "GET /checklist/modelos HTTP/1.1" 200 -
+2025-03-10 19:55:58,832 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:55:58] "GET /checklist/modelos/novo HTTP/1.1" 200 -
+2025-03-10 19:57:41,286 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:57:41] "[32mPOST /checklist/modelos/novo HTTP/1.1[0m" 302 -
+2025-03-10 19:57:41,370 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:57:41] "GET /checklist/modelos/1/itens HTTP/1.1" 200 -
+2025-03-10 19:58:35,241 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:58:35] "POST /checklist/modelos/1/item HTTP/1.1" 200 -
+2025-03-10 19:58:37,431 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:58:37] "GET /checklist/modelos/1/itens HTTP/1.1" 200 -
+2025-03-10 19:59:09,264 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:59:09] "POST /checklist/modelos/1/item HTTP/1.1" 200 -
+2025-03-10 19:59:10,937 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:59:10] "GET /checklist/modelos/1/itens HTTP/1.1" 200 -
+2025-03-10 19:59:14,938 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:59:14] "GET /checklist/modelos HTTP/1.1" 200 -
+2025-03-10 19:59:19,048 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:59:19] "GET /checklist/ HTTP/1.1" 200 -
+2025-03-10 19:59:25,113 - werkzeug - INFO - 127.0.0.1 - - [10/Mar/2025 19:59:25] "GET /checklist/checklists/novo HTTP/1.1" 200 -
