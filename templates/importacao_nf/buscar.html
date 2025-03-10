@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Buscar Notas Fiscais</h5>
+                <a href="{{ url_for('importacao_nf.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('importacao_nf.buscar') }}" class="mb-4">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="termo" class="form-label">Termo de busca</label>
+                                <input type="text" class="form-control" id="termo" name="termo" value="{{ termo_busca }}" placeholder="Digite um termo para buscar">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="tipo" class="form-label">Buscar por</label>
+                                <select class="form-select" id="tipo" name="tipo">
+                                    <option value="fornecedor" {% if tipo_busca == 'fornecedor' %}selected{% endif %}>Fornecedor (Nome/CNPJ)</option>
+                                    <option value="destinatario" {% if tipo_busca == 'destinatario' %}selected{% endif %}>Destinatário (Nome/CNPJ)</option>
+                                    <option value="descricao" {% if tipo_busca == 'descricao' %}selected{% endif %}>Descrição do Item</option>
+                                    <option value="chave" {% if tipo_busca == 'chave' %}selected{% endif %}>Chave de Acesso</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="data_inicio" class="form-label">Data de Emissão - Início</label>
+                                <input type="date" class="form-control" id="data_inicio" name="data_inicio" value="{{ data_inicio }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="data_fim" class="form-label">Data de Emissão - Fim</label>
+                                <input type="date" class="form-control" id="data_fim" name="data_fim" value="{{ data_fim }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <button type="button" class="btn btn-outline-secondary" id="limparFiltros">
+                            <i class="fas fa-eraser"></i> Limpar filtros
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </form>
+                
+                {% if request.method == 'POST' %}
+                    <h6 class="border-bottom pb-2 mb-3">Resultados da busca</h6>
+                    
+                    <div class="mb-3">
+                        <strong>Filtros aplicados:</strong>
+                        {% if termo_busca %}
+                            <span class="badge bg-primary">{{ {'fornecedor': 'Fornecedor', 'destinatario': 'Destinatário', 'descricao': 'Descrição', 'chave': 'Chave de Acesso'}[tipo_busca] }}: {{ termo_busca }}</span>
+                        {% endif %}
+                        {% if data_inicio %}
+                            <span class="badge bg-info">A partir de: {{ data_inicio }}</span>
+                        {% endif %}
+                        {% if data_fim %}
+                            <span class="badge bg-info">Até: {{ data_fim }}</span>
+                        {% endif %}
+                    </div>
+                    
+                    {% if resultados|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nº NF</th>
+                                        <th>Chave de Acesso</th>
+                                        <th>Data Emissão</th>
+                                        <th>Fornecedor</th>
+                                        <th>Destinatário</th>
+                                        <th>Valor</th>
+                                        <th>Itens</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for nota in resultados %}
+                                    <tr>
+                                        <td>{{ nota.id }}</td>
+                                        <td>{{ nota.numero_nf or '-' }}</td>
+                                        <td title="{{ nota.chave_acesso }}">{{ nota.chave_acesso[:10] }}...</td>
+                                        <td>{{ nota.data_emissao_formatada if nota.data_emissao_formatada else (nota.data_emissao.strftime('%d/%m/%Y') if nota.data_emissao else '-') }}</td>
+                                        <td title="{{ nota.cnpj_emitente }}">{{ nota.nome_emitente }}</td>
+                                        <td title="{{ nota.cnpj_destinatario }}">{{ nota.nome_destinatario }}</td>
+                                        <td>R$ {{ "%.2f"|format(nota.valor_total)|replace('.', ',') }}</td>
+                                        <td><span class="badge bg-secondary">{{ nota.total_itens }}</span></td>
+                                        <td>
+                                            <a href="{{ url_for('importacao_nf.visualizar', nf_id=nota.id) }}" class="btn btn-sm btn-info">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('importacao_nf.solicitar', nf_id=nota.id) }}" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-clipboard-list"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-muted">Encontrados {{ resultados|length }} resultado(s).</p>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            Nenhuma nota fiscal encontrada com os filtros selecionados.
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para limpar os filtros
+    document.getElementById('limparFiltros').addEventListener('click', function() {
+        document.getElementById('termo').value = '';
+        document.getElementById('tipo').selectedIndex = 0;
+        document.getElementById('data_inicio').value = '';
+        document.getElementById('data_fim').value = '';
+    });
+    
+    // Validação de datas
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const dataInicio = document.getElementById('data_inicio').value;
+        const dataFim = document.getElementById('data_fim').value;
+        
+        if (dataInicio && dataFim && dataInicio > dataFim) {
+            e.preventDefault();
+            alert('A data inicial não pode ser posterior à data final.');
+        }
+    });
+});
+</script>
+{% endblock %}

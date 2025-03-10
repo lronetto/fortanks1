@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Importação Manual de Arquivo XLS</h5>
+                <a href="{{ url_for('integracao_erp.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <p><i class="fas fa-info-circle"></i> <strong>Instruções:</strong></p>
+                    <ul>
+                        <li>Selecione um arquivo XLS exportado do sistema ERP</li>
+                        <li>O arquivo deve estar no formato HTML, conforme gerado pelo sistema</li>
+                        <li>O sistema irá processar as transações e importá-las para o banco de dados</li>
+                        <li>Após a importação, você poderá visualizar as transações na seção "Transações"</li>
+                    </ul>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data" class="dropzone-form">
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="mb-3">
+                                <label for="arquivo_xls" class="form-label">Arquivo XLS (HTML)</label>
+                                <input class="form-control" type="file" id="arquivo_xls" name="arquivo_xls" accept=".xls" required>
+                                <div class="form-text">Selecione o arquivo .xls gerado pelo ERP</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="detectarDuplicados" name="detectarDuplicados" checked>
+                                    <label class="form-check-label" for="detectarDuplicados">
+                                        Ignorar transações duplicadas
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-upload"></i> Processar e Importar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="row mt-5">
+                    <div class="col-md-12">
+                        <h5 class="border-bottom pb-2 mb-3">Exemplo de Arquivo</h5>
+                        <div class="card">
+                            <div class="card-body">
+                                <p>O arquivo XLS deve conter uma estrutura similar a esta:</p>
+                                <pre class="bg-light p-3 rounded">
+&lt;table&gt;
+  &lt;tr&gt;
+    &lt;td&gt;C.Custo: 1234-56 DEPARTAMENTO FINANCEIRO&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt;&lt;/td&gt;
+    ...
+  &lt;/tr&gt;
+  &lt;tr&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt;101&lt;/td&gt; &lt;!-- Categoria --&gt;
+    &lt;td&gt;20/03/2025&lt;/td&gt; &lt;!-- Data --&gt;
+    &lt;td&gt;NF-12345&lt;/td&gt; &lt;!-- Documento --&gt;
+    &lt;td&gt;FORNECEDOR XYZ&lt;/td&gt; &lt;!-- Emitente --&gt;
+    &lt;td&gt;&lt;/td&gt;
+    &lt;td&gt;PAGAMENTO REFERENTE A SERVIÇOS&lt;/td&gt; &lt;!-- Histórico --&gt;
+    ...
+    &lt;td&gt;1.000,00&lt;/td&gt; &lt;!-- Valor --&gt;
+  &lt;/tr&gt;
+  ...
+&lt;/table&gt;
+                                </pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

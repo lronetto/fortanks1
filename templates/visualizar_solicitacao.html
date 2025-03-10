@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Solicitação de Material #{{ solicitacao.id }}</h5>
+                <div>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-light">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                    <a href="{{ url_for('exportar_pdf', id=solicitacao.id) }}" class="btn btn-sm btn-light">
+                        <i class="fas fa-file-pdf"></i> Exportar PDF
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Informações da Solicitação</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <th class="table-light" width="40%">Número:</th>
+                                <td>{{ solicitacao.id }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Status:</th>
+                                <td>
+                                    {% if solicitacao.status == 'pendente' %}
+                                    <span class="badge bg-warning">Pendente</span>
+                                    {% elif solicitacao.status == 'aprovada' %}
+                                    <span class="badge bg-success">Aprovada</span>
+                                    {% elif solicitacao.status == 'rejeitada' %}
+                                    <span class="badge bg-danger">Rejeitada</span>
+                                    {% elif solicitacao.status == 'finalizada' %}
+                                    <span class="badge bg-secondary">Finalizada</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Data da Solicitação:</th>
+                                <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Centro de Custo:</th>
+                                <td>{{ solicitacao.centro_custo_codigo }} - {{ solicitacao.centro_custo_nome }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Justificativa:</th>
+                                <td>{{ solicitacao.justificativa }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="mb-3">Informações do Solicitante</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <th class="table-light" width="40%">Nome:</th>
+                                <td>{{ solicitacao.solicitante_nome }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Email:</th>
+                                <td>{{ solicitacao.solicitante_email }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Departamento:</th>
+                                <td>{{ solicitacao.solicitante_departamento }}</td>
+                            </tr>
+                        </table>
+                        
+                        {% if solicitacao.status in ['aprovada', 'rejeitada'] %}
+                        <h6 class="mt-4 mb-3">Informações da {{ 'Aprovação' if solicitacao.status == 'aprovada' else 'Rejeição' }}</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <th class="table-light" width="40%">Responsável:</th>
+                                <td>{{ solicitacao.aprovador_nome }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Data:</th>
+                                <td>{{ solicitacao.data_aprovacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Observação:</th>
+                                <td>{{ solicitacao.observacao if solicitacao.observacao else '-' }}</td>
+                            </tr>
+                        </table>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <h6 class="border-bottom pb-2 mb-3">Itens da Solicitação</h6>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Material</th>
+                                <th>Categoria</th>
+                                <th>Descrição</th>
+                                <th class="text-center">Quantidade</th>
+                                <th>Observação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in itens %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ item.material_nome }}</td>
+                                <td>{{ item.material_categoria }}</td>
+                                <td>{{ item.material_descricao }}</td>
+                                <td class="text-center">{{ item.quantidade }}</td>
+                                <td>{{ item.observacao if item.observacao else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-secondary">
+                                <td colspan="4" class="text-end"><strong>Total:</strong></td>
+                                <td class="text-center"><strong>{{ itens|sum(attribute='quantidade') }}</strong></td>
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

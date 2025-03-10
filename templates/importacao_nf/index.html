@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Importação de Notas Fiscais</h5>
+                <div>
+                    <div class="btn-group">
+                        <a href="{{ url_for('importacao_nf.importar') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-cloud-download-alt"></i> API Arquivei
+                        </a>
+                        <a href="{{ url_for('importacao_nf.importar_xml') }}" class="btn btn-light btn-sm">
+                            <i class="fas fa-file-upload"></i> Upload XML
+                        </a>
+                    </div>
+                    <a href="{{ url_for('importacao_nf.buscar') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-search"></i> Buscar
+                    </a>
+                    <a href="{{ url_for('importacao_nf.relatorios') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-chart-bar"></i> Relatórios
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Total de Notas</h5>
+                                <h2 class="mb-0">{{ estatisticas.total_importadas }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Importadas Hoje</h5>
+                                <h2 class="mb-0">{{ estatisticas.total_hoje }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card bg-info text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Valor Total</h5>
+                                <h2 class="mb-0">R$ {{ "{:,.2f}".format(estatisticas.valor_total|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-4">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body text-center">
+                                <h5 class="card-title">Fornecedores</h5>
+                                <h2 class="mb-0">{{ estatisticas.fornecedores_unicos }}</h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Filtrar por período</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" id="btnLimparFiltro">
+                                        <i class="fas fa-eraser"></i> Limpar
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-5">
+                                        <div class="mb-2">
+                                            <label for="dataInicio" class="form-label">Data Inicial</label>
+                                            <input type="date" class="form-control form-control-sm" id="dataInicio">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="mb-2">
+                                            <label for="dataFim" class="form-label">Data Final</label>
+                                            <input type="date" class="form-control form-control-sm" id="dataFim">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2 d-flex align-items-end">
+                                        <button class="btn btn-primary btn-sm w-100" id="btnFiltrar">
+                                            <i class="fas fa-filter"></i> Filtrar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5 class="border-bottom pb-2 mb-3">Notas Fiscais <span id="labelPeriodo"></span></h5>
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="tabelaNotasRecentes">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nº NF</th>
+                                        <th>Chave de Acesso</th>
+                                        <th>Data Emissão</th>
+                                        <th>Fornecedor</th>
+                                        <th>Destinatário</th>
+                                        <th>Valor</th>
+                                        <th>Itens</th>
+                                        <th>Origem</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="10" class="text-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Carregando...</span>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dataInicio = document.getElementById('dataInicio');
+    const dataFim = document.getElementById('dataFim');
+    const btnFiltrar = document.getElementById('btnFiltrar');
+    const btnLimparFiltro = document.getElementById('btnLimparFiltro');
+    const labelPeriodo = document.getElementById('labelPeriodo');
+    
+    // Função para carregar notas fiscais
+    function carregarNotas(filtroData = {}) {
+        const tabela = document.getElementById('tabelaNotasRecentes').getElementsByTagName('tbody')[0];
+        tabela.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        
+        // Construir URL com filtros, se houver
+        let url = '/importacao_nf/api/notas_recentes';
+        if (filtroData.inicio || filtroData.fim) {
+            url += '?';
+            const params = [];
+            if (filtroData.inicio) params.push(`data_inicio=${filtroData.inicio}`);
+            if (filtroData.fim) params.push(`data_fim=${filtroData.fim}`);
+            url += params.join('&');
+        }
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                tabela.innerHTML = '';
+                
+                if (data.data && data.data.length > 0) {
+                    data.data.forEach(nota => {
+                        // Verificar se os dados da nota são válidos
+                        if (!nota || !nota.id) {
+                            return;
+                        }
+                        
+                        // Formatar a data
+                        let dataFormatada = 'N/A';
+                        if (nota.data_emissao) {
+                            const dataEmissao = new Date(nota.data_emissao);
+                            if (!isNaN(dataEmissao.getTime())) {
+                                dataFormatada = dataEmissao.toLocaleDateString('pt-BR');
+                            }
+                        }
+                        
+                        // Determinar a origem da nota
+                        let origem = "Desconhecida";
+                        let origemClass = "bg-secondary";
+                        
+                        if (nota.observacoes) {
+                            if (nota.observacoes.includes("API")) {
+                                origem = "API Arquivei";
+                                origemClass = "bg-info";
+                            } else if (nota.observacoes.includes("XML")) {
+                                origem = "Upload XML";
+                                origemClass = "bg-success";
+                            }
+                        }
+                        
+                        const row = tabela.insertRow();
+                        row.innerHTML = `
+                        <td>${nota.id}</td>
+                        <td>${nota.numero_nf || '-'}</td>
+                        <td>${nota.chave_acesso ? nota.chave_acesso.substring(0, 10) + '...' : 'N/A'}</td>
+                        <td>${dataFormatada}</td>
+                        <td>${nota.nome_emitente || 'N/A'}</td>
+                        <td>${nota.nome_destinatario || 'N/A'}</td>
+                        <td>R$ ${parseFloat(nota.valor_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td><span class="badge bg-secondary">${nota.total_itens || 0}</span></td>
+                        <td><span class="badge ${origemClass}">${origem}</span></td>
+                        <td>
+                            <a href="/importacao_nf/visualizar/${nota.id}" class="btn btn-sm btn-info">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <a href="/importacao_nf/solicitar/${nota.id}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-clipboard-list"></i>
+                            </a>
+                        </td>
+                        `;
+                    });
+                } else {
+                    const row = tabela.insertRow();
+                    row.innerHTML = '<td colspan="9" class="text-center">Nenhuma nota fiscal encontrada no período selecionado</td>';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar notas:', error);
+                const tabela = document.getElementById('tabelaNotasRecentes').getElementsByTagName('tbody')[0];
+                tabela.innerHTML = `<tr><td colspan="9" class="text-center text-danger">Erro ao carregar notas: ${error.message}</td></tr>`;
+            });
+    }
+    
+    // Função para formatar data para exibição
+    function formatarDataBR(data) {
+        const partes = data.split('-');
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
+    
+    // Evento para filtrar por data
+    btnFiltrar.addEventListener('click', function() {
+        const inicio = dataInicio.value;
+        const fim = dataFim.value;
+        
+        // Validar datas
+        if (inicio && fim && inicio > fim) {
+            alert('A data inicial não pode ser posterior à data final');
+            return;
+        }
+        
+        // Atualizar o label de período
+        if (inicio && fim) {
+            labelPeriodo.textContent = `(${formatarDataBR(inicio)} até ${formatarDataBR(fim)})`;
+        } else if (inicio) {
+            labelPeriodo.textContent = `(a partir de ${formatarDataBR(inicio)})`;
+        } else if (fim) {
+            labelPeriodo.textContent = `(até ${formatarDataBR(fim)})`;
+        } else {
+            labelPeriodo.textContent = '';
+        }
+        
+        // Carregar notas com filtro
+        carregarNotas({
+            inicio: inicio,
+            fim: fim
+        });
+    });
+    
+    // Evento para limpar filtros
+    btnLimparFiltro.addEventListener('click', function() {
+        dataInicio.value = '';
+        dataFim.value = '';
+        labelPeriodo.textContent = '';
+        carregarNotas();
+    });
+    
+    // Carregar notas iniciais sem filtro
+    carregarNotas();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,330 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Relatórios Analíticos</h5>
+                <a href="{{ url_for('integracao_erp.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="relatoriosTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="centro-custo-tab" data-bs-toggle="tab" 
+                                data-bs-target="#centro-custo-content" type="button" role="tab" 
+                                aria-controls="centro-custo-content" aria-selected="true">
+                            Por Centro de Custo
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="categoria-tab" data-bs-toggle="tab" 
+                                data-bs-target="#categoria-content" type="button" role="tab" 
+                                aria-controls="categoria-content" aria-selected="false">
+                            Por Categoria
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="timeline-tab" data-bs-toggle="tab" 
+                                data-bs-target="#timeline-content" type="button" role="tab" 
+                                aria-controls="timeline-content" aria-selected="false">
+                            Timeline
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content pt-4" id="relatoriosTabsContent">
+                    <!-- Tab Centro de Custo -->
+                    <div class="tab-pane fade show active" id="centro-custo-content" role="tabpanel" aria-labelledby="centro-custo-tab">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Distribuição por Centro de Custo</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="centroCustoChart" height="300"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Análise</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="centroCustoAnalise">
+                                            <div class="text-center">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Carregando...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab Categoria -->
+                    <div class="tab-pane fade" id="categoria-content" role="tabpanel" aria-labelledby="categoria-tab">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Distribuição por Categoria</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <canvas id="categoriaChart" height="300"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">Análise</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="categoriaAnalise">
+                                            <div class="text-center">
+                                                <div class="spinner-border text-primary" role="status">
+                                                    <span class="visually-hidden">Carregando...</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab Timeline -->
+                    <div class="tab-pane fade" id="timeline-content" role="tabpanel" aria-labelledby="timeline-tab">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> A visualização de timeline está em desenvolvimento e será disponibilizada em breve.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Cores para os gráficos
+    const coresGraficos = [
+        'rgba(54, 162, 235, 0.7)',
+        'rgba(75, 192, 192, 0.7)',
+        'rgba(255, 159, 64, 0.7)',
+        'rgba(255, 99, 132, 0.7)',
+        'rgba(153, 102, 255, 0.7)',
+        'rgba(255, 205, 86, 0.7)',
+        'rgba(201, 203, 207, 0.7)',
+        'rgba(255, 99, 71, 0.7)',
+        'rgba(50, 205, 50, 0.7)',
+        'rgba(138, 43, 226, 0.7)'
+    ];
+    
+    // Carregar dados por centro de custo
+    fetch('/integracao_erp/api/dados_centro_custo')
+        .then(response => response.json())
+        .then(resposta => {
+            if (resposta.error) {
+                console.error('Erro:', resposta.error);
+                return;
+            }
+            
+            const dados = resposta.data;
+            if (dados && dados.length > 0) {
+                // Preparar dados para o gráfico
+                const labels = dados.map(item => item.rotulo);
+                const valores = dados.map(item => item.valor_total);
+                
+                // Criar gráfico
+                const ctx = document.getElementById('centroCustoChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Valor Total (R$)',
+                            data: valores,
+                            backgroundColor: coresGraficos,
+                            borderColor: coresGraficos.map(cor => cor.replace('0.7', '1')),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'R$ ' + value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'R$ ' + context.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Análise
+                const analise = document.getElementById('centroCustoAnalise');
+                analise.innerHTML = '';
+                
+                // Total geral
+                const totalGeral = valores.reduce((a, b) => a + b, 0);
+                
+                // Top 3 centros de custo
+                const top3 = [...dados]
+                    .sort((a, b) => b.valor_total - a.valor_total)
+                    .slice(0, 3);
+                
+                // Criar HTML com a análise
+                let html = `
+                    <p><strong>Total Geral:</strong> R$ ${totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p><strong>Quantidade de Centros:</strong> ${dados.length}</p>
+                    <hr>
+                    <p><strong>Top 3 Centros de Custo:</strong></p>
+                    <ul class="list-group">
+                `;
+                
+                top3.forEach(centro => {
+                    const percentual = ((centro.valor_total / totalGeral) * 100).toFixed(2);
+                    html += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${centro.rotulo}
+                            <span class="badge bg-primary rounded-pill">
+                                R$ ${centro.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                (${percentual}%)
+                            </span>
+                        </li>
+                    `;
+                });
+                
+                html += '</ul>';
+                analise.innerHTML = html;
+            } else {
+                document.getElementById('centroCustoChart').innerHTML = 'Nenhum dado disponível';
+                document.getElementById('centroCustoAnalise').innerHTML = 'Nenhum dado disponível para análise';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar dados:', error);
+            document.getElementById('centroCustoChart').innerHTML = `Erro ao carregar dados: ${error.message}`;
+            document.getElementById('centroCustoAnalise').innerHTML = 'Erro ao carregar análise';
+        });
+    
+    // Carregar dados por categoria
+    fetch('/integracao_erp/api/dados_categoria')
+        .then(response => response.json())
+        .then(resposta => {
+            if (resposta.error) {
+                console.error('Erro:', resposta.error);
+                return;
+            }
+            
+            const dados = resposta.data;
+            if (dados && dados.length > 0) {
+                // Preparar dados para o gráfico
+                const labels = dados.map(item => item.rotulo);
+                const valores = dados.map(item => item.valor_total);
+                
+                // Criar gráfico
+                const ctx = document.getElementById('categoriaChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: valores,
+                            backgroundColor: coresGraficos,
+                            borderColor: coresGraficos.map(cor => cor.replace('0.7', '1')),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.raw;
+                                        const percentage = ((value / context.dataset.data.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+                                        return `${label}: R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${percentage}%)`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                // Análise
+                const analise = document.getElementById('categoriaAnalise');
+                analise.innerHTML = '';
+                
+                // Total geral
+                const totalGeral = valores.reduce((a, b) => a + b, 0);
+                
+                // Top 3 categorias
+                const top3 = [...dados]
+                    .sort((a, b) => b.valor_total - a.valor_total)
+                    .slice(0, 3);
+                
+                // Criar HTML com a análise
+                let html = `
+                    <p><strong>Total Geral:</strong> R$ ${totalGeral.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p><strong>Quantidade de Categorias:</strong> ${dados.length}</p>
+                    <hr>
+                    <p><strong>Top 3 Categorias:</strong></p>
+                    <ul class="list-group">
+                `;
+                
+                top3.forEach(categoria => {
+                    const percentual = ((categoria.valor_total / totalGeral) * 100).toFixed(2);
+                    html += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            ${categoria.rotulo}
+                            <span class="badge bg-primary rounded-pill">
+                                R$ ${categoria.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                (${percentual}%)
+                            </span>
+                        </li>
+                    `;
+                });
+                
+                html += '</ul>';
+                analise.innerHTML = html;
+            } else {
+                document.getElementById('categoriaChart').innerHTML = 'Nenhum dado disponível';
+                document.getElementById('categoriaAnalise').innerHTML = 'Nenhum dado disponível para análise';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao carregar dados:', error);
+            document.getElementById('categoriaChart').innerHTML = `Erro ao carregar dados: ${error.message}`;
+            document.getElementById('categoriaAnalise').innerHTML = 'Erro ao carregar análise';
+        });
+});
+</script>
+{% endblock %}

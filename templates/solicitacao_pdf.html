@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitação #{{ solicitacao.id }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 10px;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0d6efd;
+        }
+        .title {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        .info-section {
+            margin-bottom: 20px;
+        }
+        .info-title {
+            font-weight: bold;
+            background-color: #f8f9fa;
+            padding: 5px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .info-content {
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-top: none;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid #dee2e6;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+        .footer {
+            margin-top: 50px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+            font-size: 12px;
+            text-align: center;
+            color: #6c757d;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        .status-pendente { background-color: #fff3cd; color: #856404; }
+        .status-aprovada { background-color: #d4edda; color: #155724; }
+        .status-rejeitada { background-color: #f8d7da; color: #721c24; }
+        .status-finalizada { background-color: #e2e3e5; color: #383d41; }
+        .signature {
+            margin-top: 40px;
+            text-align: center;
+        }
+        .signature-line {
+            display: inline-block;
+            width: 200px;
+            border-top: 1px solid #000;
+            margin: 0 20px;
+            padding-top: 5px;
+        }
+        .items-table th {
+            background-color: #e9ecef;
+        }
+        .items-table .total-row {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">SisMateriaisWeb</div>
+        <div class="title">Solicitação de Material Nº {{ solicitacao.id }}</div>
+    </div>
+    
+    <div class="info-section">
+        <div class="info-title">Informações da Solicitação</div>
+        <div class="info-content">
+            <table>
+                <tr>
+                    <th width="30%">Número da Solicitação:</th>
+                    <td>{{ solicitacao.id }}</td>
+                </tr>
+                <tr>
+                    <th>Data da Solicitação:</th>
+                    <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                </tr>
+                <tr>
+                    <th>Status:</th>
+                    <td>
+                        <span class="status status-{{ solicitacao.status }}">
+                            {{ {'pendente': 'Pendente', 'aprovada': 'Aprovada', 'rejeitada': 'Rejeitada', 'finalizada': 'Finalizada'}[solicitacao.status] }}
+                        </span>
+                    </td>
+                </tr>
+                <tr>
+                    <th>Centro de Custo:</th>
+                    <td>{{ solicitacao.centro_custo_codigo }} - {{ solicitacao.centro_custo_nome }}</td>
+                </tr>
+                <tr>
+                    <th>Justificativa:</th>
+                    <td>{{ solicitacao.justificativa }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    <div class="info-section">
+        <div class="info-title">Itens Solicitados</div>
+        <div class="info-content">
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Material</th>
+                        <th>Categoria</th>
+                        <th>Descrição</th>
+                        <th style="text-align: center;">Quantidade</th>
+                        <th>Observação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ item.material_nome }}</td>
+                        <td>{{ item.material_categoria }}</td>
+                        <td>{{ item.material_descricao }}</td>
+                        <td style="text-align: center;">{{ item.quantidade }}</td>
+                        <td>{{ item.observacao if item.observacao else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                    <tr class="total-row">
+                        <td colspan="4" style="text-align: right;">Total:</td>
+                        <td style="text-align: center;">{{ itens|sum(attribute='quantidade') }}</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="info-section">
+        <div class="info-title">Solicitante</div>
+        <div class="info-content">
+            <table>
+                <tr>
+                    <th width="30%">Nome:</th>
+                    <td>{{ solicitacao.solicitante_nome }}</td>
+                </tr>
+                <tr>
+                    <th>Email:</th>
+                    <td>{{ solicitacao.solicitante_email }}</td>
+                </tr>
+                <tr>
+                    <th>Departamento:</th>
+                    <td>{{ solicitacao.solicitante_departamento }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    
+    {% if solicitacao.status in ['aprovada', 'rejeitada'] %}
+    <div class="info-section">
+        <div class="info-title">Aprovação/Rejeição</div>
+        <div class="info-content">
+            <table>
+                <tr>
+                    <th width="30%">Responsável:</th>
+                    <td>{{ solicitacao.aprovador_nome }}</td>
+                </tr>
+                <tr>
+                    <th>Data:</th>
+                    <td>{{ solicitacao.data_aprovacao.strftime('%d/%m/%Y %H:%M') }}</td>
+                </tr>
+                <tr>
+                    <th>Observação:</th>
+                    <td>{{ solicitacao.observacao if solicitacao.observacao else '-' }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div class="signature">
+        <div class="signature-line">Solicitante</div>
+        <div class="signature-line">Aprovador</div>
+    </div>
+    
+    <div class="footer">
+        <p>Documento gerado em {{ now.strftime('%d/%m/%Y %H:%M') }}</p>
+        <p>Sistema de Solicitação de Materiais - SisMateriaisWeb</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Importar Notas Fiscais via API</h5>
+                <div>
+                    <a href="{{ url_for('importacao_nf.importar_xml') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-file-upload"></i> Upload XML
+                    </a>
+                    <a href="{{ url_for('importacao_nf.index') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Este módulo importa notas fiscais eletrônicas da API Arquivei.
+                </div>
+                
+                <ul class="nav nav-tabs mb-4" id="importTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="api-tab" data-bs-toggle="tab" data-bs-target="#api-content" type="button" role="tab" aria-controls="api-content" aria-selected="true">
+                            <i class="fas fa-cloud-download-alt"></i> API Arquivei
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="xml-tab" data-bs-toggle="tab" data-bs-target="#xml-content" type="button" role="tab" aria-controls="xml-content" aria-selected="false">
+                            <i class="fas fa-file-upload"></i> Upload XML
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="importTabsContent">
+                    <div class="tab-pane fade show active" id="api-content" role="tabpanel" aria-labelledby="api-tab">
+                        <div class="row">
+                            <div class="col-md-6 mx-auto">
+                                <form method="POST" action="{{ url_for('importacao_nf.importar') }}">
+                                    <div class="mb-3">
+                                        <label for="dias" class="form-label">Período de importação (dias)</label>
+                                        <select class="form-select" id="dias" name="dias">
+                                            <option value="7">Últimos 7 dias</option>
+                                            <option value="15">Últimos 15 dias</option>
+                                            <option value="30" selected>Últimos 30 dias</option>
+                                            <option value="60">Últimos 60 dias</option>
+                                            <option value="90">Últimos 90 dias</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="cnpj" class="form-label">CNPJ específico (opcional)</label>
+                                        <input type="text" class="form-control" id="cnpj" name="cnpj" placeholder="00.000.000/0000-00">
+                                        <div class="form-text">Deixe em branco para importar de todos os CNPJs.</div>
+                                    </div>
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-download"></i> Iniciar Importação
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="xml-content" role="tabpanel" aria-labelledby="xml-tab">
+                        <div class="row">
+                            <div class="col-md-12 text-center my-4">
+                                <a href="{{ url_for('importacao_nf.importar_xml') }}" class="btn btn-lg btn-primary">
+                                    <i class="fas fa-file-upload"></i> Ir para Upload de XML
+                                </a>
+                                <p class="text-muted mt-3">
+                                    Clique acima para acessar a página de upload de arquivos XML ou ZIP.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Máscara para CNPJ
+    const cnpjInput = document.getElementById('cnpj');
+    if (cnpjInput) {
+        cnpjInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 14) value = value.slice(0, 14);
+            
+            if (value.length > 12) {
+                value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+            } else if (value.length > 8) {
+                value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d*)$/, '$1.$2.$3/$4');
+            } else if (value.length > 5) {
+                value = value.replace(/^(\d{2})(\d{3})(\d*)$/, '$1.$2.$3');
+            } else if (value.length > 2) {
+                value = value.replace(/^(\d{2})(\d*)$/, '$1.$2');
+            }
+            
+            e.target.value = value;
+        });
+    }
+});
+</script>
+{% endblock %}

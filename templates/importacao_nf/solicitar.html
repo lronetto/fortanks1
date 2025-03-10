@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Criar Solicitação a partir de Nota Fiscal</h5>
+                <a href="{{ url_for('importacao_nf.visualizar', nf_id=nota.id) }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Selecione os itens da nota fiscal que deseja incluir na solicitação.
+                </div>
+                
+                <form method="POST" action="{{ url_for('importacao_nf.solicitar', nf_id=nota.id) }}">
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="justificativa" class="form-label">Justificativa da Solicitação</label>
+                                <textarea class="form-control" id="justificativa" name="justificativa" rows="2" required>Solicitação baseada na Nota Fiscal {{ nota.chave_acesso }}</textarea>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="centro_custo_id" class="form-label">Centro de Custo</label>
+                                <select class="form-select" id="centro_custo_id" name="centro_custo_id" required>
+                                    <option value="">Selecione um centro de custo</option>
+                                    {% for centro in centros_custo %}
+                                    <option value="{{ centro.id }}">{{ centro.codigo }} - {{ centro.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="border-bottom pb-2 mb-3">Itens da Nota Fiscal</h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="40px">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="selecionar-todos">
+                                        </div>
+                                    </th>
+                                    <th>#</th>
+                                    <th>Código</th>
+                                    <th>Descrição</th>
+                                    <th class="text-center">Quantidade</th>
+                                    <th class="text-end">Valor Unit.</th>
+                                    <th class="text-end">Valor Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if itens %}
+                                    {% for item in itens %}
+                                    <tr>
+                                        <td>
+                                            <div class="form-check">
+                                                <input class="form-check-input item-checkbox" type="checkbox" name="item_id" value="{{ item.id }}" id="item-{{ item.id }}">
+                                            </div>
+                                        </td>
+                                        <td>{{ loop.index }}</td>
+                                        <td>{{ item.codigo or '-' }}</td>
+                                        <td>{{ item.descricao }}</td>
+                                        <td class="text-center">{{ "%.2f"|format(item.quantidade)|replace('.', ',') }}</td>
+                                        <td class="text-end">R$ {{ "%.4f"|format(item.valor_unitario)|replace('.', ',') }}</td>
+                                        <td class="text-end">R$ {{ "%.2f"|format(item.valor_total)|replace('.', ',') }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="7" class="text-center">Nenhum item encontrado para esta nota fiscal</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="submit" class="btn btn-primary" id="btnCriarSolicitacao">
+                            <i class="fas fa-save"></i> Criar Solicitação
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selecionarTodos = document.getElementById('selecionar-todos');
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    const btnCriarSolicitacao = document.getElementById('btnCriarSolicitacao');
+    
+    // Evento para selecionar/deselecionar todos os itens
+    selecionarTodos.addEventListener('change', function() {
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = selecionarTodos.checked;
+        });
+    });
+    
+    // Verificar se todos os itens estão selecionados
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const todosSelecionados = Array.from(checkboxes).every(cb => cb.checked);
+            const algunsSelecionados = Array.from(checkboxes).some(cb => cb.checked);
+            
+            selecionarTodos.checked = todosSelecionados;
+            selecionarTodos.indeterminate = algunsSelecionados && !todosSelecionados;
+        });
+    });
+    
+    // Validar formulário antes do envio
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const itensSelecionados = Array.from(checkboxes).filter(cb => cb.checked);
+        
+        if (itensSelecionados.length === 0) {
+            e.preventDefault();
+            alert('Selecione pelo menos um item da nota fiscal.');
+            return false;
+        }
+        
+        const centroCusto = document.getElementById('centro_custo_id').value;
+        if (!centroCusto) {
+            e.preventDefault();
+            alert('Selecione um centro de custo.');
+            return false;
+        }
+        
+        const justificativa = document.getElementById('justificativa').value.trim();
+        if (!justificativa) {
+            e.preventDefault();
+            alert('Informe a justificativa para a solicitação.');
+            return false;
+        }
+        
+        return true;
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Detalhes da Transação #{{ transacao.id }}</h5>
+                <a href="{{ url_for('integracao_erp.listar_transacoes') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="border-bottom pb-2 mb-3">Informações Básicas</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <th class="table-light" width="40%">ID da Transação:</th>
+                                <td>{{ transacao.id }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Centro de Custo:</th>
+                                <td>{{ transacao.centro_custo }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Categoria:</th>
+                                <td>{{ transacao.categoria or '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Data de Pagamento:</th>
+                                <td>{{ transacao.data_pagamento }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Documento:</th>
+                                <td>{{ transacao.documento }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Emitente:</th>
+                                <td>{{ transacao.emitente }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Valor:</th>
+                                <td><strong class="text-primary">R$ {{ "{:,.2f}".format(transacao.valor)|replace(',', 'X')|replace('.', ',')|replace('X', '.') }}</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="border-bottom pb-2 mb-3">Dados da Importação</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <th class="table-light" width="40%">Data de Processamento:</th>
+                                <td>{{ transacao.data_processamento.strftime('%d/%m/%Y %H:%M:%S') if transacao.data_processamento else '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">Data de Importação:</th>
+                                <td>{{ transacao.importado_em.strftime('%d/%m/%Y %H:%M:%S') if transacao.importado_em else '-' }}</td>
+                            </tr>
+                            <tr>
+                                <th class="table-light">UUID:</th>
+                                <td><small class="text-muted">{{ transacao.id|string|uuid5 if transacao.id else '-' }}</small></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="border-bottom pb-2 mb-3">Histórico</h6>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <p>{{ transacao.historico or 'Nenhum histórico disponível.' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="border-bottom pb-2 mb-3">Ações</h6>
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('integracao_erp.listar_transacoes', emitente=transacao.emitente) }}" class="btn btn-outline-primary">
+                                <i class="fas fa-search"></i> Ver todas as transações deste emitente
+                            </a>
+                            <a href="{{ url_for('integracao_erp.listar_transacoes', centro_custo=transacao.centro_custo) }}" class="btn btn-outline-info">
+                                <i class="fas fa-filter"></i> Filtrar por este centro de custo
+                            </a>
+                            {% if transacao.categoria %}
+                            <a href="{{ url_for('integracao_erp.listar_transacoes', categoria=transacao.categoria) }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-tag"></i> Filtrar por esta categoria
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

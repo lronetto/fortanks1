@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Adicionar Usuário</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('adicionar_usuario') }}">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="senha" class="form-label">Senha</label>
+                        <input type="password" class="form-control" id="senha" name="senha" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="departamento" class="form-label">Departamento</label>
+                        <input type="text" class="form-control" id="departamento" name="departamento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="cargo" class="form-label">Cargo</label>
+                        <select class="form-select" id="cargo" name="cargo" required>
+                            <option value="">Selecione um cargo</option>
+                            <option value="colaborador">Colaborador</option>
+                            <option value="gerente">Gerente</option>
+                            <option value="diretor">Diretor</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Adicionar Usuário</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Lista de Usuários</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Email</th>
+                                <th>Departamento</th>
+                                <th>Cargo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for usuario in usuarios %}
+                            <tr>
+                                <td>{{ usuario.id }}</td>
+                                <td>{{ usuario.nome }}</td>
+                                <td>{{ usuario.email }}</td>
+                                <td>{{ usuario.departamento }}</td>
+                                <td>
+                                    {% if usuario.cargo == 'colaborador' %}
+                                    <span class="badge bg-secondary">Colaborador</span>
+                                    {% elif usuario.cargo == 'gerente' %}
+                                    <span class="badge bg-info">Gerente</span>
+                                    {% elif usuario.cargo == 'diretor' %}
+                                    <span class="badge bg-warning">Diretor</span>
+                                    {% elif usuario.cargo == 'admin' %}
+                                    <span class="badge bg-danger">Administrador</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

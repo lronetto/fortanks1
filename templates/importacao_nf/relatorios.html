@@ -1,0 +1,293 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Relatórios de Notas Fiscais</h5>
+                <a href="{{ url_for('importacao_nf.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Importações por Mês</h6>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="carregarDados('mensal')">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="graficoMensal" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Top Fornecedores</h6>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="carregarDados('fornecedor')">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="graficoFornecedor" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Status das Notas</h6>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="carregarDados('status')">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="graficoStatus" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+<script>
+// Objetos para armazenar as instâncias dos gráficos
+let graficoMensal, graficoFornecedor, graficoStatus;
+
+// Cores para os gráficos
+const coresGraficos = [
+    'rgba(54, 162, 235, 0.7)',
+    'rgba(75, 192, 192, 0.7)',
+    'rgba(255, 159, 64, 0.7)',
+    'rgba(255, 99, 132, 0.7)',
+    'rgba(153, 102, 255, 0.7)',
+    'rgba(255, 205, 86, 0.7)',
+    'rgba(201, 203, 207, 0.7)',
+    'rgba(255, 99, 71, 0.7)',
+    'rgba(50, 205, 50, 0.7)',
+    'rgba(138, 43, 226, 0.7)'
+];
+
+// Função para carregar dados do relatório
+function carregarDados(tipo) {
+    fetch(`/importacao_nf/api/dados_relatorio?tipo=${tipo}`)
+        .then(response => response.json())
+        .then(resposta => {
+            if (resposta.error) {
+                console.error('Erro:', resposta.error);
+                return;
+            }
+            
+            const dados = resposta.data;
+            
+            if (tipo === 'mensal') {
+                atualizarGraficoMensal(dados);
+            } else if (tipo === 'fornecedor') {
+                atualizarGraficoFornecedor(dados);
+            } else if (tipo === 'status') {
+                atualizarGraficoStatus(dados);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados:', error);
+        });
+}
+
+// Função para atualizar o gráfico mensal
+function atualizarGraficoMensal(dados) {
+    const labels = dados.map(item => {
+        const [ano, mes] = item.periodo.split('-');
+        const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        return `${meses[parseInt(mes) - 1]}/${ano}`;
+    });
+    
+    const valores = dados.map(item => item.total_notas);
+    const valoresMonetarios = dados.map(item => parseFloat(item.valor_total));
+    
+    if (graficoMensal) {
+        graficoMensal.data.labels = labels;
+        graficoMensal.data.datasets[0].data = valores;
+        graficoMensal.data.datasets[1].data = valoresMonetarios;
+        graficoMensal.update();
+    } else {
+        const ctx = document.getElementById('graficoMensal').getContext('2d');
+        graficoMensal = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Quantidade',
+                        data: valores,
+                        backgroundColor: coresGraficos[0],
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Valor (R$)',
+                        data: valoresMonetarios,
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        tension: 0.1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        type: 'linear',
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Quantidade'
+                        }
+                    },
+                    y1: {
+                        beginAtZero: true,
+                        type: 'linear',
+                        position: 'right',
+                        title: {
+                            display: true,
+                            text: 'Valor (R$)'
+                        },
+                        grid: {
+                            drawOnChartArea: false
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Função para atualizar o gráfico de fornecedores
+function atualizarGraficoFornecedor(dados) {
+    const labels = dados.map(item => {
+        // Limitar o tamanho do nome para não sobrecarregar o gráfico
+        return item.rotulo.length > 20 ? item.rotulo.substring(0, 20) + '...' : item.rotulo;
+    });
+    
+    const valores = dados.map(item => parseFloat(item.valor_total));
+    
+    if (graficoFornecedor) {
+        graficoFornecedor.data.labels = labels;
+        graficoFornecedor.data.datasets[0].data = valores;
+        graficoFornecedor.update();
+    } else {
+        const ctx = document.getElementById('graficoFornecedor').getContext('2d');
+        graficoFornecedor = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: valores,
+                    backgroundColor: coresGraficos,
+                    borderColor: coresGraficos.map(cor => cor.replace('0.7', '1')),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.raw;
+                                const percentage = ((value / context.dataset.data.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+                                return `${label}: R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Função para atualizar o gráfico de status
+function atualizarGraficoStatus(dados) {
+    const statusTraduzido = {
+        'importado': 'Importado',
+        'processado': 'Processado',
+        'atualizado': 'Atualizado',
+        'erro': 'Erro'
+    };
+    
+    const labels = dados.map(item => statusTraduzido[item.rotulo] || item.rotulo);
+    const valores = dados.map(item => item.total_notas);
+    
+    if (graficoStatus) {
+        graficoStatus.data.labels = labels;
+        graficoStatus.data.datasets[0].data = valores;
+        graficoStatus.update();
+    } else {
+        const ctx = document.getElementById('graficoStatus').getContext('2d');
+        graficoStatus = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: valores,
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 159, 64, 0.7)',
+                        'rgba(255, 99, 132, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Carregar dados iniciais
+document.addEventListener('DOMContentLoaded', function() {
+    carregarDados('mensal');
+    carregarDados('fornecedor');
+    carregarDados('status');
+});
+</script>
+{% endblock %}

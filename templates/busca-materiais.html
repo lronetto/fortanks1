@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Busca de Materiais</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('buscar_material') }}" class="mb-4">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="termo" name="termo" placeholder="Digite o nome, descrição ou categoria do material" value="{{ termo }}">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </form>
+                
+                {% if termo %}
+                    <h6>Resultados para: <span class="badge bg-secondary">{{ termo }}</span></h6>
+                    
+                    {% if resultados|length > 0 %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Nome</th>
+                                        <th>Categoria</th>
+                                        <th>Descrição</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for material in resultados %}
+                                    <tr>
+                                        <td>{{ material.id }}</td>
+                                        <td>{{ material.nome }}</td>
+                                        <td>{{ material.categoria }}</td>
+                                        <td>{{ material.descricao }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-muted">Encontrados {{ resultados|length }} resultado(s).</p>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            Nenhum material encontrado com o termo "{{ termo }}".
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

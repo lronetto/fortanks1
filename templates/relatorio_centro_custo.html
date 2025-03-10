@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Relatório por Centro de Custo</h5>
+                <button id="btnExportPDF" class="btn btn-light btn-sm">
+                    <i class="fas fa-file-pdf"></i> Exportar PDF
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped" id="tabelaRelatorio">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Centro de Custo</th>
+                                <th>Total de Solicitações</th>
+                                <th>Total de Itens</th>
+                                <th>Aprovadas</th>
+                                <th>Rejeitadas</th>
+                                <th>Pendentes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for centro in resumo_centros %}
+                            <tr>
+                                <td>{{ centro.codigo }}</td>
+                                <td>{{ centro.nome }}</td>
+                                <td>{{ centro.total_solicitacoes }}</td>
+                                <td>{{ centro.total_itens }}</td>
+                                <td>{{ centro.aprovadas }}</td>
+                                <td>{{ centro.rejeitadas }}</td>
+                                <td>{{ centro.pendentes }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Gráfico de Solicitações por Centro de Custo</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="centrosCustoChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Status por Centro de Custo</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Dados para gráficos
+    const centros = [{% for centro in resumo_centros %}"{{ centro.codigo }} - {{ centro.nome }}"{% if not loop.last %},{% endif %}{% endfor %}];
+    const totais = [{% for centro in resumo_centros %}{{ centro.total_solicitacoes }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const aprovadas = [{% for centro in resumo_centros %}{{ centro.aprovadas }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const rejeitadas = [{% for centro in resumo_centros %}{{ centro.rejeitadas }}{% if not loop.last %},{% endif %}{% endfor %}];
+    const pendentes = [{% for centro in resumo_centros %}{{ centro.pendentes }}{% if not loop.last %},{% endif %}{% endfor %}];
+    
+    // Gráfico de barras - Total por centro de custo
+    const ctx1 = document.getElementById('centrosCustoChart').getContext('2d');
+    new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: centros,
+            datasets: [{
+                label: 'Total de Solicitações',
+                data: totais,
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Gráfico de linha - Status por centro de custo
+    const ctx2 = document.getElementById('statusChart').getContext('2d');
+    new Chart(ctx2, {
+        type: 'line',
+        data: {
+            labels: centros,
+            datasets: [
+                {
+                    label: 'Aprovadas',
+                    data: aprovadas,
+                    backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    borderWidth: 2,
+                    tension: 0.1
+                },
+                {
+                    label: 'Rejeitadas',
+                    data: rejeitadas,
+                    backgroundColor: 'rgba(220, 53, 69, 0.2)',
+                    borderColor: 'rgba(220, 53, 69, 1)',
+                    borderWidth: 2,
+                    tension: 0.1
+                },
+                {
+                    label: 'Pendentes',
+                    data: pendentes,
+                    backgroundColor: 'rgba(255, 193, 7, 0.2)',
+                    borderColor: 'rgba(255, 193, 7, 1)',
+                    borderWidth: 2,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Exportar relatório em PDF
+    document.getElementById('btnExportPDF').addEventListener('click', function() {
+        window.print();
+    });
+});
+</script>
+{% endblock %}
