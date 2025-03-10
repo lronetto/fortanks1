@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Registrar Manutenção</h5>
+                <a href="{{ url_for('checklist.visualizar_equipamento', equipamento_id=equipamento.id) }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <div class="d-flex">
+                        <div class="me-3">
+                            <i class="fas fa-info-circle fa-2x"></i>
+                        </div>
+                        <div>
+                            <h5 class="alert-heading">Informações do Equipamento</h5>
+                            <p class="mb-1"><strong>Código:</strong> {{ equipamento.codigo }}</p>
+                            <p class="mb-1"><strong>Nome:</strong> {{ equipamento.nome }}</p>
+                            <p class="mb-1"><strong>Tipo:</strong> {{ equipamento.tipo }}</p>
+                            <p class="mb-0"><strong>Última Manutenção:</strong> {{ equipamento.data_ultima_manutencao.strftime('%d/%m/%Y') if equipamento.data_ultima_manutencao else 'Nunca realizada' }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <form method="POST" action="{{ url_for('checklist.registrar_manutencao', equipamento_id=equipamento.id) }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo_manutencao" class="form-label">Tipo de Manutenção *</label>
+                            <select class="form-select" id="tipo_manutencao" name="tipo_manutencao" required>
+                                <option value="preventiva">Preventiva</option>
+                                <option value="corretiva">Corretiva</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="data_manutencao" class="form-label">Data da Manutenção *</label>
+                            <input type="date" class="form-control" id="data_manutencao" name="data_manutencao" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição da Manutenção *</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3" required></textarea>
+                        <div class="form-text">Descreva os serviços realizados, peças substituídas, etc.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="custo" class="form-label">Custo (R$)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" class="form-control" id="custo" name="custo" placeholder="0,00">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="form-check mb-4">
+                        <input class="form-check-input" type="checkbox" id="alterar_status" name="alterar_status">
+                        <label class="form-check-label" for="alterar_status">
+                            Alterar status do equipamento após registro da manutenção
+                        </label>
+                    </div>
+                    
+                    <div id="opcoes_status" class="mb-4" style="display: none;">
+                        <label class="form-label">Novo status:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="novo_status" id="status_ativo" value="ativo" checked>
+                            <label class="form-check-label" for="status_ativo">
+                                <span class="badge bg-success">Ativo</span> - Equipamento operacional
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="novo_status" id="status_manutencao" value="em_manutencao">
+                            <label class="form-check-label" for="status_manutencao">
+                                <span class="badge bg-warning">Em Manutenção</span> - Equipamento em manutenção
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="novo_status" id="status_inativo" value="inativo">
+                            <label class="form-check-label" for="status_inativo">
+                                <span class="badge bg-danger">Inativo</span> - Equipamento fora de operação
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Registrar Manutenção
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Formatação do campo de custo
+    const custoInput = document.getElementById('custo');
+    custoInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        
+        if (value === '') {
+            e.target.value = '';
+            return;
+        }
+        
+        value = parseInt(value, 10) / 100;
+        e.target.value = value.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    });
+    
+    // Mostrar/ocultar opções de status
+    const alterarStatusCheckbox = document.getElementById('alterar_status');
+    const opcoesStatus = document.getElementById('opcoes_status');
+    
+    alterarStatusCheckbox.addEventListener('change', function() {
+        opcoesStatus.style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // Preencher valor atual do status do equipamento
+    {% if equipamento.status %}
+    document.querySelector(`input[name="novo_status"][value="{{ equipamento.status }}"]`).checked = true;
+    {% endif %}
+});
+</script>
+{% endblock %}

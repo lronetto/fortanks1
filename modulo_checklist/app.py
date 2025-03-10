@@ -78,11 +78,13 @@ def index():
         'total_modelos': 0,
         'checklists_pendentes': 0,
         'checklists_concluidos': 0,
-        'checklists_hoje': 0
+        'checklists_hoje': 0,
+        'total_equipamentos': 0  # Novo item para estatísticas de equipamentos
     }
 
     modelos_recentes = []
     checklists_recentes = []
+    equipamentos_recentes = []  # Nova variável para equipamentos recentes
 
     if connection:
         try:
@@ -112,6 +114,12 @@ def index():
             resultado = cursor.fetchone()
             estatisticas['checklists_hoje'] = resultado['total'] if resultado else 0
 
+            # Total de equipamentos
+            cursor.execute(
+                "SELECT COUNT(*) as total FROM checklist_equipamentos WHERE status = 'ativo'")
+            resultado = cursor.fetchone()
+            estatisticas['total_equipamentos'] = resultado['total'] if resultado else 0
+
             # Modelos recentes
             cursor.execute("""
                 SELECT m.*, u.nome as criador_nome, 
@@ -137,6 +145,18 @@ def index():
             """)
             checklists_recentes = cursor.fetchall()
 
+            # Equipamentos recentes (adicione esta query)
+            cursor.execute("""
+                SELECT e.*, u.nome as responsavel_nome,
+                (SELECT COUNT(*) FROM checklist_preenchidos WHERE equipamento_cadastrado_id = e.id) as total_checklists
+                FROM checklist_equipamentos e
+                JOIN usuarios u ON e.criado_por = u.id
+                WHERE e.status = 'ativo'
+                ORDER BY e.criado_em DESC
+                LIMIT 5
+            """)
+            equipamentos_recentes = cursor.fetchall()
+
             cursor.close()
         except Exception as e:
             logger.error(f"Erro ao obter estatísticas: {e}")
@@ -146,9 +166,438 @@ def index():
     return render_template('checklist/index.html',
                            estatisticas=estatisticas,
                            modelos_recentes=modelos_recentes,
-                           checklists_recentes=checklists_recentes)
+                           checklists_recentes=checklists_recentes,
+                           equipamentos_recentes=equipamentos_recentes)  # Adicione esta variável
 
 # Rotas para gerenciamento de modelos de checklist
+
+# Rota para listar equipamentos
+
+
+@mod_checklist.route('/equipamentos')
+def listar_equipamentos():
+    if 'logado' not in session:
+        flash('Faça login para acessar o sistema', 'warning')
+        return redirect(url_for('index'))
+
+    if not verificar_permissao('visualizar'):
+        flash('Você não tem permissão para acessar esta página', 'danger')
+        return redirect(url_for('checklist.index'))
+
+    filtro_tipo = request.args.get('tipo', '')
+    filtro_status = request.args.get('status', '')
+    filtro_nome = request.args.get('nome', '')
+    filtro_local = request.args.get('local', '')
+
+    connection = get_db_connection()
+    equipamentos = []
+    tipos_equipamento = []
+
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+
+            # Construir query com filtros
+            query = """
+                SELECT e.*, u.nome as responsavel_nome,
+                (SELECT COUNT(*) FROM checklist_preenchidos WHERE equipamento_cadastrado_id = e.id) as total_checklists
+                FROM checklist_equipamentos e
+                JOIN usuarios u ON e.criado_por = u.id
+                WHERE 1=1
+            """
+            params = []
+
+            if filtro_tipo:
+                query += " AND e.tipo = %s"
+                params.append(filtro_tipo)
+
+            if filtro_status:
+                query += " AND e.status = %s"
+                params.append(filtro_status)
+
+            if filtro_nome:
+                query += " AND (e.nome LIKE %s OR e.codigo LIKE %s)"
+                params.extend([f"%{filtro_nome}%", f"%{filtro_nome}%"])
+
+            if filtro_local:
+                query += " AND e.local LIKE %s"
+                params.append(f"%{filtro_local}%")
+
+            query += " ORDER BY e.nome"
+
+            cursor.execute(query, params)
+            equipamentos = cursor.fetchall()
+
+            # Obter lista de tipos de equipamento para o filtro
+            cursor.execute(
+                "SELECT DISTINCT tipo FROM checklist_equipamentos ORDER BY tipo")
+            tipos_equipamento = [row['tipo'] for row in cursor.fetchall()]
+
+            # Obter lista de locais para o filtro
+            cursor.execute(
+                "SELECT DISTINCT local FROM checklist_equipamentos WHERE local IS NOT NULL AND local != '' ORDER BY local")
+            locais = [row['local'] for row in cursor.fetchall()]
+
+            cursor.close()
+        except Exception as e:
+            logger.error(f"Erro ao listar equipamentos: {e}")
+            flash(f"Erro ao listar equipamentos: {str(e)}", 'danger')
+        finally:
+            connection.close()
+
+    return render_template('checklist/equipamentos.html',
+                           equipamentos=equipamentos,
+                           filtros={
+                               'tipo': filtro_tipo,
+                               'status': filtro_status,
+                               'nome': filtro_nome,
+                               'local': filtro_local
+                           },
+                           tipos_equipamento=tipos_equipamento,
+                           locais=locais if 'locais' in locals() else [],
+                           pode_editar=verificar_permissao('editar'),
+                           pode_admin=verificar_permissao('admin'))
+
+
+@mod_checklist.route('/equipamentos/novo', methods=['GET', 'POST'])
+def novo_equipamento():
+    if 'logado' not in session:
+        flash('Faça login para acessar o sistema', 'warning')
+        return redirect(url_for('index'))
+
+    if not verificar_permissao('editar'):
+        flash('Você não tem permissão para cadastrar equipamentos', 'danger')
+        return redirect(url_for('checklist.listar_equipamentos'))
+
+    if request.method == 'POST':
+        codigo = request.form.get('codigo')
+        nome = request.form.get('nome')
+        tipo = request.form.get('tipo')
+        modelo = request.form.get('modelo')
+        fabricante = request.form.get('fabricante')
+        numero_serie = request.form.get('numero_serie')
+        data_aquisicao = request.form.get('data_aquisicao')
+        data_ultima_manutencao = request.form.get('data_ultima_manutencao')
+        local = request.form.get('local')
+        status = request.form.get('status')
+        observacoes = request.form.get('observacoes')
+
+        if not all([codigo, nome, tipo, status]):
+            flash('Preencha todos os campos obrigatórios', 'warning')
+            return redirect(url_for('checklist.novo_equipamento'))
+
+        # Processar upload de foto, se houver
+        foto = None
+        if 'foto' in request.files and request.files['foto'].filename:
+            arquivo = request.files['foto']
+            if arquivo and arquivo.filename:
+                # Gerar nome seguro para o arquivo
+                filename = secure_filename(arquivo.filename)
+                # Gerar um nome único com timestamp
+                nome_arquivo = f"{int(datetime.now().timestamp())}_{filename}"
+                # Definir o caminho para salvar
+                diretorio_uploads = os.path.join(
+                    current_app.root_path, 'static', 'uploads', 'equipamentos')
+
+                # Garantir que o diretório existe
+                os.makedirs(diretorio_uploads, exist_ok=True)
+
+                # Caminho completo do arquivo
+                caminho_arquivo = os.path.join(diretorio_uploads, nome_arquivo)
+
+                # Salvar o arquivo
+                arquivo.save(caminho_arquivo)
+
+                # Guardar o caminho relativo para o banco de dados
+                foto = f"uploads/equipamentos/{nome_arquivo}"
+
+        connection = get_db_connection()
+        if connection:
+            try:
+                cursor = connection.cursor()
+
+                # Inserir equipamento
+                cursor.execute("""
+                    INSERT INTO checklist_equipamentos 
+                    (codigo, nome, tipo, modelo, fabricante, numero_serie, 
+                     data_aquisicao, data_ultima_manutencao, local, status, 
+                     observacoes, foto, criado_por)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, [
+                    codigo, nome, tipo, modelo, fabricante, numero_serie,
+                    data_aquisicao if data_aquisicao else None,
+                    data_ultima_manutencao if data_ultima_manutencao else None,
+                    local, status, observacoes, foto, session['id_usuario']
+                ])
+
+                equipamento_id = cursor.lastrowid
+                connection.commit()
+                flash('Equipamento cadastrado com sucesso', 'success')
+                return redirect(url_for('checklist.listar_equipamentos'))
+
+            except Exception as e:
+                connection.rollback()
+                logger.error(f"Erro ao cadastrar equipamento: {e}")
+                flash(f"Erro ao cadastrar equipamento: {str(e)}", 'danger')
+            finally:
+                cursor.close()
+                connection.close()
+
+    return render_template('checklist/novo_equipamento.html')
+
+
+@mod_checklist.route('/equipamentos/<int:equipamento_id>/editar', methods=['GET', 'POST'])
+def editar_equipamento(equipamento_id):
+    if 'logado' not in session:
+        flash('Faça login para acessar o sistema', 'warning')
+        return redirect(url_for('index'))
+
+    if not verificar_permissao('editar'):
+        flash('Você não tem permissão para editar equipamentos', 'danger')
+        return redirect(url_for('checklist.listar_equipamentos'))
+
+    connection = get_db_connection()
+    equipamento = None
+
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+
+            # Buscar dados do equipamento
+            cursor.execute(
+                "SELECT * FROM checklist_equipamentos WHERE id = %s", [equipamento_id])
+            equipamento = cursor.fetchone()
+
+            if not equipamento:
+                flash('Equipamento não encontrado', 'warning')
+                return redirect(url_for('checklist.listar_equipamentos'))
+
+            if request.method == 'POST':
+                codigo = request.form.get('codigo')
+                nome = request.form.get('nome')
+                tipo = request.form.get('tipo')
+                modelo = request.form.get('modelo')
+                fabricante = request.form.get('fabricante')
+                numero_serie = request.form.get('numero_serie')
+                data_aquisicao = request.form.get('data_aquisicao')
+                data_ultima_manutencao = request.form.get(
+                    'data_ultima_manutencao')
+                local = request.form.get('local')
+                status = request.form.get('status')
+                observacoes = request.form.get('observacoes')
+
+                if not all([codigo, nome, tipo, status]):
+                    flash('Preencha todos os campos obrigatórios', 'warning')
+                    return redirect(url_for('checklist.editar_equipamento', equipamento_id=equipamento_id))
+
+                # Processar upload de foto, se houver
+                foto = equipamento['foto']  # Manter a foto atual como padrão
+
+                if 'foto' in request.files and request.files['foto'].filename:
+                    arquivo = request.files['foto']
+                    if arquivo and arquivo.filename:
+                        # Gerar nome seguro para o arquivo
+                        filename = secure_filename(arquivo.filename)
+                        # Gerar um nome único com timestamp
+                        nome_arquivo = f"{int(datetime.now().timestamp())}_{filename}"
+                        # Definir o caminho para salvar
+                        diretorio_uploads = os.path.join(
+                            current_app.root_path, 'static', 'uploads', 'equipamentos')
+
+                        # Garantir que o diretório existe
+                        os.makedirs(diretorio_uploads, exist_ok=True)
+
+                        # Caminho completo do arquivo
+                        caminho_arquivo = os.path.join(
+                            diretorio_uploads, nome_arquivo)
+
+                        # Salvar o arquivo
+                        arquivo.save(caminho_arquivo)
+
+                        # Guardar o caminho relativo para o banco de dados
+                        foto = f"uploads/equipamentos/{nome_arquivo}"
+
+                        # Se existia uma foto antiga, podemos apagá-la
+                        if equipamento['foto']:
+                            caminho_antigo = os.path.join(
+                                current_app.root_path, 'static', equipamento['foto'])
+                            if os.path.exists(caminho_antigo):
+                                try:
+                                    os.remove(caminho_antigo)
+                                except:
+                                    logger.warning(
+                                        f"Não foi possível remover a foto antiga: {caminho_antigo}")
+
+                # Atualizar o equipamento
+                cursor.execute("""
+                    UPDATE checklist_equipamentos 
+                    SET codigo = %s, nome = %s, tipo = %s, modelo = %s, 
+                        fabricante = %s, numero_serie = %s, data_aquisicao = %s, 
+                        data_ultima_manutencao = %s, local = %s, status = %s, 
+                        observacoes = %s, foto = %s
+                    WHERE id = %s
+                """, [
+                    codigo, nome, tipo, modelo, fabricante, numero_serie,
+                    data_aquisicao if data_aquisicao else None,
+                    data_ultima_manutencao if data_ultima_manutencao else None,
+                    local, status, observacoes, foto, equipamento_id
+                ])
+
+                connection.commit()
+                flash('Equipamento atualizado com sucesso', 'success')
+                return redirect(url_for('checklist.listar_equipamentos'))
+
+            cursor.close()
+        except Exception as e:
+            logger.error(f"Erro ao editar equipamento: {e}")
+            flash(f"Erro ao editar equipamento: {str(e)}", 'danger')
+        finally:
+            connection.close()
+
+    return render_template('checklist/editar_equipamento.html', equipamento=equipamento)
+
+
+@mod_checklist.route('/equipamentos/<int:equipamento_id>/visualizar')
+def visualizar_equipamento(equipamento_id):
+    if 'logado' not in session:
+        flash('Faça login para acessar o sistema', 'warning')
+        return redirect(url_for('index'))
+
+    connection = get_db_connection()
+    equipamento = None
+    manutencoes = []
+    checklists = []
+
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+
+            # Buscar dados do equipamento
+            cursor.execute("""
+                SELECT e.*, u.nome as responsavel_nome
+                FROM checklist_equipamentos e
+                JOIN usuarios u ON e.criado_por = u.id
+                WHERE e.id = %s
+            """, [equipamento_id])
+
+            equipamento = cursor.fetchone()
+
+            if not equipamento:
+                flash('Equipamento não encontrado', 'warning')
+                return redirect(url_for('checklist.listar_equipamentos'))
+
+            # Buscar manutenções do equipamento
+            cursor.execute("""
+                SELECT m.*, u.nome as responsavel_nome
+                FROM checklist_manutencoes m
+                JOIN usuarios u ON m.responsavel_id = u.id
+                WHERE m.equipamento_id = %s
+                ORDER BY m.data_manutencao DESC
+            """, [equipamento_id])
+
+            manutencoes = cursor.fetchall()
+
+            # Buscar checklists do equipamento
+            cursor.execute("""
+                SELECT c.*, m.nome as modelo_nome, u.nome as responsavel_nome
+                FROM checklist_preenchidos c
+                JOIN checklist_modelos m ON c.modelo_id = m.id
+                JOIN usuarios u ON c.responsavel_id = u.id
+                WHERE c.equipamento_cadastrado_id = %s
+                ORDER BY c.data_preenchimento DESC
+            """, [equipamento_id])
+
+            checklists = cursor.fetchall()
+
+            cursor.close()
+        except Exception as e:
+            logger.error(f"Erro ao visualizar equipamento: {e}")
+            flash(f"Erro ao visualizar equipamento: {str(e)}", 'danger')
+        finally:
+            connection.close()
+
+    return render_template('checklist/visualizar_equipamento.html',
+                           equipamento=equipamento,
+                           manutencoes=manutencoes,
+                           checklists=checklists)
+
+
+@mod_checklist.route('/equipamentos/<int:equipamento_id>/manutencao', methods=['GET', 'POST'])
+def registrar_manutencao(equipamento_id):
+    if 'logado' not in session:
+        flash('Faça login para acessar o sistema', 'warning')
+        return redirect(url_for('index'))
+
+    if not verificar_permissao('editar'):
+        flash('Você não tem permissão para registrar manutenções', 'danger')
+        return redirect(url_for('checklist.visualizar_equipamento', equipamento_id=equipamento_id))
+
+    connection = get_db_connection()
+    equipamento = None
+
+    if connection:
+        try:
+            cursor = connection.cursor(dictionary=True)
+
+            # Verificar se o equipamento existe
+            cursor.execute(
+                "SELECT * FROM checklist_equipamentos WHERE id = %s", [equipamento_id])
+            equipamento = cursor.fetchone()
+
+            if not equipamento:
+                flash('Equipamento não encontrado', 'warning')
+                return redirect(url_for('checklist.listar_equipamentos'))
+
+            if request.method == 'POST':
+                tipo_manutencao = request.form.get('tipo_manutencao')
+                data_manutencao = request.form.get('data_manutencao')
+                descricao = request.form.get('descricao')
+                custo = request.form.get('custo', '0')
+                observacoes = request.form.get('observacoes', '')
+
+                if not all([tipo_manutencao, data_manutencao, descricao]):
+                    flash('Preencha todos os campos obrigatórios', 'warning')
+                    return redirect(url_for('checklist.registrar_manutencao', equipamento_id=equipamento_id))
+
+                # Converter custo para float
+                try:
+                    custo = float(custo.replace(',', '.'))
+                except:
+                    custo = 0
+
+                # Registrar manutenção
+                cursor.execute("""
+                    INSERT INTO checklist_manutencoes 
+                    (equipamento_id, tipo_manutencao, data_manutencao, responsavel_id, 
+                     descricao, custo, observacoes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, [
+                    equipamento_id, tipo_manutencao, data_manutencao,
+                    session['id_usuario'], descricao, custo, observacoes
+                ])
+
+                # Atualizar a data da última manutenção no equipamento
+                cursor.execute("""
+                    UPDATE checklist_equipamentos 
+                    SET data_ultima_manutencao = %s
+                    WHERE id = %s
+                """, [data_manutencao, equipamento_id])
+
+                connection.commit()
+                flash('Manutenção registrada com sucesso', 'success')
+                return redirect(url_for('checklist.visualizar_equipamento', equipamento_id=equipamento_id))
+
+            cursor.close()
+        except Exception as e:
+            if connection.is_connected():
+                connection.rollback()
+            logger.error(f"Erro ao registrar manutenção: {e}")
+            flash(f"Erro ao registrar manutenção: {str(e)}", 'danger')
+        finally:
+            if connection.is_connected():
+                connection.close()
+
+    return render_template('checklist/registrar_manutencao.html', equipamento=equipamento)
 
 
 @mod_checklist.route('/modelos')
@@ -661,6 +1110,7 @@ def novo_checklist():
 
     connection = get_db_connection()
     modelos = []
+    equipamentos = []
 
     if connection:
         try:
@@ -676,25 +1126,61 @@ def novo_checklist():
             """)
             modelos = cursor.fetchall()
 
+            # Buscar equipamentos ativos
+            cursor.execute("""
+                SELECT id, codigo, nome, tipo, local 
+                FROM checklist_equipamentos 
+                WHERE status = 'ativo'
+                ORDER BY nome
+            """)
+            equipamentos = cursor.fetchall()
+
             if request.method == 'POST':
                 modelo_id = request.form.get('modelo_id')
                 equipamento_id = request.form.get('equipamento_id')
-                equipamento_nome = request.form.get('equipamento_nome')
-                equipamento_local = request.form.get('equipamento_local')
+                equipamento_manual = request.form.get('equipamento_manual')
+                equipamento_cadastrado = request.form.get(
+                    'usar_equipamento_cadastrado') == 'on'
+
+                # Campos dependendo do tipo de equipamento
+                if equipamento_cadastrado:
+                    if not equipamento_id:
+                        flash('Selecione um equipamento cadastrado', 'warning')
+                        return redirect(url_for('checklist.novo_checklist'))
+
+                    # Buscar informações do equipamento
+                    cursor.execute("""
+                        SELECT id, codigo, nome, local 
+                        FROM checklist_equipamentos 
+                        WHERE id = %s
+                    """, [equipamento_id])
+                    equip = cursor.fetchone()
+
+                    equipamento_id_valor = equip['id']
+                    equipamento_id_campo = equip['codigo']
+                    equipamento_nome = equip['nome']
+                    equipamento_local = equip['local']
+                else:
+                    # Usar valores manuais
+                    equipamento_id_valor = None
+                    equipamento_id_campo = request.form.get('equipamento_id')
+                    equipamento_nome = request.form.get('equipamento_nome')
+                    equipamento_local = request.form.get('equipamento_local')
+
                 observacoes = request.form.get('observacoes')
 
-                if not all([modelo_id, equipamento_id, equipamento_nome]):
+                if not all([modelo_id, equipamento_id_campo, equipamento_nome]):
                     flash('Preencha todos os campos obrigatórios', 'warning')
                     return redirect(url_for('checklist.novo_checklist'))
 
                 # Criar novo checklist
                 cursor.execute("""
                     INSERT INTO checklist_preenchidos 
-                    (modelo_id, equipamento_id, equipamento_nome, equipamento_local, 
+                    (modelo_id, equipamento_cadastrado_id, equipamento_id, equipamento_nome, equipamento_local, 
                     responsavel_id, observacoes, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 """, [
-                    modelo_id, equipamento_id, equipamento_nome, equipamento_local,
+                    modelo_id, equipamento_id_valor, equipamento_id_campo, equipamento_nome, equipamento_local,
                     session['id_usuario'], observacoes, 'em_andamento'
                 ])
 
@@ -714,7 +1200,7 @@ def novo_checklist():
             if 'connection' in locals() and connection.is_connected():
                 connection.close()
 
-    return render_template('checklist/novo_checklist.html', modelos=modelos)
+    return render_template('checklist/novo_checklist.html', modelos=modelos, equipamentos=equipamentos)
 
 
 @mod_checklist.route('/checklists/<int:checklist_id>/preencher', methods=['GET', 'POST'])
