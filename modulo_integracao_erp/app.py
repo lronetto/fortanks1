@@ -21,12 +21,10 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('integracao_erp')
+logger = logging.getLogger(__name__)
 
-# Configuração do Blueprint
-mod_integracao_erp = Blueprint('integracao_erp', __name__,
-                               template_folder='templates',
-                               static_folder='static')
+# Criar o Blueprint com um nome único
+mod_integracao_erp = Blueprint('integracao_erp', __name__, url_prefix='/integracao_erp')
 
 # Função para conectar ao banco de dados
 
@@ -830,29 +828,18 @@ def api_importacoes():
 
 
 def init_app(app):
-    # Registrar o blueprint
-    app.register_blueprint(mod_integracao_erp, url_prefix='/integracao_erp')
-
-    # Adicionar item ao menu principal
+    """
+    Função para inicializar o módulo com a aplicação Flask
+    """
+    # Não registramos o Blueprint aqui, pois ele será registrado no app principal
+    
     @app.context_processor
     def inject_menu_data():
-        menu_items = []
-        if 'logado' in session:
-            menu_items = [
-                {'name': 'Dashboard', 'url': url_for(
-                    'dashboard'), 'icon': 'fas fa-tachometer-alt'},
-                {'name': 'Solicitações', 'url': url_for(
-                    'dashboard'), 'icon': 'fas fa-clipboard-list'},
-                {'name': 'Notas Fiscais', 'url': url_for(
-                    'importacao_nf.index'), 'icon': 'fas fa-file-invoice'},
-                {'name': 'Integração ERP', 'url': url_for(
-                    'integracao_erp.index'), 'icon': 'fas fa-sync'},
-                {'name': 'Relatórios', 'url': url_for(
-                    'relatorios'), 'icon': 'fas fa-chart-bar'},
-            ]
-        return {'menu_items': menu_items}
-
-    # Adicionar as rotas assíncronas
+        return {
+            'modulo_integracao_erp': True
+        }
+        
+    # Configurar rotas específicas do módulo que precisam ser registradas diretamente no app
     @app.route('/integracao_erp/executar_importacao_automatica', methods=['POST'])
     async def executar_importacao_automatica():
         if 'logado' not in session or session['cargo'] != 'admin':

@@ -18,12 +18,10 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
-logger = logging.getLogger('checklist')
+logger = logging.getLogger(__name__)
 
-# Configuração do Blueprint
-mod_checklist = Blueprint('checklist', __name__,
-                          template_folder='templates',
-                          static_folder='static')
+# Criar o Blueprint com um nome único
+mod_checklist = Blueprint('mod_checklist', __name__, url_prefix='/checklist')
 
 # Função para conectar ao banco de dados
 
@@ -1680,44 +1678,15 @@ def api_estatisticas():
 
 
 def init_app(app):
-    # Importar dependências necessárias
-    import mysql.connector
-    from mysql.connector import Error
-    import json
-
-    # Registrar o blueprint
-    app.register_blueprint(mod_checklist, url_prefix='/checklist')
-
-    # Adicionar filtro personalizado para converter JSON para Python
-    @app.template_filter('from_json')
-    def from_json(value):
-        if not value:
-            return []
-        try:
-            return json.loads(value)
-        except Exception as e:
-            logger.error(f"Erro ao converter JSON: {e}")
-            return []
-
-    # Adicionar item ao menu principal
+    """
+    Função para inicializar o módulo com a aplicação Flask
+    """
+    # Não registramos o Blueprint aqui, pois ele será registrado no app principal
+    
     @app.context_processor
     def inject_menu_data():
-        menu_items = []
-        if 'logado' in session:
-            menu_items = [
-                {'name': 'Dashboard', 'url': url_for(
-                    'dashboard'), 'icon': 'fas fa-tachometer-alt'},
-                {'name': 'Solicitações', 'url': url_for(
-                    'dashboard'), 'icon': 'fas fa-clipboard-list'},
-                {'name': 'Notas Fiscais', 'url': url_for(
-                    'importacao_nf.index'), 'icon': 'fas fa-file-invoice'},
-                {'name': 'Checklists', 'url': url_for(
-                    'checklist.index'), 'icon': 'fas fa-tasks'},
-                {'name': 'Integração ERP', 'url': url_for(
-                    'integracao_erp.index'), 'icon': 'fas fa-sync'},
-                {'name': 'Relatórios', 'url': url_for(
-                    'relatorios'), 'icon': 'fas fa-chart-bar'},
-            ]
-        return {'menu_items': menu_items}
+        return {
+            'modulo_checklist': True
+        }
 
     return app

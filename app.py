@@ -1,12 +1,13 @@
 # app.py - Aplicativo principal
 from modulo_importacao_nf.app import mod_importacao_nf
-from modulo_integracao_erp import mod_integracao_erp, init_app
-from modulo_checklist import mod_checklist
+from modulo_integracao_erp import mod_integracao_erp, init_app as init_erp
+from modulo_checklist.app import mod_checklist, init_app as init_checklist
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from flask_mysqldb import MySQL
 import os
 import tempfile
 import pdfkit
+import platform
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from dotenv import load_dotenv
@@ -14,36 +15,27 @@ from dotenv import load_dotenv
 load_dotenv()
 app = Flask(__name__)
 
+# Configurações do banco de dados e segurança
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['MYSQL_HOST'] = os.getenv('DB_HOST')
 app.config['MYSQL_USER'] = os.getenv('DB_USER')
-app.config['MYSQL_PASSWORD'] = os.getenv(
-    'DB_PASSWORD')  # Altere para sua senha do MySQL
+app.config['MYSQL_PASSWORD'] = os.getenv('DB_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('DB_NAME')
 app.config['ARQUIVEI_API_ID'] = os.getenv('ARQUIVEI_API_ID')
 app.config['ARQUIVEI_API_KEY'] = os.getenv('ARQUIVEI_API_KEY')
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 
-# Configurações
-# app.config['SECRET_KEY'] = os.urandom(24)
-# app.config['MYSQL_HOST'] = '192.168.8.150'
-# app.config['MYSQL_USER'] = 'remote'
-# app.config['MYSQL_PASSWORD'] = '8225Le@28'  # Altere para sua senha do MySQL
-# app.config['MYSQL_DB'] = 'sistema_solicitacoes'
-# app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-# app.config['ARQUIVEI_API_ID'] = '34bbd6ea3d83eb093e48b0f8ece693667540c603'
-# app.config['ARQUIVEI_API_KEY'] = '6c3ec74c9c40511b8b32541ed231d26328c356a4'
-
-# Configurações
-# app.config['SECRET_KEY'] = os.urandom(24)
-# app.config['MYSQL_HOST'] = db_host
-# app.config['MYSQL_USER'] = db_user
-# app.config['MYSQL_PASSWORD'] = db_password  # Altere para sua senha do MySQL
-# app.config['MYSQL_DB'] = db_name
-# app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
-
 # Inicializa o MySQL
 mysql = MySQL(app)
+
+# Registrar os Blueprints
+app.register_blueprint(mod_importacao_nf)
+app.register_blueprint(mod_integracao_erp)
+app.register_blueprint(mod_checklist)
+
+# Inicializar funções de configuração dos módulos
+init_erp(app)
+init_checklist(app)
 
 # Context processor para disponibilizar a variável 'now' em todos os templates
 
@@ -55,12 +47,42 @@ def inject_now():
 # Função para gerar PDF
 
 
-# Importar o Blueprint do módulo de importação de NF
+def generate_pdf(html_content, filename):
+    # Configuração para o wkhtmltopdf com base no sistema operacional
+    wkhtmltopdf_path = None
+    system = platform.system()
 
-# Registrar o Blueprint
-app.register_blueprint(mod_importacao_nf, url_prefix='/importacao_nf')
-app.register_blueprint(mod_integracao_erp, url_prefix='/integracao_erp')
-app.register_blueprint(mod_checklist, url_prefix='/checklist')
+    if system == "Windows":
+        wkhtmltopdf_path = 'C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe'
+    elif system == "Darwin":  # macOS
+        wkhtmltopdf_path = '/usr/local/bin/wkhtmltopdf'
+    else:  # Linux
+        wkhtmltopdf_path = '/usr/bin/wkhtmltopdf'
+
+    # Verificar se o arquivo existe
+    if not os.path.exists(wkhtmltopdf_path):
+        # Se não existir, tentar encontrar no PATH
+        import subprocess
+        try:
+            wkhtmltopdf_path = subprocess.check_output(
+                ['which', 'wkhtmltopdf']).decode().strip()
+        except:
+            # Se não encontrar, usar o valor padrão sem configuração específica
+            config = None
+    else:
+        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+
+    # Crie um arquivo temporário
+    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp:
+        temp_filename = temp.name
+
+    # Gere o PDF
+    if config:
+        pdfkit.from_string(html_content, temp_filename, configuration=config)
+    else:
+        pdfkit.from_string(html_content, temp_filename)
+
+    return temp_filename
 
 # Atualizar o menu no context processor
 
@@ -83,23 +105,6 @@ def inject_menu_data():
                 'checklist.index')}
         ] if 'logado' in session else []
     }
-
-
-def generate_pdf(html_content, filename):
-    # Configuração para o wkhtmltopdf (ajuste o caminho conforme sua instalação)
-    # No Linux geralmente é: /usr/bin/wkhtmltopdf
-    # No Windows geralmente é: C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe
-    # No Mac geralmente é: /usr/local/bin/wkhtmltopdf
-    config = pdfkit.configuration(wkhtmltopdf='/usr/bin/wkhtmltopdf')
-
-    # Crie um arquivo temporário
-    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp:
-        temp_filename = temp.name
-
-    # Gere o PDF
-    pdfkit.from_string(html_content, temp_filename, configuration=config)
-
-    return temp_filename
 
 # Rotas para autenticação
 
@@ -163,7 +168,6 @@ def logout():
 # Rotas do dashboard
 
 
-# Atualizar a rota dashboard para suportar múltiplos itens
 @app.route('/dashboard')
 def dashboard():
     if 'logado' not in session:
@@ -490,7 +494,6 @@ def adicionar_centro_custo():
 # Rota para exportar PDF
 
 
-# Atualizar a rota para exportar PDF
 @app.route('/exportar_pdf/<int:id>')
 def exportar_pdf(id):
     if 'logado' not in session:
@@ -563,13 +566,18 @@ def relatorio_centro_custo():
 
     cur = mysql.connection.cursor()
 
-    # Totais por centro de custo
+    # Totais por centro de custo - corrigindo a consulta para usar a soma de itens_solicitacao
     cur.execute("""
-        SELECT c.codigo, c.nome, COUNT(s.id) as total_solicitacoes, 
-               SUM(s.quantidade) as total_itens,
-               (SELECT COUNT(*) FROM solicitacoes WHERE centro_custo_id = c.id AND status = 'aprovada') as aprovadas,
-               (SELECT COUNT(*) FROM solicitacoes WHERE centro_custo_id = c.id AND status = 'rejeitada') as rejeitadas,
-               (SELECT COUNT(*) FROM solicitacoes WHERE centro_custo_id = c.id AND status = 'pendente') as pendentes
+        SELECT c.codigo, c.nome, COUNT(DISTINCT s.id) as total_solicitacoes, 
+               (SELECT SUM(i.quantidade) FROM itens_solicitacao i 
+                JOIN solicitacoes s2 ON i.solicitacao_id = s2.id 
+                WHERE s2.centro_custo_id = c.id) as total_itens,
+               (SELECT COUNT(*) FROM solicitacoes 
+                WHERE centro_custo_id = c.id AND status = 'aprovada') as aprovadas,
+               (SELECT COUNT(*) FROM solicitacoes 
+                WHERE centro_custo_id = c.id AND status = 'rejeitada') as rejeitadas,
+               (SELECT COUNT(*) FROM solicitacoes 
+                WHERE centro_custo_id = c.id AND status = 'pendente') as pendentes
         FROM centros_custo c
         LEFT JOIN solicitacoes s ON c.id = s.centro_custo_id
         GROUP BY c.id

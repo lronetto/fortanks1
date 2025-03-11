@@ -1,0 +1,29 @@
+# Arquivos de ambiente
+.env
+
+# Arquivos Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# Arquivos temporários
+*.tmp
+*.temp
+*.pdf
+
+# Diretório virtual env
+venv/
+env/
+
+# Arquivos do VS Code
+.vscode/
+
+# Arquivos do PyCharm
+.idea/
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db 
