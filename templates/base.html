@@ -235,6 +235,9 @@
                 <a href="{{ url_for('cadastros.centros_custo.listar') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-building"></i> Centros de Custo
                 </a>
+                <a href="{{ url_for('cadastros.credenciais_erp.listar') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-key"></i> Credenciais ERP
+                </a>
             </div>
 
             <!-- Importação NF -->
@@ -278,7 +281,7 @@
                     <i class="bi bi-upload"></i> Importação Manual
                 </a>
                 {% if session.get('cargo') == 'admin' %}
-                <a href="{{ url_for('integracao_erp.importar_automatico') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('integracao_erp.importar_programado') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-calendar-check"></i> Importação Programada
                 </a>
                 {% endif %}

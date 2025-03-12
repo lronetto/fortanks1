@@ -3,6 +3,7 @@ from .materiais import mod_materiais, init_app as init_materiais
 from .equipamentos import mod_equipamentos, init_app as init_equipamentos
 from .centros_custo import mod_centros_custo, init_app as init_centros_custo
 from .plano_contas import mod_plano_contas, init_app as init_plano_contas
+from .credenciais_erp import mod_credenciais_erp, init_app as init_credenciais_erp
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 import os
 import logging
@@ -12,11 +13,16 @@ from mysql.connector import Error
 from utils.auth import verificar_permissao
 
 # Configuração de logging
+log_dir = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'cadastros.log')
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('cadastros.log'),
+        logging.FileHandler(log_file),
         logging.StreamHandler()
     ]
 )
@@ -34,20 +40,8 @@ mod_cadastros.register_blueprint(mod_equipamentos, url_prefix='/equipamentos')
 mod_cadastros.register_blueprint(
     mod_centros_custo, url_prefix='/centros-custo')
 mod_cadastros.register_blueprint(mod_materiais, url_prefix='/materiais')
-
-
-def get_db_connection():
-    try:
-        connection = mysql.connector.connect(
-            host=os.environ.get('DB_HOST', 'localhost'),
-            database=os.environ.get('DB_NAME', 'sistema_solicitacoes'),
-            user=os.environ.get('DB_USER', 'root'),
-            password=os.environ.get('DB_PASSWORD', 'sua_senha')
-        )
-        return connection
-    except Error as e:
-        logger.error(f"Erro ao conectar ao MySQL: {e}")
-        return None
+mod_cadastros.register_blueprint(
+    mod_credenciais_erp, url_prefix='/credenciais-erp')
 
 
 # Rota principal - dashboard de cadastros

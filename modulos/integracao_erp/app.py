@@ -12,12 +12,22 @@ import asyncio
 import mysql.connector
 from mysql.connector import Error
 
-# Configuração de logging
+# Importações das funções centralizadas
+from utils.db import get_db_connection, execute_query, get_single_result, insert_data, update_data
+from utils.auth import login_obrigatorio, admin_obrigatorio, verificar_login_api, get_user_id
+from utils.crypto import decrypt_password
+
+# Configuração de logging centralizada
+log_dir = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'integracao_erp.log')
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('integracao_erp.log'),
+        logging.FileHandler(log_file),
         logging.StreamHandler()
     ]
 )
@@ -29,19 +39,6 @@ mod_integracao_erp = Blueprint(
 
 # Função para conectar ao banco de dados
 
-
-def get_db_connection():
-    try:
-        connection = mysql.connector.connect(
-            host=os.environ.get('DB_HOST', 'localhost'),
-            database=os.environ.get('DB_NAME', 'sistema_solicitacoes'),
-            user=os.environ.get('DB_USER', 'root'),
-            password=os.environ.get('DB_PASSWORD', 'sua_senha')
-        )
-        return connection
-    except Error as e:
-        logger.error(f"Erro ao conectar ao MySQL: {e}")
-        return None
 
 # Função para baixar arquivos do ERP via Playwright
 
@@ -67,7 +64,7 @@ async def download_erp_report(credentials):
         async with async_playwright() as p:
             # Iniciar o navegador (com modo headless configurável)
             browser = await p.chromium.launch(
-                headless=credentials.get('headless', False)
+                headless=False
             )
 
             # Configurar a página com timeout adequado
@@ -79,13 +76,15 @@ async def download_erp_report(credentials):
             await page.goto("https://www.sox.com.br/")
 
             # Login com credenciais
-            login_frame = await page.locator("iframe[name=\"login\"]").content_frame
-            await login_frame.locator("input[name=\"login\"]").fill(credentials.get('username', 'leandrofor'))
-            await login_frame.locator("input[name=\"senha\"]").fill(credentials.get('password', 'netto$%'))
+            login_frame = page.locator("iframe[name=\"login\"]").content_frame
+            await login_frame.locator("input[name=\"login\"]").fill(
+                credentials.get('username', 'leandrofor'))
+            await login_frame.locator("input[name=\"senha\"]").fill(
+                credentials.get('password', 'netto$%'))
             await login_frame.get_by_role("button", name="Acessar").click()
 
             # Acessar menu Financeiro > Custo Analítico
-            menu_frame = await page.locator("iframe[name=\"menu\"]").content_frame
+            menu_frame = page.locator("iframe[name=\"menu\"]").content_frame
             await menu_frame.get_by_text("FINANCEIRO").click()
             await menu_frame.get_by_text("Custo Analítico").click()
 
@@ -385,12 +384,9 @@ def limpar_arquivos_temporarios(arquivo_path):
 
 
 @mod_integracao_erp.route('/')
+@login_obrigatorio
 def index():
-    if 'logado' not in session:
-        return redirect(url_for('index'))
-
     # Obter estatísticas
-    connection = get_db_connection()
     estatisticas = {
         'total_transacoes': 0,
         'total_hoje': 0,
@@ -398,37 +394,32 @@ def index():
         'centro_custos': 0
     }
 
-    if connection:
-        try:
-            cursor = connection.cursor(dictionary=True)
+    try:
+        # Total de transações
+        result = get_single_result(
+            "SELECT COUNT(*) as total FROM erp_transacoes")
+        if result:
+            estatisticas['total_transacoes'] = result['total']
 
-            # Total de transações
-            cursor.execute("SELECT COUNT(*) as total FROM erp_transacoes")
-            resultado = cursor.fetchone()
-            estatisticas['total_transacoes'] = resultado['total'] if resultado else 0
+        # Transações importadas hoje
+        result = get_single_result(
+            "SELECT COUNT(*) as total FROM erp_transacoes WHERE DATE(importado_em) = CURDATE()")
+        if result:
+            estatisticas['total_hoje'] = result['total']
 
-            # Transações importadas hoje
-            cursor.execute(
-                "SELECT COUNT(*) as total FROM erp_transacoes WHERE DATE(importado_em) = CURDATE()")
-            resultado = cursor.fetchone()
-            estatisticas['total_hoje'] = resultado['total'] if resultado else 0
+        # Valor total
+        result = get_single_result(
+            "SELECT SUM(valor) as total FROM erp_transacoes")
+        if result and result['total']:
+            estatisticas['valor_total'] = result['total']
 
-            # Valor total
-            cursor.execute("SELECT SUM(valor) as total FROM erp_transacoes")
-            resultado = cursor.fetchone()
-            estatisticas['valor_total'] = resultado['total'] if resultado and resultado['total'] else 0
-
-            # Centros de custo
-            cursor.execute(
-                "SELECT COUNT(DISTINCT centro_custo) as total FROM erp_transacoes")
-            resultado = cursor.fetchone()
-            estatisticas['centro_custos'] = resultado['total'] if resultado else 0
-
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Erro ao obter estatísticas: {str(e)}")
-        finally:
-            connection.close()
+        # Centros de custo
+        result = get_single_result(
+            "SELECT COUNT(DISTINCT centro_custo) as total FROM erp_transacoes")
+        if result:
+            estatisticas['centro_custos'] = result['total']
+    except Exception as e:
+        logger.error(f"Erro ao obter estatísticas: {str(e)}")
 
     return render_template('integracao_erp/index.html', estatisticas=estatisticas)
 
@@ -436,11 +427,8 @@ def index():
 
 
 @mod_integracao_erp.route('/importar_manual', methods=['GET', 'POST'])
+@login_obrigatorio
 def importar_manual():
-    if 'logado' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
-        return redirect(url_for('index'))
-
     if request.method == 'POST':
         # Verificar se foi enviado um arquivo
         if 'arquivo_xls' not in request.files:
@@ -460,8 +448,7 @@ def importar_manual():
 
         try:
             # Registrar início da importação
-            importacao_id = registrar_importacao_iniciada(
-                session['id_usuario'])
+            importacao_id = registrar_importacao_iniciada(get_user_id())
 
             # Criar diretório temporário
             temp_dir = tempfile.mkdtemp()
@@ -501,11 +488,8 @@ def importar_manual():
 
 
 @mod_integracao_erp.route('/importar_automatico', methods=['GET', 'POST'])
+@admin_obrigatorio
 async def importar_automatico():
-    if 'logado' not in session or session['cargo'] != 'admin':
-        flash('Acesso restrito para administradores', 'danger')
-        return redirect(url_for('dashboard'))
-
     if request.method == 'POST':
         # Obter credenciais do formulário
         credentials = {
@@ -518,8 +502,7 @@ async def importar_automatico():
 
         try:
             # Registrar início da importação
-            importacao_id = registrar_importacao_iniciada(
-                session['id_usuario'])
+            importacao_id = registrar_importacao_iniciada(get_user_id())
 
             # Baixar o arquivo do ERP
             arquivo_path = await download_erp_report(credentials)
@@ -562,11 +545,8 @@ async def importar_automatico():
 
 
 @mod_integracao_erp.route('/transacoes', methods=['GET'])
+@login_obrigatorio
 def listar_transacoes():
-    if 'logado' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
-        return redirect(url_for('index'))
-
     # Parâmetros de filtro
     filtro_centro_custo = request.args.get('centro_custo', '')
     filtro_categoria = request.args.get('categoria', '')
@@ -574,64 +554,60 @@ def listar_transacoes():
     filtro_data_inicio = request.args.get('data_inicio', '')
     filtro_data_fim = request.args.get('data_fim', '')
 
-    connection = get_db_connection()
     transacoes = []
     centros_custo = []
     categorias = []
 
-    if connection:
-        try:
-            cursor = connection.cursor(dictionary=True)
+    try:
+        # Obter lista de centros de custo para o filtro
+        centros_custo_results = execute_query(
+            "SELECT DISTINCT centro_custo FROM erp_transacoes ORDER BY centro_custo")
+        if centros_custo_results:
+            centros_custo = [row['centro_custo']
+                             for row in centros_custo_results]
 
-            # Obter lista de centros de custo para o filtro
-            cursor.execute(
-                "SELECT DISTINCT centro_custo FROM erp_transacoes ORDER BY centro_custo")
-            centros_custo = [row['centro_custo'] for row in cursor.fetchall()]
+        # Obter lista de categorias para o filtro
+        categorias_results = execute_query(
+            "SELECT DISTINCT categoria FROM erp_transacoes WHERE categoria IS NOT NULL ORDER BY categoria")
+        if categorias_results:
+            categorias = [row['categoria'] for row in categorias_results]
 
-            # Obter lista de categorias para o filtro
-            cursor.execute(
-                "SELECT DISTINCT categoria FROM erp_transacoes WHERE categoria IS NOT NULL ORDER BY categoria")
-            categorias = [row['categoria'] for row in cursor.fetchall()]
+        # Construir a consulta SQL com filtros
+        query = """
+            SELECT * FROM erp_transacoes 
+            WHERE 1=1
+        """
+        params = []
 
-            # Construir a consulta SQL com filtros
-            query = """
-                SELECT * FROM erp_transacoes 
-                WHERE 1=1
-            """
-            params = []
+        if filtro_centro_custo:
+            query += " AND centro_custo = %s"
+            params.append(filtro_centro_custo)
 
-            if filtro_centro_custo:
-                query += " AND centro_custo = %s"
-                params.append(filtro_centro_custo)
+        if filtro_categoria:
+            query += " AND categoria = %s"
+            params.append(filtro_categoria)
 
-            if filtro_categoria:
-                query += " AND categoria = %s"
-                params.append(filtro_categoria)
+        if filtro_emitente:
+            query += " AND emitente LIKE %s"
+            params.append(f'%{filtro_emitente}%')
 
-            if filtro_emitente:
-                query += " AND emitente LIKE %s"
-                params.append(f'%{filtro_emitente}%')
+        if filtro_data_inicio:
+            query += " AND data_pagamento >= %s"
+            params.append(filtro_data_inicio)
 
-            if filtro_data_inicio:
-                query += " AND data_pagamento >= %s"
-                params.append(filtro_data_inicio)
+        if filtro_data_fim:
+            query += " AND data_pagamento <= %s"
+            params.append(filtro_data_fim)
 
-            if filtro_data_fim:
-                query += " AND data_pagamento <= %s"
-                params.append(filtro_data_fim)
+        query += " ORDER BY data_pagamento DESC LIMIT 1000"
 
-            query += " ORDER BY data_pagamento DESC LIMIT 1000"
-
-            # Executar a consulta
-            cursor.execute(query, params)
-            transacoes = cursor.fetchall()
-
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Erro ao listar transações: {str(e)}")
-            flash(f'Erro ao carregar transações: {str(e)}', 'danger')
-        finally:
-            connection.close()
+        # Executar a consulta
+        transacoes = execute_query(query, params)
+        if transacoes is None:
+            transacoes = []
+    except Exception as e:
+        logger.error(f"Erro ao listar transações: {str(e)}")
+        flash(f'Erro ao carregar transações: {str(e)}', 'danger')
 
     return render_template('integracao_erp/transacoes.html',
                            transacoes=transacoes,
@@ -649,28 +625,10 @@ def listar_transacoes():
 
 
 @mod_integracao_erp.route('/transacoes/<int:id>')
+@login_obrigatorio
 def visualizar_transacao(id):
-    if 'logado' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
-        return redirect(url_for('index'))
-
-    connection = get_db_connection()
-    transacao = None
-
-    if connection:
-        try:
-            cursor = connection.cursor(dictionary=True)
-
-            # Buscar transação pelo ID
-            cursor.execute("SELECT * FROM erp_transacoes WHERE id = %s", (id,))
-            transacao = cursor.fetchone()
-
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Erro ao buscar transação: {str(e)}")
-            flash(f'Erro ao carregar transação: {str(e)}', 'danger')
-        finally:
-            connection.close()
+    transacao = get_single_result(
+        "SELECT * FROM erp_transacoes WHERE id = %s", (id,))
 
     if not transacao:
         flash('Transação não encontrada', 'warning')
@@ -682,11 +640,8 @@ def visualizar_transacao(id):
 
 
 @mod_integracao_erp.route('/relatorios')
+@login_obrigatorio
 def relatorios():
-    if 'logado' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
-        return redirect(url_for('index'))
-
     return render_template('integracao_erp/relatorios.html')
 
 # API para dados do relatório por centro de custo
@@ -694,18 +649,13 @@ def relatorios():
 
 @mod_integracao_erp.route('/api/dados_centro_custo')
 def api_dados_centro_custo():
-    if 'logado' not in session:
-        return jsonify({'error': 'Não autorizado', 'data': []}), 401
-
-    connection = get_db_connection()
-    if not connection:
-        return jsonify({'error': 'Erro de conexão com o banco de dados', 'data': []}), 500
+    logado, resposta = verificar_login_api()
+    if not logado:
+        return resposta
 
     try:
-        cursor = connection.cursor(dictionary=True)
-
         # Dados por centro de custo
-        cursor.execute("""
+        dados = execute_query("""
             SELECT 
                 centro_custo as rotulo,
                 COUNT(*) as total_transacoes,
@@ -716,21 +666,15 @@ def api_dados_centro_custo():
             LIMIT 10
         """)
 
-        dados = cursor.fetchall()
-
         # Converter valores para float para serialização JSON
-        for item in dados:
-            if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
-                item['valor_total'] = float(item['valor_total'])
+        if dados:
+            for item in dados:
+                if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
+                    item['valor_total'] = float(item['valor_total'])
 
-        cursor.close()
-        connection.close()
-
-        return jsonify({'data': dados})
+        return jsonify({'data': dados or []})
     except Exception as e:
         logger.error(f"Erro ao buscar dados por centro de custo: {e}")
-        if connection:
-            connection.close()
         return jsonify({'error': str(e), 'data': []}), 500
 
 # API para dados do relatório por categoria
@@ -738,18 +682,13 @@ def api_dados_centro_custo():
 
 @mod_integracao_erp.route('/api/dados_categoria')
 def api_dados_categoria():
-    if 'logado' not in session:
-        return jsonify({'error': 'Não autorizado', 'data': []}), 401
-
-    connection = get_db_connection()
-    if not connection:
-        return jsonify({'error': 'Erro de conexão com o banco de dados', 'data': []}), 500
+    logado, resposta = verificar_login_api()
+    if not logado:
+        return resposta
 
     try:
-        cursor = connection.cursor(dictionary=True)
-
         # Dados por categoria
-        cursor.execute("""
+        dados = execute_query("""
             SELECT 
                 IFNULL(categoria, 'Sem categoria') as rotulo,
                 COUNT(*) as total_transacoes,
@@ -760,21 +699,15 @@ def api_dados_categoria():
             LIMIT 10
         """)
 
-        dados = cursor.fetchall()
-
         # Converter valores para float para serialização JSON
-        for item in dados:
-            if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
-                item['valor_total'] = float(item['valor_total'])
+        if dados:
+            for item in dados:
+                if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
+                    item['valor_total'] = float(item['valor_total'])
 
-        cursor.close()
-        connection.close()
-
-        return jsonify({'data': dados})
+        return jsonify({'data': dados or []})
     except Exception as e:
         logger.error(f"Erro ao buscar dados por categoria: {e}")
-        if connection:
-            connection.close()
         return jsonify({'error': str(e), 'data': []}), 500
 
 # API para listar histórico de importações
@@ -782,18 +715,13 @@ def api_dados_categoria():
 
 @mod_integracao_erp.route('/api/importacoes')
 def api_importacoes():
-    if 'logado' not in session:
-        return jsonify({'error': 'Não autorizado', 'data': []}), 401
-
-    connection = get_db_connection()
-    if not connection:
-        return jsonify({'error': 'Erro de conexão com o banco de dados', 'data': []}), 500
+    logado, resposta = verificar_login_api()
+    if not logado:
+        return resposta
 
     try:
-        cursor = connection.cursor(dictionary=True)
-
         # Obter histórico de importações
-        cursor.execute("""
+        dados = execute_query("""
             SELECT i.*, u.nome as usuario_nome 
             FROM erp_importacoes i
             LEFT JOIN usuarios u ON i.usuario_id = u.id
@@ -801,28 +729,150 @@ def api_importacoes():
             LIMIT 10
         """)
 
-        dados = cursor.fetchall()
-
         # Converter valores para tipos apropriados para serialização JSON
-        for item in dados:
-            if 'data_inicio' in item and item['data_inicio']:
-                item['data_inicio'] = item['data_inicio'].strftime(
-                    '%Y-%m-%d %H:%M:%S')
-            if 'data_fim' in item and item['data_fim']:
-                item['data_fim'] = item['data_fim'].strftime(
-                    '%Y-%m-%d %H:%M:%S')
-            if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
-                item['valor_total'] = float(item['valor_total'])
+        if dados:
+            for item in dados:
+                if 'data_inicio' in item and item['data_inicio']:
+                    item['data_inicio'] = item['data_inicio'].strftime(
+                        '%Y-%m-%d %H:%M:%S')
+                if 'data_fim' in item and item['data_fim']:
+                    item['data_fim'] = item['data_fim'].strftime(
+                        '%Y-%m-%d %H:%M:%S')
+                if 'valor_total' in item and hasattr(item['valor_total'], 'as_integer_ratio'):
+                    item['valor_total'] = float(item['valor_total'])
 
-        cursor.close()
-        connection.close()
-
-        return jsonify({'data': dados})
+        return jsonify({'data': dados or []})
     except Exception as e:
         logger.error(f"Erro ao buscar histórico de importações: {e}")
-        if connection:
-            connection.close()
         return jsonify({'error': str(e), 'data': []}), 500
+
+# Rota para importação programada
+
+
+@mod_integracao_erp.route('/importar_programado', methods=['GET', 'POST'])
+@login_obrigatorio
+def importar_programado():
+    # Buscar a última importação
+    ultima_importacao = None
+
+    try:
+        # Buscar o último registro de importação
+        resultado = get_single_result("""
+            SELECT i.*, u.nome as usuario_nome 
+            FROM erp_importacoes i
+            LEFT JOIN usuarios u ON i.usuario_id = u.id
+            ORDER BY i.data_inicio DESC
+            LIMIT 1
+        """)
+
+        if resultado:
+            # Formatar data para exibição
+            if resultado['data_inicio']:
+                resultado['data_inicio'] = resultado['data_inicio'].strftime(
+                    '%d/%m/%Y %H:%M')
+            if resultado['data_fim']:
+                resultado['data_fim'] = resultado['data_fim'].strftime(
+                    '%d/%m/%Y %H:%M')
+
+            ultima_importacao = resultado
+    except Exception as e:
+        logger.error(f"Erro ao buscar última importação: {e}")
+
+    return render_template('integracao_erp/importar_programado.html', ultima_importacao=ultima_importacao)
+
+# Nova rota para executar a importação programada
+
+
+@mod_integracao_erp.route('/executar_importacao_programada', methods=['POST'])
+@login_obrigatorio
+def executar_importacao_programada():
+    usuario_id = get_user_id()
+
+    try:
+        # Buscar configuração ativa para o usuário
+        config = get_single_result("""
+            SELECT c.*, cr.usuario, cr.senha_encriptada
+            FROM erp_configuracoes c
+            JOIN erp_credenciais cr ON c.id = cr.configuracao_id
+            WHERE c.criado_por = %s AND c.ativo = 1
+            LIMIT 1
+        """, [usuario_id])
+
+        if not config:
+            flash(
+                'Não foram encontradas credenciais salvas para importação automática', 'warning')
+            return redirect(url_for('integracao_erp.importar_programado'))
+
+        # Decriptografar a senha usando a função centralizada
+        senha_descriptografada = decrypt_password(config['senha_encriptada'])
+
+        # Configurar credenciais
+        credentials = {
+            'username': config['usuario'],
+            'password': senha_descriptografada,
+            'headless': True,  # Sempre executar em modo headless
+            'periodo': config['periodo'],
+            'output_path': os.path.join(tempfile.mkdtemp(), 'relatorio_erp.xls'),
+            'url_login': config['url_login'],
+            'url_relatorio': config['url_relatorio'],
+        }
+
+        # Executar em um thread separado ou usar asyncio.run
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        output_path = loop.run_until_complete(download_erp_report(credentials))
+        loop.close()
+
+        if not output_path or not os.path.exists(output_path):
+            flash('Falha ao baixar relatório do ERP', 'danger')
+            logger.error("Falha ao baixar relatório do ERP")
+            return redirect(url_for('integracao_erp.importar_programado'))
+
+        # Processar o arquivo
+        dados = extrair_dados_xls(output_path)
+
+        if not dados:
+            flash('Nenhum dado encontrado no relatório', 'warning')
+            return redirect(url_for('integracao_erp.importar_programado'))
+
+        # Contagem de registros processados
+        registros_processados = len(dados)
+        resultado = salvar_dados_no_banco(dados)
+        registros_inseridos = resultado[2] if isinstance(
+            resultado, tuple) and len(resultado) > 2 else 0
+
+        # Registrar a importação
+        importacao_id = insert_data('erp_importacoes', {
+            'configuracao_id': config['id'],
+            'usuario_id': usuario_id,
+            'data_importacao': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'total_registros': registros_processados,
+            'registros_processados': registros_inseridos,
+            'status': 'concluido',
+            'arquivo': output_path,
+        })
+
+        flash(
+            f'Importação concluída com sucesso! {registros_inseridos} de {registros_processados} registros processados.', 'success')
+
+        # Limpar o arquivo temporário
+        try:
+            os.remove(output_path)
+            os.rmdir(os.path.dirname(output_path))
+        except Exception as e:
+            logger.warning(f"Erro ao remover arquivo temporário: {str(e)}")
+
+        return redirect(url_for('integracao_erp.visualizar_importacao', importacao_id=importacao_id))
+
+    except Exception as e:
+        logger.error(
+            f"Erro ao executar importação programada: {str(e)}", exc_info=True)
+        flash(f'Erro ao executar importação programada: {str(e)}', 'danger')
+        return redirect(url_for('integracao_erp.importar_programado'))
+
+# Função para descriptografar senha (implemente de acordo com seu sistema)
+
 
 # Configuração inicial do módulo
 
@@ -842,8 +892,12 @@ def init_app(app):
     # Configurar rotas específicas do módulo que precisam ser registradas diretamente no app
     @app.route('/integracao_erp/executar_importacao_automatica', methods=['POST'])
     async def executar_importacao_automatica():
-        if 'logado' not in session or session['cargo'] != 'admin':
-            return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+        # Utilizando a função centralizada para verificar autenticação
+        if 'usuario_id' not in session:
+            return jsonify({'success': False, 'message': 'Não autorizado. Faça login para continuar.'}), 401
+
+        if session.get('cargo') != 'admin':
+            return jsonify({'success': False, 'message': 'Acesso negado. Permissão de administrador necessária.'}), 403
 
         credentials = {
             'username': request.form.get('usuario'),
@@ -853,7 +907,7 @@ def init_app(app):
             'output_path': os.path.join(tempfile.mkdtemp(), 'relatorio_erp.xls')
         }
 
-        importacao_id = registrar_importacao_iniciada(session['id_usuario'])
+        importacao_id = registrar_importacao_iniciada(get_user_id())
 
         try:
             # Função assíncrona para executar a importação em background
@@ -894,7 +948,7 @@ def init_app(app):
                     # Limpar arquivos
                     limpar_arquivos_temporarios(arquivo_path)
 
-                    logger.info(f"Importação concluída: {mensagem}")
+                    logger.info(f"Importação programada concluída: {mensagem}")
 
                 except Exception as e:
                     logger.error(

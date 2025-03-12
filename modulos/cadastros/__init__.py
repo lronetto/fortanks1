@@ -10,19 +10,23 @@ def init_app(app):
 
     # Inicializar o submódulo equipamentos
     from .app import init_equipamentos
-    init_equipamentos(mod_cadastros)
+    # init_equipamentos(mod_cadastros)
 
     # Inicializar o submódulo centros_custo
     from .app import init_centros_custo
-    init_centros_custo(mod_cadastros)
+    # init_centros_custo(mod_cadastros)
 
     # Inicializar o submódulo materiais
     from .app import init_materiais
-    init_materiais(mod_cadastros)
+    # init_materiais(mod_cadastros)
 
     # Inicializar o submódulo plano_contas
     from .app import init_plano_contas
-    init_plano_contas(mod_cadastros)
+    # init_plano_contas(mod_cadastros)
+
+    # Inicializar o submódulo credenciais_erp
+    from .app import init_credenciais_erp
+    # init_credenciais_erp(mod_cadastros)
 
     return app
 

@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3"><i class="bi bi-key"></i> Credenciais do ERP</h2>
+        
+        {% if session.cargo in ['admin', 'gerente'] %}
+        <a href="{{ url_for('cadastros.credenciais_erp.novo') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nova Credencial
+        </a>
+        {% endif %}
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">Credenciais Cadastradas</h5>
+        </div>
+        <div class="card-body">
+            {% if credenciais %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>Nome</th>
+                                <th>Usuário do Sistema</th>
+                                <th>Cargo</th>
+                                <th>Usuário no ERP</th>
+                                <th>Status</th>
+                                <th>Último Acesso</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for credencial in credenciais %}
+                                <tr>
+                                    <td>{{ credencial.nome }}</td>
+                                    <td>
+                                        <div>{{ credencial.usuario_nome }}</div>
+                                        <small class="text-muted">{{ credencial.usuario_email }}</small>
+                                    </td>
+                                    <td>
+                                        {% if credencial.usuario_cargo == 'admin' %}
+                                            <span class="badge bg-danger">Administrador</span>
+                                        {% elif credencial.usuario_cargo == 'gerente' %}
+                                            <span class="badge bg-primary">Gerente</span>
+                                        {% elif credencial.usuario_cargo == 'supervisor' %}
+                                            <span class="badge bg-info">Supervisor</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ credencial.usuario_cargo|capitalize }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ credencial.usuario_usuario }}</td>
+                                    <td>
+                                        {% if credencial.ativo %}
+                                            <span class="badge bg-success">Ativo</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inativo</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ credencial.data_atualizacao or 'Nunca' }}</td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="{{ url_for('cadastros.credenciais_erp.editar', id=credencial.id) }}" 
+                                               class="btn btn-sm btn-outline-primary" title="Editar">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    data-bs-toggle="modal" 
+                                                    data-bs-target="#modalExcluir{{ credencial.id }}" 
+                                                    title="Excluir">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+
+                                        <!-- Modal de confirmação de exclusão -->
+                                        <div class="modal fade" id="modalExcluir{{ credencial.id }}" tabindex="-1">
+                                            <div class="modal-dialog">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title">Confirmar Exclusão</h5>
+                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        <p>Tem certeza que deseja excluir a credencial <strong>{{ credencial.nome }}</strong>?</p>
+                                                        <p class="text-danger">Esta ação não pode ser desfeita.</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                        <form action="{{ url_for('cadastros.credenciais_erp.excluir', id=credencial.id) }}" method="post">
+                                                            <button type="submit" class="btn btn-danger">Excluir</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Nenhuma credencial encontrada.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %} 

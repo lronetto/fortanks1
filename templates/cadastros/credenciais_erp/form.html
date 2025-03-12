@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h3">
+            <i class="bi bi-key"></i> 
+            {% if credencial and credencial.id %}
+                Editar Credencial
+            {% else %}
+                Nova Credencial
+            {% endif %}
+        </h2>
+        
+        <a href="{{ url_for('cadastros.credenciais_erp.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow">
+        <div class="card-header bg-light">
+            <h5 class="mb-0">
+                {% if credencial and credencial.id %}
+                    Editar Credencial: {{ credencial.nome }}
+                {% else %}
+                    Cadastrar Nova Credencial
+                {% endif %}
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% if credencial and credencial.id %}{{ url_for('cadastros.credenciais_erp.editar', id=credencial.id) }}{% else %}{{ url_for('cadastros.credenciais_erp.novo') }}{% endif %}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label for="usuario_sistema" class="form-label">Usuário do Sistema <span class="text-danger">*</span></label>
+                        <select class="form-select" id="usuario_sistema" name="usuario_sistema" required>
+                            <option value="">Selecione um usuário</option>
+                            {% for usuario in usuarios %}
+                                <option value="{{ usuario.id }}" 
+                                    {% if credencial and credencial.id and credencial.criado_por == usuario.id %}selected
+                                    {% elif credencial and credencial.usuario_sistema == usuario.id|string %}selected
+                                    {% elif request.form and request.form.usuario_sistema == usuario.id|string %}selected{% endif %}>
+                                    {{ usuario.nome }} ({{ usuario.email }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Usuário do sistema que utilizará esta credencial</div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label">Nome da Credencial <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="nome" name="nome" 
+                               value="{% if credencial and credencial.id %}{{ credencial.nome }}{% elif credencial and credencial.nome %}{{ credencial.nome }}{% elif request.form and request.form.nome %}{{ request.form.nome }}{% else %}{% endif %}" required>
+                        <div class="form-text">Identificador para esta credencial (ex: ERP Financeiro)</div>
+                    </div>
+                </div>
+                
+                <div class="card mb-4 bg-light">
+                    <div class="card-header">
+                        <h6 class="mb-0">Credenciais de Acesso ao ERP</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="usuario" class="form-label">Usuário no ERP <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="usuario" name="usuario" 
+                                       value="{% if credencial and credencial.id %}{{ credencial.usuario }}{% elif credencial and credencial.usuario %}{{ credencial.usuario }}{% elif request.form and request.form.usuario %}{{ request.form.usuario }}{% else %}{% endif %}" required>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="senha" class="form-label">
+                                    {% if credencial and credencial.id %}
+                                        Nova Senha
+                                    {% else %}
+                                        Senha <span class="text-danger">*</span>
+                                    {% endif %}
+                                </label>
+                                <input type="password" class="form-control" id="senha" name="senha" 
+                                       {% if not credencial or not credencial.id %}required{% endif %}>
+                                {% if credencial and credencial.id %}
+                                    <div class="form-text">Deixe em branco para manter a senha atual</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                    <a href="{{ url_for('cadastros.credenciais_erp.listar') }}" class="btn btn-secondary me-md-2">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

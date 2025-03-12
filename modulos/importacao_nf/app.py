@@ -16,16 +16,25 @@ import logging
 from flask_wtf import FlaskForm
 import base64
 
-# Configurar logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('importacao_xml.log'),
-        logging.StreamHandler()
-    ]
-)
+# Configurar logger
+log_dir = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'importacao_xml.log')
+
 logger = logging.getLogger('importacao_xml')
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    handler = logging.FileHandler(log_file)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # Adicionar console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
 
 # Configuração do Blueprint
 mod_importacao_nf = Blueprint('importacao_nf', __name__,
@@ -312,8 +321,7 @@ def process_xml_file(file_path):
                             item['unit_value']
                 else:
                     # Calcular valor total se não conseguir extrair
-                    item['total_value'] = item['quantity'] * \
-                        item['unit_value']
+                    item['total_value'] = item['quantity']*item['unit_value']
 
                 # Adicionar item à lista
                 itens.append(item)
@@ -649,13 +657,13 @@ def save_nfe_to_db(nfe_data):
             nota_id = nota_existente['id']
 
             cursor.execute("""
-                UPDATE nf_notas SET
-                data_emissao = %s,
-                valor_total = %s,
-                cnpj_emitente = %s,
-                nome_emitente = %s,
-                cnpj_destinatario = %s,
-                nome_destinatario = %s,
+                UPDATE nf_notas SET 
+                data_emissao = %s, 
+                valor_total = %s, 
+                cnpj_emitente = %s, 
+                nome_emitente = %s, 
+                cnpj_destinatario = %s, 
+                nome_destinatario = %s, 
                 status_processamento = 'atualizado',
                 data_atualizacao = NOW(),
                 observacoes = %s
@@ -677,7 +685,7 @@ def save_nfe_to_db(nfe_data):
             # Inserir nova nota
             cursor.execute("""
                 INSERT INTO nf_notas (
-                    chave_acesso, numero_nf, data_emissao, valor_total, cnpj_emitente,
+                    chave_acesso, numero_nf, data_emissao, valor_total, cnpj_emitente, 
                     nome_emitente, cnpj_destinatario, nome_destinatario, status_processamento, data_importacao, observacoes
                 ) VALUES (%s, %s, %s,%s,%s, %s, %s, %s, %s, NOW(), %s)
             """, (
@@ -699,7 +707,7 @@ def save_nfe_to_db(nfe_data):
         for item in nfe_data.get('items', []):
             cursor.execute("""
                 INSERT INTO nf_itens (
-                    nf_id, codigo, descricao, quantidade,
+                    nf_id, codigo, descricao, quantidade, 
                     valor_unitario, valor_total
                 ) VALUES (%s, %s, %s, %s, %s, %s)
             """, (
@@ -821,14 +829,14 @@ def processar_e_salvar_nfe(nfe_data):
         if resultado:
             # Atualizar NFe existente
             cursor.execute("""
-                UPDATE nf_notas SET
+                UPDATE nf_notas SET 
                 numero_nf = %s,
-                data_emissao = %s,
-                valor_total = %s,
-                cnpj_emitente = %s,
-                nome_emitente = %s,
-                cnpj_destinatario = %s,
-                nome_destinatario = %s,
+                data_emissao = %s, 
+                valor_total = %s, 
+                cnpj_emitente = %s, 
+                nome_emitente = %s, 
+                cnpj_destinatario = %s, 
+                nome_destinatario = %s, 
                 status_processamento = 'atualizado',
                 data_atualizacao = NOW(),
                 observacoes = %s
@@ -876,8 +884,8 @@ def processar_e_salvar_nfe(nfe_data):
             # Inserir nova NFe
             cursor.execute("""
                 INSERT INTO nf_notas (
-                    chave_acesso, numero_nf, data_emissao, valor_total, cnpj_emitente,
-                    nome_emitente, cnpj_destinatario, nome_destinatario,
+                    chave_acesso, numero_nf, data_emissao, valor_total, cnpj_emitente, 
+                    nome_emitente, cnpj_destinatario, nome_destinatario, 
                     xml_data, status_processamento, data_importacao, observacoes
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
             """, (
@@ -911,7 +919,7 @@ def processar_e_salvar_nfe(nfe_data):
 
             cursor.execute("""
                 INSERT INTO nf_itens (
-                    nf_id, codigo, descricao, quantidade,
+                    nf_id, codigo, descricao, quantidade, 
                     valor_unitario, valor_total
                 ) VALUES (%s, %s, %s, %s, %s, %s)
             """, (nfe_id, codigo, descricao, quantidade,

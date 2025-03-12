@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Importação Programada do ERP</h5>
+                <a href="{{ url_for('integracao_erp.index') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h6 class="mb-1">Última Atualização:</h6>
+                        <p class="text-muted mb-0">
+                            {% if ultima_importacao %}
+                                {{ ultima_importacao.data_inicio }} por {{ ultima_importacao.usuario_nome }}
+                                ({{ ultima_importacao.status }})
+                            {% else %}
+                                Nenhuma importação registrada
+                            {% endif %}
+                        </p>
+                    </div>
+                    <form method="POST" action="{{ url_for('integracao_erp.executar_importacao_programada') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sync-alt"></i> Importar Dados do ERP
+                        </button>
+                    </form>
+                </div>
+                
+                {% if ultima_importacao and ultima_importacao.status == 'SUCESSO' %}
+                <div class="alert alert-success">
+                    <p><i class="fas fa-check-circle"></i> <strong>Última importação concluída com sucesso!</strong></p>
+                    <p>Foram importados {{ ultima_importacao.total_registros }} registros.</p>
+                </div>
+                {% elif ultima_importacao and ultima_importacao.status == 'ERRO' %}
+                <div class="alert alert-danger">
+                    <p><i class="fas fa-exclamation-circle"></i> <strong>Falha na última importação:</strong></p>
+                    <p>{{ ultima_importacao.mensagem }}</p>
+                </div>
+                {% endif %}
+                
+                <div class="mt-4">
+                    <h6 class="border-bottom pb-2 mb-3">Informações da Importação</h6>
+                    <ul class="list-group">
+                        <li class="list-group-item">
+                            <span class="fw-bold">Usuário e senha:</span> Serão recuperados automaticamente com base nas suas credenciais salvas
+                        </li>
+                        <li class="list-group-item">
+                            <span class="fw-bold">Período de importação:</span> Mês atual
+                        </li>
+                        <li class="list-group-item">
+                            <span class="fw-bold">Tipo de relatório:</span> Financeiro
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

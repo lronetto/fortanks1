@@ -10,11 +10,16 @@ import mysql.connector
 from mysql.connector import Error
 
 # Configuração de logging
+log_dir = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'checklist.log')
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('checklist.log'),
+        logging.FileHandler(log_file),
         logging.StreamHandler()
     ]
 )

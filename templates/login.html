@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block content_login %}
+{% block content %}
 <div class="row justify-content-center">
     <div class="col-md-6">
         <div class="card shadow">
@@ -8,7 +8,16 @@
                 <h3>Sistema de Solicitação de Materiais</h3>
             </div>
             <div class="card-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
                 <form method="POST" action="{{ url_for('login') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="email" class="form-label">Email</label>
                         <input type="email" class="form-control" id="email" name="email" required>
