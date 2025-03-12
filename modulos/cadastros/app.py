@@ -1,9 +1,15 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
+# coding: utf-8
+from .materiais import mod_materiais, init_app as init_materiais
+from .equipamentos import mod_equipamentos, init_app as init_equipamentos
+from .centros_custo import mod_centros_custo, init_app as init_centros_custo
+from .plano_contas import mod_plano_contas, init_app as init_plano_contas
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 import os
 import logging
 from datetime import datetime
 import mysql.connector
 from mysql.connector import Error
+from utils.auth import verificar_permissao
 
 # Configuração de logging
 logging.basicConfig(
@@ -21,6 +27,14 @@ mod_cadastros = Blueprint('cadastros', __name__,
                           template_folder='templates',
                           url_prefix='/cadastros')
 
+# Importação dos submódulos do blueprints
+
+# Registrar os Blueprints dos submódulos
+mod_cadastros.register_blueprint(mod_equipamentos, url_prefix='/equipamentos')
+mod_cadastros.register_blueprint(
+    mod_centros_custo, url_prefix='/centros-custo')
+mod_cadastros.register_blueprint(mod_materiais, url_prefix='/materiais')
+
 
 def get_db_connection():
     try:
@@ -35,144 +49,25 @@ def get_db_connection():
         logger.error(f"Erro ao conectar ao MySQL: {e}")
         return None
 
+
 # Rota principal - dashboard de cadastros
-
-
 @mod_cadastros.route('/')
 def index():
+    """Página principal do módulo de cadastros"""
+    # Verificar autenticação
     if 'usuario_id' not in session:
+        flash('Você precisa fazer login para acessar esta página', 'warning')
         return redirect(url_for('login'))
+
+    # Verificar se o usuário tem acesso ao módulo de cadastros
+    if not verificar_permissao('cadastros'):
+        flash('Você não tem permissão para acessar este módulo', 'danger')
+        return redirect(url_for('index'))
 
     return render_template('cadastros/index.html')
 
-# Rotas para Materiais
 
-
-@mod_cadastros.route('/materiais')
-def materiais():
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-
-    materiais = []
-    connection = get_db_connection()
-
-    if connection:
-        try:
-            cursor = connection.cursor(dictionary=True)
-            cursor.execute("""
-                SELECT * FROM materiais 
-                ORDER BY codigo
-            """)
-            materiais = cursor.fetchall()
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Erro ao buscar materiais: {str(e)}")
-            flash(f'Erro ao buscar materiais: {str(e)}', 'danger')
-        finally:
-            connection.close()
-
-    return render_template('cadastros/materiais.html', materiais=materiais)
-
-
-@mod_cadastros.route('/materiais/novo', methods=['GET', 'POST'])
-def novo_material():
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        codigo = request.form.get('codigo')
-        nome = request.form.get('nome')
-        descricao = request.form.get('descricao')
-        unidade = request.form.get('unidade')
-
-        connection = get_db_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-                cursor.execute("""
-                    INSERT INTO materiais (codigo, nome, descricao, unidade, ativo, criado_em)
-                    VALUES (%s, %s, %s, %s, TRUE, NOW())
-                """, (codigo, nome, descricao, unidade))
-
-                connection.commit()
-                flash('Material cadastrado com sucesso!', 'success')
-                return redirect(url_for('cadastros.materiais'))
-
-            except Exception as e:
-                connection.rollback()
-                logger.error(f"Erro ao cadastrar material: {str(e)}")
-                flash(f'Erro ao cadastrar material: {str(e)}', 'danger')
-            finally:
-                cursor.close()
-                connection.close()
-
-    return render_template('cadastros/material_form.html')
-
-# Rotas para Centros de Custo
-
-
-@mod_cadastros.route('/centros-custo')
-def centros_custo():
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-
-    centros = []
-    connection = get_db_connection()
-
-    if connection:
-        try:
-            cursor = connection.cursor(dictionary=True)
-            cursor.execute("""
-                SELECT * FROM centros_custo 
-                ORDER BY codigo
-            """)
-            centros = cursor.fetchall()
-            cursor.close()
-        except Exception as e:
-            logger.error(f"Erro ao buscar centros de custo: {str(e)}")
-            flash(f'Erro ao buscar centros de custo: {str(e)}', 'danger')
-        finally:
-            connection.close()
-
-    return render_template('cadastros/centros_custo.html', centros=centros)
-
-
-@mod_cadastros.route('/centros-custo/novo', methods=['GET', 'POST'])
-def novo_centro_custo():
-    if 'usuario_id' not in session:
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        codigo = request.form.get('codigo')
-        nome = request.form.get('nome')
-        descricao = request.form.get('descricao')
-
-        connection = get_db_connection()
-        if connection:
-            try:
-                cursor = connection.cursor()
-                cursor.execute("""
-                    INSERT INTO centros_custo (codigo, nome, descricao, ativo)
-                    VALUES (%s, %s, %s, TRUE)
-                """, (codigo, nome, descricao))
-
-                connection.commit()
-                flash('Centro de Custo cadastrado com sucesso!', 'success')
-                return redirect(url_for('cadastros.centros_custo'))
-
-            except Exception as e:
-                connection.rollback()
-                logger.error(f"Erro ao cadastrar centro de custo: {str(e)}")
-                flash(f'Erro ao cadastrar centro de custo: {str(e)}', 'danger')
-            finally:
-                cursor.close()
-                connection.close()
-
-    return render_template('cadastros/centro_custo_form.html')
-
-# Função de inicialização do módulo
-
-
+# Função para inicializar o blueprint no app Flask principal
 def init_app(app):
-    """Função para inicializar o módulo com a aplicação Flask"""
+    # app.register_blueprint(mod_cadastros)
     return app

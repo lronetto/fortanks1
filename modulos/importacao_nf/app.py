@@ -87,17 +87,31 @@ def process_xml_file(file_path):
 
         # Tentar diferentes codificações
         encodings = ['utf-8', 'latin1', 'iso-8859-1', 'cp1252']
+        success = False
 
         for encoding in encodings:
             try:
                 with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
                     xml_content = f.read()
 
+                # Verificar se parece um XML válido
+                if not xml_content or not ('<' in xml_content and '>' in xml_content):
+                    logger.warning(
+                        f"Arquivo não parece ser um XML válido com codificação {encoding}")
+                    continue
+
                 # Tentar construir a árvore XML
                 try:
                     # Remover caracteres inválidos que podem atrapalhar o parsing
                     xml_content = ''.join(char for char in xml_content if ord(
                         char) < 128 or ord(char) > 159)
+
+                    # Tentar parse com ElementTree
+                    tree = ET.fromstring(xml_content)
+                    success = True
+                    logger.info(
+                        f"XML parseado com sucesso usando codificação {encoding}")
+                    break
 
                 except Exception as e:
                     logger.warning(
@@ -109,795 +123,378 @@ def process_xml_file(file_path):
                     f"Falha ao ler arquivo com codificação {encoding}: {str(e)}")
                 continue
 
+        # Se não conseguiu ler o arquivo com nenhuma codificação
+        if not xml_content:
+            logger.error(f"Não foi possível ler o arquivo XML: {file_path}")
+            return None
+
         # Salvar o conteúdo XML no objeto de retorno
         nfe_data['xml'] = xml_content
 
-        # Tentar extrair dados com ElementTree se o parsing for bem-sucedido
-        if tree is not None:
-            # Registrar namespaces comuns em NFe
-            namespaces = {
-                'nfe': 'http://www.portalfiscal.inf.br/nfe',
-                '': 'http://www.portalfiscal.inf.br/nfe'
-            }
+        # Verificar se conseguimos fazer o parse do XML
+        if not success:
+            logger.warning(
+                "Não foi possível fazer o parse do XML com ElementTree, tentando com abordagem alternativa")
+            # Criar uma árvore com um parser mais permissivo
+            try:
+                import lxml.etree as LET
+                tree = LET.fromstring(xml_content.encode('utf-8'))
+                success = True
+                logger.info("XML parseado com sucesso usando lxml")
+            except ImportError:
+                logger.warning(
+                    "lxml não está instalado, pulando esta tentativa")
+            except Exception as e:
+                logger.warning(f"Erro ao usar lxml para parsing: {str(e)}")
 
-            # Função auxiliar para buscar elemento com suporte a namespace
-            def find_element(root, path):
-                # Tentar busca direta
-                element = root.find(path)
+        # Se conseguimos um parser válido, tentar extrair os dados
+        namespaces = {
+            'nfe': 'http://www.portalfiscal.inf.br/nfe',
+            '': 'http://www.portalfiscal.inf.br/nfe'
+        }
+
+        # Função auxiliar para buscar elemento com suporte a namespace
+        def find_element(root, path):
+            # Tentar busca direta
+            element = root.find(path)
+            if element is not None:
+                return element
+
+            # Tentar com namespace
+            for prefix, uri in namespaces.items():
+                ns_path = path
+                if prefix:
+                    ns_path = path.replace('/', f'/{prefix}:')
+                    ns_path = f'.//{prefix}:{path.lstrip("./")}'
+
+                element = root.find(ns_path, namespaces=namespaces)
                 if element is not None:
                     return element
 
-                # Tentar com namespace
-                for prefix, uri in namespaces.items():
-                    ns_path = path
-                    if prefix:
-                        ns_path = path.replace('/', f'/{prefix}:')
-                        ns_path = f'.//{prefix}:{path.lstrip("./")}'
+            # Busca mais flexível usando //
+            return root.find(f'.//{path.split("/")[-1]}')
 
-                    element = root.find(ns_path, namespaces=namespaces)
-                    if element is not None:
-                        return element
+        # Extrair chave de acesso
+        ide = find_element(tree, './/infNFe')
+        if ide is not None and 'Id' in ide.attrib:
+            id_value = ide.attrib['Id']
+            if id_value.startswith('NFe'):
+                # Remover 'NFe' do início
+                nfe_data['access_key'] = id_value[3:]
 
-                # Busca mais flexível usando //
-                return root.find(f'.//{path.split("/")[-1]}')
+        # Extrair número da NF
+        num_nf = find_element(tree, './/nNF')
+        if num_nf is not None and num_nf.text:
+            nfe_data['number'] = num_nf.text.strip()
 
-            # Extrair chave de acesso
-            ide = find_element(tree, './/infNFe')
-            if ide is not None and 'Id' in ide.attrib:
-                id_value = ide.attrib['Id']
-                if id_value.startswith('NFe'):
-                    # Remover 'NFe' do início
-                    nfe_data['access_key'] = id_value[3:]
+        # Extrair data de emissão
+        dh_emi = find_element(tree, './/dhEmi')
+        if dh_emi is None:
+            dh_emi = find_element(tree, './/dEmi')
 
-            # Extrair número da NF
-            num_nf = find_element(tree, './/nNF')
-            if num_nf is not None and num_nf.text:
-                nfe_data['number'] = num_nf.text.strip()
-
-            # Extrair data de emissão
-            dh_emi = find_element(tree, './/dhEmi')
-            if dh_emi is None:
-                dh_emi = find_element(tree, './/dEmi')
-
-            if dh_emi is not None and dh_emi.text:
-                date_str = dh_emi.text.strip()
-                try:
-                    if 'T' in date_str:
-                        # Formato com timezone: 2023-01-01T14:30:00-03:00
-                        clean_date = date_str.replace('T', ' ')
-                        if '-03:00' in clean_date:
-                            clean_date = clean_date.split('-03:00')[0]
-                        nfe_data['emission_date'] = datetime.fromisoformat(
-                            clean_date)
-                    else:
-                        # Formato antigo: AAAA-MM-DD
-                        nfe_data['emission_date'] = datetime.strptime(
-                            date_str, '%Y-%m-%d')
-                except Exception as e:
-                    logger.warning(f"Erro ao converter data de emissão: {e}")
-                    nfe_data['emission_date'] = datetime.now()
-            else:
-                nfe_data['emission_date'] = datetime.now()
-
-            # Extrair valor total
-            v_nf = find_element(tree, './/vNF')
-            if v_nf is not None and v_nf.text:
-                try:
-                    nfe_data['value'] = float(v_nf.text.replace(',', '.'))
-                except Exception as e:
-                    logger.warning(f"Erro ao converter valor total: {e}")
-
-            # Extrair informações do emitente
-            emit = find_element(tree, './/emit')
-            if emit is not None:
-                cnpj_emit = find_element(emit, 'CNPJ')
-                if cnpj_emit is not None and cnpj_emit.text:
-                    nfe_data['cnpj_sender'] = cnpj_emit.text.strip()
-
-                nome_emit = find_element(emit, 'xNome')
-                if nome_emit is not None and nome_emit.text:
-                    nfe_data['sender_name'] = nome_emit.text.strip()
-
-            # Extrair informações do destinatário
-            dest = find_element(tree, './/dest')
-            if dest is not None:
-                cnpj_dest = find_element(dest, 'CNPJ')
-                if cnpj_dest is not None and cnpj_dest.text:
-                    nfe_data['cnpj_receiver'] = cnpj_dest.text.strip()
+        if dh_emi is not None and dh_emi.text:
+            date_str = dh_emi.text.strip()
+            try:
+                if 'T' in date_str:
+                    # Formato com timezone: 2023-01-01T14:30:00-03:00
+                    clean_date = date_str.replace('T', ' ')
+                    if '-03:00' in clean_date:
+                        clean_date = clean_date.split('-03:00')[0]
+                    nfe_data['emission_date'] = datetime.fromisoformat(
+                        clean_date)
                 else:
-                    # Tentar CPF se não encontrou CNPJ
-                    cpf_dest = find_element(dest, 'CPF')
-                    if cpf_dest is not None and cpf_dest.text:
-                        nfe_data['cnpj_receiver'] = cpf_dest.text.strip()
+                    # Formato antigo: AAAA-MM-DD
+                    nfe_data['emission_date'] = datetime.strptime(
+                        date_str, '%Y-%m-%d')
+            except Exception as e:
+                logger.warning(f"Erro ao converter data de emissão: {e}")
+                nfe_data['emission_date'] = datetime.now()
+        else:
+            nfe_data['emission_date'] = datetime.now()
 
-                nome_dest = find_element(dest, 'xNome')
-                if nome_dest is not None and nome_dest.text:
-                    nfe_data['receiver_name'] = nome_dest.text.strip()
+        # Extrair valor total
+        v_nf = find_element(tree, './/vNF')
+        if v_nf is not None and v_nf.text:
+            try:
+                nfe_data['value'] = float(v_nf.text.replace(',', '.'))
+            except Exception as e:
+                logger.warning(f"Erro ao converter valor total: {e}")
 
-            # Extrair itens
-            itens = []
-            det_nodes = tree.findall('.//det')
+        # Extrair informações do emitente
+        emit = find_element(tree, './/emit')
+        if emit is not None:
+            cnpj_emit = find_element(emit, 'CNPJ')
+            if cnpj_emit is not None and cnpj_emit.text:
+                nfe_data['cnpj_sender'] = cnpj_emit.text.strip()
 
-            if not det_nodes:
-                # Tentar busca alternativa para itens
-                det_nodes = []
-                for item in tree.findall('.//*'):
-                    if item.tag.endswith('det'):
-                        det_nodes.append(item)
+            nome_emit = find_element(emit, 'xNome')
+            if nome_emit is not None and nome_emit.text:
+                nfe_data['sender_name'] = nome_emit.text.strip()
 
-            for i, det in enumerate(det_nodes, 1):
-                item = {}
+        # Extrair informações do destinatário
+        dest = find_element(tree, './/dest')
+        if dest is not None:
+            cnpj_dest = find_element(dest, 'CNPJ')
+            if cnpj_dest is not None and cnpj_dest.text:
+                nfe_data['cnpj_receiver'] = cnpj_dest.text.strip()
+        else:
+            # Tentar CPF se não encontrou CNPJ
+            cpf_dest = find_element(dest, 'CPF')
+            if cpf_dest is not None and cpf_dest.text:
+                nfe_data['cnpj_receiver'] = cpf_dest.text.strip()
 
-                # Buscar elemento prod dentro de det
-                prod = find_element(det, 'prod')
-                if prod is not None:
-                    # Código do produto
-                    c_prod = find_element(prod, 'cProd')
-                    if c_prod is not None and c_prod.text:
-                        item['code'] = c_prod.text.strip()
-                    else:
-                        item['code'] = f"ITEM{i}"
+            nome_dest = find_element(dest, 'xNome')
+            if nome_dest is not None and nome_dest.text:
+                nfe_data['receiver_name'] = nome_dest.text.strip()
 
-                    # Descrição do produto
-                    x_prod = find_element(prod, 'xProd')
-                    if x_prod is not None and x_prod.text:
-                        item['description'] = x_prod.text.strip()
-                    else:
-                        item['description'] = f"Item {i}"
+        # Extrair itens
+        itens = []
+        det_nodes = tree.findall('.//det')
 
-                    # Quantidade
-                    q_com = find_element(prod, 'qCom')
-                    if q_com is not None and q_com.text:
-                        try:
-                            item['quantity'] = float(
-                                q_com.text.replace(',', '.'))
-                        except:
-                            item['quantity'] = 1
-                    else:
+        if not det_nodes:
+            # Tentar busca alternativa para itens
+            det_nodes = []
+            for item in tree.findall('.//*'):
+                if item.tag.endswith('det'):
+                    det_nodes.append(item)
+
+        for i, det in enumerate(det_nodes, 1):
+            item = {}
+
+            # Buscar elemento prod dentro de det
+            prod = find_element(det, 'prod')
+            if prod is not None:
+                # Código do produto
+                c_prod = find_element(prod, 'cProd')
+                if c_prod is not None and c_prod.text:
+                    item['code'] = c_prod.text.strip()
+                else:
+                    item['code'] = f"ITEM{i}"
+
+            # Descrição do produto
+                x_prod = find_element(prod, 'xProd')
+                if x_prod is not None and x_prod.text:
+                    item['description'] = x_prod.text.strip()
+                else:
+                    item['description'] = f"Item {i}"
+
+            # Quantidade
+                q_com = find_element(prod, 'qCom')
+                if q_com is not None and q_com.text:
+                    try:
+                        item['quantity'] = float(
+                            q_com.text.replace(',', '.'))
+                    except:
                         item['quantity'] = 1
+                else:
+                    item['quantity'] = 1
 
-                    # Valor unitário
-                    v_un_com = find_element(prod, 'vUnCom')
-                    if v_un_com is not None and v_un_com.text:
-                        try:
-                            item['unit_value'] = float(
-                                v_un_com.text.replace(',', '.'))
-                        except:
-                            item['unit_value'] = 0
-                    else:
+            # Valor unitário
+                v_un_com = find_element(prod, 'vUnCom')
+                if v_un_com is not None and v_un_com.text:
+                    try:
+                        item['unit_value'] = float(
+                            v_un_com.text.replace(',', '.'))
+                    except:
                         item['unit_value'] = 0
+                else:
+                    item['unit_value'] = 0
 
-                    # Valor total do item
-                    v_prod = find_element(prod, 'vProd')
-                    if v_prod is not None and v_prod.text:
-                        try:
-                            item['total_value'] = float(
-                                v_prod.text.replace(',', '.'))
-                        except:
-                            # Calcular valor total se não conseguir extrair
-                            item['total_value'] = item['quantity'] * \
-                                item['unit_value']
-                    else:
+            # Valor total do item
+                v_prod = find_element(prod, 'vProd')
+                if v_prod is not None and v_prod.text:
+                    try:
+                        item['total_value'] = float(
+                            v_prod.text.replace(',', '.'))
+                    except:
                         # Calcular valor total se não conseguir extrair
                         item['total_value'] = item['quantity'] * \
                             item['unit_value']
-
-                    # Adicionar item à lista
-                    itens.append(item)
                 else:
-                    # Tentar extrair informações diretamente do det
-                    item = {
-                        'code': f"ITEM{i}",
-                        'description': f"Item {i}",
-                        'quantity': 1,
-                        'unit_value': 0,
-                        'total_value': 0
-                    }
+                    # Calcular valor total se não conseguir extrair
+                    item['total_value'] = item['quantity'] * \
+                        item['unit_value']
 
-                    # Tentar extrair campos diretamente
-                    for field in ['cProd', 'xProd', 'qCom', 'vUnCom', 'vProd']:
-                        elem = find_element(det, f'.//{field}')
-                        if elem is not None and elem.text:
-                            if field == 'cProd':
-                                item['code'] = elem.text.strip()
-                            elif field == 'xProd':
-                                item['description'] = elem.text.strip()
-                            elif field == 'qCom':
-                                try:
-                                    item['quantity'] = float(
-                                        elem.text.replace(',', '.'))
-                                except:
-                                    pass
-                            elif field == 'vUnCom':
-                                try:
-                                    item['unit_value'] = float(
-                                        elem.text.replace(',', '.'))
-                                except:
-                                    pass
-                            elif field == 'vProd':
-                                try:
-                                    item['total_value'] = float(
-                                        elem.text.replace(',', '.'))
-                                except:
-                                    # Calcular valor total
-                                    item['total_value'] = item['quantity'] * \
-                                        item['unit_value']
+                # Adicionar item à lista
+                itens.append(item)
+            else:
+                # Tentar extrair informações diretamente do det
+                item = {
+                    'code': f"ITEM{i}",
+                    'description': f"Item {i}",
+                    'quantity': 1,
+                    'unit_value': 0,
+                    'total_value': 0
+                }
 
-                    # Adicionar item à lista
-                    itens.append(item)
+                # Tentar extrair campos diretamente
+                for field in ['cProd', 'xProd', 'qCom', 'vUnCom', 'vProd']:
+                    elem = find_element(det, f'.//{field}')
+                    if elem is not None and elem.text:
+                        if field == 'cProd':
+                            item['code'] = elem.text.strip()
+                        elif field == 'xProd':
+                            item['description'] = elem.text.strip()
+                        elif field == 'qCom':
+                            try:
+                                item['quantity'] = float(
+                                    elem.text.replace(',', '.'))
+                            except:
+                                pass
+                        elif field == 'vUnCom':
+                            try:
+                                item['unit_value'] = float(
+                                    elem.text.replace(',', '.'))
+                            except:
+                                pass
+                        elif field == 'vProd':
+                            try:
+                                item['total_value'] = float(
+                                    elem.text.replace(',', '.'))
+                            except:
+                                # Calcular valor total
+                                item['total_value'] = item['quantity'] * \
+                                    item['unit_value']
 
-            # Adicionar itens ao dicionário de retorno
-            nfe_data['items'] = itens
+                # Adicionar item à lista
+                itens.append(item)
 
-        # Verificar se conseguimos extrair pelo menos a chave de acesso
-        # Caso contrário, recorrer ao método de regex
+        # Adicionar itens ao dicionário de retorno
+        nfe_data['items'] = itens
+
+        # Se não conseguimos extrair a chave de acesso, tentar com regex de forma mais agressiva
         if nfe_data['access_key'] is None and xml_content:
             logger.info(
                 "Chave de acesso não encontrada com ElementTree, tentando com regex")
 
-            # Extrair chave de acesso com regex
+            # Extrair chave de acesso com regex - padrões ampliados
             import re
             chave_patterns = [
                 r'Id="NFe([0-9]{44})"',
+                r'Id=["\']NFe([0-9]{44})["\']',
                 r'chNFe>([0-9]{44})<',
                 r'<chNFe>([0-9]{44})</chNFe>',
                 r'chave="([0-9]{44})"',
+                r'chave=["\']([0-9]{44})["\']',
                 r'Chave de acesso: ([0-9]{44})',
                 r'chave>([0-9]{44})<',
-                r'chnfe>([0-9]{44})<'
+                r'chnfe>([0-9]{44})<',
+                r'chave.{0,20}([0-9]{44})',
+                r'<infNFe.*?Id="NFe([0-9]{44})"',
+                r'<NFe.*?Id="NFe([0-9]{44})"',
+                r'["\']NFe([0-9]{44})["\']',
+                # Último recurso: qualquer sequência de 44 dígitos
+                r'([0-9]{44})'
             ]
 
             for pattern in chave_patterns:
                 chave_match = re.search(pattern, xml_content, re.IGNORECASE)
                 if chave_match:
-                    nfe_data['access_key'] = chave_match.group(1)
-                    logger.info(
-                        f"Chave de acesso encontrada com regex: {nfe_data['access_key']}")
-                    break
+                    chave_candidata = chave_match.group(1)
+                    # Verificar se é realmente uma chave de acesso (44 dígitos)
+                    if len(chave_candidata) == 44 and chave_candidata.isdigit():
+                        nfe_data['access_key'] = chave_candidata
+                        logger.info(
+                            f"Chave de acesso encontrada com regex: {nfe_data['access_key']}")
+                        break
+
+            # Se ainda não encontrou, buscar 44 dígitos em sequência como último recurso
+            if nfe_data['access_key'] is None:
+                all_numbers = re.findall(r'\d+', xml_content)
+                for num in all_numbers:
+                    if len(num) == 44:
+                        nfe_data['access_key'] = num
+                        logger.info(
+                            f"Chave de acesso encontrada como sequência de 44 dígitos: {num}")
+                        break
 
             if nfe_data['access_key'] is None:
+                # Temos um problema sério, depurar o conteúdo XML
+                debug_xml_content(xml_content, file_path)
                 logger.error(
                     f"Não foi possível extrair a chave de acesso do arquivo {file_path}")
                 return None
 
-            # Se não temos número da NF, tentar com regex
-            if not nfe_data['number']:
-                num_patterns = [
-                    r'<nNF>(\d+)</nNF>',
-                    r'nNF>(\d+)<',
-                    r'Número: (\d+)',
-                    r'numero>(\d+)<',
-                    r'num>(\d+)<'
-                ]
-
-                for pattern in num_patterns:
-                    num_match = re.search(pattern, xml_content, re.IGNORECASE)
-                    if num_match:
-                        nfe_data['number'] = num_match.group(1)
-                        break
-
-            # Se não temos data de emissão, tentar com regex
-            if not nfe_data['emission_date']:
-                date_patterns = [
-                    r'<dhEmi>(.*?)</dhEmi>',
-                    r'<dEmi>(.*?)</dEmi>',
-                    r'dhEmi>(.*?)<',
-                    r'dEmi>(.*?)<',
-                    r'Data de emissão: (\d{2}/\d{2}/\d{4})',
-                    r'data>(\d{2}/\d{2}/\d{4})<'
-                ]
-
-                for pattern in date_patterns:
-                    date_match = re.search(pattern, xml_content, re.IGNORECASE)
-                    if date_match:
-                        date_str = date_match.group(1)
-                        try:
-                            if 'T' in date_str:
-                                # Formato com timezone: 2023-01-01T14:30:00-03:00
-                                clean_date = date_str.replace('T', ' ')
-                                if '-03:00' in clean_date:
-                                    clean_date = clean_date.split('-03:00')[0]
-                                nfe_data['emission_date'] = datetime.fromisoformat(
-                                    clean_date)
-                            elif '/' in date_str:
-                                # Formato DD/MM/YYYY
-                                nfe_data['emission_date'] = datetime.strptime(
-                                    date_str, '%d/%m/%Y')
-                            else:
-                                # Formato antigo: AAAA-MM-DD
-                                nfe_data['emission_date'] = datetime.strptime(
-                                    date_str, '%Y-%m-%d')
-                            break
-                        except Exception as e:
-                            logger.warning(
-                                f"Regex: Erro ao converter data de emissão: {e}")
-                            continue
-
-            # Se ainda não temos data de emissão, usar data atual
-            if not nfe_data['emission_date']:
-                nfe_data['emission_date'] = datetime.now()
-                logger.warning(
-                    f"Data de emissão não encontrada, usando data atual")
-
-            # Se não temos valor total, tentar com regex
-            if nfe_data['value'] == 0:
-                value_patterns = [
-                    r'<vNF>(.*?)</vNF>',
-                    r'vNF>(.*?)<',
-                    r'Valor Total: ([\d.,]+)',
-                    r'total>([\d.,]+)<'
-                ]
-
-                for pattern in value_patterns:
-                    value_match = re.search(
-                        pattern, xml_content, re.IGNORECASE)
-                    if value_match:
-                        try:
-                            nfe_data['value'] = float(value_match.group(
-                                1).replace('.', '').replace(',', '.'))
-                            break
-                        except:
-                            continue
-
-            # Se não temos dados do emitente, tentar com regex
-            if not nfe_data['cnpj_sender'] or not nfe_data['sender_name']:
-                # CNPJ do emitente
-                cnpj_patterns = [
-                    r'<emit>.*?<CNPJ>(.*?)</CNPJ>',
-                    r'emit>.*?CNPJ>(.*?)<',
-                    r'Emitente:.*?CNPJ: (\d{14})',
-                    r'emit.*?cnpj>(\d{14})<'
-                ]
-
-                for pattern in cnpj_patterns:
-                    cnpj_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if cnpj_match:
-                        nfe_data['cnpj_sender'] = cnpj_match.group(1)
-                        break
-
-                # Nome do emitente
-                name_patterns = [
-                    r'<emit>.*?<xNome>(.*?)</xNome>',
-                    r'emit>.*?xNome>(.*?)<',
-                    r'Emitente:.*?Nome: (.*?)[<\n]',
-                    r'emit.*?nome>(.*?)<'
-                ]
-
-                for pattern in name_patterns:
-                    name_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if name_match:
-                        nfe_data['sender_name'] = name_match.group(1)
-                        break
-
-            # Se não temos dados do destinatário, tentar com regex
-            if not nfe_data['cnpj_receiver'] or not nfe_data['receiver_name']:
-                # CNPJ do destinatário
-                cnpj_patterns = [
-                    r'<dest>.*?<CNPJ>(.*?)</CNPJ>',
-                    r'dest>.*?CNPJ>(.*?)<',
-                    r'Destinatário:.*?CNPJ: (\d{14})',
-                    r'dest.*?cnpj>(\d{14})<'
-                ]
-
-                for pattern in cnpj_patterns:
-                    cnpj_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if cnpj_match:
-                        nfe_data['cnpj_receiver'] = cnpj_match.group(1)
-                        break
-
-                if not nfe_data['cnpj_receiver']:
-                    # Tentar CPF se não encontrou CNPJ
-                    cpf_patterns = [
-                        r'<dest>.*?<CPF>(.*?)</CPF>',
-                        r'dest>.*?CPF>(.*?)<',
-                        r'Destinatário:.*?CPF: (\d{11})',
-                        r'dest.*?cpf>(\d{11})<'
-                    ]
-
-                    for pattern in cpf_patterns:
-                        cpf_match = re.search(
-                            pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                        if cpf_match:
-                            nfe_data['cnpj_receiver'] = cpf_match.group(1)
-                            break
-
-                # Nome do destinatário
-                name_patterns = [
-                    r'<dest>.*?<xNome>(.*?)</xNome>',
-                    r'dest>.*?xNome>(.*?)<',
-                    r'Destinatário:.*?Nome: (.*?)[<\n]',
-                    r'dest.*?nome>(.*?)<'
-                ]
-
-                for pattern in name_patterns:
-                    name_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if name_match:
-                        nfe_data['receiver_name'] = name_match.group(1)
-                        break
-
-            # Se não temos itens, tentar extrair com regex
-            if not nfe_data['items']:
-                logger.info("Tentando extrair itens com regex")
-                itens = []
-
-                # Vários padrões para encontrar blocos de produtos
-                det_patterns = [
-                    r'<det[^>]*>.*?<prod>(.*?)</prod>.*?</det>',
-                    r'det .*?prod>(.*?)</prod',
-                    r'<item>.*?</item>',
-                    r'<produto>.*?</produto>'
-                ]
-
-                for pattern in det_patterns:
-                    det_matches = list(re.finditer(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE))
-                    if det_matches:
-                        for i, det_match in enumerate(det_matches, 1):
-                            prod_content = det_match.group(1)
-                            item = {}
-
-                            # Código do produto
-                            code_match = re.search(
-                                r'<cProd>(.*?)</cProd>|cProd>(.*?)<', prod_content, re.IGNORECASE)
-                            if code_match:
-                                item['code'] = code_match.group(
-                                    1) if code_match.group(1) else code_match.group(2)
-                            else:
-                                item['code'] = f"ITEM{i}"
-
-                            # Descrição do produto
-                            desc_match = re.search(
-                                r'<xProd>(.*?)</xProd>|xProd>(.*?)<', prod_content, re.IGNORECASE)
-                            if desc_match:
-                                item['description'] = desc_match.group(
-                                    1) if desc_match.group(1) else desc_match.group(2)
-                            else:
-                                item['description'] = f"Item {i}"
-
-                            # Quantidade
-                            qty_match = re.search(
-                                r'<qCom>(.*?)</qCom>|qCom>(.*?)<', prod_content, re.IGNORECASE)
-                            if qty_match:
-                                try:
-                                    value = qty_match.group(1) if qty_match.group(
-                                        1) else qty_match.group(2)
-                                    item['quantity'] = float(
-                                        value.replace(',', '.'))
-                                except:
-                                    item['quantity'] = 1
-                            else:
-                                item['quantity'] = 1
-
-                            # Valor unitário
-                            val_match = re.search(
-                                r'<vUnCom>(.*?)</vUnCom>|vUnCom>(.*?)<', prod_content, re.IGNORECASE)
-                            if val_match:
-                                try:
-                                    value = val_match.group(1) if val_match.group(
-                                        1) else val_match.group(2)
-                                    item['unit_value'] = float(
-                                        value.replace(',', '.'))
-                                except:
-                                    item['unit_value'] = 0
-                            else:
-                                item['unit_value'] = 0
-
-                            # Valor total do item
-                            total_match = re.search(
-                                r'<vProd>(.*?)</vProd>|vProd>(.*?)<', prod_content, re.IGNORECASE)
-                            if total_match:
-                                try:
-                                    value = total_match.group(1) if total_match.group(
-                                        1) else total_match.group(2)
-                                    item['total_value'] = float(
-                                        value.replace(',', '.'))
-                                except:
-                                    # Calcular valor total
-                                    item['total_value'] = item['quantity'] * \
-                                        item['unit_value']
-                            else:
-                                # Calcular valor total
-                                item['total_value'] = item['quantity'] * \
-                                    item['unit_value']
-
-                            # Adicionar item à lista
-                            itens.append(item)
-
-                        # Se encontrou itens, sair do loop
-                        if itens:
-                            break
-
-                # Adicionar itens ao dicionário de retorno
-                nfe_data['items'] = itens
-
-        # Verificar se conseguimos extrair pelo menos a chave de acesso
-        # Caso contrário, recorrer ao método de regex
-        if nfe_data['access_key'] is None and xml_content:
-            logger.info(
-                "Chave de acesso não encontrada com ElementTree, tentando com regex")
-
-            # Extrair chave de acesso com regex
+        # Se não temos número da NF, tentar com regex
+        if not nfe_data['number']:
             import re
-            chave_patterns = [
-                r'Id="NFe([0-9]{44})"',
-                r'chNFe>([0-9]{44})<',
-                r'<chNFe>([0-9]{44})</chNFe>',
-                r'chave="([0-9]{44})"',
-                r'Chave de acesso: ([0-9]{44})',
-                r'chave>([0-9]{44})<',
-                r'chnfe>([0-9]{44})<'
+            num_patterns = [
+                r'<nNF>(\d+)</nNF>',
+                r'nNF>(\d+)<',
+                r'Número: (\d+)',
+                r'numero>(\d+)<',
+                r'num>(\d+)<'
             ]
 
-            for pattern in chave_patterns:
-                chave_match = re.search(pattern, xml_content, re.IGNORECASE)
-                if chave_match:
-                    nfe_data['access_key'] = chave_match.group(1)
-                    logger.info(
-                        f"Chave de acesso encontrada com regex: {nfe_data['access_key']}")
+            for pattern in num_patterns:
+                num_match = re.search(pattern, xml_content, re.IGNORECASE)
+                if num_match:
+                    nfe_data['number'] = num_match.group(1)
                     break
 
-            if nfe_data['access_key'] is None:
-                logger.error(
-                    f"Não foi possível extrair a chave de acesso do arquivo {file_path}")
-                return None
+        # Se não temos data de emissão, tentar com regex
+        if not nfe_data['emission_date']:
+            import re
+            date_patterns = [
+                r'<dhEmi>(.*?)</dhEmi>',
+                r'<dEmi>(.*?)</dEmi>',
+                r'dhEmi>(.*?)<',
+                r'dEmi>(.*?)<',
+                r'Data de emissão: (\d{2}/\d{2}/\d{4})',
+                r'data>(\d{2}/\d{2}/\d{4})<'
+            ]
 
-            # Se não temos número da NF, tentar com regex
-            if not nfe_data['number']:
-                num_patterns = [
-                    r'<nNF>(\d+)</nNF>',
-                    r'nNF>(\d+)<',
-                    r'Número: (\d+)',
-                    r'numero>(\d+)<',
-                    r'num>(\d+)<'
-                ]
-
-                for pattern in num_patterns:
-                    num_match = re.search(pattern, xml_content, re.IGNORECASE)
-                    if num_match:
-                        nfe_data['number'] = num_match.group(1)
+            for pattern in date_patterns:
+                date_match = re.search(pattern, xml_content, re.IGNORECASE)
+                if date_match:
+                    date_str = date_match.group(1)
+                    try:
+                        if 'T' in date_str:
+                            # Formato com timezone: 2023-01-01T14:30:00-03:00
+                            clean_date = date_str.replace('T', ' ')
+                            if '-03:00' in clean_date:
+                                clean_date = clean_date.split('-03:00')[0]
+                            nfe_data['emission_date'] = datetime.fromisoformat(
+                                clean_date)
+                        elif '/' in date_str:
+                            # Formato DD/MM/YYYY
+                            nfe_data['emission_date'] = datetime.strptime(
+                                date_str, '%d/%m/%Y')
+                        else:
+                            # Formato antigo: AAAA-MM-DD
+                            nfe_data['emission_date'] = datetime.strptime(
+                                date_str, '%Y-%m-%d')
                         break
+                    except Exception as e:
+                        logger.warning(
+                            f"Regex: Erro ao converter data de emissão: {e}")
+                        continue
 
-            # Se não temos data de emissão, tentar com regex
-            if not nfe_data['emission_date']:
-                date_patterns = [
-                    r'<dhEmi>(.*?)</dhEmi>',
-                    r'<dEmi>(.*?)</dEmi>',
-                    r'dhEmi>(.*?)<',
-                    r'dEmi>(.*?)<',
-                    r'Data de emissão: (\d{2}/\d{2}/\d{4})',
-                    r'data>(\d{2}/\d{2}/\d{4})<'
-                ]
+        # Se ainda não temos data de emissão, usar data atual
+        if not nfe_data['emission_date']:
+            nfe_data['emission_date'] = datetime.now()
+            logger.warning(
+                f"Data de emissão não encontrada, usando data atual")
 
-                for pattern in date_patterns:
-                    date_match = re.search(pattern, xml_content, re.IGNORECASE)
-                    if date_match:
-                        date_str = date_match.group(1)
-                        try:
-                            if 'T' in date_str:
-                                # Formato com timezone: 2023-01-01T14:30:00-03:00
-                                clean_date = date_str.replace('T', ' ')
-                                if '-03:00' in clean_date:
-                                    clean_date = clean_date.split('-03:00')[0]
-                                nfe_data['emission_date'] = datetime.fromisoformat(
-                                    clean_date)
-                            elif '/' in date_str:
-                                # Formato DD/MM/YYYY
-                                nfe_data['emission_date'] = datetime.strptime(
-                                    date_str, '%d/%m/%Y')
-                            else:
-                                # Formato antigo: AAAA-MM-DD
-                                nfe_data['emission_date'] = datetime.strptime(
-                                    date_str, '%Y-%m-%d')
-                            break
-                        except Exception as e:
-                            logger.warning(
-                                f"Regex: Erro ao converter data de emissão: {e}")
-                            continue
+        # Se não temos valor total, tentar com regex
+        if nfe_data['value'] == 0:
+            import re
+            value_patterns = [
+                r'<vNF>(.*?)</vNF>',
+                r'vNF>(.*?)<',
+                r'Valor Total: ([\d.,]+)',
+                r'total>([\d.,]+)<'
+            ]
 
-            # Se ainda não temos data de emissão, usar data atual
-            if not nfe_data['emission_date']:
-                nfe_data['emission_date'] = datetime.now()
-                logger.warning(
-                    f"Data de emissão não encontrada, usando data atual")
-
-            # Se não temos valor total, tentar com regex
-            if nfe_data['value'] == 0:
-                value_patterns = [
-                    r'<vNF>(.*?)</vNF>',
-                    r'vNF>(.*?)<',
-                    r'Valor Total: ([\d.,]+)',
-                    r'total>([\d.,]+)<'
-                ]
-
-                for pattern in value_patterns:
-                    value_match = re.search(
-                        pattern, xml_content, re.IGNORECASE)
-                    if value_match:
-                        try:
-                            nfe_data['value'] = float(value_match.group(
-                                1).replace('.', '').replace(',', '.'))
-                            break
-                        except:
-                            continue
-
-            # Se não temos dados do emitente, tentar com regex
-            if not nfe_data['cnpj_sender'] or not nfe_data['sender_name']:
-                # CNPJ do emitente
-                cnpj_patterns = [
-                    r'<emit>.*?<CNPJ>(.*?)</CNPJ>',
-                    r'emit>.*?CNPJ>(.*?)<',
-                    r'Emitente:.*?CNPJ: (\d{14})',
-                    r'emit.*?cnpj>(\d{14})<'
-                ]
-
-                for pattern in cnpj_patterns:
-                    cnpj_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if cnpj_match:
-                        nfe_data['cnpj_sender'] = cnpj_match.group(1)
+            for pattern in value_patterns:
+                value_match = re.search(pattern, xml_content, re.IGNORECASE)
+                if value_match:
+                    try:
+                        nfe_data['value'] = float(value_match.group(
+                            1).replace('.', '').replace(',', '.'))
                         break
-
-                # Nome do emitente
-                name_patterns = [
-                    r'<emit>.*?<xNome>(.*?)</xNome>',
-                    r'emit>.*?xNome>(.*?)<',
-                    r'Emitente:.*?Nome: (.*?)[<\n]',
-                    r'emit.*?nome>(.*?)<'
-                ]
-
-                for pattern in name_patterns:
-                    name_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if name_match:
-                        nfe_data['sender_name'] = name_match.group(1)
-                        break
-
-            # Se não temos dados do destinatário, tentar com regex
-            if not nfe_data['cnpj_receiver'] or not nfe_data['receiver_name']:
-                # CNPJ do destinatário
-                cnpj_patterns = [
-                    r'<dest>.*?<CNPJ>(.*?)</CNPJ>',
-                    r'dest>.*?CNPJ>(.*?)<',
-                    r'Destinatário:.*?CNPJ: (\d{14})',
-                    r'dest.*?cnpj>(\d{14})<'
-                ]
-
-                for pattern in cnpj_patterns:
-                    cnpj_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if cnpj_match:
-                        nfe_data['cnpj_receiver'] = cnpj_match.group(1)
-                        break
-
-                if not nfe_data['cnpj_receiver']:
-                    # Tentar CPF se não encontrou CNPJ
-                    cpf_patterns = [
-                        r'<dest>.*?<CPF>(.*?)</CPF>',
-                        r'dest>.*?CPF>(.*?)<',
-                        r'Destinatário:.*?CPF: (\d{11})',
-                        r'dest.*?cpf>(\d{11})<'
-                    ]
-
-                    for pattern in cpf_patterns:
-                        cpf_match = re.search(
-                            pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                        if cpf_match:
-                            nfe_data['cnpj_receiver'] = cpf_match.group(1)
-                            break
-
-                # Nome do destinatário
-                name_patterns = [
-                    r'<dest>.*?<xNome>(.*?)</xNome>',
-                    r'dest>.*?xNome>(.*?)<',
-                    r'Destinatário:.*?Nome: (.*?)[<\n]',
-                    r'dest.*?nome>(.*?)<'
-                ]
-
-                for pattern in name_patterns:
-                    name_match = re.search(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE)
-                    if name_match:
-                        nfe_data['receiver_name'] = name_match.group(1)
-                        break
-
-            # Se não temos itens, tentar extrair com regex
-            if not nfe_data['items']:
-                logger.info("Tentando extrair itens com regex")
-                itens = []
-
-                # Vários padrões para encontrar blocos de produtos
-                det_patterns = [
-                    r'<det[^>]*>.*?<prod>(.*?)</prod>.*?</det>',
-                    r'det .*?prod>(.*?)</prod',
-                    r'<item>.*?</item>',
-                    r'<produto>.*?</produto>'
-                ]
-
-                for pattern in det_patterns:
-                    det_matches = list(re.finditer(
-                        pattern, xml_content, re.DOTALL | re.IGNORECASE))
-                    if det_matches:
-                        for i, det_match in enumerate(det_matches, 1):
-                            prod_content = det_match.group(1)
-                            item = {}
-
-                            # Código do produto
-                            code_match = re.search(
-                                r'<cProd>(.*?)</cProd>|cProd>(.*?)<', prod_content, re.IGNORECASE)
-                            if code_match:
-                                item['code'] = code_match.group(
-                                    1) if code_match.group(1) else code_match.group(2)
-                            else:
-                                item['code'] = f"ITEM{i}"
-
-                            # Descrição do produto
-                            desc_match = re.search(
-                                r'<xProd>(.*?)</xProd>|xProd>(.*?)<', prod_content, re.IGNORECASE)
-                            if desc_match:
-                                item['description'] = desc_match.group(
-                                    1) if desc_match.group(1) else desc_match.group(2)
-                            else:
-                                item['description'] = f"Item {i}"
-
-                            # Quantidade
-                            qty_match = re.search(
-                                r'<qCom>(.*?)</qCom>|qCom>(.*?)<', prod_content, re.IGNORECASE)
-                            if qty_match:
-                                try:
-                                    value = qty_match.group(1) if qty_match.group(
-                                        1) else qty_match.group(2)
-                                    item['quantity'] = float(
-                                        value.replace(',', '.'))
-                                except:
-                                    item['quantity'] = 1
-                            else:
-                                item['quantity'] = 1
-
-                            # Valor unitário
-                            val_match = re.search(
-                                r'<vUnCom>(.*?)</vUnCom>|vUnCom>(.*?)<', prod_content, re.IGNORECASE)
-                            if val_match:
-                                try:
-                                    value = val_match.group(1) if val_match.group(
-                                        1) else val_match.group(2)
-                                    item['unit_value'] = float(
-                                        value.replace(',', '.'))
-                                except:
-                                    item['unit_value'] = 0
-                            else:
-                                item['unit_value'] = 0
-
-                            # Valor total do item
-                            total_match = re.search(
-                                r'<vProd>(.*?)</vProd>|vProd>(.*?)<', prod_content, re.IGNORECASE)
-                            if total_match:
-                                try:
-                                    value = total_match.group(1) if total_match.group(
-                                        1) else total_match.group(2)
-                                    item['total_value'] = float(
-                                        value.replace(',', '.'))
-                                except:
-                                    # Calcular valor total
-                                    item['total_value'] = item['quantity'] * \
-                                        item['unit_value']
-                            else:
-                                # Calcular valor total
-                                item['total_value'] = item['quantity'] * \
-                                    item['unit_value']
-
-                            # Adicionar item à lista
-                            itens.append(item)
-
-                        # Se encontrou itens, sair do loop
-                        if itens:
-                            break
-
-                # Adicionar itens ao dicionário de retorno
-                nfe_data['items'] = itens
+                    except:
+                        continue
 
         # Se não encontrou itens, adicionar item genérico
         if not nfe_data['items'] and nfe_data['access_key']:
@@ -914,8 +511,12 @@ def process_xml_file(file_path):
     except Exception as e:
         logger.error(
             f"Erro ao processar arquivo XML {file_path}: {str(e)}", exc_info=True)
-        # Se temos o conteúdo XML mas houve erro no processamento, tente extrair pelo menos a chave de acesso
+
+        # Tentar salvar informações de debug
         if 'xml_content' in locals() and xml_content:
+            debug_xml_content(xml_content, file_path)
+
+            # Último recurso: tentar extrair pelo menos a chave de acesso
             import re
             chave_match = re.search(r'Id="NFe([0-9]{44})"', xml_content)
             if chave_match:
@@ -949,6 +550,34 @@ def process_xml_file(file_path):
         f"XML processado com sucesso: {nfe_data['access_key']}, {num_itens} itens encontrados")
 
     return nfe_data
+
+
+def debug_xml_content(xml_content, file_path, salvar_debug=True):
+    """Função para depurar conteúdo XML problemático"""
+    logger.error(f"Conteúdo XML inválido ou não reconhecido em {file_path}")
+
+    # Verificar tamanho do conteúdo
+    content_size = len(xml_content) if xml_content else 0
+    logger.error(f"Tamanho do conteúdo XML: {content_size} bytes")
+
+    # Exibir primeiros 200 caracteres para depuração
+    if xml_content and len(xml_content) > 0:
+        logger.error(f"Primeiros 200 caracteres: {xml_content[:200]}")
+    else:
+        logger.error("Conteúdo XML está vazio")
+
+    # Salvar conteúdo para análise posterior
+    if salvar_debug and xml_content:
+        debug_file = os.path.join(os.path.dirname(file_path), 'debug_xml.txt')
+        try:
+            with open(debug_file, 'w', encoding='utf-8') as f:
+                f.write(f"XML original de {file_path}:\n\n")
+                f.write(xml_content)
+            logger.info(f"Conteúdo XML salvo para debug em {debug_file}")
+        except Exception as e:
+            logger.error(f"Não foi possível salvar arquivo de debug: {str(e)}")
+
+    return False
 
 
 def buscar_nfes_arquivei(dias_atras=30, cnpj=None):
@@ -1099,50 +728,73 @@ def save_nfe_to_db(nfe_data):
 
 
 def processar_e_salvar_nfe(nfe_data):
-    """
-    Processa e salva os dados de NFe recebidos da API Arquivei no banco de dados
-    Retorna True se a operação foi bem-sucedida, False caso contrário
-    """
     connection = get_db_connection()
     if not connection:
-        return False
+        logger.error("Não foi possível conectar ao banco de dados")
+        return 'erro'
 
     try:
-        logger.info("Iniciando processamento de NFe da API Arquivei")
+        logger.info("Iniciando processamento de NFe")
         cursor = connection.cursor(dictionary=True)
 
-        # Verificar se os dados contêm XML em Base64
-        xml_base64 = identificar_xml_base64(nfe_data)
+        # 1. Tratamento inicial dos dados
+        # Se nfe_data for uma string (conteúdo XML direto), transformar em dicionário
+        if isinstance(nfe_data, str):
+            # Tratar como XML direto
+            logger.info("Recebido conteúdo XML direto, processando")
+            xml_content = nfe_data
 
-        # Se identificamos um possível XML em Base64, tentar decodificar e processar
-        if xml_base64:
-            logger.info(
-                "Detectado possível XML em Base64, tentando decodificar")
+            # Verificar se o conteúdo parece ser XML
+            if not xml_content or not ('<' in xml_content[:100]):
+                logger.error("Conteúdo não parece ser XML válido")
+                logger.debug(f"Primeiros 100 caracteres: {xml_content[:100]}")
+                return 'erro'
+
             try:
-                # Decodificar o XML Base64
-                decoded_data = decodificar_base64_xml(xml_base64)
+                # Salvar em arquivo temporário
+                temp_file = tempfile.NamedTemporaryFile(
+                    mode='w', suffix='.xml', delete=False, encoding='utf-8')
+                temp_file.write(xml_content)
+                temp_file_path = temp_file.name
+                temp_file.close()
 
-                if decoded_data:
-                    # Processar o XML usando a função existente
-                    temp_file_path = decoded_data['temp_file_path']
-                    processed_nfe = process_xml_file(temp_file_path)
+                # Processar XML para extrair dados
+                processed_nfe = process_xml_file(temp_file_path)
 
-                    # Remover o arquivo temporário
+                # Remover arquivo temporário
+                try:
                     os.unlink(temp_file_path)
+                except:
+                    pass
 
-                    # Se o processamento foi bem-sucedido, usar esses dados
-                    if processed_nfe and processed_nfe.get('access_key'):
-                        logger.info(
-                            f"XML Base64 processado com sucesso: {processed_nfe.get('access_key')}")
-                        nfe_data = processed_nfe
+                if not processed_nfe:
+                    logger.error("Falha ao processar o XML")
+                    return 'erro'
 
-                        # Guardar o XML decodificado
-                        nfe_data['xml'] = decoded_data['xml_content']
+                # Adicionar o conteúdo original ao dicionário processado
+                processed_nfe['xml'] = xml_content
+                nfe_data = processed_nfe
             except Exception as e:
-                logger.warning(f"Erro ao processar XML Base64: {str(e)}")
+                logger.error(f"Erro ao processar XML: {str(e)}")
+                return 'erro'
 
-        # Extrair informações relevantes da NFe
+        elif not isinstance(nfe_data, dict):
+            logger.error(
+                f"Dados NFe inválidos, não é um dicionário ou string: {type(nfe_data)}")
+            return 'erro'
+
+        # 2. Verificar se temos os dados mínimos necessários
+        if not isinstance(nfe_data, dict):
+            logger.error(
+                "Dados NFe inválidos após processamento, não é um dicionário")
+            return 'erro'
+
         chave_acesso = nfe_data.get('access_key')
+        if not chave_acesso:
+            logger.error("Chave de acesso não encontrada nos dados")
+            return 'erro'
+
+        # 3. Extração de dados para persistência
         numero_nf = nfe_data.get('number', '')
         data_emissao = nfe_data.get('emission_date')
 
@@ -1160,11 +812,7 @@ def processar_e_salvar_nfe(nfe_data):
         nome_destinatario = nfe_data.get('receiver_name', '')
         xml_data = nfe_data.get('xml', '')
 
-        # Verificar se a chave de acesso está presente
-        if not chave_acesso:
-            logger.error("Chave de acesso ausente, impossível importar NFe")
-            return False
-
+        # 4. Persistência no banco de dados
         # Verificar se a NFe já existe no banco
         cursor.execute(
             "SELECT id FROM nf_notas WHERE chave_acesso = %s", (chave_acesso,))
@@ -1172,8 +820,6 @@ def processar_e_salvar_nfe(nfe_data):
 
         if resultado:
             # Atualizar NFe existente
-            nfe_id = resultado['id']
-
             cursor.execute("""
                 UPDATE nf_notas SET
                 numero_nf = %s,
@@ -1195,12 +841,37 @@ def processar_e_salvar_nfe(nfe_data):
                 nome_emitente,
                 cnpj_destinatario,
                 nome_destinatario,
-                'Atualizado via API Arquivei em ' + datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                'Atualizado em ' + datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
                 chave_acesso
             ))
 
+            nfe_id = resultado['id']
+
             # Remover itens antigos
             cursor.execute("DELETE FROM nf_itens WHERE nf_id = %s", (nfe_id,))
+
+            logger.info(f"NFe {chave_acesso} atualizada com sucesso")
+
+            # 5. Processamento de itens
+            # Processar itens da NFe
+            itens = nfe_data.get('items', [])
+            for item in itens:
+                codigo = item.get('code', '')
+                descricao = item.get('description', '')
+                quantidade = item.get('quantity', 0)
+                valor_unitario = item.get('unit_value', 0)
+                valor_total_item = item.get('total_value', 0)
+
+                cursor.execute("""
+                    INSERT INTO nf_itens (
+                        nf_id, codigo, descricao, quantidade,
+                        valor_unitario, valor_total
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                """, (nfe_id, codigo, descricao, quantidade,
+                      valor_unitario, valor_total_item))
+
+            connection.commit()
+            return 'atualizado'
         else:
             # Inserir nova NFe
             cursor.execute("""
@@ -1220,12 +891,15 @@ def processar_e_salvar_nfe(nfe_data):
                 nome_destinatario,
                 xml_data,
                 'importado',
-                'Importado via API Arquivei em ' + datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                'Importado em ' + datetime.now().strftime('%d/%m/%Y %H:%M:%S')
             ))
 
             # Obter o ID da NFe inserida
             nfe_id = cursor.lastrowid
 
+            logger.info(f"NFe {chave_acesso} inserida com sucesso")
+
+            # 5. Processamento de itens
         # Processar itens da NFe
         itens = nfe_data.get('items', [])
         for item in itens:
@@ -1244,13 +918,12 @@ def processar_e_salvar_nfe(nfe_data):
                   valor_unitario, valor_total_item))
 
         connection.commit()
-        logger.info(f"NFe {chave_acesso} salva com sucesso")
-        return True
+        return 'novo'
     except Exception as e:
         logger.error(f"Erro ao processar NFe: {str(e)}", exc_info=True)
         if connection:
             connection.rollback()
-        return False
+        return 'erro'
     finally:
         if connection and hasattr(connection, 'is_connected') and connection.is_connected():
             cursor.close()
@@ -1377,7 +1050,7 @@ def importar():
             flash(
                 'Erro ao importar notas fiscais. Verifique os logs para mais detalhes.', 'danger')
 
-    # Renderizar template para ambos GET e POST
+        # Renderizar template para ambos GET e POST
     return render_template('importacao_nf/importar.html', form=form)
 
 # Rota para importar por upload de XML
@@ -1386,141 +1059,338 @@ def importar():
 @mod_importacao_nf.route('/importar_xml', methods=['GET', 'POST'])
 def importar_xml():
     if 'usuario_id' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
         return redirect(url_for('login'))
 
-    # Criar uma instância de formulário vazio para obter o token CSRF
-    form = FlaskForm()
-
+    # Verificar token CSRF para requisições POST
     if request.method == 'POST':
-        logger.info("Recebida requisição POST para importar_xml")
+        logger.info(f"Método: {request.method}")
         logger.info(f"Headers: {request.headers}")
-        logger.info(f"Form data: {request.form}")
-        logger.info(f"Files: {list(request.files.keys())}")
+        logger.info(f"Form: {request.form}")
+        logger.info(f"Files: {request.files}")
 
-        # Verificar se há arquivos enviados
-        if 'file' not in request.files and 'files[]' not in request.files:
-            logger.warning("Nenhum arquivo encontrado no request.files")
-            return jsonify({"error": "Nenhum arquivo selecionado"}), 400
+        if 'files[]' not in request.files:
+            flash('Nenhum arquivo selecionado', 'danger')
+            return redirect(request.url)
 
-        # Obter arquivos (pode ser um único 'file' ou múltiplos 'files[]')
-        if 'file' in request.files:
-            files = [request.files['file']]
-            logger.info("Usando campo 'file' para upload")
-        else:
-            files = request.files.getlist('files[]')
-            logger.info(
-                f"Usando campo 'files[]' para upload, contém {len(files)} arquivos")
+        files = request.files.getlist('files[]')
 
-        if not files or files[0].filename == '':
-            logger.warning(
-                "Lista de arquivos vazia ou primeiro arquivo sem nome")
-            return jsonify({"error": "Nenhum arquivo válido selecionado"}), 400
+        if not files or all(file.filename == '' for file in files):
+            flash('Nenhum arquivo selecionado', 'danger')
+            return redirect(request.url)
 
-        logger.info(f"Recebidos {len(files)} arquivos para processamento")
-
-        # Verificar conteúdo do primeiro arquivo
-        if len(files) > 0:
-            logger.info(
-                f"Primeiro arquivo: {files[0].filename}, tipo: {files[0].content_type}")
-
-        # Contador para estatísticas
-        total_processados = 0
-        total_novos = 0
-        total_atualizados = 0
-        total_erros = 0
-
-        # Criar diretório temporário
+        # Criar diretório temporário para processar os arquivos
         temp_dir = tempfile.mkdtemp()
-        logger.info(f"Criado diretório temporário: {temp_dir}")
-
         try:
-            # Processar cada arquivo
-            for file in files:
-                if not file or not file.filename:
-                    continue
+            processados = 0
+            novos = 0
+            atualizados = 0
+            erros = 0
 
-                logger.info(f"Processando arquivo: {file.filename}")
+            # Reduzir o tamanho do lote para processar menos arquivos por vez
+            # e evitar o erro "Request Entity Too Large"
+            lote_size = 3  # Reduzido de 5 para 3 arquivos por vez
 
-                # Salvar o arquivo no diretório temporário
-                file_path = os.path.join(
-                    temp_dir, secure_filename(file.filename))
-                file.save(file_path)
-                logger.debug(f"Arquivo salvo em: {file_path}")
+            # Dividir os arquivos em lotes menores para processamento
+            for i in range(0, len(files), lote_size):
+                lote_atual = files[i:i+lote_size]
+                logger.info(
+                    f"Processando lote {i//lote_size + 1} de {(len(files) + lote_size - 1)//lote_size}")
 
-                # Verificar tipo de arquivo
-                if file.filename.lower().endswith('.xml'):
-                    # Processar arquivo XML
-                    nfe_data = process_xml_file(file_path)
-                    if nfe_data:
-                        total_processados += 1
-                        if save_nfe_to_db(nfe_data):
-                            total_novos += 1
-                        else:
-                            total_atualizados += 1
-                elif file.filename.lower().endswith('.zip'):
-                    # Processar arquivo ZIP
+                for file in lote_atual:
+                    if file.filename == '':
+                        continue
+
+                    filename = secure_filename(file.filename)
+                    file_path = os.path.join(temp_dir, filename)
+
                     try:
-                        logger.info(f"Extraindo arquivo ZIP: {file.filename}")
-                        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                            # Listar arquivos no ZIP
-                            xml_files = [f for f in zip_ref.namelist(
-                            ) if f.lower().endswith('.xml')]
+                        # Salvar o arquivo em disco para processamento
+                        file.save(file_path)
+                        logger.info(f"Arquivo salvo: {file_path}")
+
+                        # Verificar o tamanho do arquivo
+                        file_size = os.path.getsize(file_path)
+                        logger.info(
+                            f"Tamanho do arquivo {filename}: {file_size/1024:.2f} KB")
+
+                        # Processar arquivo com base na extensão
+                        if filename.lower().endswith('.xml'):
+                            # Processar arquivo XML individualmente
+                            resultado = processar_arquivo_xml(file_path)
+                            processados += 1
+                            if resultado == 'novo':
+                                novos += 1
+                                logger.info(
+                                    f"Arquivo {filename} processado como NOVO")
+                            elif resultado == 'atualizado':
+                                atualizados += 1
+                                logger.info(
+                                    f"Arquivo {filename} processado como ATUALIZADO")
+                            else:
+                                erros += 1
+                                logger.warning(
+                                    f"Erro ao processar arquivo {filename}")
+
+                        elif filename.lower().endswith('.zip'):
+                            # Processar arquivo ZIP (extrai XMLs internos)
+                            # Primeiro verificar o tamanho do ZIP
+                            if file_size > 20 * 1024 * 1024:  # 20 MB
+                                logger.warning(
+                                    f"Arquivo ZIP muito grande: {file_size/1024/1024:.2f} MB. Processando em modo otimizado")
+                                # Para arquivos muito grandes, usar método otimizado
+                                zip_resultados = processar_arquivo_zip_otimizado(
+                                    file_path, temp_dir)
+                            else:
+                                # Para arquivos menores, usar método padrão
+                                zip_resultados = processar_arquivo_zip(
+                                    file_path, temp_dir)
+
+                            processados += zip_resultados['processados']
+                            novos += zip_resultados['novos']
+                            atualizados += zip_resultados['atualizados']
+                            erros += zip_resultados['erros']
                             logger.info(
-                                f"Encontrados {len(xml_files)} arquivos XML no ZIP")
+                                f"ZIP {filename} processado: {zip_resultados['processados']} arquivos")
 
-                            # Extrair e processar cada XML
-                            for xml_file in xml_files:
-                                xml_path = os.path.join(
-                                    temp_dir, os.path.basename(xml_file))
-                                with zip_ref.open(xml_file) as source, open(xml_path, 'wb') as target:
-                                    shutil.copyfileobj(source, target)
+                        else:
+                            flash(
+                                f'Tipo de arquivo não suportado: {filename}', 'warning')
+                            logger.warning(
+                                f"Tipo de arquivo não suportado: {filename}")
+                            continue
 
-                                    logger.debug(
-                                        f"Processando XML extraído: {xml_path}")
-                                    nfe_data = process_xml_file(xml_path)
-                                    if nfe_data:
-                                        total_processados += 1
-                                        if save_nfe_to_db(nfe_data):
-                                            total_novos += 1
-                                        else:
-                                            total_atualizados += 1
                     except Exception as e:
                         logger.error(
-                            f"Erro ao processar ZIP {file.filename}: {str(e)}", exc_info=True)
-                        total_erros += 1
-                else:
-                    logger.warning(
-                        f"Tipo de arquivo não suportado: {file.filename}")
-                    total_erros += 1
+                            f"Erro ao processar arquivo {filename}: {str(e)}", exc_info=True)
+                        erros += 1
+                        flash(
+                            f'Erro ao processar {filename}: {str(e)}', 'danger')
 
-            # Mostrar resultado da importação
-            resultado = f'Importação concluída: {total_processados} arquivo(s) processado(s), {total_novos} novo(s), {total_atualizados} atualizado(s), {total_erros} erro(s)'
-            logger.info(resultado)
+                # Liberar memória entre lotes
+                import gc
+                gc.collect()
 
-            # Adicionar mensagem flash para exibir na página
-            if total_erros > 0:
-                flash(resultado, 'warning')
-            else:
-                flash(resultado, 'success')
-
-            # Redirecionar para a mesma página para mostrar o resultado
-            return redirect(url_for('importacao_nf.importar_xml'))
+            # Resultado final
+            mensagem = f'Processamento concluído: {processados} arquivos processados ({novos} novos, {atualizados} atualizados, {erros} erros)'
+            logger.info(mensagem)
+            flash(mensagem, 'success' if erros == 0 else 'warning')
 
         except Exception as e:
             logger.error(
-                f"Erro durante o processamento dos arquivos: {str(e)}", exc_info=True)
-            flash(f"Erro durante o processamento: {str(e)}", 'danger')
-            return redirect(url_for('importacao_nf.importar_xml'))
-
+                f"Erro durante o processamento de arquivos: {str(e)}", exc_info=True)
+            flash(
+                f'Erro durante o processamento de arquivos: {str(e)}', 'danger')
         finally:
-            # Limpar arquivos temporários
-            logger.info(f"Removendo diretório temporário: {temp_dir}")
+            # Limpar diretório temporário
             shutil.rmtree(temp_dir, ignore_errors=True)
 
-        return render_template('importacao_nf/importar_xml.html', form=form)
+        return redirect(url_for('importacao_nf.importar_xml'))
 
-    # Rota para buscar notas fiscais
+    return render_template('importacao_nf/importar_xml.html')
+
+
+def processar_arquivo_xml(file_path):
+    """Processa um único arquivo XML e salva no banco de dados."""
+    try:
+        # Verificar se o arquivo existe
+        if not os.path.exists(file_path):
+            logger.error(f"Arquivo não encontrado: {file_path}")
+            return 'erro'
+
+        # Verificar o tamanho do arquivo
+        file_size = os.path.getsize(file_path)
+        if file_size == 0:
+            logger.error(f"Arquivo vazio: {file_path}")
+            return 'erro'
+
+        logger.debug(
+            f"Processando arquivo XML: {file_path} (Tamanho: {file_size} bytes)")
+
+        # Tentar diferentes codificações
+        xml_content = None
+        encodings = ['utf-8', 'latin1', 'iso-8859-1', 'cp1252']
+
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
+                    xml_content = f.read()
+
+                # Verificação básica se o conteúdo parece ser XML
+                if xml_content and ('<' in xml_content[:100]):
+                    logger.debug(
+                        f"Arquivo lido com sucesso usando codificação {encoding}")
+                    break
+                else:
+                    xml_content = None
+            except Exception as e:
+                logger.warning(
+                    f"Falha ao ler com codificação {encoding}: {str(e)}")
+                continue
+
+        # Se não conseguiu ler o arquivo com nenhuma codificação
+        if not xml_content:
+            logger.error(
+                f"Não foi possível ler o arquivo como texto: {file_path}")
+            # Tentar ler como binário em último caso
+            try:
+                with open(file_path, 'rb') as f:
+                    binary_content = f.read()
+                    # Tentar decodificar manualmente
+                    for enc in encodings:
+                        try:
+                            xml_content = binary_content.decode(enc)
+                            if '<' in xml_content[:100]:
+                                logger.debug(
+                                    f"Arquivo decodificado como binário usando {enc}")
+                                break
+                        except:
+                            pass
+            except Exception as e:
+                logger.error(f"Falha também ao ler como binário: {str(e)}")
+
+            if not xml_content:
+                logger.error(f"Conteúdo não é XML válido: {file_path}")
+                # Mostrar primeiros bytes para diagnóstico
+                try:
+                    with open(file_path, 'rb') as f:
+                        first_bytes = f.read(100)
+                    logger.error(f"Primeiros bytes: {first_bytes}")
+                except:
+                    pass
+                return 'erro'
+
+        # Log para diagnóstico
+        logger.debug(f"Primeiros 100 caracteres do XML: {xml_content[:100]}")
+
+        # Processar o conteúdo XML com a função existente
+        resultado = processar_e_salvar_nfe(xml_content)
+        return resultado
+
+    except Exception as e:
+        logger.error(
+            f"Erro ao processar arquivo XML {file_path}: {str(e)}", exc_info=True)
+        return 'erro'
+
+
+def processar_arquivo_zip(zip_path, temp_dir):
+    """Extrai e processa os arquivos XML de um arquivo ZIP."""
+    resultados = {
+        'processados': 0,
+        'novos': 0,
+        'atualizados': 0,
+        'erros': 0
+    }
+
+    try:
+        extract_dir = os.path.join(temp_dir, 'extracted')
+        os.makedirs(extract_dir, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Extrai apenas arquivos XML
+            for item in zip_ref.infolist():
+                if item.filename.lower().endswith('.xml'):
+                    zip_ref.extract(item, extract_dir)
+
+                    # Processar cada arquivo XML extraído
+                    xml_path = os.path.join(extract_dir, item.filename)
+                    try:
+                        resultado = processar_arquivo_xml(xml_path)
+                        resultados['processados'] += 1
+
+                        if resultado == 'novo':
+                            resultados['novos'] += 1
+                        elif resultado == 'atualizado':
+                            resultados['atualizados'] += 1
+                        else:
+                            resultados['erros'] += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Erro ao processar XML extraído {xml_path}: {str(e)}")
+                        resultados['erros'] += 1
+
+        return resultados
+    except Exception as e:
+        logger.error(f"Erro ao processar arquivo ZIP {zip_path}: {str(e)}")
+        return resultados
+
+
+def processar_arquivo_zip_otimizado(zip_path, temp_dir):
+    """
+    Versão otimizada para extrair e processar XMLs de arquivos ZIP muito grandes
+    Faz a extração e processamento de forma mais eficiente para grandes volumes
+    """
+    resultados = {
+        'processados': 0,
+        'novos': 0,
+        'atualizados': 0,
+        'erros': 0
+    }
+
+    try:
+        extract_dir = os.path.join(temp_dir, 'extracted')
+        os.makedirs(extract_dir, exist_ok=True)
+
+        # Extrair apenas arquivos XML do ZIP
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            # Identificar apenas os arquivos XML dentro do ZIP
+            xml_files = [item for item in zip_ref.infolist()
+                         if item.filename.lower().endswith('.xml')]
+
+            logger.info(
+                f"Encontrados {len(xml_files)} arquivos XML no arquivo ZIP")
+
+            # Processar em lotes menores para evitar consumo excessivo de memória
+            batch_size = 10
+            for i in range(0, len(xml_files), batch_size):
+                current_batch = xml_files[i:i+batch_size]
+                logger.info(
+                    f"Processando lote {i//batch_size + 1} de {(len(xml_files) + batch_size - 1)//batch_size}")
+
+                # Extrair e processar cada arquivo XML do lote atual
+                for item in current_batch:
+                    if item.filename.lower().endswith('.xml'):
+                        # Extrair apenas este arquivo
+                        zip_ref.extract(item, extract_dir)
+
+                        # Caminho completo do arquivo extraído
+                        xml_path = os.path.join(extract_dir, item.filename)
+
+                        try:
+                            # Processar o XML
+                            resultado = processar_arquivo_xml(xml_path)
+                            resultados['processados'] += 1
+
+                            if resultado == 'novo':
+                                resultados['novos'] += 1
+                            elif resultado == 'atualizado':
+                                resultados['atualizados'] += 1
+                            else:
+                                resultados['erros'] += 1
+
+                            # Remover o arquivo após processamento para economizar espaço
+                            try:
+                                os.remove(xml_path)
+                            except:
+                                pass
+
+                        except Exception as e:
+                            logger.error(
+                                f"Erro ao processar XML extraído {xml_path}: {str(e)}", exc_info=True)
+                            resultados['erros'] += 1
+
+                            # Liberar memória entre lotes
+                            import gc
+                            gc.collect()
+
+        return resultados
+    except Exception as e:
+        logger.error(
+            f"Erro ao processar arquivo ZIP {zip_path}: {str(e)}", exc_info=True)
+        resultados['erros'] += 1
+        return resultados
+
+# Rota para buscar notas fiscais
 
 
 @mod_importacao_nf.route('/buscar', methods=['GET', 'POST'])
@@ -1551,9 +1421,9 @@ def buscar():
 
                 # Base da consulta SQL
                 base_query = """
-                    SELECT n.*, COUNT(i.id) as total_itens
-                    FROM nf_notas n
-                    LEFT JOIN nf_itens i ON n.id = i.nf_id
+                    SELECT n.*, COUNT(i.id) as total_itens 
+                    FROM nf_notas n 
+                    LEFT JOIN nf_itens i ON n.id = i.nf_id 
                     WHERE 1=1
                 """
 
@@ -1603,7 +1473,7 @@ def buscar():
             finally:
                 connection.close()
 
-    # Renderizar template para ambos GET e POST
+        # Renderizar template para ambos GET e POST
     return render_template('importacao_nf/buscar.html',
                            resultados=resultados,
                            termo_busca=termo_busca,
@@ -1612,7 +1482,7 @@ def buscar():
                            data_fim=data_fim,
                            form=form)
 
-    # Rota para visualizar detalhes da nota fiscal
+# Rota para visualizar detalhes da nota fiscal
 
 
 @mod_importacao_nf.route('/visualizar/<int:nf_id>')
@@ -1636,7 +1506,8 @@ def visualizar(nf_id):
             if nota:
                 # Buscar itens da nota fiscal
                 cursor.execute(
-                    "SELECT * FROM nf_itens WHERE nf_id = %s", (nf_id,))
+                    "SELECT * FROM nf_itens WHERE nf_id = %s", (nf_id,)
+                )
                 itens = cursor.fetchall()
 
             cursor.close()
@@ -1653,7 +1524,7 @@ def visualizar(nf_id):
 
     return render_template('importacao_nf/visualizar.html', nota=nota, itens=itens)
 
-    # Rota para criar uma solicitação a partir de uma nota fiscal
+# Rota para criar uma solicitação a partir de uma nota fiscal
 
 
 @mod_importacao_nf.route('/solicitar/<int:nf_id>', methods=['GET', 'POST'])
@@ -1680,20 +1551,22 @@ def solicitar(nf_id):
             if nota:
                 # Buscar itens da nota fiscal
                 cursor.execute(
-                    "SELECT * FROM nf_itens WHERE nf_id = %s", (nf_id,))
+                    "SELECT * FROM nf_itens WHERE nf_id = %s", (nf_id,)
+                )
                 itens = cursor.fetchall()
 
-                # Se for uma requisição POST, criar a solicitação
-                if request.method == 'POST' and nota and itens:
-                    justificativa = request.form.get('justificativa', '')
-                    centro_custo_id = request.form.get('centro_custo_id', '')
-                    itens_selecionados = request.form.getlist('item_id')
+            # Se for uma requisição POST, criar a solicitação
+            if request.method == 'POST' and nota and itens:
+                justificativa = request.form.get('justificativa', '')
+                centro_custo_id = request.form.get(
+                    'centro_custo_id', '')
+                itens_selecionados = request.form.getlist('item_id')
 
-                    if justificativa and centro_custo_id and itens_selecionados:
-                        # Adicione aqui o restante do código para processar a solicitação
-                        pass
+                if justificativa and centro_custo_id and itens_selecionados:
+                    # Adicione aqui o restante do código para processar a solicitação
+                    pass
 
-                cursor.close()
+            cursor.close()
         except Exception as e:
             logger.error(f"Erro ao processar solicitação: {e}")
             flash(f'Erro ao processar solicitação: {str(e)}', 'danger')
@@ -1703,20 +1576,20 @@ def solicitar(nf_id):
             if connection.is_connected():
                 connection.close()
 
-        if not nota:
-            flash('Nota fiscal não encontrada', 'warning')
-            return redirect(url_for('importacao_nf.buscar'))
+    if not nota:
+        flash('Nota fiscal não encontrada', 'warning')
+        return redirect(url_for('importacao_nf.buscar'))
 
         # Buscar centros de custo para o formulário
-        centros_custo = []
+    centros_custo = []
 
-        return render_template('importacao_nf/solicitar.html',
-                               nota=nota,
-                               itens=itens,
-                               form=form,
-                               centros_custo=centros_custo)
+    return render_template('importacao_nf/solicitar.html',
+                           nota=nota,
+                           itens=itens,
+                           form=form,
+                           centros_custo=centros_custo)
 
-        # Rotas para API interna
+# Rotas para API interna
 
 
 @mod_importacao_nf.route('/api/notas_recentes')
@@ -1737,7 +1610,7 @@ def api_notas_recentes():
 
         # Construir a consulta SQL com filtros de data
         query = """
-            SELECT n.id, n.chave_acesso, n.numero_nf, n.data_emissao, n.valor_total,
+            SELECT n.id, n.chave_acesso, n.numero_nf, n.data_emissao, n.valor_total, 
             n.nome_emitente, n.nome_destinatario, n.status_processamento,
             n.observacoes,
             COUNT(i.id) as total_itens
@@ -1776,17 +1649,15 @@ def api_notas_recentes():
 
             # Converter valores Decimal para float
             if 'valor_total' in nota and hasattr(nota['valor_total'], 'as_integer_ratio'):
-                # Converter valores Decimal para float
-                if 'valor_total' in nota and hasattr(nota['valor_total'], 'as_integer_ratio'):
-                    nota['valor_total'] = float(nota['valor_total'])
+                nota['valor_total'] = float(nota['valor_total'])
 
-                    if 'total_itens' in nota and hasattr(nota['total_itens'], 'as_integer_ratio'):
-                        nota['total_itens'] = float(nota['total_itens'])
+            if 'total_itens' in nota and hasattr(nota['total_itens'], 'as_integer_ratio'):
+                nota['total_itens'] = float(nota['total_itens'])
 
-                    cursor.close()
-                    connection.close()
+        cursor.close()
+        connection.close()
 
-                    return jsonify({'data': notas})
+        return jsonify({'data': notas})
     except Exception as e:
         logger.error(f"Erro ao buscar notas recentes: {e}")
         if connection:
@@ -1802,7 +1673,7 @@ def relatorios():
 
     return render_template('importacao_nf/relatorios.html')
 
-    # Rota para API de dados para relatórios
+# Rota para API de dados para relatórios
 
 
 @mod_importacao_nf.route('/api/dados_relatorio')

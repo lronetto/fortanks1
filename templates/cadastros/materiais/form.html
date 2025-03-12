@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-box-seam"></i> {% if material %}Editar Material{% else %}Novo Material{% endif %}</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.materiais.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>{% if material %}Editar{% else %}Cadastrar{% endif %} Material</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="codigo" class="form-label">Código*</label>
+                    <input type="text" class="form-control {% if form.errors.codigo %}is-invalid{% endif %}" id="codigo" name="codigo" value="{{ material.codigo if material else '' }}" required>
+                    {% if form.errors.codigo %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.codigo }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-6">
+                    <label for="nome" class="form-label">Nome*</label>
+                    <input type="text" class="form-control {% if form.errors.nome %}is-invalid{% endif %}" id="nome" name="nome" value="{{ material.nome if material else '' }}" required>
+                    {% if form.errors.nome %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.nome }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="unidade" class="form-label">Unidade*</label>
+                    <input type="text" class="form-control {% if form.errors.unidade %}is-invalid{% endif %}" id="unidade" name="unidade" value="{{ material.unidade if material else '' }}" required>
+                    {% if form.errors.unidade %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.unidade }}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">
+                        Exemplos: UN, KG, L, M, CX, etc.
+                    </div>
+                </div>
+                {% if material %}
+                <div class="col-md-6">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-control" id="status" name="status">
+                        <option value="1" {% if material and material.ativo == 1 %}selected{% endif %}>Ativo</option>
+                        <option value="0" {% if material and material.ativo == 0 %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="pc" class="form-label">Código PC</label>
+                    <input type="text" class="form-control" id="pc" name="pc" value="{{ material.pc if material and material.pc else '' }}">
+                    <div class="form-text">
+                        Código PC do material
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label for="codigo_erp" class="form-label">Código ERP</label>
+                    <input type="text" class="form-control" id="codigo_erp" name="codigo_erp" value="{{ material.codigo_erp if material and material.codigo_erp else '' }}">
+                    <div class="form-text">
+                        Código no sistema ERP
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <textarea class="form-control {% if form.errors.descricao %}is-invalid{% endif %}" id="descricao" name="descricao" rows="3">{{ material.descricao if material and material.descricao else '' }}</textarea>
+                    {% if form.errors.descricao %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.descricao }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 text-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('cadastros.materiais.listar') }}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

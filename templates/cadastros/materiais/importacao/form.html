@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-file-earmark-excel"></i> Importar Materiais</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.materiais.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar para Lista
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Importação de Materiais via Excel</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info" role="alert">
+            <h5 class="alert-heading"><i class="bi bi-info-circle"></i> Instruções:</h5>
+            <p>Para importar materiais, siga as seguintes instruções:</p>
+            <ol>
+                <li>Baixe o modelo de arquivo Excel clicando <a href="{{ url_for('cadastros.materiais.baixar_modelo') }}" class="alert-link">aqui</a>.</li>
+                <li>Preencha o arquivo seguindo o formato fornecido.</li>
+                <li>O arquivo deve conter colunas para: Nome, Tipo, Unidade, Valor Unitário, PC (opcional) e Código ERP (opcional).</li>
+                <li>Selecione o arquivo preenchido e clique em "Importar".</li>
+            </ol>
+        </div>
+
+        {% if mensagem %}
+            <div class="alert alert-{{ tipo_mensagem }}" role="alert">
+                {{ mensagem }}
+            </div>
+        {% endif %}
+
+        {% if importados %}
+            <div class="alert alert-success" role="alert">
+                <h5 class="alert-heading">Materiais importados com sucesso:</h5>
+                <ul>
+                {% for material in importados %}
+                    <li>{{ material.nome }} (PC: {{ material.pc or 'N/A' }}, ERP: {{ material.codigo_erp or 'N/A' }})</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        {% if erros %}
+            <div class="alert alert-danger" role="alert">
+                <h5 class="alert-heading">Erros na importação:</h5>
+                <ul>
+                {% for erro in erros %}
+                    <li>Linha {{ erro.linha }}: {{ erro.mensagem }}</li>
+                {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        <form method="POST" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="arquivo_excel" class="form-label">Arquivo Excel</label>
+                <input type="file" class="form-control" id="arquivo_excel" name="arquivo_excel" accept=".xlsx,.xls" required>
+                <div class="form-text">Apenas arquivos Excel (.xlsx, .xls) são aceitos.</div>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="substituir" name="substituir" value="1">
+                <label class="form-check-label" for="substituir">
+                    Substituir materiais existentes (se o nome ou código for encontrado)
+                </label>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Importar Materiais
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 

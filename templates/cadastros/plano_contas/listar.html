@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-list-columns"></i> Plano de Contas</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        {% if pode_editar %}
+        <a href="{{ url_for('cadastros.plano_contas.importar') }}" class="btn btn-success me-2">
+            <i class="bi bi-file-earmark-excel"></i> Importar Excel
+        </a>
+        <a href="{{ url_for('cadastros.plano_contas.novo') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Novo Plano de Conta
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Filtros</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ url_for('cadastros.plano_contas.listar') }}">
+            <div class="row">
+                <div class="col-md-3 mb-3">
+                    <label for="numero" class="form-label">Número</label>
+                    <input type="text" class="form-control" id="numero" name="numero" value="{{ request.args.get('numero', '') }}">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="indice" class="form-label">Índice</label>
+                    <input type="text" class="form-control" id="indice" name="indice" value="{{ request.args.get('indice', '') }}">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <input type="text" class="form-control" id="descricao" name="descricao" value="{{ request.args.get('descricao', '') }}">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-control" id="status" name="status">
+                        <option value="" {% if not request.args.get('status') %}selected{% endif %}>Todos</option>
+                        <option value="1" {% if request.args.get('status') == '1' %}selected{% endif %}>Ativo</option>
+                        <option value="0" {% if request.args.get('status') == '0' %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-12 text-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('cadastros.plano_contas.listar') }}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Limpar Filtros
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5>Lista de Planos de Conta</h5>
+    </div>
+    <div class="card-body">
+        {% if planos %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Número</th>
+                        <th>Índice</th>
+                        <th>Descrição</th>
+                        <th>Sequência</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for plano in planos %}
+                    <tr>
+                        <td>{{ plano.numero }}</td>
+                        <td>{{ plano.indice }}</td>
+                        <td>{{ plano.descricao }}</td>
+                        <td>{{ plano.sequencia }}</td>
+                        <td>
+                            {% if plano.ativo == 1 %}
+                            <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                            <span class="badge bg-danger">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('cadastros.plano_contas.visualizar', id=plano.id) }}" class="btn btn-sm btn-info" data-bs-toggle="tooltip" title="Visualizar">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            {% if pode_editar %}
+                            <a href="{{ url_for('cadastros.plano_contas.editar', id=plano.id) }}" class="btn btn-sm btn-warning" data-bs-toggle="tooltip" title="Editar">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a href="#" 
+                               onclick="alternarStatus('{{ plano.id }}', '{{ plano.descricao }}', {{ plano.ativo|default(0) }}, '{{ url_for('cadastros.plano_contas.alternar_status', id=plano.id) }}'); return false;" 
+                               class="btn btn-sm {% if plano.ativo == 1 %}btn-danger{% else %}btn-success{% endif %}" 
+                               data-bs-toggle="tooltip" 
+                               title="{% if plano.ativo == 1 %}Desativar{% else %}Ativar{% endif %}">
+                                <i class="bi {% if plano.ativo == 1 %}bi-x-circle{% else %}bi-check-circle{% endif %}"></i>
+                            </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            Nenhum plano de conta encontrado.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if pode_editar %}
+<!-- Modal de confirmação para alternar status -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1" aria-labelledby="modalConfirmacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmacaoLabel">Confirmação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalTexto">
+                Tem certeza que deseja alterar o status deste plano de conta?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <a href="#" id="btnConfirmar" class="btn btn-primary">Confirmar</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializa os tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+
+    {% if pode_editar %}
+    function alternarStatus(id, descricao, status, url) {
+        // Garantir que status seja um número
+        status = parseInt(status) || 0;
+        
+        var modal = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
+        var acao = status == 1 ? 'desativar' : 'ativar';
+        document.getElementById('modalTexto').innerHTML = `Tem certeza que deseja ${acao} o plano de conta <strong>${descricao}</strong>?`;
+        document.getElementById('btnConfirmar').href = url;
+        modal.show();
+    }
+    {% endif %}
+</script>
+{% endblock %} 

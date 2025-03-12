@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-file-earmark-excel"></i> Modelo de Planilha</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.materiais.importar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar para Importação
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Modelo para Importação de Materiais</h5>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info" role="alert">
+            <h5 class="alert-heading"><i class="bi bi-info-circle"></i> Instruções:</h5>
+            <p>A planilha para importação deve seguir o formato abaixo:</p>
+            <ul>
+                <li>A primeira linha contém os cabeçalhos das colunas.</li>
+                <li>Cada linha seguinte representa um material.</li>
+                <li>As colunas marcadas com (*) são obrigatórias.</li>
+            </ul>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nome (*)</th>
+                        <th>Tipo (*)</th>
+                        <th>Unidade (*)</th>
+                        <th>Valor Unitário (*)</th>
+                        <th>PC</th>
+                        <th>Código ERP</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="table-secondary">
+                        <td>Exemplo: Parafuso Allen M10</td>
+                        <td>Exemplo: Fixação</td>
+                        <td>Exemplo: UN</td>
+                        <td>Exemplo: 2.50</td>
+                        <td>Exemplo: PC001</td>
+                        <td>Exemplo: ERP001</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="alert alert-warning mt-3" role="alert">
+            <h5 class="alert-heading"><i class="bi bi-exclamation-triangle"></i> Observações Importantes:</h5>
+            <ol>
+                <li>Valores unitários devem usar ponto (.) como separador decimal, não use vírgula.</li>
+                <li>Os campos PC e Código ERP são opcionais, mas recomendados para rastreabilidade.</li>
+                <li>Tipos válidos incluem: Fixação, Elétrico, Mecânico, Hidráulico, etc.</li>
+                <li>Unidades válidas incluem: UN, KG, M, M², M³, L, etc.</li>
+            </ol>
+        </div>
+
+        <div class="d-grid gap-2">
+            <a href="{{ url_for('cadastros.materiais.baixar_modelo_xlsx') }}" class="btn btn-success">
+                <i class="bi bi-download"></i> Baixar Planilha Modelo (.xlsx)
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

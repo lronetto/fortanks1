@@ -186,15 +186,15 @@
                         <i class="bi bi-person-circle"></i>
                         <span class="ms-2">{{ session['usuario_nome'] }}</span>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
+                        <ul class="dropdown-menu dropdown-menu-end">
                         <li><a class="dropdown-item" href="{{ url_for('perfil') }}">
                             <i class="bi bi-person"></i> Perfil
                         </a></li>
-                        <li><hr class="dropdown-divider"></li>
+                            <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="{{ url_for('logout') }}">
                             <i class="bi bi-box-arrow-right"></i> Sair
                         </a></li>
-                    </ul>
+                        </ul>
                 </div>
                 {% endif %}
             </div>
@@ -226,10 +226,13 @@
             <!-- Cadastros -->
             <div class="menu-section">
                 <div class="menu-section-title">Cadastros</div>
-                <a href="{{ url_for('cadastros.materiais') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('cadastros.materiais.listar') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-box-seam"></i> Materiais
                 </a>
-                <a href="{{ url_for('cadastros.centros_custo') }}" class="list-group-item list-group-item-action">
+                <a href="{{ url_for('cadastros.equipamentos.listar') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-tools"></i> Equipamentos
+                </a>
+                <a href="{{ url_for('cadastros.centros_custo.listar') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-building"></i> Centros de Custo
                 </a>
             </div>
@@ -241,10 +244,27 @@
                     <i class="bi bi-file-earmark-text"></i> Dashboard NF
                 </a>
                 <a href="{{ url_for('importacao_nf.importar') }}" class="list-group-item list-group-item-action">
-                    <i class="bi bi-cloud-download"></i> Importar NF
+                    <i class="bi bi-cloud-download"></i> Importar Automatica de NF
+                </a>
+                <a href="{{ url_for('importacao_nf.importar_xml') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Importação por Arquivo
                 </a>
                 <a href="{{ url_for('importacao_nf.buscar') }}" class="list-group-item list-group-item-action">
                     <i class="bi bi-search"></i> Buscar NF
+                </a>
+            </div>
+
+            <!-- Checklist -->
+            <div class="menu-section">
+                <div class="menu-section-title">Checklist</div>
+                <a href="{{ url_for('checklist.index') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-check2-square"></i> Meus Checklists
+                </a>
+                <a href="{{ url_for('checklist.novo_modelo') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-plus-square"></i> Novo Checklist
+                </a>
+                <a href="{{ url_for('checklist.novo_modelo') }}" class="list-group-item list-group-item-action">
+                    <i class="bi bi-clipboard"></i> Modelos
                 </a>
             </div>
 
@@ -259,7 +279,7 @@
                 </a>
                 {% if session.get('cargo') == 'admin' %}
                 <a href="{{ url_for('integracao_erp.importar_automatico') }}" class="list-group-item list-group-item-action">
-                    <i class="bi bi-robot"></i> Importação Automática
+                    <i class="bi bi-calendar-check"></i> Importação Programada
                 </a>
                 {% endif %}
             </div>
@@ -269,17 +289,17 @@
     <!-- Main Content -->
     <main class="main-content">
         <div class="container-fluid mt-5">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
                         <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
-            {% block content %}{% endblock %}
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
         </div>
     </main>
 

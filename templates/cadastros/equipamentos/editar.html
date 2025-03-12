@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-pencil"></i> Editar Equipamento</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.equipamentos.visualizar', id=equipamento.id) }}" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-eye"></i> Visualizar
+        </a>
+        <a href="{{ url_for('cadastros.equipamentos.listar') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar para Lista
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> Formulário de Edição</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="codigo" class="form-label">Código *</label>
+                    <input type="text" class="form-control" id="codigo" name="codigo" value="{{ equipamento.codigo }}" required>
+                </div>
+                <div class="col-md-8">
+                    <label for="nome" class="form-label">Nome *</label>
+                    <input type="text" class="form-control" id="nome" name="nome" value="{{ equipamento.nome }}" required>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <textarea class="form-control" id="descricao" name="descricao" rows="3">{{ equipamento.descricao }}</textarea>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="tipo" class="form-label">Tipo *</label>
+                    <input type="text" class="form-control" id="tipo" name="tipo" value="{{ equipamento.tipo }}" required list="tipos_comuns">
+                    <datalist id="tipos_comuns">
+                        <option value="Bomba">
+                        <option value="Válvula">
+                        <option value="Tanque">
+                        <option value="Motor">
+                        <option value="Compressor">
+                        <option value="Medidor">
+                    </datalist>
+                </div>
+                <div class="col-md-4">
+                    <label for="modelo" class="form-label">Modelo</label>
+                    <input type="text" class="form-control" id="modelo" name="modelo" value="{{ equipamento.modelo }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="fabricante" class="form-label">Fabricante</label>
+                    <input type="text" class="form-control" id="fabricante" name="fabricante" value="{{ equipamento.fabricante }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="data_aquisicao" class="form-label">Data de Aquisição</label>
+                    <input type="date" class="form-control" id="data_aquisicao" name="data_aquisicao" 
+                           value="{{ equipamento.data_aquisicao.strftime('%Y-%m-%d') if equipamento.data_aquisicao else '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="valor_aquisicao" class="form-label">Valor de Aquisição (R$)</label>
+                    <input type="number" class="form-control" id="valor_aquisicao" name="valor_aquisicao" 
+                           step="0.01" min="0" value="{{ equipamento.valor_aquisicao or '' }}">
+                </div>
+                <div class="col-md-4">
+                    <label for="local" class="form-label">Local</label>
+                    <input type="text" class="form-control" id="local" name="local" value="{{ equipamento.local }}">
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label for="status" class="form-label">Status *</label>
+                    <select class="form-select" id="status" name="status" required>
+                        <option value="Operacional" {% if equipamento.status == 'Operacional' %}selected{% endif %}>Operacional</option>
+                        <option value="Em Manutenção" {% if equipamento.status == 'Em Manutenção' %}selected{% endif %}>Em Manutenção</option>
+                        <option value="Desativado" {% if equipamento.status == 'Desativado' %}selected{% endif %}>Desativado</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label for="foto" class="form-label">Foto do Equipamento</label>
+                    {% if equipamento.foto_url %}
+                    <div class="mb-2">
+                        <img src="{{ equipamento.foto_url }}" alt="Foto atual" class="img-thumbnail" style="max-height: 100px;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="manter_foto" name="manter_foto" value="1" checked>
+                            <label class="form-check-label" for="manter_foto">Manter foto atual</label>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <input type="file" class="form-control" id="foto" name="foto" accept=".jpg,.jpeg,.png,.gif">
+                    <div class="form-text">Formatos aceitos: JPG, PNG, GIF. Tamanho máximo: 5MB.</div>
+                </div>
+            </div>
+
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="observacoes" class="form-label">Observações</label>
+                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3">{{ equipamento.observacoes }}</textarea>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <button type="reset" class="btn btn-outline-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar Alterações
+                </button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Salvar Alterações
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Validação do formulário
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(event) {
+            let isValid = true;
+            
+            // Validar campos obrigatórios
+            const requiredFields = form.querySelectorAll('[required]');
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    field.classList.add('is-invalid');
+                    isValid = false;
+                } else {
+                    field.classList.remove('is-invalid');
+                }
+            });
+            
+            // Validar foto (tamanho máximo)
+            const fotoInput = document.getElementById('foto');
+            if (fotoInput.files.length > 0) {
+                const maxSize = 5 * 1024 * 1024; // 5MB
+                if (fotoInput.files[0].size > maxSize) {
+                    alert('A foto selecionada excede o tamanho máximo permitido (5MB).');
+                    fotoInput.classList.add('is-invalid');
+                    isValid = false;
+                }
+            }
+            
+            if (!isValid) {
+                event.preventDefault();
+                alert('Por favor, preencha todos os campos obrigatórios corretamente.');
+            }
+        });
+        
+        // Funcionamento da opção "manter foto atual"
+        const manterFotoCheck = document.getElementById('manter_foto');
+        const fotoInput = document.getElementById('foto');
+        
+        if (manterFotoCheck && fotoInput) {
+            fotoInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    manterFotoCheck.checked = false;
+                }
+            });
+            
+            manterFotoCheck.addEventListener('change', function() {
+                if (this.checked && fotoInput.files.length > 0) {
+                    fotoInput.value = '';
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

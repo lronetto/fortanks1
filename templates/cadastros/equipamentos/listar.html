@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-tools"></i> Equipamentos</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        {% if pode_editar %}
+        <a href="{{ url_for('cadastros.equipamentos.novo') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Novo Equipamento
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros</h5>
+    </div>
+    <div class="card-body">
+        <form method="get" action="{{ url_for('cadastros.equipamentos.listar') }}">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="nome" class="form-label">Nome/Código</label>
+                    <input type="text" class="form-control" id="nome" name="nome" value="{{ filtros.nome }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="tipo" class="form-label">Tipo</label>
+                    <select class="form-select" id="tipo" name="tipo">
+                        <option value="">Todos</option>
+                        {% for tipo in tipos %}
+                        <option value="{{ tipo }}" {% if filtros.tipo == tipo %}selected{% endif %}>{{ tipo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">Todos</option>
+                        <option value="Operacional" {% if filtros.status == 'Operacional' %}selected{% endif %}>Operacional</option>
+                        <option value="Em Manutenção" {% if filtros.status == 'Em Manutenção' %}selected{% endif %}>Em Manutenção</option>
+                        <option value="Desativado" {% if filtros.status == 'Desativado' %}selected{% endif %}>Desativado</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="local" class="form-label">Local</label>
+                    <select class="form-select" id="local" name="local">
+                        <option value="">Todos</option>
+                        {% for local in locais %}
+                        <option value="{{ local }}" {% if filtros.local == local %}selected{% endif %}>{{ local }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-12 text-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('cadastros.equipamentos.listar') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i> Limpar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header bg-light">
+        <h5 class="mb-0"><i class="bi bi-list-ul"></i> Listagem de Equipamentos</h5>
+    </div>
+    <div class="card-body">
+        {% if equipamentos %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">Código</th>
+                        <th scope="col">Nome</th>
+                        <th scope="col">Tipo</th>
+                        <th scope="col">Local</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for equipamento in equipamentos %}
+                    <tr>
+                        <td><span class="badge bg-secondary">{{ equipamento.codigo }}</span></td>
+                        <td>{{ equipamento.nome }}</td>
+                        <td>{{ equipamento.tipo }}</td>
+                        <td>{{ equipamento.local or '-' }}</td>
+                        <td>
+                            {% if equipamento.status == 'Operacional' %}
+                            <span class="badge bg-success">Operacional</span>
+                            {% elif equipamento.status == 'Em Manutenção' %}
+                            <span class="badge bg-warning text-dark">Em Manutenção</span>
+                            {% elif equipamento.status == 'Desativado' %}
+                            <span class="badge bg-danger">Desativado</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ equipamento.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{{ url_for('cadastros.equipamentos.visualizar', id=equipamento.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Visualizar">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% if pode_editar %}
+                                <a href="{{ url_for('cadastros.equipamentos.editar', id=equipamento.id) }}" 
+                                   class="btn btn-sm btn-outline-secondary" title="Editar">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Nenhum equipamento encontrado com os filtros selecionados.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+    });
+</script>
+{% endblock %} 

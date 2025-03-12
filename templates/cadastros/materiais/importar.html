@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-box-seam"></i> Importar Materiais</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.materiais.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Importação de Materiais via Excel</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-4">
+                <h6>Instruções:</h6>
+                <ol>
+                    <li>O arquivo deve estar no formato Excel (.xlsx ou .xls)</li>
+                    <li>As seguintes colunas são necessárias:
+                        <ul>
+                            <li><strong>codigo</strong>: Código único do material</li>
+                            <li><strong>nome</strong>: Nome do material (opcional)</li>
+                            <li><strong>unidade</strong>: Unidade de medida (UN, KG, L, etc.)</li>
+                            <li><strong>pc</strong>: Código PC do material</li>
+                            <li><strong>codigo_erp</strong>: Código ERP do material</li>
+                        </ul>
+                    </li>
+                    <li>Materiais com códigos já existentes serão atualizados</li>
+                    <li>Novos materiais serão adicionados automaticamente</li>
+                </ol>
+            </div>
+
+            <div class="mb-3">
+                <label for="arquivo" class="form-label">Selecione o arquivo Excel:</label>
+                <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".xlsx, .xls" required>
+                <div class="form-text">Formatos aceitos: .xlsx, .xls</div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Modelo de Planilha:</label>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead>
+                            <tr class="table-light">
+                                <th>codigo</th>
+                                <th>nome</th>
+                                <th>unidade</th>
+                                <th>pc</th>
+                                <th>codigo_erp</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>001</td>
+                                <td>Parafuso 10mm</td>
+                                <td>UN</td>
+                                <td>PC001</td>
+                                <td>ERP001</td>
+                            </tr>
+                            <tr>
+                                <td>002</td>
+                                <td>Porca 8mm</td>
+                                <td>CX</td>
+                                <td>PC002</td>
+                                <td>ERP002</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <a href="#" class="btn btn-sm btn-outline-primary" onclick="baixarModelo(); return false;">
+                    <i class="bi bi-download"></i> Baixar Modelo
+                </a>
+            </div>
+
+            <div class="text-end">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-file-earmark-arrow-up"></i> Importar Materiais
+                </button>
+                <a href="{{ url_for('cadastros.materiais.listar') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function baixarModelo() {
+        // Criar um workbook
+        var wb = XLSX.utils.book_new();
+        
+        // Dados do modelo
+        var dados = [
+            ['codigo', 'nome', 'unidade', 'pc', 'codigo_erp'],
+            ['001', 'Parafuso 10mm', 'UN', 'PC001', 'ERP001'],
+            ['002', 'Porca 8mm', 'CX', 'PC002', 'ERP002']
+        ];
+        
+        // Criar uma worksheet a partir dos dados
+        var ws = XLSX.utils.aoa_to_sheet(dados);
+        
+        // Adicionar a worksheet ao workbook
+        XLSX.utils.book_append_sheet(wb, ws, "Materiais");
+        
+        // Gerar o arquivo e iniciar o download
+        XLSX.writeFile(wb, "modelo_importacao_materiais.xlsx");
+    }
+</script>
+
+<!-- Incluir a biblioteca SheetJS para gerar o arquivo Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+{% endblock %} 

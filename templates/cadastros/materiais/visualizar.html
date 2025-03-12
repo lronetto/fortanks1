@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-box-seam"></i> Detalhes do Material</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.materiais.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+        {% if pode_editar %}
+        <a href="{{ url_for('cadastros.materiais.editar', id=material.id) }}" class="btn btn-warning">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="#" 
+           onclick="alternarStatus('{{ material.id }}', '{{ material.nome }}', {{ material.ativo|default(0) }}, '{{ url_for('cadastros.materiais.alternar_status', id=material.id) }}'); return false;" 
+           class="btn {% if material.ativo == 1 %}btn-danger{% else %}btn-success{% endif %}">
+            <i class="bi {% if material.ativo == 1 %}bi-x-circle{% else %}bi-check-circle{% endif %}"></i>
+            {% if material.ativo == 1 %}Desativar{% else %}Ativar{% endif %}
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Informações do Material</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Código:</h6>
+                <p>{{ material.codigo }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Nome:</h6>
+                <p>{{ material.nome }}</p>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Unidade:</h6>
+                <p>{{ material.unidade }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Status:</h6>
+                <p>
+                    {% if material.ativo == 1 %}
+                    <span class="badge bg-success">Ativo</span>
+                    {% else %}
+                    <span class="badge bg-danger">Inativo</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Código PC:</h6>
+                <p>{{ material.pc or 'N/A' }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Código ERP:</h6>
+                <p>{{ material.codigo_erp or 'N/A' }}</p>
+            </div>
+        </div>
+        {% if material.descricao %}
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <h6>Descrição:</h6>
+                <p>{{ material.descricao }}</p>
+            </div>
+        </div>
+        {% endif %}
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Data de Cadastro:</h6>
+                <p>{{ material.criado_em.strftime('%d/%m/%Y %H:%M') if material.criado_em else 'N/A' }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Última Atualização:</h6>
+                <p>{{ material.atualizado_em.strftime('%d/%m/%Y %H:%M') if material.atualizado_em else 'N/A' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if pode_editar %}
+<!-- Modal de confirmação para alternar status -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1" aria-labelledby="modalConfirmacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmacaoLabel">Confirmação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalTexto">
+                Tem certeza que deseja alterar o status deste material?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <a href="#" id="btnConfirmar" class="btn btn-primary">Confirmar</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    {% if pode_editar %}
+    function alternarStatus(id, nome, status, url) {
+        // Garantir que status seja um número
+        status = parseInt(status) || 0;
+        
+        var modal = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
+        var acao = status == 1 ? 'desativar' : 'ativar';
+        document.getElementById('modalTexto').innerHTML = `Tem certeza que deseja ${acao} o material <strong>${nome}</strong>?`;
+        document.getElementById('btnConfirmar').href = url;
+        modal.show();
+    }
+    {% endif %}
+</script>
+{% endblock %} 

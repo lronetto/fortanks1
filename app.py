@@ -7,16 +7,16 @@ import tempfile
 import pdfkit
 import platform
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import pathlib
 
 # Importar os módulos
-from modulos.importacao_nf.app import mod_importacao_nf
-from modulos.integracao_erp.app import mod_integracao_erp, init_app as init_erp
-from modulos.checklist.app import mod_checklist, init_app as init_checklist
-from modulos.solicitacao.app import mod_solicitacao, init_app as init_solicitacao
-from modulos.cadastros.app import mod_cadastros, init_app as init_cadastros
+from modulos.importacao_nf import mod_importacao_nf, init_app as init_importacao_nf
+from modulos.integracao_erp import mod_integracao_erp, init_app as init_integracao_erp
+from modulos.checklist import mod_checklist, init_app as init_checklist
+from modulos.solicitacao import mod_solicitacao, init_app as init_solicitacao
+from modulos.cadastros import mod_cadastros, init_app as init_cadastros
 
 # Limpar variáveis de ambiente existentes que possam interferir
 for key in ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME', 'SECRET_KEY', 'ARQUIVEI_API_ID', 'ARQUIVEI_API_KEY']:
@@ -40,6 +40,12 @@ app.config['MYSQL_PASSWORD'] = os.getenv('DB_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('DB_NAME')
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor'
 app.config['WTF_CSRF_ENABLED'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+
+# Aumentar os limites de upload de arquivos
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50 MB
+app.config['UPLOAD_EXTENSIONS'] = ['.xml', '.zip']
+app.config['MAX_CONTENT_PATH'] = None
 
 # Inicializa o CSRF Protection
 csrf = CSRFProtect(app)
@@ -55,7 +61,8 @@ app.register_blueprint(mod_solicitacao, url_prefix='/solicitacao')
 app.register_blueprint(mod_cadastros, url_prefix='/cadastros')
 
 # Inicializar funções de configuração dos módulos
-init_erp(app)
+init_importacao_nf(app)
+init_integracao_erp(app)
 init_checklist(app)
 init_solicitacao(app)
 init_cadastros(app)
@@ -158,13 +165,13 @@ def dashboard():
         try:
             # Buscar solicitações do usuário
             cur.execute("""
-                SELECT s.*, cc.nome as centro_custo_nome 
+                        SELECT s.*, cc.nome as centro_custo_nome 
                 FROM solicitacoes s
-                LEFT JOIN centros_custo cc ON s.centro_custo_id = cc.id
+                        LEFT JOIN centros_custo cc ON s.centro_custo_id = cc.id
                 WHERE s.solicitante_id = %s
                 ORDER BY s.data_solicitacao DESC
-                LIMIT 5
-            """, [session['usuario_id']])
+                        LIMIT 5
+                    """, [session['usuario_id']])
             minhas_solicitacoes = cur.fetchall()
         except Exception as e:
             flash(f'Erro ao buscar suas solicitações: {str(e)}', 'danger')
@@ -173,48 +180,48 @@ def dashboard():
             try:
                 # Buscar solicitações pendentes (apenas para admin)
                 cur.execute("""
-                    SELECT s.*, u.nome as solicitante_nome, cc.nome as centro_custo_nome
+                            SELECT s.*, u.nome as solicitante_nome, cc.nome as centro_custo_nome
                     FROM solicitacoes s
-                    LEFT JOIN usuarios u ON s.solicitante_id = u.id
-                    LEFT JOIN centros_custo cc ON s.centro_custo_id = cc.id
+                            LEFT JOIN usuarios u ON s.solicitante_id = u.id
+                            LEFT JOIN centros_custo cc ON s.centro_custo_id = cc.id
                     WHERE s.status = 'pendente'
-                    ORDER BY s.data_solicitacao DESC
-                    LIMIT 5
+                            ORDER BY s.data_solicitacao DESC
+                            LIMIT 5
                 """)
                 solicitacoes_pendentes = cur.fetchall()
             except Exception as e:
                 flash(
                     f'Erro ao buscar solicitações pendentes: {str(e)}', 'danger')
 
-        try:
-            # Buscar materiais mais recentes
-            cur.execute("""
-                SELECT * FROM materiais 
-                ORDER BY criado_em DESC 
-                LIMIT 5
-            """)
-            materiais = cur.fetchall()
-        except Exception as e:
-            flash(f'Erro ao buscar materiais: {str(e)}', 'danger')
+            try:
+                # Buscar materiais mais recentes
+                cur.execute("""
+                    SELECT * FROM materiais 
+                    ORDER BY criado_em DESC 
+                    LIMIT 5
+                """)
+                materiais = cur.fetchall()
+            except Exception as e:
+                flash(f'Erro ao buscar materiais: {str(e)}', 'danger')
 
-        try:
-            # Buscar centros de custo ativos
-            cur.execute("""
-                SELECT * FROM centros_custo 
-                WHERE ativo = TRUE 
-                ORDER BY codigo
-            """)
-            centros_custo = cur.fetchall()
-        except Exception as e:
-            flash(f'Erro ao buscar centros de custo: {str(e)}', 'danger')
+            try:
+                # Buscar centros de custo ativos
+                cur.execute("""
+                    SELECT * FROM centros_custo 
+                    WHERE ativo = TRUE 
+                    ORDER BY codigo
+                """)
+                centros_custo = cur.fetchall()
+            except Exception as e:
+                flash(f'Erro ao buscar centros de custo: {str(e)}', 'danger')
 
-        cur.close()
+            cur.close()
 
-        return render_template('dashboard.html',
-                               minhas_solicitacoes=minhas_solicitacoes,
-                               solicitacoes_pendentes=solicitacoes_pendentes,
-                               materiais=materiais,
-                               centros_custo=centros_custo)
+            return render_template('dashboard.html',
+                                   minhas_solicitacoes=minhas_solicitacoes,
+                                   solicitacoes_pendentes=solicitacoes_pendentes,
+                                   materiais=materiais,
+                                   centros_custo=centros_custo)
 
     except Exception as e:
         flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')

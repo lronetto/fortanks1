@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-building"></i> Detalhes do Centro de Custo</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.centros_custo.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+        {% if pode_editar %}
+        <a href="{{ url_for('cadastros.centros_custo.editar', id=centro.id) }}" class="btn btn-warning">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="#" onclick="alternarStatus('{{ centro.id }}', '{{ centro.nome }}', {{ centro.status }}); return false;" class="btn {% if centro.status == 1 %}btn-danger{% else %}btn-success{% endif %}">
+            <i class="bi {% if centro.status == 1 %}bi-x-circle{% else %}bi-check-circle{% endif %}"></i>
+            {% if centro.status == 1 %}Desativar{% else %}Ativar{% endif %}
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Informações do Centro de Custo</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Código:</h6>
+                <p>{{ centro.codigo }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Nome:</h6>
+                <p>{{ centro.nome }}</p>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Status:</h6>
+                <p>
+                    {% if centro.status == 1 %}
+                    <span class="badge bg-success">Ativo</span>
+                    {% else %}
+                    <span class="badge bg-danger">Inativo</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-6">
+                <h6>Data de Cadastro:</h6>
+                <p>{{ centro.data_cadastro.strftime('%d/%m/%Y %H:%M') if centro.data_cadastro else 'N/A' }}</p>
+            </div>
+        </div>
+        {% if centro.descricao %}
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <h6>Descrição:</h6>
+                <p>{{ centro.descricao }}</p>
+            </div>
+        </div>
+        {% endif %}
+        <div class="row">
+            <div class="col-md-12">
+                <h6>Última Atualização:</h6>
+                <p>{{ centro.data_atualizacao.strftime('%d/%m/%Y %H:%M') if centro.data_atualizacao else 'N/A' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if pode_editar %}
+<!-- Modal de confirmação para alternar status -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1" aria-labelledby="modalConfirmacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmacaoLabel">Confirmação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalTexto">
+                Tem certeza que deseja alterar o status deste centro de custo?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <a href="#" id="btnConfirmar" class="btn btn-primary">Confirmar</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    {% if pode_editar %}
+    function alternarStatus(id, nome, status) {
+        var modal = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
+        var acao = status == 1 ? 'desativar' : 'ativar';
+        document.getElementById('modalTexto').innerHTML = `Tem certeza que deseja ${acao} o centro de custo <strong>${nome}</strong>?`;
+        document.getElementById('btnConfirmar').href = "{{ url_for('cadastros.centros_custo.alternar_status', id='') }}" + id;
+        modal.show();
+    }
+    {% endif %}
+</script>
+{% endblock %} 

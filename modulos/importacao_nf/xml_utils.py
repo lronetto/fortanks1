@@ -63,15 +63,28 @@ def decodificar_base64_xml(base64_str):
 
 
 def identificar_xml_base64(nfe_data):
-    """
-    Identifica e extrai dados em Base64 de um dicionário
+    """Identifica se um dicionário contém dados XML em Base64
 
     Args:
-        nfe_data: Dicionário com dados da NF
+        nfe_data: Dicionário com dados da NF ou string direta de XML potencialmente em Base64
 
     Returns:
         str: String Base64 ou None
     """
+    # Se nfe_data for uma string, retornar diretamente para verificação
+    if isinstance(nfe_data, str):
+        # Verificar se a string é grande o suficiente para ser Base64 de um XML
+        if len(nfe_data) > 100:
+            # Verificação adicional para confirmar que parece Base64
+            import re
+            if re.match(r'^[A-Za-z0-9+/=]+$', nfe_data.strip()):
+                return nfe_data
+        return None
+
+    # Se não for string nem dicionário, não pode conter Base64
+    if not isinstance(nfe_data, dict):
+        return None
+
     # Verificar campos comuns onde APIs podem enviar XML em Base64
     possivel_base64 = None
 
@@ -86,7 +99,6 @@ def identificar_xml_base64(nfe_data):
 
     # Verificação adicional para confirmar que parece Base64
     if possivel_base64:
-        # Caracteres válidos em Base64: A-Z, a-z, 0-9, +, /, =
         import re
         if re.match(r'^[A-Za-z0-9+/=]+$', possivel_base64.strip()):
             return possivel_base64

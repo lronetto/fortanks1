@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-list-columns"></i> Detalhes do Plano de Conta</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.plano_contas.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+        {% if pode_editar %}
+        <a href="{{ url_for('cadastros.plano_contas.editar', id=plano.id) }}" class="btn btn-warning">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="#" 
+           onclick="alternarStatus('{{ plano.id }}', '{{ plano.descricao }}', {{ plano.ativo|default(0) }}, '{{ url_for('cadastros.plano_contas.alternar_status', id=plano.id) }}'); return false;" 
+           class="btn {% if plano.ativo == 1 %}btn-danger{% else %}btn-success{% endif %}">
+            <i class="bi {% if plano.ativo == 1 %}bi-x-circle{% else %}bi-check-circle{% endif %}"></i>
+            {% if plano.ativo == 1 %}Desativar{% else %}Ativar{% endif %}
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>Informações do Plano de Conta</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Número:</h6>
+                <p>{{ plano.numero }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Índice:</h6>
+                <p>{{ plano.indice }}</p>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Descrição:</h6>
+                <p>{{ plano.descricao }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Sequência:</h6>
+                <p>{{ plano.sequencia }}</p>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <h6>Status:</h6>
+                <p>
+                    {% if plano.ativo == 1 %}
+                    <span class="badge bg-success">Ativo</span>
+                    {% else %}
+                    <span class="badge bg-danger">Inativo</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Data de Cadastro:</h6>
+                <p>{{ plano.criado_em.strftime('%d/%m/%Y %H:%M') if plano.criado_em else 'N/A' }}</p>
+            </div>
+            <div class="col-md-6">
+                <h6>Última Atualização:</h6>
+                <p>{{ plano.atualizado_em.strftime('%d/%m/%Y %H:%M') if plano.atualizado_em else 'N/A' }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if pode_editar %}
+<!-- Modal de confirmação para alternar status -->
+<div class="modal fade" id="modalConfirmacao" tabindex="-1" aria-labelledby="modalConfirmacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmacaoLabel">Confirmação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalTexto">
+                Tem certeza que deseja alterar o status deste plano de conta?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <a href="#" id="btnConfirmar" class="btn btn-primary">Confirmar</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    {% if pode_editar %}
+    function alternarStatus(id, descricao, status, url) {
+        // Garantir que status seja um número
+        status = parseInt(status) || 0;
+        
+        var modal = new bootstrap.Modal(document.getElementById('modalConfirmacao'));
+        var acao = status == 1 ? 'desativar' : 'ativar';
+        document.getElementById('modalTexto').innerHTML = `Tem certeza que deseja ${acao} o plano de conta <strong>${descricao}</strong>?`;
+        document.getElementById('btnConfirmar').href = url;
+        modal.show();
+    }
+    {% endif %}
+</script>
+{% endblock %} 

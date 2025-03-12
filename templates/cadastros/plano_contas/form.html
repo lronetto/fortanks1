@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="bi bi-list-columns"></i> {% if plano %}Editar Plano de Conta{% else %}Novo Plano de Conta{% endif %}</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('cadastros.plano_contas.listar') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5>{% if plano %}Editar{% else %}Cadastrar{% endif %} Plano de Conta</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="numero" class="form-label">Número*</label>
+                    <input type="text" class="form-control {% if form.errors.numero %}is-invalid{% endif %}" id="numero" name="numero" value="{{ plano.numero if plano else '' }}" required>
+                    {% if form.errors.numero %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.numero }}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">
+                        Exemplo: 1.1.01
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label for="indice" class="form-label">Índice*</label>
+                    <input type="text" class="form-control {% if form.errors.indice %}is-invalid{% endif %}" id="indice" name="indice" value="{{ plano.indice if plano else '' }}" required>
+                    {% if form.errors.indice %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.indice }}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">
+                        Exemplo: A.1.01
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <label for="descricao" class="form-label">Descrição*</label>
+                    <input type="text" class="form-control {% if form.errors.descricao %}is-invalid{% endif %}" id="descricao" name="descricao" value="{{ plano.descricao if plano else '' }}" required>
+                    {% if form.errors.descricao %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.descricao }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="sequencia" class="form-label">Sequência</label>
+                    <input type="number" class="form-control {% if form.errors.sequencia %}is-invalid{% endif %}" id="sequencia" name="sequencia" value="{{ plano.sequencia if plano else '0' }}">
+                    {% if form.errors.sequencia %}
+                    <div class="invalid-feedback">
+                        {{ form.errors.sequencia }}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">
+                        Ordem de apresentação do plano de conta
+                    </div>
+                </div>
+                {% if plano %}
+                <div class="col-md-6">
+                    <label for="status" class="form-label">Status</label>
+                    <select class="form-control" id="status" name="status">
+                        <option value="1" {% if plano and plano.ativo == 1 %}selected{% endif %}>Ativo</option>
+                        <option value="0" {% if plano and plano.ativo == 0 %}selected{% endif %}>Inativo</option>
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12 text-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('cadastros.plano_contas.listar') }}" class="btn btn-secondary">
+                        <i class="bi bi-x-circle"></i> Cancelar
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %} 
