@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4">Nova Solicitação de Materiais</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" id="formSolicitacao">
+                <!-- Informações Básicas -->
+                <div class="mb-3">
+                    <label for="centro_custo_id" class="form-label">Centro de Custo</label>
+                    <select class="form-select" id="centro_custo_id" name="centro_custo_id" required>
+                        <option value="">Selecione...</option>
+                        {% for cc in centros_custo %}
+                        <option value="{{ cc.id }}">{{ cc.codigo }} - {{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label for="justificativa" class="form-label">Justificativa</label>
+                    <textarea class="form-control" id="justificativa" name="justificativa" rows="3" required></textarea>
+                </div>
+
+                <!-- Lista de Materiais -->
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Materiais</h5>
+                            <button type="button" class="btn btn-sm btn-success" onclick="adicionarItem()">
+                                <i class="bi bi-plus-circle"></i> Adicionar Material
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="listaItens">
+                            <!-- Os itens serão adicionados aqui dinamicamente -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botões -->
+                <div class="text-end">
+                    <a href="{{ url_for('solicitacao.index') }}" class="btn btn-secondary">Cancelar</a>
+                    <button type="submit" class="btn btn-primary">Salvar Solicitação</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Template para novo item -->
+<template id="templateItem">
+    <div class="row mb-3 item-material">
+        <div class="col-md-5">
+            <select class="form-select" name="material_id[]" required>
+                <option value="">Selecione o material...</option>
+                {% for material in materiais %}
+                <option value="{{ material.id }}">{{ material.codigo }} - {{ material.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control" name="quantidade[]" placeholder="Quantidade" required min="1">
+        </div>
+        <div class="col-md-4">
+            <input type="text" class="form-control" name="observacao[]" placeholder="Observação">
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-danger" onclick="removerItem(this)">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function adicionarItem() {
+    const template = document.getElementById('templateItem');
+    const clone = template.content.cloneNode(true);
+    document.getElementById('listaItens').appendChild(clone);
+}
+
+function removerItem(button) {
+    button.closest('.item-material').remove();
+}
+
+// Adicionar primeiro item automaticamente
+document.addEventListener('DOMContentLoaded', function() {
+    adicionarItem();
+});
+
+// Validar formulário antes de enviar
+document.getElementById('formSolicitacao').addEventListener('submit', function(e) {
+    const itens = document.querySelectorAll('.item-material');
+    if (itens.length === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos um material à solicitação');
+    }
+});
+</script>
+{% endblock %} 

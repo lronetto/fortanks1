@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4">Solicitações de Materiais</h1>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Solicitações</h5>
+                    <h2 class="card-text">{{ estatisticas.total }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Pendentes</h5>
+                    <h2 class="card-text">{{ estatisticas.pendentes }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Aprovadas</h5>
+                    <h2 class="card-text">{{ estatisticas.aprovadas }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Rejeitadas</h5>
+                    <h2 class="card-text">{{ estatisticas.rejeitadas }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botão Nova Solicitação -->
+    <div class="mb-4">
+        <a href="{{ url_for('solicitacao.nova_solicitacao') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Nova Solicitação
+        </a>
+    </div>
+
+    <!-- Tabela de Solicitações -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Minhas Solicitações Recentes</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Data</th>
+                            <th>Centro de Custo</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for solicitacao in solicitacoes %}
+                        <tr>
+                            <td>{{ solicitacao.id }}</td>
+                            <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') if solicitacao.data_solicitacao else 'N/A' }}</td>
+                            <td>{{ solicitacao.centro_custo_nome or 'N/A' }}</td>
+                            <td>
+                                {% if solicitacao.status == 'pendente' %}
+                                <span class="badge bg-warning">Pendente</span>
+                                {% elif solicitacao.status == 'aprovada' %}
+                                <span class="badge bg-success">Aprovada</span>
+                                {% elif solicitacao.status == 'rejeitada' %}
+                                <span class="badge bg-danger">Rejeitada</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('solicitacao.visualizar', solicitacao_id=solicitacao.id) }}" 
+                                   class="btn btn-sm btn-info">
+                                    <i class="bi bi-eye"></i> Visualizar
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">Nenhuma solicitação encontrada</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -21,7 +21,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Criar o Blueprint com um nome único
-mod_checklist = Blueprint('mod_checklist', __name__, url_prefix='/checklist')
+mod_checklist = Blueprint('checklist', __name__,
+                          url_prefix='/checklist', template_folder='templates')
 
 # Função para conectar ao banco de dados
 
@@ -67,56 +68,48 @@ def verificar_permissao(permissao_necessaria):
 @mod_checklist.route('/')
 def index():
     if 'logado' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
         return redirect(url_for('index'))
 
-    # Estatísticas
+    # Obter estatísticas
     connection = get_db_connection()
     estatisticas = {
-        'total_modelos': 0,
-        'checklists_pendentes': 0,
-        'checklists_concluidos': 0,
-        'checklists_hoje': 0,
-        'total_equipamentos': 0  # Novo item para estatísticas de equipamentos
+        'total_checklists': 0,
+        'em_andamento': 0,
+        'concluidos': 0,
+        'responsaveis': 0
     }
 
     modelos_recentes = []
     checklists_recentes = []
-    equipamentos_recentes = []  # Nova variável para equipamentos recentes
+    equipamentos_recentes = []
 
     if connection:
         try:
             cursor = connection.cursor(dictionary=True)
 
-            # Total de modelos
+            # Total de checklists
             cursor.execute(
-                "SELECT COUNT(*) as total FROM checklist_modelos WHERE ativo = TRUE")
+                "SELECT COUNT(*) as total FROM checklist_preenchidos")
             resultado = cursor.fetchone()
-            estatisticas['total_modelos'] = resultado['total'] if resultado else 0
+            estatisticas['total_checklists'] = resultado['total'] if resultado else 0
 
-            # Checklists pendentes
+            # Checklists em andamento
             cursor.execute(
                 "SELECT COUNT(*) as total FROM checklist_preenchidos WHERE status = 'em_andamento'")
             resultado = cursor.fetchone()
-            estatisticas['checklists_pendentes'] = resultado['total'] if resultado else 0
+            estatisticas['em_andamento'] = resultado['total'] if resultado else 0
 
             # Checklists concluídos
             cursor.execute(
                 "SELECT COUNT(*) as total FROM checklist_preenchidos WHERE status IN ('concluido', 'aprovado')")
             resultado = cursor.fetchone()
-            estatisticas['checklists_concluidos'] = resultado['total'] if resultado else 0
+            estatisticas['concluidos'] = resultado['total'] if resultado else 0
 
-            # Checklists de hoje
+            # Total de responsáveis únicos
             cursor.execute(
-                "SELECT COUNT(*) as total FROM checklist_preenchidos WHERE DATE(data_preenchimento) = CURDATE()")
+                "SELECT COUNT(DISTINCT responsavel_id) as total FROM checklist_preenchidos")
             resultado = cursor.fetchone()
-            estatisticas['checklists_hoje'] = resultado['total'] if resultado else 0
-
-            # Total de equipamentos
-            cursor.execute(
-                "SELECT COUNT(*) as total FROM checklist_equipamentos WHERE status = 'ativo'")
-            resultado = cursor.fetchone()
-            estatisticas['total_equipamentos'] = resultado['total'] if resultado else 0
+            estatisticas['responsaveis'] = resultado['total'] if resultado else 0
 
             # Modelos recentes
             cursor.execute("""
@@ -143,7 +136,7 @@ def index():
             """)
             checklists_recentes = cursor.fetchall()
 
-            # Equipamentos recentes (adicione esta query)
+            # Equipamentos recentes
             cursor.execute("""
                 SELECT e.*, u.nome as responsavel_nome,
                 (SELECT COUNT(*) FROM checklist_preenchidos WHERE equipamento_cadastrado_id = e.id) as total_checklists
@@ -165,7 +158,7 @@ def index():
                            estatisticas=estatisticas,
                            modelos_recentes=modelos_recentes,
                            checklists_recentes=checklists_recentes,
-                           equipamentos_recentes=equipamentos_recentes)  # Adicione esta variável
+                           equipamentos_recentes=equipamentos_recentes)
 
 # Rotas para gerenciamento de modelos de checklist
 
@@ -1630,7 +1623,12 @@ def api_estatisticas():
             FROM checklist_preenchidos
             GROUP BY status
         """)
-        checklists_por_status = cursor.fetchall()
+        checklists_por_status = []
+        for row in cursor.fetchall():
+            checklists_por_status.append({
+                'status': str(row['status']),
+                'total': int(row['total'])
+            })
 
         # Dados de checklists por tipo de equipamento
         cursor.execute("""
@@ -1641,7 +1639,12 @@ def api_estatisticas():
             ORDER BY total DESC
             LIMIT 10
         """)
-        checklists_por_tipo = cursor.fetchall()
+        checklists_por_tipo = []
+        for row in cursor.fetchall():
+            checklists_por_tipo.append({
+                'tipo_equipamento': str(row['tipo_equipamento']),
+                'total': int(row['total'])
+            })
 
         # Dados de checklists por mês
         cursor.execute("""
@@ -1653,7 +1656,12 @@ def api_estatisticas():
             GROUP BY mes
             ORDER BY mes
         """)
-        checklists_por_mes = cursor.fetchall()
+        checklists_por_mes = []
+        for row in cursor.fetchall():
+            checklists_por_mes.append({
+                'mes': str(row['mes']),
+                'total': int(row['total'])
+            })
 
         cursor.close()
         connection.close()
@@ -1682,7 +1690,7 @@ def init_app(app):
     Função para inicializar o módulo com a aplicação Flask
     """
     # Não registramos o Blueprint aqui, pois ele será registrado no app principal
-    
+
     @app.context_processor
     def inject_menu_data():
         return {

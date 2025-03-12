@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Detalhes da Solicitação #{{ solicitacao.id }}</h1>
+        <a href="{{ url_for('solicitacao.index') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Informações da Solicitação -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Informações Básicas</h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-4">Status</dt>
+                        <dd class="col-sm-8">
+                            {% if solicitacao.status == 'pendente' %}
+                            <span class="badge bg-warning">Pendente</span>
+                            {% elif solicitacao.status == 'aprovada' %}
+                            <span class="badge bg-success">Aprovada</span>
+                            {% elif solicitacao.status == 'rejeitada' %}
+                            <span class="badge bg-danger">Rejeitada</span>
+                            {% endif %}
+                        </dd>
+
+                        <dt class="col-sm-4">Data da Solicitação</dt>
+                        <dd class="col-sm-8">
+                            {{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') if solicitacao.data_solicitacao else 'N/A' }}
+                        </dd>
+
+                        <dt class="col-sm-4">Solicitante</dt>
+                        <dd class="col-sm-8">{{ solicitacao.solicitante_nome or 'N/A' }}</dd>
+
+                        <dt class="col-sm-4">Centro de Custo</dt>
+                        <dd class="col-sm-8">{{ solicitacao.centro_custo_nome or 'N/A' }}</dd>
+
+                        <dt class="col-sm-4">Justificativa</dt>
+                        <dd class="col-sm-8">{{ solicitacao.justificativa or 'N/A' }}</dd>
+
+                        {% if solicitacao.status == 'rejeitada' and solicitacao.motivo_rejeicao %}
+                        <dt class="col-sm-4">Motivo da Rejeição</dt>
+                        <dd class="col-sm-8">{{ solicitacao.motivo_rejeicao }}</dd>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        {% if session.cargo == 'admin' and solicitacao.status == 'pendente' %}
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Ações</h5>
+                </div>
+                <div class="card-body">
+                    <button type="button" class="btn btn-success me-2" onclick="aprovarSolicitacao()">
+                        <i class="bi bi-check-circle"></i> Aprovar
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="abrirModalRejeicao()">
+                        <i class="bi bi-x-circle"></i> Rejeitar
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Lista de Itens -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Itens da Solicitação</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Material</th>
+                            <th>Quantidade</th>
+                            <th>Observação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td>{{ item.material_codigo or 'N/A' }}</td>
+                            <td>{{ item.material_nome or 'N/A' }}</td>
+                            <td>{{ item.quantidade }}</td>
+                            <td>{{ item.observacao or '' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center">Nenhum item encontrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Rejeição -->
+<div class="modal fade" id="modalRejeicao" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Rejeitar Solicitação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="motivo" class="form-label">Motivo da Rejeição</label>
+                    <textarea class="form-control" id="motivo" rows="3" required></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" onclick="rejeitarSolicitacao()">Confirmar Rejeição</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const modalRejeicao = new bootstrap.Modal(document.getElementById('modalRejeicao'));
+
+function aprovarSolicitacao() {
+    if (confirm('Confirma a aprovação desta solicitação?')) {
+        fetch('{{ url_for("solicitacao.aprovar", solicitacao_id=solicitacao.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.reload();
+            } else {
+                alert('Erro ao aprovar solicitação: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Erro ao processar a requisição: ' + error);
+        });
+    }
+}
+
+function abrirModalRejeicao() {
+    modalRejeicao.show();
+}
+
+function rejeitarSolicitacao() {
+    const motivo = document.getElementById('motivo').value;
+    if (!motivo) {
+        alert('Informe o motivo da rejeição');
+        return;
+    }
+
+    fetch('{{ url_for("solicitacao.rejeitar", solicitacao_id=solicitacao.id) }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `motivo=${encodeURIComponent(motivo)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert('Erro ao rejeitar solicitação: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Erro ao processar a requisição: ' + error);
+    });
+}
+</script>
+{% endblock %} 

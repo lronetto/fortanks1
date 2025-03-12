@@ -1,173 +1,171 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Importar Notas Fiscais por XML</h5>
-                <div>
-                    <a href="{{ url_for('importacao_nf.importar') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-cloud-download-alt"></i> API Arquivei
-                    </a>
-                    <a href="{{ url_for('importacao_nf.index') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-arrow-left"></i> Voltar
-                    </a>
+<div class="container-fluid px-4">
+    <h1 class="mt-4">
+        <i class="bi bi-file-earmark-arrow-up"></i> Upload de Arquivos XML
+    </h1>
+
+    <div class="row mt-4">
+        <!-- Card de Upload -->
+        <div class="col-xl-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-upload me-2"></i>Upload de XMLs</h5>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" action="{{ url_for('importacao_nf.importar_xml') }}" method="post" enctype="multipart/form-data">
+                        {{ form.csrf_token }}
+                        
+                        <div class="mb-4">
+                            <label for="fileInput" class="form-label">Selecione os arquivos XML</label>
+                            <input type="file" id="fileInput" name="files[]" class="form-control" multiple accept=".xml, .zip">
+                            <div class="form-text">Você pode selecionar múltiplos arquivos XML ou arquivos ZIP contendo XMLs.</div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-cpu me-2"></i>Processar Arquivos
+                            </button>
+                        </div>
+                        
+                        <div id="uploadProgress" style="display: none;" class="mt-3">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="spinner-border spinner-border-sm me-2" role="status">
+                                    <span class="visually-hidden">Processando...</span>
+                                </div>
+                                <span>Processando arquivos, por favor aguarde...</span>
+                            </div>
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <!-- Resultados -->
+                    <div class="mt-4">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                    </div>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Você pode importar arquivos de nota fiscal diretamente do seu computador. 
-                    Os formatos suportados são <strong>.xml</strong> de NF-e/NFC-e ou arquivos <strong>.zip</strong> contendo múltiplos XMLs.
+        </div>
+
+        <!-- Card de Instruções -->
+        <div class="col-xl-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle"></i> Instruções
+                    </h5>
                 </div>
-                
-                <form method="POST" action="{{ url_for('importacao_nf.importar_xml') }}" enctype="multipart/form-data">
-                    <div class="mb-4">
-                        <input type="file" name="files[]" multiple accept=".xml,.zip" class="form-control" id="xmlFiles">
-                    </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-upload"></i> Importar Arquivos
-                        </button>
-                    </div>
-                </form>
-                
-                <div class="mt-4">
-                    <h6 class="border-bottom pb-2 mb-3">Arquivos selecionados</h6>
-                    <div id="previewContainer" class="row g-3">
-                        <div class="col-12">
-                            <p class="text-muted text-center" id="noFilesMsg">
-                                Nenhum arquivo selecionado
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="mt-4">
-                    <h6 class="border-bottom pb-2 mb-3">Instruções</h6>
-                    <ol class="text-muted">
-                        <li>Selecione arquivos XML de NF-e/NFC-e ou arquivos ZIP contendo XMLs</li>
-                        <li>O sistema irá verificar automaticamente se as notas já existem para evitar duplicidade</li>
-                        <li>Para notas já existentes, as informações serão atualizadas</li>
-                        <li>O processamento pode demorar alguns minutos dependendo da quantidade de arquivos</li>
+                <div class="card-body">
+                    <h6>Tipos de Arquivos Suportados:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check2"></i> Arquivos XML de Nota Fiscal Eletrônica</li>
+                        <li><i class="bi bi-check2"></i> Arquivos ZIP contendo XMLs</li>
+                    </ul>
+
+                    <h6 class="mt-4">Como Usar:</h6>
+                    <ol>
+                        <li>Arraste os arquivos para a área de upload ou clique em "Selecionar Arquivos"</li>
+                        <li>Você pode selecionar múltiplos arquivos</li>
+                        <li>Clique em "Processar Arquivos" para iniciar a importação</li>
                     </ol>
+
+                    <div class="alert alert-info mt-4">
+                        <i class="bi bi-info-circle"></i> O sistema processará automaticamente os arquivos XML dentro de ZIPs
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Área de Resultados -->
+    <div id="resultArea" class="mt-4" style="display: none;">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <h5 class="mb-0"><i class="bi bi-list-check me-2"></i>Resultado do Processamento</h5>
+            </div>
+            <div class="card-body" id="resultContent">
+                <!-- Resultados serão inseridos aqui -->
+            </div>
+        </div>
+    </div>
 </div>
+
+<!-- Estilo para a área de upload -->
+<style>
+.upload-area {
+    background-color: #f8f9fa;
+    border: 2px dashed #0d6efd !important;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    background-color: #e9ecef;
+}
+
+.upload-area.highlight {
+    background-color: #e6f7ff;
+    border-color: #0d6efd !important;
+}
+
+.file-item {
+    padding: 10px;
+    margin-bottom: 5px;
+    border-radius: 4px;
+    background-color: #f1f1f1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-right: 10px;
+}
+
+.remove-file {
+    color: #dc3545;
+    cursor: pointer;
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
-<link href="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.css" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dropzone/5.9.3/min/dropzone.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    Dropzone.autoDiscover = false;
+    console.log("DOM carregado, inicializando upload de arquivos");
     
-    const previewContainer = document.getElementById('previewContainer');
-    const noFilesMsg = document.getElementById('noFilesMsg');
-    const btnUpload = document.getElementById('btnUpload');
+    // Elementos DOM
+    const uploadForm = document.getElementById('uploadForm');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const resultArea = document.getElementById('resultArea');
     
-    // Inicializar Dropzone
-    const myDropzone = new Dropzone("#xmlDropzone", {
-        url: "#", // Será sobrescrito pelo formulário
-        autoProcessQueue: false,
-        uploadMultiple: true,
-        parallelUploads: 10,
-        maxFiles: 100,
-        acceptedFiles: ".xml,.zip",
-        addRemoveLinks: true,
-        createImageThumbnails: false,
-        dictRemoveFile: "Remover",
-        dictCancelUpload: "Cancelar",
-        clickable: true,
-        previewsContainer: false,
-        disablePreviews: true
-    });
-    
-    // Evento quando um arquivo é adicionado
-    myDropzone.on("addedfile", file => {
-        const fileExtension = file.name.split('.').pop().toLowerCase();
-        let iconClass = 'fas fa-file-code text-primary';
+    // Quando o formulário é enviado
+    uploadForm.addEventListener('submit', function(e) {
+        const fileInput = document.getElementById('fileInput');
         
-        if (fileExtension === 'zip') {
-            iconClass = 'fas fa-file-archive text-warning';
-        }
-        
-        // Criar item de preview personalizado
-        const previewItem = document.createElement('div');
-        previewItem.className = 'col-md-4';
-        previewItem.dataset.filename = file.name;
-        previewItem.innerHTML = `
-            <div class="card">
-                <div class="card-body p-3">
-                    <div class="d-flex align-items-center">
-                        <div class="me-3">
-                            <i class="${iconClass} fa-2x"></i>
-                        </div>
-                        <div class="flex-grow-1 text-truncate">
-                            <div class="text-truncate">${file.name}</div>
-                            <small class="text-muted">${(file.size / 1024).toFixed(2)} KB</small>
-                        </div>
-                        <div>
-                            <button type="button" class="btn btn-sm btn-outline-danger btn-remove-file">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Adicionar evento para remover arquivo
-        previewItem.querySelector('.btn-remove-file').addEventListener('click', function() {
-            myDropzone.files.forEach(f => {
-                if (f.name === file.name) {
-                    myDropzone.removeFile(f);
-                }
-            });
-            previewItem.remove();
-            updateFilesUI();
-        });
-        
-        previewContainer.appendChild(previewItem);
-        updateFilesUI();
-    });
-    
-    // Evento quando um arquivo é removido
-    myDropzone.on("removedfile", file => {
-        const item = previewContainer.querySelector(`[data-filename="${file.name}"]`);
-        if (item) {
-            item.remove();
-        }
-        updateFilesUI();
-    });
-    
-    // Atualizar UI baseado na quantidade de arquivos
-    function updateFilesUI() {
-        const fileCount = myDropzone.files.length;
-        
-        if (fileCount > 0) {
-            noFilesMsg.style.display = 'none';
-            btnUpload.disabled = false;
-            btnUpload.innerHTML = `<i class="fas fa-upload"></i> Importar ${fileCount} arquivo${fileCount > 1 ? 's' : ''}`;
-        } else {
-            noFilesMsg.style.display = 'block';
-            btnUpload.disabled = true;
-            btnUpload.innerHTML = '<i class="fas fa-upload"></i> Iniciar Importação';
-        }
-    }
-    
-    // Submeter formulário
-    document.querySelector('.dropzone-form').addEventListener('submit', function(e) {
-        if (myDropzone.files.length === 0) {
+        if (fileInput.files.length === 0) {
             e.preventDefault();
-            alert('Selecione pelo menos um arquivo para importar.');
+            alert('Por favor, selecione pelo menos um arquivo antes de processar.');
             return false;
         }
         
-        // O formulário será enviado normalmente com os arquivos
+        // Mostrar área de progresso
+        uploadProgress.style.display = 'block';
         return true;
     });
 });

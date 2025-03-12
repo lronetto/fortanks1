@@ -1,112 +1,113 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Importar Notas Fiscais via API</h5>
-                <div>
-                    <a href="{{ url_for('importacao_nf.importar_xml') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-file-upload"></i> Upload XML
-                    </a>
-                    <a href="{{ url_for('importacao_nf.index') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-arrow-left"></i> Voltar
+<div class="container-fluid px-4">
+    <h1 class="mt-4">
+        <i class="bi bi-cloud-arrow-down"></i> Importar Notas Fiscais
+    </h1>
+    
+    <div class="row mt-4">
+        <!-- Card de Importação via API -->
+        <div class="col-xl-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-cloud"></i> Importação via API Arquivei
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('importacao_nf.importar') }}">
+                        {{ form.csrf_token }}
+                        <div class="mb-3">
+                            <label for="dias" class="form-label">Período de Importação (dias)</label>
+                            <input type="number" class="form-control" id="dias" name="dias" value="30" min="1" max="90">
+                            <div class="form-text">Selecione o período em dias para buscar as notas fiscais (máximo 90 dias)</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="cnpj" class="form-label">CNPJ (opcional)</label>
+                            <input type="text" class="form-control" id="cnpj" name="cnpj" placeholder="00.000.000/0000-00">
+                            <div class="form-text">Digite o CNPJ para filtrar as notas fiscais de um fornecedor específico</div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-cloud-download"></i> Importar via API
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card de Upload de XML -->
+        <div class="col-xl-6">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-file-earmark-text"></i> Upload de Arquivos XML
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Para importar notas fiscais através de arquivos XML, utilize a página específica de upload:</p>
+                    <a href="{{ url_for('importacao_nf.importar_xml') }}" class="btn btn-success">
+                        <i class="bi bi-file-earmark-arrow-up"></i> Ir para Upload de XML
                     </a>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <i class="fas fa-info-circle"></i> Este módulo importa notas fiscais eletrônicas da API Arquivei.
+        </div>
+    </div>
+
+    <!-- Instruções -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle"></i> Instruções de Uso
+                    </h5>
                 </div>
-                
-                <ul class="nav nav-tabs mb-4" id="importTabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="api-tab" data-bs-toggle="tab" data-bs-target="#api-content" type="button" role="tab" aria-controls="api-content" aria-selected="true">
-                            <i class="fas fa-cloud-download-alt"></i> API Arquivei
-                        </button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="xml-tab" data-bs-toggle="tab" data-bs-target="#xml-content" type="button" role="tab" aria-controls="xml-content" aria-selected="false">
-                            <i class="fas fa-file-upload"></i> Upload XML
-                        </button>
-                    </li>
-                </ul>
-                
-                <div class="tab-content" id="importTabsContent">
-                    <div class="tab-pane fade show active" id="api-content" role="tabpanel" aria-labelledby="api-tab">
-                        <div class="row">
-                            <div class="col-md-6 mx-auto">
-                                <form method="POST" action="{{ url_for('importacao_nf.importar') }}">
-                                    <div class="mb-3">
-                                        <label for="dias" class="form-label">Período de importação (dias)</label>
-                                        <select class="form-select" id="dias" name="dias">
-                                            <option value="7">Últimos 7 dias</option>
-                                            <option value="15">Últimos 15 dias</option>
-                                            <option value="30" selected>Últimos 30 dias</option>
-                                            <option value="60">Últimos 60 dias</option>
-                                            <option value="90">Últimos 90 dias</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label for="cnpj" class="form-label">CNPJ específico (opcional)</label>
-                                        <input type="text" class="form-control" id="cnpj" name="cnpj" placeholder="00.000.000/0000-00">
-                                        <div class="form-text">Deixe em branco para importar de todos os CNPJs.</div>
-                                    </div>
-                                    
-                                    <div class="d-grid gap-2">
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-download"></i> Iniciar Importação
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Importação via API</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check2"></i> Selecione o período desejado (1 a 90 dias)</li>
+                                <li><i class="bi bi-check2"></i> Opcionalmente, filtre por CNPJ específico</li>
+                                <li><i class="bi bi-check2"></i> Clique em "Importar via API" para iniciar</li>
+                            </ul>
                         </div>
-                    </div>
-                    
-                    <div class="tab-pane fade" id="xml-content" role="tabpanel" aria-labelledby="xml-tab">
-                        <div class="row">
-                            <div class="col-md-12 text-center my-4">
-                                <a href="{{ url_for('importacao_nf.importar_xml') }}" class="btn btn-lg btn-primary">
-                                    <i class="fas fa-file-upload"></i> Ir para Upload de XML
-                                </a>
-                                <p class="text-muted mt-3">
-                                    Clique acima para acessar a página de upload de arquivos XML ou ZIP.
-                                </p>
-                            </div>
+                        <div class="col-md-6">
+                            <h6>Upload de XML</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="bi bi-check2"></i> Acesse a página de upload de XML</li>
+                                <li><i class="bi bi-check2"></i> Selecione um ou mais arquivos XML</li>
+                                <li><i class="bi bi-check2"></i> Também aceita arquivos ZIP contendo XMLs</li>
+                            </ul>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Mensagens Flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show mt-4" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
     // Máscara para CNPJ
-    const cnpjInput = document.getElementById('cnpj');
-    if (cnpjInput) {
-        cnpjInput.addEventListener('input', function(e) {
-            let value = e.target.value.replace(/\D/g, '');
-            if (value.length > 14) value = value.slice(0, 14);
-            
-            if (value.length > 12) {
-                value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-            } else if (value.length > 8) {
-                value = value.replace(/^(\d{2})(\d{3})(\d{3})(\d*)$/, '$1.$2.$3/$4');
-            } else if (value.length > 5) {
-                value = value.replace(/^(\d{2})(\d{3})(\d*)$/, '$1.$2.$3');
-            } else if (value.length > 2) {
-                value = value.replace(/^(\d{2})(\d*)$/, '$1.$2');
-            }
-            
-            e.target.value = value;
-        });
-    }
-});
+    $(document).ready(function(){
+        $('#cnpj').mask('00.000.000/0000-00');
+    });
 </script>
 {% endblock %}

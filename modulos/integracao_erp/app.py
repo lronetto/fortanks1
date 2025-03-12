@@ -24,7 +24,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Criar o Blueprint com um nome único
-mod_integracao_erp = Blueprint('integracao_erp', __name__, url_prefix='/integracao_erp')
+mod_integracao_erp = Blueprint(
+    'integracao_erp', __name__, url_prefix='/integracao_erp')
 
 # Função para conectar ao banco de dados
 
@@ -386,7 +387,6 @@ def limpar_arquivos_temporarios(arquivo_path):
 @mod_integracao_erp.route('/')
 def index():
     if 'logado' not in session:
-        flash('Faça login para acessar o sistema', 'warning')
         return redirect(url_for('index'))
 
     # Obter estatísticas
@@ -832,13 +832,13 @@ def init_app(app):
     Função para inicializar o módulo com a aplicação Flask
     """
     # Não registramos o Blueprint aqui, pois ele será registrado no app principal
-    
+
     @app.context_processor
     def inject_menu_data():
         return {
             'modulo_integracao_erp': True
         }
-        
+
     # Configurar rotas específicas do módulo que precisam ser registradas diretamente no app
     @app.route('/integracao_erp/executar_importacao_automatica', methods=['POST'])
     async def executar_importacao_automatica():

@@ -1,0 +1,170 @@
+import base64
+import tempfile
+
+def processar_e_salvar_nfe(nfe_data):
+    connection = get_db_connection()
+    if not connection:
+        return False
+
+    try:
+        cursor = connection.cursor(dictionary=True)
+        
+        # Verificar se os dados podem ser Base64
+        xml_base64 = None
+        if 'xml' in nfe_data and isinstance(nfe_data['xml'], str) and len(nfe_data['xml']) > 100:
+            xml_base64 = nfe_data['xml']
+        elif 'content' in nfe_data and isinstance(nfe_data['content'], str):
+            xml_base64 = nfe_data['content']
+        elif 'data' in nfe_data and isinstance(nfe_data['data'], str):
+            xml_base64 = nfe_data['data']
+            
+        # Tentar decodificar Base64
+        if xml_base64:
+            try:
+                # Remover espaços
+                xml_base64 = xml_base64.replace(" ", "").replace("\n", "")
+                
+                # Decodificar Base64
+                xml_bytes = base64.b64decode(xml_base64)
+                
+                # Converter para string
+                xml_content = None
+                for encoding in ['utf-8', 'latin1', 'iso-8859-1', 'cp1252']:
+                    try:
+                        xml_content = xml_bytes.decode(encoding)
+                        break
+                    except:
+                        continue
+                        
+                if xml_content:
+                    # Criar arquivo temporário
+                    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.xml', 
+                                                           delete=False, encoding='utf-8')
+                    temp_file.write(xml_content)
+                    temp_file_path = temp_file.name
+                    temp_file.close()
+                    
+                    # Processar o XML
+                    processed_nfe = process_xml_file(temp_file_path)
+                    
+                    # Limpar o arquivo temporário
+                    import os
+                    os.unlink(temp_file_path)
+                    
+                    # Se processou com sucesso, usar os dados
+                    if processed_nfe and processed_nfe.get('access_key'):
+                        # Usar os dados processados
+                        nfe_data = processed_nfe
+                        nfe_data['xml'] = xml_content
+            except Exception as e:
+                # Se falhar, continuar com os dados originais
+                print(f"Erro ao processar Base64: {str(e)}")
+
+        # Extrair informações relevantes da NFe
+        chave_acesso = nfe_data.get('access_key')
+        numero_nf = nfe_data.get('number', '')
+        data_emissao = nfe_data.get('emission_date')
+
+        # Verificar se data_emissao está presente
+        if data_emissao is None:
+            # Usar a data atual como fallback
+            data_emissao = datetime.now()
+
+        valor_total = nfe_data.get('value', 0)
+        cnpj_emitente = nfe_data.get('cnpj_sender', '')
+        nome_emitente = nfe_data.get('sender_name', '')
+        cnpj_destinatario = nfe_data.get('cnpj_receiver', '')
+        nome_destinatario = nfe_data.get('receiver_name', '')
+        xml_data = nfe_data.get('xml', '')
+
+        # Verificar se a chave de acesso está presente
+        if not chave_acesso:
+            return False
+
+        # Verificar se a NFe já existe no banco
+        cursor.execute("SELECT id FROM nf_notas WHERE chave_acesso = %s", (chave_acesso,))
+        resultado = cursor.fetchone()
+
+        if resultado:
+            # Atualizar NFe existente
+            cursor.execute("""
+                UPDATE nf_notas SET 
+                numero_nf = %s,
+                data_emissao = %s, 
+                valor_total = %s, 
+                cnpj_emitente = %s, 
+                nome_emitente = %s, 
+                cnpj_destinatario = %s, 
+                nome_destinatario = %s, 
+                status_processamento = 'atualizado',
+                data_atualizacao = NOW(),
+                observacoes = %s
+                WHERE chave_acesso = %s
+            """, (
+                numero_nf,
+                data_emissao,
+                valor_total,
+                cnpj_emitente,
+                nome_emitente,
+                cnpj_destinatario,
+                nome_destinatario,
+                'Atualizado via API Arquivei em ' + datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                chave_acesso
+            ))
+
+            nfe_id = resultado['id']
+
+            # Remover itens antigos
+            cursor.execute("DELETE FROM nf_itens WHERE nf_id = %s", (nfe_id,))
+        else:
+            # Inserir nova NFe
+            cursor.execute("""
+                INSERT INTO nf_notas (
+                    chave_acesso, numero_nf, data_emissao, valor_total, cnpj_emitente, 
+                    nome_emitente, cnpj_destinatario, nome_destinatario, 
+                    xml_data, status_processamento, data_importacao, observacoes
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
+            """, (
+                chave_acesso,
+                numero_nf,
+                data_emissao,
+                valor_total,
+                cnpj_emitente,
+                nome_emitente,
+                cnpj_destinatario,
+                nome_destinatario,
+                xml_data,
+                'importado',
+                'Importado via API Arquivei em ' + datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+            ))
+
+            # Obter o ID da NFe inserida
+            nfe_id = cursor.lastrowid
+
+        # Processar itens da NFe
+        itens = nfe_data.get('items', [])
+        for item in itens:
+            codigo = item.get('code', '')
+            descricao = item.get('description', '')
+            quantidade = item.get('quantity', 0)
+            valor_unitario = item.get('unit_value', 0)
+            valor_total_item = item.get('total_value', 0)
+
+            cursor.execute("""
+                INSERT INTO nf_itens (
+                    nf_id, codigo, descricao, quantidade, 
+                    valor_unitario, valor_total
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (nfe_id, codigo, descricao, quantidade,
+                  valor_unitario, valor_total_item))
+
+        connection.commit()
+        return True
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        return False
+    finally:
+        if connection and hasattr(connection, 'is_connected') and connection.is_connected():
+            cursor.close()
+            connection.close() 

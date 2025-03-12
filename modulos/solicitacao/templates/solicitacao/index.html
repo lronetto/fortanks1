@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-list-check"></i> Minhas Solicitações
+        </h2>
+        <a href="{{ url_for('solicitacao.nova_solicitacao') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> Nova Solicitação
+        </a>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-list-ul"></i> Total de Solicitações
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.total_solicitacoes|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-hourglass-split"></i> Pendentes
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.pendentes|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-check-circle"></i> Aprovadas
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.aprovadas|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-x-circle"></i> Rejeitadas
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.rejeitadas|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Solicitações -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-list-ul"></i> Solicitações
+                </h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="filtrarStatus('todas')">
+                        Todas
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="filtrarStatus('pendente')">
+                        Pendentes
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="filtrarStatus('aprovada')">
+                        Aprovadas
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="filtrarStatus('rejeitada')">
+                        Rejeitadas
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if solicitacoes %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Data</th>
+                            <th>Centro de Custo</th>
+                            <th>Itens</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for solicitacao in solicitacoes %}
+                        <tr class="solicitacao-row" data-status="{{ solicitacao.status }}">
+                            <td>{{ solicitacao.id }}</td>
+                            <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ solicitacao.centro_custo_nome }}</td>
+                            <td>{{ solicitacao.total_itens }}</td>
+                            <td>R$ {{ "%.2f"|format(solicitacao.valor_total|default(0)) }}</td>
+                            <td>
+                                {% if solicitacao.status == 'pendente' %}
+                                <span class="badge bg-warning">Pendente</span>
+                                {% elif solicitacao.status == 'aprovada' %}
+                                <span class="badge bg-success">Aprovada</span>
+                                {% else %}
+                                <span class="badge bg-danger">Rejeitada</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('solicitacao.visualizar', id=solicitacao.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    {% if solicitacao.status == 'pendente' %}
+                                    <a href="{{ url_for('solicitacao.editar', id=solicitacao.id) }}" 
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick="confirmarExclusao({{ solicitacao.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="bi bi-inbox display-4 text-muted"></i>
+                <p class="mt-2 text-muted">Nenhuma solicitação encontrada</p>
+                <a href="{{ url_for('solicitacao.nova_solicitacao') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-lg"></i> Criar Nova Solicitação
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmarExclusao(id) {
+    if (confirm('Tem certeza que deseja excluir esta solicitação?')) {
+        window.location.href = `/solicitacao/excluir/${id}`;
+    }
+}
+
+function filtrarStatus(status) {
+    const rows = document.querySelectorAll('.solicitacao-row');
+    rows.forEach(row => {
+        if (status === 'todas' || row.dataset.status === status) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    // Atualizar estilo dos botões
+    document.querySelectorAll('.btn-group .btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.textContent.trim().toLowerCase().includes(status) || 
+            (status === 'todas' && btn.textContent.trim() === 'Todas')) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+// Inicializar com todas as solicitações visíveis
+document.addEventListener('DOMContentLoaded', function() {
+    filtrarStatus('todas');
+});
+</script>
+{% endblock %} 

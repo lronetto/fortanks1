@@ -1,184 +1,175 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Gerenciamento de Checklists</h5>
-                <div>
-                    <a href="{{ url_for('checklist.novo_checklist') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-plus"></i> Novo Checklist
-                    </a>
-                    {% if session.cargo in ['admin', 'gerente'] %}
-                    <a href="{{ url_for('checklist.listar_modelos') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-cog"></i> Gerenciar Modelos
-                    </a>
-                    {% endif %}
-                    <a href="{{ url_for('checklist.listar_equipamentos') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-tools"></i> Equipamentos
-                    </a>
-                    <a href="{{ url_for('checklist.relatorios') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-chart-bar"></i> Relatórios
-                    </a>
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-check2-square"></i> Checklists
+        </h2>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoChecklist">
+            <i class="bi bi-plus-lg"></i> Novo Checklist
+        </button>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-list-check"></i> Total de Checklists
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.total_checklists|default(0) }}</h2>
                 </div>
             </div>
-            <div class="card-body">
-                <!-- Cards com estatísticas -->
-                <div class="row">
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-primary text-white h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Total de Modelos</h5>
-                                <h2 class="mb-0">{{ estatisticas.total_modelos }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-success text-white h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Concluídos</h5>
-                                <h2 class="mb-0">{{ estatisticas.checklists_concluidos }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-warning text-white h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Pendentes</h5>
-                                <h2 class="mb-0">{{ estatisticas.checklists_pendentes }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-info text-white h-100">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Realizados Hoje</h5>
-                                <h2 class="mb-0">{{ estatisticas.checklists_hoje }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-3 mb-4">
-                    <div class="card bg-dark text-white h-100">
-                        <div class="card-body text-center">
-                            <h5 class="card-title">Equipamentos</h5>
-                            <h2 class="mb-0">{{ estatisticas.total_equipamentos|default(0) }}</h2>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Checklists Recentes -->
-                <div class="row">
-                    <div class="col-md-12">
-                        <h5 class="border-bottom pb-2 mb-3">Checklists Recentes</h5>
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Modelo</th>
-                                        <th>Equipamento</th>
-                                        <th>Responsável</th>
-                                        <th>Data</th>
-                                        <th>Status</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% if checklists_recentes %}
-                                        {% for checklist in checklists_recentes %}
-                                        <tr>
-                                            <td>{{ checklist.id }}</td>
-                                            <td>{{ checklist.modelo_nome }}</td>
-                                            <td>{{ checklist.equipamento_nome }}</td>
-                                            <td>{{ checklist.responsavel_nome }}</td>
-                                            <td>{{ checklist.data_preenchimento.strftime('%d/%m/%Y %H:%M') }}</td>
-                                            <td>
-                                                {% if checklist.status == 'em_andamento' %}
-                                                <span class="badge bg-warning">Em andamento</span>
-                                                {% elif checklist.status == 'concluido' %}
-                                                <span class="badge bg-primary">Concluído</span>
-                                                {% elif checklist.status == 'aprovado' %}
-                                                <span class="badge bg-success">Aprovado</span>
-                                                {% elif checklist.status == 'rejeitado' %}
-                                                <span class="badge bg-danger">Rejeitado</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                {% if checklist.status == 'em_andamento' and checklist.responsavel_id == session.id_usuario %}
-                                                <a href="{{ url_for('checklist.preencher_checklist', checklist_id=checklist.id) }}" class="btn btn-sm btn-primary">
-                                                    <i class="fas fa-edit"></i>
-                                                </a>
-                                                {% else %}
-                                                <a href="{{ url_for('checklist.visualizar_checklist', checklist_id=checklist.id) }}" class="btn btn-sm btn-info">
-                                                    <i class="fas fa-eye"></i>
-                                                </a>
-                                                {% endif %}
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    {% else %}
-                                        <tr>
-                                            <td colspan="7" class="text-center">Nenhum checklist encontrado</td>
-                                        </tr>
-                                    {% endif %}
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="text-end">
-                            <a href="{{ url_for('checklist.listar_checklists') }}" class="btn btn-primary">
-                                <i class="fas fa-list"></i> Ver Todos
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Modelos Recentes -->
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <h5 class="border-bottom pb-2 mb-3">Modelos Disponíveis</h5>
-                        <div class="row">
-                            {% if modelos_recentes %}
-                                {% for modelo in modelos_recentes %}
-                                <div class="col-md-4 mb-3">
-                                    <div class="card h-100">
-                                        <div class="card-header d-flex justify-content-between align-items-center">
-                                            <h6 class="mb-0">{{ modelo.nome }}</h6>
-                                            <span class="badge bg-info">{{ modelo.tipo_equipamento }}</span>
-                                        </div>
-                                        <div class="card-body">
-                                            <p class="card-text text-muted small">{{ modelo.descricao|truncate(100) }}</p>
-                                            <div class="d-flex justify-content-between">
-                                                <small class="text-muted">Frequência: <span class="fw-bold">{{ modelo.frequencia }}</span></small>
-                                                <small class="text-muted">Itens: <span class="fw-bold">{{ modelo.total_itens }}</span></small>
-                                            </div>
-                                        </div>
-                                        <div class="card-footer d-flex justify-content-between align-items-center">
-                                            <small class="text-muted">Por: {{ modelo.criador_nome }}</small>
-                                            <a href="{{ url_for('checklist.novo_checklist') }}?modelo_id={{ modelo.id }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-plus"></i> Usar
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            {% else %}
-                                <div class="col-12">
-                                    <div class="alert alert-info">
-                                        Nenhum modelo de checklist disponível. {% if session.cargo in ['admin', 'gerente'] %}<a href="{{ url_for('checklist.novo_modelo') }}">Criar um novo modelo</a>{% endif %}
-                                    </div>
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="text-end">
-                            <a href="{{ url_for('checklist.listar_modelos') }}" class="btn btn-primary">
-                                <i class="fas fa-cog"></i> Gerenciar Modelos
-                            </a>
-                        </div>
-                    </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-clock-history"></i> Em Andamento
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.em_andamento|default(0) }}</h2>
                 </div>
             </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-check-circle"></i> Concluídos
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.concluidos|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-person-check"></i> Responsáveis
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.responsaveis|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Checklists -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-list-ul"></i> Meus Checklists
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if checklists %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Título</th>
+                            <th>Responsável</th>
+                            <th>Itens</th>
+                            <th>Progresso</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for checklist in checklists %}
+                        <tr>
+                            <td>{{ checklist.titulo }}</td>
+                            <td>{{ checklist.responsavel }}</td>
+                            <td>{{ checklist.total_itens }}</td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar" role="progressbar" 
+                                         style="width: {{ checklist.progresso }}%;"
+                                         aria-valuenow="{{ checklist.progresso }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        {{ checklist.progresso }}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if checklist.status == 'concluido' %}
+                                <span class="badge bg-success">Concluído</span>
+                                {% elif checklist.status == 'em_andamento' %}
+                                <span class="badge bg-primary">Em Andamento</span>
+                                {% else %}
+                                <span class="badge bg-warning">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('checklist.visualizar', id=checklist.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('checklist.editar', id=checklist.id) }}" 
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick="confirmarExclusao({{ checklist.id }})">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="bi bi-clipboard-check display-4 text-muted"></i>
+                <p class="mt-2 text-muted">Nenhum checklist encontrado</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Checklist -->
+<div class="modal fade" id="modalNovoChecklist" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle"></i> Novo Checklist
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ url_for('checklist.criar') }}" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="titulo" class="form-label">Título</label>
+                        <input type="text" class="form-control" id="titulo" name="titulo" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="responsavel" class="form-label">Responsável</label>
+                        <select class="form-select" id="responsavel" name="responsavel_id" required>
+                            <option value="">Selecione...</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Criar</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -186,12 +177,10 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Formatação das datas
-    document.querySelectorAll('.data-formatada').forEach(function(element) {
-        const data = new Date(element.dataset.data);
-        element.textContent = data.toLocaleDateString('pt-BR');
-    });
-});
+function confirmarExclusao(id) {
+    if (confirm('Tem certeza que deseja excluir este checklist?')) {
+        window.location.href = `/checklist/excluir/${id}`;
+    }
+}
 </script>
 {% endblock %}

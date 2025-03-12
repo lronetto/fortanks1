@@ -1,409 +1,167 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Nova Solicitação de Material</h5>
-                <button type="button" class="btn btn-light btn-sm" data-bs-toggle="modal" data-bs-target="#modalBuscarMaterial">
-                    <i class="fas fa-search"></i> Buscar Material
-                </button>
-            </div>
-            <div class="card-body">
-                <form method="POST" action="{{ url_for('solicitar_material') }}" id="formSolicitacao">
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label for="justificativa" class="form-label">Justificativa da Solicitação</label>
-                            <textarea class="form-control" id="justificativa" name="justificativa" rows="2" required></textarea>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="centro_custo_id" class="form-label">Centro de Custo</label>
-                            <select class="form-select" id="centro_custo_id" name="centro_custo_id" required>
-                                <option value="">Selecione um centro de custo</option>
-                                {% for centro in centros_custo %}
-                                <option value="{{ centro.id }}">{{ centro.codigo }} - {{ centro.nome }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <h6 class="border-bottom pb-2 mb-3">Itens da Solicitação</h6>
-                    
-                    <div id="itens-container">
-                        <!-- Os itens serão adicionados aqui dinamicamente -->
-                        <div class="alert alert-info" id="sem-itens">
-                            Nenhum item adicionado. Use o botão "Adicionar Item" ou "Buscar Material" para incluir itens.
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex justify-content-between mt-3">
-                        <button type="button" class="btn btn-outline-primary" id="btnAdicionarItem">
-                            <i class="fas fa-plus"></i> Adicionar Item
-                        </button>
-                        <button type="submit" class="btn btn-primary" id="btnEnviarSolicitacao">
-                            <i class="fas fa-paper-plane"></i> Enviar Solicitação
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Buscar Material -->
-<div class="modal fade" id="modalBuscarMaterial" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Buscar Material</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control" id="termoBusca" placeholder="Digite o nome, descrição ou categoria do material">
-                    <button class="btn btn-primary" type="button" id="btnBuscar">
-                        <i class="fas fa-search"></i> Buscar
-                    </button>
-                </div>
-                <div id="resultadosBusca">
-                    <!-- Resultados da busca serão exibidos aqui -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% if solicitacoes_pendentes %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-warning">
-                <h5 class="mb-0">Solicitações Pendentes de Aprovação</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Solicitante</th>
-                                <th>Departamento</th>
-                                <th>Centro de Custo</th>
-                                <th>Itens</th>
-                                <th>Justificativa</th>
-                                <th>Data</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for solicitacao in solicitacoes_pendentes %}
-                            <tr>
-                                <td>{{ solicitacao.id }}</td>
-                                <td>{{ solicitacao.solicitante_nome }}</td>
-                                <td>{{ solicitacao.departamento_solicitante }}</td>
-                                <td>{{ solicitacao.centro_custo_codigo }} - {{ solicitacao.centro_custo_nome }}</td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ solicitacao.total_itens }} item(ns)</span>
-                                    <span class="badge bg-secondary">{{ solicitacao.quantidade_total }} unidade(s)</span>
-                                </td>
-                                <td>{{ solicitacao.justificativa }}</td>
-                                <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>
-                                    <a href="{{ url_for('visualizar_solicitacao', id=solicitacao.id) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#aprovarModal{{ solicitacao.id }}">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejeitarModal{{ solicitacao.id }}">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </td>
-                            </tr>
-                            <!-- Modal Aprovar -->
-                            <div class="modal fade" id="aprovarModal{{ solicitacao.id }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Aprovar Solicitação #{{ solicitacao.id }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form method="POST" action="{{ url_for('aprovar_solicitacao', id=solicitacao.id) }}">
-                                            <div class="modal-body">
-                                                <p>Confirma a aprovação da solicitação com <strong>{{ solicitacao.total_itens }} item(ns)</strong>?</p>
-                                                <div class="mb-3">
-                                                    <label for="observacao" class="form-label">Observação (opcional)</label>
-                                                    <textarea class="form-control" id="observacao" name="observacao" rows="2"></textarea>
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-success">Aprovar</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- Modal Rejeitar -->
-                            <div class="modal fade" id="rejeitarModal{{ solicitacao.id }}" tabindex="-1">
-                                <div class="modal-dialog">
-                                    <div class="modal-content">
-                                        <div class="modal-header">
-                                            <h5 class="modal-title">Rejeitar Solicitação #{{ solicitacao.id }}</h5>
-                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                        </div>
-                                        <form method="POST" action="{{ url_for('rejeitar_solicitacao', id=solicitacao.id) }}">
-                                            <div class="modal-body">
-                                                <p>Confirma a rejeição da solicitação com <strong>{{ solicitacao.total_itens }} item(ns)</strong>?</p>
-                                                <div class="mb-3">
-                                                    <label for="motivo" class="form-label">Motivo da rejeição</label>
-                                                    <textarea class="form-control" id="motivo" name="motivo" rows="2" required></textarea>
-                                                </div>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                                                <button type="submit" class="btn btn-danger">Rejeitar</button>
-                                            </div>
-                                        </form>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<div class="row">
+<div class="row mb-4">
     <div class="col-md-12">
         <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Dashboard</h5>
+            </div>
+            <div class="card-body">
+                <p>Bem-vindo ao Sistema de Solicitação de Materiais!</p>
+                <p>Você está logado como {{ session['nome'] }} ({{ session['cargo'] }}).</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Minhas Solicitações -->
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0">Minhas Solicitações</h5>
+                <h5 class="mb-0">Minhas Solicitações Recentes</h5>
             </div>
             <div class="card-body">
                 {% if minhas_solicitacoes %}
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Centro de Custo</th>
-                                <th>Itens</th>
-                                <th>Justificativa</th>
-                                <th>Status</th>
-                                <th>Data Solicitação</th>
-                                <th>Aprovador</th>
-                                <th>Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for solicitacao in minhas_solicitacoes %}
-                            <tr>
-                                <td>{{ solicitacao.id }}</td>
-                                <td>{{ solicitacao.centro_custo_codigo }} - {{ solicitacao.centro_custo_nome }}</td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ solicitacao.total_itens }} item(ns)</span>
-                                    <span class="badge bg-secondary">{{ solicitacao.quantidade_total }} unidade(s)</span>
-                                </td>
-                                <td>{{ solicitacao.justificativa }}</td>
-                                <td>
-                                    {% if solicitacao.status == 'pendente' %}
-                                    <span class="badge bg-warning">Pendente</span>
-                                    {% elif solicitacao.status == 'aprovada' %}
-                                    <span class="badge bg-success">Aprovada</span>
-                                    {% elif solicitacao.status == 'rejeitada' %}
-                                    <span class="badge bg-danger">Rejeitada</span>
-                                    {% elif solicitacao.status == 'finalizada' %}
-                                    <span class="badge bg-secondary">Finalizada</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</td>
-                                <td>{{ solicitacao.aprovador_nome if solicitacao.aprovador_nome else '-' }}</td>
-                                <td>
-                                    <a href="{{ url_for('visualizar_solicitacao', id=solicitacao.id) }}" class="btn btn-sm btn-info">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <a href="{{ url_for('exportar_pdf', id=solicitacao.id) }}" class="btn btn-sm btn-outline-danger">
-                                        <i class="fas fa-file-pdf"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Centro de Custo</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for solicitacao in minhas_solicitacoes %}
+                                <tr>
+                                    <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y') if solicitacao.data_solicitacao else 'N/A' }}</td>
+                                    <td>{{ solicitacao.centro_custo_nome or 'N/A' }}</td>
+                                    <td>
+                                        {% if solicitacao.status == 'pendente' %}
+                                            <span class="badge bg-warning">Pendente</span>
+                                        {% elif solicitacao.status == 'aprovada' %}
+                                            <span class="badge bg-success">Aprovada</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Rejeitada</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 {% else %}
-                <p class="text-center">Você ainda não possui solicitações.</p>
+                    <p class="text-muted">Nenhuma solicitação encontrada.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Solicitações Pendentes (apenas para admin) -->
+    {% if session['cargo'] == 'admin' %}
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Solicitações Pendentes</h5>
+            </div>
+            <div class="card-body">
+                {% if solicitacoes_pendentes %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Solicitante</th>
+                                    <th>Centro de Custo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for solicitacao in solicitacoes_pendentes %}
+                                <tr>
+                                    <td>{{ solicitacao.data_solicitacao.strftime('%d/%m/%Y') if solicitacao.data_solicitacao else 'N/A' }}</td>
+                                    <td>{{ solicitacao.solicitante_nome or 'N/A' }}</td>
+                                    <td>{{ solicitacao.centro_custo_nome or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Nenhuma solicitação pendente.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row">
+    <!-- Materiais Recentes -->
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Materiais Recentes</h5>
+            </div>
+            <div class="card-body">
+                {% if materiais %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Categoria</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for material in materiais %}
+                                <tr>
+                                    <td>{{ material.nome or 'N/A' }}</td>
+                                    <td>{{ material.categoria or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Nenhum material cadastrado.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Centros de Custo -->
+    <div class="col-md-6 mb-4">
+        <div class="card shadow">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">Centros de Custo Ativos</h5>
+            </div>
+            <div class="card-body">
+                {% if centros_custo %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nome</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for centro in centros_custo %}
+                                <tr>
+                                    <td>{{ centro.codigo or 'N/A' }}</td>
+                                    <td>{{ centro.nome or 'N/A' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">Nenhum centro de custo cadastrado.</p>
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    let contadorItens = 0;
-    const semItensAlerta = document.getElementById('sem-itens');
-    const itensContainer = document.getElementById('itens-container');
-    const btnAdicionarItem = document.getElementById('btnAdicionarItem');
-    const formSolicitacao = document.getElementById('formSolicitacao');
-    const btnEnviarSolicitacao = document.getElementById('btnEnviarSolicitacao');
-    const btnBuscar = document.getElementById('btnBuscar');
-    const termoBusca = document.getElementById('termoBusca');
-    const resultadosBusca = document.getElementById('resultadosBusca');
-    
-    // Função para adicionar um novo item à solicitação
-    function adicionarItem(material = null) {
-        contadorItens++;
-        semItensAlerta.style.display = 'none';
-        
-        const novoItem = document.createElement('div');
-        novoItem.classList.add('row', 'mb-3', 'item-solicitacao');
-        novoItem.setAttribute('data-item', contadorItens);
-        
-        // Preencher os valores automaticamente se um material foi selecionado da busca
-        const materialIdValue = material ? material.id : '';
-        const materialNome = material ? material.nome : '';
-        
-        novoItem.innerHTML = `
-            <div class="col-md-5">
-                <select class="form-select" name="material_id[]" required>
-                    <option value=""${!materialIdValue ? ' selected' : ''}>Selecione um material</option>
-                    {% for material in materiais %}
-                    <option value="{{ material.id }}"${materialIdValue == {{ material.id }} ? ' selected' : ''}>{{ material.nome }} ({{ material.categoria }})</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <input type="number" class="form-control" name="quantidade[]" placeholder="Qtd" min="1" value="1" required>
-            </div>
-            <div class="col-md-4">
-                <input type="text" class="form-control" name="observacao_item[]" placeholder="Observação (opcional)">
-            </div>
-            <div class="col-md-1">
-                <button type="button" class="btn btn-outline-danger btn-remover-item" data-item="${contadorItens}">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
-        `;
-        
-        itensContainer.appendChild(novoItem);
-        
-        // Adicionar evento para remover item
-        novoItem.querySelector('.btn-remover-item').addEventListener('click', function() {
-            const itemId = this.getAttribute('data-item');
-            const itemElement = document.querySelector(`.item-solicitacao[data-item="${itemId}"]`);
-            itemElement.remove();
-            
-            // Verificar se ainda há itens
-            const itens = document.querySelectorAll('.item-solicitacao');
-            if (itens.length === 0) {
-                semItensAlerta.style.display = 'block';
-            }
-        });
-    }
-    
-    // Evento para adicionar um novo item
-    btnAdicionarItem.addEventListener('click', function() {
-        adicionarItem();
-    });
-    
-    // Evento para buscar materiais
-    btnBuscar.addEventListener('click', function() {
-        const termo = termoBusca.value.trim();
-        if (termo) {
-            resultadosBusca.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Buscando...</div>';
-            
-            fetch(`/buscar_material?termo=${encodeURIComponent(termo)}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                resultadosBusca.innerHTML = '';
-                
-                if (data.length === 0) {
-                    resultadosBusca.innerHTML = '<div class="alert alert-warning">Nenhum material encontrado com este termo.</div>';
-                    return;
-                }
-                
-                const tabela = document.createElement('table');
-                tabela.classList.add('table', 'table-hover', 'table-striped');
-                
-                // Cabeçalho da tabela
-                const thead = document.createElement('thead');
-                thead.innerHTML = `
-                    <tr>
-                        <th>Nome</th>
-                        <th>Categoria</th>
-                        <th>Descrição</th>
-                        <th>Ação</th>
-                    </tr>
-                `;
-                tabela.appendChild(thead);
-                
-                // Corpo da tabela
-                const tbody = document.createElement('tbody');
-                data.forEach(material => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${material.nome}</td>
-                        <td>${material.categoria}</td>
-                        <td>${material.descricao || '-'}</td>
-                        <td>
-                            <button type="button" class="btn btn-sm btn-primary btn-adicionar-material" data-material='${JSON.stringify(material)}'>
-                                <i class="fas fa-plus"></i> Adicionar
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                });
-                tabela.appendChild(tbody);
-                resultadosBusca.appendChild(tabela);
-                
-                // Adicionar eventos aos botões de adicionar material
-                document.querySelectorAll('.btn-adicionar-material').forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const material = JSON.parse(this.getAttribute('data-material'));
-                        adicionarItem(material);
-                    });
-                });
-            })
-            .catch(error => {
-                resultadosBusca.innerHTML = `<div class="alert alert-danger">Erro ao buscar materiais: ${error.message}</div>`;
-            });
-        }
-    });
-    
-    // Permitir pressionar Enter para buscar
-    termoBusca.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            btnBuscar.click();
-        }
-    });
-    
-    // Validar formulário antes do envio
-    formSolicitacao.addEventListener('submit', function(e) {
-        const itens = document.querySelectorAll('.item-solicitacao');
-        if (itens.length === 0) {
-            e.preventDefault();
-            alert('Adicione pelo menos um item à solicitação.');
-            return false;
-        }
-        return true;
-    });
-});
-</script>
 {% endblock %}

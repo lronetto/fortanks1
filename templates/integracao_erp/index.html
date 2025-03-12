@@ -1,109 +1,199 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="row">
-    <div class="col-md-12 mb-4">
-        <div class="card shadow">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Integração com SOX</h5>
-                <div>
-                    <div class="btn-group">
-                        <a href="{{ url_for('integracao_erp.importar_automatico') }}" class="btn btn-light btn-sm">
-                            <i class="fas fa-robot"></i> Importação Automática
-                        </a>
-                    </div>
-                    <a href="{{ url_for('integracao_erp.listar_transacoes') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-list"></i> Transações
-                    </a>
-                    <a href="{{ url_for('integracao_erp.relatorios') }}" class="btn btn-light btn-sm">
-                        <i class="fas fa-chart-bar"></i> Relatórios
-                    </a>
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-arrow-left-right"></i> Dashboard de Integração ERP
+        </h2>
+        <div class="btn-group">
+            <a href="{{ url_for('integracao_erp.importar_manual') }}" class="btn btn-primary">
+                <i class="bi bi-upload"></i> Importação Manual
+            </a>
+            {% if session.get('cargo') == 'admin' %}
+            <a href="{{ url_for('integracao_erp.importar_automatico') }}" class="btn btn-outline-primary">
+                <i class="bi bi-robot"></i> Importação Automática
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-receipt"></i> Total de Transações
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.total_transacoes|default(0) }}</h2>
                 </div>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-primary text-white">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Total de Transações</h5>
-                                <h2 class="mb-0">{{ estatisticas.total_transacoes|default(0) }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-success text-white">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Importadas Hoje</h5>
-                                <h2 class="mb-0">{{ estatisticas.total_hoje|default(0) }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-info text-white">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Valor Total</h5>
-                                <h2 class="mb-0">R$ {{ "{:,.2f}".format(estatisticas.valor_total|default(0))|replace(',', 'X')|replace('.', ',')|replace('X', '.') }}</h2>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-3 mb-4">
-                        <div class="card bg-warning text-white">
-                            <div class="card-body text-center">
-                                <h5 class="card-title">Centros de Custo</h5>
-                                <h2 class="mb-0">{{ estatisticas.centro_custos|default(0) }}</h2>
-                            </div>
-                        </div>
-                    </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-calendar-check"></i> Importadas Hoje
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.total_hoje|default(0) }}</h2>
                 </div>
-                
-                <div class="row">
-                    <div class="col-md-12">
-                        <div class="alert alert-info">
-                            <h5><i class="fas fa-info-circle"></i> Sobre a Integração com ERP</h5>
-                            <p>
-                                Este módulo permite a integração com o sistema ERP existente, importando automaticamente transações 
-                                financeiras através de arquivos XLS gerados pelo sistema. Você pode fazer a importação de duas formas:
-                            </p>
-                            <ul>
-                                <li><strong>Importação Manual:</strong> Upload direto do arquivo XLS gerado pelo ERP</li>
-                                <li><strong>Importação Automática:</strong> Acesso programático ao ERP para download e processamento automático dos relatórios</li>
-                            </ul>
-                            <p>
-                                Após a importação, você pode visualizar as transações, filtrar por diferentes critérios e gerar relatórios analíticos.
-                            </p>
-                        </div>
-                    </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-currency-dollar"></i> Valor Total
+                    </h6>
+                    <h2 class="card-title mb-0">R$ {{ "%.2f"|format(estatisticas.valor_total|default(0)) }}</h2>
                 </div>
-                
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <h5 class="border-bottom pb-2 mb-3">Importações Recentes</h5>
-                        <div class="table-responsive">
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Data</th>
-                                        <th>Usuário</th>
-                                        <th>Tipo</th>
-                                        <th>Registros</th>
-                                        <th>Status</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td colspan="7" class="text-center">
-                                            Histórico de importações estará disponível em breve
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">
+                        <i class="bi bi-building"></i> Centros de Custo
+                    </h6>
+                    <h2 class="card-title mb-0">{{ estatisticas.centro_custos|default(0) }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimas Importações -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-clock-history"></i> Últimas Importações
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if ultimas_importacoes %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Usuário</th>
+                            <th>Tipo</th>
+                            <th>Registros</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for importacao in ultimas_importacoes %}
+                        <tr>
+                            <td>{{ importacao.data_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>{{ importacao.usuario_nome }}</td>
+                            <td>
+                                {% if importacao.tipo == 'MANUAL' %}
+                                <span class="badge bg-primary">Manual</span>
+                                {% else %}
+                                <span class="badge bg-info">Automática</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ importacao.total_registros }}</td>
+                            <td>
+                                {% if importacao.status == 'SUCESSO' %}
+                                <span class="badge bg-success">Sucesso</span>
+                                {% elif importacao.status == 'ERRO' %}
+                                <span class="badge bg-danger">Erro</span>
+                                {% else %}
+                                <span class="badge bg-warning">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('integracao_erp.visualizar', id=importacao.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <i class="bi bi-inbox display-4 text-muted"></i>
+                <p class="mt-2 text-muted">Nenhuma importação realizada ainda</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up"></i> Importações por Dia
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="importacoesPorDia"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-pie-chart"></i> Status das Importações
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="statusImportacoes"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Gráfico de Importações por Dia
+    const ctxLine = document.getElementById('importacoesPorDia').getContext('2d');
+    new Chart(ctxLine, {
+        type: 'line',
+        data: {
+            labels: {{ labels_dias|tojson }},
+            datasets: [{
+                label: 'Importações',
+                data: {{ dados_dias|tojson }},
+                borderColor: '#0d6efd',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+
+    // Gráfico de Status das Importações
+    const ctxPie = document.getElementById('statusImportacoes').getContext('2d');
+    new Chart(ctxPie, {
+        type: 'pie',
+        data: {
+            labels: ['Sucesso', 'Erro', 'Pendente'],
+            datasets: [{
+                data: {{ dados_status|tojson }},
+                backgroundColor: ['#198754', '#dc3545', '#ffc107']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+});
+</script>
 {% endblock %}
