@@ -1,0 +1,219 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Importar Dados Analíticos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">Importar Dados Analíticos</h1>
+    <p class="mb-4">Importe arquivos CSV, XLS, XLSX ou HTML contendo dados financeiros para análise.</p>
+
+    <!-- Mensagens de feedback -->
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        <strong>{% if category == 'danger' %}Erro!{% else %}Sucesso!{% endif %}</strong> {{ message }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+    {% endfor %}
+
+    <div class="row">
+        <div class="col-lg-6">
+            <!-- Upload de Arquivo -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Upload de Arquivo</h6>
+                </div>
+                <div class="card-body">
+                    <p>Selecione um arquivo para importação:</p>
+                    <form method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-group">
+                            <label for="arquivo">Arquivo</label>
+                            <div class="custom-file">
+                                <input type="file" class="custom-file-input" id="arquivo" name="arquivo">
+                                <label class="custom-file-label" for="arquivo">Escolher arquivo...</label>
+                            </div>
+                            <small class="form-text text-muted">
+                                Formatos suportados: CSV, XLS, XLSX, HTML
+                            </small>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <i class="fas fa-upload fa-fw"></i> Importar Dados
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <!-- Instruções -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Instruções</h6>
+                </div>
+                <div class="card-body">
+                    <h5>Formato Esperado</h5>
+                    <p>
+                        O arquivo importado deve conter colunas com as seguintes informações:
+                    </p>
+                    <ul>
+                        <li><strong>Centro de Custo:</strong> Nome ou código do centro de custo</li>
+                        <li><strong>Plano de Conta:</strong> Nome ou código do plano de conta</li>
+                        <li><strong>Data Pagamento:</strong> Data da transação (formato DD/MM/AAAA)</li>
+                        <li><strong>Documento:</strong> Número do documento</li>
+                        <li><strong>Emitente:</strong> Nome do emitente</li>
+                        <li><strong>Valor:</strong> Valor da transação</li>
+                        <li>Outros campos opcionais: D/C, Histórico, Liberado Por, Banco, etc.</li>
+                    </ul>
+                    
+                    <hr/>
+                    
+                    <h5>Obs:</h5>
+                    <p class="mb-0">
+                        Se o centro de custo ou plano de conta informados não existirem no sistema, 
+                        eles serão criados automaticamente durante a importação.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extração Automática -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Extração Automática</h6>
+        </div>
+        <div class="card-body">
+            <p>Você pode configurar o sistema para extrair dados automaticamente do sistema financeiro.</p>
+            <a href="#" class="btn btn-info" data-toggle="modal" data-target="#modalExtracao">
+                <i class="fas fa-cogs fa-fw"></i> Configurar Extração Automática
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Extração Automática -->
+<div class="modal fade" id="modalExtracao" tabindex="-1" role="dialog" aria-labelledby="modalExtracaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExtracaoLabel">Configurar Extração Automática</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="formExtracao">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Esta funcionalidade permite extrair dados diretamente do sistema financeiro
+                        externo usando automação com Playwright.
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="data_inicio">Data Inicial</label>
+                        <input type="date" class="form-control" id="data_inicio" name="data_inicio">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="data_fim">Data Final</label>
+                        <input type="date" class="form-control" id="data_fim" name="data_fim">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="agendamento">Agendamento</label>
+                        <select class="form-control" id="agendamento" name="agendamento">
+                            <option value="unico">Execução única</option>
+                            <option value="diario">Diário</option>
+                            <option value="semanal">Semanal</option>
+                            <option value="mensal">Mensal</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="notificar_email" name="notificar_email">
+                            <label class="custom-control-label" for="notificar_email">Enviar notificação por e-mail ao concluir</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnIniciarExtracao">Iniciar Extração</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Atualizar o nome do arquivo quando selecionado
+        $('.custom-file-input').on('change', function() {
+            var fileName = $(this).val().split('\\').pop();
+            $(this).next('.custom-file-label').html(fileName);
+        });
+        
+        // Configurar extração automática
+        $('#btnIniciarExtracao').click(function() {
+            // Validar campos
+            var dataInicio = $('#data_inicio').val();
+            var dataFim = $('#data_fim').val();
+            
+            if (!dataInicio || !dataFim) {
+                alert('Por favor, preencha as datas de início e fim.');
+                return;
+            }
+            
+            // Exibir mensagem de aguarde
+            $('#modalExtracao').modal('hide');
+            
+            Swal.fire({
+                title: 'Iniciando extração',
+                html: 'Isso pode levar alguns minutos...',
+                allowOutsideClick: false,
+                onBeforeOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Enviar requisição AJAX para iniciar a extração
+            $.ajax({
+                url: "{{ url_for('dados_analiticos.api_iniciar_extracao') }}",
+                type: "POST",
+                data: {
+                    data_inicio: dataInicio,
+                    data_fim: dataFim,
+                    agendamento: $('#agendamento').val(),
+                    notificar_email: $('#notificar_email').is(':checked'),
+                    csrf_token: "{{ csrf_token() }}"
+                },
+                success: function(response) {
+                    if (response.sucesso) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Extração iniciada',
+                            text: response.mensagem
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: response.mensagem
+                        });
+                    }
+                },
+                error: function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Erro ao processar a requisição'
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,142 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Editar Centro de Custo - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-edit"></i> Editar Centro de Custo</h1>
+        <a href="{{ url_for('centro_custo.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edição de Centro de Custo</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('centro_custo.editar', id=centro_custo.id) }}" id="form-centro-custo"
+                data-codigo="{{ centro_custo.codigo }}" data-nome="{{ centro_custo.nome }}"
+                data-descricao="{{ centro_custo.descricao }}"
+                data-ativo="{{ 'true' if centro_custo.ativo else 'false' }}">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label for="codigo" class="form-label">Código</label>
+                        <input type="text" class="form-control" id="codigo" name="codigo"
+                            value="{{ centro_custo.codigo }}" required>
+                        <div class="form-text">Código único para identificação do centro de custo</div>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label for="nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome" name="nome" value="{{ centro_custo.nome }}"
+                            required>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao"
+                            rows="3">{{ centro_custo.descricao }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if
+                                centro_custo.ativo %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">Centro de Custo Ativo</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="reset" class="btn btn-secondary me-md-2" id="btn-restaurar">
+                        <i class="fas fa-undo"></i> Restaurar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if centro_custo.contratos or centro_custo.solicitacoes %}
+<div class="container-fluid mt-4">
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Relacionamentos</h6>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-0">
+                <i class="fas fa-info-circle me-2"></i> Este centro de custo está sendo utilizado em contratos ou
+                solicitações.
+                Alterar seu status para inativo pode afetar a visualização em relatórios.
+            </div>
+
+            {% if centro_custo.contratos %}
+            <h5 class="mt-4">Contratos associados:</h5>
+            <ul class="list-group">
+                {% for contrato in centro_custo.contratos %}
+                <li class="list-group-item">
+                    <strong>{{ contrato.nome }}</strong> - {{ contrato.descricao|truncate(50) }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if centro_custo.solicitacoes %}
+            <h5 class="mt-4">Solicitações associadas:</h5>
+            <p>Este centro de custo possui {{ centro_custo.solicitacoes|length }} solicitações associadas.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Validação do formulário
+    document.getElementById('form-centro-custo').addEventListener('submit', function (e) {
+        const codigo = document.getElementById('codigo').value.trim();
+        const nome = document.getElementById('nome').value.trim();
+
+        if (!codigo) {
+            e.preventDefault();
+            alert('O código do centro de custo é obrigatório!');
+            document.getElementById('codigo').focus();
+            return false;
+        }
+
+        if (!nome) {
+            e.preventDefault();
+            alert('O nome do centro de custo é obrigatório!');
+            document.getElementById('nome').focus();
+            return false;
+        }
+
+        return true;
+    });
+
+    // Restaurar valores originais no botão reset
+    document.getElementById('btn-restaurar').addEventListener('click', function (e) {
+        e.preventDefault();
+
+        const form = document.getElementById('form-centro-custo');
+        const codigo = form.getAttribute('data-codigo');
+        const nome = form.getAttribute('data-nome');
+        const descricao = form.getAttribute('data-descricao');
+        const ativo = form.getAttribute('data-ativo') === 'true';
+
+        document.getElementById('codigo').value = codigo;
+        document.getElementById('nome').value = nome;
+        document.getElementById('descricao').value = descricao || '';
+        document.getElementById('ativo').checked = ativo;
+    });
+</script>
+{% endblock %}

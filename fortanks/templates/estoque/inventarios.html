@@ -1,0 +1,180 @@
+{% extends "common/base.html" %}
+
+{% block title %}Inventários de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Inventários de Estoque</h1>
+        <div>
+            <a href="{{ url_for('estoque.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
+            </a>
+            <a href="{{ url_for('estoque.novo_inventario') }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> Novo Inventário
+            </a>
+        </div>
+    </div>
+
+    <!-- Tabela de Inventários -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Histórico de Inventários</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th width="5%">#</th>
+                            <th width="15%">Data Início</th>
+                            <th width="15%">Data Finalização</th>
+                            <th width="10%">Tipo</th>
+                            <th width="10%">Status</th>
+                            <th width="15%">Responsável</th>
+                            <th width="15%">Itens</th>
+                            <th width="15%">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for inv in inventarios %}
+                        <tr>
+                            <td>{{ inv.id }}</td>
+                            <td>{{ inv.data_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {% if inv.data_fim %}
+                                    {{ inv.data_fim.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ inv.tipo_inventario }}</td>
+                            <td>
+                                {% if inv.status == 'Em andamento' %}
+                                    <span class="badge badge-info">Em andamento</span>
+                                {% elif inv.status == 'Concluído' %}
+                                    <span class="badge badge-success">Concluído</span>
+                                {% else %}
+                                    <span class="badge badge-secondary">Cancelado</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ inv.criado_por.nome if inv.criado_por else "Sistema" }}</td>
+                            <td>
+                                {{ inv.itens|length }} itens
+                                {% if inv.status == 'Em andamento' %}
+                                    {% set itens_contados = inv.itens|selectattr('quantidade_contada', 'defined')|list|length %}
+                                    {% set total_itens = inv.itens|length %}
+                                    {% if total_itens > 0 %}
+                                        <div class="progress mt-1" style="height: 5px;">
+                                            <div class="progress-bar bg-info" role="progressbar" 
+                                                style="width: {{ (itens_contados / total_itens * 100)|int }}%;" 
+                                                aria-valuenow="{{ itens_contados }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="{{ total_itens }}">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">{{ itens_contados }}/{{ total_itens }} contados</small>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group">
+                                    <a href="{{ url_for('estoque.inventario_detalhes', id=inv.id) }}" class="btn btn-info btn-sm" title="Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    
+                                    {% if inv.status == 'Em andamento' %}
+                                        <a href="{{ url_for('estoque.inventario_contagem', id=inv.id) }}" class="btn btn-primary btn-sm" title="Contar">
+                                            <i class="fas fa-clipboard-check"></i>
+                                        </a>
+                                        
+                                        <button type="button" class="btn btn-success btn-sm" title="Finalizar" 
+                                                onclick="confirmarFinalizacao('{{ url_for('estoque.finalizar_inventario', id=inv.id) }}')">
+                                            <i class="fas fa-check-double"></i>
+                                        </button>
+                                        
+                                        <button type="button" class="btn btn-danger btn-sm" title="Cancelar" 
+                                                onclick="confirmarCancelamento('{{ url_for('estoque.cancelar_inventario', id=inv.id) }}')">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center">Nenhum inventário encontrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Finalização -->
+<div class="modal fade" id="confirmacaoFinalizacaoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoFinalizacaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmacaoFinalizacaoModalLabel">Confirmar Finalização</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> ATENÇÃO: Ao finalizar o inventário, as quantidades em estoque serão ajustadas conforme a contagem realizada.
+                </div>
+                <p>Tem certeza que deseja finalizar este inventário?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <form id="formFinalizacao" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success">Confirmar Finalização</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Cancelamento -->
+<div class="modal fade" id="confirmacaoCancelamentoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoCancelamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmacaoCancelamentoModalLabel">Confirmar Cancelamento</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja cancelar este inventário? Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Voltar</button>
+                <form id="formCancelamento" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Confirmar Cancelamento</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function confirmarFinalizacao(url) {
+        document.getElementById('formFinalizacao').action = url;
+        $('#confirmacaoFinalizacaoModal').modal('show');
+    }
+    
+    function confirmarCancelamento(url) {
+        document.getElementById('formCancelamento').action = url;
+        $('#confirmacaoCancelamentoModal').modal('show');
+    }
+</script>
+{% endblock %} 

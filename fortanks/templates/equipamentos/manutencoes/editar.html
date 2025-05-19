@@ -1,0 +1,163 @@
+{% extends "common/base.html" %}
+
+{% block title %}Editar Manutenção - {{ equipamento.nome }} - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Editar Manutenção{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Editar Manutenção - {{ equipamento.nome }}</h1>
+        <a href="{{ url_for('equipamento.manutencoes', id=equipamento.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            <span class="d-none d-md-inline-block ms-1">Voltar</span>
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Dados da Manutenção</h6>
+        </div>
+        <div class="card-body">
+            <form id="manutencaoForm" method="POST">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="tipo" class="form-label">Tipo de Manutenção *</label>
+                        <select class="form-select" id="tipo" name="tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="Preventiva" {% if manutencao.tipo=='Preventiva' %}selected{% endif %}>
+                                Preventiva</option>
+                            <option value="Corretiva" {% if manutencao.tipo=='Corretiva' %}selected{% endif %}>Corretiva
+                            </option>
+                            <option value="Preditiva" {% if manutencao.tipo=='Preditiva' %}selected{% endif %}>Preditiva
+                            </option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o tipo de manutenção.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="">Selecione...</option>
+                            <option value="Pendente" {% if manutencao.status=='Pendente' %}selected{% endif %}>Pendente
+                            </option>
+                            <option value="Em Andamento" {% if manutencao.status=='Em Andamento' %}selected{% endif %}>
+                                Em Andamento</option>
+                            <option value="Concluída" {% if manutencao.status=='Concluída' %}selected{% endif %}>
+                                Concluída</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o status da manutenção.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="data_inicio" class="form-label">Data de Início *</label>
+                        <input type="datetime-local" class="form-control" id="data_inicio" name="data_inicio"
+                            value="{{ manutencao.data_inicio.strftime('%Y-%m-%dT%H:%M') }}" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe a data de início.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="data_fim" class="form-label">Data de Conclusão</label>
+                        <input type="datetime-local" class="form-control" id="data_fim" name="data_fim"
+                            value="{{ manutencao.data_fim.strftime('%Y-%m-%dT%H:%M') if manutencao.data_fim else '' }}">
+                        <div class="invalid-feedback">
+                            Por favor, informe a data de conclusão.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="responsavel" class="form-label">Responsável *</label>
+                        <input type="text" class="form-control" id="responsavel" name="responsavel"
+                            value="{{ manutencao.responsavel }}" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe o responsável pela manutenção.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="custo" class="form-label">Custo (R$)</label>
+                        <input type="number" class="form-control" id="custo" name="custo" step="0.01" min="0"
+                            value="{{ manutencao.custo if manutencao.custo else '' }}">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição *</label>
+                    <textarea class="form-control" id="descricao" name="descricao" rows="3"
+                        required>{{ manutencao.descricao }}</textarea>
+                    <div class="invalid-feedback">
+                        Por favor, descreva a manutenção.
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="observacoes" class="form-label">Observações</label>
+                    <textarea class="form-control" id="observacoes" name="observacoes"
+                        rows="2">{{ manutencao.observacoes }}</textarea>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        <span class="d-none d-md-inline-block ms-1">Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('manutencaoForm');
+        const statusSelect = document.getElementById('status');
+        const dataFimInput = document.getElementById('data_fim');
+        const dataInicioInput = document.getElementById('data_inicio');
+
+        // Define a data máxima como hoje
+        const hoje = new Date().toISOString().split('T')[0];
+        dataInicioInput.max = hoje + 'T23:59';
+
+        // Atualiza a data mínima do campo data_fim
+        dataInicioInput.addEventListener('change', function () {
+            dataFimInput.min = this.value;
+        });
+
+        // Torna o campo data_fim obrigatório se o status for "Concluída"
+        statusSelect.addEventListener('change', function () {
+            if (this.value === 'Concluída') {
+                dataFimInput.required = true;
+            } else {
+                dataFimInput.required = false;
+                dataFimInput.setCustomValidity('');
+            }
+        });
+
+        // Validação do formulário
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            if (statusSelect.value === 'Concluída' && !dataFimInput.value) {
+                dataFimInput.setCustomValidity('Por favor, informe a data de conclusão.');
+                event.preventDefault();
+                event.stopPropagation();
+            } else {
+                dataFimInput.setCustomValidity('');
+            }
+
+            form.classList.add('was-validated');
+        });
+    });
+</script>
+{% endblock %}

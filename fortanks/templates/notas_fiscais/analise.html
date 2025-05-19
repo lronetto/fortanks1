@@ -1,0 +1,590 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Análise de Notas Fiscais{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">Análise de Notas Fiscais</h1>
+    <p class="mb-4">Análise quantitativa de itens de notas fiscais com filtros por fornecedor e período.</p>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+            <div class="dropdown no-arrow">
+                <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in" aria-labelledby="dropdownMenuLink">
+                    <a class="dropdown-item" href="{{ url_for('nota_fiscal.analise') }}">Limpar Filtros</a>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('nota_fiscal.analise') }}">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="fornecedor">Fornecedor</label>
+                            <select name="fornecedor" id="fornecedor" class="form-control select2">
+                                <option value="">Todos</option>
+                                {% for forn in fornecedores %}
+                                <option value="{{ forn }}" {% if filtro_fornecedor == forn %}selected{% endif %}>
+                                    {{ forn }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="data_inicio">Data Início</label>
+                            <input type="date" name="data_inicio" id="data_inicio" class="form-control" value="{{ filtro_data_inicio }}">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="data_fim">Data Fim</label>
+                            <input type="date" name="data_fim" id="data_fim" class="form-control" value="{{ filtro_data_fim }}">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <label for="termo_item">Filtrar Item NF</label>
+                            <input type="text" name="termo_item" id="termo_item" class="form-control" 
+                                   placeholder="Cód/Descrição NF" value="{{ filtro_termo_item }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filtro_material">Material Vinculado</label>
+                            <input type="text" name="filtro_material" id="filtro_material" class="form-control" 
+                                   placeholder="Nome do material" value="{{ filtro_material }}">
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                         <div class="form-group">
+                            <label for="agrupar_por">Agrupar Análise Por</label>
+                            <select name="agrupar_por" id="agrupar_por" class="form-control">
+                                <option value="item_nf" {% if agrupar_por == 'item_nf' %}selected{% endif %}>Item da Nota Fiscal</option>
+                                <option value="material" {% if agrupar_por == 'material' %}selected{% endif %}>Material Vinculado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-9 text-right align-self-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Filtrar / Agrupar
+                        </button>
+                        <a href="{{ url_for('nota_fiscal.analise') }}" class="btn btn-secondary">
+                            <i class="fas fa-sync"></i> Limpar Tudo
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Incluir template de mensagens flash -->
+   
+    <!-- Cards informativos -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Itens Diferentes (Nesta Página / Total)</div>
+                            {# Usar pagination.total para o número total de itens agregados #}
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pagination.items|length }} / {{ pagination.total }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Valor Total (Geral Filtrado)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "%.2f"|format(total_geral) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {# Card "Total de Notas Fiscais" removido pois não temos mais a contagem fácil #}
+        {# ... (remover card de total de NFs) ... #}
+    </div>
+
+    <!-- Tabela de Análise de Itens -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Análise de Itens das Notas Fiscais (Página {{ pagination.page }} de {{ pagination.pages }})</h6>
+            <div>
+                <button id="btnExportarExcel" class="btn btn-sm btn-success">
+                    <i class="fas fa-file-excel"></i> Exportar Excel
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            {% if filtro_termo_item %}
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-filter mr-2"></i> Filtrando itens que contêm "<strong>{{ filtro_termo_item }}</strong>" no código ou descrição.
+                <a href="{{ url_for('nota_fiscal.analise', fornecedor=filtro_fornecedor, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim) }}" class="alert-link ml-2">
+                    <i class="fas fa-times"></i> Remover filtro de item
+                </a>
+                <div class="mt-2 small">
+                    <strong>{{ pagination.items|length }}</strong> itens encontrados em <strong>{{ notas_fiscais|length }}</strong> notas fiscais.
+                </div>
+            </div>
+            {% endif %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTableAnalise" width="100%" cellspacing="0">
+                    <thead>
+                        {# --- Cabeçalho Condicional --- #}
+                        {% if agrupar_por == 'material' %}
+                        <tr>
+                            <th>Nome Material</th>
+                            <th>Unidade</th>
+                            <th>Quantidade Total</th>
+                            <th>Valor Total (R$)</th>
+                            <th>Fornecedores</th>
+                        </tr>
+                        {% else %} {# agrupar_por == 'item_nf' #}
+                        <tr>
+                            <th>Código Item NF</th>
+                            <th>Descrição Item NF</th>
+                            <th>Material Vinculado</th> 
+                            <th>Quantidade Total</th>
+                            <th>Unidades NF</th>
+                            <th>Valor Total (R$)</th>
+                            <th>Fornecedores</th>
+                        </tr>
+                        {% endif %}
+                        {# --- Fim Cabeçalho Condicional --- #}
+                    </thead>
+                    <tbody>
+                        {# --- Loop Condicional --- #}
+                        {% if agrupar_por == 'material' %}
+                            {% for item in pagination.items %}
+                            <tr>
+                                {# Link no Nome do Material #}
+                                <td>
+                                    <a href="javascript:void(0);" 
+                                       class="link-historico-preco" 
+                                       data-tipo-agrupamento="material"
+                                       data-item-id="{{ item.material_id }}"
+                                       data-item-nome="{{ item.material_nome }}">
+                                        {{ item.material_nome }}
+                                    </a>
+                                </td>
+                                <td>{{ item.material_unidade }}</td> {# Unidade do Material #}
+                                <td>{{ "%.2f"|format(item.quantidade_total) }}</td> 
+                                <td>{{ "%.2f"|format(item.valor_total_agregado) }}</td>
+                                <td>{{ item.fornecedores | replace(',', ', ') if item.fornecedores else 'N/D' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                {# Ajustar colspan se necessário #}
+                                <td colspan="5" class="text-center">Nenhum material encontrado para esta análise ou página.</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %} {# agrupar_por == 'item_nf' #}
+                            {% for item in pagination.items %}
+                            <tr>
+                                <td>{{ item.codigo or 'N/D' }}</td>
+                                {# Link na Descrição do Item NF #}
+                                <td>
+                                    <a href="javascript:void(0);" 
+                                       class="link-historico-preco" 
+                                       data-tipo-agrupamento="item_nf"
+                                       data-item-codigo="{{ item.codigo or '' }}" {# Passar código (ou vazio) #}
+                                       data-item-descricao="{{ item.descricao }}"
+                                       data-item-nome="{{ item.descricao }}">
+                                        {{ item.descricao }}
+                                    </a>
+                                </td>
+                                <td>{{ item.materiais_vinculados | replace(',', ', ') if item.materiais_vinculados else '-' }}</td>
+                                <td>{{ "%.2f"|format(item.quantidade_total) }}</td> 
+                                <td>{{ item.unidades | replace(',', ', ') if item.unidades else 'N/D'}}</td>
+                                <td>{{ "%.2f"|format(item.valor_total_agregado) }}</td>
+                                <td>{{ item.fornecedores | replace(',', ', ') if item.fornecedores else 'N/D' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="7" class="text-center">Nenhum item encontrado para esta análise ou página.</td>
+                            </tr>
+                            {% endfor %}
+                        {% endif %}
+                        {# --- Fim Loop Condicional --- #}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                             {# --- Colspan Condicional --- #}
+                            {% if agrupar_por == 'material' %}
+                                <th colspan="3">Total Geral (Filtrado)</th>
+                                <th>{{ "%.2f"|format(total_geral) }}</th>
+                                <th></th>
+                            {% else %} {# agrupar_por == 'item_nf' #}
+                                <th colspan="5">Total Geral (Filtrado)</th>
+                                <th>{{ "%.2f"|format(total_geral) }}</th>
+                                <th></th>
+                            {% endif %}
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            
+            <!-- Controles de Paginação -->
+            {% if pagination and pagination.pages > 1 %}
+            <nav aria-label="Paginação Análise Itens">
+                <ul class="pagination justify-content-center mt-4">
+                    <!-- Link Anterior -->
+                    <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.analise', page=pagination.prev_num, fornecedor=filtro_fornecedor, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim, termo_item=filtro_termo_item, filtro_material=filtro_material, agrupar_por=agrupar_por) }}" aria-label="Anterior">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <!-- Links de Páginas -->
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
+                                <a class="page-link" href="{{ url_for('nota_fiscal.analise', page=page_num, fornecedor=filtro_fornecedor, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim, termo_item=filtro_termo_item, filtro_material=filtro_material, agrupar_por=agrupar_por) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    <!-- Link Próximo -->
+                    <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.analise', page=pagination.next_num, fornecedor=filtro_fornecedor, data_inicio=filtro_data_inicio, data_fim=filtro_data_fim, termo_item=filtro_termo_item, filtro_material=filtro_material, agrupar_por=agrupar_por) }}" aria-label="Próximo">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="text-center text-muted">
+                 Página {{ pagination.page }} de {{ pagination.pages }}. Total de {{ pagination.total }} itens agrupados.
+            </div>
+            {% endif %}
+            <!-- Fim Controles de Paginação -->
+            
+        </div>
+    </div>
+
+    <!-- Listagem de Notas Fiscais (REMOVIDA OU COMENTADA) -->
+    {# 
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Notas Fiscais Consideradas na Análise (Removido com Paginação de Itens)</h6>
+        </div>
+        <div class="card-body">
+            <p class="text-muted">A listagem individual de notas fiscais foi removida desta tela devido à implementação da paginação na análise de itens.</p>
+             (...tabela de notas removida...)
+        </div>
+    </div> 
+    #}
+
+</div>
+
+<!-- Modal de Visualização dos Itens da Nota Fiscal -->
+<div class="modal fade" id="modalItensNF" tabindex="-1" role="dialog" aria-labelledby="modalItensNFLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalItensNFLabel">Itens da Nota Fiscal <span id="numeroNF"></span></h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <div>
+                        <strong>Fornecedor:</strong> <span id="fornecedorNF"></span>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped" id="tabelaItensModal">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Descrição</th>
+                                <th>Quantidade</th>
+                                <th>UN</th>
+                                <th>Valor Unit.</th>
+                                <th>Valor Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="itensNFBody">
+                            <!-- Os itens serão carregados via AJAX -->
+                            <tr>
+                                <td colspan="6" class="text-center">Carregando...</td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="5" class="text-right">Total:</th>
+                                <th id="totalNF">R$ 0,00</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Histórico de Preços (RESTAURADO) -->
+<div class="modal fade" id="modalHistoricoPreco" tabindex="-1" role="dialog" aria-labelledby="modalHistoricoPrecoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalHistoricoTitulo">Histórico de Preços</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                 <p><strong>Item:</strong> <span id="historicoItemNome"></span></p>
+                 <div id="graficoHistoricoContainer" style="height: 300px; margin-bottom: 1rem;"></div>
+                 <div style="max-height: 300px; overflow-y: auto;">
+                     <div class="table-responsive mt-3">
+                         <table class="table table-sm table-striped" id="tabelaHistoricoPrecos">
+                             <thead>
+                                 <tr>
+                                     <th>Data NF</th>
+                                     <th>Fornecedor</th>
+                                     <th>Nº NF</th>
+                                     <th>Quantidade</th>
+                                     <th>Valor Unitário (R$)</th>
+                                 </tr>
+                             </thead>
+                             <tbody id="historicoPrecosBody">
+                                 <!-- Dados carregados via JS -->
+                             </tbody>
+                         </table>
+                     </div>
+                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Script analise.html carregado.'); 
+    
+    
+    // Verificar se Bootstrap modal está disponível
+    if (typeof $.fn.modal === 'undefined') {
+        console.error("Bootstrap modal não está disponível!");
+    } else {
+        console.log("Bootstrap modal está disponível!");
+    }
+    
+    // Inicializar select2
+    if (typeof $.fn.select2 !== 'undefined') {
+        $('.select2').select2({
+            placeholder: "Selecione um fornecedor",
+            allowClear: true
+        });
+    }
+    
+    // Verificar se DataTables está disponível
+    var dataTablesDisponivel = typeof $.fn.DataTable !== 'undefined';
+    console.log("DataTables disponível:", dataTablesDisponivel);
+    
+    // Inicializar DataTable para a tabela de análise apenas se disponível
+    if (dataTablesDisponivel && $('#dataTableAnalise tbody tr').length > 0) {
+        try {
+            $('#dataTableAnalise').DataTable({
+                order: [[4, 'desc']], // Ordenar por valor total (ajustar índice se necessário)
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json'
+                },
+                paging: false, // Desativar paginação do DataTables se usando paginação do Flask
+                info: false,   // Ocultar informação "Showing X to Y of Z entries" 
+                searching: false // Desativar busca do DataTables se usando filtros do Flask
+            });
+        } catch (e) {
+            console.error("Erro ao inicializar DataTable:", e);
+        }
+    }
+    
+    // Código removido para visualização de itens de nota (modalItensNF)
+    // ...
+    
+    // Código removido para exportar excel
+    // ...
+
+    var historicoChart = null; 
+
+    // Função para carregar e exibir histórico de preços
+    function carregarHistoricoPreco(tipoAgrupamento, itemId, itemCodigo, itemDescricao, itemNome) {
+        console.log('Função carregarHistoricoPreco iniciada.');
+        console.log("Carregando histórico para:", tipoAgrupamento, itemId, itemCodigo, itemDescricao, itemNome);
+
+        // Atualizar título e nome do item no modal
+        $('#modalHistoricoTitulo').text('Histórico de Preços'); 
+        $('#historicoItemNome').text(itemNome || 'Item não especificado');
+
+        // Limpar tabela e gráfico anteriores
+        $('#historicoPrecosBody').html('<tr><td colspan="5" class="text-center">Carregando histórico...</td></tr>');
+        if (historicoChart) {
+            historicoChart.destroy(); 
+            historicoChart = null;
+        }
+        $('#graficoHistoricoContainer').html(''); 
+
+        // Construir parâmetros da API
+        var params = {
+             tipo: tipoAgrupamento,
+             fornecedor: '{{ filtro_fornecedor }}',
+             data_inicio: '{{ filtro_data_inicio }}',
+             data_fim: '{{ filtro_data_fim }}'
+        };
+        if (tipoAgrupamento === 'material') {
+            params.material_id = itemId;
+        } else { // item_nf
+            params.codigo = itemCodigo;
+            params.descricao = itemDescricao;
+        }
+        console.log("Parâmetros AJAX:", params); 
+
+        // Requisição AJAX
+        $.ajax({
+            url: "{{ url_for('nota_fiscal.api_historico_preco') }}",
+            type: 'GET',
+            data: params,
+            dataType: 'json',
+            success: function(response) {
+                console.log('AJAX Success! Resposta:', response); 
+                var historico = response.historico || [];
+                var htmlTabela = '';
+                var chartLabels = [];
+                var chartData = [];
+
+                if (historico.length > 0) {
+                    historico.forEach(function(reg) {
+                        let dataFormatada = 'N/D';
+                        if (reg.data_emissao) {
+                            try {
+                                let dt = new Date(reg.data_emissao + 'T00:00:00');
+                                let dia = String(dt.getDate()).padStart(2, '0');
+                                let mes = String(dt.getMonth() + 1).padStart(2, '0'); 
+                                let ano = dt.getFullYear();
+                                dataFormatada = `${dia}/${mes}/${ano}`;
+                            } catch(e) { console.error("Erro ao formatar data:", reg.data_emissao, e); }
+                        }
+                        
+                        htmlTabela += `<tr>
+                            <td>${dataFormatada}</td>
+                            <td>${reg.nome_emitente || 'N/D'}</td>
+                            <td>${reg.numero_nf || 'N/D'}</td>
+                            <td>${parseFloat(reg.quantidade).toFixed(2)}</td>
+                            <td>R$ ${parseFloat(reg.valor_unitario).toFixed(2)}</td>
+                        </tr>`;
+
+                        chartLabels.push(dataFormatada);
+                        chartData.push(parseFloat(reg.valor_unitario));
+                    });
+                } else {
+                    htmlTabela = '<tr><td colspan="5" class="text-center">Nenhum histórico de preço encontrado para este item/material nos filtros aplicados.</td></tr>';
+                }
+
+                $('#historicoPrecosBody').html(htmlTabela);
+
+                // --- Inverter dados para o gráfico (Mais antigo para mais recente) ---
+                chartLabels.reverse();
+                chartData.reverse();
+                // ---------------------------------------------------------------------
+
+                if (chartData.length > 0 && typeof Chart !== 'undefined') {
+                    var ctx = document.getElementById('graficoHistoricoContainer').appendChild(document.createElement('canvas')).getContext('2d');
+                    historicoChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: chartLabels,
+                            datasets: [{
+                                label: 'Valor Unitário (R$)',
+                                data: chartData,
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                             scales: {
+                                y: {
+                                    beginAtZero: false 
+                                }
+                            }
+                        }
+                    });
+                } else if (typeof Chart === 'undefined'){
+                     console.warn("Chart.js não carregado. Gráfico não será exibido.");
+                     $('#graficoHistoricoContainer').html('<p class="text-muted text-center">Biblioteca de gráfico não carregada.</p>');
+                }
+                
+                console.log('Tentando abrir modal #modalHistoricoPreco (sucesso)'); 
+                console.log('Modal existe?', $('#modalHistoricoPreco').length > 0); 
+                try {
+                     $('#modalHistoricoPreco').modal('show');
+                } catch (e) {
+                    console.error("Erro ao tentar abrir modal:", e);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('AJAX Error! Status:', status, 'Erro:', error, 'XHR:', xhr); 
+                $('#historicoPrecosBody').html('<tr><td colspan="5" class="text-center">Erro ao carregar histórico: ' + error + '</td></tr>');
+                
+                console.log('Tentando abrir modal #modalHistoricoPreco (erro)'); 
+                console.log('Modal existe?', $('#modalHistoricoPreco').length > 0); 
+                try {
+                    $('#modalHistoricoPreco').modal('show');
+                } catch (e) {
+                     console.error("Erro ao tentar abrir modal:", e);
+                 }
+            }
+        });
+    }
+
+    // Event listener para os links de histórico
+    $('#dataTableAnalise').on('click', '.link-historico-preco', function(e) {
+        e.preventDefault();
+        console.log('Link .link-historico-preco clicado!'); 
+        var $link = $(this);
+        var tipo = $link.data('tipo-agrupamento');
+        var nome = $link.data('item-nome');
+        var id = (tipo === 'material') ? $link.data('item-id') : null;
+        var codigo = (tipo === 'item_nf') ? $link.data('item-codigo') : null;
+        var descricao = (tipo === 'item_nf') ? $link.data('item-descricao') : null;
+
+        carregarHistoricoPreco(tipo, id, codigo, descricao, nome);
+    });
+   
+
+});
+</script>
+{% endblock %} 

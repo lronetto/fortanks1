@@ -1,0 +1,116 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Importar Materiais{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Importar Materiais</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('material.index') }}">Materiais</a></li>
+        <li class="breadcrumb-item active">Importar</li>
+    </ol>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-file-import me-1"></i>
+            Importar Materiais
+        </div>
+        <div class="card-body">
+
+            {% if resultados %}
+            <div
+                class="alert {% if resultados.erros == 0 and (resultados.inseridos > 0 or resultados.atualizados > 0) %}alert-success{% elif resultados.erros > 0 and (resultados.inseridos > 0 or resultados.atualizados > 0) %}alert-warning{% else %}alert-danger{% endif %} mb-4">
+                <h4 class="alert-heading">Resultado da Importação</h4>
+                <p>
+                    <strong>Resumo:</strong>
+                    {{ resultados.inseridos }} materiais inseridos,
+                    {{ resultados.atualizados }} materiais atualizados,
+                    {{ resultados.erros }} erros encontrados.
+                </p>
+            </div>
+
+            {% if resultados.detalhes_erros %}
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-white">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    Detalhes dos Erros
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Linha</th>
+                                    <th>Erro</th>
+                                    <th>Dados</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for erro in resultados.detalhes_erros %}
+                                <tr>
+                                    <td>{{ erro.linha }}</td>
+                                    <td>{{ erro.erro }}</td>
+                                    <td><small>{{ erro.dados }}</small></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{{ url_for('material.importar') }}" class="btn btn-primary">
+                    <i class="fas fa-file-import me-1"></i> Importar Novo Arquivo
+                </a>
+                <a href="{{ url_for('material.index') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-1"></i> Voltar para Materiais
+                </a>
+            </div>
+
+            {% else %}
+
+            <form method="POST" action="{{ url_for('material.upload_arquivo') }}" enctype="multipart/form-data"
+                class="mb-4">
+                <div class="mb-3">
+                    <label for="arquivo" class="form-label">Arquivo Excel (.xlsx)</label>
+                    <input class="form-control" type="file" id="arquivo" name="arquivo" accept=".xlsx" required>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload me-1"></i> Enviar Arquivo
+                    </button>
+                    <a href="{{ url_for('material.download_modelo') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-download me-1"></i> Baixar Modelo
+                    </a>
+                    <a href="{{ url_for('material.index') }}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Instruções
+                </div>
+                <div class="card-body">
+                    <p>Para importar materiais, siga as instruções abaixo:</p>
+                    <ol>
+                        <li>Prepare um arquivo Excel (.xlsx) com os dados dos materiais.</li>
+                        <li>As colunas obrigatórias são: <strong>Nome</strong> e <strong>Categoria</strong>.</li>
+                        <li>Colunas opcionais: Código, Código ERP, Plano de Contas, Descrição, PC e Unidade.</li>
+                        <li>Envie o arquivo clicando no botão "Enviar Arquivo".</li>
+                        <li>Na próxima tela, mapeie as colunas do seu arquivo com os campos do sistema.</li>
+                        <li>Confirme a importação para concluir o processo.</li>
+                    </ol>
+                </div>
+            </div>
+
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

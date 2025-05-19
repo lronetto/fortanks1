@@ -1,0 +1,123 @@
+{% extends "common/base.html" %}
+
+{% block title %}Detalhes da Entrega de EPI{% endblock %}
+{% block mobile_title %}Detalhes da Entrega{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">Detalhes da Entrega de EPI</h1>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('seguranca.entregas_index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>Voltar para Lista
+            </a>
+            {% if not entrega.data_devolucao %}
+            <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#devolucaoModal">
+                <i class="fas fa-undo mr-2"></i>Registrar Devolução
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div class="alert-container">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-xl-12">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações da Entrega</h6>
+                    <div>
+                        {% if entrega.data_devolucao %}
+                        <span class="badge bg-success">Devolvido</span>
+                        {% else %}
+                        <span class="badge badge-warning">Em uso</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5 class="mb-3">Dados da Entrega</h5>
+                            <p><strong>ID:</strong> {{ entrega.id }}</p>
+                            <p><strong>Data de Entrega:</strong> {{ entrega.data_entrega.strftime('%d/%m/%Y') }}</p>
+                            <p><strong>Quantidade:</strong> {{ entrega.quantidade }}</p>
+                            <p><strong>Motivo:</strong> {{ entrega.motivo or 'Não informado' }}</p>
+                            <p><strong>Assinado pelo Colaborador:</strong> {% if entrega.assinado %}Sim{% else %}Não{% endif %}</p>
+                            
+                            {% if entrega.data_devolucao %}
+                            <p><strong>Data de Devolução:</strong> {{ entrega.data_devolucao.strftime('%d/%m/%Y') }}</p>
+                            <p><strong>Dias em Uso:</strong> {{ entrega.dias_em_uso }}</p>
+                            {% else %}
+                            <p><strong>Status:</strong> Em uso</p>
+                            <p><strong>Dias em Uso (até hoje):</strong> {{ (now1.date() - entrega.data_entrega).days }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h5 class="mb-3">Dados do EPI e Colaborador</h5>
+                            <p><strong>EPI:</strong> {{ entrega.epi.material.nome }}</p>
+                            <p><strong>Código CA:</strong> {{ entrega.epi.ca_numero or 'Não informado' }}</p>
+                            <p><strong>Colaborador:</strong> {{ entrega.colaborador.nome }}</p>
+                            <p><strong>Cargo:</strong> {{ entrega.colaborador.cargo or 'Não informado' }}</p>
+                            <p><strong>Departamento:</strong> {{ entrega.colaborador.departamento or 'Não informado' }}</p>
+                        </div>
+                    </div>
+
+                    {% if entrega.observacoes %}
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">Observações</h5>
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    {{ entrega.observacoes|nl2br }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Devolução de EPI -->
+    {% if not entrega.data_devolucao %}
+    <div class="modal fade" id="devolucaoModal" tabindex="-1" aria-labelledby="devolucaoModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title" id="devolucaoModalLabel">Registrar Devolução de EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <form action="{{ url_for('seguranca.devolver_entrega', id=entrega.id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <div class="modal-body">
+                        <p>Registrar devolução do EPI: <strong>{{ entrega.epi.material.nome }}</strong></p>
+                        <p class="text-muted">Entregue a {{ entrega.colaborador.nome }} em {{ entrega.data_entrega.strftime('%d/%m/%Y') }}</p>
+                        
+                        <div class="mb-3">
+                            <label for="data_devolucao" class="form-label">Data da Devolução</label>
+                            <input type="date" class="form-control" id="data_devolucao" name="data_devolucao" 
+                                value="{{ now1.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="observacoes_devolucao" class="form-label">Observações sobre a Devolução</label>
+                            <textarea class="form-control" id="observacoes_devolucao" name="observacoes_devolucao" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-warning">Registrar Devolução</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

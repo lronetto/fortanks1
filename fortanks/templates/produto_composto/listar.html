@@ -1,0 +1,104 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Produtos Compostos{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Lista de Produtos Compostos</h6>
+                    <a href="{{ url_for('produto_composto.novo') }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Novo Produto Composto
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Nome</th>
+                                    <th>Tipo de Peça</th>
+                                    <th>Tempo Produção (h)</th>
+                                    <th>Componentes</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for produto in produtos %}
+                                <tr>
+                                    <td>{{ produto.codigo or '-' }}</td>
+                                    <td>{{ produto.nome }}</td>
+                                    <td>{{ produto.tipo_peca }}</td>
+                                    <td>{{ produto.tempo_producao or '-' }}</td>
+                                    <td>{{ produto.componentes|length }}</td>
+                                    <td>
+                                        {% if produto.status == 'Ativo' %}
+                                        <span class="badge badge-success">{{ produto.status }}</span>
+                                        {% else %}
+                                        <span class="badge badge-secondary">{{ produto.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('produto_composto.editar', id=produto.id) }}" class="btn btn-info btn-sm">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-danger btn-sm" 
+                                                data-toggle="modal" data-target="#deleteModal{{ produto.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                        
+                                        <!-- Modal Excluir -->
+                                        <div class="modal fade" id="deleteModal{{ produto.id }}" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                                            <div class="modal-dialog" role="document">
+                                                <div class="modal-content">
+                                                    <div class="modal-header">
+                                                        <h5 class="modal-title" id="deleteModalLabel">Confirmar Exclusão</h5>
+                                                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                            <span aria-hidden="true">&times;</span>
+                                                        </button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        Tem certeza que deseja excluir o produto composto <strong>{{ produto.nome }}</strong>?
+                                                        <p class="text-danger mt-2">Esta ação não poderá ser desfeita!</p>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                                                        <form action="{{ url_for('produto_composto.deletar', id=produto.id) }}" method="post">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                            <button type="submit" class="btn btn-danger">Excluir</button>
+                                                        </form>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        $('#dataTable').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json'
+            },
+            order: [[1, 'asc']]
+        });
+    });
+</script>
+{% endblock %} 

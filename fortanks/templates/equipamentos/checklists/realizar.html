@@ -1,0 +1,91 @@
+{% extends "common/base.html" %}
+
+{% block title %}Realizar Checklist - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Realizar Checklist{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Realizar Checklist</h1>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Iniciar Novo Checklist</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('equipamento.novo_checklist_equipamento', id=0) }}" id="realizarChecklistForm">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="equipamento_id" class="form-label">Equipamento *</label>
+                        <select class="form-select" id="equipamento_id" name="equipamento_id" required>
+                            <option value="">Selecione o equipamento...</option>
+                            {% for equipamento in equipamentos %}
+                            <option value="{{ equipamento.id }}">{{ equipamento.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione um equipamento.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="modelo_id" class="form-label">Modelo de Checklist *</label>
+                        <select class="form-select" id="modelo_id" name="modelo_id" required>
+                            <option value="">Selecione o modelo...</option>
+                            {% for modelo in modelos %}
+                            <option value="{{ modelo.id }}">{{ modelo.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione um modelo de checklist.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="data_checklist" class="form-label">Data do Checklist *</label>
+                        <input type="datetime-local" class="form-control" id="data_checklist" 
+                               name="data_checklist" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe a data do checklist.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="observacoes" class="form-label">Observações</label>
+                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-clipboard-check"></i>
+                        <span class="d-none d-md-inline-block ms-1">Iniciar Checklist</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Interceptar o formulário para ajustar a URL antes do envio
+        document.getElementById('realizarChecklistForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const equipamentoId = document.getElementById('equipamento_id').value;
+            if (!equipamentoId) {
+                alert('Por favor, selecione um equipamento.');
+                return false;
+            }
+            
+            // Ajustar a URL para conter o ID do equipamento
+            this.action = "{{ url_for('equipamento.novo_checklist_equipamento', id=0) }}".replace('/0/', '/' + equipamentoId + '/');
+            this.submit();
+        });
+    });
+</script>
+{% endblock %}

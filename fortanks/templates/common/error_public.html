@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erro {{ error_code }} - Sistema de Gestão - Pré-moldados</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .error-container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .error {
+            color: #5a5c69;
+            font-size: 7rem;
+            position: relative;
+            line-height: 1;
+            width: 12.5rem;
+            margin: 0 auto;
+        }
+
+        .error:after {
+            content: attr(data-text);
+            position: absolute;
+            left: 2px;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            color: rgba(231, 74, 59, 0.4);
+            -webkit-transform: scale(1.5);
+            transform: scale(1.5);
+        }
+
+        .logo {
+            max-width: 150px;
+            margin-bottom: 20px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #0069d9;
+            border-color: #0062cc;
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: #6c757d;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        /* Tema escuro */
+        [data-bs-theme="dark"] {
+            background-color: #212529;
+            color: #f8f9fa;
+        }
+
+        [data-bs-theme="dark"] .card {
+            background-color: #343a40;
+            color: #f8f9fa;
+        }
+
+        [data-bs-theme="dark"] .theme-toggle {
+            color: #f8f9fa;
+        }
+    </style>
+
+    <!-- Tema claro/escuro -->
+    <script>
+        // Verifica se há preferência de tema salva
+        let theme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-bs-theme', theme);
+    </script>
+</head>
+
+<body>
+    <button id="theme-toggle" class="theme-toggle">
+        <i class="fas fa-sun" id="theme-icon"></i>
+    </button>
+
+    <div class="error-container">
+        <div class="text-center mb-4">
+            <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="logo">
+        </div>
+
+        <div class="text-center mb-4">
+            <div class="error mx-auto" data-text="{{ error_code }}">
+                <h1 class="display-1 fw-bold">{{ error_code }}</h1>
+            </div>
+            <p class="lead mb-4">{{ error_title|default('Erro') }}</p>
+            <p class="text-muted mb-4">{{ error_message|default('Ocorreu um erro ao processar sua solicitação.') }}</p>
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary">
+                <i class="fas fa-home me-2"></i>Ir para a página de login
+            </a>
+        </div>
+
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold">Detalhes do erro</h6>
+            </div>
+            <div class="card-body">
+                {% if error_details %}
+                <p>{{ error_details }}</p>
+                {% else %}
+                <p>Se você acredita que isso é um erro, entre em contato com o administrador do sistema.</p>
+                {% endif %}
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>Código do erro: {{ error_code }}
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-3">
+            <p class="text-muted">© 2024 Sistema de Gestão - Pré-moldados. Todos os direitos reservados.</p>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Alternar o tema claro/escuro
+        document.getElementById('theme-toggle').addEventListener('click', function () {
+            let theme = document.documentElement.getAttribute('data-bs-theme');
+            let newTheme = theme === 'dark' ? 'light' : 'dark';
+
+            document.documentElement.setAttribute('data-bs-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+
+            // Atualiza o ícone
+            const themeIcon = document.getElementById('theme-icon');
+            if (newTheme === 'dark') {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            } else {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            }
+        });
+
+        // Atualiza o ícone de acordo com o tema atual
+        (function () {
+            const themeIcon = document.getElementById('theme-icon');
+            let theme = localStorage.getItem('theme') || 'light';
+
+            if (theme === 'dark') {
+                themeIcon.classList.remove('fa-sun');
+                themeIcon.classList.add('fa-moon');
+            } else {
+                themeIcon.classList.remove('fa-moon');
+                themeIcon.classList.add('fa-sun');
+            }
+        })();
+    </script>
+</body>
+
+</html>

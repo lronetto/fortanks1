@@ -1,0 +1,293 @@
+// Função para adicionar linha de material no formulário de edição
+function adicionarLinhaMaterialEditar() {
+    var novaLinha = $('<div class="row mt-2 material-row-editar"></div>');
+    var contador = $('#materiais-container-editar .material-row-editar').length;
+    var umidadeId = 'umidade-editar-' + contador;
+    
+    novaLinha.html(`
+        <div class="col-md-4">
+            <select class="form-control select2-material-editar" name="material_ids" style="width: 100%;">
+                <option value="">Selecione um material</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control quantidade-editar" name="quantidades" placeholder="Quantidade" step="0.01" min="0">
+        </div>
+        <div class="col-md-2">
+            <select class="form-control unidade-editar" name="unidades">
+                <option value="">Selecione...</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-control conversao-editar" name="conversao_unidade_ids">
+                <option value="">Nenhuma conversão</option>
+            </select>
+        </div>
+        <div class="col-md-1">
+            <div class="custom-control custom-checkbox">
+                <input type="checkbox" class="custom-control-input" id="${umidadeId}" name="influenciado_umidade[]" value="${contador}">
+                <label class="custom-control-label" for="${umidadeId}">Umidade</label>
+            </div>
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-danger btn-sm remover-material-editar">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `);
+    
+    // Adicionar os campos hidden para material agrupado e ordem de pesagem
+    novaLinha.append('<input type="hidden" name="material_agrupado_ids" value="">');
+    novaLinha.append('<input type="hidden" name="ordem_pesagem" value="">');
+    
+    $('#materiais-container-editar').append(novaLinha);
+    
+    // Inicializar Select2 com configurações adequadas para modal
+    var select = novaLinha.find('.select2-material-editar');
+    var unidadeSelect = novaLinha.find('.unidade-editar');
+    var conversaoSelect = novaLinha.find('.conversao-editar');
+    
+    console.log('Carregando unidades para nova linha de edição');
+    carregarUnidades(unidadeSelect, '');
+    
+    try {
+        select.select2({
+            theme: 'bootstrap4',
+            placeholder: 'Selecione um material',
+            allowClear: true,
+            dropdownParent: $('#editarTracoModal'),
+            width: '100%',
+            language: 'pt-BR',
+            minimumResultsForSearch: 1
+        });
+    } catch (e) {
+        console.error('Erro ao inicializar Select2:', e);
+    }
+    
+    // Carregar os materiais disponíveis para o select
+    $.ajax({
+        url: '/usinagem-concreto/materiais-para-traco',
+        method: 'GET',
+        dataType: 'json',
+        success: function(data) {
+            console.log('Materiais recebidos para novo select de edição:', data.length);
+            
+            select.empty();
+            select.append('<option value="">Selecione um material</option>');
+            
+            $.each(data, function(i, material) {
+                select.append('<option value="' + material.id + '" data-unidade="' + material.unidade + '">' + material.codigo + ' - ' + material.nome + '</option>');
+            });
+            
+            // Atualizar o Select2 após adicionar as opções
+            select.trigger('change');
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar materiais para novo select de edição:', error);
+            console.error('Status:', status);
+            console.error('Resposta:', xhr.responseText);
+            alert('Erro ao carregar os materiais. Por favor, tente novamente.');
+        }
+    });
+    
+    // Adicionar evento de mudança para o select de material
+    select.on('change', function() {
+        var unidadeMaterial = $(this).find('option:selected').data('unidade');
+        console.log('Material selecionado, unidade:', unidadeMaterial);
+        if (unidadeMaterial) {
+            unidadeSelect.val(unidadeMaterial);
+            // Limpar o select de conversão quando muda o material
+            conversaoSelect.html('<option value="">Nenhuma conversão</option>');
+        }
+    });
+    
+    // Adicionar evento de mudança para o select de unidade
+    unidadeSelect.on('change', function() {
+        var materialId = select.val();
+        var unidadeSelecionada = $(this).val();
+        var unidadeMaterial = select.find('option:selected').data('unidade');
+        
+        console.log('Unidade alterada:', {
+            materialId: materialId,
+            unidadeSelecionada: unidadeSelecionada,
+            unidadeMaterial: unidadeMaterial
+        });
+        
+        if (materialId && unidadeMaterial && unidadeSelecionada && unidadeMaterial !== unidadeSelecionada) {
+            carregarConversoesDisponiveisEditar(conversaoSelect, unidadeMaterial, unidadeSelecionada);
+        } else {
+            // Se a unidade for a mesma do material, não precisa de conversão
+            conversaoSelect.html('<option value="">Nenhuma conversão</option>');
+        }
+    });
+}
+
+// Função para adicionar material existente na edição
+function adicionarLinhaMaterialEditarExistente(materialId, nome, quantidade, unidade, influenciadoUmidade, conversaoUnidadeId, materialAgrupadoId, ordemPesagem) {
+    console.log('Adicionando material existente:', {
+        materialId: materialId,
+        nome: nome, 
+        quantidade: quantidade,
+        unidade: unidade,
+        influenciadoUmidade: influenciadoUmidade,
+        conversaoUnidadeId: conversaoUnidadeId,
+        materialAgrupadoId: materialAgrupadoId,
+        ordemPesagem: ordemPesagem
+    });
+    
+    var novaLinha = $('<div class="row mt-2 material-row-editar"></div>');
+    var contador = $('#materiais-container-editar .material-row-editar').length;
+    var umidadeId = 'umidade-editar-' + contador;
+    
+    // Garantir que a quantidade seja um número válido
+    if (quantidade === null || quantidade === undefined || quantidade === '') {
+        quantidade = '';
+    }
+    
+    novaLinha.html(`
+        <div class="col-md-4">
+            <select class="form-control select2-material-editar" name="material_ids" style="width: 100%;">
+                <option value="${materialId}" selected>${nome}</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="number" class="form-control quantidade-editar" name="quantidades" placeholder="Quantidade" value="${quantidade}" step="0.01" min="0">
+        </div>
+        <div class="col-md-2">
+            <select class="form-control unidade-editar" name="unidades">
+                <option value="">Carregando...</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select class="form-control conversao-editar" name="conversao_unidade_ids">
+                <option value="">Nenhuma conversão</option>
+            </select>
+        </div>
+        <div class="col-md-1">
+            <div class="custom-control custom-checkbox">
+                <input type="checkbox" class="custom-control-input" id="${umidadeId}" name="influenciado_umidade[]" value="${contador}" ${influenciadoUmidade ? 'checked' : ''}>
+                <label class="custom-control-label" for="${umidadeId}">Umidade</label>
+            </div>
+        </div>
+        <div class="col-md-1">
+            <button type="button" class="btn btn-danger btn-sm remover-material-editar">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `);
+    
+    // Adicionar os campos hidden FORA do HTML acima para garantir que não sejam dentro de selects
+    if (materialAgrupadoId) {
+        novaLinha.append(`<input type="hidden" name="material_agrupado_ids" value="${materialAgrupadoId}">`);
+    } else {
+        novaLinha.append(`<input type="hidden" name="material_agrupado_ids" value="">`);
+    }
+    
+    if (ordemPesagem) {
+        novaLinha.append(`<input type="hidden" name="ordem_pesagem" value="${ordemPesagem}">`);
+    } else {
+        novaLinha.append(`<input type="hidden" name="ordem_pesagem" value="">`);
+    }
+    
+    // Adicionar classe especial se for um material agrupado
+    if (materialAgrupadoId) {
+        novaLinha.addClass('material-agrupado');
+        novaLinha.attr('data-material-agrupado-id', materialAgrupadoId);
+        novaLinha.attr('data-ordem-pesagem', ordemPesagem || 0);
+    }
+    
+    $('#materiais-container-editar').append(novaLinha);
+    
+    // Inicializar Select2 para o material
+    var select = novaLinha.find('.select2-material-editar');
+    var unidadeSelect = novaLinha.find('.unidade-editar');
+    var conversaoSelect = novaLinha.find('.conversao-editar');
+    
+    // Carregar unidades disponíveis
+    carregarUnidades(unidadeSelect, unidade);
+    
+    // Inicializar o Select2 para o material
+    try {
+        select.select2({
+            theme: 'bootstrap4',
+            placeholder: 'Selecione um material',
+            allowClear: true,
+            dropdownParent: $('#editarTracoModal'),
+            width: '100%',
+            language: 'pt-BR',
+            minimumResultsForSearch: 1
+        });
+    } catch (e) {
+        console.error('Erro ao inicializar Select2:', e);
+    }
+    
+    // Carregar os materiais disponíveis via AJAX
+    $.ajax({
+        url: '/usinagem-concreto/materiais-para-traco',
+        method: 'GET',
+        dataType: 'json',
+        success: function(data) {
+            console.log('Materiais recebidos para select:', data.length);
+            
+            // Manter a opção atual selecionada
+            var selectedOption = select.find('option:selected').clone();
+            
+            // Limpar e recriar as opções
+            select.empty();
+            select.append('<option value="">Selecione um material</option>');
+            select.append(selectedOption);
+            
+            // Adicionar todos os outros materiais
+            $.each(data, function(i, material) {
+                if (material.id != materialId) {
+                    select.append('<option value="' + material.id + '" data-unidade="' + material.unidade + '">' + material.codigo + ' - ' + material.nome + '</option>');
+                }
+            });
+            
+            // Atualizar o Select2 após adicionar as opções
+            select.trigger('change');
+            
+            // Se tiver conversão de unidade e a unidade for diferente da unidade padrão do material, carregar conversões
+            var materialObj = data.find(m => m.id == materialId);
+            if (materialObj && unidade && materialObj.unidade !== unidade) {
+                carregarConversoesDisponiveisEditar(conversaoSelect, materialObj.unidade, unidade, conversaoUnidadeId);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar materiais para o select:', error);
+            console.error('Status:', status);
+            console.error('Resposta:', xhr.responseText);
+            alert('Erro ao carregar os materiais. Por favor, tente novamente.');
+        }
+    });
+    
+    // Adicionar evento de mudança para o select de material
+    select.on('change', function() {
+        var unidadeMaterial = $(this).find('option:selected').data('unidade');
+        if (unidadeMaterial) {
+            unidadeSelect.val(unidadeMaterial);
+            // Limpar o select de conversão quando muda o material
+            conversaoSelect.html('<option value="">Nenhuma conversão</option>');
+        }
+    });
+    
+    // Adicionar evento de mudança para o select de unidade
+    unidadeSelect.on('change', function() {
+        var materialId = select.val();
+        var unidadeSelecionada = $(this).val();
+        var unidadeMaterial = select.find('option:selected').data('unidade');
+        
+        console.log('Unidade alterada:', {
+            materialId: materialId,
+            unidadeSelecionada: unidadeSelecionada,
+            unidadeMaterial: unidadeMaterial
+        });
+        
+        if (materialId && unidadeMaterial && unidadeSelecionada && unidadeMaterial !== unidadeSelecionada) {
+            carregarConversoesDisponiveisEditar(conversaoSelect, unidadeMaterial, unidadeSelecionada);
+        } else {
+            // Se a unidade for a mesma do material, não precisa de conversão
+            conversaoSelect.html('<option value="">Nenhuma conversão</option>');
+        }
+    });
+} 

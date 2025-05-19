@@ -1,0 +1,262 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatórios - Dados Analíticos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Relatórios Financeiros</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <a href="{{ url_for('dados_analiticos.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Relatórios Disponíveis</h6>
+                </div>
+                <div class="card-body">
+                    <p>Selecione um dos relatórios disponíveis para visualizar dados analíticos com gráficos:</p>
+                    
+                    <div class="row">
+                        <!-- Relatório por Centro de Custo -->
+                        <div class="col-lg-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="card-title">Gastos por Centro de Custo</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p>Visualiza a distribuição de gastos por centro de custo em um período.</p>
+                                    
+                                    <form action="{{ url_for('dados_analiticos.relatorio_centro_custo') }}" method="GET">
+                                        <div class="form-group">
+                                            <label for="ano_cc">Ano:</label>
+                                            <select class="form-control" id="ano_cc" name="ano">
+                                                {% for ano in anos %}
+                                                <option value="{{ ano }}" {% if ano == current_year %}selected{% endif %}>
+                                                    {{ ano }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label for="mes_inicio_cc">Mês inicial:</label>
+                                                <select class="form-control" id="mes_inicio_cc" name="mes_inicio">
+                                                    <option value="1">Janeiro</option>
+                                                    <option value="2">Fevereiro</option>
+                                                    <option value="3">Março</option>
+                                                    <option value="4">Abril</option>
+                                                    <option value="5">Maio</option>
+                                                    <option value="6">Junho</option>
+                                                    <option value="7">Julho</option>
+                                                    <option value="8">Agosto</option>
+                                                    <option value="9">Setembro</option>
+                                                    <option value="10">Outubro</option>
+                                                    <option value="11">Novembro</option>
+                                                    <option value="12">Dezembro</option>
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label for="mes_fim_cc">Mês final:</label>
+                                                <select class="form-control" id="mes_fim_cc" name="mes_fim">
+                                                    <option value="1">Janeiro</option>
+                                                    <option value="2">Fevereiro</option>
+                                                    <option value="3">Março</option>
+                                                    <option value="4">Abril</option>
+                                                    <option value="5">Maio</option>
+                                                    <option value="6">Junho</option>
+                                                    <option value="7">Julho</option>
+                                                    <option value="8">Agosto</option>
+                                                    <option value="9">Setembro</option>
+                                                    <option value="10">Outubro</option>
+                                                    <option value="11">Novembro</option>
+                                                    <option value="12" selected>Dezembro</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-chart-bar"></i> Gerar Relatório
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relatório por Plano de Conta -->
+                        <div class="col-lg-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="card-title">Gastos por Plano de Conta</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p>Visualiza a distribuição de gastos por plano de conta em um ano.</p>
+                                    
+                                    <form action="{{ url_for('dados_analiticos.relatorio_plano_conta') }}" method="GET">
+                                        <div class="form-group">
+                                            <label for="ano_pc">Ano:</label>
+                                            <select class="form-control" id="ano_pc" name="ano">
+                                                {% for ano in anos %}
+                                                <option value="{{ ano }}" {% if ano == current_year %}selected{% endif %}>
+                                                    {{ ano }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label for="centro_custo_id_pc">Centro de Custo (opcional):</label>
+                                            <select class="form-control" id="centro_custo_id_pc" name="centro_custo_id">
+                                                <option value="">Todos</option>
+                                                {% for cc in centros_custo %}
+                                                <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-chart-pie"></i> Gerar Relatório
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- Relatório de Evolução Mensal -->
+                        <div class="col-lg-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="card-title">Evolução Mensal de Gastos</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p>Visualiza a evolução mensal de gastos ao longo de um ano.</p>
+                                    
+                                    <form action="{{ url_for('dados_analiticos.relatorio_evolucao_mensal') }}" method="GET">
+                                        <div class="form-group">
+                                            <label for="ano_em">Ano:</label>
+                                            <select class="form-control" id="ano_em" name="ano">
+                                                {% for ano in anos %}
+                                                <option value="{{ ano }}" {% if ano == current_year %}selected{% endif %}>
+                                                    {{ ano }}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label for="centro_custo_id_em">Centro de Custo (opcional):</label>
+                                            <select class="form-control" id="centro_custo_id_em" name="centro_custo_id">
+                                                <option value="">Todos</option>
+                                                {% for cc in centros_custo %}
+                                                <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label for="plano_conta_id_em">Plano de Conta (opcional):</label>
+                                            <select class="form-control" id="plano_conta_id_em" name="plano_conta_id">
+                                                <option value="">Todos</option>
+                                                {% for pc in planos_conta %}
+                                                <option value="{{ pc.id }}">{{ pc.descricao }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-chart-line"></i> Gerar Relatório
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Relatório Comparativo entre Anos -->
+                        <div class="col-lg-6">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h6 class="card-title">Comparativo entre Anos</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p>Compara os gastos entre dois anos diferentes, mês a mês.</p>
+                                    
+                                    <form action="{{ url_for('dados_analiticos.relatorio_comparativo_anos') }}" method="GET">
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label for="ano1">Primeiro Ano:</label>
+                                                <select class="form-control" id="ano1" name="ano1">
+                                                    {% for ano in anos %}
+                                                    <option value="{{ ano }}" {% if ano == current_year - 1 %}selected{% endif %}>
+                                                        {{ ano }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label for="ano2">Segundo Ano:</label>
+                                                <select class="form-control" id="ano2" name="ano2">
+                                                    {% for ano in anos %}
+                                                    <option value="{{ ano }}" {% if ano == current_year %}selected{% endif %}>
+                                                        {{ ano }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label for="centro_custo_id_ca">Centro de Custo (opcional):</label>
+                                            <select class="form-control" id="centro_custo_id_ca" name="centro_custo_id">
+                                                <option value="">Todos</option>
+                                                {% for cc in centros_custo %}
+                                                <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                        
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-chart-bar"></i> Gerar Relatório
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Inicializa os selects com busca
+    $('#centro_custo_id_pc, #centro_custo_id_em, #centro_custo_id_ca, #plano_conta_id_em').select2({
+        placeholder: 'Selecione...',
+        allowClear: true,
+        width: '100%'
+    });
+    
+    // Lógica para validar mês inicial e final
+    $('#mes_inicio_cc, #mes_fim_cc').change(function() {
+        var mesInicio = parseInt($('#mes_inicio_cc').val());
+        var mesFim = parseInt($('#mes_fim_cc').val());
+        
+        if (mesFim < mesInicio) {
+            $('#mes_fim_cc').val(mesInicio);
+        }
+    });
+});
+</script>
+{% endblock %} 

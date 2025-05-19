@@ -1,0 +1,192 @@
+{% extends "common/base.html" %}
+
+{% block title %}Registrar Entrega de EPI{% endblock %}
+{% block mobile_title %}Nova Entrega{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">Registrar Entrega de EPI</h1>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('seguranca.entregas_index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    {% include "common/alerts.html" %}
+
+    <!-- Formulário de Cadastro -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Dados da Entrega</h6>
+        </div>
+        <div class="card-body">
+            <form method="post" id="entrega-form">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="colaborador_id" class="form-label">Colaborador <span
+                                class="text-danger">*</span></label>
+                        <select class="form-select" id="colaborador_id" name="colaborador_id" required>
+                            <option value="">Selecione o colaborador</option>
+                            {% for colaborador in colaboradores %}
+                            <option value="{{ colaborador.id }}">{{ colaborador.nome }} - {{ colaborador.cargo }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione um colaborador.
+                        </div>
+                        {% if not colaboradores %}
+                        <small class="text-muted">
+                            Não há colaboradores ativos cadastrados. <a
+                                href="{{ url_for('colaborador.novo') }}">Cadastrar novo colaborador</a>
+                        </small>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label for="epi_id" class="form-label">EPI <span class="text-danger">*</span></label>
+                        <select class="form-select" id="epi_id" name="epi_id" required>
+                            <option value="">Selecione o EPI</option>
+                            {% for epi in epis %}
+                            <option value="{{ epi.id }}" data-estoque="{{ epi.estoque_atual }}">
+                                {{ epi.material.nome }} (CA: {{ epi.ca_numero or 'N/A' }}) - Estoque: {{
+                                epi.estoque_atual }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione um EPI.
+                        </div>
+                        {% if not epis %}
+                        <small class="text-muted">
+                            Não há EPIs disponíveis em estoque. <a href="{{ url_for('seguranca.epi_novo') }}">Cadastrar
+                                novo EPI</a>
+                        </small>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="data_entrega" class="form-label">Data de Entrega <span
+                                class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="data_entrega" name="data_entrega" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe a data de entrega.
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="quantidade" class="form-label">Quantidade <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="quantidade" name="quantidade" min="1" value="1"
+                            required>
+                        <div class="invalid-feedback">
+                            Por favor, informe a quantidade.
+                        </div>
+                        <small class="text-muted" id="estoque-info">Estoque disponível: <span
+                                id="estoque-disponivel">-</span></small>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="assinado" class="form-label">Termo Assinado</label>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="assinado" name="assinado">
+                            <label class="form-check-label" for="assinado">Termo de responsabilidade assinado</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="motivo" class="form-label">Motivo da Entrega <span
+                                class="text-danger">*</span></label>
+                        <select class="form-select" id="motivo" name="motivo" required>
+                            <option value="">Selecione o motivo</option>
+                            <option value="Primeira entrega">Primeira entrega</option>
+                            <option value="Substituição por desgaste">Substituição por desgaste</option>
+                            <option value="Substituição por perda">Substituição por perda</option>
+                            <option value="Substituição por validade vencida">Substituição por validade vencida</option>
+                            <option value="Nova função">Nova função</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o motivo da entrega.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                            placeholder="Observações sobre a entrega, condições específicas, etc."></textarea>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                    <button type="reset" class="btn btn-outline-secondary me-md-2">Limpar</button>
+                    <button type="submit" class="btn btn-primary">Registrar Entrega</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('entrega-form');
+        const epiSelect = document.getElementById('epi_id');
+        const quantidadeInput = document.getElementById('quantidade');
+        const estoqueInfo = document.getElementById('estoque-disponivel');
+        const dataEntregaInput = document.getElementById('data_entrega');
+
+        // Definir data máxima como hoje
+        dataEntregaInput.max = new Date().toISOString().split('T')[0];
+        dataEntregaInput.value = new Date().toISOString().split('T')[0];
+
+        // Atualizar informações de estoque quando o EPI for selecionado
+        epiSelect.addEventListener('change', function () {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.value) {
+                const estoque = selectedOption.getAttribute('data-estoque');
+                estoqueInfo.textContent = estoque;
+
+                // Atualizar quantidade máxima
+                quantidadeInput.max = estoque;
+                if (parseInt(quantidadeInput.value) > parseInt(estoque)) {
+                    quantidadeInput.value = estoque;
+                }
+            } else {
+                estoqueInfo.textContent = '-';
+                quantidadeInput.max = '';
+            }
+        });
+
+        // Validação do formulário
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            // Verificar se a quantidade é válida
+            const selectedOption = epiSelect.options[epiSelect.selectedIndex];
+            if (selectedOption.value) {
+                const estoque = parseInt(selectedOption.getAttribute('data-estoque'));
+                const quantidade = parseInt(quantidadeInput.value);
+
+                if (quantidade > estoque) {
+                    event.preventDefault();
+                    alert(`Quantidade não disponível em estoque. Máximo disponível: ${estoque}`);
+                }
+            }
+
+            form.classList.add('was-validated');
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,368 @@
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, current_app
+from flask_login import login_required, current_user
+from datetime import datetime
+from models.database import db
+from models.solicitacao import Solicitacao, ItemSolicitacao
+from models.material import Material
+from models.centro_custo import CentroCusto
+from models.usuario import Usuario
+from utils.email_utils import enviar_email
+
+# Importar WeasyPrint (requer instalação: pip install WeasyPrint)
+# e instalação de dependências de sistema (Pango, Cairo, etc.)
+try:
+    from weasyprint import HTML
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
+    # Logar um aviso se WeasyPrint não estiver disponível
+    # import logging
+    # logging.warning("WeasyPrint não encontrado. A funcionalidade de enviar PDF por e-mail estará desabilitada.")
+
+solicitacao_bp = Blueprint('solicitacao', __name__, url_prefix='/solicitacoes')
+
+@solicitacao_bp.route('/')
+@login_required
+def index():
+    """Lista todas as solicitações"""
+    # Se for gerente ou superior, mostra todas as solicitações
+    if current_user.is_gerente_ou_superior:
+        solicitacoes = Solicitacao.query.order_by(Solicitacao.data_solicitacao.desc()).all()
+    else:
+        # Se não, mostra apenas as próprias solicitações
+        solicitacoes = Solicitacao.query.filter_by(solicitante_id=current_user.id).order_by(Solicitacao.data_solicitacao.desc()).all()
+    
+    # Buscar dados para o formulário no modal
+    materiais = Material.query.order_by(Material.nome).all()
+    centros_custo = CentroCusto.query.order_by(CentroCusto.nome).all()
+    
+    return render_template('solicitacoes/index.html', 
+                          solicitacoes=solicitacoes,
+                          materiais=materiais,
+                          centros_custo=centros_custo)
+
+@solicitacao_bp.route('/novo', methods=['POST'])
+@login_required
+def novo():
+    """Cria uma nova solicitação"""
+    try:
+        # Criar nova solicitação sem número (será definido após obter o ID)
+        solicitacao = Solicitacao(
+            data_necessidade=datetime.strptime(request.form.get('data_necessidade'), '%Y-%m-%d').date(),
+            centro_custo_id=request.form.get('centro_custo_id'),
+            solicitante_id=current_user.id,
+            observacoes=request.form.get('observacoes')
+        )
+        
+        # Adicionar itens
+        materiais = request.form.getlist('material_id[]')
+        quantidades = request.form.getlist('quantidade[]')
+        unidades = request.form.getlist('unidade[]')
+        observacoes = request.form.getlist('observacoes_item[]')
+        
+        for i in range(len(materiais)):
+            if materiais[i] and quantidades[i]:
+                item = ItemSolicitacao(
+                    material_id=materiais[i],
+                    quantidade=quantidades[i],
+                    unidade=unidades[i],
+                    observacoes=observacoes[i]
+                )
+                solicitacao.itens.append(item)
+        
+        # Salvar para obter o ID
+        db.session.add(solicitacao)
+        db.session.flush()
+        
+        # Definir o número da solicitação igual ao ID
+        solicitacao.numero = str(solicitacao.id)
+        
+        # Concluir a transação
+        db.session.commit()
+        
+        flash('Solicitação criada com sucesso!', 'success')
+        return redirect(url_for('solicitacao.index'))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao criar solicitação: {str(e)}', 'danger')
+        return redirect(url_for('solicitacao.index'))
+
+@solicitacao_bp.route('/<int:id>/aprovar', methods=['POST'])
+@login_required
+
+def aprovar(id):
+    """Aprova uma solicitação"""
+    if not current_user.is_gerente_ou_superior:
+        flash('Você não tem permissão para aprovar solicitações.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+    
+    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao.aprovar(current_user.id)
+    flash('Solicitação aprovada com sucesso!', 'success')
+    return redirect(url_for('solicitacao.index'))
+
+@solicitacao_bp.route('/<int:id>/rejeitar', methods=['POST'])
+@login_required
+
+def rejeitar(id):
+    """Rejeita uma solicitação"""
+    if not current_user.is_gerente_ou_superior:
+        flash('Você não tem permissão para rejeitar solicitações.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+    
+    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao.rejeitar(current_user.id)
+    flash('Solicitação rejeitada com sucesso!', 'success')
+    return redirect(url_for('solicitacao.index'))
+
+@solicitacao_bp.route('/<int:id>/cancelar', methods=['POST'])
+@login_required
+
+def cancelar(id):
+    """Cancela uma solicitação"""
+    solicitacao = Solicitacao.query.get_or_404(id)
+    
+    # Verificar permissão
+    if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
+        flash('Você não tem permissão para cancelar esta solicitação.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+    
+    solicitacao.cancelar()
+    flash('Solicitação cancelada com sucesso!', 'success')
+    return redirect(url_for('solicitacao.index'))
+
+@solicitacao_bp.route('/<int:id>/editar', methods=['POST'])
+@login_required
+def editar(id):
+    """Edita uma solicitação pendente"""
+    solicitacao = Solicitacao.query.get_or_404(id)
+    
+    # Verificar permissão e status
+    if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
+        flash('Você não tem permissão para editar esta solicitação.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+    
+    if solicitacao.status != 'Pendente':
+        flash('Apenas solicitações pendentes podem ser editadas.', 'warning')
+        return redirect(url_for('solicitacao.index'))
+    
+    try:
+        # Atualizar dados da solicitação
+        solicitacao.data_necessidade = datetime.strptime(request.form.get('data_necessidade'), '%Y-%m-%d').date()
+        solicitacao.centro_custo_id = request.form.get('centro_custo_id')
+        solicitacao.observacoes = request.form.get('observacoes')
+        
+        # Remover todos os itens atuais
+        for item in solicitacao.itens:
+            db.session.delete(item)
+        
+        # Adicionar novos itens
+        materiais = request.form.getlist('material_id[]')
+        quantidades = request.form.getlist('quantidade[]')
+        unidades = request.form.getlist('unidade[]')
+        observacoes = request.form.getlist('observacoes_item[]')
+        
+        for i in range(len(materiais)):
+            if materiais[i] and quantidades[i]:
+                item = ItemSolicitacao(
+                    solicitacao_id=solicitacao.id,
+                    material_id=materiais[i],
+                    quantidade=quantidades[i],
+                    unidade=unidades[i],
+                    observacoes=observacoes[i]
+                )
+                db.session.add(item)
+        
+        db.session.commit()
+        flash('Solicitação atualizada com sucesso!', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar solicitação: {str(e)}', 'danger')
+    
+    return redirect(url_for('solicitacao.index'))
+
+# API endpoints
+@solicitacao_bp.route('/api/materiais')
+@login_required
+def api_materiais():
+    """API para retornar materiais em formato JSON"""
+    query = Material.query
+    
+    # Filtro por código ou nome
+    search = request.args.get('q')
+    if search:
+        query = query.filter(
+            db.or_(
+                Material.codigo.like(f'%{search}%'),
+                Material.nome.like(f'%{search}%')
+            )
+        )
+    
+    materiais = query.order_by(Material.nome).limit(100).all()
+    
+    result = []
+    for m in materiais:
+        result.append({
+            'id': m.id,
+            'codigo': m.codigo,
+            'nome': m.nome,
+            'unidade': m.unidade
+        })
+    
+    return jsonify(result)
+
+@solicitacao_bp.route('/<int:id>/enviar_email_aprovacao', methods=['POST'])
+@login_required
+def enviar_email_aprovacao(id):
+    """Envia um e-mail de notificação de aprovação para o solicitante."""
+    # Verificar permissão
+    if not current_user.is_gerente_ou_superior:
+        flash('Você não tem permissão para executar esta ação.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+
+    solicitacao = Solicitacao.query.get_or_404(id)
+
+    # Verificar se a solicitação está aprovada
+    if solicitacao.status != 'Aprovada':
+        flash('Esta solicitação não está aprovada.', 'warning')
+        return redirect(url_for('solicitacao.index'))
+
+    # Verificar se o solicitante tem e-mail cadastrado
+    if not solicitacao.solicitante or not solicitacao.solicitante.email:
+        flash(f'O solicitante {solicitacao.solicitante.nome} não possui um e-mail cadastrado.', 'warning')
+        return redirect(url_for('solicitacao.index'))
+
+    try:
+        assunto = f"Solicitação #{solicitacao.id} Aprovada"
+        destinatario = solicitacao.solicitante.email
+        
+        # Renderizar um template de email ou criar o corpo do email aqui
+        # Idealmente, usar render_template para um HTML de email
+        corpo_email = f"""
+        Olá {solicitacao.solicitante.nome},
+
+        Sua solicitação de material #{solicitacao.id} foi aprovada.
+
+        Data da Solicitação: {solicitacao.data_solicitacao.strftime('%d/%m/%Y')}
+        Data da Necessidade: {solicitacao.data_necessidade.strftime('%d/%m/%Y')}
+        Centro de Custo: {solicitacao.centro_custo.nome}
+
+        Atenciosamente,
+        Equipe Fortanks
+        """
+        
+        # Chamar a função de envio de email real
+        sucesso_envio = enviar_email(
+            destinatario=destinatario, 
+            assunto=assunto, 
+            corpo_html=corpo_email # Passar como HTML, a função cuidará do texto puro
+        )
+
+        if sucesso_envio:
+            flash('E-mail de aprovação enviado com sucesso!', 'success')
+        else:
+            flash('Erro ao enviar e-mail de aprovação. Verifique os logs.', 'danger')
+
+    except Exception as e:
+        # Logar o erro também seria bom aqui
+        current_app.logger.error(f'Erro inesperado na rota enviar_email_aprovacao: {e}')
+        flash(f'Erro ao tentar enviar e-mail: {str(e)}', 'danger')
+
+    return redirect(url_for('solicitacao.index')) 
+
+@solicitacao_bp.route('/<int:id>/enviar_pdf_email', methods=['POST'])
+@login_required
+def enviar_pdf_email(id):
+    """Gera um PDF da solicitação e envia por e-mail para destinatários pré-definidos e o solicitante."""
+    if not WEASYPRINT_AVAILABLE:
+        flash('A funcionalidade de envio de PDF por e-mail está temporariamente indisponível (dependência ausente). ', 'warning')
+        return redirect(url_for('solicitacao.index'))
+
+    # Verificar permissão (ajuste conforme necessário)
+    if not current_user.is_gerente_ou_superior:
+        flash('Você não tem permissão para executar esta ação.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+
+    solicitacao = Solicitacao.query.options(db.joinedload(Solicitacao.solicitante), 
+                                            db.joinedload(Solicitacao.centro_custo),
+                                            db.joinedload(Solicitacao.aprovador),
+                                            db.joinedload(Solicitacao.itens).joinedload(ItemSolicitacao.material)
+                                            ).get_or_404(id)
+
+    # --- Obter Destinatários ---
+    destinatarios = set() # Usar set para evitar duplicatas
+    
+    # Adicionar solicitante (se tiver email)
+    if solicitacao.solicitante and solicitacao.solicitante.email:
+        destinatarios.add(solicitacao.solicitante.email)
+    else:
+        flash(f'Aviso: O solicitante {solicitacao.solicitante.nome} não possui e-mail cadastrado e não receberá a cópia.', 'info')
+
+    # Adicionar e-mails pré-definidos (CARREGAR DA CONFIGURAÇÃO!)
+    emails_predefinidos_str = current_app.config.get('EMAILS_PDF_SOLICITACAO', '') # Ex: 'email1@ex.com, email2@ex.com'
+    if emails_predefinidos_str:
+        lista_predefinidos = [email.strip() for email in emails_predefinidos_str.split(',') if email.strip()]
+        destinatarios.update(lista_predefinidos)
+    else:
+        current_app.logger.warning("Nenhum EMAIL_PDF_SOLICITACAO configurado.")
+        # Decida se quer impedir o envio ou apenas avisar
+        # flash('Nenhum e-mail pré-definido configurado para envio.', 'warning') 
+        
+    if not destinatarios:
+         flash('Nenhum destinatário válido encontrado para enviar o e-mail.', 'danger')
+         return redirect(url_for('solicitacao.index'))
+         
+    # Converter para lista para a função de email
+    lista_destinatarios = list(destinatarios)
+    
+    # --- Gerar PDF --- 
+    try:
+        # Renderizar o template HTML para o PDF
+        html_string = render_template('solicitacoes/pdf_template.html', solicitacao=solicitacao)
+        
+        # Gerar PDF usando WeasyPrint
+        pdf_bytes = HTML(string=html_string).write_pdf()
+        nome_arquivo_pdf = f'solicitacao_{solicitacao.id}.pdf'
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar PDF para solicitação {id}: {e}")
+        flash('Erro interno ao gerar o PDF da solicitação.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+        
+    # --- Preparar e Enviar Email ---    
+    try:
+        assunto = f"Solicitação de Material #{solicitacao.id} - PDF Anexo"
+        mensagem_adicional = request.form.get('mensagem_adicional', '')
+        
+        # Corpo do e-mail (pode ser simples ou usar outro template)
+        corpo_html = f"""
+        <p>Prezados,</p>
+        <p>Segue em anexo o PDF da solicitação de material #{solicitacao.id}.</p>
+        """
+        if mensagem_adicional:
+            corpo_html += f"<p><strong>Mensagem adicional:</strong><br>{mensagem_adicional}</p>"
+        corpo_html += "<p>Atenciosamente,<br>Sistema Fortanks</p>"
+        
+        # Definir o anexo
+        anexos = [(nome_arquivo_pdf, 'application/pdf', pdf_bytes)]
+        
+        # Chamar a função de envio
+        sucesso_envio = enviar_email(
+            destinatario=lista_destinatarios,
+            assunto=assunto,
+            corpo_html=corpo_html,
+            anexos=anexos
+        )
+        
+        if sucesso_envio:
+            flash(f'PDF da solicitação #{id} enviado por e-mail para: {", ".join(lista_destinatarios)}', 'success')
+        else:
+            flash('Erro ao enviar o e-mail com o PDF. Verifique os logs.', 'danger')
+            
+    except Exception as e:
+        current_app.logger.error(f'Erro inesperado ao enviar PDF por e-mail para solicitação {id}: {e}')
+        flash(f'Erro interno ao tentar enviar o e-mail: {str(e)}', 'danger')
+
+    return redirect(url_for('solicitacao.index')) 

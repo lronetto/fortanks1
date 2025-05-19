@@ -1,0 +1,259 @@
+{% extends "common/base.html" %}
+
+{% block title %}Usinagens de Concreto{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Usinagens de Concreto</h1>
+        <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalImportarUsinagens">
+            <i class="fas fa-file-excel"></i> Importar Usinagens
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaUsinagem">
+            <i class="fas fa-plus"></i> Nova Usinagem
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Usinagens Cadastradas</h6>
+        </div>
+            <!-- Início do Formulário de Filtro de Data -->
+            <div class="mb-3 mt-3 p-3 border rounded">
+                <form method="GET" action="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="filtro_data_inicial" class="form-label">Data Inicial</label>
+                        <input type="date" class="form-control" id="filtro_data_inicial" name="data_inicial" value="{{ filtro_data_inicial or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="filtro_data_final" class="form-label">Data Final</label>
+                        <input type="date" class="form-control" id="filtro_data_final" name="data_final" value="{{ filtro_data_final or '' }}">
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-filter"></i> Filtrar
+                        </button>
+                    </div>
+                    <div class="col-md-auto">
+                        <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="btn btn-secondary">
+                            <i class="fas fa-times-circle"></i> Limpar Filtros
+                        </a>
+                    </div>
+                </form>
+            </div>
+            <!-- Fim do Formulário de Filtro de Data -->
+        
+        <div class="card-body">
+            {% if usinagens %}
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <td>Nota</td>
+                            <th>Data</th>
+                            <th>Volume (m³)</th>
+                            <th>Traço</th>
+                            <th>Idade</th>
+                            <th>Fluidez</th>
+                            <th>Status</th>
+                            <th width="120">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usinagem in usinagens %}
+                        <tr>
+                            <td>{{ usinagem.id }}</td>
+                            <td>{{ usinagem.nota }}</td>
+                            <td data-order="{{ usinagem.data_usinagem.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>{{ usinagem.volume_produzido }}</td>
+                            <td>{{ usinagem.traco.nome }}</td>
+                            <td>{{ usinagem.idade_str }}</td>
+                            <td>{{ usinagem.fluidez or '-' }}</td>
+                            <td>
+                                {% if usinagem.tem_redozagem() %}
+                                <span class="badge bg-warning">Redozagem</span>   
+                                {% else %}
+                                <span class="badge bg-{{ usinagem.status_badge }}">{{ usinagem.status }}</span>
+                                {% endif %}
+                                {% if usinagem.rompimento %}
+                                    {% if usinagem.rompimento_24h %}
+                                    <span class="badge bg-success rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="24H">24H</span>
+                                    {% endif %}
+                                    {% if usinagem.rompimento_28d %}
+                                    <span class="badge bg-success rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="28D">28D</span>
+                                    {% elif usinagem.idade.days <=28 %}
+                                    <span class="badge bg-warning rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="28D">28D</span>
+                                    {% elif usinagem.idade.days > 28 %}
+                                    <span class="badge bg-danger rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="28D">28D</span>
+                                    {% endif %}
+                                {% else %}
+                                    {% if usinagem.idade.days <=0  %}
+                                    <span class="badge bg-warning rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="24H">24H</span>
+                                    {% elif usinagem.idade.days > 3 %}
+                                    <span class="badge bg-danger rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="24H">24H</span>
+                                    {% endif %}
+                                    {% if usinagem.idade.days < 28 %}
+                                    <span class="badge bg-warning rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="28D">28D</span>
+                                    {% elif usinagem.idade.days >= 28 %}
+                                    <span class="badge bg-danger rompimento-badge" 
+                                          data-bs-toggle="tooltip" 
+                                          data-bs-html="true"
+                                          data-usinagem-id="{{ usinagem.id }}"
+                                          data-idade="28D">28D</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalVisualizarUsinagem" 
+                                            data-usinagem-id="{{ usinagem.id }}" 
+                                            title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalRedozagem" 
+                                            data-usinagem-id="{{ usinagem.id }}" 
+                                            data-traco-id="{{ usinagem.traco_id }}" 
+                                            title="Registrar Redozagem">
+                                        <i class="fas fa-plus-circle"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNovoRompimento" data-usinagem-id="{{ usinagem.id }}" title="Adicionar Rompimento">
+                                        <i class="fas fa-flask"></i>
+                                    </button>
+                                    <a href="{{ url_for('relatorio_usinagem.ficha_moldagem_rompimento', usinagem_id=usinagem.id) }}" class="btn btn-sm btn-secondary" title="Gerar Relatório">
+                                        <i class="fas fa-file-alt"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ usinagem.id }}" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Modal de exclusão -->
+                                <div class="modal fade" id="deleteModal-{{ usinagem.id }}" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel-{{ usinagem.id }}" aria-hidden="true">
+                                    <div class="modal-dialog" role="document">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title" id="deleteModalLabel-{{ usinagem.id }}">Confirmar Exclusão</h5>
+                                                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
+                                                    <span aria-hidden="true">×</span>
+                                                </button>
+                                            </div>
+                                            <div class="modal-body">
+                                                Tem certeza que deseja excluir a usinagem de concreto do dia <strong>{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</strong>?
+                                                <br>
+                                                <small class="text-danger">Esta ação não poderá ser desfeita.</small>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancelar</button>
+                                                <form action="{{ url_for('usinagem_concreto.excluir_usinagem', id=usinagem.id) }}" method="post">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <button type="submit" class="btn btn-danger">Excluir</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-4">
+                <p class="text-muted">Nenhuma usinagem de concreto cadastrada.</p>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaUsinagem">
+                    <i class="fas fa-plus"></i> Cadastrar Usinagem
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+
+
+
+{% include 'usinagem_concreto/usinagens/modais/redozagem.html' %}
+{% include 'usinagem_concreto/usinagens/modais/novo_rompimento.html' %}
+{% include 'usinagem_concreto/usinagens/modais/nova_usinagem.html' %}
+{% include 'usinagem_concreto/usinagens/modais/importar_usinagem.html' %}
+{% include 'usinagem_concreto/usinagens/modais/visualizar_usinagem.html' %}
+{% include 'usinagem_concreto/usinagens/modais/rompimento.html' %}
+
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Inicializar variáveis JavaScript a partir do JSON passado pelo backend
+    var tracosData = JSON.parse('{{ tracos_json|safe }}');
+    var colaboradoresData = JSON.parse('{{ colaboradores_json|safe }}');
+    var equipamentosData = JSON.parse('{{ equipamentos_json|safe }}');
+
+    $(document).ready(function() {
+        // Inicializar DataTable se disponível
+        if (typeof $.fn.DataTable !== 'undefined') {
+            $('#dataTable').DataTable({
+                language: {
+                    // Definir traduções diretamente ao invés de carregar arquivo externo
+                    "sEmptyTable": "Nenhum registro encontrado",
+                    "sInfo": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
+                    "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
+                    "sInfoFiltered": "(Filtrados de _MAX_ registros)",
+                    "sInfoPostFix": "",
+                    "sInfoThousands": ".",
+                    "sLengthMenu": "_MENU_ resultados por página",
+                    "sLoadingRecords": "Carregando...",
+                    "sProcessing": "Processando...",
+                    "sZeroRecords": "Nenhum registro encontrado",
+                    "sSearch": "Pesquisar",
+                    "oPaginate": {
+                        "sNext": "Próximo",
+                        "sPrevious": "Anterior",
+                        "sFirst": "Primeiro",
+                        "sLast": "Último"
+                    }
+                },
+                "order": [[ 2, "desc" ]], // Ordenar pela terceira coluna (Data) em ordem descendente
+                "columnDefs": [
+                    { "type": "date", "targets": 2 } // Informa ao DataTables que a coluna 2 é do tipo data
+                ]
+            });
+        }
+
+    });
+</script>
+{% endblock %} 

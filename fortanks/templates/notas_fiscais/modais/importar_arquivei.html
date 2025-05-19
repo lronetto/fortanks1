@@ -1,0 +1,52 @@
+<!-- Modal de Importação via Arquivei -->
+<div class="modal fade" id="modalImportarArquivei" tabindex="-1" aria-labelledby="modalImportarArquiveiLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarArquiveiLabel">Importar Notas Fiscais via Arquivei</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formImportarArquivei">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Defina os parâmetros para importação de notas fiscais via Arquivei.
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="data_inicial">Data Inicial</label>
+                        <input type="date" id="data_inicial" name="data_inicial" class="form-control" required>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="data_final">Data Final</label>
+                        <input type="date" id="data_final" name="data_final" class="form-control" required>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="tipo_documento">Tipo de Documento</label>
+                        <select id="tipo_documento" name="tipo_documento" class="form-select" required>
+                            <option value="NFe">Nota Fiscal Eletrônica (NFe)</option>
+                            <option value="NFCe">Nota Fiscal de Consumidor Eletrônica (NFCe)</option>
+                            <option value="CTe">Conhecimento de Transporte Eletrônico (CTe)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="cnpj">CNPJ (opcional)</label>
+                        <input type="text" id="cnpj" name="cnpj" class="form-control" placeholder="Somente números">
+                        <small class="form-text text-muted">Digite apenas os números, sem pontuação.</small>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" id="btnImportarArquivei" class="btn btn-primary">
+                        <i class="fas fa-cloud-download-alt"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

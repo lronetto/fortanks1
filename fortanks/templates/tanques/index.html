@@ -1,0 +1,650 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Tanques - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-water"></i> Gerenciamento de Tanques</h1>
+    <p class="mb-4">Gerenciamento de tanques para projetos</p>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Tanques</h6>
+            <div>
+                <a href="{{ url_for('tanque.novo') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus"></i> Novo Tanque
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Contrato</th>
+                            <th>UN</th>
+                            <th>Nome</th>
+                            <th>Sistema</th>
+                            <th>Dimensões</th>
+                            <th>Altura Total</th>
+                            <th>Altura Útil</th>
+                            <th>Quantidade</th>
+                            <th>Cobertura</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tanque in tanques %}
+                        <tr>
+                            <td>{{ tanque.id }}</td>
+                            <td>
+                                <a href="{{ url_for('contrato.visualizar', id=tanque.contrato_id) }}">
+                                    {{ tanque.contrato.nome }}
+                                </a>
+                            </td>
+                            <td>{{ tanque.un }}</td>
+                            <td>{{ tanque.nome }}</td>
+                            <td>{{ tanque.sistema }}</td>
+                            <td>{{ tanque.dimensoes }}</td>
+                            <td>{{ tanque.altura_total }} m</td>
+                            <td>{{ tanque.altura_util }} m</td>
+                            <td>{{ tanque.quantidade }}</td>
+                            <td>{{ tanque.possui_cobertura }}</td>
+                            <td class="text-center">
+                                <a href="{{ url_for('tanque.visualizar', id=tanque.id) }}" class="btn btn-info btn-sm"
+                                    title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('tanque.editar', id=tanque.id) }}" class="btn btn-primary btn-sm"
+                                    title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button class="btn btn-success btn-sm" title="Adicionar Peças"
+                                    onclick="abrirModalAdicionarPecas('{{ tanque.id }}', '{{ tanque.nome }}')">
+                                    <i class="fas fa-plus-circle"></i>
+                                </button>
+                                <form action="{{ url_for('tanque.excluir', id=tanque.id) }}" method="POST"
+                                    class="d-inline form-excluir">
+                                    <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Peças -->
+<div class="modal fade" id="modalAdicionarPecas" tabindex="-1" aria-labelledby="modalAdicionarPecasLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarPecasLabel">Adicionar Peças ao Tanque: <span
+                        id="nomeTanque"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="pecasTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="manual-tab" data-bs-toggle="tab"
+                            data-bs-target="#manual-content" type="button" role="tab" aria-controls="manual-content"
+                            aria-selected="true">Adição Manual</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="importar-tab" data-bs-toggle="tab"
+                            data-bs-target="#importar-content" type="button" role="tab" aria-controls="importar-content"
+                            aria-selected="false">Importar por Excel</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="gerador-tab" data-bs-toggle="tab" data-bs-target="#gerador-content"
+                            type="button" role="tab" aria-controls="gerador-content" aria-selected="false">Gerador
+                            Automático</button>
+                    </li>
+                </ul>
+                <div class="tab-content p-3 border border-top-0 rounded-bottom" id="pecasTabContent">
+                    <!-- Abas para Adição Manual -->
+                    <div class="tab-pane fade show active" id="manual-content" role="tabpanel"
+                        aria-labelledby="manual-tab">
+                        <form id="formAdicionarPeca" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" id="tanqueId" name="tanque_id">
+                            <input type="hidden" id="proximoSequencial" name="numero_sequencial">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="tipo" class="form-label">Tipo</label>
+                                    <input type="text" class="form-control" id="tipo" name="tipo" required>
+                                    <small class="form-text text-muted">Exemplo: Viga, Pilar, Placa, etc.</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="nome" class="form-label">Nome</label>
+                                    <input type="text" class="form-control" id="nome" name="nome" required>
+                                    <small class="form-text text-muted">Nome ou identificação da peça</small>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="quantidade" class="form-label">Quantidade</label>
+                                    <input type="number" class="form-control" id="quantidade" name="quantidade" min="1"
+                                        value="1" required>
+                                    <small class="form-text text-muted">Número de peças iguais a adicionar</small>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <!-- Aba para Importação por Excel -->
+                    <div class="tab-pane fade" id="importar-content" role="tabpanel" aria-labelledby="importar-tab">
+                        <form id="formImportarPecas" enctype="multipart/form-data">
+                            <input type="hidden" id="tanqueIdImport" name="tanque_id">
+                            <div class="mb-3">
+                                <label for="arquivoExcel" class="form-label">Selecione o arquivo Excel</label>
+                                <input type="file" class="form-control" id="arquivoExcel" name="arquivo"
+                                    accept=".xlsx, .xls" required>
+                                <small class="form-text text-muted">Formatos aceitos: .xlsx, .xls</small>
+                            </div>
+                            <div class="alert alert-info">
+                                <h6 class="alert-heading">Formato do arquivo Excel:</h6>
+                                <p class="mb-0">O arquivo deve conter as seguintes colunas:</p>
+                                <ul>
+                                    <li><strong>TIPO</strong>: Tipo da peça (Viga, Pilar, etc.)</li>
+                                    <li><strong>NOME</strong>: Nome ou identificação da peça</li>
+                                    <li><strong>QUANTIDADE</strong>: (Opcional) Quantidade de peças iguais</li>
+                                </ul>
+                                <p>
+                                    <a href="#" class="alert-link" id="downloadModelo">Baixar modelo de planilha</a>
+                                </p>
+                            </div>
+                        </form>
+                    </div>
+                    <!-- Aba para Gerador Automático de Placas -->
+                    <div class="tab-pane fade" id="gerador-content" role="tabpanel" aria-labelledby="gerador-tab">
+                        <form id="formGerarPlacas">
+                            <input type="hidden" id="tanqueIdGerador" name="tanque_id">
+                            <input type="hidden" id="tanquePlacasNormais" name="placas_normais">
+                            <input type="hidden" id="tanquePlacasFecho" name="placas_fecho">
+                            <input type="hidden" id="tanqueQuantidade" name="quantidade">
+
+                            <div class="alert alert-info mb-3">
+                                <p>Esta ferramenta vai gerar automaticamente:</p>
+                                <ul>
+                                    <li><strong id="placas-pn-count">0</strong> peças do tipo "PN" (Placas Normais)</li>
+                                    <li><strong id="placas-pf-count">0</strong> peças do tipo "PF" (Placas de Fecho) - 1
+                                        a cada <span id="intervalo-display">40</span> PN</li>
+                                </ul>
+                                <li>Total por tanque: <strong id="placas-total-count">0</strong> peças</li>
+                                <li>Total Geral: <strong id="placas-total-geral">0</strong> peças</li>
+                                <div id="sem-placas-config" class="text-datnger" style="display: none;">
+                                    <i class="fas fa-exclamation-triangle"></i> Este tanque não tem configuração de
+                                    placas.
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="prefixo-pn" class="form-label">Prefixo para Placas Normais</label>
+                                    <input type="text" class="form-control" id="prefixo-pn" name="prefixo_pn"
+                                        value="PN">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="prefixo-pf" class="form-label">Prefixo para Placas de Fecho</label>
+                                    <input type="text" class="form-control" id="prefixo-pf" name="prefixo_pf"
+                                        value="PF">
+                                </div>
+                            </div>
+
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="numero-inicial" class="form-label">Número Inicial</label>
+                                    <input type="number" class="form-control" id="numero-inicial" name="numero_inicial"
+                                        value="1" min="1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="intervalo-pf" class="form-label">Inserir PF a cada quantas PN?</label>
+                                    <input type="number" class="form-control" id="intervalo-pf" name="intervalo_pf"
+                                        value="40" min="1">
+                                </div>
+                            </div>
+
+                            <div class="d-grid gap-2 mt-3 mb-3">
+                                <button type="button" class="btn btn-outline-primary" id="btnVisualizarPlacas">
+                                    <i class="fas fa-eye"></i> Visualizar placas a serem geradas
+                                </button>
+                            </div>
+
+                            <!-- Área de prévia das peças -->
+                            <div id="previewPlacas" class="border rounded p-3 mb-3"
+                                style="display: none; max-height: 300px; overflow-y: auto;">
+                                <h6>Prévia das placas a serem geradas:</h6>
+                                <div class="row mb-2">
+                                    <div class="col-md-12">
+                                        <div class="alert alert-secondary">
+                                            <small>As peças abaixo serão geradas quando você clicar em "Gerar e
+                                                Adicionar Placas".</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <table class="table table-sm table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Nome</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="previewPlacasBody">
+                                        <!-- Aqui serão adicionadas as linhas com as peças -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnAdicionarPeca">Adicionar Peça</button>
+                <button type="button" class="btn btn-primary" id="btnImportarPecas" style="display: none;">Importar
+                    Peças</button>
+                <button type="button" class="btn btn-primary" id="btnGerarPlacas" style="display: none;">Gerar e
+                    Adicionar Placas</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Funções GLOBAIS que precisam ser acessadas por onclick ou por múltiplos listeners
+
+    function atualizarContadoresPlacas() {
+        const prefixoPN = document.getElementById('prefixo-pn').value || 'PN';
+        const numeroInicial = parseInt(document.getElementById('numero-inicial').value || '1');
+        const intervaloPF = parseInt(document.getElementById('intervalo-pf').value || '40');
+
+        const placasNormais = parseInt(document.getElementById('tanquePlacasNormais').value || '0');
+        const placasFecho = parseInt(document.getElementById('tanquePlacasFecho').value || '0');
+        const tanques = parseInt(document.getElementById('tanqueQuantidade').value || '0');
+
+        document.getElementById('placas-pn-count').textContent = placasNormais;
+        document.getElementById('placas-pf-count').textContent = placasFecho;
+        document.getElementById('placas-total-count').textContent = placasNormais + placasFecho;
+        const total = (placasFecho + placasNormais) * tanques;
+        document.getElementById('placas-total-geral').textContent = total;
+        document.getElementById('intervalo-display').textContent = intervaloPF;
+
+        const alertaVazio = document.getElementById('sem-placas-config');
+        if (placasNormais === 0) {
+            alertaVazio.style.display = 'block';
+        } else {
+            alertaVazio.style.display = 'none';
+        }
+    }
+
+    function gerarListaPecas() {
+        const prefixoPN = document.getElementById('prefixo-pn').value || 'PN';
+        const prefixoPF = document.getElementById('prefixo-pf').value || 'PF';
+        const numeroInicial = parseInt(document.getElementById('numero-inicial').value || '1');
+        const intervaloPF = parseInt(document.getElementById('intervalo-pf').value || '40');
+
+        const placasNormais = parseInt(document.getElementById('tanquePlacasNormais').value || '0');
+        const placasFecho = parseInt(document.getElementById('tanquePlacasFecho').value || '0');
+        const Quantidade = parseInt(document.getElementById('tanqueQuantidade').value || '0');
+
+        if (placasNormais === 0) {
+            return {
+                sucesso: false,
+                mensagem: 'Este tanque não tem configuração de placas.'
+            };
+        }
+
+        const pecas = [];
+        let inti = 0;
+        let numero = numeroInicial;
+        let qpft = 0;
+        let qpnt = 0;
+        for (let taq = 0; taq < Quantidade; taq++) {
+            let qpf = 0;
+            for (let i = 0; i < placasNormais + placasFecho; i++) {
+                inti++;
+                if (inti == intervaloPF && qpf < (placasFecho / Quantidade) ) { // Ajuste para intervaloPF e quantidade correta de PF por tanque
+                    pecas.push({
+                        tipo: 'Placa Fecho',
+                        nome: `${prefixoPF}${numero}`,
+                        quantidade: 1,
+                        tanque: taq + 1
+                    });
+                    qpf++;
+                    qpft++;
+                    inti = 0;
+                } else {
+                    pecas.push({
+                        tipo: 'Placa Normal',
+                        nome: `${prefixoPN}${numero}`,
+                        quantidade: 1,
+                        tanque: taq + 1
+                    });
+                    qpnt++;
+                }
+                numero++;
+            }
+            inti = 0; // Reset inti for each tank
+        }
+        // console.log("total pecas: " + (numero - numeroInicial) + " pn: " + qpnt + " pf: " + qpft); // Adjusted log
+        return {
+            sucesso: true,
+            pecas: pecas
+        };
+    }
+
+    function abrirModalAdicionarPecas(tanqueId, nomeTanque) {
+        document.getElementById('tanqueId').value = tanqueId;
+        document.getElementById('tanqueIdImport').value = tanqueId;
+        document.getElementById('tanqueIdGerador').value = tanqueId;
+        document.getElementById('nomeTanque').textContent = nomeTanque;
+
+        document.getElementById('previewPlacas').style.display = 'none';
+        document.getElementById('previewPlacasBody').innerHTML = '';
+        
+        // Limpar forms ao abrir o modal
+        if(document.getElementById('formAdicionarPeca')) document.getElementById('formAdicionarPeca').reset();
+        if(document.getElementById('formImportarPecas')) document.getElementById('formImportarPecas').reset();
+        if(document.getElementById('formGerarPlacas')) document.getElementById('formGerarPlacas').reset();
+
+
+        fetch(`/api/tanques/${tanqueId}/proximo-sequencial`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('proximoSequencial').value = data.proximo_sequencial || 1;
+            })
+            .catch(error => {
+                console.error('Erro ao buscar próximo sequencial:', error);
+                document.getElementById('proximoSequencial').value = 1;
+            });
+
+        fetch(`/api/tanques/${tanqueId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.tanque) {
+                    document.getElementById('tanquePlacasNormais').value = parseInt(data.tanque.placas_normais) || 0;
+                    document.getElementById('tanquePlacasFecho').value = parseInt(data.tanque.placas_fecho) || 0;
+                    document.getElementById('tanqueQuantidade').value = parseInt(data.tanque.quantidade) || 0;
+                    // console.log('Dados do tanque recebidos:', data.tanque);
+                    atualizarContadoresPlacas();
+                } else {
+                    // console.warn('Dados do tanque incompletos ou inválidos:', data);
+                    document.getElementById('tanquePlacasNormais').value = 0;
+                    document.getElementById('tanquePlacasFecho').value = 0;
+                    document.getElementById('tanqueQuantidade').value = 0;
+                    atualizarContadoresPlacas();
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar configuração do tanque:', error);
+                document.getElementById('tanquePlacasNormais').value = 0;
+                document.getElementById('tanquePlacasFecho').value = 0;
+                document.getElementById('tanqueQuantidade').value = 0;
+                atualizarContadoresPlacas();
+            });
+
+        var myModal = new bootstrap.Modal(document.getElementById('modalAdicionarPecas'));
+        myModal.show();
+
+        const firstTab = document.querySelector('#pecasTab button:first-child');
+        if (firstTab) {
+            const tabInstance = new bootstrap.Tab(firstTab);
+            tabInstance.show();
+             // Forçar a exibição do botão correto para a primeira aba ao abrir o modal
+            document.getElementById('btnAdicionarPeca').style.display = 'block';
+            document.getElementById('btnImportarPecas').style.display = 'none';
+            document.getElementById('btnGerarPlacas').style.display = 'none';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Inicializa o DataTables com configurações para português
+        if (typeof $.fn.DataTable !== 'undefined') {
+            $('#dataTable').DataTable({
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+                },
+                order: [[0, 'desc']]
+            });
+        } else {
+            // console.error('DataTable não está disponível');
+        }
+
+        // Confirmação para exclusão
+        const formsExcluir = document.querySelectorAll('.form-excluir');
+        formsExcluir.forEach(form => {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (confirm('Tem certeza que deseja excluir este tanque? Esta ação não pode ser desfeita.')) {
+                    form.submit();
+                }
+            });
+        });
+
+        // Alternar entre as abas do modal (adição manual, importação, gerador)
+        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function (button) {
+            button.addEventListener('shown.bs.tab', function (event) { // Usar shown.bs.tab para garantir que a aba foi exibida
+                const targetId = button.getAttribute('data-bs-target');
+
+                document.getElementById('btnAdicionarPeca').style.display = 'none';
+                document.getElementById('btnImportarPecas').style.display = 'none';
+                document.getElementById('btnGerarPlacas').style.display = 'none';
+
+                if (targetId === '#manual-content') {
+                    document.getElementById('btnAdicionarPeca').style.display = 'block';
+                } else if (targetId === '#importar-content') {
+                    document.getElementById('btnImportarPecas').style.display = 'block';
+                } else if (targetId === '#gerador-content') {
+                    document.getElementById('btnGerarPlacas').style.display = 'block';
+                    atualizarContadoresPlacas();
+                }
+            });
+        });
+
+        // Adicionar peça manualmente
+        const btnAdicionarPecaEl = document.getElementById('btnAdicionarPeca');
+        if (btnAdicionarPecaEl) {
+            // console.log('Listener para btnAdicionarPeca ANEXADO DENTRO de DOMContentLoaded');
+            btnAdicionarPecaEl.addEventListener('click', function () {
+                const form = document.getElementById('formAdicionarPeca');
+                const tanqueId = document.getElementById('tanqueId').value;
+                const formData = new FormData(form);
+                // console.log('Dados do formulário manual (btnAdicionarPeca):', Object.fromEntries(formData.entries()));
+                
+                fetch(`/api/tanques/${tanqueId}/pecas/adicionar`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Peça(s) adicionada(s) com sucesso!');
+                        var myModal = bootstrap.Modal.getInstance(document.getElementById('modalAdicionarPecas'));
+                        if (myModal) myModal.hide();
+                        window.location.reload();
+                    } else {
+                        alert('Erro ao adicionar peça(s): ' + (data.message || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro AJAX ao adicionar peça:', error);
+                    alert('Erro ao adicionar peça(s). Verifique o console para mais detalhes.');
+                });
+            });
+        } else {
+            // console.error('Elemento btnAdicionarPeca NÃO encontrado no DOM (dentro do DOMContentLoaded).');
+        }
+
+        // Importar peças via Excel
+        const btnImportarPecasEl = document.getElementById('btnImportarPecas');
+        if (btnImportarPecasEl) {
+            // console.log('Listener para btnImportarPecas ANEXADO DENTRO de DOMContentLoaded');
+            btnImportarPecasEl.addEventListener('click', function (e) {
+                e.preventDefault();
+                const fileInput = document.getElementById('arquivoExcel');
+                const tanqueId = document.getElementById('tanqueIdImport').value;
+
+                if (!fileInput.files.length) {
+                    alert('Por favor, selecione um arquivo Excel para importar.');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                // console.log('Dados do formulário de importação (btnImportarPecas):', fileInput.files[0].name, 'para tanqueId:', tanqueId);
+
+                fetch(`/api/tanques/${tanqueId}/pecas/importar`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Peças importadas com sucesso!');
+                        var myModal = bootstrap.Modal.getInstance(document.getElementById('modalAdicionarPecas'));
+                        if (myModal) myModal.hide();
+                        location.reload();
+                    } else {
+                        alert(`Erro ao importar peças: ${data.error || 'Erro desconhecido'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro AJAX ao importar peças:', error);
+                    alert(`Erro ao importar peças. Verifique o console.`);
+                });
+            });
+        } else {
+            // console.error('Elemento btnImportarPecas NÃO encontrado no DOM (dentro do DOMContentLoaded).');
+        }
+
+        // Link para download do modelo de planilha
+        const downloadModeloEl = document.getElementById('downloadModelo');
+        if (downloadModeloEl) {
+            downloadModeloEl.addEventListener('click', function (e) {
+                e.preventDefault();
+                window.location.href = '/api/pecas/modelo-planilha';
+            });
+        }
+
+        // Adicionar event listeners para os inputs do gerador
+        const intervaloPfEl = document.getElementById('intervalo-pf');
+        if (intervaloPfEl) intervaloPfEl.addEventListener('input', atualizarContadoresPlacas);
+        const numeroInicialEl = document.getElementById('numero-inicial');
+        if (numeroInicialEl) numeroInicialEl.addEventListener('input', atualizarContadoresPlacas);
+        const prefixoPnEl = document.getElementById('prefixo-pn');
+        if (prefixoPnEl) prefixoPnEl.addEventListener('input', atualizarContadoresPlacas);
+        const prefixoPfEl = document.getElementById('prefixo-pf');
+        if (prefixoPfEl) prefixoPfEl.addEventListener('input', atualizarContadoresPlacas);
+
+        // Event listener para o botão de visualizar placas
+        const btnVisualizarPlacasEl = document.getElementById('btnVisualizarPlacas');
+        if (btnVisualizarPlacasEl) {
+            btnVisualizarPlacasEl.addEventListener('click', function (e) {
+                e.preventDefault();
+                const resultado = gerarListaPecas();
+                if (!resultado.sucesso) {
+                    alert(resultado.mensagem);
+                    return;
+                }
+                const tbody = document.getElementById('previewPlacasBody');
+                tbody.innerHTML = '';
+                resultado.pecas.forEach(peca => {
+                    const tr = document.createElement('tr');
+                    const tdTipo = document.createElement('td');
+                    tdTipo.textContent = peca.tipo;
+                    const tdNome = document.createElement('td');
+                    tdNome.textContent = peca.nome;
+                    const tdTanque = document.createElement('td'); // Adicionado para exibir o tanque na prévia
+                    tdTanque.textContent = "Tanque " + peca.tanque;
+
+                    tr.appendChild(tdTipo);
+                    tr.appendChild(tdNome);
+                    tr.appendChild(tdTanque); // Adicionado
+                    tbody.appendChild(tr);
+                });
+                document.getElementById('previewPlacas').style.display = 'block';
+            });
+        }
+
+        // Event listener para o botão de gerar placas
+        const btnGerarPlacasEl = document.getElementById('btnGerarPlacas');
+        if (btnGerarPlacasEl) {
+            btnGerarPlacasEl.addEventListener('click', function (e) {
+                e.preventDefault();
+                const resultado = gerarListaPecas();
+                if (!resultado.sucesso) {
+                    alert(resultado.mensagem);
+                    return;
+                }
+                const tanqueId = document.getElementById('tanqueIdGerador').value;
+                // console.log('Enviando lote de placas:', resultado.pecas, 'para tanqueId:', tanqueId);
+
+                fetch(`/api/tanques/${tanqueId}/pecas/adicionar-lote`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pecas: resultado.pecas })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`${resultado.pecas.length} placas foram adicionadas com sucesso!`);
+                        var myModal = bootstrap.Modal.getInstance(document.getElementById('modalAdicionarPecas'));
+                        if (myModal) myModal.hide();
+                        location.reload();
+                    } else {
+                        alert(`Erro ao adicionar placas: ${data.error || 'Erro desconhecido'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro AJAX ao adicionar lote de placas:', error);
+                    alert(`Erro ao adicionar placas. Verifique o console.`);
+                });
+            });
+        }
+
+        // Inicialização para o modal (listener para 'shown.bs.modal')
+        const modalAdicionarPecas = document.getElementById('modalAdicionarPecas');
+        if (modalAdicionarPecas) {
+            modalAdicionarPecas.addEventListener('shown.bs.modal', function () {
+                const activeTab = document.querySelector('#pecasTab button.active'); // Correção no seletor
+                if (activeTab) {
+                    const targetId = activeTab.getAttribute('data-bs-target');
+                    if (targetId === '#gerador-content') {
+                        atualizarContadoresPlacas();
+                    }
+                    // Garante que o botão correto esteja visível com base na aba ativa ao mostrar o modal
+                     document.getElementById('btnAdicionarPeca').style.display = (targetId === '#manual-content') ? 'block' : 'none';
+                     document.getElementById('btnImportarPecas').style.display = (targetId === '#importar-content') ? 'block' : 'none';
+                     document.getElementById('btnGerarPlacas').style.display = (targetId === '#gerador-content') ? 'block' : 'none';
+                } else {
+                     // Se nenhuma aba estiver ativa (pouco provável com Bootstrap), mostrar o da primeira aba por padrão
+                    document.getElementById('btnAdicionarPeca').style.display = 'block';
+                    document.getElementById('btnImportarPecas').style.display = 'none';
+                    document.getElementById('btnGerarPlacas').style.display = 'none';
+                }
+            });
+        } else {
+            // console.warn('Elemento #modalAdicionarPecas não encontrado para listener shown.bs.modal.');
+        }
+    });
+</script>
+{% endblock %}

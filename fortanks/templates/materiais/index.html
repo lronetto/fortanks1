@@ -1,0 +1,965 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Materiais - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <!-- Garantir que o jQuery e Bootstrap estejam disponíveis -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-boxes"></i> Materiais</h1>
+    <p class="mb-4">Gerenciamento de materiais para solicitações e pedidos</p>
+    
+    {# Lógica inline para exibir mensagens flash #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category in ['success', 'warning', 'danger', 'info'] else 'secondary' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Materiais</h6>
+            <div>
+                <a href="{{ url_for('material.exportar_excel', search=search_term, category=category_filter) }}" class="btn btn-info btn-sm me-2" target="_blank">
+                    <i class="fas fa-file-excel"></i> Exportar Excel (Filtrado)
+                </a>
+                <button type="button" class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalImportarMaterial">
+                    <i class="fas fa-file-import"></i> Importar Materiais
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoMaterial">
+                    <i class="fas fa-plus"></i> Novo Material
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Formulário de busca e filtro (Backend) -->
+            <form method="GET" action="{{ url_for('material.index') }}" id="filterForm" class="mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-5">
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-search"></i>
+                            </span>
+                            <input type="text" class="form-control" id="searchInput" name="search" placeholder="Buscar por código ou nome..." value="{{ search_term }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" id="categoriaFilter" name="category">
+                            <option value="">Todas as categorias</option>
+                            {# Popular com categorias do backend #}
+                            {% for cat in categorias_filtro %}
+                            <option value="{{ cat }}" {{ 'selected' if cat == category_filter else '' }}>{{ cat }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary">
+                           <i class="fas fa-filter"></i> Filtrar
+                        </button>
+                         <a href="{{ url_for('material.index') }}" class="btn btn-secondary ms-1" title="Limpar Filtros">
+                            <i class="fas fa-eraser"></i>
+                        </a>
+                    </div>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Código SOX</th>
+                            <th>Nome</th>
+                            <th>Categoria</th>
+                            <th>Unidade</th>
+                            <th>Plano de Conta</th>
+                            <th>Criado em</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for material in materiais %}
+                        <tr>
+                            <td>{{ material.id }}</td>
+                            <td>{{ material.codigo or '-' }}</td>
+                            <td>{{ material.nome }}</td>
+                            <td>{{ material.unidade_obj.nome or '-' }}</td>
+                            <td>{{ material.plano_conta or '-' }}</td>
+                            <td>{{ material.data_criacao.strftime('%d/%m/%Y') }}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-info btn-sm btn-visualizar"
+                                    data-id="{{ material.id }}" 
+                                    data-codigo="{{ material.codigo or '' }}"
+                                    data-codigo_erp="{{ material.codigo_erp or '' }}" 
+                                    data-nome="{{ material.nome }}"
+                                    data-categoria="{{ material.categoria }}"
+                                    data-unidade="{{ material.unidade_obj.id or '' }}"
+                                    data-plano_conta="{{ material.plano_conta or '' }}"
+                                    data-descricao="{{ material.descricao or '' }}"
+                                    title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-primary btn-sm btn-editar" 
+                                    data-id="{{ material.id }}" 
+                                    data-codigo="{{ material.codigo or '' }}"
+                                    data-codigo-erp="{{ material.codigo_erp or '' }}" 
+                                    data-nome="{{ material.nome }}"
+                                    data-categoria="{{ material.categoria }}"
+                                    data-plano-conta="{{ material.plano_conta or '' }}"
+                                    data-descricao="{{ material.descricao or '' }}"
+                                    data-unidade="{{ material.unidade_obj.id or '' }}"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalEditarMaterial"
+                                    title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <form action="{{ url_for('material.excluir', id=material.id) }}" method="POST"
+                                    class="d-inline form-excluir">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-danger btn-sm" {% if material.itens_solicitacao
+                                        %}disabled{% endif %}
+                                        title="{% if material.itens_solicitacao %}Material em uso{% else %}Excluir{% endif %}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center">Nenhum material encontrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Controles de Paginação (Inline) -->
+            {% if pagination and pagination.pages > 1 %}
+            <nav aria-label="Navegação de página">
+                <ul class="pagination justify-content-center mt-4">
+                    {# Link para a página anterior #}
+                    <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
+                        <a class="page-link" href="{{ url_for('material.index', page=pagination.prev_num, **request.args) }}" aria-label="Anterior">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+            
+                    {# Links para as páginas #}
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num != pagination.page %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('material.index', page=page_num, **request.args) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item active" aria-current="page">
+                                    <span class="page-link">{{ page_num }}</span>
+                                </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+            
+                    {# Link para a próxima página #}
+                    <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
+                        <a class="page-link" href="{{ url_for('material.index', page=pagination.next_num, **request.args) }}" aria-label="Próxima">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edição de Material -->
+<div class="modal fade" id="modalEditarMaterial" tabindex="-1" aria-labelledby="modalEditarMaterialLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarMaterialLabel"><i class="fas fa-edit"></i> Editar Material</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-material" method="POST">
+                    <input type="hidden" id="edit_id" name="material_id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_codigo" class="form-label">Código SOX</label>
+                            <input type="text" class="form-control" id="edit_codigo" name="edit_codigo">
+                            <small class="text-muted">Código interno ou SKU do material</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_codigo_erp" class="form-label">Código ERP</label>
+                            <input type="text" class="form-control" id="edit_codigo_erp" name="edit_codigo_erp">
+                            <small class="text-muted">Código usado no sistema ERP (opcional)</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_categoria" class="form-label">Categoria</label>
+                            <select class="form-select" id="edit_categoria" name="edit_categoria" required>
+                                <option value="" disabled>Selecione uma categoria</option>
+                                <option value="Matéria-prima">Matéria-prima</option>
+                                <option value="Insumo">Insumo</option>
+                                <option value="Ferramenta">Ferramenta</option>
+                                <option value="Equipamento">Equipamento</option>
+                                <option value="Material de Escritório">Material de Escritório</option>
+                                <option value="Serviço">Serviço</option>
+                                <option value="EPI">EPI</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="edit_nome" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="edit_nome" name="edit_nome" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_unidade" class="form-label">Unidade de Medida</label>
+                            <select class="form-select" id="edit_unidade" name="edit_unidade">
+                                <option value="">Selecione uma unidade</option>
+                                {% for unidade in unidades %}
+                                <option value="{{ unidade.id }}">{{ unidade.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <!-- Campo alternativo de texto para unidade, inicialmente oculto -->
+                            <input type="text" id="unidade_texto" name="unidade_texto" class="form-control mt-2" style="display:none;">
+                            
+                            <!-- Botão para alternar para input de texto se o select não funcionar -->
+                            <button type="button" id="btn-alternar-unidade" class="btn btn-sm btn-outline-secondary mt-2">
+                                Digitar unidade manualmente
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_plano_conta" class="form-label">Plano de Conta</label>
+                            <select class="form-select select2-plano-conta" id="edit_plano_conta" name="edit_plano_conta">
+                                <option value="">Selecione o plano de conta (opcional)</option>
+                                {% for plano in planos_conta %}
+                                <option value="{{ plano.codigo }}">
+                                    {{ plano.codigo }} - {{ plano.descricao }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="edit_descricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="edit_descricao" name="edit_descricao" rows="3"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <div id="modal-mensagens"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-edicao">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Visualização de Material -->
+<div class="modal fade" id="modalVisualizarMaterial" tabindex="-1" aria-labelledby="modalVisualizarMaterialLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarMaterialLabel"><i class="fas fa-eye"></i> Detalhes do Material</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Código SOX</label>
+                        <p id="view_codigo" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Código ERP</label>
+                        <p id="view_codigo_erp" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Categoria</label>
+                        <p id="view_categoria" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label fw-bold">Nome</label>
+                        <p id="view_nome" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Unidade de Medida</label>
+                        <p id="view_unidade" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Plano de Conta</label>
+                        <p id="view_plano_conta" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label fw-bold">Descrição</label>
+                        <p id="view_descricao" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Novo Material -->
+<div class="modal fade" id="modalNovoMaterial" tabindex="-1" aria-labelledby="modalNovoMaterialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNovoMaterialLabel"><i class="fas fa-plus-circle"></i> Novo Material</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('material.novo') }}" id="form-novo-material">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="codigo" class="form-label">Código SOX</label>
+                            <input type="text" class="form-control" id="codigo" name="codigo">
+                            <small class="text-muted">Código interno ou SKU do material</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="codigo_erp" class="form-label">Código ERP</label>
+                            <input type="text" class="form-control" id="codigo_erp" name="codigo_erp">
+                            <small class="text-muted">Código usado no sistema ERP (opcional)</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="categoria" class="form-label">Categoria</label>
+                            <select class="form-select" id="categoria" name="categoria" required>
+                                <option value="" selected disabled>Selecione uma categoria</option>
+                                <option value="Matéria-prima">Matéria-prima</option>
+                                <option value="Insumo">Insumo</option>
+                                <option value="Ferramenta">Ferramenta</option>
+                                <option value="Equipamento">Equipamento</option>
+                                <option value="Material de Escritório">Material de Escritório</option>
+                                <option value="Serviço">Serviço</option>
+                                <option value="EPI">EPI</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="nome" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="nome" name="nome" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="unidade" class="form-label">Unidade de Medida</label>
+                            <select class="form-select" id="unidade" name="unidade">
+                                <option value="">Selecione uma unidade</option>
+                                {% for unidade in unidades %}
+                                <option value="{{ unidade.id }}">{{ unidade.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <!-- Campo alternativo de texto para unidade, inicialmente oculto -->
+                            <input type="text" id="unidade_texto_novo" name="unidade_texto" class="form-control mt-2" style="display:none;">
+                            
+                            <!-- Botão para alternar para input de texto se o select não funcionar -->
+                            <button type="button" id="btn-alternar-unidade-novo" class="btn btn-sm btn-outline-secondary mt-2">
+                                Digitar unidade manualmente
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="plano_conta" class="form-label">Plano de Conta</label>
+                            <select class="form-select select2-plano-conta-novo" id="plano_conta" name="plano_conta">
+                                <option value="">Selecione o plano de conta (opcional)</option>
+                                {% for plano in planos_conta %}
+                                <option value="{{ plano.codigo }}">
+                                    {{ plano.indice }} - {{ plano.codigo }} - {{ plano.descricao }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="descricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="pc" class="form-label">Informações Adicionais (PC)</label>
+                            <input type="text" class="form-control" id="pc" name="pc">
+                            <small class="text-muted">Informações para Pedido de Compra (opcional)</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Importação de Material -->
+<div class="modal fade" id="modalImportarMaterial" tabindex="-1" aria-labelledby="modalImportarMaterialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalImportarMaterialLabel"><i class="fas fa-file-import"></i> Importar Materiais</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('material.upload_arquivo') }}" enctype="multipart/form-data" id="form-importar-material">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="arquivo" class="form-label">Arquivo Excel (.xlsx)</label>
+                        <input class="form-control" type="file" id="arquivo" name="arquivo" accept=".xlsx" required>
+                    </div>
+                    <div class="mt-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Instruções
+                            </div>
+                            <div class="card-body">
+                                <p>Para importar materiais, siga as instruções abaixo:</p>
+                                <ol>
+                                    <li>Prepare um arquivo Excel (.xlsx) com os dados dos materiais.</li>
+                                    <li>As colunas obrigatórias são: <strong>Nome</strong> e <strong>Categoria</strong>.</li>
+                                    <li>Colunas opcionais: Código, Código ERP, Plano de Contas, Descrição, PC e Unidade.</li>
+                                    <li>Envie o arquivo clicando no botão "Enviar Arquivo".</li>
+                                    <li>Na próxima tela, mapeie as colunas do seu arquivo com os campos do sistema.</li>
+                                    <li>Confirme a importação para concluir o processo.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="{{ url_for('material.download_modelo') }}" class="btn btn-outline-primary me-auto">
+                            <i class="fas fa-download me-1"></i> Baixar Modelo
+                        </a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-upload me-1"></i> Enviar Arquivo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Garantir que o jQuery está disponível
+    if (typeof jQuery === 'undefined') {
+        console.error('jQuery não está carregado!');
+        return;
+    }
+
+    // Configurar o botão de alternar unidade
+    const btnAlternarUnidade = document.getElementById('btn-alternar-unidade');
+    const unidadeSelect = document.getElementById('edit_unidade');
+    const unidadeTexto = document.getElementById('unidade_texto');
+    
+    if (btnAlternarUnidade && unidadeSelect && unidadeTexto) {
+        btnAlternarUnidade.addEventListener('click', function() {
+            if (unidadeTexto.style.display === 'none') {
+                // Alternar para o campo de texto
+                unidadeSelect.style.display = 'none';
+                unidadeTexto.style.display = 'block';
+                unidadeTexto.value = unidadeSelect.value;
+                btnAlternarUnidade.textContent = 'Usar opções pré-definidas';
+            } else {
+                // Alternar para o select
+                unidadeTexto.style.display = 'none';
+                unidadeSelect.style.display = 'block';
+                btnAlternarUnidade.textContent = 'Digitar unidade manualmente';
+            }
+        });
+    }
+
+    // Manipulação do Modal de Edição
+    const modal = new bootstrap.Modal(document.getElementById('modalEditarMaterial'));
+    
+    // Preencher o modal com os dados do material
+    function preencherModal(material) {
+        if (!material) {
+            console.error('Dados do material não encontrados!');
+            return;
+        }
+        
+        console.log('Preenchendo modal com dados:', material);
+        
+        try {
+            // Definir campos básicos
+            document.getElementById('edit_id').value = material.id || '';
+            console.log('ID definido:', document.getElementById('edit_id').value);
+            
+            document.getElementById('edit_codigo').value = material.codigo || '';
+            console.log('Código definido:', document.getElementById('edit_codigo').value);
+            
+            document.getElementById('edit_codigo_erp').value = material.codigo_erp || '';
+            console.log('Código ERP definido:', document.getElementById('edit_codigo_erp').value);
+            
+            document.getElementById('edit_nome').value = material.nome || '';
+            console.log('Nome definido:', document.getElementById('edit_nome').value);
+            
+            document.getElementById('edit_descricao').value = material.descricao || '';
+            console.log('Descrição definida:', document.getElementById('edit_descricao').value);
+            
+            // Definir categoria
+            const categoriaSelect = document.getElementById('edit_categoria');
+            if (categoriaSelect) {
+                categoriaSelect.value = material.categoria || '';
+                console.log('Categoria definida:', categoriaSelect.value);
+            } else {
+                console.error('Elemento edit_categoria não encontrado');
+            }
+            
+            // Definir plano de conta
+            const planoContaSelect = document.getElementById('edit_plano_conta');
+            if (planoContaSelect) {
+                planoContaSelect.value = material.plano_conta || '';
+                console.log('Plano de conta definido:', planoContaSelect.value);
+                // Atualizar select2 se estiver sendo usado
+                try {
+                    $(planoContaSelect).trigger('change');
+                } catch (e) {
+                    console.error('Erro ao atualizar select2:', e);
+                }
+            } else {
+                console.error('Elemento edit_plano_conta não encontrado');
+            }
+            
+            // Configurar a unidade
+            const unidadeSelect = document.getElementById('edit_unidade');
+            const unidadeTexto = document.getElementById('unidade_texto');
+            
+            if (unidadeSelect && unidadeTexto) {
+                console.log('Configurando unidade:', material.unidade);
+                
+                // Verificar se a unidade existe nas opções
+                let unidadeExiste = false;
+                for (let i = 0; i < unidadeSelect.options.length; i++) {
+                    if (unidadeSelect.options[i].value === material.unidade) {
+                        unidadeExiste = true;
+                        break;
+                    }
+                }
+                
+                console.log('Unidade existe nas opções:', unidadeExiste);
+                
+                // Se a unidade não existir nas opções e não estiver vazia, adiciona como nova opção
+                if (!unidadeExiste && material.unidade) {
+                    console.log('Adicionando nova opção de unidade:', material.unidade);
+                    const novaOpcao = new Option(material.unidade, material.unidade);
+                    unidadeSelect.add(novaOpcao);
+                }
+                
+                // Definir os valores para ambos os campos
+                unidadeSelect.value = material.unidade || '';
+                unidadeTexto.value = material.unidade || '';
+                
+                console.log('Unidade definida (select):', unidadeSelect.value);
+                console.log('Unidade definida (texto):', unidadeTexto.value);
+                
+                // Mostrar o campo apropriado
+                const btnAlternarUnidade = document.getElementById('btn-alternar-unidade');
+                
+                if (unidadeExiste || !material.unidade) {
+                    unidadeSelect.style.display = 'block';
+                    unidadeTexto.style.display = 'none';
+                    
+                    if (btnAlternarUnidade) {
+                        btnAlternarUnidade.textContent = 'Digitar unidade manualmente';
+                    }
+                } else {
+                    unidadeSelect.style.display = 'none';
+                    unidadeTexto.style.display = 'block';
+                    
+                    if (btnAlternarUnidade) {
+                        btnAlternarUnidade.textContent = 'Usar opções pré-definidas';
+                    }
+                }
+            } else {
+                console.error('Elementos de unidade não encontrados:', {
+                    unidadeSelect: !!unidadeSelect,
+                    unidadeTexto: !!unidadeTexto
+                });
+            }
+            
+            console.log('Modal preenchido com sucesso');
+            
+        } catch (error) {
+            console.error('Erro ao preencher o modal:', error);
+        }
+    }
+    
+    // Adicionar evento para o botão de editar
+    const editButtons = document.querySelectorAll('.btn-editar');
+    editButtons.forEach(button => {
+        console.log('Botão encontrado:', button);
+        console.log('data-id:', button.getAttribute('data-id'));
+        
+        button.addEventListener('click', function() {
+            try {
+                const materialId = this.getAttribute('data-id');
+                console.log('Botão de editar clicado, ID:', materialId);
+                
+                // Verificar se podemos obter os dados do material pelos atributos data
+                if (this.dataset) {
+                    console.log('Usando dados do dataset:', this.dataset);
+                    
+                    // Criar um objeto material com os dados do dataset
+                    const material = {
+                        id: this.dataset.id,
+                        codigo: this.dataset.codigo || '',
+                        codigo_erp: this.dataset.codigoErp || '',
+                        nome: this.dataset.nome || '',
+                        descricao: this.dataset.descricao || '',
+                        categoria: this.dataset.categoria || '',
+                        plano_conta: this.dataset.planoConta || '',
+                        unidade: this.dataset.unidade || ''
+                    };
+                    
+                    console.log('Material construído do dataset:', material);
+                    
+                    // Preencher o modal com os dados do material
+                    preencherModal(material);
+                    return;
+                }
+                
+                // Se não conseguir obter do dataset, tenta via AJAX
+                const url = `/materiais/obter-ajax/${materialId}`;
+                console.log('Fazendo requisição para:', url);
+                
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    console.log('Resposta recebida, status:', response.status);
+                    const contentType = response.headers.get('content-type');
+                    console.log('Tipo de conteúdo:', contentType);
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        return response.json();
+                    } else {
+                        // Se não for JSON, tratar como erro
+                        return response.text().then(text => {
+                            console.error('Resposta não é JSON:', text);
+                            throw new Error('Resposta do servidor não é JSON válido');
+                        });
+                    }
+                })
+                .then(data => {
+                    console.log('Dados do material:', data);
+                    if (data.success) {
+                        console.log('Preenchendo modal com dados:', data.material);
+                        preencherModal(data.material);
+                    } else {
+                        console.error('Erro retornado pelo servidor:', data.error);
+                        alert('Erro ao carregar os dados do material: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao fazer requisição:', error);
+                    console.error('Detalhes completos do erro:', {
+                        name: error.name,
+                        message: error.message,
+                        stack: error.stack
+                    });
+                    alert('Erro ao carregar os dados do material: ' + error.message);
+                });
+            } catch (error) {
+                console.error('Erro ao processar clique no botão de editar:', error);
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+    
+    // Adicionar evento para o botão de salvar edição
+    const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
+    if (btnSalvarEdicao) {
+        btnSalvarEdicao.addEventListener('click', function() {
+            try {
+                console.log('Botão salvar clicado');
+                
+                const materialId = document.getElementById('edit_id').value;
+                console.log('ID do material:', materialId);
+                
+                const unidadeSelect = document.getElementById('edit_unidade');
+                const unidadeTexto = document.getElementById('unidade_texto');
+                const categoriaSelect = document.getElementById('edit_categoria');
+                
+                // Verificar se a categoria está selecionada (campo obrigatório)
+                if (!categoriaSelect.value) {
+                    alert('A categoria é obrigatória. Por favor, selecione uma categoria para o material.');
+                    categoriaSelect.focus();
+                    return;
+                }
+                
+                // Verificar se o nome está preenchido (campo obrigatório)
+                const nomeInput = document.getElementById('edit_nome');
+                if (!nomeInput.value.trim()) {
+                    alert('O nome do material é obrigatório. Por favor, preencha o nome do material.');
+                    nomeInput.focus();
+                    return;
+                }
+                
+                console.log('Valores de unidade:', {
+                    selectValue: unidadeSelect.value,
+                    textoValue: unidadeTexto.value,
+                    selectDisplay: unidadeSelect.style.display,
+                    textoDisplay: unidadeTexto.style.display,
+                    categoria: categoriaSelect.value
+                });
+                
+                // Verificar qual campo está visível e usar esse valor
+                let unidadeValue = unidadeSelect.style.display !== 'none' ? unidadeSelect.value : unidadeTexto.value;
+                console.log('Valor da unidade escolhido:', unidadeValue);
+                
+                // Se o select estiver vazio mas o campo de texto tiver valor, use o valor do texto
+                if (!unidadeSelect.value && unidadeTexto.value) {
+                    console.log('Select vazio, usando valor do texto');
+                    // Adicionar a opção ao select
+                    const novaOpcao = new Option(unidadeTexto.value, unidadeTexto.value);
+                    unidadeSelect.add(novaOpcao);
+                    unidadeSelect.value = unidadeTexto.value;
+                    unidadeValue = unidadeTexto.value;
+                    console.log('Novo valor do select:', unidadeSelect.value);
+                }
+                
+                const form = document.getElementById('form-editar-material');
+                console.log('Formulário encontrado:', !!form);
+                
+                // Verificar elementos do formulário
+                const formElements = form.elements;
+                console.log('Elementos do formulário:');
+                for (let i = 0; i < formElements.length; i++) {
+                    const element = formElements[i];
+                    console.log(`- ${element.name}: ${element.value}`);
+                }
+                
+                const formData = new FormData(form);
+                
+                // Verificar dados do FormData
+                console.log('Dados do FormData:');
+                for (let [key, value] of formData.entries()) {
+                    console.log(`- ${key}: ${value}`);
+                }
+                
+                const url = `/material/editar-material-ajax/${materialId}`;
+                console.log('URL para envio:', url);
+                
+                // Usando XMLHttpRequest em vez de fetch
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url, true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        console.log('Resposta recebida, status:', xhr.status);
+                        console.log('Resposta texto:', xhr.responseText);
+                        
+                        if (xhr.status === 200) {
+                            try {
+                                const resposta = JSON.parse(xhr.responseText);
+                                console.log('Resposta JSON:', resposta);
+                                
+                                if (resposta.success) {
+                                    console.log('Material salvo com sucesso, recarregando página');
+                                    window.location.reload();
+                                } else {
+                                    console.error('Erro retornado pelo servidor:', resposta.message || resposta.error);
+                                    alert(resposta.message || resposta.error || 'Erro ao salvar o material.');
+                                }
+                            } catch (e) {
+                                console.error('Erro ao parsear resposta JSON:', e);
+                                console.error('Resposta recebida:', xhr.responseText);
+                                alert('Erro ao processar resposta do servidor. Verifique o console para mais detalhes.');
+                            }
+                        } else {
+                            console.error('Erro na requisição. Status:', xhr.status);
+                            alert('Erro ao enviar requisição para o servidor. Status: ' + xhr.status);
+                        }
+                    }
+                };
+                
+                xhr.onerror = function() {
+                    console.error('Erro de rede na requisição');
+                    alert('Erro de conexão ao tentar salvar. Verifique sua conexão de internet.');
+                };
+                
+                // Enviar os dados
+                xhr.send(formData);
+                
+            } catch (error) {
+                console.error('Erro ao processar salvamento:', error);
+                alert('Ocorreu um erro ao processar sua solicitação: ' + error.message);
+            }
+        });
+    }
+
+    // Função para preencher o modal de visualização
+    function preencherModalVisualizacao(button) {
+        const data = button.dataset;
+        
+        document.getElementById('view_codigo').textContent = data.codigo || '-';
+        document.getElementById('view_codigo_erp').textContent = data.codigo_erp || '-';
+        document.getElementById('view_nome').textContent = data.nome || '-';
+        document.getElementById('view_categoria').textContent = data.categoria || '-';
+        document.getElementById('view_unidade').textContent = data.unidade || '-';
+        document.getElementById('view_plano_conta').textContent = data.plano_conta || '-';
+        document.getElementById('view_descricao').textContent = data.descricao || '-';
+    }
+
+    // Modal de Visualização
+    const modalVisualizacao = new bootstrap.Modal(document.getElementById('modalVisualizarMaterial'));
+
+    // Event listener para botões de visualização
+    document.querySelectorAll('.btn-visualizar').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log('Botão de visualizar clicado');
+            console.log('Dataset do botão:', this.dataset);
+            preencherModalVisualizacao(this);
+            modalVisualizacao.show();
+        });
+    });
+
+    // Confirmar exclusão de materiais
+    document.querySelectorAll('.form-excluir').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault(); // Evitar envio imediato
+            
+            const materialId = this.action.split('/').pop();
+            const materialRow = this.closest('tr');
+            const materialNome = materialRow.cells[2].textContent.trim();
+            
+            if (confirm(`Confirma a exclusão do material "${materialNome}"? Esta ação não pode ser desfeita.`)) {
+                console.log(`Excluindo material ID ${materialId}: ${materialNome}`);
+                this.submit(); // Enviar o formulário se confirmado
+            } else {
+                console.log('Exclusão cancelada pelo usuário');
+            }
+        });
+    });
+
+    // Log inicial
+    console.log('Script inicializado com sucesso');
+    console.log('Elementos encontrados:', {
+        searchInput: !!searchInput,
+        categoriaFilter: !!categoriaFilter
+    });
+
+    // Inicializar Select2 para o campo de plano de conta no modal de novo material
+    $('.select2-plano-conta-novo').select2({
+        placeholder: 'Selecione ou pesquise um plano de conta',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalNovoMaterial'),
+        language: {
+            noResults: function() {
+                return "Nenhum resultado encontrado";
+            },
+            searching: function() {
+                return "Buscando...";
+            }
+        }
+    });
+
+    // Botão para alternar para input de texto de unidade no modal de novo material
+    $('#btn-alternar-unidade-novo').click(function() {
+        $('#unidade').hide();
+        $('#unidade_texto_novo').show();
+        $(this).hide();
+    });
+
+    // Validação do formulário de novo material
+    $('#form-novo-material').submit(function(e) {
+        const nome = $('#nome').val().trim();
+        const categoria = $('#categoria').val();
+
+        if (!nome) {
+            e.preventDefault();
+            alert('O nome do material é obrigatório!');
+            $('#nome').focus();
+            return false;
+        }
+
+        if (!categoria) {
+            e.preventDefault();
+            alert('A categoria do material é obrigatória!');
+            $('#categoria').focus();
+            return false;
+        }
+
+        return true;
+    });
+
+    // Para o formulário de edição (que já existia)
+    $('#form-editar-material').submit(function(e) {
+        const nome = $('#edit_nome').val().trim();
+        const categoria = $('#edit_categoria').val();
+
+        if (!nome) {
+            e.preventDefault();
+            alert('O nome do material é obrigatório!');
+            $('#edit_nome').focus();
+            return false;
+        }
+
+        if (!categoria) {
+            e.preventDefault();
+            alert('A categoria do material é obrigatória!');
+            $('#edit_categoria').focus();
+            return false;
+        }
+
+        return true;
+    });
+});
+</script>
+{% endblock %}

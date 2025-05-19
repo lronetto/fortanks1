@@ -1,0 +1,345 @@
+{% extends "common/base.html" %}
+
+{% block title %}Movimentações de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Movimentações de Estoque</h1>
+        {% if current_user.is_admin or current_user.is_gerente %}
+        <a href="{{ url_for('estoque.nova_movimentacao') }}" class="btn btn-primary btn-sm mb-3">
+            <i class="fas fa-plus"></i> Nova Movimentação
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <a href="#collapseCardFiltros" class="d-block card-header py-3" data-toggle="collapse" role="button" aria-expanded="true" aria-controls="collapseCardFiltros">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </a>
+        <div class="collapse show" id="collapseCardFiltros">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('estoque.movimentacoes') }}">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="tipo">Tipo de Movimentação</label>
+                                <select name="tipo" id="tipo" class="form-control">
+                                    <option value="">Todos</option>
+                                    <option value="entrada" {% if tipo == 'entrada' %}selected{% endif %}>Entrada</option>
+                                    <option value="saida" {% if tipo == 'saida' %}selected{% endif %}>Saída</option>
+                                    <option value="ajuste" {% if tipo == 'ajuste' %}selected{% endif %}>Ajuste</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="estoque_id">Item de Estoque</label>
+                                <select name="estoque_id" id="estoque_id" class="form-control">
+                                    <option value="">Todos</option>
+                                    {% for item in itens_estoque %}
+                                    <option value="{{ item.id }}" {% if estoque_id == item.id %}selected{% endif %}>
+                                        {% if item.material %}
+                                            {{ item.material.nome }}
+                                        {% elif item.epi and item.epi.material %}
+                                            {{ item.epi.material.nome }}
+                                        {% else %}
+                                            Item #{{ item.id }}
+                                        {% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="data_inicio">Data Início</label>
+                                <input type="date" name="data_inicio" id="data_inicio" class="form-control" value="{{ data_inicio }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="data_fim">Data Fim</label>
+                                <input type="date" name="data_fim" id="data_fim" class="form-control" value="{{ data_fim }}">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="material_id">Material</label>
+                                <select name="material_id" id="material_id" class="form-control select2">
+                                    <option value="">Todos</option>
+                                    {% for material in materiais %}
+                                    <option value="{{ material.id }}" {% if material_id == material.id %}selected{% endif %}>
+                                        {{ material.nome }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
+                                <label for="observacao">Observação</label>
+                                <input type="text" name="observacao" id="observacao" class="form-control" value="{{ observacao or '' }}" placeholder="Buscar na observação...">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <button type="submit" class="btn btn-primary float-right ml-2">
+                                <i class="fas fa-search"></i> Filtrar
+                            </button>
+                            <a href="{{ url_for('estoque.movimentacoes') }}" class="btn btn-secondary float-right">
+                                <i class="fas fa-sync"></i> Limpar
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Movimentações -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Movimentações</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Data/Hora</th>
+                            <th>Item</th>
+                            <th>Tipo</th>
+                            <th>Quantidade</th>
+                            <th>Saldo Anterior</th>
+                            <th>Saldo Atual</th>
+                            <th>Usuário</th>
+                            <th>Observação</th>
+                            {% if current_user.is_admin %}
+                            <th>Ações</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimentacoes.items %}
+                        <tr>
+                            <td>{{ mov.id }}</td>
+                            <td>{{ mov.data_movimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {% if mov.estoque.material %}
+                                    <a href="{{ url_for('estoque.detalhes', id=mov.estoque.id) }}">
+                                        {{ mov.estoque.material.id }} - {{ mov.estoque.material.nome }}
+                                    </a>
+                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
+                                    <a href="{{ url_for('estoque.detalhes', id=mov.estoque.id) }}">
+                                        {{ mov.estoque.epi.material.id }} - {{ mov.estoque.epi.material.nome }}
+                                    </a>
+                                {% else %}
+                                    <a href="{{ url_for('estoque.detalhes', id=mov.estoque.id) }}">
+                                        Item #{{ mov.estoque.id }}
+                                    </a>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if mov.tipo_movimento == 'entrada' %}
+                                    <span >Entrada</span>
+                                {% elif mov.tipo_movimento == 'saida' %}
+                                    <span >Saída</span>
+                                {% elif mov.tipo_movimento == 'ajuste' %}
+                                    <span >Ajuste</span>
+                                {% else %}
+                                    <span >{{ mov.tipo_movimento }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {{ "%.2f"|format(mov.quantidade|float) }}
+                                {% if mov.estoque.material %}
+                                    {{ mov.estoque.material.unidade_obj.nome or "" }}
+                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
+                                    {{ mov.estoque.epi.material.unidade.nome or "un" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {{ "%.2f"|format(mov.saldo_anterior()|float if mov.saldo_anterior() else 0) }}
+                                {% if mov.estoque.material %}
+                                    {{ mov.estoque.material.unidade_obj.nome or "" }}
+                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
+                                    {{ mov.estoque.epi.material.unidade_obj.nome or "un" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {{ "%.2f"|format(mov.saldo_atual()|float if mov.saldo_atual() else 0) }}
+                                {% if mov.estoque.material %}
+                                    {{ mov.estoque.material.unidade_obj.nome or "" }}
+                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
+                                    {{ mov.estoque.epi.material.unidade.nome or "un" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ mov.usuario.nome if mov.usuario else "Sistema" }}</td>
+                            <td>{{ mov.observacao or "-" }}</td>
+                            {% if current_user.is_admin %}
+                            <td>
+                                {% set item_nome = mov.estoque.material.nome if mov.estoque.material else (mov.estoque.epi.material.nome if mov.estoque.epi and mov.estoque.epi.material else 'Item desconhecido') %}
+                                <form method="POST" action="{{ url_for('estoque.excluir_movimentacao', id_movimentacao=mov.id) }}" style="display:inline;" onsubmit="return confirmarExclusaoMovimentacao('{{ mov.id }}', '{{ mov.tipo_movimento }}', {{ mov.quantidade|float }}, '{{ item_nome|tojson|safe }}');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-danger btn-sm">
+                                        <i class="fas fa-trash"></i> Excluir
+                                    </button>
+                                </form>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="{% if current_user.is_admin %}10{% else %}9{% endif %}" class="text-center">Nenhuma movimentação encontrada</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if movimentacoes.pages > 1 %}
+            <div class="d-flex justify-content-center mt-4">
+                <nav aria-label="Navegação de páginas">
+                    <ul class="pagination">
+                        <li class="page-item {% if movimentacoes.page == 1 %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.prev_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, observacao=observacao) }}" aria-label="Anterior">
+                                <span aria-hidden="true">&laquo;</span>
+                                <span class="sr-only">Anterior</span>
+                            </a>
+                        </li>
+                        
+                        {% for page_num in movimentacoes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num == movimentacoes.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}<span class="sr-only">(atual)</span></span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=page_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, observacao=observacao) }}">{{ page_num }}</a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                        {% endfor %}
+                        
+                        <li class="page-item {% if movimentacoes.page == movimentacoes.pages %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.next_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, observacao=observacao) }}" aria-label="Próximo">
+                                <span aria-hidden="true">&raquo;</span>
+                                <span class="sr-only">Próximo</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Resumo das Movimentações</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card border-left-success h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                        Total de Entradas</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_entradas }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-arrow-down fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card border-left-danger h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                        Total de Saídas</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_saidas }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-arrow-up fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="card border-left-warning h-100 py-2">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Total de Ajustes</div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_ajustes }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-sync fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Inicialização do DataTable
+        $('#dataTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.22/i18n/Portuguese-Brasil.json"
+            },
+            "ordering": false,
+            "paging": false,  // Desabilitar paginação do DataTable, pois já temos nossa própria
+            "info": false,
+            "searching": false,
+            // Desabilitar info do DataTable
+        });
+        
+        // Melhorar seleção de itens de estoque com select2
+        $('#estoque_id').select2({
+            placeholder: "Selecione um item",
+            allowClear: true,
+            width: '100%'
+        });
+
+        // Inicializar select2 para dropdown de material
+        $('#material_id').select2({
+            theme: 'bootstrap4',
+            placeholder: 'Selecione um material',
+            allowClear: true,
+            width: '100%'
+        });
+    });
+
+    function confirmarExclusaoMovimentacao(id, tipo, quantidade, itemNome) {
+        return confirm(`Tem certeza que deseja excluir a movimentação ID ${id} (${tipo} de ${quantidade} do item "${itemNome}")? Esta ação não poderá ser desfeita e o estoque será revertido.`);
+    }
+</script>
+{% endblock %} 

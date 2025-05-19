@@ -1,0 +1,175 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Adicionar Endereço{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Adicionar Endereço</h1>
+        <a href="{{ url_for('cliente.visualizar', id=cliente.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Novo Endereço para {{ cliente.nome }}</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('cliente.novo_endereco', cliente_id=cliente.id) }}"
+                id="formNovoEndereco">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="logradouro" class="form-label">Logradouro*</label>
+                        <input type="text" class="form-control" id="logradouro" name="logradouro"
+                            placeholder="Rua, Avenida, etc." required maxlength="150">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="numero" class="form-label">Número</label>
+                        <input type="text" class="form-control" id="numero" name="numero" placeholder="Número"
+                            maxlength="20">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="complemento" class="form-label">Complemento</label>
+                        <input type="text" class="form-control" id="complemento" name="complemento"
+                            placeholder="Sala, Andar, etc." maxlength="100">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="bairro" class="form-label">Bairro</label>
+                        <input type="text" class="form-control" id="bairro" name="bairro" placeholder="Bairro"
+                            maxlength="100">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="cidade" class="form-label">Cidade*</label>
+                        <input type="text" class="form-control" id="cidade" name="cidade" placeholder="Cidade" required
+                            maxlength="100">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="estado" class="form-label">Estado*</label>
+                        <select class="form-select" id="estado" name="estado" required>
+                            <option value="">Selecione</option>
+                            <option value="AC">Acre</option>
+                            <option value="AL">Alagoas</option>
+                            <option value="AP">Amapá</option>
+                            <option value="AM">Amazonas</option>
+                            <option value="BA">Bahia</option>
+                            <option value="CE">Ceará</option>
+                            <option value="DF">Distrito Federal</option>
+                            <option value="ES">Espírito Santo</option>
+                            <option value="GO">Goiás</option>
+                            <option value="MA">Maranhão</option>
+                            <option value="MT">Mato Grosso</option>
+                            <option value="MS">Mato Grosso do Sul</option>
+                            <option value="MG">Minas Gerais</option>
+                            <option value="PA">Pará</option>
+                            <option value="PB">Paraíba</option>
+                            <option value="PR">Paraná</option>
+                            <option value="PE">Pernambuco</option>
+                            <option value="PI">Piauí</option>
+                            <option value="RJ">Rio de Janeiro</option>
+                            <option value="RN">Rio Grande do Norte</option>
+                            <option value="RS">Rio Grande do Sul</option>
+                            <option value="RO">Rondônia</option>
+                            <option value="RR">Roraima</option>
+                            <option value="SC">Santa Catarina</option>
+                            <option value="SP">São Paulo</option>
+                            <option value="SE">Sergipe</option>
+                            <option value="TO">Tocantins</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cep" class="form-label">CEP</label>
+                        <input type="text" class="form-control" id="cep" name="cep" placeholder="00000-000"
+                            maxlength="10">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="tipo" class="form-label">Tipo de Endereço</label>
+                        <select class="form-select" id="tipo" name="tipo">
+                            <option value="COMERCIAL" selected>Comercial</option>
+                            <option value="COBRANCA">Cobrança</option>
+                            <option value="ENTREGA">Entrega</option>
+                            <option value="OUTRO">Outro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="mt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="principal" name="principal">
+                                <label class="form-check-label" for="principal">Endereço Principal</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle"></i> Campos marcados com * são obrigatórios.
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('cliente.visualizar', id=cliente.id) }}" class="btn btn-secondary me-md-2">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // Máscara para CEP
+        $('#cep').on('input', function () {
+            let valor = $(this).val().replace(/\D/g, '');
+
+            if (valor.length <= 8) {
+                valor = valor.replace(/(\d{5})(\d)/, '$1-$2');
+            }
+
+            $(this).val(valor);
+        });
+
+        // Busca de endereço pelo CEP
+        $('#cep').blur(function () {
+            const cep = $(this).val().replace(/\D/g, '');
+
+            if (cep.length === 8) {
+                $.getJSON(`https://viacep.com.br/ws/${cep}/json/`, function (data) {
+                    if (!data.erro) {
+                        $('#logradouro').val(data.logradouro);
+                        $('#bairro').val(data.bairro);
+                        $('#cidade').val(data.localidade);
+                        $('#estado').val(data.uf);
+                        $('#numero').focus();
+                    }
+                });
+            }
+        });
+
+        // Validação do formulário
+        $('#formNovoEndereco').submit(function (event) {
+            const logradouro = $('#logradouro').val();
+            const cidade = $('#cidade').val();
+            const estado = $('#estado').val();
+
+            if (!logradouro || !cidade || !estado) {
+                event.preventDefault();
+                alert('Por favor, preencha todos os campos obrigatórios.');
+                return false;
+            }
+
+            return true;
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends "common/base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">{{ title }}</h6>
+                    <a href="{{ url_for('estoque.index') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="estoqueForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.tipo_item.label }}
+                                    {{ form.tipo_item(class="form-control", id="tipoItem") }}
+                                    {% if form.tipo_item.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.tipo_item.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group" id="materialGroup">
+                                    {{ form.material_id.label }}
+                                    {{ form.material_id(class="form-control select2") }}
+                                    {% if form.material_id.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.material_id.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group" id="epiGroup">
+                                    {{ form.epi_id.label }}
+                                    {{ form.epi_id(class="form-control select2") }}
+                                    {% if form.epi_id.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.epi_id.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.quantidade.label }}
+                                    {{ form.quantidade(class="form-control", type="number", step="0.01") }}
+                                    <small class="form-text text-muted">Quantidade inicial do item no estoque</small>
+                                    {% if form.quantidade.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.quantidade.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.quantidade_minima.label }}
+                                    {{ form.quantidade_minima(class="form-control", type="number", step="0.01") }}
+                                    <small class="form-text text-muted">Quando abaixo deste valor, o estoque será marcado como crítico</small>
+                                    {% if form.quantidade_minima.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.quantidade_minima.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.quantidade_maxima.label }}
+                                    {{ form.quantidade_maxima(class="form-control", type="number", step="0.01") }}
+                                    <small class="form-text text-muted">Quando acima deste valor, o estoque será marcado como em excesso</small>
+                                    {% if form.quantidade_maxima.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.quantidade_maxima.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.localizacao.label }}
+                                    {{ form.localizacao(class="form-control") }}
+                                    <small class="form-text text-muted">Local onde o item está armazenado</small>
+                                    {% if form.localizacao.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.localizacao.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.lote.label }}
+                                    {{ form.lote(class="form-control") }}
+                                    <small class="form-text text-muted">Número do lote, se aplicável</small>
+                                    {% if form.lote.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.lote.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    {{ form.data_validade.label }}
+                                    {{ form.data_validade(class="form-control", type="date") }}
+                                    <small class="form-text text-muted">Data de validade, se aplicável</small>
+                                    {% if form.data_validade.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.data_validade.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.centro_custo_id.label }}
+                                    {{ form.centro_custo_id(class="form-control select2") }}
+                                    <small class="form-text text-muted">Centro de custo responsável pelo item</small>
+                                    {% if form.centro_custo_id.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.centro_custo_id.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12 d-flex justify-content-end">
+                                <a href="{{ url_for('estoque.index') }}" class="btn btn-secondary mr-2">Cancelar</a>
+                                <button type="submit" class="btn btn-primary">Salvar</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Inicializar select2
+        $('.select2').select2({
+            theme: 'bootstrap4',
+        });
+        
+        // Função para mostrar/esconder campos conforme o tipo de item
+        function toggleItemFields() {
+            const tipoItem = $('#tipoItem').val();
+            
+            if (tipoItem === 'material') {
+                $('#materialGroup').show();
+                $('#epiGroup').hide();
+            } else if (tipoItem === 'epi') {
+                $('#materialGroup').hide();
+                $('#epiGroup').show();
+            } else {
+                $('#materialGroup').show();
+                $('#epiGroup').hide();
+            }
+        }
+        
+        // Aplicar a lógica ao carregar a página
+        toggleItemFields();
+        
+        // Aplicar a lógica quando o tipo de item mudar
+        $('#tipoItem').change(toggleItemFields);
+        
+        // Evitar envio do formulário se o tipo de item não corresponder com o selecionado
+        $('#estoqueForm').submit(function(e) {
+            const tipoItem = $('#tipoItem').val();
+            let valid = true;
+            
+            if (tipoItem === 'material' && $('#material_id').val() === '') {
+                alert('Selecione um material para este item de estoque.');
+                valid = false;
+            } else if (tipoItem === 'epi' && $('#epi_id').val() === '') {
+                alert('Selecione um EPI para este item de estoque.');
+                valid = false;
+            }
+            
+            if (!valid) {
+                e.preventDefault();
+            }
+        });
+    });
+</script>
+{% endblock %} 

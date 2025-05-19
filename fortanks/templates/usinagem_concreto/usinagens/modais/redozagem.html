@@ -1,0 +1,193 @@
+<!-- Modal de Redozagem -->
+<div class="modal fade" id="modalRedozagem" tabindex="-1" aria-labelledby="modalRedozagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRedozagemLabel">Registrar Redozagem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formRedozagem">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="usinagem_id" id="redozagem_usinagem_id">
+                <div class="modal-body">
+                    <div id="redozagem-feedback" class="alert d-none" role="alert"></div>
+                    <p>Selecione os materiais e informe as quantidades adicionais para a redozagem.</p>
+                    
+                    <div id="materiaisRedozagemContainer" class="mb-3">
+                        <!-- Materiais do traço serão carregados aqui via JS -->
+                        <div class="text-center py-3">
+                            <i class="fas fa-spinner fa-spin me-2"></i> Carregando materiais do traço...
+                        </div>
+                    </div>
+
+                    <div id="redozagem-loading" class="text-center d-none my-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Salvando...</span>
+                        </div>
+                        <p>Salvando redozagem, por favor aguarde...</p>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Redozagem
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+// --- INÍCIO: Lógica para Modal de Redozagem ---
+const modalRedozagem = document.getElementById('modalRedozagem');
+const formRedozagem = document.getElementById('formRedozagem');
+const materiaisRedozagemContainer = document.getElementById('materiaisRedozagemContainer');
+const redozagemUsinagemIdInput = document.getElementById('redozagem_usinagem_id');
+const redozagemFeedbackDiv = document.getElementById('redozagem-feedback');
+const redozagemLoadingDiv = document.getElementById('redozagem-loading');
+
+if (modalRedozagem) {
+    modalRedozagem.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const usinagemId = button.getAttribute('data-usinagem-id');
+        const tracoId = button.getAttribute('data-traco-id');
+
+        redozagemUsinagemIdInput.value = usinagemId;
+        materiaisRedozagemContainer.innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i> Carregando materiais do traço...</div>';
+        redozagemFeedbackDiv.classList.add('d-none');
+        redozagemFeedbackDiv.innerHTML = '';
+        formRedozagem.reset(); // Limpa inputs de quantidade anteriores
+         // Certifique-se que o usinagem_id seja repreenchido após o reset
+        redozagemUsinagemIdInput.value = usinagemId;
+
+        if (!tracoId) {
+            materiaisRedozagemContainer.innerHTML = '<div class="alert alert-danger">ID do Traço não encontrado. Não é possível carregar materiais.</div>';
+            return;
+        }
+
+        // Buscar materiais do traço via AJAX
+        // ATENÇÃO: A rota /usinagem-concreto/tracos/${tracoId}/materiais-para-redozagem será criada no backend
+        fetch(`/usinagem-concreto/tracos/${tracoId}/materiais-para-redozagem`) 
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Falha ao buscar materiais do traço. Status: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(materiaisDoTraco => {
+                materiaisRedozagemContainer.innerHTML = ''; // Limpa o container
+                if (materiaisDoTraco && materiaisDoTraco.length > 0) {
+                    materiaisDoTraco.forEach(material => {
+                        const materialDiv = document.createElement('div');
+                        materialDiv.classList.add('row', 'mb-2', 'align-items-center');
+                        materialDiv.innerHTML = `
+                            <div class="col-md-1">
+                                <input class="form-check-input material-redozagem-checkbox" type="checkbox" name="redozagem_material_ids" value="${material.material_id}" id="mat-redoz-${material.material_id}">
+                            </div>
+                            <label class="col-md-5 col-form-label" for="mat-redoz-${material.material_id}">
+                                ${material.material_nome} (${material.unidade_nome})
+                            </label>
+                            <div class="col-md-6">
+                                <input type="number" class="form-control quantidade-redozada" name="redozagem_quantidades_${material.material_id}" step="0.01" min="0" placeholder="Qtd. Adicional" disabled>
+                            </div>
+                        `;
+                        materiaisRedozagemContainer.appendChild(materialDiv);
+                    });
+
+                    // Habilitar/desabilitar input de quantidade ao marcar/desmarcar checkbox
+                    materiaisRedozagemContainer.querySelectorAll('.material-redozagem-checkbox').forEach(checkbox => {
+                        checkbox.addEventListener('change', function() {
+                            const qtdInput = this.closest('.row').querySelector('.quantidade-redozada');
+                            qtdInput.disabled = !this.checked;
+                            if (!this.checked) {
+                                qtdInput.value = ''; // Limpa a quantidade se desmarcado
+                            }
+                        });
+                    });
+
+                } else {
+                    materiaisRedozagemContainer.innerHTML = '<div class="alert alert-info">Nenhum material encontrado para este traço.</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar materiais para redozagem:', error);
+                materiaisRedozagemContainer.innerHTML = `<div class="alert alert-danger">Erro ao carregar materiais: ${error.message}</div>`;
+            });
+    });
+}
+
+if (formRedozagem) {
+    formRedozagem.addEventListener('submit', function(event) {
+        event.preventDefault();
+        redozagemLoadingDiv.classList.remove('d-none');
+        redozagemFeedbackDiv.classList.add('d-none');
+        redozagemFeedbackDiv.innerHTML = '';
+
+        const formData = new FormData(formRedozagem);
+        const payload = {
+            usinagem_id: formData.get('usinagem_id'),
+            csrf_token: formData.get('csrf_token'),
+            materiais: []
+        };
+
+        const checkboxes = materiaisRedozagemContainer.querySelectorAll('.material-redozagem-checkbox:checked');
+        checkboxes.forEach(checkbox => {
+            const materialId = checkbox.value;
+            const quantidadeInput = materiaisRedozagemContainer.querySelector(`input[name="redozagem_quantidades_${materialId}"]`);
+            const quantidade = quantidadeInput ? quantidadeInput.value : null;
+
+            if (materialId && quantidade && parseFloat(quantidade) > 0) {
+                payload.materiais.push({
+                    material_id: materialId,
+                    quantidade: parseFloat(quantidade)
+                });
+            }
+        });
+
+        if (payload.materiais.length === 0) {
+            redozagemFeedbackDiv.innerHTML = 'Selecione pelo menos um material e informe uma quantidade válida.';
+            redozagemFeedbackDiv.className = 'alert alert-warning';
+            redozagemLoadingDiv.classList.add('d-none');
+            return;
+        }
+
+        // ATENÇÃO: A rota /usinagem-concreto/usinagens/registrar-redozagem será criada no backend
+        fetch("{{ url_for('usinagem_concreto.registrar_redozagem') }}", { // Usando url_for para a rota
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': payload.csrf_token // Adicionar CSRF Token no header se não for via FormData
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            redozagemLoadingDiv.classList.add('d-none');
+            if (data.success) {
+                redozagemFeedbackDiv.innerHTML = data.message || 'Redozagem registrada com sucesso!';
+                redozagemFeedbackDiv.className = 'alert alert-success';
+                formRedozagem.reset();
+                redozagemUsinagemIdInput.value = ''; // Limpa o ID da usinagem após sucesso
+                materiaisRedozagemContainer.innerHTML = ''; // Limpa os materiais
+                // const modal = bootstrap.Modal.getInstance(modalRedozagem);
+                // modal.hide();
+                // location.reload(); // ou $('#dataTable').DataTable().ajax.reload(); se configurado para AJAX
+                setTimeout(() => location.reload(), 1500); // Recarrega após um tempo para o usuário ver a msg
+            } else {
+                redozagemFeedbackDiv.innerHTML = (data.errors && data.errors.length > 0) ? data.errors.join('<br>') : (data.message || 'Erro ao registrar redozagem.');
+                redozagemFeedbackDiv.className = 'alert alert-danger';
+            }
+        })
+        .catch(error => {
+            redozagemLoadingDiv.classList.add('d-none');
+            redozagemFeedbackDiv.innerHTML = 'Erro de comunicação ao registrar redozagem: ' + error.message;
+            redozagemFeedbackDiv.className = 'alert alert-danger';
+            console.error('Erro ao submeter redozagem:', error);
+        });
+    });
+}
+// --- FIM: Lógica para Modal de Redozagem ---
+</script>
+{% endblock %}

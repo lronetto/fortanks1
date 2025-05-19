@@ -1,0 +1,129 @@
+<!-- Modal de Novo Rompimento -->
+<div class="modal fade" id="modalNovoRompimento" tabindex="-1" aria-labelledby="modalNovoRompimentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoRompimentoLabel">Novo Rompimento de Corpo de Prova</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('usinagem_concreto.criar_rompimento') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="now" id="now" value="{{ now }}">
+                <div class="modal-body">
+                    <input type="hidden" name="usinagem_id" id="rompimento_usinagem_id">
+                    <div class="mb-3">
+                        <label for="numero_cp" class="form-label">Número do CP</label>
+                        <select name="numero_cp" id="numero_cp" class="form-select" required>
+                            {% for i in range(1, 11) %}
+                            <option value="{{ i }}">CP {{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_rompimento" class="form-label">Data de Rompimento</label>
+                        <input type="datetime-local" class="form-control" id="data_rompimento" name="data_rompimento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="idade_cp" class="form-label">Idade do CP</label>
+                        <input type="text" class="form-control" id="idade_cp" name="idade_cp" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="resultado" class="form-label">Resultado (MPa)</label>
+                        <input type="text" class="form-control" id="resultado" name="resultado" placeholder="Ex: 30.5">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo_rompimento" class="form-label">Tipo de Rompimento</label>
+                        <select name="tipo_rompimento" id="tipo_rompimento" class="form-select">
+                            <option value="">Selecione o tipo de rompimento</option>
+                            <option value="cônica">Cônica</option>
+                            <option value="cônica e bipartida">Cônica e Bipartida</option>
+                            <option value="cônica e cisalhada">Cônica e Cisalhada</option>
+                            <option value="cisalhada">Cisalhada</option>
+                            <option value="colunar">Colunar</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes1" name="observacoes1" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+//--- INÍCIO: Modal de novo rompimento ---
+        const modalRompimento = document.getElementById('modalNovoRompimento');
+        if (modalRompimento) {
+            modalRompimento.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const usinagem_id = button.getAttribute('data-usinagem-id');
+                const modal = this;
+                modal.querySelector('#rompimento_usinagem_id').value = usinagem_id;
+                
+                // Preencher data atual no campo de data de rompimento
+                const now = new Date();
+                const isoString = now.toISOString().substring(0, 16);
+                modal.querySelector('#data_rompimento').value = isoString;
+                
+                // Buscar a data de usinagem via AJAX
+                fetch(`/usinagem-concreto/usinagens/${usinagem_id}/data-usinagem`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const dataUsinagem = new Date(data.data_usinagem);
+                        const dataRompimento = new Date(isoString);
+                        
+                        // Calcular diferença em milissegundos
+                        const diffMs = dataRompimento - dataUsinagem;
+                        const diffHours = diffMs / (1000 * 60 * 60);
+                        const diffDays = diffHours / 24;
+                        
+                        // Formatar idade do CP
+                        let idadeTexto;
+                        if (diffHours < 24) {
+                            idadeTexto = `${Math.round(diffHours)} horas`;
+                        } else {
+                            idadeTexto = `${Math.round(diffDays)} dias`;
+                        }
+                        
+                        modal.querySelector('#idade_cp').value = idadeTexto;
+                    })
+                    .catch(error => console.error('Erro ao buscar data de usinagem:', error));
+            });
+            
+            // Atualizar idade do CP quando a data de rompimento mudar
+            modalRompimento.querySelector('#data_rompimento').addEventListener('change', function() {
+                const usinagem_id = modalRompimento.querySelector('#rompimento_usinagem_id').value;
+                const dataRompimento = new Date(this.value);
+                
+                fetch(`/usinagem-concreto/usinagens/${usinagem_id}/data-usinagem`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const dataUsinagem = new Date(data.data_usinagem);
+                        
+                        // Calcular diferença em milissegundos
+                        const diffMs = dataRompimento - dataUsinagem;
+                        const diffHours = diffMs / (1000 * 60 * 60);
+                        const diffDays = diffHours / 24;
+                        
+                        // Formatar idade do CP
+                        let idadeTexto;
+                        if (diffHours < 24) {
+                            idadeTexto = `${Math.round(diffHours)} horas`;
+                        } else {
+                            idadeTexto = `${Math.round(diffDays)} dias`;
+                        }
+                        
+                        modalRompimento.querySelector('#idade_cp').value = idadeTexto;
+                    })
+                    .catch(error => console.error('Erro ao buscar data de usinagem:', error));
+            });
+        }
+//--- FIM: Modal de novo rompimento ---
+</script>
+{% endblock %}

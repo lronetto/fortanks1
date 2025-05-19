@@ -1,0 +1,282 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Editar Contrato - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-edit"></i> Editar Contrato</h1>
+        <div>
+            <a href="{{ url_for('contrato.visualizar', id=contrato.id) }}" class="btn btn-info me-2">
+                <i class="fas fa-eye"></i> Visualizar
+            </a>
+            <a href="{{ url_for('contrato.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edição de Contrato</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('contrato.editar', id=contrato.id) }}" id="form-contrato"
+                data-nome="{{ contrato.nome }}" data-centro_custo_id="{{ contrato.centro_custo_id }}"
+                data-descricao="{{ contrato.descricao or '' }}"
+                data-cliente_direto_id="{{ contrato.cliente_direto_id or '' }}"
+                data-cliente_final_id="{{ contrato.cliente_final_id or '' }}" data-estado="{{ contrato.estado or '' }}"
+                data-cidade="{{ contrato.cidade or '' }}"
+                data-data_base="{% if contrato.data_base %}{{ contrato.data_base.strftime('%Y-%m-%d') }}{% endif %}"
+                data-venda_material="{{ contrato.valor_mat or 0 }}" data-venda_servico="{{ contrato.valor_ser or 0 }}">
+
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="nome" class="form-label">Nome do Contrato</label>
+                        <input type="text" class="form-control" id="nome" name="nome" value="{{ contrato.nome }}"
+                            required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="centro_custo_id" class="form-label">Centro de Custo</label>
+                        <select class="form-select" id="centro_custo_id" name="centro_custo_id" required>
+                            <option value="" disabled>Selecione um centro de custo</option>
+                            {% for centro in centros_custo %}
+                            <option value="{{ centro.id }}" {% if centro.id==contrato.centro_custo_id %}selected{% endif
+                                %}>
+                                {{ centro.codigo }} - {{ centro.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao"
+                            rows="3">{{ contrato.descricao }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="cliente_direto_id" class="form-label">Cliente Direto</label>
+                        <select class="form-select" id="cliente_direto_id" name="cliente_direto_id">
+                            <option value="">Selecione um cliente</option>
+                            {% for cliente in clientes %}
+                            <option value="{{ cliente.id }}" {% if cliente.id==contrato.cliente_direto_id %}selected{%
+                                endif %}>
+                                {{ cliente.nome }} ({{ cliente.cnpj }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="cliente_final_id" class="form-label">Cliente Final</label>
+                        <select class="form-select" id="cliente_final_id" name="cliente_final_id">
+                            <option value="">Selecione um cliente</option>
+                            {% for cliente in clientes %}
+                            <option value="{{ cliente.id }}" {% if cliente.id==contrato.cliente_final_id %}selected{%
+                                endif %}>
+                                {{ cliente.nome }} ({{ cliente.cnpj }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label for="estado" class="form-label">Estado</label>
+                        <select class="form-select" id="estado" name="estado">
+                            <option value="">Selecione um estado</option>
+                            <option value="AC" {% if contrato.estado=='AC' %}selected{% endif %}>Acre</option>
+                            <option value="AL" {% if contrato.estado=='AL' %}selected{% endif %}>Alagoas</option>
+                            <option value="AP" {% if contrato.estado=='AP' %}selected{% endif %}>Amapá</option>
+                            <option value="AM" {% if contrato.estado=='AM' %}selected{% endif %}>Amazonas</option>
+                            <option value="BA" {% if contrato.estado=='BA' %}selected{% endif %}>Bahia</option>
+                            <option value="CE" {% if contrato.estado=='CE' %}selected{% endif %}>Ceará</option>
+                            <option value="DF" {% if contrato.estado=='DF' %}selected{% endif %}>Distrito Federal
+                            </option>
+                            <option value="ES" {% if contrato.estado=='ES' %}selected{% endif %}>Espírito Santo</option>
+                            <option value="GO" {% if contrato.estado=='GO' %}selected{% endif %}>Goiás</option>
+                            <option value="MA" {% if contrato.estado=='MA' %}selected{% endif %}>Maranhão</option>
+                            <option value="MT" {% if contrato.estado=='MT' %}selected{% endif %}>Mato Grosso</option>
+                            <option value="MS" {% if contrato.estado=='MS' %}selected{% endif %}>Mato Grosso do Sul
+                            </option>
+                            <option value="MG" {% if contrato.estado=='MG' %}selected{% endif %}>Minas Gerais</option>
+                            <option value="PA" {% if contrato.estado=='PA' %}selected{% endif %}>Pará</option>
+                            <option value="PB" {% if contrato.estado=='PB' %}selected{% endif %}>Paraíba</option>
+                            <option value="PR" {% if contrato.estado=='PR' %}selected{% endif %}>Paraná</option>
+                            <option value="PE" {% if contrato.estado=='PE' %}selected{% endif %}>Pernambuco</option>
+                            <option value="PI" {% if contrato.estado=='PI' %}selected{% endif %}>Piauí</option>
+                            <option value="RJ" {% if contrato.estado=='RJ' %}selected{% endif %}>Rio de Janeiro</option>
+                            <option value="RN" {% if contrato.estado=='RN' %}selected{% endif %}>Rio Grande do Norte
+                            </option>
+                            <option value="RS" {% if contrato.estado=='RS' %}selected{% endif %}>Rio Grande do Sul
+                            </option>
+                            <option value="RO" {% if contrato.estado=='RO' %}selected{% endif %}>Rondônia</option>
+                            <option value="RR" {% if contrato.estado=='RR' %}selected{% endif %}>Roraima</option>
+                            <option value="SC" {% if contrato.estado=='SC' %}selected{% endif %}>Santa Catarina</option>
+                            <option value="SP" {% if contrato.estado=='SP' %}selected{% endif %}>São Paulo</option>
+                            <option value="SE" {% if contrato.estado=='SE' %}selected{% endif %}>Sergipe</option>
+                            <option value="TO" {% if contrato.estado=='TO' %}selected{% endif %}>Tocantins</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="cidade" class="form-label">Cidade</label>
+                        <input type="text" class="form-control" id="cidade" name="cidade" value="{{ contrato.cidade }}">
+                    </div>
+                    <div class="col-md-5 mb-3">
+                        <label for="data_base" class="form-label">Data Base</label>
+                        <input type="date" class="form-control" id="data_base" name="data_base"
+                            value="{% if contrato.data_base %}{{ contrato.data_base.strftime('%Y-%m-%d') }}{% endif %}">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="venda_material" class="form-label">Valor Materiais (R$)</label>
+                        <input type="text" class="form-control mascara-moeda" id="venda_material" name="venda_material"
+                            value="{{ " R$ {:,.2f}".format(contrato.valor_mat or 0).replace(',', '.' ).replace('.', ','
+                            ) }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="venda_servico" class="form-label">Valor Serviços (R$)</label>
+                        <input type="text" class="form-control mascara-moeda" id="venda_servico" name="venda_servico"
+                            value="{{ " R$ {:,.2f}".format(contrato.valor_ser or 0).replace(',', '.' ).replace('.', ','
+                            ) }}">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Valor Total do Contrato:</strong>
+                            <span id="valor_total" class="ms-2">
+                                {{ "R$ {:,.2f}".format(contrato.valor_total).replace(',', '.').replace('.', ',') }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="alert alert-secondary">
+                            <i class="fas fa-user me-2"></i>
+                            <strong>Criado por:</strong>
+                            <span class="ms-2">{{ contrato.usuario.nome }}</span>
+                            <br>
+                            <i class="fas fa-calendar-alt me-2 mt-2"></i>
+                            <strong>Data de criação:</strong>
+                            <span class="ms-2">{{ contrato.data_criacao.strftime('%d/%m/%Y %H:%M') }}</span>
+                            <br>
+                            <i class="fas fa-clock me-2 mt-2"></i>
+                            <strong>Última atualização:</strong>
+                            <span class="ms-2">{{ contrato.data_atualizacao.strftime('%d/%m/%Y %H:%M') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="reset" class="btn btn-secondary me-md-2" id="btn-restaurar">
+                        <i class="fas fa-undo"></i> Restaurar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Formatar valores monetários
+    function formatarMoeda(valor) {
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    // Converter valor formatado em número
+    function converterParaNumero(valorFormatado) {
+        if (!valorFormatado) return 0;
+
+        return parseFloat(valorFormatado.replace('R$', '')
+            .replace(/\./g, '')
+            .replace(/,/g, '.')
+            .trim());
+    }
+
+    // Calcular valor total
+    function calcularTotal() {
+        const valorMaterial = converterParaNumero(document.getElementById('venda_material').value);
+        const valorServico = converterParaNumero(document.getElementById('venda_servico').value);
+
+        const total = valorMaterial + valorServico;
+        document.getElementById('valor_total').textContent = formatarMoeda(total);
+    }
+
+    // Inicializar máscaras
+    $(document).ready(function () {
+        // Máscara para valores monetários
+        $('.mascara-moeda').maskMoney({
+            prefix: 'R$ ',
+            allowNegative: false,
+            thousands: '.',
+            decimal: ',',
+            affixesStay: true
+        });
+
+        // Recalcular total quando os valores são alterados
+        $('#venda_material, #venda_servico').on('keyup', calcularTotal);
+    });
+
+    // Validação do formulário
+    document.getElementById('form-contrato').addEventListener('submit', function (e) {
+        const nome = document.getElementById('nome').value.trim();
+        const centroCusto = document.getElementById('centro_custo_id').value;
+
+        if (!nome) {
+            e.preventDefault();
+            alert('O nome do contrato é obrigatório!');
+            document.getElementById('nome').focus();
+            return false;
+        }
+
+        if (!centroCusto) {
+            e.preventDefault();
+            alert('O centro de custo é obrigatório!');
+            document.getElementById('centro_custo_id').focus();
+            return false;
+        }
+
+        return true;
+    });
+
+    // Restaurar valores originais
+    document.getElementById('btn-restaurar').addEventListener('click', function (e) {
+        e.preventDefault();
+
+        const form = document.getElementById('form-contrato');
+        document.getElementById('nome').value = form.getAttribute('data-nome');
+        document.getElementById('centro_custo_id').value = form.getAttribute('data-centro_custo_id');
+        document.getElementById('descricao').value = form.getAttribute('data-descricao');
+        document.getElementById('cliente_direto_id').value = form.getAttribute('data-cliente_direto_id');
+        document.getElementById('cliente_final_id').value = form.getAttribute('data-cliente_final_id');
+        document.getElementById('estado').value = form.getAttribute('data-estado');
+        document.getElementById('cidade').value = form.getAttribute('data-cidade');
+        document.getElementById('data_base').value = form.getAttribute('data-data_base');
+
+        // Formatar e definir valores monetários
+        const vendaMaterial = parseFloat(form.getAttribute('data-venda_material'));
+        const vendaServico = parseFloat(form.getAttribute('data-venda_servico'));
+
+        document.getElementById('venda_material').value = formatarMoeda(vendaMaterial);
+        document.getElementById('venda_servico').value = formatarMoeda(vendaServico);
+        document.getElementById('valor_total').textContent = formatarMoeda(vendaMaterial + vendaServico);
+    });
+</script>
+{% endblock %}

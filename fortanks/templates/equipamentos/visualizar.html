@@ -1,0 +1,225 @@
+{% extends "common/base.html" %}
+
+{% block title %}{{ equipamento.nome }} - Sistema de Gestão{% endblock %}
+{% block mobile_title %}{{ equipamento.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">{{ equipamento.nome }}</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('equipamento.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline-block ms-1">Voltar</span>
+            </a>
+            {% if current_user.is_gerente_ou_superior %}
+            <a href="{{ url_for('equipamento.editar', id=equipamento.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i>
+                <span class="d-none d-md-inline-block ms-1">Editar</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações do Equipamento -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold">Informações do Equipamento</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Status</h6>
+                        {% if equipamento.status == 'Ativo' %}
+                        <span class="badge bg-success">Ativo</span>
+                        {% elif equipamento.status == 'Em Manutenção' %}
+                        <span class="badge bg-warning">Em Manutenção</span>
+                        {% else %}
+                        <span class="badge bg-danger">Inativo</span>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Tipo</h6>
+                        <p>{{ equipamento.tipo }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Propriedade</h6>
+                        <p>{{ 'Própria' if equipamento.propriedade == 'Propria' else 'Alugada' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Modelo</h6>
+                        <p>{{ equipamento.modelo or 'Não informado' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Número de Série</h6>
+                        <p>{{ equipamento.numero_serie or 'Não informado' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Nota Fiscal</h6>
+                        <p>{{ equipamento.nota_fiscal or 'Não informada' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Data de Aquisição</h6>
+                        <p>{{ equipamento.data_aquisicao.strftime('%d/%m/%Y') if equipamento.data_aquisicao else 'Não
+                            informada' }}</p>
+                    </div>
+                    <div class="mb-3">
+                        <h6 class="font-weight-bold">Observações</h6>
+                        <p>{{ equipamento.observacoes or 'Nenhuma observação' }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manutenções e Checklists -->
+        <div class="col-xl-8 col-lg-7">
+            <!-- Últimas Manutenções -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold">Últimas Manutenções</h6>
+                    <a href="{{ url_for('equipamento.manutencoes', id=equipamento.id) }}"
+                        class="btn btn-sm btn-primary">
+                        <i class="fas fa-tools"></i>
+                        <span class="d-none d-md-inline-block ms-1">Ver Todas</span>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Tipo</th>
+                                    <th>Status</th>
+                                    <th>Responsável</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for manutencao in equipamento.manutencoes[-5:]|reverse %}
+                                <tr>
+                                    <td>{{ manutencao.data_inicio.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ manutencao.tipo }}</td>
+                                    <td>
+                                        {% if manutencao.status == 'Concluída' %}
+                                        <span class="badge bg-success">Concluída</span>
+                                        {% elif manutencao.status == 'Em Andamento' %}
+                                        <span class="badge bg-warning">Em Andamento</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Pendente</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ manutencao.responsavel }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">Nenhuma manutenção registrada.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Últimos Checklists -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold">Últimos Checklists</h6>
+                    <a href="{{ url_for('equipamento.novo_checklist_equipamento', id=equipamento.id) }}"
+                        class="btn btn-sm btn-success">
+                        <i class="fas fa-clipboard-check"></i>
+                        <span class="d-none d-md-inline-block ms-1">Novo Checklist</span>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Modelo</th>
+                                    <th>Status</th>
+                                    <th>Responsável</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for checklist in equipamento.checklists[-5:]|reverse %}
+                                <tr>
+                                    <td>{{ checklist.data_checklist.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ checklist.modelo.nome }}</td>
+                                    <td>
+                                        {% if checklist.status == 'Concluído' %}
+                                        <span class="badge bg-success">Concluído</span>
+                                        {% elif checklist.status == 'Em Andamento' %}
+                                        <span class="badge bg-warning">Em Andamento</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">Pendente</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ checklist.responsavel }}</td>
+                                    <td class="text-center">
+                                        {% if checklist.status != 'Concluído' %}
+                                        <a href="{{ url_for('equipamento.preencher_checklist', id=equipamento.id, checklist_id=checklist.id) }}"
+                                            class="btn btn-sm btn-primary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        {% else %}
+                                        <a href="#" class="btn btn-sm btn-info" data-bs-toggle="modal"
+                                            data-bs-target="#checklistModal{{ checklist.id }}">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+
+                                <!-- Modal para visualizar checklist concluído -->
+                                <div class="modal fade" id="checklistModal{{ checklist.id }}" tabindex="-1">
+                                    <div class="modal-dialog modal-lg">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Checklist - {{
+                                                    checklist.data_checklist.strftime('%d/%m/%Y') }}</h5>
+                                                <button type="button" class="btn-close"
+                                                    data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                <div class="table-responsive">
+                                                    <table class="table">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Item</th>
+                                                                <th>Resposta</th>
+                                                                <th>Observação</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for resposta in checklist.respostas %}
+                                                            <tr>
+                                                                <td>{{ resposta.item.descricao }}</td>
+                                                                <td>{{ resposta.resposta or '-' }}</td>
+                                                                <td>{{ resposta.observacao or '-' }}</td>
+                                                            </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">Nenhum checklist registrado.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

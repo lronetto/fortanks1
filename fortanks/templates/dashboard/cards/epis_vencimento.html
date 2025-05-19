@@ -1,0 +1,30 @@
+<div class="card-body">
+    {% if dados_especificos.epis_vencimento %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-sm" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>EPI</th>
+                        <th>Data Validade</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for epi in dados_especificos.epis_vencimento %}
+                    <tr>
+                        <td>{{ epi.material.nome }}</td>
+                        <td class="text-center">{{ epi.data_validade.strftime('%d/%m/%Y') }}</td>
+                        <td>
+                            <span class="badge badge-{{ 'danger' if epi.status_validade == 'Vencido' else 'warning' }}">
+                                {{ epi.status_validade }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="text-center">Nenhum EPI próximo ao vencimento.</p>
+    {% endif %}
+</div>

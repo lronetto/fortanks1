@@ -1,0 +1,141 @@
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-success">Resumo Analítico</h6>
+        </div>
+        <div class="card-body">
+            <div class="form-group mb-3">
+                <label for="filtroCentroCustoAnalitico">Centro de Custo:</label>
+                <select id="filtroCentroCustoAnalitico" class="form-control form-control-sm">
+                    <option value="0" selected>Todos os Centros de Custo</option>
+                    {% for cc in centros_custo_analitico %}
+                        <option value="{{ cc.id }}">{{ cc.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="loadingAnalitico" style="display: none;" class="text-center">
+                <div class="spinner-border spinner-border-sm text-primary" role="status">
+                    <span class="sr-only">Carregando...</span>
+                </div>
+                <p class="text-muted small">Carregando dados...</p>
+            </div>
+            <div id="contentAnalitico">
+                <p class="mb-1">Custo Realizado: <strong id="displayCustoRealizado">R$ 0,00</strong></p>
+                <p class="mb-0">Receita Realizada: <strong id="displayReceitaRealizada">R$ 0,00</strong></p>
+            </div>
+            <div id="errorAnalitico" class="text-danger small mt-2" style="display: none;">
+                Não foi possível carregar os dados.
+            </div>
+            <div class="text-center mt-3">
+                <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}" class="btn btn-sm btn-outline-success">
+                    <i class="fas fa-chart-line mr-1"></i> Ver Dashboard Analítico Detalhado
+                </a>
+            </div>
+        </div>
+    </div>
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Lógica para o Card de Resumo Analítico ---
+        const filtroCCAnalitico = document.getElementById('filtroCentroCustoAnalitico');
+        const displayCusto = document.getElementById('displayCustoRealizado');
+        const displayReceita = document.getElementById('displayReceitaRealizada');
+        const loadingAnaliticoDiv = document.getElementById('loadingAnalitico');
+        const contentAnaliticoDiv = document.getElementById('contentAnalitico');
+        const errorAnaliticoDiv = document.getElementById('errorAnalitico');
+
+        function formatCurrency(value) {
+            // console.log('Formatando valor:', value);
+            const num = parseFloat(value);
+            if (isNaN(num)) {
+                // console.error('formatCurrency recebeu valor não numérico:', value);
+                return 'R$ 0,00'; // Ou algum valor padrão/indicador de erro
+            }
+            return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        async function carregarDadosAnaliticos(centroCustoId) {
+            console.log('[Analitico] Iniciando carregarDadosAnaliticos com cc_id:', centroCustoId);
+
+            if (!filtroCCAnalitico || !displayCusto || !displayReceita || !loadingAnaliticoDiv || !contentAnaliticoDiv || !errorAnaliticoDiv) {
+                console.error('[Analitico] Um ou mais elementos do DOM para o card analítico não foram encontrados. Abortando.');
+                // Adicionamos filtroCCAnalitico aqui na verificação pois se ele não existe, não faz sentido prosseguir.
+                return;
+            }
+            console.log('[Analitico] Elementos do DOM para card analítico encontrados.');
+
+            loadingAnaliticoDiv.style.display = 'block';
+            contentAnaliticoDiv.style.display = 'none';
+            errorAnaliticoDiv.style.display = 'none';
+            console.log('[Analitico] Estado inicial dos divs de display configurado (loading visível).');
+            
+            console.log(`[Analitico] cc_id para API: ${centroCustoId}`);
+            try {
+                console.log(`[Analitico] Fetching: {{ url_for('dashboard.api_dados_analiticos') }}?cc_id=${centroCustoId}`);
+                const response = await fetch(`{{ url_for('dashboard.api_dados_analiticos') }}?cc_id=${centroCustoId}`);
+                console.log('[Analitico] Resposta do fetch recebida:', response);
+
+                if (!response.ok) {
+                    let errorMsg = `Erro HTTP: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        console.error('[Analitico] Erro (response.json()):', errorData);
+                        errorMsg = errorData.erro || errorMsg;
+                    } catch (e) {
+                        console.error('[Analitico] Não foi possível parsear JSON do erro da resposta:', e);
+                    }
+                    throw new Error(errorMsg);
+                }
+                
+                const data = await response.json();
+                console.log('[Analitico] Dados da API (JSON parseado):', data);
+                
+                if (data && typeof data.custo_realizado !== 'undefined' && typeof data.receita_realizada !== 'undefined') {
+                    console.log('[Analitico] Custo antes de formatar:', data.custo_realizado);
+                    const custoFormatado = formatCurrency(data.custo_realizado);
+                    console.log('[Analitico] Custo depois de formatar:', custoFormatado);
+                    displayCusto.textContent = custoFormatado;
+
+                    console.log('[Analitico] Receita antes de formatar:', data.receita_realizada);
+                    const receitaFormatada = formatCurrency(data.receita_realizada);
+                    console.log('[Analitico] Receita depois de formatar:', receitaFormatada);
+                    displayReceita.textContent = receitaFormatada;
+                    
+                    contentAnaliticoDiv.style.display = 'block';
+                    console.log('[Analitico] Conteúdo analítico atualizado e visível.');
+                } else {
+                    console.error('[Analitico] Dados da API estão ausentes ou malformados:', data);
+                    throw new Error('Dados recebidos da API estão incompletos.');
+                }
+
+            } catch (error) {
+                console.error('[Analitico] Erro no bloco try/catch de carregarDadosAnaliticos:', error);
+                errorAnaliticoDiv.textContent = error.message || 'Não foi possível carregar os dados.';
+                errorAnaliticoDiv.style.display = 'block';
+                
+                console.log('[Analitico] Resetando valores para R$ 0,00 devido ao erro.');
+                displayCusto.textContent = formatCurrency(0);
+                displayReceita.textContent = formatCurrency(0);
+                contentAnaliticoDiv.style.display = 'block'; 
+            } finally {
+                loadingAnaliticoDiv.style.display = 'none';
+                console.log('[Analitico] Bloco finally de carregarDadosAnaliticos executado, loading escondido.');
+            }
+        }
+
+        if (filtroCCAnalitico) {
+            console.log('[Analitico] Dropdown filtroCCAnalitico ENCONTRADO. Adicionando event listener e carregamento inicial.');
+            filtroCCAnalitico.addEventListener('change', function() {
+                console.log('[Analitico] Dropdown mudou. Novo cc_id:', this.value);
+                carregarDadosAnaliticos(this.value);
+            });
+            
+            console.log('[Analitico] Carregamento inicial com cc_id:', filtroCCAnalitico.value);
+            carregarDadosAnaliticos(filtroCCAnalitico.value); 
+        } else {
+            console.warn('[Analitico] Dropdown filtroCCAnalitico NÃO encontrado no DOM mesmo após DOMContentLoaded. O card pode estar ausente ou ID incorreto.');
+        }
+    });
+</script>
+{% endblock %}
+

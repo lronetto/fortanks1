@@ -1,0 +1,266 @@
+{% extends "common/base.html" %}
+
+{% block title %}EPIs do Colaborador{% endblock %}
+{% block mobile_title %}EPIs do Colaborador{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">EPIs do Colaborador</h1>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('seguranca.entregas_index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>Voltar
+            </a>
+            <a href="{{ url_for('seguranca.entrega_nova') }}" class="btn btn-primary">
+                <i class="fas fa-plus mr-2"></i>Nova Entrega
+            </a>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    {% include "common/alerts.html" %}
+
+    <!-- Informações do Colaborador -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Informações do Colaborador</h6>
+            {% if 'colaborador.visualizar' in request.path or 'colaborador.index' in request.path %}
+            {% else %}
+            <a href="{{ url_for('colaborador.visualizar', id=colaborador.id) }}" class="btn btn-sm btn-info">
+                <i class="fas fa-user mr-1"></i>Ver Perfil Completo
+            </a>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Nome:</strong> {{ colaborador.nome }}</p>
+                    <p><strong>CPF:</strong> {{ colaborador.cpf }}</p>
+                    <p><strong>Cargo:</strong> {{ colaborador.cargo }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Departamento:</strong> {{ colaborador.departamento }}</p>
+                    <p><strong>Data de Admissão:</strong> {{ colaborador.data_admissao.strftime('%d/%m/%Y') }}</p>
+                    <p><strong>Status:</strong>
+                        <span
+                            class="badge {% if colaborador.status == 'Ativo' %}bg-success{% else %}bg-danger{% endif %} text-white">
+                            {{ colaborador.status }}
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de EPIs</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hard-hat fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Em Uso</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas|selectattr('data_devolucao',
+                                'none')|list|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Devolvidos</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas|selectattr('data_devolucao',
+                                'defined')|list|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EPIs em Uso -->
+    {% set epis_em_uso = entregas|selectattr('data_devolucao', 'none')|list %}
+    {% if epis_em_uso|length > 0 %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-warning">
+            <h6 class="m-0 font-weight-bold text-dark">EPIs em Uso</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>EPI</th>
+                            <th>Data de Entrega</th>
+                            <th>Quantidade</th>
+                            <th>Dias em Uso</th>
+                            <th>Termo Assinado</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entrega in epis_em_uso %}
+                        <tr>
+                            <td>{{ entrega.epi.material.nome }}</td>
+                            <td>{{ entrega.data_entrega.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ entrega.quantidade }}</td>
+                            <td>{{ entrega.dias_em_uso }}</td>
+                            <td>
+                                {% if entrega.assinado %}
+                                <span class="text-success"><i class="fas fa-check-circle"></i> Sim</span>
+                                {% else %}
+                                <span class="text-danger"><i class="fas fa-times-circle"></i> Não</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <!-- Botão para visualizar -->
+                                <a href="{{ url_for('seguranca.entrega_visualizar', id=entrega.id) }}"
+                                    class="btn btn-sm btn-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+
+                                <!-- Botão para registrar devolução -->
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal"
+                                    data-bs-target="#devolucaoModal{{ entrega.id }}">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle mr-2"></i>Este colaborador não possui EPIs em uso atualmente.
+    </div>
+    {% endif %}
+
+    <!-- Histórico de EPIs -->
+    {% set epis_devolvidos = entregas|selectattr('data_devolucao', 'defined')|list %}
+    {% if epis_devolvidos|length > 0 %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Histórico de EPIs</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>EPI</th>
+                            <th>Data de Entrega</th>
+                            <th>Data de Devolução</th>
+                            <th>Tempo de Uso</th>
+                            <th>Quantidade</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entrega in epis_devolvidos %}
+                        <tr>
+                            <td>{{ entrega.epi.material.nome }}</td>
+                            <td>{{ entrega.data_entrega.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ entrega.data_devolucao.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ entrega.dias_em_uso }} dias</td>
+                            <td>{{ entrega.quantidade }}</td>
+                            <td class="text-center">
+                                <!-- Botão para visualizar -->
+                                <a href="{{ url_for('seguranca.entrega_visualizar', id=entrega.id) }}"
+                                    class="btn btn-sm btn-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Modais para Devolução -->
+    {% for entrega in epis_em_uso %}
+    <div class="modal fade" id="devolucaoModal{{ entrega.id }}" tabindex="-1"
+        aria-labelledby="devolucaoModalLabel{{ entrega.id }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="devolucaoModalLabel{{ entrega.id }}">Registrar Devolução</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{{ url_for('seguranca.entrega_registrar_devolucao', id=entrega.id) }}" method="post">
+                    <div class="modal-body">
+                        <p><strong>EPI:</strong> {{ entrega.epi.material.nome }}</p>
+                        <p><strong>Data de Entrega:</strong> {{ entrega.data_entrega.strftime('%d/%m/%Y') }}</p>
+                        <p><strong>Dias em uso:</strong> {{ entrega.dias_em_uso }}</p>
+
+                        <div class="mb-3">
+                            <label for="data_devolucao-{{ entrega.id }}" class="form-label">Data de Devolução</label>
+                            <input type="date" class="form-control" id="data_devolucao-{{ entrega.id }}" 
+                                name="data_devolucao" value="{{ now1.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="mb-3">
+                            <label for="observacoes-{{ entrega.id }}" class="form-label">Observações</label>
+                            <textarea class="form-control" id="observacoes-{{ entrega.id }}" name="observacoes" rows="3"
+                                placeholder="Condições do EPI, motivo da devolução, etc."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">Registrar Devolução</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Definir data máxima de devolução como hoje
+        document.querySelectorAll('[id^="data_devolucao-"]').forEach(function (input) {
+            input.max = new Date().toISOString().split('T')[0];
+        });
+    });
+</script>
+{% endblock %}

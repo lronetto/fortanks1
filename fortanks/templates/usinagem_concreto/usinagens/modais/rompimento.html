@@ -1,0 +1,80 @@
+<!-- Modal de Rompimentos -->
+<div class="modal fade" id="modalRompimentos" tabindex="-1" aria-labelledby="modalRompimentosLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRompimentosLabel">Rompimentos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="rompimentosContent">
+                    <!-- O conteúdo será carregado dinamicamente via JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar tooltips do Bootstrap
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true,
+            trigger: 'hover'
+        });
+    });
+
+    // Manipulador de eventos para os badges de rompimento
+    document.querySelectorAll('.rompimento-badge').forEach(function(badge) {
+        badge.addEventListener('mouseenter', function() {
+            var usinagemId = this.getAttribute('data-usinagem-id');
+            var idade = this.getAttribute('data-idade');
+            var tooltip = bootstrap.Tooltip.getInstance(this);
+            console.log(usinagemId, idade)
+            if (!tooltip) {
+                tooltip = new bootstrap.Tooltip(this, {
+                    html: true,
+                    trigger: 'hover'
+                });
+            }
+            
+            fetch('/usinagem-concreto/rompimentos/' + usinagemId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.rompimentos) {
+                        var rompimentos = data.rompimentos;
+                        var html = '<div class="table-responsive"><table class="table table-sm table-bordered mb-0">';
+                        html += '<thead><tr><th>Idade</th><th>Resistência</th></tr></thead><tbody>';
+                        
+                        rompimentos.forEach(function(romp) {
+                            if ((idade === '24H' && romp.idade_days <= 3) || 
+                                (idade === '28D' && romp.idade_days >= 28)) {
+                                html += '<tr><td>' + romp.idade_str + '</td><td>' + 
+                                       (romp.resistencia_str || '-') + '</td></tr>';
+                            }
+                        });
+                        
+                        html += '</tbody></table></div>';
+                        
+                        if (tooltip) {
+                            tooltip.setContent({ '.tooltip-inner': html });
+                        }
+                    } else {
+                        if (tooltip) {
+                            tooltip.setContent({ '.tooltip-inner': 'Nenhum rompimento disponível' });
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar rompimentos:', error);
+                    if (tooltip) {
+                        tooltip.setContent({ '.tooltip-inner': 'Erro ao carregar rompimentos' });
+                    }
+                });
+        });
+    });
+});
+</script>
+{% endblock %}

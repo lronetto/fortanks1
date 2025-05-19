@@ -1,0 +1,220 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Notas Fiscais{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 text-gray-800">Gestão de Notas Fiscais</h1>
+            <p class="mb-0">Visualize e gerencie todas as notas fiscais do sistema.</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImportarArquivei">
+                <i class="fas fa-cloud-download-alt"></i> Importar Arquivei
+            </button>
+            <a href="{{ url_for('nota_fiscal.importar_todas_pendentes') }}" class="btn btn-warning" id="btnImportarTodasPendentes">
+                <i class="fas fa-file-import"></i> Importar Pendentes
+            </a>
+            <a href="{{ url_for('nota_fiscal.analise') }}" class="btn btn-info">
+                <i class="fas fa-chart-bar"></i> Análise
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('nota_fiscal.index') }}" class="row g-3">
+                <div class="col-md-3">
+                    <label for="busca" class="form-label">Busca</label>
+                    <input type="text" name="busca" id="busca" class="form-control" 
+                           placeholder="Número, emitente ou chave de acesso" value="{{ request.args.get('busca', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="item_nome" class="form-label">Nome do Item</label>
+                    <input type="text" name="item_nome" id="item_nome" class="form-control"
+                           placeholder="Filtrar por nome de item" value="{{ request.args.get('item_nome', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="status_importacao" class="form-label">Status de Importação</label>
+                    <select name="status_importacao" id="status_importacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="importadas" {% if status_importacao == 'importadas' %}selected{% endif %}>Importadas</option>
+                        <option value="parciais" {% if status_importacao == 'parciais' %}selected{% endif %}>Parcialmente Importadas</option>
+                        <option value="pendentes" {% if status_importacao == 'pendentes' %}selected{% endif %}>Pendentes</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('nota_fiscal.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-sync"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Incluir template de mensagens flash -->
+  
+
+    <!-- Lista de Notas Fiscais -->
+    <div class="card shadow">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabelaNotasFiscais">
+                    <thead>
+                        <tr>
+                            <th>Número NF</th>
+                            <th>Data Emissão</th>
+                            <th>Fornecedor</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th width="180">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Iterar sobre os itens da página atual -->
+                        {% for nf in pagination.items %}
+                        <tr>
+                            <td>{{ nf.numero_nf }}</td>
+                            <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
+                            <td>{{ nf.nome_emitente }}</td>
+                            <td>R$ {{ "%.2f"|format(nf.valor_total) if nf.valor_total is not none else '0.00' }}</td>
+                            <td>
+                                <!-- Lógica de status atual -->
+                                {# Verificar se o método existe antes de chamar #}
+                                {% set percentual = -1 %} {# Valor padrão caso método não exista #}
+                                {% if nf.percentual_importacao is defined %}
+                                    {% set percentual = nf.percentual_importacao() %}
+                                {% endif %}
+                                <span class="badge {% if percentual == 0 %}bg-danger{% elif percentual == 100 %}bg-success{% elif percentual > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {% if percentual == 0 %}
+                                        Pendente
+                                    {% elif percentual == 100 %}
+                                        Importada
+                                    {% elif percentual > 0 %}
+                                        Parcial ({{ "%.0f"|format(percentual) }}%)
+                                    {% else %}
+                                        N/A {# Ou status Indefinido #}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-primary visualizar-itens" 
+                                            data-id="{{ nf.id }}" title="Visualizar Itens">
+                                        <i class="fas fa-list"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-success importar-itens" 
+                                            data-id="{{ nf.id }}" title="Importar para Estoque">
+                                        <i class="fas fa-file-import"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning vincular-material" 
+                                            data-id="{{ nf.id }}" title="Vincular Material">
+                                        <i class="fas fa-link"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger excluir-nota" 
+                                            data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">Nenhuma nota fiscal encontrada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Controles de Paginação -->
+            {% if pagination and pagination.pages > 1 %}
+            <nav aria-label="Paginação Notas Fiscais">
+                <ul class="pagination justify-content-center">
+                    <!-- Link Anterior -->
+                    <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.prev_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', '')) }}" aria-label="Anterior">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <!-- Links de Páginas -->
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
+                                <a class="page-link" href="{{ url_for('nota_fiscal.index', page=page_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', '')) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    <!-- Link Próximo -->
+                    <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.next_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', '')) }}" aria-label="Próximo">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="text-center text-muted">
+                Página {{ pagination.page }} de {{ pagination.pages }}. Total de {{ pagination.total }} notas.
+            </div>
+            {% endif %}
+            <!-- Fim Controles de Paginação -->
+
+        </div>
+    </div>
+</div>
+
+<!-- Modais -->
+{% include 'notas_fiscais/modais/visualizar_itens.html' %}
+{% include 'notas_fiscais/modais/importar_itens.html' %}
+{% include 'notas_fiscais/modais/selecionar_material.html' %}
+{% include 'notas_fiscais/modais/conversao_unidades.html' %}
+{% include 'notas_fiscais/modais/importar_arquivei.html' %}
+{% include 'notas_fiscais/modais/excluir_nota.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.min.css">
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+<style>
+.badge {
+    font-size: 85%;
+    padding: 0.25em 0.6em;
+}
+.btn-group .btn {
+    margin-right: 2px;
+}
+.modal {
+    z-index: 1050 !important;
+}
+.modal-backdrop {
+    z-index: 1040 !important;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<!-- Certifique-se de que jQuery é carregado primeiro -->
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+<!-- Bootstrap Bundle inclui Popper.js -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- SweetAlert2 para diálogos -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
+<!-- DataTables -->
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<!-- Script principal -->
+<script src="{{ url_for('static', filename='js/notas_fiscais/index.js') }}"></script>
+{% endblock %} 

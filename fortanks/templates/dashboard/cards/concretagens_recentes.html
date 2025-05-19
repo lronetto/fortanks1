@@ -1,0 +1,93 @@
+ <!-- Concretagens Recentes -->
+ <div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Concretagens Recentes</h6>
+    </div>
+    <div class="card-body">
+        {% if dados_especificos.concretagens_recentes %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Pista</th>
+                            <th>Peças</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for concretagem in dados_especificos.concretagens_recentes %}
+                        <tr>
+                            <td>{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}</td>
+                            <td class="text-center">{{ concretagem.pista }}</td>
+                            <td class="text-center">{{ concretagem.pecas|length }}</td>
+                            <td>
+                                <a href="{{ url_for('concretagem.visualizar', id=concretagem.id) }}" class="btn btn-sm btn-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-center">Nenhuma concretagem recente encontrada.</p>
+        {% endif %}
+        
+    </div>
+</div>
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Histórico de Concretagens</h6>
+    </div>
+    <div class="card-body">
+        <div class="chart-area">
+            <canvas id="concretagensChart"></canvas>
+        </div>
+        <div class="text-center mt-3">
+            <p>Total de peças concretadas nos últimos 30 dias: <strong>{{ dados_especificos.total_pecas_recentes }}</strong></p>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+    fetch("{{ url_for('dashboard.api_dados_concretagens') }}")
+        .then(response => response.json())
+        .then(data => {
+            const ctxConcretagens = document.getElementById("concretagensChart");
+            if (ctxConcretagens && data.concretagens_semanais) {
+                const concretagensData = data.concretagens_semanais;
+                new Chart(ctxConcretagens, {
+                    type: 'line',
+                    data: {
+                        labels: concretagensData.map(item => item.semana),
+                        datasets: [{
+                            label: 'Concretagens Semanais',
+                            lineTension: 0.3,
+                            backgroundColor: "rgba(78, 115, 223, 0.05)",
+                            borderColor: "rgba(78, 115, 223, 1)",
+                            pointRadius: 3,
+                            pointBackgroundColor: "rgba(78, 115, 223, 1)",
+                            pointBorderColor: "rgba(78, 115, 223, 1)",
+                            pointHoverRadius: 3,
+                            pointHoverBackgroundColor: "rgba(78, 115, 223, 1)",
+                            pointHoverBorderColor: "rgba(78, 115, 223, 1)",
+                            pointHitRadius: 10,
+                            pointBorderWidth: 2,
+                            data: concretagensData.map(item => item.quantidade),
+                        }],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        });
+</script>
+{% endblock %}

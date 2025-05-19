@@ -1,0 +1,353 @@
+{% extends "common/base.html" %}
+
+{% block title %}Controle de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Controle de Estoque</h1>
+        <div>
+            <a href="{{ url_for('estoque.movimentacoes') }}" class="btn btn-info btn-sm">
+                <i class="fas fa-exchange-alt"></i> Movimentações
+            </a>
+            <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-warning btn-sm">
+                <i class="fas fa-clipboard-list"></i> Inventários
+            </a>
+            <a href="{{ url_for('estoque.novo') }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i> Novo Item
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+            <div class="dropdown no-arrow">
+                <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in" aria-labelledby="dropdownMenuLink">
+                    <a class="dropdown-item" href="{{ url_for('estoque.index') }}">Limpar Filtros</a>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('estoque.index') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        {{ form_filtro.tipo_item.label }}
+                        {{ form_filtro.tipo_item(class="form-control") }}
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        {{ form_filtro.status_estoque.label }}
+                        {{ form_filtro.status_estoque(class="form-control") }}
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        {{ form_filtro.termo_busca.label }}
+                        {{ form_filtro.termo_busca(class="form-control", placeholder="Buscar por nome, código...") }}
+                    </div>
+                    <div class="col-md-2 mb-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Itens -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Itens em Estoque</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Código</th>
+                            <th>Nome / Descrição</th>
+                            <th>Quantidade</th>
+                            <th>Localização</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items.items %}
+                        <tr>
+                            <td>{{ item.tipo_item|capitalize }}</td>
+                            <td>
+                                {% if item.material %}
+                                    {{ item.material.codigo or "N/A" }}
+                                {% elif item.epi and item.epi.material %}
+                                    {{ item.epi.material.codigo or "N/A" }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.material %}
+                                    {{ item.material.nome }}
+                                {% elif item.epi and item.epi.material %}
+                                    {{ item.epi.material.nome }} - CA: {{ item.epi.ca_numero or "N/A" }}
+                                {% else %}
+                                    Item sem descrição
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {{ "%.2f"|format(item.quantidade|float) }}
+                                {% if item.material %}
+                                    {{ item.material.unidade or "" }}
+                                {% endif %}
+                            </td>
+                            <td>{{ item.localizacao or "Não especificado" }}</td>
+                            <td>
+                                {% if item.status_estoque == "Esgotado" %}
+                                    <span class="badge badge-danger">Esgotado</span>
+                                {% elif item.status_estoque == "Crítico" %}
+                                    <span class="badge badge-warning">Crítico</span>
+                                {% elif item.status_estoque == "Excesso" %}
+                                    <span class="badge badge-info">Excesso</span>
+                                {% else %}
+                                    <span class="badge badge-success">Normal</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group">
+                                    <a href="{{ url_for('estoque.detalhes', id=item.id) }}" class="btn btn-info btn-sm" title="Detalhes">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('estoque.editar', id=item.id) }}" class="btn btn-primary btn-sm" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-danger btn-sm" title="Excluir" 
+                                            onclick="confirmarExclusao('{{ url_for('estoque.excluir', id=item.id) }}');">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center">Nenhum item encontrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginação -->
+            <div class="d-flex justify-content-between align-items-center mt-3">
+                <div>
+                    Mostrando {{ items.items|length }} de {{ items.total }} itens
+                </div>
+                <nav aria-label="Navegação de página">
+                    <ul class="pagination">
+                        {% for page in items.iter_pages() %}
+                            {% if page %}
+                                {% if page != items.page %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('estoque.index', page=page, tipo_item=form_filtro.tipo_item.data, status_estoque=form_filtro.status_estoque.data, termo_busca=form_filtro.termo_busca.data) }}">{{ page }}</a>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ page }}</span>
+                                    </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <span class="page-link">...</span>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="confirmacaoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmacaoModalLabel">Confirmar Exclusão</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Tem certeza que deseja excluir este item do estoque? Esta ação não pode ser desfeita.
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <form id="formExclusao" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Confirmar Exclusão</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Novo Item de Estoque -->
+<div class="modal fade" id="novoItemModal" tabindex="-1" role="dialog" aria-labelledby="novoItemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="novoItemModalLabel">Novo Item de Estoque</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" id="formNovoItem" action="{{ url_for('estoque.novo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="material_id">Material</label>
+                                <select class="form-control select2" id="material_id" name="material_id" required>
+                                    <option value="0">Selecione um material</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="quantidade">Quantidade Inicial</label>
+                                <input type="number" class="form-control" id="quantidade" name="quantidade" value="0" step="0.01" min="0" required>
+                                <small class="form-text text-muted">Quantidade inicial do item no estoque</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="quantidade_minima">Quantidade Mínima</label>
+                                <input type="number" class="form-control" id="quantidade_minima" name="quantidade_minima" value="0" step="0.01" min="0">
+                                <small class="form-text text-muted">Quando abaixo deste valor, o estoque será marcado como crítico</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="quantidade_maxima">Quantidade Máxima</label>
+                                <input type="number" class="form-control" id="quantidade_maxima" name="quantidade_maxima" value="0" step="0.01" min="0">
+                                <small class="form-text text-muted">Quando acima deste valor, o estoque será marcado como em excesso</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="lote">Lote</label>
+                                <input type="text" class="form-control" id="lote" name="lote" placeholder="Número do lote, se aplicável">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="data_validade">Data de Validade</label>
+                                <input type="date" class="form-control" id="data_validade" name="data_validade">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarItem">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function confirmarExclusao(url) {
+        document.getElementById('formExclusao').action = url;
+        $('#confirmacaoModal').modal('show');
+    }
+    
+    $(document).ready(function() {
+        // Inicializar elementos de interface
+        $('.select2').select2({
+            theme: 'bootstrap4',
+            dropdownParent: $('#novoItemModal')
+        });
+        
+        // Alterar o link "Novo Item" para abrir o modal
+        $('a[href="{{ url_for('estoque.novo') }}"]').attr('href', '#').on('click', function(e) {
+            e.preventDefault();
+            $('#novoItemModal').modal('show');
+            carregarOpcoesSelects();
+        });
+        
+        // Função para carregar as opções dos selects via Ajax
+        function carregarOpcoesSelects() {
+            // Inicializar selects com Select2
+            $('#material_id').select2({
+                theme: 'bootstrap4',
+                dropdownParent: $('#novoItemModal'),
+                width: '100%'
+            });
+            
+            // Carregar materiais
+            $.getJSON("{{ url_for('material.listar_json') }}", function(data) {
+                let materialSelect = $('#material_id');
+                materialSelect.empty();
+                materialSelect.append('<option value="0">Selecione um material</option>');
+                
+                $.each(data, function(index, item) {
+                    materialSelect.append('<option value="' + item.id + '">' + item.codigo + ' - ' + item.nome + '</option>');
+                });
+                
+                materialSelect.trigger('change');
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                console.error("Erro ao carregar materiais:", textStatus, errorThrown);
+            });
+        }
+        
+        // Salvar novo item
+        $('#btnSalvarItem').click(function() {
+            // Validar formulário
+            let valid = true;
+            
+            if ($('#material_id').val() == '0') {
+                alert('Selecione um material para este item de estoque.');
+                valid = false;
+            }
+            
+            if (valid) {
+                // Enviar formulário via Ajax
+                $.ajax({
+                    url: "{{ url_for('estoque.novo') }}",
+                    type: "POST",
+                    data: $('#formNovoItem').serialize(),
+                    dataType: "json",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert(response.message);
+                            window.location.href = response.redirect;
+                        } else {
+                            alert(response.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        alert("Erro ao salvar item: " + error);
+                    }
+                });
+            }
+        });
+    });
+</script>
+{% endblock %} 

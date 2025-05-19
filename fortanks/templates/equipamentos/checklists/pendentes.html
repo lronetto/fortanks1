@@ -1,0 +1,60 @@
+{% extends "common/base.html" %}
+
+{% block title %}Checklists Pendentes - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Checklists Pendentes{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Checklists Pendentes</h1>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Checklists Aguardando Preenchimento</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Equipamento</th>
+                            <th>Modelo de Checklist</th>
+                            <th>Data Programada</th>
+                            <th>Status</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for checklist in checklists %}
+                        <tr>
+                            <td>{{ checklist.equipamento.nome }}</td>
+                            <td>{{ checklist.modelo.nome }}</td>
+                            <td>{{ checklist.data_checklist.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {% if checklist.status == 'Pendente' %}
+                                <span class="badge bg-warning">Pendente</span>
+                                {% elif checklist.status == 'Em Andamento' %}
+                                <span class="badge bg-primary">Em Andamento</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{{ url_for('equipamento.preencher_checklist', id=checklist.equipamento_id, checklist_id=checklist.id) }}" 
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-clipboard-check"></i>
+                                    <span class="d-none d-md-inline-block ms-1">Preencher</span>
+                                </a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">Nenhum checklist pendente encontrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

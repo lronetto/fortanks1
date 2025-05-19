@@ -1,0 +1,247 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatórios de Usinagem - {{ contrato.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Relatórios de Usinagem - {{ contrato.nome }}</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('relatorio_usinagem.index') }}">Relatórios de Usinagem</a></li>
+        <li class="breadcrumb-item active">{{ contrato.nome }}</li>
+    </ol>
+    
+    <div class="row">
+        <div class="col-xl-4">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-info-circle me-1"></i>
+                        Informações do Contrato
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalSelecionarContrato">
+                            <i class="fas fa-exchange-alt"></i> Trocar Contrato
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h5>{{ contrato.nome }}</h5>
+                    <p><strong>Descrição:</strong> {{ contrato.descricao or "Não informada" }}</p>
+                    <p><strong>Cliente Direto:</strong> {{ contrato.cliente_direto.nome if contrato.cliente_direto else "Não especificado" }}</p>
+                    <p><strong>Cliente Final:</strong> {{ contrato.cliente_final.nome if contrato.cliente_final else "Não especificado" }}</p>
+                    <p><strong>Valor Total:</strong> R$ {{ contrato.valor_total|float|round(2, 'common')|replace('.', ',') }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-flask me-1"></i>
+                    Usinagens de Concreto
+                </div>
+                <div class="card-body">
+                    {% if usinagens %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Data</th>
+                                    <th>Traço</th>
+                                    <th>Volume (m³)</th>
+                                    <th>Responsável</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for usinagem in usinagens %}
+                                <tr>
+                                    <td>{{ usinagem.id }}</td>
+                                    <td>{{ usinagem.data_usinagem.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ usinagem.traco.codigo if usinagem.traco else "N/A" }}</td>
+                                    <td>{{ usinagem.volume_produzido|float|round(2, 'common')|replace('.', ',') }}</td>
+                                    <td>{{ usinagem.responsavel.nome if usinagem.responsavel else "N/A" }}</td>
+                                    <td>
+                                        <a href="{{ url_for('relatorio_usinagem.ficha_moldagem_rompimento', usinagem_id=usinagem.id) }}" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-eye"></i> Visualizar
+                                        </a>
+                                        <a href="{{ url_for('relatorio_usinagem.ficha_moldagem_rompimento_pdf', usinagem_id=usinagem.id) }}" class="btn btn-danger btn-sm" target="_blank">
+                                            <i class="fas fa-file-pdf"></i> PDF
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        Não há usinagens de concreto associadas a este contrato.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-cubes me-1"></i>
+                    Concretagens Associadas
+                </div>
+                <div class="card-body">
+                    {% if concretagens %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="tableConcretagens" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Data</th>
+                                    <th>Pista</th>
+                                    <th>Tanques</th>
+                                    <th>Peças</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for concretagem in concretagens %}
+                                <tr>
+                                    <td>{{ concretagem.id }}</td>
+                                    <td>{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ concretagem.pista }}</td>
+                                    <td>
+                                        {% for tanque in concretagem.tanques %}
+                                            <span class="badge bg-secondary">{{ tanque.nome }}</span>
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ concretagem.pecas|length }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        Não há concretagens associadas a este contrato.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Selecionar Contrato -->
+<div class="modal fade" id="modalSelecionarContrato" tabindex="-1" aria-labelledby="modalSelecionarContratoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalSelecionarContratoLabel">Selecionar Contrato</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control" id="pesquisaContrato" placeholder="Pesquisar contrato..." aria-label="Pesquisar contrato">
+                    <button class="btn btn-outline-secondary" type="button" id="btnPesquisarContrato">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tabelaContratos">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>Cliente</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaContratos">
+                            <!-- Os contratos serão carregados via AJAX -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        $('#dataTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            },
+            "order": [[1, 'desc']]  // Ordenar pela data (coluna 1) decrescente
+        });
+        
+        $('#tableConcretagens').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            },
+            "order": [[1, 'desc']]  // Ordenar pela data (coluna 1) decrescente
+        });
+        
+        // Carregar contratos quando o modal é aberto
+        $('#modalSelecionarContrato').on('shown.bs.modal', function () {
+            carregarContratos();
+        });
+        
+        // Pesquisar contratos
+        $('#btnPesquisarContrato').click(function() {
+            carregarContratos($('#pesquisaContrato').val());
+        });
+        
+        $('#pesquisaContrato').keypress(function(e) {
+            if(e.which == 13) { // Enter
+                carregarContratos($('#pesquisaContrato').val());
+                e.preventDefault();
+            }
+        });
+        
+        // Função para carregar os contratos
+        function carregarContratos(termo = '') {
+            $.ajax({
+                url: "{{ url_for('relatorio_usinagem.api_listar_contratos') }}",
+                method: 'GET',
+                data: { termo: termo },
+                success: function(response) {
+                    const contratos = response.contratos;
+                    let html = '';
+                    
+                    if (contratos.length === 0) {
+                        html = '<tr><td colspan="4" class="text-center">Nenhum contrato encontrado</td></tr>';
+                    } else {
+                        contratos.forEach(function(contrato) {
+                            html += `
+                                <tr>
+                                    <td>${contrato.id}</td>
+                                    <td>${contrato.nome}</td>
+                                    <td>${contrato.cliente || 'Não especificado'}</td>
+                                    <td>
+                                        <a href="{{ url_for('relatorio_usinagem.por_contrato', contrato_id=0) }}".replace('0', contrato.id) 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="fas fa-check"></i> Selecionar
+                                        </a>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    }
+                    
+                    $('#listaContratos').html(html);
+                },
+                error: function(error) {
+                    console.error('Erro ao carregar contratos:', error);
+                    $('#listaContratos').html('<tr><td colspan="4" class="text-center">Erro ao carregar contratos</td></tr>');
+                }
+            });
+        }
+    });
+</script>
+{% endblock %} 

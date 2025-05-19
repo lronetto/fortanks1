@@ -1,0 +1,454 @@
+<!-- Modal de Nova Usinagem -->
+<div class="modal fade" id="modalNovaUsinagem" tabindex="-1" aria-labelledby="modalNovaUsinagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovaUsinagemLabel">Nova Usinagem de Concreto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formNovaUsinagem" method="POST" action="{{ url_for('usinagem_concreto.nova_usinagem') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                <!-- Aviso de carregamento dos dados -->
+                <div id="aviso-carregamento" class="alert alert-info mb-3">
+                    <i class="fas fa-spinner fa-spin me-2"></i> Carregando dados necessários...
+                    <button type="button" class="btn btn-sm btn-outline-primary float-end" onclick="preencherDadosManualmente()">
+                        <i class="fas fa-sync"></i> Recarregar Dados
+                    </button>
+                </div>
+                
+                <!-- Primeira linha: Data e Volume -->
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6 mb-3 mb-md-0">
+                        <label for="data_usinagem" class="form-label fw-bold">Data de Usinagem *</label>
+                        <input type="datetime-local" class="form-control" id="data_usinagem" name="data_usinagem" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="volume_produzido" class="form-label fw-bold">Volume Produzido (m³) *</label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="volume_produzido" name="volume_produzido" required>
+                    </div>
+                </div>
+
+                <!-- Segunda linha: Traço e Umidade -->
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6 mb-3 mb-md-0">
+                        <label for="traco_id" class="form-label fw-bold">Traço *</label>
+                        <select class="form-control" id="traco_id" name="traco_id" required>
+                            <option value="">Selecione um traço</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="umidade" class="form-label fw-bold">Umidade (%) <small class="text-muted">Afeta materiais marcados</small></label>
+                        <input type="number" step="0.01" min="0" max="100" class="form-control" id="umidade" name="umidade" value="0">
+                    </div>
+                </div>
+
+                <!-- Terceira linha: Responsável e Status -->
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6 mb-3 mb-md-0">
+                        <label for="responsavel_id" class="form-label fw-bold">Responsável *</label>
+                        <select class="form-control" id="responsavel_id" name="responsavel_id" required>
+                            <option value="">Selecione um responsável</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="status" class="form-label fw-bold">Status *</label>
+                        <select class="form-control" id="status" name="status" required>
+                            <option value="Concluído">Concluído</option>
+                            <option value="Em andamento">Em andamento</option>
+                            <option value="Programada">Programada</option>
+                            <option value="Cancelada">Cancelada</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Quarta linha: Nota e Quantidade CPs -->
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6">
+                        <label for="nota_id" class="form-label fw-bold">Nota</label>
+                        <input type="text" class="form-control" id="nota_id" name="nota_id" maxlength="10">
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="quantidade_cps" class="form-label fw-bold">Quantidade de CPs</label>
+                        <input type="number" class="form-control" id="quantidade_cps" name="quantidade_cps" min="0" max="10" value="0">
+                        <small class="form-text text-muted">Número de corpos de prova a serem moldados</small>
+                    </div>
+                </div>
+                <!-- Quinta linha: Fluidez -->
+                <div class="row mb-3">
+                    <div class="col-12 col-md-6">
+                        <label for="numero_betoneira" class="form-label fw-bold">Número Betoneira</label>
+                        <input type="text" class="form-control" id="numero_betoneira" name="numero_betoneira" maxlength="15" list="lista_betoneiras">
+                        <datalist id="lista_betoneiras">
+                            <!-- Será preenchido via JavaScript -->
+                        </datalist>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="fluidez" class="form-label fw-bold">Fluidez</label>
+                        <input type="text" class="form-control" id="fluidez" name="fluidez" maxlength="15">
+                        <small class="form-text text-muted">Ex: 650/650</small>
+                    </div>
+                </div>
+
+                <!-- Checkbox para Baixar Estoque Automaticamente -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" name="baixar_estoque_automaticamente" id="baixar_estoque_automaticamente_modal" checked>
+                            <label class="form-check-label" for="baixar_estoque_automaticamente_modal">
+                                Baixar material do estoque automaticamente ao concluir a usinagem?
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Materiais Utilizados -->
+                <hr>
+                <h5 class="fw-bold">Materiais Utilizados</h5>
+                <p class="text-muted small">Informe a quantidade executada para cada material do traço</p>
+
+                <div id="materiais-container">
+                    <!-- Aqui serão adicionados os campos de materiais dinamicamente -->
+                    <div class="alert alert-info" id="sem-materiais">
+                        Selecione um traço para exibir os materiais
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar Usinagem</button>
+            </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+//--- INÍCIO: Script para modal de nova usinagem ---
+// Definir a data e hora atual como padrão para o campo de data de usinagem
+        
+const dataFormatada = '{{ now }}'
+        console.log(dataFormatada);
+        $('#data_usinagem').val(dataFormatada);
+        
+        // Função para carregar números de betoneira únicos
+        function carregarNumerosBetoneira() {
+            $.ajax({
+                url: '/usinagem-concreto/usinagens/numeros-betoneira',
+                method: 'GET',
+                success: function(response) {
+                    const datalist = $('#lista_betoneiras');
+                    datalist.empty();
+                    
+                    if (response && response.length > 0) {
+                        response.forEach(function(numero) {
+                            datalist.append(`<option value="${numero}">`);
+                        });
+                    }
+                },
+                error: function() {
+                    console.error('Erro ao carregar números de betoneira');
+                }
+            });
+        }
+
+        function carregarUltimaNota() {
+            $.ajax({
+                url: '/usinagem-concreto/usinagens/ultima-nota',
+                method: 'GET',
+                success: function(response) {
+                    nota = $('#nota_id');
+                    
+                    if (response && response.length > 0) {
+                        nota_id=parseInt(response)+1;
+                        nota.val(nota_id);
+                    }
+                },
+                error: function() {
+                    console.error('Erro ao carregar números de betoneira');
+                }
+            });
+        }
+
+        // Função para preencher os selects com os dados carregados do servidor
+        function preencherDadosManualmente() {
+            console.log('Preenchendo dados manualmente...');
+            
+            // Preencher traços
+            const tracoSelect = $('#traco_id');
+            tracoSelect.empty().append('<option value="">Selecione um traço</option>');
+            
+            if (tracosData && tracosData.length > 0) {
+                tracosData.forEach(function(traco) {
+                    tracoSelect.append(`<option value="${traco.id}">${traco.codigo} - ${traco.nome}</option>`);
+                });
+                
+                if ($.fn.select2) {
+                    tracoSelect.trigger('change');
+                }
+            } else {
+                console.warn('Nenhum traço disponível para preenchimento');
+            }
+            
+            // Preencher colaboradores
+            const responsavelSelect = $('#responsavel_id');
+            responsavelSelect.empty().append('<option value="">Selecione um responsável</option>');
+            
+            if (colaboradoresData && colaboradoresData.length > 0) {
+                colaboradoresData.forEach(function(colaborador) {
+                    responsavelSelect.append(`<option value="${colaborador.id}">${colaborador.nome}</option>`);
+                });
+                
+                if ($.fn.select2) {
+                    responsavelSelect.trigger('change');
+                }
+            } else {
+                console.warn('Nenhum colaborador disponível para preenchimento');
+            }
+            
+            // Preencher equipamentos
+            const equipamentoSelect = $('#equipamento_id');
+            equipamentoSelect.empty().append('<option value="">Selecione um equipamento</option>');
+            
+            if (equipamentosData && equipamentosData.length > 0) {
+                equipamentosData.forEach(function(equipamento) {
+                    equipamentoSelect.append(`<option value="${equipamento.id}">${equipamento.nome} (${equipamento.tipo})</option>`);
+                });
+                
+                if ($.fn.select2) {
+                    equipamentoSelect.trigger('change');
+                }
+            } else {
+                console.warn('Nenhum equipamento disponível para preenchimento');
+            }
+            
+            // Esconder o aviso de carregamento
+            $('#aviso-carregamento').hide();
+        }
+        
+        // Tornar a função disponível globalmente para o botão de recarga
+        window.preencherDadosManualmente = preencherDadosManualmente;
+        
+        // Inicializar selects avançados, se existirem
+        if ($.fn.select2) {
+            $('#traco_id, #responsavel_id, #equipamento_id').select2({
+                dropdownParent: $('#modalNovaUsinagem')
+            });
+        }
+        
+        // Carregar dados necessários quando o modal for aberto
+        $('#modalNovaUsinagem').on('show.bs.modal', function() {
+            console.log('Modal aberto, carregando dados...');
+            // Mostrar aviso de carregamento
+            $('#aviso-carregamento').show();
+            // Carregar dados
+            carregarNumerosBetoneira();
+            carregarUltimaNota();
+            preencherDadosManualmente();
+        });
+        
+        // Quando o traço for selecionado, carregar os materiais
+        $('#traco_id').change(function() {
+            carregarMateriaisTraco($(this).val());
+        });
+
+        // Função para carregar os materiais do traço
+        function carregarMateriaisTraco(tracoId) {
+            if (!tracoId) {
+                $('#materiais-container').html('<div class="alert alert-info" id="sem-materiais">Selecione um traço para exibir os materiais</div>');
+                return;
+            }
+            
+            // Obter volume e umidade
+            var volume = $('#volume_produzido').val().replace(',', '.');
+            var umidade = $('#umidade').val().replace(',', '.');
+            
+            // Validar volume
+            if (!volume || isNaN(parseFloat(volume)) || parseFloat(volume) <= 0) {
+                console.log('Volume inválido ou não preenchido, cálculo não será realizado.');
+                $('#materiais-container').html('<div class="alert alert-warning">Informe um volume válido maior que zero.</div>');
+                return;
+            }
+            
+            // Validar umidade
+            if (!umidade || isNaN(parseFloat(umidade))) {
+                umidade = 0;
+            }
+            
+            // Mostrar indicador de carregamento
+            $('#materiais-container').html('<div class="text-center py-3"><i class="fas fa-spinner fa-spin me-2"></i> Carregando materiais...</div>');
+            
+            // Log dos dados a serem enviados (sintaxe corrigida/verificada)
+            console.log('Enviando para /calcular-materiais:', { traco_id: tracoId, volume: volume, umidade: umidade });
+            
+            // Requisição AJAX para calcular materiais
+            $.ajax({
+                url: '/usinagem-concreto/usinagens/calcular-materiais',
+                method: 'POST',
+                data: {
+                    traco_id: tracoId,
+                    volume: volume,
+                    umidade: umidade,
+                    csrf_token: $('input[name="csrf_token"]').val()
+                },
+                success: function(response) {
+                    // Limpar container de materiais
+                    $('#materiais-container').empty();
+                    
+                    // Verificar se há materiais
+                    if (!response.materiais || response.materiais.length === 0) {
+                        $('#materiais-container').html(`
+                            <div class="alert alert-info">
+                                Nenhum material encontrado para este traço.
+                            </div>
+                        `);
+                        return;
+                    }
+                    console.log(response);
+                    // Adicionar materiais
+                    response.materiais.forEach(function(material, index) {
+                        // Verificar se o material tem agrupamento
+                        const temAgrupados = material.eh_agrupamento && material.materiais_agrupados.length > 0;
+                        
+                        // Criar classe especial para materiais com agrupamento
+                        const classeAgrupamento = temAgrupados ? 'material-grupo-principal' : '';
+                        
+                        // Criar linha para o material principal
+                        const html = `
+                        <div class="card mb-3 ${classeAgrupamento}">
+                            <div class="card-header bg-primary text-white">
+                                <div class="row align-items-center">
+                                    <div class="col">
+                                        <h6 class="mb-0">${material.nome}</h6>
+                                        ${temAgrupados ? '<small class="d-block"><i class="fas fa-info-circle"></i> Este material tem outros agrupados abaixo</small>' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <div class="col-md-4 col-6 mb-2">
+                                        <label class="form-label fw-bold">Quantidade Calculada</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control quantidade-calculada" value="${material.quantidade}" readonly>
+                                            <span class="input-group-text">${material.unidade_nome}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4 col-6 mb-2">
+                                        <label class="form-label fw-bold">Quantidade Executada</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control quantidade-executada" name="quantidades_executadas" value="${material.quantidade}" step="0.01" min="0">
+                                            <span class="input-group-text">${material.unidade_nome}</span>
+                                        </div>
+                                        <input type="hidden" name="material_ids" value="${material.id}">
+                                        <input type="hidden" name="unidades" value="${material.unidade}">
+                                    </div>
+                                </div>
+                                
+                                ${temAgrupados ? renderizarMateriaisAgrupados(material.materiais_agrupados) : ''}
+                            </div>
+                        </div>
+                        `;
+                        
+                        $('#materiais-container').append(html);
+                    });
+                    
+                    // Adicionar estilo para materiais agrupados
+                    if (!$('#estilo-materiais-agrupados').length) {
+                        $('head').append(`
+                            <style id="estilo-materiais-agrupados">
+                                .material-grupo-principal {
+                                    border: 2px solid #4e73df;
+                                }
+                                .material-agrupado {
+                                    background-color: #f8f9fc;
+                                    border-left: 3px solid #4e73df;
+                                    margin-top: 10px;
+                                    padding: 10px;
+                                    border-radius: 4px;
+                                }
+                                .ordem-pesagem {
+                                    display: inline-block;
+                                    width: 24px;
+                                    height: 24px;
+                                    background-color: #4e73df;
+                                    color: white;
+                                    text-align: center;
+                                    border-radius: 50%;
+                                    margin-right: 8px;
+                                    line-height: 24px;
+                                    font-weight: bold;
+                                }
+                            </style>
+                        `);
+                    }
+                },
+                error: function() {
+                    $('#materiais-container').html(`
+                        <div class="alert alert-danger">
+                            Erro ao calcular materiais. Por favor, tente novamente.
+                        </div>
+                    `);
+                }
+            });
+        }
+        
+        // Função para renderizar materiais agrupados
+        function renderizarMateriaisAgrupados(materiais) {
+            if (!materiais || materiais.length === 0) return '';
+            
+            let html = '<div class="materiais-agrupados mt-3"><h6>Materiais Agrupados</h6>';
+            
+            // Ordenar por ordem de pesagem
+            materiais.sort((a, b) => a.ordem_pesagem - b.ordem_pesagem);
+            
+            materiais.forEach(function(material) {
+                html += `
+                <div class="material-agrupado">
+                    <div class="row align-items-center">
+                        <div class="col-md-4 col-12 mb-2">
+                            <span class="ordem-pesagem">${material.ordem_pesagem}</span>
+                            <span class="fw-bold">${material.nome}</span>
+                        </div>
+                        <div class="col-md-4 col-6 mb-2">
+                            <label class="form-label">Quantidade Calculada</label>
+                        <div class="input-group">
+                                <input type="text" class="form-control quantidade-calculada-agrupada" value="${material.quantidade}" readonly>
+                                <span class="input-group-text">${material.unidade_nome}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-6 mb-2">
+                            <label class="form-label">Quantidade Executada</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control quantidade-executada-agrupada" name="quantidades_executadas" value="${material.quantidade}" step="0.01" min="0">
+                                <span class="input-group-text">${material.unidade_nome}</span>
+                            </div>
+                            <input type="hidden" name="material_ids" value="${material.id}">
+                            <input type="hidden" name="unidades" value="${material.unidade}">
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            html += '</div>';
+            return html;
+        }
+        
+        // Atualizar cálculos quando volume ou umidade mudam
+        $('#volume_produzido, #umidade').on('input', function() {
+            if ($('#traco_id').val()) {
+                carregarMateriaisTraco($('#traco_id').val());
+            }
+        });
+        
+        // Limpar formulário ao fechar o modal
+        $('#modalNovaUsinagem').on('hidden.bs.modal', function() {
+            $('#formNovaUsinagem').trigger('reset');
+            $('#data_usinagem').val(dataFormatada); // Redefinir a data padrão
+            $('#fluidez').val(''); // Limpar campo fluidez
+            $('#materiais-container').html('<div class="alert alert-info" id="sem-materiais">Selecione um traço para exibir os materiais</div>');
+        });
+//--- FIM: Script para modal de nova usinagem ---
+</script>
+{% endblock %}
+

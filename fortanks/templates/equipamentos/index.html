@@ -1,0 +1,269 @@
+{% extends "common/base.html" %}
+
+{% block title %}Equipamentos - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Equipamentos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Equipamentos</h1>
+        {% if current_user.is_gerente_ou_superior %}
+        <div class="btn-group">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoEquipamentoModal">
+                <i class="fas fa-plus"></i>
+                <span class="d-none d-md-inline-block ms-1">Novo Equipamento</span>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold">Lista de Equipamentos</h6>
+            <div class="input-group w-50">
+                <input type="text" id="searchInput" class="form-control" placeholder="Buscar equipamento...">
+                <span class="input-group-text">
+                    <i class="fas fa-search"></i>
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="equipamentosTable">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Modelo</th>
+                            <th>Número de Série</th>
+                            <th>Status</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for equipamento in equipamentos %}
+                        <tr>
+                            <td>{{ equipamento.nome }}</td>
+                            <td>{{ equipamento.modelo }}</td>
+                            <td>{{ equipamento.numero_serie }}</td>
+                            <td>
+                                {% if equipamento.status == 'Ativo' %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% elif equipamento.status == 'Em Manutenção' %}
+                                <span class="badge bg-warning">Em Manutenção</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group">
+                                    <a href="{{ url_for('equipamento.visualizar', id=equipamento.id) }}"
+                                        class="btn btn-sm btn-info" title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('equipamento.manutencoes', id=equipamento.id) }}"
+                                        class="btn btn-sm btn-warning" title="Manutenções">
+                                        <i class="fas fa-tools"></i>
+                                    </a>
+                                    <a href="{{ url_for('equipamento.novo_checklist_equipamento', id=equipamento.id) }}"
+                                        class="btn btn-sm btn-success" title="Novo Checklist">
+                                        <i class="fas fa-clipboard-check"></i>
+                                    </a>
+                                    {% if current_user.is_gerente_ou_superior %}
+                                    <a href="{{ url_for('equipamento.editar', id=equipamento.id) }}"
+                                        class="btn btn-sm btn-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-danger" title="Excluir"
+                                        data-bs-toggle="modal" data-bs-target="#excluirModal{{ equipamento.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        
+                        <!-- Modal Excluir Equipamento -->
+                        <div class="modal fade" id="excluirModal{{ equipamento.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Confirmar Exclusão</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p>Tem certeza que deseja excluir o equipamento <strong>{{ equipamento.nome }}</strong>?</p>
+                                        <p class="text-danger">Esta ação não pode ser desfeita!</p>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <a href="{{ url_for('equipamento.excluir', id=equipamento.id) }}" class="btn btn-danger">Excluir</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">Nenhum equipamento cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Equipamento -->
+<div class="modal fade" id="novoEquipamentoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Equipamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('equipamento.novo') }}" id="novoEquipamentoForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="nome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="nome" name="nome" required>
+                            <div class="invalid-feedback">
+                                Por favor, informe o nome do equipamento.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="tipo" class="form-label">Tipo *</label>
+                            <select class="form-select" id="tipo" name="tipo" required>
+                                <option value="">Selecione...</option>
+                                <option value="Veiculos">Veículos</option>
+                                <option value="Maquinas">Máquinas</option>
+                                <option value="Ferramentas">Ferramentas</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Por favor, selecione o tipo do equipamento.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="propriedade" class="form-label">Propriedade *</label>
+                            <select class="form-select" id="propriedade" name="propriedade" required>
+                                <option value="">Selecione...</option>
+                                <option value="Propria">Própria</option>
+                                <option value="Alugada">Alugada</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Por favor, selecione o tipo de propriedade.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="modelo" class="form-label">Modelo *</label>
+                            <input type="text" class="form-control" id="modelo" name="modelo" required>
+                            <div class="invalid-feedback">
+                                Por favor, informe o modelo do equipamento.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="numero_serie" class="form-label">Número de Série *</label>
+                            <input type="text" class="form-control" id="numero_serie" name="numero_serie" required>
+                            <div class="invalid-feedback">
+                                Por favor, informe o número de série do equipamento.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
+                            <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="data_aquisicao" class="form-label">Data de Aquisição *</label>
+                            <input type="date" class="form-control" id="data_aquisicao" name="data_aquisicao" required>
+                            <div class="invalid-feedback">
+                                Por favor, informe a data de aquisição do equipamento.
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="status" class="form-label">Status *</label>
+                            <select class="form-select" id="status" name="status" required>
+                                <option value="">Selecione...</option>
+                                <option value="Ativo">Ativo</option>
+                                <option value="Em Manutenção">Em Manutenção</option>
+                                <option value="Inativo">Inativo</option>
+                            </select>
+                            <div class="invalid-feedback">
+                                Por favor, selecione o status do equipamento.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="observacoes" class="form-label">Observações</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Busca de equipamentos
+        const searchInput = document.getElementById('searchInput');
+        const table = document.getElementById('equipamentosTable');
+        const rows = table.getElementsByTagName('tr');
+
+        searchInput.addEventListener('keyup', function () {
+            const searchTerm = searchInput.value.toLowerCase();
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                const cells = row.getElementsByTagName('td');
+                let found = false;
+
+                for (let j = 0; j < cells.length - 1; j++) {
+                    const cellText = cells[j].textContent.toLowerCase();
+                    if (cellText.includes(searchTerm)) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                row.style.display = found ? '' : 'none';
+            }
+        });
+
+        // Validação do formulário
+        const form = document.getElementById('novoEquipamentoForm');
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+
+        // Limpar formulário ao fechar o modal
+        const modal = document.getElementById('novoEquipamentoModal');
+        modal.addEventListener('hidden.bs.modal', function () {
+            form.reset();
+            form.classList.remove('was-validated');
+        });
+    });
+</script>
+{% endblock %}

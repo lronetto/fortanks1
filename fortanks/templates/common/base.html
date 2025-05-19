@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{% block title %}Sistema de Gestão - Pré-moldados{% endblock %}</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css">
+    <!-- Chart.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css">
+    <!-- DataTables CSS for Bootstrap 5 -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <!-- Estilos adicionais para submenus aninhados e responsividade -->
+    <style>
+        #sidebar ul ul li a {
+            padding-left: 35px;
+            font-size: 0.9em;
+        }
+
+        #sidebar ul ul {
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+
+        #sidebar ul li.active ul {
+            display: block;
+        }
+
+        #sidebar ul li.active>a {
+            color: #fff;
+            background: #3a72ab;
+        }
+
+        /* Melhoria de toque para dispositivos móveis */
+        @media (max-width: 768px) {
+
+            .nav-link,
+            .dropdown-item,
+            #sidebar a {
+                padding: 12px 15px;
+                /* Áreas de toque maiores para dedos */
+            }
+
+            #sidebar.active+#content {
+                margin-left: 0;
+            }
+
+            #content {
+                transition: margin-left 0.3s;
+                width: 100% !important;
+            }
+
+            #sidebarCollapse {
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                z-index: 1050;
+                display: block;
+                background: #3a72ab;
+                color: white;
+                border-radius: 4px;
+                width: 40px;
+                height: 40px;
+                text-align: center;
+                line-height: 40px;
+                padding: 0;
+                margin: 0;
+            }
+
+            .navbar-brand {
+                margin-left: 50px;
+            }
+
+            /* Garantir que o conteúdo esteja visível quando o menu estiver fechado */
+            #content {
+                margin-left: 0 !important;
+                padding-left: 0 !important;
+            }
+
+            /* Manter o botão sempre visível */
+            .navbar .container-fluid {
+                padding-left: 50px;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+
+   
+       <!-- jQuery -->
+       <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+       <!-- Popper.js -->
+       <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+       <!-- Bootstrap JS -->
+       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+       <!-- Select2 JS -->
+       <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+       <!-- Chart.js -->
+       <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+       <!-- DataTables JS for Bootstrap 5 -->
+       <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+       <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+       <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+       <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+       <!-- Custom JS -->
+       <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+   
+       <script>
+        // Verifica se há preferência de tema salva
+      
+   
+   
+        (function () {
+            // Aplicar tema imediatamente na carga da página
+            let initialPageTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-bs-theme', initialPageTheme);
+    
+            $(document).ready(function () {
+                // --- Início da lógica do tema ---
+                const themeIconElement = document.getElementById('theme-icon');
+                const themeToggleButton = document.getElementById('theme-toggle');
+    
+                // Atualizar o ícone na carga da página com base no tema já aplicado
+                if (themeIconElement) {
+                    if (initialPageTheme === 'dark') {
+                        themeIconElement.classList.remove('fa-sun');
+                        themeIconElement.classList.add('fa-moon');
+                    } else {
+                        themeIconElement.classList.remove('fa-moon');
+                        themeIconElement.classList.add('fa-sun');
+                    }
+                }
+    
+                // Lógica para alternar o tema ao clicar no botão
+                if (themeToggleButton) {
+                    themeToggleButton.addEventListener('click', function () {
+                        let currentTheme = document.documentElement.getAttribute('data-bs-theme');
+                        let newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+                        document.documentElement.setAttribute('data-bs-theme', newTheme);
+                        localStorage.setItem('theme', newTheme);
+    
+                        // Ajustar ícone
+                        if (themeIconElement) {
+                            if (newTheme === 'dark') {
+                                themeIconElement.classList.remove('fa-sun');
+                                themeIconElement.classList.add('fa-moon');
+                            } else {
+                                themeIconElement.classList.remove('fa-moon');
+                                themeIconElement.classList.add('fa-sun');
+                            }
+                        }
+                    });
+                }
+                // --- Fim da lógica do tema ---
+
+                // Encontrar o item de menu ativo atual
+                const activeItem = $('#sidebar .active');
+                   
+                   // Se houver um item ativo, verificar se ele está dentro de um submenu
+                   if (activeItem.length > 0) {
+                       // Encontrar o submenu pai e abri-lo
+                       activeItem.parents('.collapse').addClass('show');
+                       
+                       // Adicionar a classe active ao item do menu principal correspondente
+                       activeItem.parents('.collapse').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+                   
+                   // Manter os comportamentos específicos existentes
+                   if (window.location.pathname.includes('/pecas')) {
+                       $('#concretagemSubmenu').addClass('show');
+                       $('#concretagemSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Auto-abrir o menu Operacional se estiver na página de concretagem ou equipamentos
+                   if (window.location.pathname.includes('/concretagens') || 
+                       window.location.pathname.includes('/equipamentos') ||
+                       window.location.pathname.includes('/tanques')) {
+                       $('#operacionalSubmenu').addClass('show');
+                       $('#operacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+                   
+                   // Auto-abrir o submenu de concretagem se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/concretagens') ||
+                       window.location.pathname.includes('/tanques') ||
+                       window.location.pathname.includes('/pecas')) {
+                       $('#concretagemSubmenu').addClass('show');
+                       $('#concretagemSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Auto-abrir o submenu de equipamentos se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/equipamentos') ||
+                       window.location.pathname.includes('/checklists')) {
+                       $('#equipamentosSubmenu').addClass('show');
+                       $('#equipamentosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Auto-abrir o submenu de Cadastro Operacional se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/produto-composto') ||
+                       window.location.pathname.includes('/producao-peca')) {
+                       $('#cadastroOperacionalSubmenu').addClass('show');
+                       $('#cadastroOperacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Auto-abrir o novo submenu de Cadastros se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/usuario') ||
+                       window.location.pathname.includes('/centro_custo') ||
+                       window.location.pathname.includes('/contrato') ||
+                       window.location.pathname.includes('/cliente') ||
+                       window.location.pathname.includes('/material') ||
+                       window.location.pathname.includes('/plano_conta') ||
+                       window.location.pathname.includes('/colaborador') ||
+                       window.location.pathname.includes('/cargo') ||
+                       window.location.pathname.includes('/conversao_unidade') ||
+                       window.location.pathname.includes('/tanques') ||
+                       window.location.pathname.includes('/pecas') ||
+                       window.location.pathname.includes('/tracos')) {
+                       $('#cadastrosSubmenu').addClass('show');
+                       $('#cadastrosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Auto-abrir o submenu de segurança se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/seguranca') || 
+                       window.location.pathname.includes('/epis')) {
+                       $('#segurancaSubmenu').addClass('show');
+                       $('#segurancaSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Auto-abrir o submenu de estoque se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/estoque') || 
+                       window.location.pathname.includes('/inventario') ||
+                       window.location.pathname.includes('/movimentacoes')) {
+                       $('#estoqueSubmenu').addClass('show');
+                       $('#estoqueSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+   
+                   // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em um link
+                   if (window.innerWidth <= 768) {
+                       $('#sidebar a').click(function () {
+                           if (!$(this).hasClass('dropdown-toggle')) {
+                               $('#sidebar').removeClass('active');
+                           }
+                       });
+                   }
+               });
+           })();
+   
+           // Validação do formulário de alteração de senha
+           document.addEventListener('DOMContentLoaded', function() {
+               const formAlterarSenha = document.getElementById('formAlterarSenha');
+               if (formAlterarSenha) {
+                   formAlterarSenha.addEventListener('submit', function(e) {
+                       e.preventDefault();
+                       const novaSenha = document.getElementById('nova_senha').value;
+                       const confirmarSenha = document.getElementById('confirmar_senha').value;
+                       
+                       // Verifica se as senhas coincidem
+                       if (novaSenha !== confirmarSenha) {
+                           alert('As senhas não coincidem!');
+                           return false;
+                       }
+                       
+                       // Verifica o tamanho mínimo da senha
+                       if (novaSenha.length < 8) {
+                           alert('A senha deve ter pelo menos 8 caracteres!');
+                           return false;
+                       }
+                       
+                       // Enviar formulário via AJAX
+                       $.ajax({
+                           url: formAlterarSenha.action,
+                           type: 'POST',
+                           data: $(formAlterarSenha).serialize(),
+                           headers: {
+                               'X-Requested-With': 'XMLHttpRequest'
+                           },
+                           success: function(response) {
+                               if (response.success) {
+                                   // Exibir mensagem de sucesso
+                                   const alertDiv = document.createElement('div');
+                                   alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                                   alertDiv.role = 'alert';
+                                   alertDiv.innerHTML = `
+                                       ${response.message}
+                                       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                   `;
+                                   
+                                   // Inserir o alerta no início do container principal
+                                   const containerFluid = document.querySelector('.container-fluid');
+                                   containerFluid.insertBefore(alertDiv, containerFluid.firstChild);
+                                   
+                                   // Limpar o formulário
+                                   formAlterarSenha.reset();
+                                   
+                                   // Fechar o modal
+                                   const modal = bootstrap.Modal.getInstance(document.getElementById('alterarSenhaModal'));
+                                   modal.hide();
+                               } else {
+                                   // Exibir mensagem de erro
+                                   alert(response.message);
+                               }
+                           },
+                           error: function() {
+                               alert('Ocorreu um erro ao processar sua solicitação. Por favor, tente novamente.');
+                           }
+                       });
+                       
+                       return false;
+                   });
+               }
+           });
+   
+           // Melhorar a experiência de toque em dispositivos móveis
+           document.addEventListener('DOMContentLoaded', function () {
+               const sidebar = document.getElementById('sidebar');
+               const content = document.getElementById('content');
+               const sidebarCollapse = document.getElementById('sidebarCollapse');
+               const overlay = document.querySelector('.sidebar-overlay');
+   
+               // Função para ajustar o layout
+               function ajustarLayout() {
+                   if (window.innerWidth <= 768) {
+                       // Garantir que o conteúdo ocupe toda a largura
+                       content.style.width = '100%';
+                       content.style.marginLeft = '0';
+                       content.style.left = '0';
+   
+                       // Ajustar posição do sidebar
+                       if (!sidebar.classList.contains('active')) {
+                           sidebar.style.transform = 'translateX(-100%)';
+                           if (overlay) overlay.classList.remove('active');
+                       } else {
+                           sidebar.style.transform = 'translateX(0)';
+                           if (overlay) overlay.classList.add('active');
+                       }
+   
+                       // Garantir que o botão de menu esteja sempre visível
+                       sidebarCollapse.style.display = 'flex';
+                       sidebarCollapse.style.position = 'fixed';
+   
+                       // Ajustar padding do container principal
+                       document.querySelectorAll('.container-fluid').forEach(container => {
+                           container.style.paddingLeft = '15px';
+                           container.style.paddingRight = '15px';
+                       });
+                   } else {
+                       // Resetar estilos para desktop
+                       content.style = '';
+                       sidebar.style = '';
+                       sidebarCollapse.style = '';
+                       if (overlay) overlay.classList.remove('active');
+                   }
+               }
+   
+               // Aplicar ajuste inicial
+               ajustarLayout();
+   
+               // Aplicar ajuste ao redimensionar a janela
+               window.addEventListener('resize', ajustarLayout);
+   
+               // Alternar sidebar
+               sidebarCollapse.addEventListener('click', function (e) {
+                   e.preventDefault();
+                   e.stopPropagation();
+                   sidebar.classList.toggle('active');
+                   ajustarLayout();
+               });
+   
+               // Fechar sidebar ao clicar no overlay
+               if (overlay) {
+                   overlay.addEventListener('click', function () {
+                       sidebar.classList.remove('active');
+                       ajustarLayout();
+                   });
+               }
+   
+               // Fechar sidebar ao clicar em links (exceto dropdowns)
+               if (window.innerWidth <= 768) {
+                   sidebar.querySelectorAll('a:not(.dropdown-toggle)').forEach(link => {
+                       link.addEventListener('click', function () {
+                           sidebar.classList.remove('active');
+                           ajustarLayout();
+                       });
+                   });
+               }
+           });
+       </script>
+       {% block scripts %}{% endblock %}
+    
+</head>
+
+<body>
+    <div class="wrapper">
+        <!-- Overlay para o sidebar -->
+        <div class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h3>Pré-moldados</h3>
+                <div class="logo">
+                    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="img-fluid">
+                </div>
+                <!-- Adicionando botão de fechar na sidebar para mobile -->
+                <button type="button" id="sidebarClose" class="btn d-md-none">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <ul class="list-unstyled components">
+                <li class="{{ is_active('dashboard') }}">
+                    <a href="{{ url_for('dashboard.index') }}">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </li>
+
+                <!-- Módulo Administrativo -->
+                {% if current_user.is_gerente_ou_superior %}
+                <li>
+                    <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                        <i class="fas fa-cogs"></i> Gerencial
+                    </a>
+                    <ul class="collapse list-unstyled" id="adminSubmenu">
+                        
+                        <li class="{{ is_active('dados_analiticos') }}">
+                            <a href="#dadosAnaliticosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                                class="dropdown-toggle">
+                                <i class="fas fa-chart-line"></i> Dados Analíticos
+                            </a>
+                            <ul class="collapse list-unstyled" id="dadosAnaliticosSubmenu">
+
+                                <li>
+                                    <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}">
+                                        <i class="fas fa-chart-area"></i> Dashboard
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('dados_analiticos.index') }}">
+                                        <i class="fas fa-chart-line"></i> Listagem de Dados
+                                    </a>
+                                </li>
+                                
+                            </ul>
+                        </li>
+                        <li class="{{ is_active('solicitacao') }}">
+                            <a href="{{ url_for('solicitacao.index') }}">
+                                <i class="fas fa-clipboard-list"></i> Solicitações
+                            </a>
+                        </li>
+                        
+                        
+                        
+                        
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Novo Módulo de Cadastros -->
+                <li>
+                    <a href="#cadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                        <i class="fas fa-edit"></i> Cadastros
+                    </a>
+                    <ul class="collapse list-unstyled" id="cadastrosSubmenu">
+                        {% if current_user.colaborador.departamento_id in [4] %}
+                        <li class="{{ is_active('usuario') }}">
+                            <a href="{{ url_for('usuario.index') }}">
+                                <i class="fas fa-users"></i> Usuários
+                            </a>
+                        </li>
+                        <li class="{{ is_active('colaborador') }}">
+                            <a href="{{ url_for('colaborador.index') }}">
+                                <i class="fas fa-user-tie"></i> Colaboradores
+                            </a>
+                        </li>
+                        <li class="{{ is_active('cargo') }}">
+                            <a href="{{ url_for('cargo.index') }}">
+                                <i class="fas fa-id-badge"></i> Cargos
+                            </a>
+                        </li>
+                        <li class="{{ is_active('departamento ') }}">
+                            <a href="{{ url_for('departamento.index') }}">
+                                <i class="fas fa-building"></i> Departamentos
+                            </a>
+                        </li>
+                        <li class="{{ is_active('centro_custo') }}">
+                            <a href="{{ url_for('centro_custo.index') }}">
+                                <i class="fas fa-building"></i> Centros de Custo
+                            </a>
+                        </li>
+                        <li class="{{ is_active('contrato') }}">
+                            <a href="{{ url_for('contrato.index') }}">
+                                <i class="fas fa-file-contract"></i> Contratos
+                            </a>
+                        </li>
+                        <li class="{{ is_active('cliente') }}">
+                            <a href="{{ url_for('cliente.index') }}">
+                                <i class="fas fa-building"></i> Clientes
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plano_conta') }}">
+                            <a href="{{ url_for('plano_conta.index') }}">
+                                <i class="fas fa-list-ol"></i> Plano de Contas
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if current_user.colaborador.departamento_id in [4,7] %}
+                        <li class="{{ is_active('conversao_unidade') }}">
+                            <a href="{{ url_for('conversao_unidade.index') }}">
+                                <i class="fas fa-exchange-alt"></i> Conversão de Unidades
+                            </a>
+                        </li>
+                        <li class="{{ is_active('material') }}">
+                            <a href="{{ url_for('material.index') }}">
+                                <i class="fas fa-boxes"></i> Materiais
+                            </a>
+                        </li>
+                        
+                        <li class="{{ is_active('tanque') }}">
+                            <a href="{{ url_for('tanque.index') }}">
+                                <i class="fas fa-water"></i> Tanques
+                            </a>
+                        </li>
+                        <li class="{{ is_active('peca') }}">
+                            <a href="{{ url_for('peca.index') }}">
+                                <i class="fas fa-cogs"></i> Peças de Tanques
+                            </a>
+                        </li>
+                        <li class="{{ is_active('usinagem_concreto.listar_tracos') }}">
+                            <a href="{{ url_for('usinagem_concreto.listar_tracos') }}">
+                                <i class="fas fa-bookmark"></i> Traços
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </li>
+
+                <!-- Módulo Operacional -->
+                {% if current_user.colaborador.departamento_id in [3,4,7] %}
+                    <li>
+                        <a href="#operacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                            class="dropdown-toggle">
+                            <i class="fas fa-industry"></i> Operacional
+                        </a>
+                        <ul class="collapse list-unstyled" id="operacionalSubmenu">
+                            <li class="{{ is_active('concretagem') }}">
+                                <a href="#concretagemSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                                    class="dropdown-toggle">
+                                    <i class="fas fa-cubes"></i> Concretagem
+                                </a>
+                                <ul class="collapse list-unstyled" id="concretagemSubmenu">
+                                    <li class="{{ is_active('usinagem_concreto') }}">
+                                        <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}">
+                                            <i class="fas fa-cut"></i> Usinagem de Concreto
+                                        </a>
+                                    </li>
+                                    {% if current_user.colaborador.departamento_id in [4,7] %}
+                                    <li class="{{ is_active('concretagem') }}">
+                                        <a href="{{ url_for('concretagem.index') }}">
+                                            <i class="fas fa-cubes"></i> Concretagens
+                                        </a>
+                                    </li>
+                                    
+                                    <li class="{{ is_active('usinagem_concreto.listar_rompimentos') }}">
+                                        <a href="{{ url_for('usinagem_concreto.listar_rompimentos') }}">
+                                            <i class="fas fa-chart-line"></i> Rompimentos de CP
+                                        </a>
+                                    </li>
+                                    <li class="{{ is_active('relatorio_usinagem') }}">
+                                        <a href="{{ url_for('relatorio_usinagem.index') }}">
+                                            <i class="fas fa-file-alt"></i> Relatórios de Usinagem
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </li>
+                            <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }}">
+                                <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                                    class="dropdown-toggle">
+                                    <i class="fas fa-tools"></i> Equipamentos
+                                </a>
+                                <ul class="collapse list-unstyled" id="equipamentosSubmenu">
+                                    <li class="{{ is_active('equipamento') }}">
+                                        <a href="{{ url_for('equipamento.index') }}">
+                                            <i class="fas fa-tools"></i> Listar Equipamentos
+                                        </a>
+                                    </li>
+                                    <li class="{{ is_active('equipamento.checklists') }}">
+                                        <a href="{{ url_for('equipamento.checklists') }}">
+                                            <i class="fas fa-list-alt"></i> Modelos de Checklist
+                                        </a>
+                                    </li>
+                                    <li class="{{ is_active('equipamento.checklists_pendentes') }}">
+                                        <a href="{{ url_for('equipamento.checklists_pendentes') }}">
+                                            <i class="fas fa-clipboard-check"></i> Checklists Pendentes
+                                        </a>
+                                    </li>
+                                    <li class="{{ is_active('equipamento.realizar_checklist') }}">
+                                        <a href="{{ url_for('equipamento.realizar_checklist') }}">
+                                            <i class="fas fa-tasks"></i> Realizar Novo Checklist
+                                        </a>
+                                    </li>
+                                </ul>
+                            </li>
+                            <!-- Outros submódulos operacionais podem ser adicionados aqui -->
+                        </ul>
+                    </li>
+
+                    <!-- Módulo de Cadastro Operacional -->
+                    {% if current_user.colaborador_id == 22 %}
+                    <li>
+                        <a href="#cadastroOperacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                            class="dropdown-toggle">
+                            <i class="fas fa-clipboard-list"></i> Cadastro Operacional
+                        </a>
+                        <ul class="collapse list-unstyled" id="cadastroOperacionalSubmenu">
+                            <li class="{{ is_active('produto-composto') }}">
+                                <a href="{{ url_for('produto_composto.listar') }}">
+                                    <i class="fas fa-boxes"></i> Produtos Compostos
+                                </a>
+                            </li>
+                            <li class="{{ is_active('producao-peca') }}">
+                                <a href="{{ url_for('producao_peca.listar') }}">
+                                    <i class="fas fa-industry"></i> Produção de Peças
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                {% endif %}
+                <!-- Módulo de Segurança -->
+                <li class="{{ is_active('seguranca.epis_index') }} {{ is_active('seguranca.entregas_index') }} {{ is_active('seguranca.relatorios') }}">
+                    <a href="#segurancaSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-shield-alt"></i> Segurança
+                    </a>
+                    <ul class="collapse list-unstyled" id="segurancaSubmenu">
+                        <li class="{{ is_active('seguranca.epis_index') }}">
+                            <a href="{{ url_for('seguranca.epis_index') }}">
+                                <i class="fas fa-helmet-safety"></i> EPIs
+                            </a>
+                        </li>
+                        <li class="{{ is_active('seguranca.entregas_index') }}">
+                            <a href="{{ url_for('seguranca.entregas_index') }}">
+                                <i class="fas fa-helmet-safety"></i> Entregas de EPIs
+                            </a>
+                        </li>
+                        
+                        
+                    </ul>
+                </li>
+
+
+                <!-- Outros módulos podem ser adicionados aqui -->
+                <li class="{{ is_active('solicitacao') }}">
+                    <a href="{{ url_for('solicitacao.index') }}">
+                        <i class="fas fa-list"></i> Minhas Solicitações
+                    </a>
+                </li>
+                
+                <!-- Módulo de Estoque -->
+                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }} {{ is_active('estoque.inventarios') }}">
+                    <a href="#estoqueSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-warehouse"></i> Estoque
+                    </a>
+                    <ul class="collapse list-unstyled" id="estoqueSubmenu">
+                        <li class="{{ is_active('estoque.index') }}">
+                            <a href="{{ url_for('estoque.index') }}">
+                                <i class="fas fa-boxes"></i> Itens em Estoque
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque.movimentacoes') }}">
+                            <a href="{{ url_for('estoque.movimentacoes') }}">
+                                <i class="fas fa-exchange-alt"></i> Movimentações
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque.inventarios') }}">
+                            <a href="{{ url_for('estoque.inventarios') }}">
+                                <i class="fas fa-clipboard-check"></i> Inventários
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque.novo_inventario') }}">
+                            <a href="{{ url_for('estoque.novo_inventario') }}">
+                                <i class="fas fa-plus-circle"></i> Novo Inventário
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Módulo de Notas Fiscais -->
+                <li class="{{ is_active('nota_fiscal') }}">
+                    <a href="#notasFiscaisSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-file-invoice"></i> Notas Fiscais
+                    </a>
+                    <ul class="collapse list-unstyled" id="notasFiscaisSubmenu">
+                        <li class="{{ is_active('nota_fiscal.index') }}">
+                            <a href="{{ url_for('nota_fiscal.index') }}">
+                                <i class="fas fa-list"></i> Listar Notas Fiscais
+                            </a>
+                        </li>
+                        <li class="{{ is_active('nota_fiscal.analise') }}">
+                            <a href="{{ url_for('nota_fiscal.analise') }}">
+                                <i class="fas fa-chart-pie"></i> Análise de Notas Fiscais
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <button id="theme-toggle" class="btn btn-sm">
+                    <i class="fas fa-sun" id="theme-icon"></i>
+                </button>
+                <span>v1.0.0</span>
+            </div>
+        </nav>
+
+        <!-- Conteúdo da página -->
+        <div id="content">
+            <!-- Navbar superior -->
+            <nav class="navbar navbar-expand-lg">
+                <div class="container-fluid">
+                    <button type="button" id="sidebarCollapse" class="btn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+
+                    <!-- Título da página para dispositivos móveis -->
+                    <h5 class="d-md-none navbar-text mb-0">{% block mobile_title %}Sistema de Gestão{% endblock %}</h5>
+
+                    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                        <ul class="nav navbar-nav ms-auto">
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-user"></i> <span class="d-none d-md-inline">{{ current_user.nome
+                                        }}</span>
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                    <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#alterarSenhaModal">Alterar
+                                            Senha</a></li>
+                                    <li>
+                                        <hr class="dropdown-divider">
+                                    </li>
+                                    <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Sair</a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Mensagens flash -->
+            <div class="container-fluid">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+            </div>
+
+            <!-- Modal para Alteração de Senha -->
+            <div class="modal fade" id="alterarSenhaModal" tabindex="-1" aria-labelledby="alterarSenhaModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="alterarSenhaModalLabel"><i class="fas fa-key"></i> Alterar Senha</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('auth.alterar_senha') }}" id="formAlterarSenha">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="senha_atual" class="form-label">Senha Atual</label>
+                                    <input type="password" class="form-control" id="senha_atual" name="senha_atual" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="nova_senha" class="form-label">Nova Senha</label>
+                                    <input type="password" class="form-control" id="nova_senha" name="nova_senha" required>
+                                    <div class="form-text">A senha deve ter pelo menos 8 caracteres.</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="confirmar_senha" class="form-label">Confirmar Nova Senha</label>
+                                    <input type="password" class="form-control" id="confirmar_senha" name="confirmar_senha" required>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-primary">Salvar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo principal -->
+            <main class="container-fluid">
+                {% block content %}{% endblock %}
+            </main>
+
+            <!-- Rodapé -->
+            <footer class="footer mt-auto py-3">
+                <div class="container-fluid">
+                    <span class="text-muted d-none d-md-inline">© {{ get_current_year() }} Sistema de Gestão -
+                        Pré-moldados. Todos os direitos reservados.</span>
+                    <span class="text-muted d-md-none">© {{ get_current_year() }} Pré-moldados</span>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+ 
+</body>
+
+</html>

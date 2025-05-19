@@ -1,0 +1,128 @@
+{% extends "common/base.html" %}
+
+{% block title %}Novo Inventário de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Novo Inventário de Estoque</h6>
+                    <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left"></i> Voltar
+                    </a>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.tipo_inventario.label }}
+                                    {{ form.tipo_inventario(class="form-control", id="tipoInventario") }}
+                                    {% if form.tipo_inventario.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.tipo_inventario.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Campos para inventário parcial -->
+                        <div id="filtrosParciais" style="display: none;">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        {{ form.tipo_item.label }}
+                                        {{ form.tipo_item(class="form-control") }}
+                                        {% if form.tipo_item.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {% for error in form.tipo_item.errors %}
+                                                    {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        {{ form.localizacao.label }}
+                                        {{ form.localizacao(class="form-control") }}
+                                        {% if form.localizacao.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {% for error in form.localizacao.errors %}
+                                                    {{ error }}
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <div class="form-group">
+                                    {{ form.observacoes.label }}
+                                    {{ form.observacoes(class="form-control", rows=3) }}
+                                    {% if form.observacoes.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.observacoes.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Alerta de informação -->
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle"></i> O inventário será criado com status "Em andamento". Após criado, você poderá iniciar a contagem dos itens.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-12 d-flex justify-content-end">
+                                <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-secondary mr-2">Cancelar</a>
+                                <button type="submit" class="btn btn-primary">Criar Inventário</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Mostrar/esconder os filtros para inventário parcial
+        function toggleFiltrosParciais() {
+            const tipoInventario = $('#tipoInventario').val();
+            
+            if (tipoInventario === 'Parcial') {
+                $('#filtrosParciais').show();
+            } else {
+                $('#filtrosParciais').hide();
+            }
+        }
+        
+        // Inicializar
+        toggleFiltrosParciais();
+        
+        // Aplicar evento de mudança
+        $('#tipoInventario').change(toggleFiltrosParciais);
+    });
+</script>
+{% endblock %} 

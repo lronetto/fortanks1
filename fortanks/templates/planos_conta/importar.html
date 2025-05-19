@@ -1,0 +1,338 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Importar Planos de Conta{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Importar Planos de Conta</h1>
+        <a href="{{ url_for('plano_conta.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 col-lg-6 mx-auto">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Upload de Arquivo Excel</h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('plano_conta.importar') }}" method="POST" enctype="multipart/form-data" id="formImportacao">
+                        <div class="mb-4">
+                            <label for="arquivo_excel" class="form-label">Selecione o arquivo Excel (.xlsx, .xls)</label>
+                            <input type="file" class="form-control" id="arquivo_excel" name="arquivo_excel" accept=".xlsx,.xls" required>
+                            <div class="form-text">
+                                Você poderá selecionar a planilha e mapear os campos após o upload.
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="primeira_linha_cabecalho" name="primeira_linha_cabecalho" checked>
+                                <label class="form-check-label" for="primeira_linha_cabecalho">
+                                    A primeira linha contém cabeçalhos
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div id="planilhas-container" class="mb-4" style="display: none;">
+                            <label for="planilha" class="form-label">Selecione a planilha:</label>
+                            <select class="form-select" id="planilha" name="planilha">
+                                <!-- Opções serão preenchidas via JavaScript -->
+                            </select>
+                        </div>
+                        
+                        <div id="mapeamento-container" class="mb-4" style="display: none;">
+                            <h6 class="mb-3">Mapeamento de Campos:</h6>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="coluna_codigo" class="form-label">Coluna para Código *</label>
+                                    <select class="form-select" id="coluna_codigo" name="coluna_codigo" required>
+                                        <option value="">Selecione...</option>
+                                        <!-- Opções serão preenchidas via JavaScript -->
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="coluna_descricao" class="form-label">Coluna para Descrição *</label>
+                                    <select class="form-select" id="coluna_descricao" name="coluna_descricao" required>
+                                        <option value="">Selecione...</option>
+                                        <!-- Opções serão preenchidas via JavaScript -->
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="coluna_indice" class="form-label">Coluna para Índice (opcional)</label>
+                                    <select class="form-select" id="coluna_indice" name="coluna_indice">
+                                        <option value="">Nenhum</option>
+                                        <!-- Opções serão preenchidas via JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> 
+                                Após selecionar o arquivo, você deve mapear as colunas para os campos correspondentes.
+                                Os campos com * são obrigatórios.
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="m-0 font-weight-bold">Instruções para Importação</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p>Para importar Planos de Conta, você precisará:</p>
+                                    <ol>
+                                        <li>Selecionar um arquivo Excel (.xlsx ou .xls)</li>
+                                        <li>Escolher a planilha que contém os dados</li>
+                                        <li>Mapear as colunas para os campos do sistema:
+                                            <ul>
+                                                <li><strong>Código</strong>: Código único do plano de conta (obrigatório)</li>
+                                                <li><strong>Descrição</strong>: Descrição do plano de conta (obrigatório)</li>
+                                                <li><strong>Índice</strong>: Índice para categorização (opcional)</li>
+                                            </ul>
+                                        </li>
+                                    </ol>
+                                    <p class="text-danger mb-0">
+                                        <i class="fas fa-exclamation-triangle"></i> Códigos que já existem no sistema serão ignorados.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="button" id="btn-analisar-arquivo" class="btn btn-secondary mb-2">
+                                <i class="fas fa-file-import"></i> Analisar Arquivo
+                            </button>
+                            <button type="submit" id="btn-importar" class="btn btn-primary" style="display: none;">
+                                <i class="fas fa-upload"></i> Importar Planos de Conta
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if resultados %}
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Resultado da Importação</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <h6>Resumo:</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Total de registros processados
+                                <span class="badge bg-primary rounded-pill">{{ resultados.total }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Registros importados com sucesso
+                                <span class="badge bg-success rounded-pill">{{ resultados.sucesso }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Registros ignorados (já existentes)
+                                <span class="badge bg-warning rounded-pill">{{ resultados.ignorados }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                Registros com erro
+                                <span class="badge bg-danger rounded-pill">{{ resultados.erros }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    {% if resultados.erros_detalhes %}
+                    <div class="mb-3">
+                        <h6>Detalhes dos Erros:</h6>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Linha</th>
+                                        <th>Código</th>
+                                        <th>Descrição</th>
+                                        <th>Erro</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for erro in resultados.erros_detalhes %}
+                                    <tr>
+                                        <td>{{ erro.linha }}</td>
+                                        <td>{{ erro.codigo }}</td>
+                                        <td>{{ erro.descricao }}</td>
+                                        <td>{{ erro.erro }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('plano_conta.index') }}" class="btn btn-success">
+                            <i class="fas fa-list"></i> Ver Lista de Planos de Conta
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Botão para analisar o arquivo
+        $('#btn-analisar-arquivo').click(function() {
+            var fileInput = document.getElementById('arquivo_excel');
+            
+            if (fileInput.files.length === 0) {
+                alert('Por favor, selecione um arquivo Excel.');
+                return;
+            }
+            
+            var file = fileInput.files[0];
+            var reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    // Ler o arquivo Excel
+                    var data = new Uint8Array(e.target.result);
+                    var workbook = XLSX.read(data, {type: 'array'});
+                    
+                    // Preencher o select de planilhas
+                    var planilhasSelect = $('#planilha');
+                    planilhasSelect.empty();
+                    planilhasSelect.append('<option value="">Selecione uma planilha...</option>');
+                    
+                    workbook.SheetNames.forEach(function(sheetName) {
+                        planilhasSelect.append('<option value="' + sheetName + '">' + sheetName + '</option>');
+                    });
+                    
+                    // Mostrar o container de planilhas
+                    $('#planilhas-container').show();
+                    
+                    // Quando uma planilha é selecionada
+                    planilhasSelect.off('change').on('change', function() {
+                        var selectedSheet = $(this).val();
+                        if (!selectedSheet) {
+                            $('#mapeamento-container').hide();
+                            $('#btn-importar').hide();
+                            return;
+                        }
+                        
+                        // Obter os dados da planilha
+                        var worksheet = workbook.Sheets[selectedSheet];
+                        var headers = [];
+                        var range = XLSX.utils.decode_range(worksheet['!ref']);
+                        
+                        // Verificar se a primeira linha contém cabeçalhos
+                        var primeiraLinhaCabecalho = $('#primeira_linha_cabecalho').is(':checked');
+                        
+                        if (primeiraLinhaCabecalho) {
+                            // Obter cabeçalhos da primeira linha
+                            for (var C = range.s.c; C <= range.e.c; ++C) {
+                                var cell = worksheet[XLSX.utils.encode_cell({r: range.s.r, c: C})];
+                                headers.push(cell ? cell.v : 'Coluna ' + (C + 1));
+                            }
+                        } else {
+                            // Gerar nomes de colunas numericamente
+                            for (var C = range.s.c; C <= range.e.c; ++C) {
+                                headers.push('Coluna ' + (C + 1));
+                            }
+                        }
+                        
+                        // Preencher os selects de mapeamento
+                        var selects = ['coluna_codigo', 'coluna_descricao', 'coluna_indice'];
+                        selects.forEach(function(selectId) {
+                            var select = $('#' + selectId);
+                            var currentValue = select.val();
+                            select.empty();
+                            
+                            if (selectId === 'coluna_indice') {
+                                select.append('<option value="">Nenhum</option>');
+                            } else {
+                                select.append('<option value="">Selecione...</option>');
+                            }
+                            
+                            headers.forEach(function(header, index) {
+                                select.append('<option value="' + index + '">' + header + '</option>');
+                            });
+                            
+                            // Sugerir mapeamento automático
+                            if (selectId === 'coluna_codigo' && headers.some(h => h.toLowerCase().includes('cod'))) {
+                                var index = headers.findIndex(h => h.toLowerCase().includes('cod'));
+                                select.val(index);
+                            } else if (selectId === 'coluna_descricao' && headers.some(h => h.toLowerCase().includes('desc'))) {
+                                var index = headers.findIndex(h => h.toLowerCase().includes('desc'));
+                                select.val(index);
+                            } else if (selectId === 'coluna_indice' && headers.some(h => h.toLowerCase().includes('ind'))) {
+                                var index = headers.findIndex(h => h.toLowerCase().includes('ind'));
+                                select.val(index);
+                            }
+                        });
+                        
+                        // Mostrar o container de mapeamento
+                        $('#mapeamento-container').show();
+                        $('#btn-importar').show();
+                        
+                        // Verificar se os campos obrigatórios estão preenchidos
+                        verificarCamposObrigatorios();
+                    });
+                    
+                } catch (error) {
+                    console.error('Erro ao analisar o arquivo:', error);
+                    alert('Erro ao analisar o arquivo Excel. Verifique se o formato está correto.');
+                }
+            };
+            
+            reader.onerror = function() {
+                alert('Erro ao ler o arquivo.');
+            };
+            
+            reader.readAsArrayBuffer(file);
+        });
+        
+        // Verificar campos obrigatórios antes de enviar
+        function verificarCamposObrigatorios() {
+            var todosCamposPreenchidos = true;
+            
+            if (!$('#planilha').val()) {
+                todosCamposPreenchidos = false;
+            }
+            
+            if (!$('#coluna_codigo').val()) {
+                todosCamposPreenchidos = false;
+            }
+            
+            if (!$('#coluna_descricao').val()) {
+                todosCamposPreenchidos = false;
+            }
+            
+            if (todosCamposPreenchidos) {
+                $('#btn-importar').prop('disabled', false);
+            } else {
+                $('#btn-importar').prop('disabled', true);
+            }
+        }
+        
+        // Verificar campos obrigatórios quando mudar algum select
+        $('#planilha, #coluna_codigo, #coluna_descricao').on('change', function() {
+            verificarCamposObrigatorios();
+        });
+        
+        // Quando o formulário for enviado
+        $('#formImportacao').on('submit', function(e) {
+            if (!$('#planilha').val() || !$('#coluna_codigo').val() || !$('#coluna_descricao').val()) {
+                e.preventDefault();
+                alert('Por favor, preencha todos os campos obrigatórios.');
+            }
+        });
+    });
+</script>
+{% endblock %} 

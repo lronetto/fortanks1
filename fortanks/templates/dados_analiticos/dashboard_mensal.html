@@ -1,0 +1,1575 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Dashboard Mensal - Dados Analíticos{% endblock %}
+
+{% block extra_css %}
+<!-- Adicionar Plotly.js -->
+<!-- Adicionar CSS do Select2 -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<style>
+    .filter-card {
+        margin-bottom: 20px;
+        padding: 15px;
+        border-radius: 5px;
+    }
+    
+    .chart-container {
+        margin-bottom: 25px;
+        border-radius: 5px;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        background-color: #fff;
+    }
+    
+    .chart-header {
+        padding: 10px 15px;
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
+        border-top-left-radius: 5px;
+        border-top-right-radius: 5px;
+    }
+    
+    .chart-body {
+        padding: 15px;
+        min-height: 350px;
+    }
+    
+    .no-data-message {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 300px;
+        color: #6c757d;
+        font-size: 16px;
+    }
+    
+    .financial-summary {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        gap: 15px;
+        margin-bottom: 20px;
+        overflow-x: auto;
+        width: 100%;
+    }
+    
+    .financial-card {
+        flex: 1 1 0;
+        width: 33%;
+        min-width: 200px;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        text-align: center;
+        transition: transform 0.2s;
+        cursor: pointer;
+        margin: 0;
+        display: inline-block;
+    }
+    
+    .financial-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .financial-card-value {
+        font-size: 24px;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+    
+    .financial-card-title {
+        font-size: 14px;
+        color: #6c757d;
+    }
+    
+    .card-receita {
+        background-color: #f0fff4;
+        border-left: 4px solid #38a169;
+    }
+    
+    .card-custo {
+        background-color: #fff5f5;
+        border-left: 4px solid #e53e3e;
+    }
+    
+    .card-saldo {
+        background-color: #e6f7ff; /* Azul claro */
+        border-left: 4px solid #17a2b8; /* Info */
+    }
+    
+    .text-positive {
+        color: #38a169;
+    }
+    
+    .text-negative {
+        color: #e53e3e;
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(255, 255, 255, 0.8);
+        z-index: 1000;
+    }
+    
+    /* NOVO: Estilos para linhas de grupo e detalhes */
+    .grupo-plano-conta {
+        cursor: pointer;
+        /* background-color: #f8f9fc !important; /* Fundo levemente diferente */
+        border-bottom: 1px solid #e3e6f0; /* Adiciona borda inferior sutil */
+    }
+    .detalhe-contas-container td {
+        border-top: none !important; /* Remove a borda superior da linha de detalhe */
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    .detalhe-contas-container .table { /* Tabela interna de detalhes */
+        margin-left: 2rem !important; /* Mantém indentação */
+        margin-bottom: 0 !important;
+        background-color: #fdfdfd; /* Fundo ligeiramente diferente para área de detalhes */
+    }
+     /* Zebra striping para as linhas da tabela interna de detalhes */
+    .detalhe-contas-container .table > tbody > tr:nth-of-type(odd) > * {
+        background-color: rgba(0, 0, 0, 0.03); 
+    }
+    .toggle-detalhes.rotated {
+        transform: rotate(90deg);
+    }
+    
+    .linha-pai {
+        cursor: pointer;
+        background-color: #f8f9fc !important; /* Leve destaque para linhas pai */
+    }
+    .linha-pai:hover {
+        background-color: #e9ecef !important; /* Destaque no hover */
+    }
+
+    .toggle-icon {
+        transition: transform 0.2s ease-in-out;
+        display: inline-block; /* Necessário para transform funcionar */
+         width: 1em; /* Garante espaço para o ícone */
+         text-align: center;
+    }
+
+    .toggle-icon.rotated {
+        transform: rotate(90deg);
+    }
+    
+    /* Estilo para linhas clicáveis de detalhamento (opcional, pode já existir) */
+     .linha-conta-clicavel:hover td {
+         background-color: #e2e6ea; /* Ou outra cor de hover */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Dashboard Mensal Analítico (<span id="periodo-selecionado">{{ periodo_texto }}</span>)</h1>
+        <div>
+             <!-- NOVO: Botão para abrir o modal de detalhes (agora com ID e sem toggle direto) -->
+             <button type="button" class="btn btn-info" id="btn-ver-detalhes-geral">
+                <i class="fas fa-list-alt"></i> Ver Detalhes por Plano de Conta
+            </button>
+            <!-- Botão para iniciar importação -->
+            <button type="button" class="btn btn-warning ms-2" id="btn-iniciar-importacao">
+                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" style="display: none;"></span>
+                <span class="loading-text" style="display: none;">Importando...</span>
+                <span class="default-text"><i class="fas fa-sync-alt"></i> Iniciar Importação</span>
+            </button>
+            <!-- Botão para exportar Excel -->
+            <button type="button" class="btn btn-success ms-2" id="btn-exportar-excel">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
+        </div>
+    </div>
+    <p class="mb-4">Análise mensal detalhada de receitas, custos e saldo utilizando Plotly.</p>
+    <div id='ultima-atualizacao' class="mb-4">Última atualização: {{ ultima_atualizacao }}</div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4 filter-card">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="filterForm" class="row g-3">
+                <div class="col-md-3">
+                    <label for="ano" class="form-label">Ano</label>
+                    <select class="form-select" id="ano" name="ano">
+                        <option value="">Todos os Anos</option>
+                        {% for ano in anos %}
+                            <option value="{{ ano }}" {% if filtros.ano == ano|string %}selected{% endif %}>{{ ano }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="mes" class="form-label">Mês</label>
+                    <select class="form-select" id="mes" name="mes">
+                        <option value="">Todos os Meses</option>
+                        <option value="1" {% if filtros.mes == 1 %}selected{% endif %}>Janeiro</option>
+                        <option value="2" {% if filtros.mes == 2 %}selected{% endif %}>Fevereiro</option>
+                        <option value="3" {% if filtros.mes == 3 %}selected{% endif %}>Março</option>
+                        <option value="4" {% if filtros.mes == 4 %}selected{% endif %}>Abril</option>
+                        <option value="5" {% if filtros.mes == 5 %}selected{% endif %}>Maio</option>
+                        <option value="6" {% if filtros.mes == 6 %}selected{% endif %}>Junho</option>
+                        <option value="7" {% if filtros.mes == 7 %}selected{% endif %}>Julho</option>
+                        <option value="8" {% if filtros.mes == 8 %}selected{% endif %}>Agosto</option>
+                        <option value="9" {% if filtros.mes == 9 %}selected{% endif %}>Setembro</option>
+                        <option value="10" {% if filtros.mes == 10 %}selected{% endif %}>Outubro</option>
+                        <option value="11" {% if filtros.mes == 11 %}selected{% endif %}>Novembro</option>
+                        <option value="12" {% if filtros.mes == 12 %}selected{% endif %}>Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="cc_id" class="form-label">Centro de Custo</label>
+                    <!-- Alterar select para permitir seleção múltipla -->
+                    <select class="form-select select2-multiple" id="cc_id" name="cc_id" multiple="multiple">
+                        {# <option value="">Todos os Centros</option> #} <!-- Remover opção 'Todos' para multi-select -->
+                        {% for cc in centros_custo %}
+                            <option value="{{ cc.id }}" {% if cc.id|string in filtros.cc_id %}selected{% endif %}>{{ cc.codigo }} - {{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Indicadores Financeiros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="financial-summary">
+                <div class="financial-card card-receita" role="button" data-bs-toggle="modal" data-bs-target="#modalReceita">
+                    <div class="financial-card-title">Receita Total</div>
+                    <div class="financial-card-value" id="total-receita">R$ 0,00</div>
+                    <div class="mt-2"><small><i class="fas fa-search-plus"></i> Clique para detalhes</small></div>
+                </div>
+                <div class="financial-card card-custo" role="button" data-bs-toggle="modal" data-bs-target="#modalCusto">
+                    <div class="financial-card-title">Custo Total</div>
+                    <div class="financial-card-value" id="total-custo">R$ 0,00</div>
+                    <div class="mt-2"><small><i class="fas fa-search-plus"></i> Clique para detalhes</small></div>
+                </div>
+                <div class="financial-card card-saldo" role="button" data-bs-toggle="modal" data-bs-target="#modalSaldo">
+                    <div class="financial-card-title">Saldo</div>
+                    <div class="financial-card-value" id="total-saldo">R$ 0,00</div>
+                    <div class="mt-2"><small><i class="fas fa-search-plus"></i> Clique para detalhes</small></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Principal Consolidado -->
+    <div class="chart-container">
+        <div class="chart-header">
+            <h6 class="m-0 font-weight-bold text-primary">Dashboard Financeiro Consolidado - <span id="periodo-consolidado">{{ periodo_texto }}</span></h6>
+        </div>
+        <div class="card-body">
+
+            <div id="grafico-consolidado" style="width: 100%; height: 500px;"></div>
+        </div>
+    </div>
+
+    <!-- Top 10 Centros de Custo -->
+    <div class="chart-container">
+        <div class="chart-header">
+            <h6 class="m-0 font-weight-bold text-primary">Top 10 Centros de Custo</h6>
+        </div>
+        <div class="chart-body">
+            <div id="grafico-top-cc" style="width: 100%; height: 400px;"></div>
+        </div>
+    </div>
+
+    <!-- Tabela de Resumo Mensal -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Resumo Mensal Detalhado</h6>
+            <button type="button" class="btn btn-sm btn-success" id="btn-exportar-tabela-excel">
+                <i class="fas fa-file-excel"></i> Exportar Tabela (Excel)
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover" id="monthly-summary-table" width="100%" cellspacing="0">
+                    <thead class="table-light" id="monthly-summary-table-head">
+                        <!-- Cabeçalho será gerado por Javascript -->
+                    </thead>
+                    <tbody id="monthly-summary-table-body">
+                        <!-- Linhas serão preenchidas por Javascript -->
+                        <tr><td colspan="1" class="text-center" id="loading-cell"><div class="spinner-border spinner-border-sm" role="status"><span class="visually-hidden">Carregando...</span></div> Carregando dados...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modais -->
+<!-- Modal de Receita Total -->
+<div class="modal fade" id="modalReceita" tabindex="-1" aria-labelledby="modalReceitaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalReceitaLabel">Detalhes da Receita Total</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-12 mb-4">
+                        <div class="card border-left-success shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                            Receita Total</div>
+                                        <div class="h2 mb-0 font-weight-bold text-gray-800" id="modal-total-receita">R$ 0,00</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-success">
+                            <tr>
+                                <th>Período</th>
+                                <th class="text-end">Valor Mensal (R$)</th>
+                                <th class="text-end">Valor Acumulado (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-receitas">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="grafico-modal-receitas" style="width: 100%; height: 300px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Custo Total -->
+<div class="modal fade" id="modalCusto" tabindex="-1" aria-labelledby="modalCustoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalCustoLabel">Detalhes do Custo Total</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-12 mb-4">
+                        <div class="card border-left-danger shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            Custo Total</div>
+                                        <div class="h2 mb-0 font-weight-bold text-gray-800" id="modal-total-custo">R$ 0,00</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-danger">
+                            <tr>
+                                <th>Período</th>
+                                <th class="text-end">Valor Mensal (R$)</th>
+                                <th class="text-end">Valor Acumulado (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-custos">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="grafico-modal-custos" style="width: 100%; height: 300px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Saldo -->
+<div class="modal fade" id="modalSaldo" tabindex="-1" aria-labelledby="modalSaldoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalSaldoLabel">Detalhes do Saldo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-12 mb-4">
+                        <div class="card border-left-primary shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                            Saldo Total</div>
+                                        <div class="h2 mb-0 font-weight-bold text-gray-800" id="modal-total-saldo">R$ 0,00</div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-primary">
+                            <tr>
+                                <th>Período</th>
+                                <th class="text-end">Valor Mensal (R$)</th>
+                                <th class="text-end">Valor Acumulado (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabela-saldos">
+                            <!-- Preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="grafico-modal-saldos" style="width: 100%; height: 300px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- NOVO: Estrutura do Modal -->
+<div class="modal fade" id="modalDetalhesPlanoConta" tabindex="-1" aria-labelledby="modalDetalhesPlanoContaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalDetalhesPlanoContaLabel">Detalhes por Plano de Conta - <span id="modal-periodo-texto">Carregando...</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Indicador de Carregamento -->
+        <div id="modal-plano-conta-loading" class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+            <p class="mt-2">Carregando detalhes...</p>
+        </div>
+        <!-- Mensagem de Erro -->
+        <div id="modal-plano-conta-error" class="alert alert-danger" role="alert" style="display: none;">
+            Erro ao carregar detalhes.
+        </div>
+        <!-- Conteúdo da Tabela (inicialmente escondido) -->
+        <div id="modal-plano-conta-content" style="display: none;">
+            <table class="table table-sm table-hover">
+                <thead>
+              <tr>
+                        <th style="width: 20%;">Índice</th>
+                        <th style="width: 60%;">Plano de Conta</th>
+                        <th style="width: 20%;" class="text-end">Valor Total</th>
+              </tr>
+            </thead>
+            <tbody id="modal-plano-conta-table-body">
+                    <!-- Linhas serão inseridas pelo Javascript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+         </div>
+         
+<!-- NOVO: Modal para Detalhes de Movimentação por Conta -->
+<div class="modal fade" id="modalMovimentacoesConta" tabindex="-1" aria-labelledby="modalMovimentacoesContaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalMovimentacoesContaLabel">Movimentações - <span id="movimentacoes-conta-titulo">Conta</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="movimentacoes-conta-loading" class="text-center mb-3" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p>Buscando movimentações...</p>
+                </div>
+                <div id="movimentacoes-conta-error" class="alert alert-danger" style="display: none;"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered table-striped" id="movimentacoes-conta-table">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Data Pag.</th>
+                                <th>Documento</th>
+                                <th>Emitente</th>
+                                <th>Histórico</th>
+                                <th>Centro Custo</th>
+                                <th class="text-end">Valor (R$)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="movimentacoes-conta-table-body">
+                            <!-- Movimentações serão carregadas aqui -->
+                        </tbody>
+                    </table>
+                </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Adicionar jQuery e Bootstrap JS (se não estiverem no base.html) -->
+<!-- Adicionar Plotly.js -->
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    // Função para formatar valores como moeda brasileira
+    function formatarValor(valor) {
+        if (valor === null || valor === undefined || isNaN(valor)) {
+            return 'R$ 0,00';
+        }
+        // Garante que o valor seja numérico
+        const numero = Number(valor);
+        return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    
+    // Função para mostrar mensagem de carregamento nos gráficos
+    function mostrarLoading(elementId) {
+        const container = document.getElementById(elementId);
+        if (!container) return; // Não faz nada se o elemento não existir
+        
+        // Remover loading antigo se existir
+        ocultarLoading(elementId);
+        
+        const overlay = document.createElement('div');
+        overlay.className = 'loading-overlay';
+        overlay.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>';
+        overlay.id = elementId + '-loading';
+        container.style.position = 'relative'; // Necessário para posicionar o overlay
+        container.appendChild(overlay);
+    }
+    
+    // Função para remover overlay de carregamento dos gráficos
+    function ocultarLoading(elementId) {
+        const overlay = document.getElementById(elementId + '-loading');
+        if (overlay) {
+            overlay.remove();
+        }
+    }
+
+    // *** NOVA FUNÇÃO PARA ATUALIZAR INDICADORES ***
+    function atualizarIndicadores(data) {
+        const totalReceita = data.total_receita !== undefined ? data.total_receita : 0;
+        const totalCusto = data.total_custo !== undefined ? data.total_custo : 0;
+        // O backend já deve retornar custos como negativos, mas calculamos saldo aqui
+        const totalSaldo = totalReceita - totalCusto; // Somar, pois custo já vem negativo
+        const periodoTexto = data.periodo_texto || 'Período não definido';
+
+        // Usar .html() pois formatarValor agora retorna <span> com classe de cor
+        $('#total-receita').html(formatarValor(totalReceita)); 
+        $('#total-custo').html(formatarValor(totalCusto));   
+        $('#total-saldo').html(formatarValor(totalSaldo));   
+        $('#ultima-atualizacao').html('Última atualização: ' + data.ultima_atualizacao);
+        // Atualiza o texto do período no título principal e acima do gráfico
+        $('#periodo-selecionado').text(periodoTexto);
+        $('#periodo-consolidado').text(periodoTexto); 
+    }
+    // *** FIM NOVA FUNÇÃO ***
+
+    // *** FUNÇÃO PARA ATUALIZAR TABELA RESUMO (ADICIONAR DATA ATTRIBUTES) ***
+    function atualizarTabelaResumo(data) {
+        console.log("[Tabela Resumo] Iniciando atualização."); // LOG INÍCIO
+        const tableHead = $('#monthly-summary-table-head');
+        const tableBody = $('#monthly-summary-table-body');
+        
+        // LOG: Verificar se elementos foram encontrados
+        console.log(`[Tabela Resumo] Encontrado thead: ${tableHead.length}, tbody: ${tableBody.length}`); 
+        
+        tableHead.empty(); 
+        tableBody.empty(); 
+
+        // LOG: Verificar dados de entrada
+        console.log("[Tabela Resumo] Dados recebidos para tabela:", data);
+        if (!data || (!data.labels_meses && !data.labels_anos_meses)) {
+            console.warn("[Tabela Resumo] Dados insuficientes (faltam labels), retornando cedo."); // LOG SAÍDA PREMATURA
+            tableHead.append('<tr><th>Métrica</th><th>Erro</th></tr>');
+            tableBody.append('<tr><td colspan="2" class="text-center text-warning">Dados de período ausentes para gerar a tabela.</td></tr>');
+            return;
+        }
+
+        const isTodosAnos = data.todos_anos;
+        const labelsPeriodo = isTodosAnos ? data.labels_anos_meses : data.labels_meses;
+        const numPeriodos = labelsPeriodo.length;
+        
+        // --- PARSE DE LABELS PARA OBTER ANO/MÊS --- 
+        // Mapeia cada label para um objeto {label, year, month}
+        // !!! AJUSTAR ESTE PARSE CONFORME O FORMATO REAL DOS LABELS !!!
+        const periodosInfo = labelsPeriodo.map(label => {
+            let year = null;
+            let month = null;
+            // Tentativa 1: Formato "MMM/YY" (ex: Mar/23)
+            if (label && label.includes('/')) {
+                const parts = label.split('/');
+                if (parts.length === 2) {
+                    const monthStr = parts[0].toLowerCase();
+                    const yearSuffix = parseInt(parts[1], 10);
+                    if (!isNaN(yearSuffix)) {
+                        year = 2000 + yearSuffix; // Assume século 21
+                        const monthMap = { 'jan': 1, 'fev': 2, 'mar': 3, 'abr': 4, 'mai': 5, 'jun': 6, 'jul': 7, 'ago': 8, 'set': 9, 'out': 10, 'nov': 11, 'dez': 12 };
+                        month = monthMap[monthStr];
+                    }
+                }
+            }
+            // Tentativa 2: Formato "YYYY-MM" (se a tentativa 1 falhar)
+            else if (label && label.includes('-')) {
+                const parts = label.split('-');
+                 if (parts.length === 2) {
+                     year = parseInt(parts[0], 10);
+                     month = parseInt(parts[1], 10);
+                     if (isNaN(year) || isNaN(month)) { year = null; month = null; } // Reset se parse falhar
+                 }
+            }
+             // Tentativa 3: Apenas Mês (quando isTodosAnos é falso)
+             else if (!isTodosAnos && labelsPeriodo.length === 12) {
+                  // Assume que labelsPeriodo são 'Jan', 'Fev', ... e o ano é o data.ano_selecionado
+                  const monthIndex = labelsPeriodo.indexOf(label);
+                  if (monthIndex !== -1 && data.ano_selecionado) {
+                      year = data.ano_selecionado;
+                      month = monthIndex + 1;
+                  }
+             }
+            console.log(`[Parse Label] Label: ${label} -> Ano: ${year}, Mês: ${month}`); // LOG PARSE
+            return { label, year, month };
+        });
+        // --- FIM PARSE --- 
+
+        // Gerar Cabeçalho
+                        const headerRow = $('<tr>');
+        headerRow.append('<th>Métrica</th>');
+                            labelsPeriodo.forEach(label => {
+                                headerRow.append(`<th class="text-end">${label}</th>`);
+                            });
+        // Fallback para colunas vazias se não houver períodos
+        if (numPeriodos === 0) {
+            headerRow.append('<th>Nenhum Período</th>');
+                        }
+                        tableHead.append(headerRow);
+
+        // Preparar os dados das métricas para exibição
+        // Calcular acumulados para 'todos anos' se necessário, pois a API pode não retornar
+        const receitasAcumAnos = isTodosAnos ? (data.valores_receitas_anos || []).reduce((acc, val, i) => { acc.push((i > 0 ? acc[i-1] : 0) + (val || 0)); return acc; }, []) : data.receitas_acumuladas_por_mes;
+        const custosAcumAnos = isTodosAnos ? (data.valores_custos_anos || []).reduce((acc, val, i) => { acc.push((i > 0 ? acc[i-1] : 0) + (val || 0)); return acc; }, []) : data.custos_acumulados_por_mes;
+
+        // *** DEFINIR A VARIÁVEL 'metricas' AQUI ***
+                        const metricas = [
+            { nome: 'Receita', tipo: 'RECEITAS', dataKey: isTodosAnos ? data.valores_receitas_anos : data.receitas_por_mes },
+            { nome: 'Receita Acumulada', tipo: null, dataKey: receitasAcumAnos },
+            { nome: 'Custo', tipo: 'CUSTOS', dataKey: isTodosAnos ? data.valores_custos_anos : data.custos_por_mes },
+            { nome: 'Custo Acumulado', tipo: null, dataKey: custosAcumAnos },
+            { nome: 'Saldo', tipo: null, dataKey: isTodosAnos ? data.valores_saldo_anos : data.saldo_por_mes },
+            { nome: 'Saldo Acumulado', tipo: null, dataKey: isTodosAnos ? data.valores_saldo_acumulado_anos : data.saldo_acumulado_por_mes }
+        ];
+        
+        // Preencher linhas da tabela
+                        metricas.forEach(metrica => {
+                            const row = $('<tr>');
+            row.append(`<td><strong>${metrica.nome}</strong></td>`); 
+            
+            const valores = metrica.dataKey || []; 
+            
+                            for (let i = 0; i < numPeriodos; i++) {
+                const periodoAtual = periodosInfo[i]; // Obter info do período
+                const valor = (valores[i] !== undefined && valores[i] !== null) ? valores[i] : 0;
+                let classeCor = '';
+                if (metrica.nome.includes('Saldo') || metrica.nome.includes('Custo')) { 
+                    classeCor = valor >= 0 ? 'text-success-emphasis' : 'text-danger-emphasis';
+                }
+                
+                let valorHtml = formatarValor(valor);
+                
+                // Adicionar span clicável COM data-year e data-month
+                if ((metrica.tipo === 'RECEITAS' || metrica.tipo === 'CUSTOS') && !metrica.nome.includes('Acum') && periodoAtual.year && periodoAtual.month) {
+                    valorHtml = `<span class="valor-detalhavel text-primary text-decoration-underline" 
+                                        data-metric-type="${metrica.tipo}" 
+                                        data-year="${periodoAtual.year}"
+                                        data-month="${periodoAtual.month}"
+                                        style="cursor: pointer;" 
+                                        title="Clique para ver detalhes de ${metrica.tipo} para ${periodoAtual.label}">${valorHtml}</span>`;
+                } else {
+                     valorHtml = `<span class="${classeCor}">${valorHtml}</span>`;
+                }
+                
+                row.append(`<td class="text-end">${valorHtml}</td>`);
+            }
+            // ... (fallback colunas vazias) ...
+                            tableBody.append(row);
+                        });
+        console.log("[Tabela Resumo] Fim da atualização.");
+    }
+    // *** FIM ATUALIZAR TABELA RESUMO ***
+
+    $(document).ready(function() {
+        console.log("[Document Ready] Iniciando..."); // LOG
+        console.log("[Document Ready] Tipo de bootstrap.Modal:", typeof bootstrap.Modal); // LOG VERIFICAR BOOTSTRAP
+
+        // *** DEFINIR VARIÁVEIS DE ESTADO AQUI ***
+        let collapseCounter = 0;
+        var dadosGraficos = null; // Armazena dados da API para re-renderizar gráficos
+        var graficoAtual = 'evolucao'; // Estado do gráfico principal atual ('evolucao', 'receitas-custos', etc.)
+
+        // *** MOVER FUNÇÕES DE GRÁFICO E RENDERIZAÇÃO PARA DENTRO DO READY ***
+        
+        // Função Recursiva para renderizar a árvore de planos no modal (COM COLLAPSE)
+        function renderizarLinhaPlano(tbody, no, nivel) {
+            if (!no) return;
+
+            const indiceCompleto = no.indice_completo || '';
+            const nome = no.nome || 'Sem Nome';
+            const valorTotal = no.valor_total !== undefined ? no.valor_total : 0; 
+            const valorFormatado = formatarValor(valorTotal);
+            const temFilhos = no.filhos && Object.keys(no.filhos).length > 0;
+            const codigoConta = no.codigo; 
+            const isParent = temFilhos;
+            
+            // ID único para o collapse desta seção (se for pai)
+            const collapseId = isParent ? `collapse-plano-${collapseCounter++}` : null;
+
+            const paddingLeft = nivel * 25; 
+            const row = $('<tr class="align-middle">'); 
+
+            let iconHtml = '';
+            
+            if (isParent) {
+                row.addClass('linha-pai'); 
+                row.attr('data-bs-toggle', 'collapse');
+                row.attr('data-bs-target', `#${collapseId}`);
+                row.attr('aria-expanded', 'false');
+                row.attr('aria-controls', collapseId);
+                iconHtml = `<i class="fas fa-chevron-right toggle-icon me-2"></i>`; 
+                                            } else {
+                iconHtml = `<i class="fas fa-file-alt fa-xs text-muted me-2"></i>`;
+                if (codigoConta) { 
+                    row.addClass('linha-conta-clicavel');
+                    row.attr('data-codigo-conta', codigoConta);
+                    row.attr('data-descricao-conta', nome);
+                }
+            }
+            
+            row.append($('<td>').css('padding-left', `${paddingLeft}px`).html(`<small>${indiceCompleto}</small>`));
+            const nomeCell = $('<td>').html(`<small>${iconHtml}${nome}</small>`);
+            row.append(nomeCell);
+            row.append($('<td class="text-end">').html(`<small>${valorFormatado}</small>`));
+            tbody.append(row);
+
+            if (isParent) {
+                const collapseRow = $('<tr class="collapse-row">'); 
+                const collapseCell = $('<td colspan="3" class="p-0 border-0">'); 
+                const collapseDiv = $(`<div class="collapse" id="${collapseId}"></div>`);
+                const innerTable = $(`<table class="table table-sm table-borderless mb-0"></table>`); 
+                const innerTbody = $('<tbody>');
+                
+                const chavesFilhosOrdenadas = Object.keys(no.filhos).sort((a, b) => {
+                    const numA = parseInt(a, 10); const numB = parseInt(b, 10);
+                    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+                    return a.localeCompare(b); 
+                });
+                chavesFilhosOrdenadas.forEach(chaveFilho => {
+                    renderizarLinhaPlano(innerTbody, no.filhos[chaveFilho], nivel + 1); 
+                });
+
+                innerTable.append(innerTbody);
+                collapseDiv.append(innerTable);
+                collapseCell.append(collapseDiv);
+                collapseRow.append(collapseCell);
+                tbody.append(collapseRow);
+            }
+        }
+        // --- FIM renderizarLinhaPlano ---
+
+        // Funções de Gráfico (já movidas para dentro do ready na edição anterior)
+        function renderizarGraficoSelecionado() {
+            if (!dadosGraficos) return; 
+            // A variável 'graficoAtual' está acessível aqui agora
+            switch(graficoAtual) {
+                case 'evolucao': criarGraficoEvolucaoMensal(dadosGraficos); break;
+                case 'receitas-custos': criarGraficoReceitasCustos(dadosGraficos); break;
+                case 'acumulado': criarGraficoValoresAcumulados(dadosGraficos); break;
+                case 'saldo': criarGraficoSaldoMensal(dadosGraficos); break;
+                default: criarGraficoEvolucaoMensal(dadosGraficos); // Fallback
+            }
+        }
+        
+        function criarGraficoEvolucaoMensal(data) {
+            const isTodosAnos = data.todos_anos;
+            const labels = isTodosAnos ? data.labels_anos_meses : data.labels_meses;
+            const receitas = isTodosAnos ? data.valores_receitas_anos : data.receitas_por_mes;
+            const custos = isTodosAnos ? data.valores_custos_anos : data.custos_por_mes;
+            const saldo = isTodosAnos ? data.valores_saldo_anos : data.saldo_por_mes;
+            const saldoAcumulado = isTodosAnos ? data.valores_saldo_acumulado_anos : data.saldo_acumulado_por_mes;
+
+            // Verificar se Plotly está carregado
+            if (typeof Plotly === 'undefined') {
+                console.error("Plotly não está carregado. Não é possível criar o gráfico.");
+                $('#grafico-consolidado').html('<div class="no-data-message">Erro ao carregar biblioteca de gráficos.</div>');
+                return;
+            }
+
+            // Limpar gráfico anterior
+            Plotly.purge('grafico-consolidado');
+
+            if (!labels || labels.length === 0) {
+                 $('#grafico-consolidado').html('<div class="no-data-message">Nenhum dado para exibir no gráfico.</div>');
+                 return;
+            }
+
+            const receitaTrace = { x: labels, y: receitas, type: 'bar', name: 'Receitas', marker: { color: '#38a169' } };
+            const custoTrace = { x: labels, y: custos, type: 'bar', name: 'Custos', marker: { color: '#e53e3e' } };
+            const saldoTrace = { x: labels, y: saldo, type: 'bar', name: 'Saldo', marker: { color: saldo && saldo.map ? saldo.map(v => v >= 0 ? '#4caf50' : '#f44336') : '#17a2b8' } };
+            const saldoAcumuladoTrace = { x: labels, y: saldoAcumulado, type: 'scatter', mode: 'lines+markers', name: 'Saldo Acumulado', line: { color: '#17a2b8', width: 2 }, marker: { color: '#17a2b8', size: 6 } };
+
+            const layout = {
+                title: 'Evolução Mensal Financeira',
+                autosize: true,
+                margin: { l: 60, r: 50, b: (isTodosAnos ? 120 : 60), t: 40, pad: 4 },
+                legend: { orientation: 'h', y: 1.1 },
+                hovermode: 'x unified',
+                xaxis: { title: isTodosAnos ? 'Período' : 'Mês', tickangle: (isTodosAnos ? 45 : 0) },
+                yaxis: { title: 'Valor (R$)', tickformat: '.2s' }
+            };
+
+            Plotly.react('grafico-consolidado', [receitaTrace, custoTrace, saldoTrace, saldoAcumuladoTrace], layout, {responsive: true});
+        }
+
+        
+        function criarGraficoTopCC(data) {
+             if (!data || !data.valores_cc || !data.labels_cc) {
+                 $('#grafico-top-cc').html('<div class="no-data-message">Dados insuficientes para gerar o gráfico de Top CC.</div>');
+                 return;
+             }
+            if (typeof Plotly === 'undefined') { console.error("Plotly não carregado."); return; }
+            Plotly.purge('grafico-top-cc');
+
+            const valores = data.valores_cc.map(v => Math.abs(v));
+            const labels = data.labels_cc;
+            
+            if (!labels || labels.length === 0) {
+                 $('#grafico-top-cc').html('<div class="no-data-message">Nenhum dado de Centro de Custo para exibir.</div>');
+                 return;
+            }
+            
+            const cores = valores.map((v, i) => i % 2 === 0 ? '#4e73df' : '#36b9cc');
+            
+            const trace = {
+                y: labels,
+                x: valores,
+                type: 'bar',
+                orientation: 'h',
+                marker: { color: cores }
+            };
+            
+            const layout = {
+                title: 'Top Centros de Custo (Valor Absoluto)', // Ajustado título
+                autosize: true,
+                margin: { l: 200, r: 50, b: 60, t: 40, pad: 4 },
+                xaxis: { title: 'Valor Absoluto (R$)', tickformat: '.2s' }, // MODIFICADO AQUI
+                yaxis: { automargin: true }
+            };
+            
+            Plotly.react('grafico-top-cc', [trace], layout, {responsive: true});
+        }
+        // *** FIM Funções de Gráfico ***
+        
+        // Inicialização Select2
+        // ... (código select2) ...
+
+        // Listeners botões tipo gráfico
+       
+
+        // Listeners botões exportação, importação
+        // ... (código dos listeners) ...
+
+        // Listeners para Collapse e Detalhamento (modal hierárquico)
+        // ... (código listeners collapse) ...
+         
+        // Listener para Detalhamento (modal movimentação)
+        // ... (código listener movimentação) ...
+
+        // *** LISTENER TABELA RESUMO (MODIFICADO PARA NOVA API) ***
+        console.log("[Document Ready] Anexando listener para #monthly-summary-table-body span.valor-detalhavel..."); // LOG ANEXAR LISTENER
+        $('#monthly-summary-table-body').on('click', 'span.valor-detalhavel', function() {
+            console.log("[Tabela Resumo Click] Listener disparado!"); // LOG - MOVIDO PARA O INÍCIO
+            const metricType = $(this).data('metric-type');
+            const year = $(this).data('year');
+            const month = $(this).data('month');
+            const cc_ids = $('#cc_id').val(); 
+            
+            console.log(`[Tabela Resumo Click] Dados do span: Métrica=${metricType}, Ano=${year}, Mês=${month}, CCs=${cc_ids}`); // LOG DADOS
+
+            // LOG: Verificar elementos do modal
+            const modalElement = document.getElementById('modalDetalhesPlanoConta');
+            const modalInstanceCheck = modalElement ? (bootstrap.Modal.getInstance(modalElement) || 'Nova instância será criada') : 'Elemento do modal não encontrado!';
+            console.log("[Tabela Resumo Click] Verificando modal:", modalElement, "Instância:", modalInstanceCheck);
+            const modalTableBody = $('#modal-plano-conta-table-body');
+            console.log("[Tabela Resumo Click] Verificando modal body:", modalTableBody.length ? modalTableBody[0] : 'Não encontrado');
+            const modalLoading = $('#modal-plano-conta-loading');
+            const modalContent = $('#modal-plano-conta-content');
+            const modalError = $('#modal-plano-conta-error');
+            const modalTitle = $('#modalDetalhesPlanoContaLabel'); 
+            const modalPeriodoSpan = $('#modal-periodo-texto'); 
+            console.log(`[Tabela Resumo Click] Elementos internos: Loading=${modalLoading.length}, Content=${modalContent.length}, Error=${modalError.length}, Title=${modalTitle.length}, Periodo=${modalPeriodoSpan.length}`);
+
+            if (!metricType || !year || !month) {
+                console.error("[Tabela Resumo Click] Falta informação (métrica, ano ou mês) no elemento clicado.");
+                alert("Erro ao obter detalhes: informação de período ou métrica ausente.");
+                return;
+            }
+
+            // Referências ao modal e preparação inicial (remover repetições se já logado)
+            if (!modalElement) { console.error("Modal #modalDetalhesPlanoConta não encontrado (verificação secundária)."); return; }
+            let modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            
+            // Mostrar Loading e Limpar
+            modalContent.hide();
+            modalError.hide();
+            modalTableBody.empty(); 
+            modalLoading.show();
+            // Atualizar Título (mesmo antes da resposta da API)
+            const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            modalTitle.text(`Detalhes ${metricType}`);
+            modalPeriodoSpan.text(`${meses[month-1]}/${String(year).slice(-2)}`); // Formato MMM/YY
+            
+            // *** ARMAZENAR CONTEXTO NO MODAL ***
+            $(modalElement).attr('data-contexto-ano', year);
+            $(modalElement).attr('data-contexto-mes', month);
+            console.log(`[Tabela Resumo Click] Armazenando contexto no modal: Ano=${year}, Mês=${month}`);
+
+            console.log("[Tabela Resumo Click] Tentando abrir o modal para mostrar loading..."); // LOG ADICIONAL
+            modalInstance.show(); // Abrir modal para mostrar loading
+
+            // Construir URL da NOVA API
+            const apiUrl = '{{ url_for("dados_analiticos.api_detalhes_hierarquicos_periodo") }}'; // <<< NOVA ROTA
+            const params = new URLSearchParams();
+            params.append('ano', year);
+            params.append('mes', month);
+            params.append('metric_type', metricType);
+            if (cc_ids && cc_ids.length > 0) {
+                cc_ids.forEach(id => params.append('cc_id', id));
+            }
+            const finalUrl = apiUrl + '?' + params.toString();
+            console.log("[Tabela Resumo Click] Chamando API específica:", finalUrl);
+
+            // Chamar a NOVA API
+            $.ajax({
+                url: finalUrl,
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    modalLoading.hide();
+                    console.log("[Tabela Resumo Click] Resposta da API específica:", response);
+
+                    if (response.error) {
+                        console.error("[Tabela Resumo Click] Erro retornado pela API:", response.error);
+                        modalError.text(`Erro ao buscar detalhes: ${response.error}`).show();
+                        return;
+                    }
+
+                    // A resposta deve conter {nome, valor_total, arvore_indices}
+                    if (response && response.arvore_indices && typeof response.arvore_indices === 'object') {
+                        const arvoreEspecifica = response.arvore_indices;
+                        const chavesIndices = Object.keys(arvoreEspecifica);
+
+                        console.log(`[Tabela Resumo Click] Renderizando árvore específica com ${chavesIndices.length} índices raiz.`);
+                        if (chavesIndices.length > 0) {
+                            chavesIndices.forEach(indiceRaiz => {
+                                renderizarLinhaPlano(modalTableBody, arvoreEspecifica[indiceRaiz], 0); // Começar no nível 0
+                            });
+                            modalContent.show();
+                        } else {
+                            modalError.text(`Nenhum detalhe encontrado para ${metricType} neste período (${meses[month-1]}/${String(year).slice(-2)}).`).show();
+                        }
+                    } else {
+                        console.error("[Tabela Resumo Click] Resposta da API em formato inesperado.", response);
+                        modalError.text("Erro ao processar detalhes: resposta da API inválida.").show();
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    modalLoading.hide();
+                    console.error("[Tabela Resumo Click] Erro AJAX:", textStatus, errorThrown, jqXHR.responseText);
+                    modalError.text("Erro de comunicação ao buscar detalhes. Verifique a conexão.").show();
+                }
+            });
+        });
+        // *** FIM LISTENER TABELA RESUMO ***
+
+        // *** NOVO LISTENER PARA O BOTÃO DE DETALHES GERAL ***
+        console.log("[Document Ready] Anexando listener para #btn-ver-detalhes-geral..."); // LOG ANEXAR LISTENER
+        $('#btn-ver-detalhes-geral').on('click', function() {
+            console.log("[Botão Detalhes Geral] Listener disparado!"); // LOG - MOVIDO PARA O INÍCIO
+            
+            // LOG: Verificar elementos do modal
+            const modalElement = document.getElementById('modalDetalhesPlanoConta');
+            
+            // *** LIMPAR CONTEXTO DO MODAL ***
+            $(modalElement).removeAttr('data-contexto-ano');
+            $(modalElement).removeAttr('data-contexto-mes');
+            console.log("[Botão Detalhes Geral] Limpando contexto do modal.");
+            
+            const modalInstanceCheck = modalElement ? (bootstrap.Modal.getInstance(modalElement) || 'Nova instância será criada') : 'Elemento do modal não encontrado!';
+            console.log("[Botão Detalhes Geral] Verificando modal:", modalElement, "Instância:", modalInstanceCheck);
+            const modalTableBody = $('#modal-plano-conta-table-body');
+            console.log("[Botão Detalhes Geral] Verificando modal body:", modalTableBody.length ? modalTableBody[0] : 'Não encontrado');
+            const modalLoading = $('#modal-plano-conta-loading');
+            const modalContent = $('#modal-plano-conta-content');
+            const modalError = $('#modal-plano-conta-error');
+            const modalTitle = $('#modalDetalhesPlanoContaLabel');
+            const modalPeriodoSpan = $('#modal-periodo-texto');
+             console.log(`[Botão Detalhes Geral] Elementos internos: Loading=${modalLoading.length}, Content=${modalContent.length}, Error=${modalError.length}, Title=${modalTitle.length}, Periodo=${modalPeriodoSpan.length}`);
+
+            // console.log("[Botão Detalhes Geral] Click detectado."); // Removido, já logado acima
+            // const modalElement = document.getElementById('modalDetalhesPlanoConta'); // Já verificado
+            if (!modalElement) {
+                console.error("Modal #modalDetalhesPlanoConta não encontrado (verificação secundária).");
+                return;
+            }
+            let modalInstance = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+            // const modalTableBody = $('#modal-plano-conta-table-body'); // Já verificado
+            // ... (elementos internos já verificados) ...
+            
+            // Limpar e preparar modal
+            modalTableBody.empty();
+            modalLoading.hide();
+            modalContent.hide();
+            modalError.hide();
+
+            // Verificar se temos os dados gerais
+            if (dadosGraficos && dadosGraficos.detalhes_por_plano_hierarquico) {
+                console.log("[Botão Detalhes Geral] Renderizando dados gerais da variável dadosGraficos.", dadosGraficos.detalhes_por_plano_hierarquico);
+                const estruturaAgrupada = dadosGraficos.detalhes_por_plano_hierarquico;
+                const ordemGrupos = ['RECEITAS', 'CUSTOS', 'OUTROS']; // Ordem preferencial
+                let hasAnyData = false;
+                
+                 // Atualizar título e período
+                 modalTitle.text("Detalhes por Plano de Conta");
+                 modalPeriodoSpan.text(dadosGraficos.periodo_texto || 'Período não definido');
+
+                // Reutilizar a lógica de renderização agrupada
+                ordemGrupos.forEach(grupoChave => {
+                    if (estruturaAgrupada.hasOwnProperty(grupoChave)) {
+                        const grupoDados = estruturaAgrupada[grupoChave];
+                        const arvoreIndicesGrupo = grupoDados.arvore_indices || {};
+                        const chavesIndices = Object.keys(arvoreIndicesGrupo);
+                        
+                        const grupoHeaderRow = $('<tr class="table-secondary fw-bold">');
+                        grupoHeaderRow.append($('<td colspan="2">').text(grupoDados.nome || grupoChave));
+                        grupoHeaderRow.append($('<td class="text-end">').html(formatarValor(grupoDados.valor_total)));
+                        modalTableBody.append(grupoHeaderRow);
+                        hasAnyData = true;
+                        
+                        if (chavesIndices.length > 0) {
+                            chavesIndices.forEach(indiceRaiz => {
+                                renderizarLinhaPlano(modalTableBody, arvoreIndicesGrupo[indiceRaiz], 1); // Nível 1 para itens dentro do grupo
+                            });
+                        } 
+                    }
+                }); 
+
+                if (hasAnyData) {
+                    modalContent.show();
+                } else {
+                    modalError.text('Nenhum detalhe por plano de conta encontrado para o período selecionado.').show();
+                }
+                
+            } else {
+                console.error("[Botão Detalhes Geral] Dados gerais (dadosGraficos.detalhes_por_plano_hierarquico) não encontrados ou inválidos.");
+                modalTitle.text("Detalhes por Plano de Conta");
+                modalPeriodoSpan.text("Erro ao carregar");
+                modalError.text('Erro ao carregar dados gerais. Tente filtrar novamente.').show();
+            }
+
+            console.log("[Botão Detalhes Geral] Tentando abrir o modal..."); // LOG ADICIONAL
+            modalInstance.show(); // Abrir o modal
+        });
+        // *** FIM NOVO LISTENER ***
+
+        // *** NOVO LISTENER PARA CLIQUE EM LINHA DE CONTA (DETALHES MOVIMENTAÇÃO) ***
+        console.log("[Document Ready] Anexando listener delegado para #modal-plano-conta-table-body tr.linha-conta-clicavel..."); // LOG ANEXAR LISTENER
+        $('#modal-plano-conta-table-body').on('click', 'tr.linha-conta-clicavel', function() {
+            console.log("[Linha Conta Click] Listener disparado!");
+            
+            const codigoConta = $(this).data('codigo-conta');
+            const descricaoConta = $(this).data('descricao-conta') || 'Conta sem descrição';
+            console.log(`[Linha Conta Click] Conta Clicada: Código=${codigoConta}, Descrição=${descricaoConta}`);
+            
+            if (!codigoConta) {
+                console.error("[Linha Conta Click] Código da conta não encontrado no atributo data-codigo-conta.");
+                alert('Erro: Não foi possível identificar a conta selecionada.');
+                return;
+            }
+            
+            // *** OBTER FILTROS ATUAIS (ANO/MÊS) USANDO CONTEXTO DO MODAL HIERÁRQUICO ***
+            const modalHierarquico = $('#modalDetalhesPlanoConta'); 
+            const contextoAno = modalHierarquico.attr('data-contexto-ano');
+            const contextoMes = modalHierarquico.attr('data-contexto-mes');
+            
+            let anoFiltro, mesFiltro;
+
+            if (contextoAno && contextoMes) {
+                anoFiltro = contextoAno;
+                mesFiltro = contextoMes;
+                console.log(`[Linha Conta Click] Usando contexto específico do modal: Ano=${anoFiltro}, Mês=${mesFiltro}`);
+            } else {
+                anoFiltro = $('#ano').val() || null;
+                mesFiltro = $('#mes').val() || null;
+                console.log(`[Linha Conta Click] Usando filtros gerais da página: Ano=${anoFiltro}, Mês=${mesFiltro}`);
+            }
+
+            // Filtro de CC sempre vem do geral (a árvore já foi filtrada por CC se necessário)
+            const ccIdsFiltro = $('#cc_id').val() || [];
+            console.log(`[Linha Conta Click] Filtros Finais para API Mov.: Ano=${anoFiltro}, Mês=${mesFiltro}, CCs=${ccIdsFiltro.join(', ')}`);
+
+            // Referências ao modal de MOVIMENTAÇÕES
+            const modalMovEl = document.getElementById('modalMovimentacoesConta');
+            const modalMovTitle = $('#movimentacoes-conta-titulo');
+            const modalMovLoading = $('#movimentacoes-conta-loading');
+            const modalMovError = $('#movimentacoes-conta-error');
+            const modalMovTbody = $('#movimentacoes-conta-table-body');
+            console.log(`[Linha Conta Click] Verificando Modal Movimentações: El=${modalMovEl}, Title=${modalMovTitle.length}, Loading=${modalMovLoading.length}, Error=${modalMovError.length}, TBody=${modalMovTbody.length}`);
+            
+            if (!modalMovEl || modalMovTbody.length === 0) {
+                 console.error("[Linha Conta Click] Elementos do modal de movimentações não encontrados!");
+                 alert('Erro ao preparar modal de movimentações.');
+                 return;
+            }
+            let modalMovInstance = bootstrap.Modal.getInstance(modalMovEl) || new bootstrap.Modal(modalMovEl);
+
+            // Preparar e abrir modal de movimentações
+            modalMovTitle.text(`${codigoConta} - ${descricaoConta}`);
+            modalMovTbody.empty();
+            modalMovError.hide();
+            modalMovLoading.show();
+            
+            console.log('[Linha Conta Click] Tentando abrir o modal de movimentações...');
+            modalMovInstance.show();
+
+            // *** CHAMADA AJAX PARA BUSCAR MOVIMENTAÇÕES (REAL) ***
+            const apiUrlMov = '{{ url_for("dados_analiticos.api_detalhes_movimentacao_plano_conta") }}'; 
+            const paramsMov = new URLSearchParams();
+            paramsMov.append('plano_conta_codigo', codigoConta);
+            if (anoFiltro) paramsMov.append('ano', anoFiltro);
+            if (mesFiltro) paramsMov.append('mes', mesFiltro);
+            if (ccIdsFiltro && ccIdsFiltro.length > 0) {
+                ccIdsFiltro.forEach(id => paramsMov.append('cc_id', id));
+            }
+            const finalUrlMov = apiUrlMov + '?' + paramsMov.toString();
+            console.log("[Linha Conta Click] Chamando API de movimentações:", finalUrlMov);
+            
+            $.ajax({
+                url: finalUrlMov,
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    modalMovLoading.hide();
+                    if (response && response.agrupado_por_cc && Object.keys(response.agrupado_por_cc).length > 0) {
+                        console.log("[Linha Conta Click] Movimentações recebidas:", response.agrupado_por_cc);
+                        const centrosCustoOrdenados = Object.keys(response.agrupado_por_cc).sort(); // Ordenar por chave (código - nome)
+                        
+                        centrosCustoOrdenados.forEach(ccChave => {
+                            const grupo = response.agrupado_por_cc[ccChave];
+                            
+                            // Linha Cabeçalho do Centro de Custo
+                            const ccHeaderRow = $('<tr class="table-info fw-bold">');
+                            ccHeaderRow.append($('<td colspan="4">').text('Centro de Custo: ' + ccChave));
+                            ccHeaderRow.append($('<td colspan="2" class="text-end">').text('Subtotal: ' + formatarValor(grupo.subtotal))); // Adiciona subtotal aqui
+                            modalMovTbody.append(ccHeaderRow);
+                            
+                            // Linhas de Movimentação
+                            if(grupo.movimentacoes && grupo.movimentacoes.length > 0) {
+                                grupo.movimentacoes.forEach(mov => {
+                                    const row = $('<tr>');
+                                    row.append($('<td>').text(mov.data_pagamento || '-'));
+                                    row.append($('<td>').text(mov.documento || '-'));
+                                    row.append($('<td>').text(mov.emitente || '-'));
+                                    row.append($('<td>').text(mov.historico || '-'));
+                                    row.append($('<td>').text(ccChave)); // Repete o CC para clareza, pode ser omitido
+                                    row.append($('<td class="text-end">').html(formatarValor(mov.valor)));
+                                    modalMovTbody.append(row);
+                                });
+                            } else {
+                                const noMovRow = $('<tr><td colspan="6" class="text-center fst-italic">Nenhuma movimentação neste Centro de Custo.</td></tr>');
+                                modalMovTbody.append(noMovRow);
+                            }
+                        });
+                        
+                    } else {
+                        console.log("[Linha Conta Click] Nenhuma movimentação encontrada ou resposta inválida.");
+                        modalMovTbody.html('<tr><td colspan="6" class="text-center">Nenhuma movimentação encontrada para esta conta no período e filtros selecionados.</td></tr>');
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error("[Linha Conta Click] Erro ao buscar movimentações:", textStatus, errorThrown, jqXHR.responseText);
+                    modalMovLoading.hide();
+                    let errorMsg = 'Erro ao buscar movimentações. Tente novamente.';
+                    try {
+                        const errorResponse = JSON.parse(jqXHR.responseText);
+                        if (errorResponse && errorResponse.error) {
+                            errorMsg = errorResponse.error;
+                        }
+                    } catch (e) { /* Ignorar erro de parse */ }
+                    modalMovError.text(errorMsg).show();
+                }
+            });
+             // APENAS PARA TESTE - Remover/Substituir por AJAX real -- REMOVIDO
+            /*
+              setTimeout(() => {
+                  modalMovLoading.hide();
+                  modalMovTbody.html('<tr><td colspan="6" class="text-center">Funcionalidade de busca de movimentações ainda não implementada.</td></tr>');
+                  console.log('[Linha Conta Click] Simulação de AJAX concluída (sem implementação real).');
+              }, 1500);
+            */
+        });
+        // *** FIM LISTENER LINHA CONTA ***
+
+        // Definição da Função carregarDados (PRECISA VIR DEPOIS das funções que ela chama)
+        function carregarDados() {
+            mostrarLoading('grafico-consolidado');
+            mostrarLoading('grafico-top-cc');
+            // Mostrar loading no modal de detalhes
+            $('#modal-plano-conta-loading').show();
+            $('#modal-plano-conta-content').hide();
+            $('#modal-plano-conta-error').hide();
+
+            const ano = $('#ano').val();
+            const mes = $('#mes').val();
+            const cc_ids = $('#cc_id').val(); 
+
+            console.log("Iniciando carregamento de dados com filtros:", { ano, mes, cc_ids });
+            const apiUrl = '{{ url_for("dados_analiticos.api_dashboard_mensal") }}';
+            const params = new URLSearchParams();
+            if (ano) params.append('ano', ano);
+            if (mes) params.append('mes', mes);
+            if (cc_ids && cc_ids.length > 0) {
+                cc_ids.forEach(id => params.append('cc_id', id));
+            }
+            const finalUrl = apiUrl + '?' + params.toString();
+            console.log("URL da API formatada:", finalUrl);
+
+            $.ajax({
+                url: finalUrl,
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    // Verificação de Data Null
+                    if (data === null || typeof data !== 'object') {
+                        console.error("Erro Crítico: A resposta da API foi null ou não é um objeto válido.", data);
+                        ocultarLoading('grafico-consolidado');
+                        ocultarLoading('grafico-top-cc');
+                        $('#modal-plano-conta-loading').hide();
+                        $('#modal-plano-conta-content').hide();
+                        $('#modal-plano-conta-table-body').empty();
+                        $('#modal-plano-conta-error').text('Erro ao processar resposta da API. Dados inválidos recebidos.').show();
+                        $('#modal-periodo-texto').text('Erro');
+                        const tableHead = $('#monthly-summary-table-head');
+                        const tableBody = $('#monthly-summary-table-body');
+                        tableHead.empty().append('<tr><th>Métrica</th><th>Erro</th></tr>');
+                        tableBody.empty().append('<tr><td colspan="2" class="text-center text-danger">Erro ao processar resposta da API.</td></tr>');
+                        alert("Ocorreu um erro ao processar os dados recebidos do servidor.");
+                        return;
+                    }
+
+                    console.log("Dados recebidos da API:", data); 
+                    dadosGraficos = data; 
+                    
+                    atualizarIndicadores(data); 
+                    renderizarGraficoSelecionado();
+                    criarGraficoTopCC(data);
+                    atualizarTabelaResumo(data);
+
+                    // ATUALIZAR Modal Detalhes por Plano de Conta (AGRUPADO E HIERÁRQUICO) 
+                    const modalTableBody = $('#modal-plano-conta-table-body');
+                    const modalLoading = $('#modal-plano-conta-loading');
+                    const modalContent = $('#modal-plano-conta-content');
+                    const modalError = $('#modal-plano-conta-error');
+                    const modalPeriodo = $('#modal-periodo-texto'); 
+                    
+                    modalLoading.hide();
+                    modalContent.hide();
+                    modalError.hide();
+                    modalTableBody.empty(); 
+                    modalPeriodo.text(data.periodo_texto || 'Período Indefinido');
+
+                    if (data && data.detalhes_por_plano_hierarquico && typeof data.detalhes_por_plano_hierarquico === 'object') {
+                         const estruturaAgrupada = data.detalhes_por_plano_hierarquico;
+                         const ordemGrupos = ['RECEITAS', 'CUSTOS', 'OUTROS'];
+                         let hasAnyData = false;
+                         
+                         console.log("[Modal Update] Iniciando renderização da estrutura agrupada.");
+                         
+                         ordemGrupos.forEach(grupoChave => {
+                             if (estruturaAgrupada.hasOwnProperty(grupoChave)) {
+                                 const grupoDados = estruturaAgrupada[grupoChave];
+                                 const arvoreIndicesGrupo = grupoDados.arvore_indices || {};
+                                 const chavesIndices = Object.keys(arvoreIndicesGrupo);
+                                 
+                                 console.log(`[Modal Update] Processando Grupo: ${grupoChave}, Indices: ${chavesIndices.length}`);
+                                 
+                                 const grupoHeaderRow = $('<tr class="table-secondary fw-bold">');
+                                 grupoHeaderRow.append($('<td colspan="2">').text(grupoDados.nome || grupoChave));
+                                 grupoHeaderRow.append($('<td class="text-end">').html(formatarValor(grupoDados.valor_total)));
+                                 modalTableBody.append(grupoHeaderRow);
+                                 hasAnyData = true;
+                                 
+                                 if (chavesIndices.length > 0) {
+                                     chavesIndices.forEach(indiceRaiz => {
+                                         console.log(`  [Modal Update] Renderizando índice ${indiceRaiz} dentro de ${grupoChave}`);
+                                         renderizarLinhaPlano(modalTableBody, arvoreIndicesGrupo[indiceRaiz], 1); 
+                                     });
+                                 } 
+                             }
+                         }); 
+                         
+                         if (hasAnyData) {
+                             modalContent.show(); 
+                             console.log("[Modal Update] Renderização agrupada concluída.");
+                         } else {
+                             console.log("[Modal Update] Nenhum grupo com dados encontrado na estrutura.");
+                             modalError.text('Nenhum detalhe por plano de conta encontrado para o período selecionado.').show();
+                        }
+                     } else {
+                         console.warn("[Modal Update] Chave 'detalhes_por_plano_hierarquico' ausente ou inválida para agrupamento.");
+                         modalError.text('Não foi possível carregar os detalhes (estrutura agrupada inesperada).').show();
+                     }
+
+                    ocultarLoading('grafico-consolidado');
+                    ocultarLoading('grafico-top-cc');
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                   console.error("Erro na requisição AJAX:", textStatus, errorThrown, jqXHR.responseText);
+                   ocultarLoading('grafico-consolidado');
+                   ocultarLoading('grafico-top-cc');
+                   $('#modal-plano-conta-loading').hide();
+                   $('#modal-plano-conta-content').hide();
+                   $('#modal-plano-conta-table-body').empty();
+                   $('#modal-plano-conta-error').text('Erro ao carregar dados do dashboard. Verifique o console.').show();
+                   $('#modal-periodo-texto').text('Erro');
+                   const tableHead = $('#monthly-summary-table-head');
+                   const tableBody = $('#monthly-summary-table-body');
+                   tableHead.empty().append('<tr><th>Métrica</th><th>Erro</th></tr>');
+                   tableBody.empty().append('<tr><td colspan="2" class="text-center text-danger">Erro ao carregar dados da tabela.</td></tr>');
+                }
+            });
+        }
+        
+        // Carregar dados ao iniciar a página
+        carregarDados();
+
+      
+
+        // --- Listener Botão Exportar Excel ---
+        $('#btn-exportar-excel').on('click', function() {
+            const ano = $('#filtro-ano').val();
+            const mes = $('#filtro-mes').val();
+            const ccIds = $('#filtro-centro-custo').val() || []; // Garante que seja um array
+            const url_exportar = "{{ url_for('dados_analiticos.exportar') }}";
+            const params = new URLSearchParams();
+            if (ano) params.append('ano', ano);
+            if (mes) params.append('mes', mes);
+            ccIds.forEach(id => params.append('centro_custo_id', id));
+
+            // Gera a URL usando a variável global url_exportar definida no template
+            // Certifique-se de que url_exportar = url_for('dados_analiticos.exportar') está no template
+            if (typeof url_exportar !== 'undefined') {
+               window.location.href = `${url_exportar}?${params.toString()}`;
+            } else {
+               console.error("URL de exportação não definida. Verifique a variável 'url_exportar' no template.");
+               alert("Erro: URL de exportação não configurada.");
+            }
+        });
+
+        // --- Listener Botão Iniciar Importação/Extração ---
+        $('#btn-iniciar-importacao').on('click', function() {
+            // Opcional: Mostrar um indicador de loading
+            const $button = $(this);
+            const originalText = $button.html();
+            $button.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Aguarde...');
+
+            $.ajax({
+                url: "/dados-analiticos/api/iniciar-extracao", // Endpoint confirmado
+                method: 'GET',
+                success: function(response) {
+                    console.log("Resposta da API Iniciar Extração:", response);
+                    // Exibir mensagem de sucesso (pode ser um toast, alert, etc.)
+                    alert(response.message || "Processo de extração iniciado com sucesso! Verifique o status ou aguarde a conclusão.");
+                    // Opcional: Atualizar a página ou algum indicador de status
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    console.error("Erro ao iniciar extração:", textStatus, errorThrown, jqXHR.responseText);
+                    let errorMsg = "Erro ao iniciar o processo de extração.";
+                    try {
+                       const errResp = JSON.parse(jqXHR.responseText);
+                       errorMsg = errResp.error || errorMsg;
+                    } catch (e) {}
+                    alert(`Falha: ${errorMsg}`);
+                },
+                complete: function() {
+                    // Restaurar botão
+                    $button.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
+    }); // Fim $(document).ready()
+
+    // ********** FUNÇÃO PARA RESTABELECER **********
+    function abrirModalMovimentacoes(codigoConta, descricaoConta, ano, mes, ccIds) {
+        console.log("Abrindo modal de movimentações para:", codigoConta, descricaoConta, ano, mes, ccIds);
+
+        const modal = $('#modal-movimentacoes');
+        const modalTitle = $('#modal-movimentacoes-title');
+        const modalBody = $('#modal-movimentacoes-body');
+        const modalLoading = $('#modal-movimentacoes-loading');
+        const modalError = $('#modal-movimentacoes-error');
+
+        // Atualizar título e mostrar loading
+        modalTitle.text(`Movimentações - ${codigoConta} ${descricaoConta || ''}`);
+        modalBody.empty(); // Limpar corpo
+        modalError.hide();
+        modalLoading.show();
+        modal.modal('show');
+
+        // Preparar parâmetros da API
+        const params = new URLSearchParams();
+        params.append('plano_conta_codigo', codigoConta);
+        if (ano) params.append('ano', ano);
+        if (mes) params.append('mes', mes);
+        // Garantir que ccIds seja um array antes de iterar
+        if (ccIds && Array.isArray(ccIds)) { 
+            ccIds.forEach(id => params.append('cc_id', id));
+        } else if (ccIds) { // Se for um valor único (não array), adiciona mesmo assim
+            params.append('cc_id', ccIds);
+        }
+
+        // Chamar API
+        $.ajax({
+            url: `/api/detalhes-movimentacao-plano-conta?${params.toString()}`,
+            method: 'GET',
+            success: function(data) {
+                modalLoading.hide();
+                console.log("Dados recebidos para movimentações:", data);
+
+                if (data.error) {
+                    modalError.text(data.error).show();
+                    return;
+                }
+
+                const agrupado = data.agrupado_por_cc;
+                if (!agrupado || Object.keys(agrupado).length === 0) {
+                    modalBody.html(`<p class="text-muted fst-italic">${data.message || 'Nenhuma movimentação encontrada para esta conta e filtros.'}</p>`);
+                    return;
+                }
+
+                // Construir tabela
+                const table = $('<table class="table table-sm table-hover"></table>');
+                const thead = $('<thead><tr><th>Data Pgto.</th><th>Doc</th><th>Emitente</th><th>Histórico</th><th class="text-end">Valor</th></tr></thead>');
+                const tbody = $('<tbody></tbody>');
+
+                // Ordenar centros de custo pela chave (código - nome)
+                const sortedCCKeys = Object.keys(agrupado).sort((a, b) => {
+                    // Colocar "Sem Centro de Custo" no final ou início, se desejado
+                    // Aqui está a ordenação alfanumérica padrão que inclui o código "000 - "
+                    return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+                });
+
+                sortedCCKeys.forEach(ccChave => {
+                    const grupoCC = agrupado[ccChave];
+                    // Certificar que grupoCC existe e tem as propriedades esperadas
+                    if (!grupoCC) return;
+                    const subtotalGrupo = grupoCC.subtotal || 0;
+                    const movimentacoesGrupo = grupoCC.movimentacoes || [];
+
+                    // Linha de cabeçalho do Centro de Custo
+                    const ccHeaderRow = $('<tr class="table-light"></tr>');
+                    ccHeaderRow.append(`<td colspan="4"><strong>${ccChave}</strong></td>`); // Colspan 4
+                    ccHeaderRow.append(`<td class="text-end"><strong>${formatarValor(subtotalGrupo)}</strong></td>`);
+                    tbody.append(ccHeaderRow);
+
+                    // Linhas de movimentação
+                    if (movimentacoesGrupo.length > 0) {
+                        movimentacoesGrupo.forEach(mov => {
+                            const movRow = $('<tr></tr>');
+                            movRow.append(`<td><small>${mov.data_pagamento || '-'}</small></td>`);
+                            movRow.append(`<td><small>${mov.documento || '-'}</small></td>`);
+                            movRow.append(`<td><small>${mov.emitente || '-'}</small></td>`);
+                            movRow.append(`<td><small>${mov.historico || '-'}</small></td>`);
+                            movRow.append(`<td class="text-end"><small>${formatarValor(mov.valor)}</small></td>`);
+                            tbody.append(movRow);
+                        });
+                    } else {
+                        tbody.append('<tr><td colspan="5" class="text-muted fst-italic ps-3"><small>Nenhuma movimentação neste centro de custo.</small></td></tr>');
+                    }
+                });
+
+                table.append(thead).append(tbody);
+                modalBody.append(table);
+
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                modalLoading.hide();
+                console.error("Erro ao buscar movimentações:", textStatus, errorThrown, jqXHR.responseText);
+                let errorMsg = "Erro ao buscar detalhes das movimentações.";
+                try {
+                    const errResp = JSON.parse(jqXHR.responseText);
+                    errorMsg = errResp.error || errorMsg;
+                } catch (e) {}
+                modalError.text(errorMsg).show();
+            }
+        });
+    }
+
+    // Função para renderizar o gráfico principal selecionado
+    function renderizarGraficoSelecionado() {
+        if (!dadosGraficos) return; 
+        // A variável 'graficoAtual' está acessível aqui agora
+        switch(graficoAtual) {
+            case 'evolucao': criarGraficoEvolucaoMensal(dadosGraficos); break;
+            case 'receitas-custos': criarGraficoReceitasCustos(dadosGraficos); break;
+            case 'acumulado': criarGraficoValoresAcumulados(dadosGraficos); break;
+            case 'saldo': criarGraficoSaldoMensal(dadosGraficos); break;
+            default: criarGraficoEvolucaoMensal(dadosGraficos); // Fallback
+        }
+    }
+</script>
+{% endblock %} 

@@ -1,0 +1,291 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Meu Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <h2 class="mb-4">Bem-vindo(a), {{ usuario.nome }}</h2>
+    
+    <!-- Cards com resumos -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Minhas Solicitações</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_solicitacoes_usuario }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pendentes</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_sol_pendentes }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Aprovadas</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_sol_aprovadas }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Rejeitadas</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_sol_rejeitadas }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-times-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Coluna Esquerda -->
+        <div class="col-lg-6">
+
+            {% if exibir_card_materiais_usinagem %}
+            {% include 'dashboard/cards/materiais_usinagem.html' %}
+            {% endif %}
+        </div>
+        <!-- Coluna Esquerda -->
+        <div class="col-lg-6">
+            <!-- Card Resumo Analítico -->
+            {% if exibir_card_analitico %}
+            {% include 'dashboard/cards/analitico.html' %}
+            {% endif %}
+
+            <!-- Coluna Direita - Conteúdo específico por perfil -->
+            {% if exibir_card_epis_estoque_critico %}
+            {% include 'dashboard/cards/epis_estoque_critico.html' %}
+            {% endif %}
+
+            {% if exibir_card_epis_vencimento %}
+            <!-- EPIs Próximos ao Vencimento -->
+            {% include 'dashboard/cards/epis_vencimento.html' %}
+            {% endif %}
+
+            {% if exibir_card_concretagens_recentes %}
+            <!-- Concretagens Recentes -->
+            {% include 'dashboard/cards/concretagens_recentes.html' %}
+            {% endif %}
+       
+
+                {% if exibir_card_epis_estoque_critico %}
+                <!-- EPIs com Estoque Crítico -->
+                {% include 'dashboard/cards/epis_estoque_critico.html' %}
+                {% endif %}
+
+                {% if exibir_card_epis_vencimento %}
+                <!-- EPIs Próximos ao Vencimento -->
+                {% include 'dashboard/cards/epis_vencimento.html' %}
+                {% endif %}
+
+                
+                {% if exibir_card_volume_usinado %}
+                {% include 'dashboard/cards/volume_usinado.html' %}
+                {% endif %}
+
+           
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Carregar dados para os gráficos via API
+    fetch("{{ url_for('dashboard.api_dados') }}")
+        .then(response => response.json())
+        .then(data => {
+            // Configurar gráfico de solicitações do usuário
+            const ctxSolicitacoes = document.getElementById("solicitacoesChart");
+            if (ctxSolicitacoes && data.solicitacoes_usuario_status) { // Só tenta criar o gráfico se o canvas existir e os dados vierem da API
+                new Chart(ctxSolicitacoes, {
+                    type: 'pie',
+                    data: {
+                        labels: ['Pendentes', 'Aprovadas', 'Rejeitadas'],
+                        datasets: [{
+                            data: [
+                                data.solicitacoes_usuario_status.Pendente || 0,
+                                data.solicitacoes_usuario_status.Aprovada || 0,
+                                data.solicitacoes_usuario_status.Rejeitada || 0
+                            ],
+                            backgroundColor: ['#f6c23e', '#1cc88a', '#e74a3b'],
+                            hoverBackgroundColor: ['#dda20a', '#13855c', '#be2617'],
+                            hoverBorderColor: "rgba(234, 236, 244, 1)",
+                        }],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        },
+                        cutout: '50%',
+                    },
+                });
+            }
+
+            // Configurar gráfico de concretagens (para perfil Operacional)
+            
+
+            // Popular tabela de Volume Usinado por Semana (para perfil Operacional)
+            const tabelaVolumeBody = document.querySelector("#tabelaVolumeUsinado tbody");
+            if (tabelaVolumeBody && data.volume_usinado_semanal) {
+                if (data.volume_usinado_semanal.length > 0) {
+                    tabelaVolumeBody.innerHTML = ''; // Limpar "Carregando dados..."
+                    data.volume_usinado_semanal.forEach(item => {
+                        const row = tabelaVolumeBody.insertRow();
+                        const cellSemana = row.insertCell();
+                        const cellVolume = row.insertCell();
+                        cellSemana.textContent = item.semana;
+                        cellVolume.textContent = item.volume.toFixed(2);
+                        cellVolume.classList.add('text-end');
+                    });
+                } else {
+                    tabelaVolumeBody.innerHTML = '<tr><td colspan="2" class="text-center">Nenhum dado de volume usinado encontrado para as últimas semanas.</td></tr>';
+                }
+            } else if (tabelaVolumeBody) {
+                // Se a tabela existe mas não há dados (ex: perfil não operacional não recebe esse dado)
+                // ou se o perfil é operacional mas data.volume_usinado_semanal não veio por algum motivo
+                const isOperacional = document.getElementById("concretagensChart") !== null; // Heurística: se o gráfico de concretagem existe, é operacional
+                if (isOperacional) {
+                     tabelaVolumeBody.innerHTML = '<tr><td colspan="2" class="text-center">Não foi possível carregar os dados de volume.</td></tr>';
+                } else {
+                    // Para outros perfis, o card não deveria nem existir, mas se existir, esconder ou não popular.
+                    // Como o card é condicional no HTML, não precisamos fazer nada aqui se não for operacional.
+                }
+            }
+
+            // Configurar gráfico de Volume Usinado por Semana (para perfil Operacional)
+            const ctxVolumeUsinado = document.getElementById("volumeUsinadoChart");
+            if (ctxVolumeUsinado && data.volume_usinado_semanal) {
+                const volumeUsinadoData = data.volume_usinado_semanal;
+                new Chart(ctxVolumeUsinado, {
+                    type: 'line', // Ou 'bar'
+                    data: {
+                        labels: volumeUsinadoData.map(item => item.semana),
+                        datasets: [{
+                            label: 'Volume Usinado (m³)',
+                            lineTension: 0.3,
+                            backgroundColor: "rgba(28, 200, 138, 0.05)", // Cor verde, similar ao "Aprovadas"
+                            borderColor: "rgba(28, 200, 138, 1)",
+                            pointRadius: 3,
+                            pointBackgroundColor: "rgba(28, 200, 138, 1)",
+                            pointBorderColor: "rgba(28, 200, 138, 1)",
+                            pointHoverRadius: 3,
+                            pointHoverBackgroundColor: "rgba(28, 200, 138, 1)",
+                            pointHoverBorderColor: "rgba(28, 200, 138, 1)",
+                            pointHitRadius: 10,
+                            pointBorderWidth: 2,
+                            data: volumeUsinadoData.map(item => item.volume.toFixed(2)), // Usar item.volume
+                        }],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    // Incluir " m³" nas legendas do eixo Y
+                                    callback: function(value, index, values) {
+                                        return value + ' m³';
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y + ' m³';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Configurar gráfico do sistema (para gerentes)
+            const ctxSistema = document.getElementById("solicitacoesSistemaChart");
+            if (ctxSistema && data.solicitacoes_por_status_sistema) { // Usar a chave renomeada
+                new Chart(ctxSistema, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Pendentes', 'Aprovadas', 'Rejeitadas'],
+                        datasets: [{
+                            data: [
+                                data.solicitacoes_por_status_sistema.Pendente || 0,
+                                data.solicitacoes_por_status_sistema.Aprovada || 0,
+                                data.solicitacoes_por_status_sistema.Rejeitada || 0
+                            ],
+                            backgroundColor: ['#f6c23e', '#1cc88a', '#e74a3b'],
+                            hoverBackgroundColor: ['#dda20a', '#13855c', '#be2617'],
+                            hoverBorderColor: "rgba(234, 236, 244, 1)",
+                        }],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            }
+        })
+        .catch(error => console.error('Erro ao carregar dados:', error));
+
+    
+
+</script>
+{% endblock %} 

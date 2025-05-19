@@ -1,0 +1,707 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Dados Analíticos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">Dados Analíticos</h1>
+    <p class="mb-4">Visualização e análise de dados financeiros importados.</p>
+
+    
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('dados_analiticos.index') }}" class="row">
+                <div class="col-md-2 mb-3">
+                    <label for="ano">Ano</label>
+                    <select class="form-control" id="ano" name="ano">
+                        <option value="">Todos os Anos</option>
+                        {% for ano_op in anos_disponiveis %}
+                        {% if ano_op %}
+                        <option value="{{ ano_op }}" {% if filtros.ano == ano_op %}selected{% endif %}>{{ ano_op }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 mb-3">
+                    <label for="mes">Mês</label>
+                    <select class="form-control" id="mes" name="mes">
+                        <option value="">Todos</option>
+                        <option value="1" {% if filtros.mes == 1 %}selected{% endif %}>Janeiro</option>
+                        <option value="2" {% if filtros.mes == 2 %}selected{% endif %}>Fevereiro</option>
+                        <option value="3" {% if filtros.mes == 3 %}selected{% endif %}>Março</option>
+                        <option value="4" {% if filtros.mes == 4 %}selected{% endif %}>Abril</option>
+                        <option value="5" {% if filtros.mes == 5 %}selected{% endif %}>Maio</option>
+                        <option value="6" {% if filtros.mes == 6 %}selected{% endif %}>Junho</option>
+                        <option value="7" {% if filtros.mes == 7 %}selected{% endif %}>Julho</option>
+                        <option value="8" {% if filtros.mes == 8 %}selected{% endif %}>Agosto</option>
+                        <option value="9" {% if filtros.mes == 9 %}selected{% endif %}>Setembro</option>
+                        <option value="10" {% if filtros.mes == 10 %}selected{% endif %}>Outubro</option>
+                        <option value="11" {% if filtros.mes == 11 %}selected{% endif %}>Novembro</option>
+                        <option value="12" {% if filtros.mes == 12 %}selected{% endif %}>Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="centro_custo_id">Centro de Custo</label>
+                    <select class="form-control" id="centro_custo_id" name="centro_custo_id">
+                        <option value="">Todos</option>
+                        {% for cc in centros_custo %}
+                        <option value="{{ cc.id }}" {% if filtros.centro_custo_id == cc.id %}selected{% endif %}>{{cc.codigo}} - {{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="plano_conta_id">Plano de Conta</label>
+                    <select class="form-control" id="plano_conta_id" name="plano_conta_id">
+                        <option value="">Todos</option>
+                        {% for pc in planos_conta %}
+                        <option value="{{ pc.id }}" {% if filtros.plano_conta_id == pc.id %}selected{% endif %}>{{ pc.descricao }} - {{ pc.codigo }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5 mb-3">
+                    <label for="emitente_filtro">Emitente</label>
+                    <input type="text" class="form-control" id="emitente_filtro" name="emitente_filtro" value="{{ filtros.emitente_filtro or '' }}">
+                </div>
+                <div class="col-md-5 mb-3">
+                    <label for="historico_filtro">Histórico</label>
+                    <input type="text" class="form-control" id="historico_filtro" name="historico_filtro" value="{{ filtros.historico_filtro or '' }}">
+                </div>
+                <div class="col-md-2 mb-3 align-self-end">
+                    <button type="submit" class="btn btn-primary btn-block">Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Totais -->
+    <div class="row">
+        <div class="col-xl-6 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Registros</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_registros }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Valor Total</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "%.2f"|format(total_valor) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Dados -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Dados Analíticos</h6>
+            <div class="dropdown no-arrow">
+                <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                </a>
+                <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                    aria-labelledby="dropdownMenuLink">
+                    <div class="dropdown-header">Ações:</div>
+                    <a class="dropdown-item" href="#" id="btnDropdownImportacao">
+                        <i class="fas fa-upload fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Importar Dados
+                    </a>
+                    <a class="dropdown-item" href="#" data-toggle="modal" data-target="#modalExtracao">
+                        <i class="fas fa-robot fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Importar via Playwright
+                    </a>
+                    <a class="dropdown-item" href="{{ url_for('dados_analiticos.exportar', 
+                                                                ano=filtros.ano, 
+                                                                mes=filtros.mes,
+                                                                centro_custo_id=filtros.centro_custo_id,
+                                                                plano_conta_id=filtros.plano_conta_id,
+                                                                sort_by=filtros.sort_by,
+                                                                sort_dir=filtros.sort_dir) }}">
+                        <i class="fas fa-download fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Exportar para CSV
+                    </a>
+                    <a class="dropdown-item" href="{{ url_for('dados_analiticos.dashboard', 
+                                                                ano=filtros.ano, 
+                                                                centro_custo_id=filtros.centro_custo_id) }}">
+                        <i class="fas fa-chart-bar fa-sm fa-fw mr-2 text-gray-400"></i>
+                        Ver Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="data_pagamento">
+                                Data <i class="fas fa-sort{% if filtros.sort_by == 'data_pagamento' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="centro_custo">
+                                Centro de Custo <i class="fas fa-sort{% if filtros.sort_by == 'centro_custo' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="plano_conta">
+                                Plano de Conta <i class="fas fa-sort{% if filtros.sort_by == 'plano_conta' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="documento">
+                                Documento <i class="fas fa-sort{% if filtros.sort_by == 'documento' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="emitente">
+                                Emitente <i class="fas fa-sort{% if filtros.sort_by == 'emitente' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="debito_credito">
+                                D/C <i class="fas fa-sort{% if filtros.sort_by == 'debito_credito' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="historico">
+                                Histórico <i class="fas fa-sort{% if filtros.sort_by == 'historico' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                            <th class="sortable" data-sort="valor">
+                                Valor <i class="fas fa-sort{% if filtros.sort_by == 'valor' %}{% if filtros.sort_dir == 'asc' %}-up{% else %}-down{% endif %}{% endif %}"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dado in dados %}
+                        <tr>
+                            <td>{{ dado.data_pagamento.strftime('%d/%m/%Y') if dado.data_pagamento else '-' }}</td>
+                            <td>{{ dado.centro_custo.codigo }} - {{ dado.centro_custo.nome if dado.centro_custo else '-' }}</td>
+                            <td>({{dado.plano_conta.codigo}}) - {{ dado.plano_conta.descricao if dado.plano_conta else '-' }}</td>
+                            <td>{{ dado.documento or '-' }}</td>
+                            <td>{{ dado.emitente or '-' }}</td>
+                            <td>{{ dado.debito_credito or '-' }}</td>
+                            <td>{{ dado.historico or '-' }}</td>
+                            <td class="text-right">R$ {{ "%.2f"|format(dado.valor) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginação -->
+            <div class="d-flex justify-content-center mt-4">
+                <nav aria-label="Navegação entre páginas">
+                    <ul class="pagination">
+                        {% if pagination.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('dados_analiticos.index', 
+                                                                    page=pagination.prev_num, 
+                                                                    ano=filtros.ano, 
+                                                                    mes=filtros.mes,
+                                                                    centro_custo_id=filtros.centro_custo_id,
+                                                                    plano_conta_id=filtros.plano_conta_id,
+                                                                    sort_by=filtros.sort_by,
+                                                                    sort_dir=filtros.sort_dir,
+                                                                    emitente_filtro=filtros.emitente_filtro,
+                                                                    historico_filtro=filtros.historico_filtro
+                                                                    ) }}">
+                                Anterior
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">Anterior</a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if page_num %}
+                                {% if page_num == pagination.page %}
+                                <li class="page-item active">
+                                    <a class="page-link" href="#">{{ page_num }}</a>
+                                </li>
+                                {% else %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('dados_analiticos.index', 
+                                                                            page=page_num, 
+                                                                            ano=filtros.ano, 
+                                                                            mes=filtros.mes,
+                                                                            centro_custo_id=filtros.centro_custo_id,
+                                                                            plano_conta_id=filtros.plano_conta_id,
+                                                                            sort_by=filtros.sort_by,
+                                                                            sort_dir=filtros.sort_dir,
+                                                                            emitente_filtro=filtros.emitente_filtro,
+                                                                            historico_filtro=filtros.historico_filtro
+                                                                            ) }}">
+                                        {{ page_num }}
+                                    </a>
+                                </li>
+                                {% endif %}
+                            {% else %}
+                                <li class="page-item disabled">
+                                    <a class="page-link" href="#">...</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if pagination.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('dados_analiticos.index', 
+                                                                    page=pagination.next_num, 
+                                                                    ano=filtros.ano, 
+                                                                    mes=filtros.mes,
+                                                                    centro_custo_id=filtros.centro_custo_id,
+                                                                    plano_conta_id=filtros.plano_conta_id,
+                                                                    sort_by=filtros.sort_by,
+                                                                    sort_dir=filtros.sort_dir,
+                                                                    emitente_filtro=filtros.emitente_filtro,
+                                                                    historico_filtro=filtros.historico_filtro
+                                                                    ) }}">
+                                Próximo
+                            </a>
+                        </li>
+                        {% else %}
+                        <li class="page-item disabled">
+                            <a class="page-link" href="#">Próximo</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Importação -->
+<div class="modal fade" id="modalImportacao" tabindex="-1" role="dialog" aria-labelledby="modalImportacaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportacaoLabel">Importar Dados Analíticos</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <!-- Abas para escolher o método de importação -->
+                <ul class="nav nav-tabs mb-3" id="importacaoTab" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="upload-tab" data-toggle="tab" href="#uploadTab" role="tab" aria-controls="uploadTab" aria-selected="true">
+                            <i class="fas fa-file-upload"></i> Upload de Arquivo
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="extracao-tab" data-toggle="tab" href="#extracao" role="tab" aria-controls="extracao" aria-selected="false">
+                            <i class="fas fa-robot"></i> Extração Automática
+                        </a>
+                    </li>
+                </ul>
+                
+                <!-- Conteúdo das abas -->
+                <div class="tab-content" id="importacaoTabContent">
+                    <!-- Tab Upload de Arquivo -->
+                    <div class="tab-pane fade show active" id="uploadTab" role="tabpanel" aria-labelledby="upload-tab">
+                        <div class="mt-3">
+                            <p class="text-muted">Faça upload de um arquivo CSV, XLS, XLSX ou HTML com os dados financeiros extraídos.</p>
+                            <p class="text-muted">O arquivo deve conter as colunas: Centro de Custo, Plano de Conta, Data Pgto, Valor R$, Documento, Emitente, etc.</p>
+                            
+                            <form id="uploadForm" action="{{ url_for('dados_analiticos.importar') }}" method="post" enctype="multipart/form-data">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="mb-3">
+                                    <label for="arquivo" class="form-label">Arquivo</label>
+                                    <input type="file" class="form-control" id="arquivo" name="arquivo" accept=".csv,.xls,.xlsx,.html" required>
+                                    <div class="form-text" id="arquivoFileLabel">Selecione um arquivo</div>
+                                </div>
+                            </form>
+
+                            <!-- Botão de importação direta -->
+                            <div class="alert alert-info">
+                                <strong>Importação Direta</strong>: Se o arquivo já está no servidor com o nome "dados_extraidos.csv", 
+                                você pode importá-lo diretamente clicando no botão abaixo.
+                                <div class="mt-2">
+                                    <a href="{{ url_for('dados_analiticos.importar_dados_csv') }}" class="btn btn-primary">
+                                        <i class="fas fa-file-import"></i> Importar dados_extraidos.csv
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Aba de Extração Automática -->
+                    <div class="tab-pane fade" id="extracao" role="tabpanel" aria-labelledby="extracao-tab">
+                        <form id="formExtracao">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="alert alert-info mb-4">
+                                <i class="fas fa-info-circle"></i> Esta funcionalidade permite extrair dados diretamente do sistema financeiro
+                                externo usando automação com Playwright.
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label for="data_inicio">Data Inicial</label>
+                                    <input type="date" class="form-control" id="data_inicio" name="data_inicio">
+                                </div>
+                                
+                                <div class="form-group col-md-6">
+                                    <label for="data_fim">Data Final</label>
+                                    <input type="date" class="form-control" id="data_fim" name="data_fim">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="agendamento">Agendamento</label>
+                                <select class="form-control" id="agendamento" name="agendamento">
+                                    <option value="unico">Execução única</option>
+                                    <option value="diario">Diário</option>
+                                    <option value="semanal">Semanal</option>
+                                    <option value="mensal">Mensal</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="notificar_email" name="notificar_email">
+                                    <label class="custom-control-label" for="notificar_email">Enviar notificação por e-mail ao concluir</label>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnEnviarArquivo">Importar Dados</button>
+                <button type="button" class="btn btn-primary d-none" id="btnIniciarExtracao">Iniciar Extração</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Extração Automática -->
+<div class="modal fade" id="modalExtracao" tabindex="-1" role="dialog" aria-labelledby="modalExtracaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExtracaoLabel">Configurar Extração Automática</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="formExtracaoModal">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Esta funcionalidade permite extrair dados diretamente do sistema financeiro
+                        externo usando automação com Playwright.
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="data_inicio_modal">Data Inicial</label>
+                        <input type="date" class="form-control" id="data_inicio_modal" name="data_inicio">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="data_fim_modal">Data Final</label>
+                        <input type="date" class="form-control" id="data_fim_modal" name="data_fim">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="agendamento_modal">Agendamento</label>
+                        <select class="form-control" id="agendamento_modal" name="agendamento">
+                            <option value="unico">Execução única</option>
+                            <option value="diario">Diário</option>
+                            <option value="semanal">Semanal</option>
+                            <option value="mensal">Mensal</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="notificar_email_modal" name="notificar_email">
+                            <label class="custom-control-label" for="notificar_email_modal">Enviar notificação por e-mail ao concluir</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnIniciarExtracaoModal">Iniciar Extração</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    $(document).ready(function() {
+        // Adicionar CSS para colunas ordenáveis
+        $('head').append('<style>.sortable{cursor:pointer;}.sortable:hover{background-color:#f8f9fc;}</style>');
+        
+        // Configurar ordenação de colunas
+        $('.sortable').on('click', function() {
+            // Obter coluna a ser ordenada
+            var sortBy = $(this).data('sort');
+            
+            // Obter direção atual
+            var currentSortBy = getUrlParameter('sort_by');
+            var currentSortDir = getUrlParameter('sort_dir');
+            
+            // Determinar nova direção
+            var sortDir = 'asc';
+            if (sortBy === currentSortBy && currentSortDir === 'asc') {
+                sortDir = 'desc';
+            }
+            
+            // Construir URL com parâmetros de ordenação e outros filtros existentes
+            var url = "{{ url_for('dados_analiticos.index') }}";
+            var params = new URLSearchParams(window.location.search);
+            
+            // Atualizar parâmetros de ordenação
+            params.set('sort_by', sortBy);
+            params.set('sort_dir', sortDir);
+            
+            // Manter a página atual
+            if (!params.has('page')) {
+                params.set('page', '1');
+            }
+            
+            // Redirecionar para a URL com os novos parâmetros
+            window.location.href = url + '?' + params.toString();
+        });
+        
+        // Função auxiliar para obter parâmetros da URL
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            var results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+        
+        // Verificar se jQuery e Bootstrap estão carregados corretamente
+        console.log("jQuery versão:", $.fn.jquery);
+        console.log("Bootstrap modal:", typeof $.fn.modal);
+        
+        // Inicializar select2 para melhorar a experiência de seleção
+        $('#centro_custo_id, #plano_conta_id').select2({
+            placeholder: 'Selecione uma opção',
+            allowClear: true
+        });
+        
+        // Verificar se o Bootstrap está inicializado corretamente
+        console.log("Bootstrap versão:", $.fn.modal ? "Carregado" : "Não carregado");
+        
+        // Evento para abrir o modal manualmente
+        $('#btnAbrirImportacao, #btnDropdownImportacao').on('click', function(e) {
+            e.preventDefault();
+            console.log("Botão de importação clicado");
+            $('#modalImportacao').modal('show');
+        });
+        
+        // Atualizar o nome do arquivo quando selecionado
+        $('.custom-file-input').on('change', function() {
+            var fileName = $(this).val().split('\\').pop();
+            $(this).next('.custom-file-label').html(fileName);
+        });
+        
+        // Alternar botões de acordo com a aba ativa
+        $('#importacaoTab a').on('shown.bs.tab', function (e) {
+            if (e.target.id === 'upload-tab') {
+                $('#btnEnviarArquivo').removeClass('d-none');
+                $('#btnIniciarExtracao').addClass('d-none');
+            } else {
+                $('#btnEnviarArquivo').addClass('d-none');
+                $('#btnIniciarExtracao').removeClass('d-none');
+            }
+        });
+        
+        // Submit do formulário de upload
+        $('#btnEnviarArquivo').click(function() {
+            // Verificar se um arquivo foi selecionado
+            if (!$('#arquivo').val()) {
+                alert('Por favor, selecione um arquivo para importar.');
+                return;
+            }
+            
+            // Mostrar overlay de carregamento
+            $('body').append('<div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 9999; display: flex; justify-content: center; align-items: center;"><div class="spinner-border text-light" role="status"><span class="sr-only">Enviando...</span></div><div class="text-light ml-3">Enviando arquivo, por favor aguarde...</div></div>');
+            
+            $('#uploadForm').submit();
+        });
+        
+        // Mostrar nome do arquivo selecionado
+        $('#arquivo').on('change', function() {
+            var fileName = $(this).val().split('\\').pop();
+            $('#arquivoFileLabel').text(fileName ? fileName : 'Selecione um arquivo');
+        });
+        
+        // Adicionar feedback de carregamento para importação direta
+        $('a[href$="importar_dados_csv"]').on('click', function(e) {
+            e.preventDefault();
+            
+            if (confirm('Deseja iniciar a importação do arquivo dados_extraidos.csv?')) {
+                // Mostrar overlay de carregamento
+                $('body').append('<div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 9999; display: flex; justify-content: center; align-items: center;"><div class="spinner-border text-light" role="status"><span class="sr-only">Importando...</span></div><div class="text-light ml-3">Importando dados, por favor aguarde...</div></div>');
+                
+                // Redirecionar para a URL de importação
+                window.location.href = $(this).attr('href');
+            }
+        });
+        
+        // Configurar extração automática
+        $('#btnIniciarExtracao').click(function() {
+            // Validar campos
+            var dataInicio = $('#data_inicio').val();
+            var dataFim = $('#data_fim').val();
+            
+            if (!dataInicio || !dataFim) {
+                alert('Por favor, preencha as datas de início e fim.');
+                return;
+            }
+            
+            // Exibir mensagem de aguarde
+            $('#modalImportacao').modal('hide');
+            
+            Swal.fire({
+                title: 'Iniciando extração',
+                html: 'Isso pode levar alguns minutos...',
+                allowOutsideClick: false,
+                onBeforeOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Enviar requisição AJAX para iniciar a extração
+            $.ajax({
+                url: "{{ url_for('dados_analiticos.api_iniciar_extracao') }}",
+                type: "POST",
+                data: {
+                    data_inicio: dataInicio,
+                    data_fim: dataFim,
+                    agendamento: $('#agendamento').val(),
+                    notificar_email: $('#notificar_email').is(':checked'),
+                    csrf_token: "{{ csrf_token() }}"
+                },
+                success: function(response) {
+                    if (response.sucesso) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Extração iniciada',
+                            text: response.mensagem
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: response.mensagem
+                        });
+                    }
+                },
+                error: function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Erro ao processar a requisição'
+                    });
+                }
+            });
+        });
+        
+        // Configurar extração automática no modal separado
+        $('#btnIniciarExtracaoModal').click(function() {
+            // Validar campos
+            var dataInicio = $('#data_inicio_modal').val();
+            var dataFim = $('#data_fim_modal').val();
+            
+            if (!dataInicio || !dataFim) {
+                alert('Por favor, preencha as datas de início e fim.');
+                return;
+            }
+            
+            // Exibir mensagem de aguarde
+            $('#modalExtracao').modal('hide');
+            
+            Swal.fire({
+                title: 'Iniciando extração',
+                html: 'Isso pode levar alguns minutos...',
+                allowOutsideClick: false,
+                onBeforeOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Enviar requisição AJAX para iniciar a extração
+            $.ajax({
+                url: "{{ url_for('dados_analiticos.api_iniciar_extracao') }}",
+                type: "POST",
+                data: {
+                    data_inicio: dataInicio,
+                    data_fim: dataFim,
+                    agendamento: $('#agendamento_modal').val(),
+                    notificar_email: $('#notificar_email_modal').is(':checked'),
+                    csrf_token: "{{ csrf_token() }}"
+                },
+                success: function(response) {
+                    if (response.sucesso) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Extração iniciada',
+                            text: response.mensagem
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro',
+                            text: response.mensagem
+                        });
+                    }
+                },
+                error: function() {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Erro ao processar a requisição'
+                    });
+                }
+            });
+        });
+        
+        // Adicionar função para abrir o modal no carregamento da página se vier da URL de importação
+        if (window.location.href.indexOf('importar') > -1) {
+            setTimeout(function() {
+                $('#modalImportacao').modal('show');
+            }, 500);
+        }
+        
+        // Garantir que o modal funcione mesmo se o data-* não funcionar
+        setTimeout(function() {
+            // Adicionar evento click direto para elementos que possam não ter sido processados pelo Bootstrap
+            $('[data-target="#modalImportacao"]').off('click').on('click', function(e) {
+                e.preventDefault();
+                $('#modalImportacao').modal('show');
+            });
+            
+            // Garantir que o botão do modal de extração funcione
+            $('[data-target="#modalExtracao"]').off('click').on('click', function(e) {
+                e.preventDefault();
+                $('#modalExtracao').modal('show');
+            });
+        }, 1000);
+    });
+</script>
+{% endblock %} 

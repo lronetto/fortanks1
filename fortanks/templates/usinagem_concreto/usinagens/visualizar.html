@@ -1,0 +1,299 @@
+{% extends "common/base.html" %}
+
+{% block title %}Visualizar Usinagem de Concreto{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Detalhes da Usinagem de Concreto</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('usinagem_concreto.editar_usinagem', id=usinagem.id) }}" class="btn btn-primary">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+            {% if usinagem.status == 'Concluído' %}
+            <button type="button" class="btn btn-success" data-toggle="modal" data-target="#baixarEstoqueModal">
+                <i class="fas fa-boxes"></i> Baixar no Estoque
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Exibir mensagens flash -->
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+        </button>
+    </div>
+    {% endfor %}
+
+    <div class="row">
+        <!-- Informações gerais -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações Gerais</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Data de Usinagem:</p>
+                            <p>{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Volume Produzido:</p>
+                            <p>{{ usinagem.volume_produzido }} m³</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Traço:</p>
+                            <p>{{ usinagem.traco.codigo }} - {{ usinagem.traco.nome }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Umidade:</p>
+                            <p>{{ usinagem.umidade|default('0') }}%</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Responsável:</p>
+                            <p>{{ usinagem.responsavel.nome }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Local de Aplicação:</p>
+                            <p>{{ usinagem.local_aplicacao or 'Não informado' }}</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Status:</p>
+                            <p>
+                                {% if usinagem.status == 'Concluído' %}
+                                <span class="badge badge-success">{{ usinagem.status }}</span>
+                                {% elif usinagem.status == 'Em andamento' %}
+                                <span class="badge badge-info">{{ usinagem.status }}</span>
+                                {% elif usinagem.status == 'Programada' %}
+                                <span class="badge badge-warning">{{ usinagem.status }}</span>
+                                {% elif usinagem.status == 'Cancelada' %}
+                                <span class="badge badge-danger">{{ usinagem.status }}</span>
+                                {% else %}
+                                <span class="badge badge-secondary">{{ usinagem.status }}</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Corpos de Prova (CPs):</p>
+                            <p>{{ usinagem.quantidade_cps }}</p>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p class="mb-0 font-weight-bold">Data de Cadastro:</p>
+                            <p>{{ usinagem.criado_em.strftime('%d/%m/%Y %H:%M') }}</p>
+                        </div>
+                    </div>
+                    {% if usinagem.observacoes %}
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <p class="mb-0 font-weight-bold">Observações:</p>
+                            <p>{{ usinagem.observacoes }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Equipamentos utilizados -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Equipamentos Utilizados</h6>
+                </div>
+                <div class="card-body">
+                    {% if usinagem.equipamentos %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Equipamento</th>
+                                    <th>Função</th>
+                                    <th>Horas Trabalhadas</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in usinagem.equipamentos %}
+                                <tr>
+                                    <td>{{ item.equipamento.nome }}</td>
+                                    <td>{{ item.funcao or '-' }}</td>
+                                    <td>{{ item.horas_trabalhadas or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center py-3 text-muted">Nenhum equipamento registrado para esta usinagem.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rompimentos de Corpo de Prova -->
+    <div class="row">
+        <div class="col-md-12 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Rompimentos de Corpo de Prova</h6>
+                    <a href="{{ url_for('usinagem_concreto.listar_rompimentos_usinagem', id=usinagem.id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-chart-line mr-1"></i> Gerenciar Rompimentos
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if usinagem.rompimentos %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Data de Rompimento</th>
+                                    <th>Idade (dias)</th>
+                                    <th>Número do CP</th>
+                                    <th>Resultado (MPa)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rompimento in usinagem.rompimentos %}
+                                <tr>
+                                    <td>{{ rompimento.id }}</td>
+                                    <td>{{ rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td>{{ rompimento.idade_cp }}</td>
+                                    <td>{{ rompimento.numero_cp }}</td>
+                                    <td>{{ rompimento.resultado|round(2) if rompimento.resultado else 'Não informado' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <p class="mb-0">Nenhum rompimento de corpo de prova cadastrado para esta usinagem.</p>
+                        <p class="mb-0 mt-2">
+                            <a href="{{ url_for('usinagem_concreto.listar_rompimentos_usinagem', id=usinagem.id) }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus mr-1"></i> Adicionar Rompimento
+                            </a>
+                        </p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Materiais utilizados -->
+    <div class="row">
+        <div class="col-md-12 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Materiais Utilizados</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Quantidade Calculada</th>
+                                    <th>Quantidade Executada</th>
+                                    <th>Unidade</th>
+                                    <th>Influenciado por Umidade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if materiais_calculados %}
+                                {% for material_calc in materiais_calculados %}
+                                <tr>
+                                    <td>{{ material_calc.material.nome }}</td>
+                                    <td>{{ material_calc.quantidade }}</td>
+                                    <td>
+                                        {% for material_exec in usinagem.materiais %}
+                                        {% if material_exec.material_id == material_calc.material.id %}
+                                        {{ material_exec.quantidade_executada }}
+                                        {% endif %}
+                                        {% endfor %}
+                                    </td>
+                                    <td>{{ material_calc.unidade }}</td>
+                                    <td>
+                                        {% if material_calc.influenciado_umidade %}
+                                        <span class="badge badge-info">Sim</span>
+                                        {% else %}
+                                        <span class="badge badge-secondary">Não</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">Nenhum material registrado.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Baixa no Estoque -->
+<div class="modal fade" id="baixarEstoqueModal" tabindex="-1" role="dialog" aria-labelledby="baixarEstoqueModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="baixarEstoqueModalLabel">Confirmar Baixa no Estoque</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Deseja realizar a baixa dos materiais utilizados nesta usinagem no estoque?</p>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Esta ação irá:
+                    <ul class="mb-0 mt-2">
+                        <li>Verificar disponibilidade dos materiais no estoque</li>
+                        <li>Converter unidades automaticamente quando necessário</li>
+                        <li>Registrar movimentações de saída no histórico do estoque</li>
+                    </ul>
+                </div>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> Atenção: esta operação pode falhar se algum material não estiver disponível em quantidade suficiente no estoque ou se não houver conversão de unidade cadastrada.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <form action="{{ url_for('usinagem_concreto.baixar_estoque_usinagem', id=usinagem.id) }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success">Confirmar Baixa</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Scripts específicos da página -->
+<script>
+    $(document).ready(function() {
+        // Inicializar tooltips
+        $('[data-toggle="tooltip"]').tooltip();
+    });
+</script>
+{% endblock %} 

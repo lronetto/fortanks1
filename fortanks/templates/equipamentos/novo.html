@@ -1,0 +1,135 @@
+{% extends "common/base.html" %}
+
+{% block title %}Novo Equipamento - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Novo Equipamento{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Novo Equipamento</h1>
+        <a href="{{ url_for('equipamento.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            <span class="d-none d-md-inline-block ms-1">Voltar</span>
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Cadastro de Equipamento</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" class="needs-validation" novalidate>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label">Nome do Equipamento *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe o nome do equipamento.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="tipo" class="form-label">Tipo *</label>
+                        <select class="form-select" id="tipo" name="tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="Veiculos">Veículos</option>
+                            <option value="Maquinas">Máquinas</option>
+                            <option value="Ferramentas">Ferramentas</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o tipo do equipamento.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="propriedade" class="form-label">Propriedade *</label>
+                        <select class="form-select" id="propriedade" name="propriedade" required>
+                            <option value="">Selecione...</option>
+                            <option value="Propria">Própria</option>
+                            <option value="Alugada">Alugada</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o tipo de propriedade.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="modelo" class="form-label">Modelo</label>
+                        <input type="text" class="form-control" id="modelo" name="modelo">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="numero_serie" class="form-label">Número de Série</label>
+                        <input type="text" class="form-control" id="numero_serie" name="numero_serie">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
+                        <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="data_aquisicao" class="form-label">Data de Aquisição</label>
+                        <input type="date" class="form-control" id="data_aquisicao" name="data_aquisicao">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="">Selecione...</option>
+                            <option value="Ativo">Ativo</option>
+                            <option value="Em Manutenção">Em Manutenção</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o status do equipamento.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                        <a href="{{ url_for('equipamento.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Validação do formulário
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('.needs-validation');
+
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+
+        // Formatar data de aquisição para não permitir datas futuras
+        const dataAquisicao = document.getElementById('data_aquisicao');
+        const hoje = new Date().toISOString().split('T')[0];
+        dataAquisicao.setAttribute('max', hoje);
+    });
+</script>
+{% endblock %}

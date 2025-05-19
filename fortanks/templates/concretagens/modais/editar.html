@@ -1,0 +1,176 @@
+<!-- Modal de Edição de Concretagem -->
+<div class="modal fade" id="modalEditarConcretagem" tabindex="-1" aria-labelledby="modalEditarConcretagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formEditarConcretagem" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarConcretagemLabel">Editar Concretagem</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Primeira linha: Tanques e Data -->
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6 mb-3 mb-md-0">
+                            <label for="edit_tanque_ids" class="form-label fw-bold">Tanques *</label>
+                            <select class="form-select form-control" id="edit_tanque_ids" name="tanque_ids" multiple required>
+                                {% for tanque in tanques %}
+                                <option value="{{ tanque.id }}">{{ tanque.nome }} ({{ tanque.sistema }})</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Segure Ctrl para selecionar múltiplos tanques.</small>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="edit_data_concretagem" class="form-label fw-bold">Data *</label>
+                            <input type="date" class="form-control" id="edit_data_concretagem" name="data_concretagem" required>
+                        </div>
+                    </div>
+
+                    <!-- Segunda linha: Pista e Observações -->
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6 mb-3 mb-md-0">
+                            <label for="edit_pista" class="form-label fw-bold">Pista *</label>
+                            <select class="form-select form-control" id="edit_pista" name="pista" required>
+                                <option value="">Selecione a pista</option>
+                                <option value="1">Pista 1</option>
+                                <option value="2">Pista 2</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="edit_observacoes" class="form-label fw-bold">Observações</label>
+                            <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Seleção de Peças -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Peças a serem concretadas *</label>
+                            <div class="alert alert-info py-2" id="edit-alerta-selecione-tanque">
+                                <i class="fas fa-info-circle"></i> Selecione pelo menos um tanque para ver as peças disponíveis.
+                            </div>
+                            <div id="edit-div-pecas" style="display: none;">
+                                <div class="d-flex flex-wrap align-items-center mb-3">
+                                    <div class="form-check me-3 mb-2">
+                                        <input class="form-check-input" type="checkbox" id="edit_mostrarNaoConcretadas">
+                                        <label class="form-check-label" for="edit_mostrarNaoConcretadas">
+                                            Apenas peças não concretadas
+                                        </label>
+                                    </div>
+                                    <div class="form-check me-3 mb-2">
+                                        <input class="form-check-input" type="checkbox" id="edit_mostrarApenasAssociadas" checked>
+                                        <label class="form-check-label" for="edit_mostrarApenasAssociadas">
+                                            Apenas peças já associadas
+                                        </label>
+                                    </div>
+                                    <div class="input-group input-group-sm mb-2" style="max-width: 300px;">
+                                        <input type="text" id="edit_filtroPecasMobile" class="form-control"
+                                            placeholder="Filtrar peças...">
+                                        <button class="btn btn-outline-secondary" type="button">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive" style="max-height: 350px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+                                    <table class="table table-sm table-bordered table-hover" id="edit_tabelaPecas">
+                                        <thead class="sticky-top bg-white">
+                                            <tr>
+                                                <th width="5%" class="align-middle text-center">
+                                                    <div class="d-none d-md-block">Sel.</div>
+                                                    <div class="d-md-none"><i class="fas fa-check-square"></i></div>
+                                                </th>
+                                                <th width="25%" class="align-middle">Tanque</th>
+                                                <th width="20%" class="align-middle">Tipo</th>
+                                                <th width="8%" class="align-middle">Nome</th>
+                                                <th width="8%" class="align-middle">Forma</th>
+                                                <th width="39%" class="align-middle">Usinagem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- As peças serão carregadas via JavaScript -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Contador de peças selecionadas -->
+                                <div class="mt-2 alert alert-info py-2" id="edit_contadorPecas">
+                                    <i class="fas fa-info-circle"></i> Nenhuma peça selecionada
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Atualizar Concretagem</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        $('.editar-concretagem').click(function (e) {
+            e.preventDefault();
+            const concretagemId = $(this).data('id');
+            const formAction = $(this).attr('href');
+            
+            $('#formEditarConcretagem').attr('action', formAction);
+            
+            fetch(`/concretagens/api/concretagem/${concretagemId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        console.error('Erro ao carregar dados da concretagem da API:', response);
+                        throw new Error('Erro ao carregar dados da concretagem');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log("Dados da concretagem recebidos para edição (API) em index.html:", data);
+                    window.dadosConcretagemEdicao = data; // Atribui à variável global
+                    console.log("window.dadosConcretagemEdicao ATUALIZADO (index.html):", window.dadosConcretagemEdicao);
+
+                    $('#edit_data_concretagem').val(data.data_concretagem);
+                    $('#edit_pista').val(data.pista);
+                    $('#edit_observacoes').val(data.observacoes);
+                    
+                    // Selecionar os tanques
+                    const tanqueIds = data.tanques.map(t => t.id.toString());
+                    $('#edit_tanque_ids').val(tanqueIds);
+                    
+                    // A chamada carregarPecasPorTanques('edit_') aqui agora chamará a versão
+                    // de concretagens-multi-tanques.js, que será modificada.
+                    if (typeof carregarPecasPorTanques === 'function') {
+                         carregarPecasPorTanques('edit_'); 
+                    } else {
+                        console.error("Função carregarPecasPorTanques não está definida globalmente ao tentar editar.");
+                    }
+                    
+                    // O checkInterval pode permanecer ou ser ajustado dependendo da nova carregarPecasPorTanques
+                    const checkInterval = setInterval(() => {
+                        const pecasRows = $('#edit_tabelaPecas tbody tr.linha-peca');
+                        // Este if pode ser simplificado ou removido se o contador for atualizado ao final de carregarPecasPorTanques
+                        // Condição para parar mesmo se não houver peças visíveis (quando o filtro "apenas associadas" resulta em zero)
+                        const filtroApenasAssociadasAtivo = $('#edit_mostrarApenasAssociadas').is(':checked');
+                        const devePararIntervalo = pecasRows.length > 0 || (filtroApenasAssociadasAtivo && dadosConcretagemEdicao && dadosConcretagemEdicao.pecas && dadosConcretagemEdicao.pecas.map(p=>p.id).filter(id => pecasAssociadasOriginalmenteIds.includes(id)).length === 0) || !filtroApenasAssociadasAtivo;
+                        
+                        if (devePararIntervalo) { 
+                            clearInterval(checkInterval);
+                            atualizarContadorPecas('edit_');
+                        }
+                    }, 100); 
+                    
+                    // Abrir o modal
+                    const modalEditar = new bootstrap.Modal(document.getElementById('modalEditarConcretagem'));
+                    modalEditar.show();
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar dados da concretagem:', error);
+                    alert('Erro ao carregar dados da concretagem. Tente novamente.');
+                });
+        });
+    });
+</script>
+{% endblock %}

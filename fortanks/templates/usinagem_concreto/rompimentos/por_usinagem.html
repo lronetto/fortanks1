@@ -1,0 +1,366 @@
+{% extends "layout.html" %}
+
+{% block title %}Rompimentos de Corpo de Prova - Usinagem #{{ usinagem.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Rompimentos de Corpo de Prova</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Início</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('usinagem_concreto.listar_usinagens') }}">Usinagens de Concreto</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('usinagem_concreto.visualizar_usinagem', id=usinagem.id) }}">Usinagem #{{ usinagem.id }}</a></li>
+        <li class="breadcrumb-item active">Rompimentos de Corpo de Prova</li>
+    </ol>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-info-circle me-1"></i>
+            Detalhes da Usinagem
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Traço:</strong> {{ usinagem.traco.nome }}</p>
+                    <p><strong>Data:</strong> {{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</p>
+                    <p><strong>Resistência Prevista:</strong> {{ usinagem.traco.resistencia }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Volume:</strong> {{ usinagem.volume_produzido }} m³</p>
+                    <p><strong>Responsável:</strong> {{ usinagem.responsavel.nome }}</p>
+                    <p><strong>Status:</strong> {{ usinagem.status }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-table me-1"></i>
+            Rompimentos Cadastrados
+            <button type="button" class="btn btn-primary btn-sm float-end" data-bs-toggle="modal" data-bs-target="#modalNovoRompimento">
+                <i class="fas fa-plus"></i> Novo Rompimento
+            </button>
+        </div>
+        <div class="card-body">
+            {% if usinagem.rompimentos %}
+            <table id="tabelaRompimentos" class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Data de Rompimento</th>
+                        <th>Idade (dias)</th>
+                        <th>Quantidade CPs</th>
+                        <th>Resultado (MPa)</th>
+                        <th>Tipo de Rompimento</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rompimento in usinagem.rompimentos %}
+                    <tr>
+                        <td>{{ rompimento.id }}</td>
+                        <td>{{ rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>{{ rompimento.idade_cp }}</td>
+                        <td>{{ rompimento.quantidade_cps }}</td>
+                        <td>{{ rompimento.resultado|round(2) if rompimento.resultado else 'Não informado' }}</td>
+                        <td>{{ rompimento.tipo_rompimento if rompimento.tipo_rompimento else 'Não informado' }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-sm btn-info"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalEditarRompimento"
+                                        data-id="{{ rompimento.id }}"
+                                        data-data="{{ rompimento.data_rompimento.strftime('%Y-%m-%dT%H:%M') }}"
+                                        data-idade="{{ rompimento.idade_cp }}"
+                                        data-quantidade="{{ rompimento.quantidade_cps }}"
+                                        data-resultado="{{ rompimento.resultado|round(2) if rompimento.resultado else '' }}"
+                                        data-tipo-rompimento="{{ rompimento.tipo_rompimento }}"
+                                        data-observacoes="{{ rompimento.observacoes }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalExcluirRompimento"
+                                        data-id="{{ rompimento.id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-info">
+                Nenhum rompimento cadastrado para esta usinagem.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% if usinagem.rompimentos %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-chart-line me-1"></i>
+            Evolução da Resistência
+        </div>
+        <div class="card-body">
+            <canvas id="graficoEvolucao" width="100%" height="30"></canvas>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal Novo Rompimento -->
+<div class="modal fade" id="modalNovoRompimento" tabindex="-1" aria-labelledby="modalNovoRompimentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoRompimentoLabel">Novo Rompimento de Corpo de Prova</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form action="{{ url_for('usinagem_concreto.novo_rompimento') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="usinagem_id" value="{{ usinagem.id }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="quantidade_cps" class="form-label">Quantidade de CPs</label>
+                        <select name="quantidade_cps" id="quantidade_cps" class="form-select" required>
+                            {% for i in range(1, 11) %}
+                            <option value="{{ i }}">{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="idade_cp" class="form-label">Idade do CP (dias)</label>
+                        <input type="number" class="form-control" id="idade_cp" name="idade_cp" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_rompimento" class="form-label">Data de Rompimento</label>
+                        <input type="datetime-local" class="form-control" id="data_rompimento" name="data_rompimento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="resultado" class="form-label">Resultado (MPa)</label>
+                        <input type="text" class="form-control" id="resultado" name="resultado" placeholder="Ex: 30.5">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo_rompimento" class="form-label">Tipo de Rompimento</label>
+                        <select name="tipo_rompimento" id="tipo_rompimento" class="form-select">
+                            <option value="">Selecione o tipo de rompimento</option>
+                            <option value="cônica">Cônica</option>
+                            <option value="cônica e bipartida">Cônica e Bipartida</option>
+                            <option value="cônica e cisalhada">Cônica e Cisalhada</option>
+                            <option value="cisalhada">Cisalhada</option>
+                            <option value="colunar">Colunar</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Rompimento -->
+<div class="modal fade" id="modalEditarRompimento" tabindex="-1" aria-labelledby="modalEditarRompimentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarRompimentoLabel">Editar Rompimento de Corpo de Prova</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formEditarRompimento" action="" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit_quantidade_cps" class="form-label">Quantidade de CPs</label>
+                        <select name="quantidade_cps" id="edit_quantidade_cps" class="form-select" required>
+                            {% for i in range(1, 11) %}
+                            <option value="{{ i }}">{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_idade_cp" class="form-label">Idade do CP (dias)</label>
+                        <input type="number" class="form-control" id="edit_idade_cp" name="idade_cp" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_data_rompimento" class="form-label">Data de Rompimento</label>
+                        <input type="datetime-local" class="form-control" id="edit_data_rompimento" name="data_rompimento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_resultado" class="form-label">Resultado (MPa)</label>
+                        <input type="text" class="form-control" id="edit_resultado" name="resultado" placeholder="Ex: 30.5">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_tipo_rompimento" class="form-label">Tipo de Rompimento</label>
+                        <select name="tipo_rompimento" id="edit_tipo_rompimento" class="form-select">
+                            <option value="">Selecione o tipo de rompimento</option>
+                            <option value="cônica">Cônica</option>
+                            <option value="cônica e bipartida">Cônica e Bipartida</option>
+                            <option value="cônica e cisalhada">Cônica e Cisalhada</option>
+                            <option value="cisalhada">Cisalhada</option>
+                            <option value="colunar">Colunar</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Excluir Rompimento -->
+<div class="modal fade" id="modalExcluirRompimento" tabindex="-1" aria-labelledby="modalExcluirRompimentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirRompimentoLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir este rompimento de corpo de prova?</p>
+                <p>Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluirRompimento" action="" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Confirmar Exclusão</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    $(document).ready(function() {
+        // Inicializar DataTable
+        $('#tabelaRompimentos').DataTable({
+            language: {
+                url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            },
+            order: [[1, 'desc']] // Ordenar por data de rompimento (decrescente)
+        });
+        
+        // Configurar modal de edição
+        $('#modalEditarRompimento').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var id = button.data('id');
+            var data = button.data('data');
+            var idade = button.data('idade');
+            var quantidade = button.data('quantidade');
+            var resultado = button.data('resultado');
+            var tipoRompimento = button.data('tipo-rompimento');
+            var observacoes = button.data('observacoes');
+            
+            var modal = $(this);
+            modal.find('#formEditarRompimento').attr('action', '/usinagens/rompimentos/' + id + '/editar');
+            modal.find('#edit_data_rompimento').val(data);
+            modal.find('#edit_idade_cp').val(idade);
+            modal.find('#edit_quantidade_cps').val(quantidade);
+            modal.find('#edit_resultado').val(resultado);
+            modal.find('#edit_tipo_rompimento').val(tipoRompimento);
+            modal.find('#edit_observacoes').val(observacoes);
+        });
+        
+        // Configurar modal de exclusão
+        $('#modalExcluirRompimento').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var id = button.data('id');
+            
+            var modal = $(this);
+            modal.find('#formExcluirRompimento').attr('action', '/usinagens/rompimentos/' + id + '/excluir');
+        });
+        
+        // Preencher data atual no campo de data de rompimento ao abrir o modal de novo rompimento
+        $('#modalNovoRompimento').on('show.bs.modal', function () {
+            var now = new Date();
+            var isoString = now.toISOString().substring(0, 16);
+            $('#data_rompimento').val(isoString);
+        });
+        
+        {% if usinagem.rompimentos %}
+        // Preparar dados para o gráfico
+        var rompimentos = [
+            {% for rompimento in usinagem.rompimentos|sort(attribute='idade_cp') %}
+                {% if rompimento.resultado %}
+                {
+                    idade: {{ rompimento.idade_cp }},
+                    resultado: {{ rompimento.resultado }},
+                    data: '{{ rompimento.data_rompimento.strftime("%d/%m/%Y") }}'
+                }{% if not loop.last %},{% endif %}
+                {% endif %}
+            {% endfor %}
+        ];
+        
+        if (rompimentos.length > 0) {
+            // Criar gráfico de evolução da resistência
+            var ctx = document.getElementById('graficoEvolucao').getContext('2d');
+            var grafico = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: rompimentos.map(function(item) { return item.idade + ' dias (' + item.data + ')'; }),
+                    datasets: [{
+                        label: 'Resistência (MPa)',
+                        data: rompimentos.map(function(item) { return item.resultado; }),
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 2,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Resistência (MPa)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Idade do CP'
+                            }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Evolução da Resistência do Concreto'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Resistência: ' + context.raw + ' MPa';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        {% endif %}
+    });
+</script>
+{% endblock %} 

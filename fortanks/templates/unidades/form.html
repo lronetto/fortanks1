@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ unidade.id|default(false) and 'Editar' or 'Nova' }} Unidade</h1>
+        <a href="{{ url_for('unidade.listar') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    {% include "partials/flash_messages.html" %}
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" class="needs-validation" novalidate>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="mb-3">
+                    <label for="nome" class="form-label">Nome <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="nome" name="nome" 
+                        value="{{ unidade.nome|default('') }}" maxlength="10" required>
+                    <div class="form-text">Nome da unidade (máximo 10 caracteres). Ex: KG, L, M, etc.</div>
+                    <div class="invalid-feedback">
+                        Por favor, informe o nome da unidade.
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="descricao" class="form-label">Descrição</label>
+                    <input type="text" class="form-control" id="descricao" name="descricao" 
+                        value="{{ unidade.descricao|default('') }}" maxlength="100">
+                    <div class="form-text">Descrição detalhada da unidade. Ex: Quilograma, Litro, Metro.</div>
+                </div>
+                
+                {% if unidade %}
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="ativo" name="ativo" 
+                        {{ unidade.ativo and 'checked' or '' }}>
+                    <label class="form-check-label" for="ativo">Ativo</label>
+                    <div class="form-text">Se desativada, a unidade não aparecerá em novos registros.</div>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="padrao" name="padrao" 
+                        {{ unidade and unidade.padrao and 'checked' or '' }}>
+                    <label class="form-check-label" for="padrao">Definir como unidade padrão</label>
+                    <div class="form-text">A unidade padrão será usada quando nenhuma outra for especificada.</div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Validação de formulário
+    (function() {
+        'use strict'
+
+        // Busca todos os formulários que queremos aplicar estilos de validação do Bootstrap
+        var forms = document.querySelectorAll('.needs-validation')
+
+        // Previne submissão e faz validação
+        Array.prototype.slice.call(forms)
+            .forEach(function(form) {
+                form.addEventListener('submit', function(event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+
+                    form.classList.add('was-validated')
+                }, false)
+            })
+    })()
+</script>
+{% endblock %} 

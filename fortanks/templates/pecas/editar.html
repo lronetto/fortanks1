@@ -1,0 +1,93 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Editar Peça - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-edit"></i> Editar Peça #{{ peca.numero_sequencial }}</h1>
+        <div>
+            <a href="{{ url_for('peca.visualizar', id=peca.id) }}" class="btn btn-info me-2">
+                <i class="fas fa-eye"></i> Visualizar
+            </a>
+            <a href="{{ url_for('peca.listar_por_tanque', tanque_id=peca.tanque_id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edição de Peça</h6>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-4">
+                <strong>Tanque:</strong> {{ peca.tanque.nome }} ({{ peca.tanque.sistema }})
+                <br>
+                <strong>Número Sequencial:</strong> <span class="badge bg-primary">{{ peca.numero_sequencial }}</span>
+            </div>
+
+            <form method="POST" action="{{ url_for('peca.editar', id=peca.id) }}" id="form-peca">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="tipo" class="form-label">Tipo</label>
+                        <input type="text" class="form-control" id="tipo" name="tipo" value="{{ peca.tipo }}" required>
+                        <small class="form-text text-muted">Exemplo: Viga, Pilar, Placa, etc.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome" name="nome" value="{{ peca.nome }}" required>
+                        <small class="form-text text-muted">Nome ou identificação da peça</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="numero_tanque" class="form-label">Número do Tanque</label>
+                        <input type="number" class="form-control" id="numero_tanque" name="numero_tanque"
+                            value="{{ peca.numero_tanque or '' }}">
+                        <small class="form-text text-muted">Código numérico do tanque (opcional)</small>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="alert alert-secondary">
+                            <strong>Data de cadastro:</strong> {{ peca.data_cadastro.strftime('%d/%m/%Y %H:%M') }}<br>
+                            <strong>Última atualização:</strong> {{ peca.ultima_atualizacao.strftime('%d/%m/%Y %H:%M')
+                            }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="reset" class="btn btn-secondary me-md-2">
+                        <i class="fas fa-undo"></i> Restaurar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Validação do formulário
+    document.getElementById('form-peca').addEventListener('submit', function (e) {
+        const tipo = document.getElementById('tipo').value.trim();
+        const nome = document.getElementById('nome').value.trim();
+
+        if (!tipo || !nome) {
+            e.preventDefault();
+            alert('Todos os campos são obrigatórios!');
+            return false;
+        }
+
+        return true;
+    });
+</script>
+{% endblock %}

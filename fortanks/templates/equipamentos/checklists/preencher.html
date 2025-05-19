@@ -1,0 +1,119 @@
+{% extends "common/base.html" %}
+
+{% block title %}Preencher Checklist - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Preencher Checklist{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Preencher Checklist</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('equipamento.visualizar', id=equipamento.id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline-block ms-1">Voltar</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Dados do Checklist</h6>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <label class="form-label">Equipamento</label>
+                    <p class="form-control-static">{{ equipamento.nome }}</p>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Modelo</label>
+                    <p class="form-control-static">{{ checklist.modelo.nome }}</p>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Data</label>
+                    <p class="form-control-static">{{ checklist.data_checklist.strftime('%d/%m/%Y %H:%M') }}</p>
+                </div>
+            </div>
+
+            <form method="POST" id="checklistForm">
+                <div class="mb-4">
+                    <h6 class="font-weight-bold">Itens do Checklist</h6>
+                    {% for resposta in checklist.respostas|sort(attribute='item.ordem') %}
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">{{ resposta.item.descricao }}</h6>
+                                {% if resposta.item.obrigatorio %}
+                                <span class="badge bg-danger">Obrigatório</span>
+                                {% endif %}
+                            </div>
+
+                            {% if resposta.item.tipo == 'text' %}
+                            <div class="mb-2">
+                                <textarea class="form-control" name="resposta_{{ resposta.id }}" 
+                                          rows="2" {% if resposta.item.obrigatorio %}required{% endif %}>{{ resposta.resposta }}</textarea>
+                            </div>
+                            {% elif resposta.item.tipo == 'checkbox' %}
+                            <div class="mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="resposta_{{ resposta.id }}" 
+                                           value="1" {% if resposta.resposta == '1' %}checked{% endif %}
+                                           {% if resposta.item.obrigatorio %}required{% endif %}>
+                                    <label class="form-check-label">Conforme</label>
+                                </div>
+                            </div>
+                            {% elif resposta.item.tipo == 'select' %}
+                            <div class="mb-2">
+                                <select class="form-select" name="resposta_{{ resposta.id }}"
+                                        {% if resposta.item.obrigatorio %}required{% endif %}>
+                                    <option value="">Selecione...</option>
+                                    <option value="conforme" {% if resposta.resposta == 'conforme' %}selected{% endif %}>Conforme</option>
+                                    <option value="nao_conforme" {% if resposta.resposta == 'nao_conforme' %}selected{% endif %}>Não Conforme</option>
+                                    <option value="nao_aplicavel" {% if resposta.resposta == 'nao_aplicavel' %}selected{% endif %}>Não Aplicável</option>
+                                </select>
+                            </div>
+                            {% endif %}
+
+                            <div class="mb-2">
+                                <label class="form-label">Observação</label>
+                                <textarea class="form-control" name="observacao_{{ resposta.id }}" rows="1">{{ resposta.observacao }}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        <span class="d-none d-md-inline-block ms-1">Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('checklistForm').addEventListener('submit', function(e) {
+        const obrigatorios = document.querySelectorAll('[required]');
+        let invalidos = false;
+
+        obrigatorios.forEach(campo => {
+            if (!campo.value) {
+                campo.classList.add('is-invalid');
+                invalidos = true;
+            } else {
+                campo.classList.remove('is-invalid');
+            }
+        });
+
+        if (invalidos) {
+            e.preventDefault();
+            alert('Por favor, preencha todos os campos obrigatórios.');
+        }
+    });
+</script>
+{% endblock %} 

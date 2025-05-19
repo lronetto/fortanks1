@@ -1,0 +1,34 @@
+<!-- Card Estoque de Materiais de Usinagem -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-info">Estoque de Materiais de Usinagem</h6>
+    </div>
+    <div class="card-body">
+        {% if materiais_usinagem_estoque %}
+            <div class="table-responsive">
+                <table class="table table-sm table-hover" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th class="text-end">Estoque</th>
+                            <th class="text-center">Unidade (Traço)</th>
+                            <th class="text-end">Potencial Concreto (m³)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in materiais_usinagem_estoque %}
+                        <tr>
+                            <td>{{ item.nome }}</td>
+                            <td class="text-end">{{ "%.2f"|format(item.estoque_convertido|float) }}</td>
+                            <td class="text-center">{{ item.unidade_traco }}</td>
+                            <td class="text-end">{{ "%.3f"|format(item.potencial_m3|float) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-center">Nenhum material de usinagem encontrado ou sem dados de estoque/traço suficientes.</p>
+        {% endif %}
+    </div>
+</div>

@@ -1,0 +1,255 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatórios de Segurança{% endblock %}
+{% block mobile_title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">Relatórios de Segurança</h1>
+        </div>
+        <div class="col-auto">
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('seguranca.epis_index') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-helmet-safety mr-2"></i>EPIs
+                </a>
+                <a href="{{ url_for('seguranca.entregas_index') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-clipboard-list mr-2"></i>Entregas
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    {% include "common/alerts.html" %}
+
+    <!-- Resumo Geral -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                EPIs Cadastrados</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_epis }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-helmet-safety fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                EPIs em Situação Crítica</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ epis_criticos }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total de Entregas</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_entregas }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                EPIs Sem Devolução</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas_sem_devolucao }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Gráfico de Entregas e Devoluções por Mês -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Entregas e Devoluções por Mês</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        <canvas id="entregasChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EPIs por Colaborador -->
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Top Colaboradores com EPIs</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm" width="100%" cellspacing="0">
+                            <thead>
+                                <tr>
+                                    <th>Colaborador</th>
+                                    <th>EPIs em Uso</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for colaborador in dados_colaboradores %}
+                                {% if colaborador.entregas_ativas > 0 or colaborador.total_entregas > 0 %}
+                                <tr>
+                                    <td>
+                                        <a href="{{ url_for('seguranca.colaborador_epis', id=colaborador.id) }}">
+                                            {{ colaborador.nome }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if colaborador.entregas_ativas > 0 %}
+                                        <span class="badge bg-warning text-dark">{{ colaborador.entregas_ativas }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success text-white">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ colaborador.total_entregas }}</td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exportação de Relatórios -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Exportar Relatórios</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Relatório de EPIs</h5>
+                            <p class="card-text">Relatório completo de todos os EPIs, incluindo informações de estoque e
+                                validade.</p>
+                            <a href="#" class="btn btn-primary">
+                                <i class="fas fa-file-excel mr-2"></i>Exportar Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Relatório de Entregas</h5>
+                            <p class="card-text">Relatório completo de todas as entregas de EPIs e suas respectivas
+                                devoluções.</p>
+                            <a href="#" class="btn btn-primary">
+                                <i class="fas fa-file-excel mr-2"></i>Exportar Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Relatório por Colaborador</h5>
+                            <p class="card-text">Relatório detalhado de EPIs por colaborador, incluindo entregas e
+                                devoluções.</p>
+                            <a href="#" class="btn btn-primary">
+                                <i class="fas fa-file-excel mr-2"></i>Exportar Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Dados para gráficos
+    const dadosMeses = JSON.parse('{{ dados_meses|safe }}');
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gráfico de Entregas e Devoluções por Mês
+        const ctx = document.getElementById('entregasChart').getContext('2d');
+
+        // Inverte a ordem para mostrar os meses mais antigos primeiro
+        const mesesRevertidos = dadosMeses.slice().reverse();
+
+        const entregasChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: mesesRevertidos.map(function(item) { return item.mes; }),
+                datasets: [
+                    {
+                        label: 'Entregas',
+                        backgroundColor: '#4e73df',
+                        data: mesesRevertidos.map(function(item) { return item.entregas; })
+                    },
+                    {
+                        label: 'Devoluções',
+                        backgroundColor: '#1cc88a',
+                        data: mesesRevertidos.map(function(item) { return item.devolucoes; })
+                    }
+                ]
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

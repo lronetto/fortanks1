@@ -1,0 +1,183 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Editar Endereço{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Editar Endereço</h1>
+        <a href="{{ url_for('cliente.visualizar', id=cliente.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edição de Endereço para {{ cliente.nome }}</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('cliente.editar_endereco', endereco_id=endereco.id) }}"
+                id="formEditarEndereco">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="logradouro" class="form-label">Logradouro*</label>
+                        <input type="text" class="form-control" id="logradouro" name="logradouro"
+                            placeholder="Rua, Avenida, etc." required maxlength="150" value="{{ endereco.logradouro }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="numero" class="form-label">Número</label>
+                        <input type="text" class="form-control" id="numero" name="numero" placeholder="Número"
+                            maxlength="20" value="{{ endereco.numero or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="complemento" class="form-label">Complemento</label>
+                        <input type="text" class="form-control" id="complemento" name="complemento"
+                            placeholder="Sala, Andar, etc." maxlength="100" value="{{ endereco.complemento or '' }}">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="bairro" class="form-label">Bairro</label>
+                        <input type="text" class="form-control" id="bairro" name="bairro" placeholder="Bairro"
+                            maxlength="100" value="{{ endereco.bairro or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="cidade" class="form-label">Cidade*</label>
+                        <input type="text" class="form-control" id="cidade" name="cidade" placeholder="Cidade" required
+                            maxlength="100" value="{{ endereco.cidade }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="estado" class="form-label">Estado*</label>
+                        <select class="form-select" id="estado" name="estado" required>
+                            <option value="">Selecione</option>
+                            <option value="AC" {% if endereco.estado=='AC' %}selected{% endif %}>Acre</option>
+                            <option value="AL" {% if endereco.estado=='AL' %}selected{% endif %}>Alagoas</option>
+                            <option value="AP" {% if endereco.estado=='AP' %}selected{% endif %}>Amapá</option>
+                            <option value="AM" {% if endereco.estado=='AM' %}selected{% endif %}>Amazonas</option>
+                            <option value="BA" {% if endereco.estado=='BA' %}selected{% endif %}>Bahia</option>
+                            <option value="CE" {% if endereco.estado=='CE' %}selected{% endif %}>Ceará</option>
+                            <option value="DF" {% if endereco.estado=='DF' %}selected{% endif %}>Distrito Federal
+                            </option>
+                            <option value="ES" {% if endereco.estado=='ES' %}selected{% endif %}>Espírito Santo</option>
+                            <option value="GO" {% if endereco.estado=='GO' %}selected{% endif %}>Goiás</option>
+                            <option value="MA" {% if endereco.estado=='MA' %}selected{% endif %}>Maranhão</option>
+                            <option value="MT" {% if endereco.estado=='MT' %}selected{% endif %}>Mato Grosso</option>
+                            <option value="MS" {% if endereco.estado=='MS' %}selected{% endif %}>Mato Grosso do Sul
+                            </option>
+                            <option value="MG" {% if endereco.estado=='MG' %}selected{% endif %}>Minas Gerais</option>
+                            <option value="PA" {% if endereco.estado=='PA' %}selected{% endif %}>Pará</option>
+                            <option value="PB" {% if endereco.estado=='PB' %}selected{% endif %}>Paraíba</option>
+                            <option value="PR" {% if endereco.estado=='PR' %}selected{% endif %}>Paraná</option>
+                            <option value="PE" {% if endereco.estado=='PE' %}selected{% endif %}>Pernambuco</option>
+                            <option value="PI" {% if endereco.estado=='PI' %}selected{% endif %}>Piauí</option>
+                            <option value="RJ" {% if endereco.estado=='RJ' %}selected{% endif %}>Rio de Janeiro</option>
+                            <option value="RN" {% if endereco.estado=='RN' %}selected{% endif %}>Rio Grande do Norte
+                            </option>
+                            <option value="RS" {% if endereco.estado=='RS' %}selected{% endif %}>Rio Grande do Sul
+                            </option>
+                            <option value="RO" {% if endereco.estado=='RO' %}selected{% endif %}>Rondônia</option>
+                            <option value="RR" {% if endereco.estado=='RR' %}selected{% endif %}>Roraima</option>
+                            <option value="SC" {% if endereco.estado=='SC' %}selected{% endif %}>Santa Catarina</option>
+                            <option value="SP" {% if endereco.estado=='SP' %}selected{% endif %}>São Paulo</option>
+                            <option value="SE" {% if endereco.estado=='SE' %}selected{% endif %}>Sergipe</option>
+                            <option value="TO" {% if endereco.estado=='TO' %}selected{% endif %}>Tocantins</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cep" class="form-label">CEP</label>
+                        <input type="text" class="form-control" id="cep" name="cep" placeholder="00000-000"
+                            maxlength="10" value="{{ endereco.cep or '' }}">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="tipo" class="form-label">Tipo de Endereço</label>
+                        <select class="form-select" id="tipo" name="tipo">
+                            <option value="COMERCIAL" {% if endereco.tipo=='COMERCIAL' %}selected{% endif %}>Comercial
+                            </option>
+                            <option value="COBRANCA" {% if endereco.tipo=='COBRANCA' %}selected{% endif %}>Cobrança
+                            </option>
+                            <option value="ENTREGA" {% if endereco.tipo=='ENTREGA' %}selected{% endif %}>Entrega
+                            </option>
+                            <option value="OUTRO" {% if endereco.tipo=='OUTRO' %}selected{% endif %}>Outro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="mt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="principal" name="principal" {% if
+                                    endereco.principal %}checked{% endif %}>
+                                <label class="form-check-label" for="principal">Endereço Principal</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle"></i> Campos marcados com * são obrigatórios.
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('cliente.visualizar', id=cliente.id) }}" class="btn btn-secondary me-md-2">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // Máscara para CEP
+        $('#cep').on('input', function () {
+            let valor = $(this).val().replace(/\D/g, '');
+
+            if (valor.length <= 8) {
+                valor = valor.replace(/(\d{5})(\d)/, '$1-$2');
+            }
+
+            $(this).val(valor);
+        });
+
+        // Busca de endereço pelo CEP
+        $('#cep').blur(function () {
+            const cep = $(this).val().replace(/\D/g, '');
+
+            if (cep.length === 8) {
+                $.getJSON(`https://viacep.com.br/ws/${cep}/json/`, function (data) {
+                    if (!data.erro) {
+                        $('#logradouro').val(data.logradouro);
+                        $('#bairro').val(data.bairro);
+                        $('#cidade').val(data.localidade);
+                        $('#estado').val(data.uf);
+                        $('#numero').focus();
+                    }
+                });
+            }
+        });
+
+        // Validação do formulário
+        $('#formEditarEndereco').submit(function (event) {
+            const logradouro = $('#logradouro').val();
+            const cidade = $('#cidade').val();
+            const estado = $('#estado').val();
+
+            if (!logradouro || !cidade || !estado) {
+                event.preventDefault();
+                alert('Por favor, preencha todos os campos obrigatórios.');
+                return false;
+            }
+
+            return true;
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+{# Este template é parcial, destinado a ser carregado em um modal ou usado para gerar PDF #}
+{# Pode não precisar de <head>, <body> completos se incluído em outra página, mas WeasyPrint pode precisar #}
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Ficha de EPI - {{ colaborador.nome }}</title>
+    {# Incluir estilos básicos inline ou referenciar um CSS para WeasyPrint #}
+    <style>
+        body { font-family: sans-serif; font-size: 10pt; }
+        .logo-header {
+            position: absolute; /* Ou use float/flexbox dependendo do layout geral */
+            top: 15px;
+            left: 15px;
+            max-height: 60px; /* Ajuste a altura máxima conforme necessário */
+            max-width: 150px; /* Ajuste a largura máxima */
+        }
+        .ficha-container {
+             padding: 20px;
+             /* Adicionar padding-top para não sobrepor o logo absoluto */
+             padding-top: 80px; /* Ajuste conforme altura do logo + margem */
+             position: relative; /* Necessário para posicionar o logo absoluto dentro dele */
+             border: 1px solid #ccc; 
+             margin-bottom: 20px; 
+        }
+        .header-info { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .header-info h4 { margin-bottom: 10px; }
+        .info-grid { display: grid; grid-template-columns: 150px 1fr; gap: 5px 10px; margin-bottom: 15px; }
+        .info-grid strong { text-align: right; }
+        .table-epis { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .table-epis th, .table-epis td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 9pt; }
+        .table-epis th { background-color: #f2f2f2; }
+        .status-devolvido { color: green; }
+        .status-entregue { color: orange; }
+        /* Adicione mais estilos conforme necessário, especialmente para paginação em PDF se for longo */
+        @media print {
+            .no-print { display: none; }
+             @page {
+                size: A4;
+                margin: 1.5cm; /* Ajuste as margens conforme necessário */
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ficha-container">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo Empresa" class="logo-header">
+        
+        <div class="header-info">
+            <h4>Ficha de Controle de EPIs</h4>
+        </div>
+
+        <div class="info-grid">
+            <strong>Nome:</strong>               <span>{{ colaborador.nome }}</span>
+            <strong>Matrícula/ID:</strong>       <span>{{ colaborador.id }}</span> {# Ou um campo de matrícula se existir #}
+            <strong>CPF:</strong>                <span>{{ colaborador.cpf or 'Não informado' }}</span>
+            <strong>Cargo:</strong>              <span>{{ colaborador.cargo.nome if colaborador.cargo else 'Não informado' }}</span>
+            <strong>Departamento:</strong>     <span>{{ colaborador.departamento.nome if colaborador.departamento else 'Não informado' }}</span>
+            <strong>Data de Admissão:</strong> <span>{{ colaborador.data_admissao.strftime('%d/%m/%Y') if colaborador.data_admissao else 'Não informada' }}</span>
+        </div>
+
+        <h5>Histórico de Entregas</h5>
+        {% if entregas %}
+            <table class="table table-bordered table-striped table-epis">
+                <thead>
+                    <tr>
+                        <th>EPI</th>
+                        <th>C.A.</th>
+                        <th>Data Entrega</th>
+                        <th>Quantidade</th>
+                        <th>Data Devolução</th>
+                        <th>Status</th>
+                        <th>Motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entrega in entregas %}
+                        <tr>
+                            <td>{{ entrega.epi.material.nome if entrega.epi and entrega.epi.material else 'EPI Inválido' }}</td>
+                            <td>{{ entrega.ca if entrega.ca else entrega.epi.ca_numero if entrega.epi else 'N/A' }}</td>
+                            <td>{{ entrega.data_entrega.strftime('%d/%m/%Y') if entrega.data_entrega else '' }}</td>
+                            <td>{{ entrega.quantidade }}</td>
+                            <td>{{ entrega.data_devolucao.strftime('%d/%m/%Y') if entrega.data_devolucao else '-' }}</td>
+                            <td>
+                                {% if entrega.data_devolucao %}
+                                    <span class="status-devolvido">Devolvido</span>
+                                {% else %}
+                                    <span class="status-entregue">Entregue</span>
+                                {% endif %}
+                            </td>
+                             <td>{{ entrega.motivo or '-' }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>Nenhuma entrega de EPI registrada para este colaborador.</p>
+        {% endif %}
+
+        <div style="margin-top: 40px; font-size: 8pt; text-align: center;">
+            <p>Declaro ter recebido os Equipamentos de Proteção Individual (EPIs) listados acima, em perfeitas condições de uso, e ter sido orientado quanto à sua correta utilização, guarda e conservação, conforme as normas de segurança.</p>
+            <p style="margin-top: 50px;">_________________________________________</p>
+            <p>Assinatura do Colaborador</p>
+            <p style="margin-top: 30px;">Data: ____/____/______</p>
+        </div>
+    </div>
+</body>
+</html> 

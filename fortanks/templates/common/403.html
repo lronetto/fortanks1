@@ -1,0 +1,65 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Acesso Proibido - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="text-center mt-5">
+        <div class="error mx-auto" data-text="403">
+            <h1 class="display-1 fw-bold">403</h1>
+        </div>
+        <p class="lead text-gray-800 mb-4">Acesso Proibido</p>
+        <p class="text-gray-500 mb-4">Você não tem permissão para acessar esta página</p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">
+            <i class="fas fa-arrow-left me-2"></i>Voltar para o Dashboard
+        </a>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-lg-6 mx-auto">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">O que aconteceu?</h6>
+                </div>
+                <div class="card-body">
+                    <p>Seu nível de acesso atual não permite visualizar o recurso solicitado.</p>
+                    <p>Possíveis razões:</p>
+                    <ul>
+                        <li>Você não tem permissões suficientes para acessar esta funcionalidade</li>
+                        <li>Seu perfil de usuário não tem autorização para esta área</li>
+                        <li>A página solicitada requer um nível de acesso superior</li>
+                    </ul>
+
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i>Se você acredita que deveria ter acesso a esta página,
+                        entre em contato com o administrador do sistema.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error {
+        color: #5a5c69;
+        font-size: 7rem;
+        position: relative;
+        line-height: 1;
+        width: 12.5rem;
+        margin: 0 auto;
+    }
+
+    .error:after {
+        content: attr(data-text);
+        position: absolute;
+        left: 2px;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        color: rgba(231, 74, 59, 0.4);
+        -webkit-transform: scale(1.5);
+        transform: scale(1.5);
+    }
+</style>
+{% endblock %}

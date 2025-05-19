@@ -1,0 +1,422 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Editar Cliente{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Editar Cliente</h1>
+        <a href="{{ url_for('cliente.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Edição de Cliente (Pessoa Jurídica)</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('cliente.editar', id=cliente.id) }}" id="formEditarCliente">
+                <!-- Dados do cliente -->
+                <h5 class="mb-3 border-bottom pb-2">Dados da Empresa</h5>
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="nome" class="form-label">Nome/Razão Social*</label>
+                        <input type="text" class="form-control" id="nome" name="nome"
+                            placeholder="Razão social da empresa" required maxlength="100" value="{{ cliente.nome }}">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="cnpj" class="form-label">CNPJ*</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="cnpj" name="cnpj"
+                                placeholder="00.000.000/0000-00" required maxlength="20" value="{{ cliente.cnpj }}">
+                            <button class="btn btn-primary" type="button" id="btnConsultarCnpj">
+                                <i class="fas fa-search"></i> Consultar
+                            </button>
+                        </div>
+                        <div class="form-text" id="cnpjFeedback"></div>
+                        <div id="cnpjLoadingIndicator" class="mt-2 d-none">
+                            <div class="d-flex align-items-center">
+                                <div class="spinner-border spinner-border-sm text-primary me-2" role="status">
+                                    <span class="visually-hidden">Carregando...</span>
+                                </div>
+                                <span class="text-primary">Consultando CNPJ na base de dados...</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm mt-2" type="button"
+                            onclick="consultarCnpjAlternativo()">
+                            <i class="fas fa-sync"></i> Consultar CNPJ (alternativo)
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" placeholder="email@exemplo.com"
+                            maxlength="100" value="{{ cliente.email or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="telefone" class="form-label">Telefone</label>
+                        <input type="text" class="form-control" id="telefone" name="telefone"
+                            placeholder="(00) 00000-0000" maxlength="20" value="{{ cliente.telefone or '' }}">
+                    </div>
+                </div>
+
+                <!-- Dados do endereço -->
+                <h5 class="mb-3 mt-4 border-bottom pb-2">Endereço Principal</h5>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="logradouro" class="form-label">Logradouro*</label>
+                        <input type="text" class="form-control" id="logradouro" name="logradouro"
+                            placeholder="Rua, Avenida, etc." required maxlength="150"
+                            value="{{ endereco.logradouro or '' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="numero" class="form-label">Número</label>
+                        <input type="text" class="form-control" id="numero" name="numero" placeholder="Número"
+                            maxlength="20" value="{{ endereco.numero or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="complemento" class="form-label">Complemento</label>
+                        <input type="text" class="form-control" id="complemento" name="complemento"
+                            placeholder="Sala, Andar, etc." maxlength="100" value="{{ endereco.complemento or '' }}">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="bairro" class="form-label">Bairro</label>
+                        <input type="text" class="form-control" id="bairro" name="bairro" placeholder="Bairro"
+                            maxlength="100" value="{{ endereco.bairro or '' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="cidade" class="form-label">Cidade*</label>
+                        <input type="text" class="form-control" id="cidade" name="cidade" placeholder="Cidade" required
+                            maxlength="100" value="{{ endereco.cidade or '' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="estado" class="form-label">Estado*</label>
+                        <select class="form-select" id="estado" name="estado" required>
+                            <option value="">Selecione</option>
+                            <option value="AC" {% if endereco.estado=='AC' %}selected{% endif %}>Acre</option>
+                            <option value="AL" {% if endereco.estado=='AL' %}selected{% endif %}>Alagoas</option>
+                            <option value="AP" {% if endereco.estado=='AP' %}selected{% endif %}>Amapá</option>
+                            <option value="AM" {% if endereco.estado=='AM' %}selected{% endif %}>Amazonas</option>
+                            <option value="BA" {% if endereco.estado=='BA' %}selected{% endif %}>Bahia</option>
+                            <option value="CE" {% if endereco.estado=='CE' %}selected{% endif %}>Ceará</option>
+                            <option value="DF" {% if endereco.estado=='DF' %}selected{% endif %}>Distrito Federal
+                            </option>
+                            <option value="ES" {% if endereco.estado=='ES' %}selected{% endif %}>Espírito Santo</option>
+                            <option value="GO" {% if endereco.estado=='GO' %}selected{% endif %}>Goiás</option>
+                            <option value="MA" {% if endereco.estado=='MA' %}selected{% endif %}>Maranhão</option>
+                            <option value="MT" {% if endereco.estado=='MT' %}selected{% endif %}>Mato Grosso</option>
+                            <option value="MS" {% if endereco.estado=='MS' %}selected{% endif %}>Mato Grosso do Sul
+                            </option>
+                            <option value="MG" {% if endereco.estado=='MG' %}selected{% endif %}>Minas Gerais</option>
+                            <option value="PA" {% if endereco.estado=='PA' %}selected{% endif %}>Pará</option>
+                            <option value="PB" {% if endereco.estado=='PB' %}selected{% endif %}>Paraíba</option>
+                            <option value="PR" {% if endereco.estado=='PR' %}selected{% endif %}>Paraná</option>
+                            <option value="PE" {% if endereco.estado=='PE' %}selected{% endif %}>Pernambuco</option>
+                            <option value="PI" {% if endereco.estado=='PI' %}selected{% endif %}>Piauí</option>
+                            <option value="RJ" {% if endereco.estado=='RJ' %}selected{% endif %}>Rio de Janeiro</option>
+                            <option value="RN" {% if endereco.estado=='RN' %}selected{% endif %}>Rio Grande do Norte
+                            </option>
+                            <option value="RS" {% if endereco.estado=='RS' %}selected{% endif %}>Rio Grande do Sul
+                            </option>
+                            <option value="RO" {% if endereco.estado=='RO' %}selected{% endif %}>Rondônia</option>
+                            <option value="RR" {% if endereco.estado=='RR' %}selected{% endif %}>Roraima</option>
+                            <option value="SC" {% if endereco.estado=='SC' %}selected{% endif %}>Santa Catarina</option>
+                            <option value="SP" {% if endereco.estado=='SP' %}selected{% endif %}>São Paulo</option>
+                            <option value="SE" {% if endereco.estado=='SE' %}selected{% endif %}>Sergipe</option>
+                            <option value="TO" {% if endereco.estado=='TO' %}selected{% endif %}>Tocantins</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="cep" class="form-label">CEP</label>
+                        <input type="text" class="form-control" id="cep" name="cep" placeholder="00000-000"
+                            maxlength="10" value="{{ endereco.cep or '' }}">
+                    </div>
+                </div>
+
+                <!-- Observações e status -->
+                <h5 class="mb-3 mt-4 border-bottom pb-2">Informações Adicionais</h5>
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"
+                            placeholder="Informações adicionais sobre o cliente">{{ cliente.observacoes or '' }}</textarea>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="ativo" name="ativo" {% if cliente.ativo
+                                %}checked{% endif %}>
+                            <label class="form-check-label" for="ativo">Ativo</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-end">
+                            <small class="text-muted">
+                                Cadastrado em: {{ cliente.criado_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% if cliente.atualizado_em and cliente.atualizado_em != cliente.criado_em %}
+                                <br>Última atualização: {{ cliente.atualizado_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle"></i> Campos marcados com * são obrigatórios.
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('cliente.index') }}" class="btn btn-secondary me-md-2">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('DOM carregado - inicializando script de edição de cliente');
+
+        // Verificando se jQuery está disponível
+        console.log('jQuery disponível:', typeof jQuery !== 'undefined');
+
+        // Inicializando o script mesmo sem jQuery
+        setupFormValidation();
+        setupInputMasks();
+
+        // Configurar eventos para o botão de consulta CNPJ - usando JavaScript puro
+        document.getElementById('btnConsultarCnpj').addEventListener('click', function () {
+            consultarCnpjAlternativo();
+        });
+
+        // Busca de endereço pelo CEP
+        document.getElementById('cep').addEventListener('blur', function () {
+            const cep = this.value.replace(/\D/g, '');
+
+            if (cep.length === 8) {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', `https://viacep.com.br/ws/${cep}/json/`);
+                xhr.onload = function () {
+                    if (xhr.status === 200) {
+                        const data = JSON.parse(xhr.responseText);
+                        if (!data.erro) {
+                            document.getElementById('logradouro').value = data.logradouro;
+                            document.getElementById('bairro').value = data.bairro;
+                            document.getElementById('cidade').value = data.localidade;
+                            document.getElementById('estado').value = data.uf;
+                            document.getElementById('numero').focus();
+                        }
+                    }
+                };
+                xhr.send();
+            }
+        });
+    });
+
+    function setupFormValidation() {
+        // Validação do formulário
+        document.getElementById('formEditarCliente').addEventListener('submit', function (event) {
+            const nome = document.getElementById('nome').value;
+            const cnpj = document.getElementById('cnpj').value;
+            const logradouro = document.getElementById('logradouro').value;
+            const cidade = document.getElementById('cidade').value;
+            const estado = document.getElementById('estado').value;
+
+            if (!nome || !cnpj || !logradouro || !cidade || !estado) {
+                event.preventDefault();
+                alert('Por favor, preencha todos os campos obrigatórios.');
+                return false;
+            }
+
+            // Validação de CNPJ
+            const cnpjNumeros = cnpj.replace(/\D/g, '');
+
+            if (cnpjNumeros.length !== 14) {
+                event.preventDefault();
+                alert('CNPJ deve conter 14 dígitos.');
+                return false;
+            }
+
+            // Validação de email (se preenchido)
+            const email = document.getElementById('email').value;
+            if (email && !validarEmail(email)) {
+                event.preventDefault();
+                alert('Por favor, informe um email válido.');
+                return false;
+            }
+
+            return true;
+        });
+    }
+
+    function setupInputMasks() {
+        // Máscara para CNPJ
+        document.getElementById('cnpj').addEventListener('input', function () {
+            let valor = this.value.replace(/\D/g, '');
+
+            // Máscara de CNPJ: 00.000.000/0000-00
+            if (valor.length > 0) valor = valor.replace(/^(\d{2})(\d)/, '$1.$2');
+            if (valor.length > 5) valor = valor.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            if (valor.length > 8) valor = valor.replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4');
+            if (valor.length > 12) valor = valor.replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5');
+
+            this.value = valor;
+        });
+
+        // Aplicar máscara ao carregar a página
+        const cnpj = document.getElementById('cnpj').value;
+        if (cnpj) {
+            let valor = cnpj.replace(/\D/g, '');
+            if (valor.length > 0) valor = valor.replace(/^(\d{2})(\d)/, '$1.$2');
+            if (valor.length > 5) valor = valor.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            if (valor.length > 8) valor = valor.replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4');
+            if (valor.length > 12) valor = valor.replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5');
+            document.getElementById('cnpj').value = valor;
+        }
+
+        // Máscara para telefone
+        document.getElementById('telefone').addEventListener('input', function () {
+            let valor = this.value.replace(/\D/g, '');
+
+            if (valor.length > 0) valor = valor.replace(/^(\d{2})(\d)/, '($1) $2');
+            if (valor.length > 6) valor = valor.replace(/^(\(\d{2}\) \d{5})(\d)/, '$1-$2');
+
+            this.value = valor;
+        });
+
+        // Máscara para CEP
+        document.getElementById('cep').addEventListener('input', function () {
+            let valor = this.value.replace(/\D/g, '');
+
+            if (valor.length > 5) valor = valor.replace(/^(\d{5})(\d)/, '$1-$2');
+
+            this.value = valor;
+        });
+    }
+
+    function validarEmail(email) {
+        const re = /\S+@\S+\.\S+/;
+        return re.test(email);
+    }
+
+    // Função para consulta de CNPJ
+    function consultarCnpjAlternativo() {
+        console.log('Iniciando consulta CNPJ alternativa');
+
+        const cnpj = document.getElementById('cnpj').value;
+        if (!cnpj) {
+            document.getElementById('cnpjFeedback').innerHTML = '<span class="text-danger">Informe o CNPJ para consulta</span>';
+            return;
+        }
+
+        // Limpar feedback anterior
+        document.getElementById('cnpjFeedback').innerHTML = '';
+
+        // Validar formato do CNPJ antes de enviar
+        const cnpjNumeros = cnpj.replace(/\D/g, '');
+        if (cnpjNumeros.length !== 14) {
+            document.getElementById('cnpjFeedback').innerHTML = '<span class="text-danger">CNPJ deve conter 14 dígitos numéricos</span>';
+            return;
+        }
+
+        // Mostrar indicador de carregamento
+        document.getElementById('cnpjLoadingIndicator').classList.remove('d-none');
+
+        // Desabilitar o botão durante a consulta
+        const btnConsultar = document.getElementById('btnConsultarCnpj');
+        const btnConsultarAlt = document.querySelector('button[onclick="consultarCnpjAlternativo()"]');
+        btnConsultar.disabled = true;
+        btnConsultar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Consultando...';
+        if (btnConsultarAlt) btnConsultarAlt.disabled = true;
+
+        // Criar uma requisição XMLHttpRequest
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `/clientes/consultar_cnpj/${cnpj}`, true);
+        xhr.timeout = 15000; // 15 segundos
+
+        xhr.onload = function () {
+            console.log('Resposta recebida:', xhr.status, xhr.responseText);
+
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+
+                    if (response.success) {
+                        // Confirmar com o usuário antes de sobrescrever os dados
+                        if (confirm('Deseja atualizar os dados do cliente com as informações encontradas?')) {
+                            // Preencher os campos com os dados retornados
+                            document.getElementById('nome').value = response.dados.nome || '';
+                            document.getElementById('telefone').value = response.dados.telefone || '';
+                            document.getElementById('logradouro').value = response.dados.logradouro || '';
+                            document.getElementById('numero').value = response.dados.numero || '';
+                            document.getElementById('complemento').value = response.dados.complemento || '';
+                            document.getElementById('bairro').value = response.dados.bairro || '';
+                            document.getElementById('cidade').value = response.dados.cidade || '';
+                            document.getElementById('estado').value = response.dados.estado || '';
+                            document.getElementById('cep').value = response.dados.cep || '';
+
+                            // Feedback positivo
+                            document.getElementById('cnpjFeedback').innerHTML = '<div class="alert alert-success mt-2 mb-0"><i class="fas fa-check-circle"></i> Dados da empresa atualizados!</div>';
+                        } else {
+                            document.getElementById('cnpjFeedback').innerHTML = '<div class="alert alert-info mt-2 mb-0"><i class="fas fa-info-circle"></i> Atualização cancelada pelo usuário.</div>';
+                        }
+                    } else {
+                        // Feedback de erro
+                        document.getElementById('cnpjFeedback').innerHTML = `<div class="alert alert-danger mt-2 mb-0"><i class="fas fa-exclamation-triangle"></i> ${response.error}</div>`;
+                    }
+                } catch (e) {
+                    console.error('Erro ao processar resposta JSON:', e);
+                    document.getElementById('cnpjFeedback').innerHTML = '<div class="alert alert-danger mt-2 mb-0"><i class="fas fa-exclamation-circle"></i> Erro ao processar a resposta do servidor</div>';
+                }
+            } else {
+                // Erro na requisição
+                document.getElementById('cnpjFeedback').innerHTML = `<div class="alert alert-danger mt-2 mb-0"><i class="fas fa-exclamation-circle"></i> Erro na requisição: ${xhr.status}</div>`;
+                console.error('Erro na requisição (Alternativo):', xhr.status, xhr.statusText);
+            }
+
+            // Restaurar os botões e ocultar indicador de carregamento
+            finalizarConsulta();
+        };
+
+        xhr.onerror = function () {
+            document.getElementById('cnpjFeedback').innerHTML = '<div class="alert alert-danger mt-2 mb-0"><i class="fas fa-exclamation-circle"></i> Erro de rede ao fazer a requisição</div>';
+            console.error('Erro de rede na requisição AJAX');
+            finalizarConsulta();
+        };
+
+        xhr.ontimeout = function () {
+            document.getElementById('cnpjFeedback').innerHTML = '<div class="alert alert-danger mt-2 mb-0"><i class="fas fa-exclamation-circle"></i> Tempo limite excedido na requisição</div>';
+            console.error('Timeout na requisição AJAX');
+            finalizarConsulta();
+        };
+
+        function finalizarConsulta() {
+            // Ocultar indicador de carregamento
+            document.getElementById('cnpjLoadingIndicator').classList.add('d-none');
+
+            // Restaurar botões
+            btnConsultar.disabled = false;
+            btnConsultar.innerHTML = '<i class="fas fa-search"></i> Consultar';
+            if (btnConsultarAlt) btnConsultarAlt.disabled = false;
+        }
+
+        xhr.send();
+        console.log('Requisição CNPJ enviada');
+    }
+</script>
+{% endblock %}

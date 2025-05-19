@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nota Fiscal - {{ nota_fiscal.numero_nf }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .company-info {
+            flex: 1;
+        }
+        .company-info h1 {
+            margin: 0;
+            color: #007bff;
+            font-size: 24px;
+        }
+        .company-info p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .document-title {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .document-title h2 {
+            font-size: 20px;
+            margin: 0;
+        }
+        .document-title p {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0;
+        }
+        .info-section {
+            margin-bottom: 30px;
+        }
+        .info-section h3 {
+            background-color: #f0f0f0;
+            padding: 8px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .info-table th, .info-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .info-table th {
+            background-color: #f8f9fa;
+            width: 40%;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+        .xml-data {
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow: auto;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .status-importada {
+            background-color: #cff4fc;
+            color: #055160;
+        }
+        .status-processada {
+            background-color: #d1e7dd;
+            color: #0f5132;
+        }
+        .status-atualizada {
+            background-color: #cfe2ff;
+            color: #084298;
+        }
+        .status-erro {
+            background-color: #f8d7da;
+            color: #842029;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-info">
+            <h1>FORTANKS</h1>
+            <p>Soluções em Reservatórios e Tanques</p>
+        </div>
+        <div class="logo">
+            <!-- Aqui poderia ser inserido o logo da empresa -->
+        </div>
+    </div>
+
+    <div class="document-title">
+        <h2>NOTA FISCAL ELETRÔNICA</h2>
+        <p>Número: {{ nota_fiscal.numero_nf }} | Documento gerado em: {{ data_geracao }}</p>
+    </div>
+
+    <div class="info-section">
+        <h3>Informações Gerais</h3>
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th>Número da NF:</th>
+                    <td>{{ nota_fiscal.numero_nf }}</td>
+                </tr>
+                <tr>
+                    <th>Chave de Acesso:</th>
+                    <td style="word-break: break-all;">{{ nota_fiscal.chave_acesso }}</td>
+                </tr>
+                <tr>
+                    <th>Data de Emissão:</th>
+                    <td>{{ nota_fiscal.data_emissao.strftime('%d/%m/%Y') }}</td>
+                </tr>
+                <tr>
+                    <th>Valor Total:</th>
+                    <td>R$ {{ "%.2f"|format(nota_fiscal.valor_total|float) }}</td>
+                </tr>
+                <tr>
+                    <th>Status de Processamento:</th>
+                    <td>
+                        <span class="status status-{{ nota_fiscal.status_processamento.lower() }}">
+                            {{ nota_fiscal.status_processamento }}
+                        </span>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="info-section">
+        <h3>Informações de Emitente e Destinatário</h3>
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th>CNPJ Emitente:</th>
+                    <td>{{ nota_fiscal.cnpj_emitente }}</td>
+                </tr>
+                <tr>
+                    <th>Nome Emitente:</th>
+                    <td>{{ nota_fiscal.nome_emitente }}</td>
+                </tr>
+                <tr>
+                    <th>CNPJ Destinatário:</th>
+                    <td>{{ nota_fiscal.cnpj_destinatario }}</td>
+                </tr>
+                <tr>
+                    <th>Nome Destinatário:</th>
+                    <td>{{ nota_fiscal.nome_destinatario }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="info-section">
+        <h3>Itens da Nota Fiscal</h3>
+        {% if nota_fiscal.itens %}
+        <table class="info-table">
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Descrição</th>
+                    <th>Qtd</th>
+                    <th>Unidade</th>
+                    <th>Valor Unit.</th>
+                    <th>Valor Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in nota_fiscal.itens %}
+                <tr>
+                    <td>{{ item.codigo }}</td>
+                    <td>{{ item.descricao }}</td>
+                    <td>{{ item.quantidade }}</td>
+                    <td>{{ item.unidade }}</td>
+                    <td>R$ {{ "%.2f"|format(item.valor_unitario|float) }}</td>
+                    <td>R$ {{ "%.2f"|format(item.valor_total|float) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Nenhum item encontrado para esta nota fiscal.</p>
+        {% endif %}
+    </div>
+
+    <div class="info-section">
+        <h3>Dados Adicionais</h3>
+        <table class="info-table">
+            <tbody>
+                <tr>
+                    <th>Data de Importação:</th>
+                    <td>{{ nota_fiscal.data_importacao.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                </tr>
+                {% if nota_fiscal.data_atualizacao %}
+                <tr>
+                    <th>Última Atualização:</th>
+                    <td>{{ nota_fiscal.data_atualizacao.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Este documento é uma representação da nota fiscal eletrônica e não substitui o documento fiscal oficial.</p>
+        <p>FORTANKS - Todos os direitos reservados.</p>
+    </div>
+</body>
+</html> 

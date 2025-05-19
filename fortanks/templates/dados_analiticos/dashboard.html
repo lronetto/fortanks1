@@ -1,0 +1,1069 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Dashboard - Dados Analíticos{% endblock %}
+
+{% block styles %}
+<!-- Adicionar Chart.js -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.css" rel="stylesheet">
+
+<style>
+.no-data-message {
+    padding: 20px;
+    text-align: center;
+    border: 1px dashed #ccc;
+    border-radius: 5px;
+    margin: 20px 0;
+    color: #777;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Dashboard Analítico</h1>
+        <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}" class="btn btn-primary">
+            <i class="fas fa-chart-line"></i> Dashboard Mensal
+        </a>
+    </div>
+    <p class="mb-4">Visualização gráfica e análise dos dados financeiros.</p>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="filtro-form" class="row">
+                <div class="col-md-3 mb-3">
+                    <label for="ano">Ano</label>
+                    <select class="form-control" id="ano" name="ano">
+                        <option value="">Todos os Anos</option>
+                        {% for ano_disp in anos %}
+                        <option value="{{ ano_disp }}" {% if filtros.ano == ano_disp %}selected{% endif %}>{{ ano_disp }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="mes">Mês</label>
+                    <select class="form-control" id="mes" name="mes">
+                        <option value="">Todos</option>
+                        <option value="1" {% if filtros.mes == 1 %}selected{% endif %}>Janeiro</option>
+                        <option value="2" {% if filtros.mes == 2 %}selected{% endif %}>Fevereiro</option>
+                        <option value="3" {% if filtros.mes == 3 %}selected{% endif %}>Março</option>
+                        <option value="4" {% if filtros.mes == 4 %}selected{% endif %}>Abril</option>
+                        <option value="5" {% if filtros.mes == 5 %}selected{% endif %}>Maio</option>
+                        <option value="6" {% if filtros.mes == 6 %}selected{% endif %}>Junho</option>
+                        <option value="7" {% if filtros.mes == 7 %}selected{% endif %}>Julho</option>
+                        <option value="8" {% if filtros.mes == 8 %}selected{% endif %}>Agosto</option>
+                        <option value="9" {% if filtros.mes == 9 %}selected{% endif %}>Setembro</option>
+                        <option value="10" {% if filtros.mes == 10 %}selected{% endif %}>Outubro</option>
+                        <option value="11" {% if filtros.mes == 11 %}selected{% endif %}>Novembro</option>
+                        <option value="12" {% if filtros.mes == 12 %}selected{% endif %}>Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="cc_id">Centro de Custo</label>
+                    <select class="form-control" id="cc_id" name="cc_id">
+                        <option value="">Todos</option>
+                        {% for cc in centros_custo %}
+                        <option value="{{ cc.id }}" {% if filtros.cc_id == cc.id|string %}selected{% endif %}>{{cc.codigo}} - {{ cc.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 mb-3">
+                    <label class="d-block">&nbsp;</label>
+                    <button type="button" id="btn-filtrar" class="btn btn-primary btn-block">Filtrar</button>
+                </div>
+            </form>
+            <div class="row mt-2">
+                <div class="col-12">
+                    <button type="button" id="btn-verificar-status" class="btn btn-info btn-sm">
+                        <i class="fas fa-info-circle"></i> Verificar Status dos Dados
+                    </button>
+                    <button type="button" id="btn-testar-api" class="btn btn-warning btn-sm ml-2">
+                        <i class="fas fa-bug"></i> Testar API Sem Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para status dos dados -->
+    <div class="modal fade" id="modalStatusDados" tabindex="-1" role="dialog" aria-labelledby="modalStatusDadosLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalStatusDadosLabel">Status dos Dados</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="text-center mb-3" id="status-loading">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Verificando status dos dados...</p>
+                    </div>
+                    
+                    <div id="status-results" style="display: none;">
+                        <div class="card mb-3">
+                            <div class="card-header">Resumo</div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <p><strong>Total de Registros:</strong> <span id="total-registros">0</span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p><strong>Planos de Receita:</strong> <span id="total-planos-receita">0</span></p>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <p><strong>Planos de Custo:</strong> <span id="total-planos-custo">0</span></p>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>Valor de Receitas:</strong> <span id="valor-receitas">R$ 0,00</span></p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Valor de Custos:</strong> <span id="valor-custos">R$ 0,00</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header">Planos de Conta de Receita</div>
+                            <div class="card-body">
+                                <div id="planos-receita-list">Nenhum plano de receita encontrado</div>
+                            </div>
+                        </div>
+                        
+                        <div class="card mb-3">
+                            <div class="card-header">Dados por Mês</div>
+                            <div class="card-body">
+                                <div id="dados-por-mes-list">Nenhum dado mensal encontrado</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                    <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Importar Dados
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading spinner -->
+    <div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.7); z-index: 9999;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+            <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">Carregando...</span>
+            </div>
+            <p class="mt-2">Carregando dados...</p>
+        </div>
+    </div>
+
+    <!-- Totais -->
+    <div class="row">
+        <div class="col-xl-12 col-md-12 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1" id="titulo-total-geral">
+                                Total Geral - {{ periodo_texto }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="valor-total-geral">R$ 0,00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Totais -->
+    <div class="row">
+        <div class="col-xl-6 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Valor Recebido</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "%.2f"|format(total_receitas|default(0)) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-6 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Custo Realizado</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">R$ {{ "%.2f"|format(total_despesas|default(0)) }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row">
+        <!-- Gráfico por mês -->
+        <div class="col-xl-12 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Evolução Mensal {{ periodo_texto }}</h6>
+                    <div class="dropdown no-arrow">
+                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink1"
+                           data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                             aria-labelledby="dropdownMenuLink1">
+                            <a class="dropdown-item" href="#" id="downloadChart1">
+                                <i class="fas fa-download fa-sm fa-fw mr-2 text-gray-400"></i>
+                                Download Gráfico
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area">
+                        {% if valores_meses and valores_meses|length > 0 %}
+                            <canvas id="myAreaChart"></canvas>
+                        {% else %}
+                            <div class="no-data-message">
+                                <i class="fas fa-chart-area fa-3x mb-3"></i>
+                                <p>Não há dados disponíveis para este período</p>
+                                <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                                    <i class="fas fa-upload"></i> Importar Dados
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Gráfico por Centro de Custo -->
+        <div class="col-xl-6 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Top 10 Centros de Custo</h6>
+                    <div class="dropdown no-arrow">
+                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink2"
+                           data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                             aria-labelledby="dropdownMenuLink2">
+                            <a class="dropdown-item" href="#" id="downloadChart2">
+                                <i class="fas fa-download fa-sm fa-fw mr-2 text-gray-400"></i>
+                                Download Gráfico
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie">
+                        {% if valores_cc and valores_cc|length > 0 %}
+                            <canvas id="myPieChart"></canvas>
+                        {% else %}
+                            <div class="no-data-message">
+                                <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                                <p>Não há dados disponíveis para este período</p>
+                                <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                                    <i class="fas fa-upload"></i> Importar Dados
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gráfico por Plano de Conta -->
+        <div class="col-xl-6 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Top 10 Planos de Conta</h6>
+                    <div class="dropdown no-arrow">
+                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink3"
+                           data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                             aria-labelledby="dropdownMenuLink3">
+                            <a class="dropdown-item" href="#" id="downloadChart3">
+                                <i class="fas fa-download fa-sm fa-fw mr-2 text-gray-400"></i>
+                                Download Gráfico
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie">
+                        {% if valores_pc and valores_pc|length > 0 %}
+                            <canvas id="myBarChart"></canvas>
+                        {% else %}
+                            <div class="no-data-message">
+                                <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                                <p>Não há dados disponíveis para este período</p>
+                                <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                                    <i class="fas fa-upload"></i> Importar Dados
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de Receitas vs Despesas -->
+    <div class="row">
+        <div class="col-xl-12 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Recebimento x Custos</h6>
+                    <div class="dropdown no-arrow">
+                        <a class="dropdown-toggle" href="#" role="button" id="dropdownMenuLink0"
+                           data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-ellipsis-v fa-sm fa-fw text-gray-400"></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-right shadow animated--fade-in"
+                             aria-labelledby="dropdownMenuLink0">
+                            <a class="dropdown-item" href="#" id="downloadComparisonChart">
+                                <i class="fas fa-download fa-sm fa-fw mr-2 text-gray-400"></i>
+                                Download Gráfico
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-bar" style="height: 350px;">
+                        {% if receitas_por_mes and despesas_por_mes %}
+                            <canvas id="receitasDespesasChart"></canvas>
+                        {% else %}
+                            <div class="no-data-message">
+                                <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                                <p>Não há dados disponíveis para este período</p>
+                                <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                                    <i class="fas fa-upload"></i> Importar Dados
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Links -->
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Ações</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-lg-4">
+                            <a href="{{ url_for('dados_analiticos.index', 
+                                                ano=ano, 
+                                                centro_custo_id=centro_custo_id) }}" 
+                               class="btn btn-primary btn-block mb-2">
+                                <i class="fas fa-table fa-fw"></i> Ver Dados em Tabela
+                            </a>
+                        </div>
+                        <div class="col-lg-4">
+                            <a href="{{ url_for('dados_analiticos.exportar', 
+                                                ano=ano, 
+                                                centro_custo_id=centro_custo_id) }}" 
+                               class="btn btn-success btn-block mb-2">
+                                <i class="fas fa-file-csv fa-fw"></i> Exportar para CSV
+                            </a>
+                        </div>
+                        <div class="col-lg-4">
+                            <a href="{{ url_for('dados_analiticos.importar') }}" 
+                               class="btn btn-info btn-block mb-2">
+                                <i class="fas fa-upload fa-fw"></i> Importar Novos Dados
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js via CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+
+<script>
+// Declaração global de variáveis para os gráficos
+var myAreaChart, myPieChart, myBarChart, receitasDespesasChart;
+
+$(document).ready(function() {
+    // Inicializar select2 para melhorar a experiência de seleção
+    try {
+        $('#cc_id').select2({
+            placeholder: 'Selecione uma opção',
+            allowClear: true
+        });
+    } catch (e) {
+        console.error("Erro ao inicializar select2:", e);
+    }
+    
+    // Botão para testar API sem filtros
+    $('#btn-testar-api').click(function() {
+        $('#ano').val('');
+        $('#mes').val('');
+        $('#cc_id').val('');
+        carregarDados();
+    });
+    
+    // Verificar status dos dados
+    $('#btn-verificar-status').click(function() {
+        // Abrir modal
+        $('#modalStatusDados').modal('show');
+        
+        // Mostrar loading e esconder resultados
+        $('#status-loading').show();
+        $('#status-results').hide();
+        
+        // Fazer requisição AJAX
+        $.ajax({
+            url: "{{ url_for('dados_analiticos.dashboard_status') }}",
+            method: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                console.log("Status dos dados:", data);
+                
+                // Preencher dados
+                $('#total-registros').text(data.total_registros);
+                $('#total-planos-receita').text(data.total_planos_receita);
+                $('#total-planos-custo').text(data.total_planos_custo);
+                $('#valor-receitas').text('R$ ' + formatarValor(data.valor_receitas));
+                $('#valor-custos').text('R$ ' + formatarValor(data.valor_custos));
+                
+                // Preencher lista de planos de receita
+                if (data.planos_receita && data.planos_receita.length > 0) {
+                    var htmlPlanos = '<ul class="list-group">';
+                    data.planos_receita.forEach(function(plano) {
+                        htmlPlanos += '<li class="list-group-item">' + plano.codigo + ' - ' + plano.descricao + '</li>';
+                    });
+                    htmlPlanos += '</ul>';
+                    $('#planos-receita-list').html(htmlPlanos);
+                } else {
+                    $('#planos-receita-list').html('<div class="alert alert-warning">Nenhum plano de receita encontrado. Isso pode causar problemas na exibição dos gráficos.</div>');
+                }
+                
+                // Preencher dados por mês
+                if (data.dados_por_mes && data.dados_por_mes.length > 0) {
+                    var htmlMeses = '<table class="table table-sm">';
+                    htmlMeses += '<thead><tr><th>Mês</th><th>Total</th></tr></thead><tbody>';
+                    
+                    var meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+                    
+                    data.dados_por_mes.forEach(function(item) {
+                        var mesNome = meses[item.mes - 1] || 'Desconhecido';
+                        htmlMeses += '<tr><td>' + mesNome + '</td><td>R$ ' + formatarValor(item.total) + '</td></tr>';
+                    });
+                    
+                    htmlMeses += '</tbody></table>';
+                    $('#dados-por-mes-list').html(htmlMeses);
+                } else {
+                    $('#dados-por-mes-list').html('<div class="alert alert-warning">Nenhum dado mensal encontrado.</div>');
+                }
+                
+                // Mostrar diagnóstico
+                var alerta = '';
+                if (data.total_registros === 0) {
+                    alerta = '<div class="alert alert-danger">Não há registros na tabela de dados analíticos. Por favor, importe dados.</div>';
+                } else if (data.total_planos_receita === 0) {
+                    alerta = '<div class="alert alert-warning">Não há planos de conta classificados como receita. Isso afeta os gráficos de receitas x custos.</div>';
+                } else if (data.total_planos_custo === 0) {
+                    alerta = '<div class="alert alert-warning">Não há planos de conta classificados como custo. Isso afeta os gráficos de receitas x custos.</div>';
+                }
+                
+                if (alerta) {
+                    $('#status-results').prepend(alerta);
+                }
+                
+                // Esconder loading e mostrar resultados
+                $('#status-loading').hide();
+                $('#status-results').show();
+            },
+            error: function(xhr, status, error) {
+                console.error("Erro ao carregar status dos dados:", error);
+                $('#status-loading').hide();
+                $('#status-results').html('<div class="alert alert-danger">Erro ao carregar status dos dados. Verifique o console para mais detalhes.</div>').show();
+            }
+        });
+    });
+    
+    // Verificar se Chart está disponível
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js não foi carregado corretamente');
+        $(".chart-area, .chart-pie").html('<div class="no-data-message"><i class="fas fa-exclamation-triangle fa-3x mb-3"></i><p>Erro ao carregar biblioteca de gráficos</p></div>');
+        return;
+    }
+
+    // Carregar dados iniciais
+    carregarDados();
+    
+    // Configurar evento de clique no botão de filtro
+    $('#btn-filtrar').click(function() {
+        carregarDados();
+    });
+    
+    // Também atualizar ao mudar os filtros diretamente (opcional)
+    $('#ano, #mes, #cc_id').change(function() {
+        // Opcional: descomentar para atualizar automaticamente ao mudar os filtros
+        // carregarDados();
+    });
+    
+    // Função para carregar dados via AJAX
+    function carregarDados() {
+        // Mostrar indicador de carregamento
+        $('#loading-overlay').show();
+        $('#dashboard-container').hide();
+        
+        // Obter filtros
+        var ano = $('#ano').val();
+        var mes = $('#mes').val();
+        var cc_id = $('#cc_id').val();
+        
+        // Fazer chamada AJAX para buscar dados
+        $.ajax({
+            url: '/dados-analiticos/api/dashboard-data',
+            type: 'GET',
+            data: {
+                ano: ano,
+                mes: mes,
+                cc_id: cc_id
+            },
+            success: function(response) {
+                // Verificar status da resposta
+                if (response.status === 'success') {
+                    // Atualizar cards com informações financeiras
+                    atualizarCards(response);
+                    
+                    // Atualizar gráficos
+                    atualizarGraficos(response);
+                    
+                    // Mostrar container do dashboard e esconder indicador de carregamento
+                    $('#dashboard-container').show();
+                    $('#loading-overlay').hide();
+                    
+                    // Atualizar texto do período
+                    $('#periodo-texto').text(response.periodo_texto);
+                } else if (response.status === 'empty') {
+                    // Caso não existam dados para mostrar
+                    $('#loading-overlay').hide();
+                    $('#dashboard-container').hide();
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Sem dados',
+                        text: response.message || 'Não há dados para exibir com os filtros selecionados.',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    // Algum outro status
+                    $('#loading-overlay').hide();
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Aviso',
+                        text: response.message || 'Resposta do servidor tem formato inesperado.',
+                        confirmButtonText: 'OK'
+                    });
+                }
+            },
+            error: function(xhr, status, error) {
+                // Esconder indicador de carregamento
+                $('#loading-overlay').hide();
+                
+                // Mostrar mensagem de erro detalhada
+                let errorMessage = 'Erro ao carregar dados do dashboard.';
+                
+                // Tentar extrair informações da resposta do servidor
+                if (xhr.responseJSON) {
+                    if (xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    }
+                    if (xhr.responseJSON.details) {
+                        errorMessage += '\n\nDetalhes: ' + xhr.responseJSON.details;
+                    }
+                } else if (xhr.responseText) {
+                    try {
+                        // Tentar fazer parse da resposta como JSON
+                        const jsonResponse = JSON.parse(xhr.responseText);
+                        if (jsonResponse.message) {
+                            errorMessage = jsonResponse.message;
+                        }
+                    } catch (e) {
+                        // Se não for JSON, usar o texto da resposta se for curto
+                        if (xhr.responseText.length < 100) {
+                            errorMessage += '\n\nResposta: ' + xhr.responseText;
+                        }
+                    }
+                }
+                
+                // Adicionar informações do erro HTTP
+                errorMessage += '\n\nStatus: ' + xhr.status + ' ' + error;
+                
+                console.error('Erro ao carregar dados:', error, xhr.responseText);
+                
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro',
+                    text: errorMessage,
+                    confirmButtonText: 'OK'
+                });
+            }
+        });
+    }
+    
+    // Função para atualizar títulos baseados nos filtros
+    function atualizarTitulos(data) {
+        $('#titulo-total-geral').text('Total Geral - ' + data.periodo_texto);
+    }
+    
+    // Função para atualizar totais
+    function atualizarTotais(data) {
+        $('#valor-total-geral').text('R$ ' + formatarValor(data.total_geral));
+        $('#valor-total-receitas').text('R$ ' + formatarValor(data.total_receitas));
+        $('#valor-total-despesas').text('R$ ' + formatarValor(data.total_despesas));
+    }
+    
+    // Função para atualizar os gráficos
+    function atualizarGraficos(data) {
+        // Gráfico de evolução mensal
+        atualizarGraficoEvolucaoMensal(data);
+        
+        // Gráfico de Top 10 Centros de Custo
+        atualizarGraficoTopCentrosCusto(data);
+        
+        // Gráfico de Top 10 Planos de Conta
+        atualizarGraficoTopPlanosConta(data);
+        
+        // Gráfico de Receitas vs Despesas
+        atualizarGraficoReceitasDespesas(data);
+    }
+    
+    // Função para atualizar o gráfico de evolução mensal
+    function atualizarGraficoEvolucaoMensal(data) {
+        var canvas = document.getElementById("myAreaChart");
+        if (!canvas) return;
+        
+        var ctx = canvas.getContext('2d');
+        
+        // Se o gráfico já existe, destruí-lo
+        if (myAreaChart) {
+            myAreaChart.destroy();
+        }
+        
+        // Verificar se tem dados
+        if (data.valores_meses && data.valores_meses.length > 0) {
+            // Criar novo gráfico
+            myAreaChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.labels_meses,
+                    datasets: [{
+                        label: "Valor (R$)",
+                        lineTension: 0.3,
+                        backgroundColor: "rgba(78, 115, 223, 0.05)",
+                        borderColor: "rgba(78, 115, 223, 1)",
+                        pointRadius: 3,
+                        pointBackgroundColor: "rgba(78, 115, 223, 1)",
+                        pointBorderColor: "rgba(78, 115, 223, 1)",
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: "rgba(78, 115, 223, 1)",
+                        pointHoverBorderColor: "rgba(78, 115, 223, 1)",
+                        pointHitRadius: 10,
+                        pointBorderWidth: 2,
+                        data: data.valores_meses
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: data.titulo_grafico
+                    },
+                    tooltips: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                return 'R$ ' + formatarValor(tooltipItem.yLabel);
+                            }
+                        }
+                    },
+                    scales: {
+                        xAxes: [{
+                            gridLines: {
+                                display: false,
+                                drawBorder: false
+                            }
+                        }],
+                        yAxes: [{
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    return 'R$ ' + formatarValor(value);
+                                }
+                            }
+                        }]
+                    }
+                }
+            });
+            
+            // Configurar download do gráfico
+            $('#downloadChart1').off('click').click(function() {
+                downloadGrafico(myAreaChart, 'evolucao_mensal_' + data.periodo_texto + '.png');
+            });
+            
+            // Mostrar gráfico
+            $(canvas).parent().show();
+            $(canvas).parent().siblings('.no-data-message').hide();
+        } else {
+            // Esconder canvas e mostrar mensagem de sem dados
+            $(canvas).parent().hide();
+            var noDataMsg = $(canvas).parent().siblings('.no-data-message');
+            if (noDataMsg.length === 0) {
+                $(canvas).parent().after(`
+                    <div class="no-data-message">
+                        <i class="fas fa-chart-area fa-3x mb-3"></i>
+                        <p>Não há dados disponíveis para este período</p>
+                        <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                            <i class="fas fa-upload"></i> Importar Dados
+                        </a>
+                    </div>
+                `);
+            } else {
+                noDataMsg.show();
+            }
+        }
+    }
+    
+    // Função para atualizar o gráfico de Top 10 Centros de Custo
+    function atualizarGraficoTopCentrosCusto(data) {
+        var canvas = document.getElementById("myPieChart");
+        if (!canvas) return;
+        
+        var ctx = canvas.getContext('2d');
+        
+        // Se o gráfico já existe, destruí-lo
+        if (myPieChart) {
+            myPieChart.destroy();
+        }
+        
+        // Verificar se tem dados
+        if (data.labels_cc && data.labels_cc.length > 0) {
+            // Criar novo gráfico
+            myPieChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.labels_cc,
+                    datasets: [{
+                        data: data.valores_cc,
+                        backgroundColor: [
+                            'rgba(78, 115, 223, 0.8)',
+                            'rgba(28, 200, 138, 0.8)',
+                            'rgba(54, 185, 204, 0.8)',
+                            'rgba(246, 194, 62, 0.8)',
+                            'rgba(231, 74, 59, 0.8)',
+                            'rgba(104, 109, 224, 0.8)',
+                            'rgba(156, 136, 255, 0.8)',
+                            'rgba(241, 196, 15, 0.8)',
+                            'rgba(46, 204, 113, 0.8)',
+                            'rgba(231, 76, 60, 0.8)'
+                        ]
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    legend: {
+                        position: 'right'
+                    },
+                    cutoutPercentage: 70,
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                var value = data.datasets[0].data[tooltipItem.index];
+                                return data.labels[tooltipItem.index] + ': R$ ' + formatarValor(value);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Configurar download do gráfico
+            $('#downloadChart2').off('click').click(function() {
+                downloadGrafico(myPieChart, 'top10_centros_custo_' + data.periodo_texto + '.png');
+            });
+            
+            // Mostrar gráfico
+            $(canvas).parent().show();
+            $(canvas).parent().siblings('.no-data-message').hide();
+        } else {
+            // Esconder canvas e mostrar mensagem de sem dados
+            $(canvas).parent().hide();
+            var noDataMsg = $(canvas).parent().siblings('.no-data-message');
+            if (noDataMsg.length === 0) {
+                $(canvas).parent().after(`
+                    <div class="no-data-message">
+                        <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                        <p>Não há dados disponíveis para este período</p>
+                        <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                            <i class="fas fa-upload"></i> Importar Dados
+                        </a>
+                    </div>
+                `);
+            } else {
+                noDataMsg.show();
+            }
+        }
+    }
+    
+    // Função para atualizar o gráfico de Top 10 Planos de Conta
+    function atualizarGraficoTopPlanosConta(data) {
+        var canvas = document.getElementById("myBarChart");
+        if (!canvas) return;
+        
+        var ctx = canvas.getContext('2d');
+        
+        // Se o gráfico já existe, destruí-lo
+        if (myBarChart) {
+            myBarChart.destroy();
+        }
+        
+        // Verificar se tem dados
+        if (data.labels_pc && data.labels_pc.length > 0) {
+            // Criar novo gráfico
+            myBarChart = new Chart(ctx, {
+                type: 'horizontalBar',
+                data: {
+                    labels: data.labels_pc,
+                    datasets: [{
+                        label: "Valor (R$)",
+                        backgroundColor: "rgba(78, 115, 223, 0.8)",
+                        data: data.valores_pc
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    legend: {
+                        display: false
+                    },
+                    scales: {
+                        xAxes: [{
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    return 'R$ ' + formatarValor(value);
+                                }
+                            }
+                        }]
+                    },
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                return 'R$ ' + formatarValor(tooltipItem.xLabel);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Configurar download do gráfico
+            $('#downloadChart3').off('click').click(function() {
+                downloadGrafico(myBarChart, 'top10_planos_conta_' + data.periodo_texto + '.png');
+            });
+            
+            // Mostrar gráfico
+            $(canvas).parent().show();
+            $(canvas).parent().siblings('.no-data-message').hide();
+        } else {
+            // Esconder canvas e mostrar mensagem de sem dados
+            $(canvas).parent().hide();
+            var noDataMsg = $(canvas).parent().siblings('.no-data-message');
+            if (noDataMsg.length === 0) {
+                $(canvas).parent().after(`
+                    <div class="no-data-message">
+                        <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                        <p>Não há dados disponíveis para este período</p>
+                        <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                            <i class="fas fa-upload"></i> Importar Dados
+                        </a>
+                    </div>
+                `);
+            } else {
+                noDataMsg.show();
+            }
+        }
+    }
+    
+    // Função para atualizar o gráfico de Receitas vs Despesas
+    function atualizarGraficoReceitasDespesas(data) {
+        var canvas = document.getElementById("receitasDespesasChart");
+        if (!canvas) return;
+        
+        var ctx = canvas.getContext('2d');
+        
+        // Se o gráfico já existe, destruí-lo
+        if (receitasDespesasChart) {
+            receitasDespesasChart.destroy();
+        }
+        
+        // Verificar se tem dados
+        if (data.receitas_por_mes && data.receitas_por_mes.length > 0) {
+            // Criar novo gráfico
+            receitasDespesasChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels_meses,
+                    datasets: [
+                        {
+                            label: "Receitas (R$)",
+                            backgroundColor: "rgba(28, 200, 138, 0.8)", // Verde para receitas
+                            borderColor: "rgba(28, 200, 138, 1)",
+                            borderWidth: 1,
+                            data: data.receitas_por_mes
+                        },
+                        {
+                            label: "Custos (R$)",
+                            backgroundColor: "rgba(231, 74, 59, 0.8)", // Vermelho para despesas
+                            borderColor: "rgba(231, 74, 59, 1)",
+                            borderWidth: 1,
+                            data: data.despesas_por_mes
+                        },
+                        {
+                            label: "Acumulado (R$)",
+                            backgroundColor: "rgba(78, 115, 223, 0.4)", // Azul para acumulado
+                            borderColor: "rgba(78, 115, 223, 1)",
+                            borderWidth: 2,
+                            type: 'line',
+                            fill: false,
+                            data: data.acumulado_por_mes
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    responsive: true,
+                    title: {
+                        display: true,
+                        text: 'Evolução de Receitas e Custos'
+                    },
+                    tooltips: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                var value = tooltipItem.yLabel;
+                                var prefix = '';
+                                if (value < 0) {
+                                    value = -value;
+                                    prefix = '-';
+                                }
+                                return data.datasets[tooltipItem.datasetIndex].label + ': ' + prefix + 'R$ ' + formatarValor(value);
+                            }
+                        }
+                    },
+                    scales: {
+                        xAxes: [{
+                            stacked: false
+                        }],
+                        yAxes: [{
+                            stacked: false,
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    var prefix = '';
+                                    if (value < 0) {
+                                        value = -value;
+                                        prefix = '-';
+                                    }
+                                    return prefix + 'R$ ' + formatarValor(value);
+                                }
+                            }
+                        }]
+                    }
+                }
+            });
+            
+            // Configurar download do gráfico
+            $('#downloadComparisonChart').off('click').click(function() {
+                downloadGrafico(receitasDespesasChart, 'receitas_vs_custos_' + data.periodo_texto + '.png');
+            });
+            
+            // Mostrar gráfico
+            $(canvas).parent().show();
+            $(canvas).parent().siblings('.no-data-message').hide();
+        } else {
+            // Esconder canvas e mostrar mensagem de sem dados
+            $(canvas).parent().hide();
+            var noDataMsg = $(canvas).parent().siblings('.no-data-message');
+            if (noDataMsg.length === 0) {
+                $(canvas).parent().after(`
+                    <div class="no-data-message">
+                        <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                        <p>Não há dados disponíveis para este período</p>
+                        <a href="{{ url_for('dados_analiticos.importar') }}" class="btn btn-primary btn-sm mt-3">
+                            <i class="fas fa-upload"></i> Importar Dados
+                        </a>
+                    </div>
+                `);
+            } else {
+                noDataMsg.show();
+            }
+        }
+    }
+    
+    // Função auxiliar para formatar valor monetário
+    function formatarValor(valor) {
+        return parseFloat(valor).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+    
+    // Função auxiliar para download de gráfico
+    function downloadGrafico(chart, filename) {
+        try {
+            var a = document.createElement('a');
+            a.href = chart.toBase64Image();
+            a.download = filename;
+            a.click();
+        } catch (e) {
+            console.error("Erro ao fazer download do gráfico:", e);
+            alert("Não foi possível fazer o download do gráfico");
+        }
+    }
+});
+</script>
+{% endblock %} 

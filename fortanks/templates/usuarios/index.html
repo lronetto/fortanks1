@@ -1,0 +1,112 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Usuários - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-users"></i> Usuários</h1>
+        <a href="{{ url_for('usuario.novo') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Usuário
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Usuários</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Departamento</th>
+                            <th>Cargo</th>
+                            <th>Último Login</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for usuario in usuarios %}
+                        <tr>
+                            <td>{{ usuario.id }}</td>
+                            <td>{{ usuario.nome }}</td>
+                            <td>{{ usuario.email }}</td>
+                            <td>{{ usuario.departamento }}</td>
+                            <td>
+                                {% if usuario.cargo == 'admin' %}
+                                <span class="badge bg-danger">Administrador</span>
+                                {% elif usuario.cargo == 'diretor' %}
+                                <span class="badge bg-primary">Diretor</span>
+                                {% elif usuario.cargo == 'gerente' %}
+                                <span class="badge bg-success">Gerente</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Colaborador</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if usuario.ultimo_login %}
+                                {{ usuario.ultimo_login.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                Nunca
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('usuario.editar', id=usuario.id) }}"
+                                        class="btn btn-sm btn-primary" data-bs-toggle="tooltip" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="{{ url_for('usuario.resetar_senha', id=usuario.id) }}"
+                                        class="btn btn-sm btn-warning" data-bs-toggle="tooltip" title="Resetar Senha">
+                                        <i class="fas fa-key"></i>
+                                    </a>
+                                    {% if usuario.id != current_user.id %}
+                                    <form id="form-excluir-{{ usuario.id }}"
+                                        action="{{ url_for('usuario.excluir', id=usuario.id) }}" method="POST"
+                                        class="d-inline form-excluir">
+                                        <button type="submit" class="btn btn-sm btn-danger" data-bs-toggle="tooltip"
+                                            title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Inicializar DataTable
+    $(document).ready(function () {
+        $('#dataTable').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            },
+            order: [[0, 'desc']]
+        });
+
+        // Confirmar exclusão
+        $('.form-excluir').on('submit', function (e) {
+            e.preventDefault();
+            const form = this;
+            const userName = $(this).closest('tr').find('td:nth-child(2)').text();
+
+            if (confirm(`Tem certeza que deseja excluir o usuário "${userName}"?`)) {
+                form.submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

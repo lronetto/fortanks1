@@ -1,0 +1,347 @@
+{% extends "common/base.html" %}
+
+{% block title %}Visualizar Dados Analíticos{% endblock %}
+
+{% block styles %}
+<style>
+    .filtros-container {
+        background-color: #f8f9fc;
+        border-radius: 0.35rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    .filtro-collapse {
+        padding: 0.5rem;
+    }
+    .table-container {
+        overflow-x: auto;
+    }
+    .data-table th {
+        white-space: nowrap;
+        font-size: 0.9rem;
+    }
+    .data-table td {
+        font-size: 0.85rem;
+    }
+    .valor-positivo {
+        color: #1cc88a;
+        font-weight: bold;
+    }
+    .valor-negativo {
+        color: #e74a3b;
+        font-weight: bold;
+    }
+    .pagination-container {
+        margin-top: 1rem;
+    }
+    .total-container {
+        font-size: 1.2rem;
+        font-weight: bold;
+        text-align: right;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Visualizar Dados Analíticos</h1>
+    
+    <!-- Botões de ação -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <a href="{{ url_for('dados_analiticos.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            
+            {% if dados.items %}
+            <a href="{{ url_for('dados_analiticos.exportar', 
+                centro_custo_id=filtros.centro_custo_id,
+                plano_conta_id=filtros.plano_conta_id,
+                data_inicio=filtros.data_inicio,
+                data_fim=filtros.data_fim,
+                valor_min=filtros.valor_min,
+                valor_max=filtros.valor_max,
+                termo_busca=filtros.termo_busca) }}" 
+               class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Exportar para Excel
+            </a>
+            {% endif %}
+        </div>
+        <div class="col-md-4 text-right">
+            <button class="btn btn-primary" type="button" data-toggle="collapse" data-target="#filtrosCollapse">
+                <i class="fas fa-filter"></i> Filtros <span class="badge badge-light">
+                    {% set count = 0 %}
+                    {% if filtros.centro_custo_id %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.plano_conta_id %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.data_inicio %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.data_fim %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.valor_min %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.valor_max %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.termo_busca %}{% set count = count + 1 %}{% endif %}
+                    {{ count }}
+                </span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Filtros -->
+    <div class="collapse {% if count > 0 %}show{% endif %}" id="filtrosCollapse">
+        <div class="filtros-container">
+            <form action="{{ url_for('dados_analiticos.visualizar') }}" method="GET">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="centro_custo_id">Centro de Custo:</label>
+                            <select class="form-control" id="centro_custo_id" name="centro_custo_id">
+                                <option value="">Todos</option>
+                                {% for cc in centros_custo %}
+                                <option value="{{ cc.id }}" {% if filtros.centro_custo_id == cc.id %}selected{% endif %}>
+                                    {{ cc.nome }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="plano_conta_id">Plano de Conta:</label>
+                            <select class="form-control" id="plano_conta_id" name="plano_conta_id">
+                                <option value="">Todos</option>
+                                {% for pc in planos_conta %}
+                                <option value="{{ pc.id }}" {% if filtros.plano_conta_id == pc.id %}selected{% endif %}>
+                                    {{ pc.descricao }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_inicio">Data Inicial:</label>
+                            <input type="date" class="form-control" id="data_inicio" name="data_inicio"
+                                   value="{{ filtros.data_inicio }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_fim">Data Final:</label>
+                            <input type="date" class="form-control" id="data_fim" name="data_fim"
+                                   value="{{ filtros.data_fim }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="valor_min">Valor Mínimo:</label>
+                            <input type="number" step="0.01" class="form-control" id="valor_min" name="valor_min"
+                                   value="{{ filtros.valor_min }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="valor_max">Valor Máximo:</label>
+                            <input type="number" step="0.01" class="form-control" id="valor_max" name="valor_max"
+                                   value="{{ filtros.valor_max }}">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-8">
+                        <div class="form-group">
+                            <label for="termo_busca">Buscar por Texto:</label>
+                            <input type="text" class="form-control" id="termo_busca" name="termo_busca"
+                                   placeholder="Documento, Emitente ou Histórico" value="{{ filtros.termo_busca }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="per_page">Registros por página:</label>
+                            <select class="form-control" id="per_page" name="per_page">
+                                <option value="20" {% if request.args.get('per_page') == '20' %}selected{% endif %}>20</option>
+                                <option value="50" {% if request.args.get('per_page', '50') == '50' %}selected{% endif %}>50</option>
+                                <option value="100" {% if request.args.get('per_page') == '100' %}selected{% endif %}>100</option>
+                                <option value="200" {% if request.args.get('per_page') == '200' %}selected{% endif %}>200</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12 text-right">
+                        <a href="{{ url_for('dados_analiticos.visualizar') }}" class="btn btn-secondary">
+                            <i class="fas fa-eraser"></i> Limpar Filtros
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Aplicar Filtros
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Tabela de Dados -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Resultados</h6>
+        </div>
+        <div class="card-body">
+            {% if dados.items %}
+                <div class="table-container">
+                    <table class="table table-bordered data-table" width="100%" cellspacing="0">
+                        <thead>
+                            <tr>
+                                <th>Centro de Custo</th>
+                                <th>Plano de Conta</th>
+                                <th>Data</th>
+                                <th>Documento</th>
+                                <th>Emitente</th>
+                                <th>D/C</th>
+                                <th>Histórico</th>
+                                <th>Liberado Por</th>
+                                <th>Banco/Conta</th>
+                                <th>Cheque</th>
+                                <th>Valor (R$)</th>
+                                <th>Pago</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for dado in dados.items %}
+                            <tr>
+                                <td>{{ dado.centro_custo.nome if dado.centro_custo else 'Não informado' }}</td>
+                                <td>{{ dado.plano_conta.descricao if dado.plano_conta else 'Não informado' }}</td>
+                                <td>{{ dado.data_pagamento.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ dado.documento }}</td>
+                                <td>{{ dado.emitente }}</td>
+                                <td>{{ dado.debito_credito }}</td>
+                                <td>{{ dado.historico }}</td>
+                                <td>{{ dado.liberado_por }}</td>
+                                <td>{{ dado.banco }}</td>
+                                <td>{{ dado.cheque }}</td>
+                                <td class="{% if dado.valor < 0 %}valor-negativo{% else %}valor-positivo{% endif %}">
+                                    {{ "R$ {:,.2f}".format(dado.valor) }}
+                                </td>
+                                <td>{{ 'Sim' if dado.pago else 'Não' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Total -->
+                <div class="total-container">
+                    Total: <span class="{% if total_valor < 0 %}valor-negativo{% else %}valor-positivo{% endif %}">
+                        {{ "R$ {:,.2f}".format(total_valor) }}
+                    </span>
+                </div>
+                
+                <!-- Paginação -->
+                <div class="pagination-container">
+                    <nav aria-label="Navegação de página">
+                        <ul class="pagination justify-content-center">
+                            {% if dados.has_prev %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('dados_analiticos.visualizar', 
+                                    page=dados.prev_num, 
+                                    per_page=request.args.get('per_page', 50),
+                                    centro_custo_id=filtros.centro_custo_id,
+                                    plano_conta_id=filtros.plano_conta_id,
+                                    data_inicio=filtros.data_inicio,
+                                    data_fim=filtros.data_fim,
+                                    valor_min=filtros.valor_min,
+                                    valor_max=filtros.valor_max,
+                                    termo_busca=filtros.termo_busca) }}">
+                                    Anterior
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <a class="page-link" href="#">Anterior</a>
+                            </li>
+                            {% endif %}
+                            
+                            {% for page_num in dados.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                                {% if page_num %}
+                                    {% if page_num == dados.page %}
+                                    <li class="page-item active">
+                                        <span class="page-link">
+                                            {{ page_num }}
+                                            <span class="sr-only">(atual)</span>
+                                        </span>
+                                    </li>
+                                    {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="{{ url_for('dados_analiticos.visualizar', 
+                                            page=page_num, 
+                                            per_page=request.args.get('per_page', 50),
+                                            centro_custo_id=filtros.centro_custo_id,
+                                            plano_conta_id=filtros.plano_conta_id,
+                                            data_inicio=filtros.data_inicio,
+                                            data_fim=filtros.data_fim,
+                                            valor_min=filtros.valor_min,
+                                            valor_max=filtros.valor_max,
+                                            termo_busca=filtros.termo_busca) }}">
+                                            {{ page_num }}
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                {% else %}
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if dados.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('dados_analiticos.visualizar', 
+                                    page=dados.next_num, 
+                                    per_page=request.args.get('per_page', 50),
+                                    centro_custo_id=filtros.centro_custo_id,
+                                    plano_conta_id=filtros.plano_conta_id,
+                                    data_inicio=filtros.data_inicio,
+                                    data_fim=filtros.data_fim,
+                                    valor_min=filtros.valor_min,
+                                    valor_max=filtros.valor_max,
+                                    termo_busca=filtros.termo_busca) }}">
+                                    Próxima
+                                </a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled">
+                                <a class="page-link" href="#">Próxima</a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    <div class="text-center text-muted">
+                        Mostrando registros {{ (dados.page - 1) * dados.per_page + 1 }} a 
+                        {{ (dados.page - 1) * dados.per_page + dados.items|length }} de {{ dados.total }}
+                    </div>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Nenhum registro encontrado com os filtros atuais.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Inicializa os selects com busca
+    $('#centro_custo_id, #plano_conta_id').select2({
+        placeholder: 'Selecione...',
+        allowClear: true,
+        width: '100%'
+    });
+});
+</script>
+{% endblock %} 

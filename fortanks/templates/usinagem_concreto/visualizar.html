@@ -1,0 +1,196 @@
+{% extends "common/base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Visualizar Usinagem #{{ usinagem.id }}</h2>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="card-title">Detalhes da Usinagem</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Traço:</strong> {{ usinagem.traco.nome }}</p>
+            <p><strong>Data da Usinagem:</strong> {{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</p>
+            <p><strong>Observações:</strong> {{ usinagem.observacoes if usinagem.observacoes else 'Nenhuma observação' }}</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="card-title mb-0">Rompimentos de Corpos de Prova</h5>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoRompimentoModal">
+                Novo Rompimento
+            </button>
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Data de Rompimento</th>
+                        <th>Idade (dias)</th>
+                        <th>CP Nº</th>
+                        <th>Resultado (MPa)</th>
+                        <th>Tipo de Rompimento</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rompimento in usinagem.rompimentos %}
+                    <tr>
+                        <td>{{ rompimento.id }}</td>
+                        <td>{{ rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>{{ rompimento.idade_cp }}</td>
+                        <td>{{ rompimento.numero_cp }}</td>
+                        <td>{{ rompimento.resultado|round(2) if rompimento.resultado else 'Não informado' }}</td>
+                        <td>{{ rompimento.tipo_rompimento if rompimento.tipo_rompimento else 'Não informado' }}</td>
+                        <td>
+                            <a href="{{ url_for('usinagem_concreto.editar', id=rompimento.id) }}" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-id="{{ rompimento.id }}" data-data="{{ rompimento.data_rompimento.strftime('%Y-%m-%dT%H:%M') }}" data-idade="{{ rompimento.idade_cp }}" data-numero="{{ rompimento.numero_cp }}" data-resultado="{{ rompimento.resultado }}" data-tipo-rompimento="{{ rompimento.tipo_rompimento }}" data-observacoes="{{ rompimento.observacoes }}">Editar</a>
+                            <a href="{{ url_for('usinagem_concreto.excluir', id=rompimento.id) }}" class="btn btn-danger">Excluir</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Criação -->
+<div class="modal fade" id="novoRompimentoModal" tabindex="-1" aria-labelledby="novoRompimentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="novoRompimentoModalLabel">Novo Rompimento de Corpo de Prova</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('usinagem_concreto.criar_rompimento') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <input type="hidden" name="usinagem_id" value="{{ usinagem.id }}">
+                    <div class="mb-3">
+                        <label for="numero_cp" class="form-label">Número do CP</label>
+                        <select name="numero_cp" id="numero_cp" class="form-select" required>
+                            {% for i in range(1, 11) %}
+                            <option value="{{ i }}">CP {{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="idade_cp" class="form-label">Idade do CP (dias)</label>
+                        <input type="number" class="form-control" id="idade_cp" name="idade_cp" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_rompimento" class="form-label">Data de Rompimento</label>
+                        <input type="datetime-local" class="form-control" id="data_rompimento" name="data_rompimento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="resultado" class="form-label">Resultado (MPa)</label>
+                        <input type="text" class="form-control" id="resultado" name="resultado" placeholder="Ex: 30.5">
+                    </div>
+                    <div class="mb-3">
+                        <label for="tipo_rompimento" class="form-label">Tipo de Rompimento</label>
+                        <select name="tipo_rompimento" id="tipo_rompimento" class="form-select">
+                            <option value="">Selecione o tipo de rompimento</option>
+                            <option value="cônica">Cônica</option>
+                            <option value="cônica e bipartida">Cônica e Bipartida</option>
+                            <option value="cônica e cisalhada">Cônica e Cisalhada</option>
+                            <option value="cisalhada">Cisalhada</option>
+                            <option value="colunar">Colunar</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Edição -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">Editar Rompimento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('usinagem_concreto.editar_rompimento') }}" method="POST">
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="edit_id">
+                    <div class="mb-3">
+                        <label for="edit_numero_cp" class="form-label">Número do CP</label>
+                        <select name="numero_cp" id="edit_numero_cp" class="form-select" required>
+                            {% for i in range(1, 11) %}
+                            <option value="{{ i }}">CP {{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_idade_cp" class="form-label">Idade do CP (dias)</label>
+                        <input type="number" class="form-control" id="edit_idade_cp" name="idade_cp" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_data_rompimento" class="form-label">Data de Rompimento</label>
+                        <input type="datetime-local" class="form-control" id="edit_data_rompimento" name="data_rompimento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_resultado" class="form-label">Resultado (MPa)</label>
+                        <input type="text" class="form-control" id="edit_resultado" name="resultado" placeholder="Ex: 30.5">
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_tipo_rompimento" class="form-label">Tipo de Rompimento</label>
+                        <select name="tipo_rompimento" id="edit_tipo_rompimento" class="form-select">
+                            <option value="">Selecione o tipo de rompimento</option>
+                            <option value="cônica">Cônica</option>
+                            <option value="cônica e bipartida">Cônica e Bipartida</option>
+                            <option value="cônica e cisalhada">Cônica e Cisalhada</option>
+                            <option value="cisalhada">Cisalhada</option>
+                            <option value="colunar">Colunar</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="edit_observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="edit_observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        $('#editModal').on('show.bs.modal', function (event) {
+            var button = $(event.relatedTarget);
+            var id = button.data('id');
+            var data = button.data('data');
+            var idade = button.data('idade');
+            var numero = button.data('numero');
+            var resultado = button.data('resultado');
+            var tipoRompimento = button.data('tipo-rompimento');
+            var observacoes = button.data('observacoes');
+            
+            var modal = $(this);
+            modal.find('#edit_id').val(id);
+            modal.find('#edit_data_rompimento').val(data);
+            modal.find('#edit_idade_cp').val(idade);
+            modal.find('#edit_numero_cp').val(numero);
+            modal.find('#edit_resultado').val(resultado);
+            modal.find('#edit_tipo_rompimento').val(tipoRompimento);
+            modal.find('#edit_observacoes').val(observacoes);
+        });
+    });
+</script>
+
+{% endblock %} 

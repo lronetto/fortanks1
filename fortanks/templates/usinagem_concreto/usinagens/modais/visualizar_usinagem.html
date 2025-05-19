@@ -1,0 +1,41 @@
+<!-- Modal de Visualização -->
+<div class="modal fade" id="modalVisualizarUsinagem" tabindex="-1" role="dialog" aria-labelledby="modalVisualizarUsinagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarUsinagemLabel">Detalhes da Usinagem</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="modalVisualizarUsinagemBody">
+                <!-- O conteúdo será carregado via AJAX -->
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div> 
+{% block scripts %}
+<script> // Carregar dados da usinagem quando o modal for aberto
+    $('#modalVisualizarUsinagem').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget);
+        var usinagemId = button.data('usinagem-id');
+        var modalBody = $(this).find('#modalVisualizarUsinagemBody');
+        
+        // Mostrar spinner de carregamento
+        modalBody.html('<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+        
+        // Fazer requisição AJAX para carregar os dados
+        $.get('/usinagem-concreto/usinagens/' + usinagemId + '/visualizar', function(data) {
+            modalBody.html(data);
+        }).fail(function() {
+            modalBody.html('<div class="alert alert-danger">Erro ao carregar os dados da usinagem.</div>');
+        });
+    });
+</script>
+{% endblock %}

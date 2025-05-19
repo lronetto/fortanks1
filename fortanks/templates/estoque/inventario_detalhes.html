@@ -1,0 +1,403 @@
+{% extends "common/base.html" %}
+
+{% block title %}Detalhes do Inventário{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Detalhes do Inventário #{{ inventario.id }}</h1>
+        <div>
+            <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            
+            {% if inventario.status == 'Em andamento' %}
+                <a href="{{ url_for('estoque.inventario_contagem', id=inventario.id) }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-clipboard-check"></i> Continuar Contagem
+                </a>
+                
+                <button type="button" class="btn btn-success btn-sm" 
+                        onclick="confirmarFinalizacao('{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}')">
+                    <i class="fas fa-check-double"></i> Finalizar
+                </button>
+                
+                <button type="button" class="btn btn-danger btn-sm" 
+                        onclick="confirmarCancelamento('{{ url_for('estoque.cancelar_inventario', id=inventario.id) }}')">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Informações do Inventário -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações do Inventário</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th style="width: 35%">Tipo</th>
+                                <td>{{ inventario.tipo_inventario }}</td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>
+                                    {% if inventario.status == 'Em andamento' %}
+                                        <span class="badge badge-info">Em andamento</span>
+                                    {% elif inventario.status == 'Concluído' %}
+                                        <span class="badge badge-success">Concluído</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">Cancelado</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Data de Início</th>
+                                <td>{{ inventario.data_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            <tr>
+                                <th>Data de Finalização</th>
+                                <td>
+                                    {% if inventario.data_fim %}
+                                        {{ inventario.data_fim.strftime('%d/%m/%Y %H:%M') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Iniciado por</th>
+                                <td>{{ inventario.criado_por.nome if inventario.criado_por else "Sistema" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Finalizado por</th>
+                                <td>
+                                    {% if inventario.finalizado_por %}
+                                        {{ inventario.finalizado_por.nome }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Observações</th>
+                                <td>{{ inventario.observacoes or "-" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Resumo da Contagem</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-4 text-center">
+                            <div class="h4">{{ inventario.itens|length }}</div>
+                            <div class="text-xs font-weight-bold text-primary text-uppercase">Total de Itens</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            {% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}
+                            <div class="h4">{{ itens_contados }}</div>
+                            <div class="text-xs font-weight-bold text-success text-uppercase">Itens Contados</div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            {% set itens_divergentes = inventario.itens|selectattr('diferenca')|selectattr('diferenca', 'ne', 0)|list|length %}
+                            <div class="h4">{{ itens_divergentes }}</div>
+                            <div class="text-xs font-weight-bold text-warning text-uppercase">Divergências</div>
+                        </div>
+                    </div>
+                    
+                    {% if inventario.status == 'Em andamento' %}
+                        <div class="progress mb-4">
+                            <div class="progress-bar bg-info" role="progressbar" 
+                                 style="width: {{ (itens_contados / inventario.itens|length * 100)|int }}%" 
+                                 aria-valuenow="{{ itens_contados }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="{{ inventario.itens|length }}">
+                                {{ (itens_contados / inventario.itens|length * 100)|int }}%
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-center mt-3">
+                        <div class="text-center">
+                            {% if inventario.status == 'Concluído' %}
+                                <div class="text-success">
+                                    <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                    <p>Inventário finalizado em {{ inventario.data_fim.strftime('%d/%m/%Y %H:%M') }}</p>
+                                </div>
+                            {% elif inventario.status == 'Cancelado' %}
+                                <div class="text-secondary">
+                                    <i class="fas fa-ban fa-2x mb-2"></i>
+                                    <p>Inventário cancelado em {{ inventario.data_fim.strftime('%d/%m/%Y %H:%M') }}</p>
+                                </div>
+                            {% else %}
+                                <div class="text-info">
+                                    <i class="fas fa-hourglass-half fa-2x mb-2"></i>
+                                    <p>Inventário em andamento</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Itens -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Itens do Inventário</h6>
+            <div>
+                <button type="button" class="btn btn-info btn-sm" data-toggle="collapse" data-target="#filtrosCollapse">
+                    <i class="fas fa-filter"></i> Filtros
+                </button>
+            </div>
+        </div>
+        
+        <!-- Filtros -->
+        <div class="collapse" id="filtrosCollapse">
+            <div class="card-body bg-light">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filtroTipo">Tipo de Item</label>
+                            <select id="filtroTipo" class="form-control">
+                                <option value="">Todos</option>
+                                <option value="material">Material</option>
+                                <option value="epi">EPI</option>
+                                <option value="usinagem">Usinagem</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filtroStatus">Status</label>
+                            <select id="filtroStatus" class="form-control">
+                                <option value="">Todos</option>
+                                <option value="divergente">Com Divergência</option>
+                                <option value="sem-divergencia">Sem Divergência</option>
+                                <option value="nao-contado">Não Contados</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="filtroBusca">Buscar</label>
+                            <input type="text" id="filtroBusca" class="form-control" placeholder="Nome, código...">
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-secondary btn-block" id="btnLimparFiltros">
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabelaItens" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Localização</th>
+                            <th>Qtd. Sistema</th>
+                            <th>Qtd. Contada</th>
+                            <th>Diferença</th>
+                            <th>Observações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr class="item-row {{ 'divergente' if item.diferenca and item.diferenca != 0 else 'sem-divergencia' if item.quantidade_contada is not none else 'nao-contado' }}" 
+                            data-tipo="{{ item.estoque.tipo_item }}" 
+                            data-busca="{{ item.estoque.material.nome if item.estoque.material else '' }} {{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }} {{ item.estoque.material.codigo if item.estoque.material else '' }}">
+                            <td>{{ item.estoque.tipo_item|capitalize }}</td>
+                            <td>
+                                {% if item.estoque.material %}
+                                    {{ item.estoque.material.codigo or "N/A" }}
+                                {% elif item.estoque.epi and item.estoque.epi.material %}
+                                    {{ item.estoque.epi.material.codigo or "N/A" }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.estoque.material %}
+                                    {{ item.estoque.material.nome }}
+                                {% elif item.estoque.epi and item.estoque.epi.material %}
+                                    {{ item.estoque.epi.material.nome }} - CA: {{ item.estoque.epi.ca_numero or "N/A" }}
+                                {% else %}
+                                    Item sem descrição
+                                {% endif %}
+                            </td>
+                            <td>{{ item.estoque.localizacao or "Não especificado" }}</td>
+                            <td class="text-right">
+                                {{ "%.2f"|format(item.quantidade_sistema|float) }}
+                                {% if item.estoque.material %}
+                                    {{ item.estoque.material.unidade or "" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {% if item.quantidade_contada is not none %}
+                                    {{ "%.2f"|format(item.quantidade_contada|float) }}
+                                    {% if item.estoque.material %}
+                                        {{ item.estoque.material.unidade or "" }}
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">Não contado</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right {{ 'text-danger' if item.diferenca and item.diferenca < 0 else 'text-success' if item.diferenca and item.diferenca > 0 else '' }}">
+                                {% if item.diferenca is not none %}
+                                    {{ "%.2f"|format(item.diferenca|float) }}
+                                    {% if item.diferenca > 0 %}+{% endif %}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>{{ item.observacoes or "" }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center">Nenhum item encontrado</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Finalização -->
+<div class="modal fade" id="confirmacaoFinalizacaoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoFinalizacaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmacaoFinalizacaoModalLabel">Confirmar Finalização</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> ATENÇÃO: Ao finalizar o inventário, as quantidades em estoque serão ajustadas conforme a contagem realizada.
+                </div>
+                <p>Tem certeza que deseja finalizar este inventário?</p>
+                
+                {% set itens_nao_contados = itens|selectattr('quantidade_contada', 'none')|list|length %}
+                {% if itens_nao_contados > 0 %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i> Existem {{ itens_nao_contados }} itens não contados. Finalize a contagem antes de encerrar o inventário.
+                    </div>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <form id="formFinalizacao" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success" {% if itens_nao_contados > 0 %}disabled{% endif %}>
+                        Confirmar Finalização
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Cancelamento -->
+<div class="modal fade" id="confirmacaoCancelamentoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoCancelamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmacaoCancelamentoModalLabel">Confirmar Cancelamento</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja cancelar este inventário? Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Voltar</button>
+                <form id="formCancelamento" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Confirmar Cancelamento</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Filtros
+        function aplicarFiltros() {
+            const tipo = $('#filtroTipo').val();
+            const status = $('#filtroStatus').val();
+            const busca = $('#filtroBusca').val().toLowerCase();
+            
+            $('.item-row').each(function() {
+                let mostrar = true;
+                
+                // Filtro por tipo
+                if (tipo && $(this).data('tipo') !== tipo) {
+                    mostrar = false;
+                }
+                
+                // Filtro por status
+                if (status === 'divergente' && !$(this).hasClass('divergente')) {
+                    mostrar = false;
+                } else if (status === 'sem-divergencia' && !$(this).hasClass('sem-divergencia')) {
+                    mostrar = false;
+                } else if (status === 'nao-contado' && !$(this).hasClass('nao-contado')) {
+                    mostrar = false;
+                }
+                
+                // Filtro por busca
+                if (busca && !$(this).data('busca').toLowerCase().includes(busca)) {
+                    mostrar = false;
+                }
+                
+                $(this).toggle(mostrar);
+            });
+        }
+        
+        $('#filtroTipo, #filtroStatus').change(aplicarFiltros);
+        $('#filtroBusca').on('input', aplicarFiltros);
+        
+        $('#btnLimparFiltros').click(function() {
+            $('#filtroTipo, #filtroStatus').val('');
+            $('#filtroBusca').val('');
+            aplicarFiltros();
+        });
+        
+        // Confirmação de finalização
+        window.confirmarFinalizacao = function(url) {
+            $('#formFinalizacao').attr('action', url);
+            $('#confirmacaoFinalizacaoModal').modal('show');
+        };
+        
+        // Confirmação de cancelamento
+        window.confirmarCancelamento = function(url) {
+            $('#formCancelamento').attr('action', url);
+            $('#confirmacaoCancelamentoModal').modal('show');
+        };
+    });
+</script>
+{% endblock %} 

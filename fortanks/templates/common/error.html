@@ -1,0 +1,63 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Erro {{ error_code }} - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="text-center mt-5">
+        <div class="error mx-auto" data-text="{{ error_code }}">
+            <h1 class="display-1 fw-bold">{{ error_code }}</h1>
+        </div>
+        <p class="lead text-gray-800 mb-4">{{ error_title }}</p>
+        <p class="text-gray-500 mb-4">{{ error_message }}</p>
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">
+            <i class="fas fa-arrow-left me-2"></i>Voltar para o Dashboard
+        </a>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-lg-6 mx-auto">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Detalhes do erro</h6>
+                </div>
+                <div class="card-body">
+                    {% if error_details %}
+                    <p>{{ error_details }}</p>
+                    {% else %}
+                    <p>Ocorreu um erro durante o processamento da sua solicitação.</p>
+                    <p>Se o problema persistir, entre em contato com o suporte técnico.</p>
+                    {% endif %}
+
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Código do erro: {{ error_code }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .error {
+        color: #5a5c69;
+        font-size: 7rem;
+        position: relative;
+        line-height: 1;
+        width: 12.5rem;
+        margin: 0 auto;
+    }
+
+    .error:after {
+        content: attr(data-text);
+        position: absolute;
+        left: 2px;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        color: rgba(231, 74, 59, 0.4);
+        -webkit-transform: scale(1.5);
+        transform: scale(1.5);
+    }
+</style>
+{% endblock %}

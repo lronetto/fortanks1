@@ -1,0 +1,202 @@
+<!-- Modal de Importar Usinagens -->
+<div class="modal fade" id="modalImportarUsinagens" tabindex="-1" aria-labelledby="modalImportarUsinagensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarUsinagensLabel">Importar Usinagens de Concreto via Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formImportarUsinagens" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div id="importacao-feedback" class="alert d-none" role="alert"></div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="import_traco_id" class="form-label fw-bold">Traço *</label>
+                            <select class="form-select" id="import_traco_id" name="traco_id" required>
+                                <option value="">Selecione um traço...</option>
+                                <!-- Opções de traço serão carregadas via JS -->
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="import_responsavel_id" class="form-label fw-bold">Responsável *</label>
+                            <select class="form-select" id="import_responsavel_id" name="responsavel_id" required>
+                                <option value="">Selecione um responsável...</option>
+                                <!-- Opções de responsável serão carregadas via JS -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="arquivo_excel_import" class="form-label fw-bold">Arquivo Excel (.xlsx, .xls) *</label>
+                        <input type="file" class="form-control" id="arquivo_excel_import" name="arquivo_excel" accept=".xlsx, .xls" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-info" id="btnBaixarModeloImportacao" disabled>
+                            <i class="fas fa-download"></i> Baixar Modelo Excel para o Traço Selecionado
+                        </button>
+                        <small class="form-text text-muted d-block mt-1">Selecione um traço acima para habilitar o download do modelo.</small>
+                    </div>
+                    
+                    <div id="importacao-loading" class="text-center d-none my-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Importando...</span>
+                        </div>
+                        <p>Importando usinagens, por favor aguarde...</p>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Importar Arquivo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+       function preencherSelectsImportacao() {
+            const tracoSelectImport = $('#import_traco_id');
+            const responsavelSelectImport = $('#import_responsavel_id');
+
+            tracoSelectImport.empty().append('<option value="">Selecione um traço...</option>');
+            if (typeof tracosData !== 'undefined' && tracosData.length > 0) {
+                tracosData.forEach(function(traco) {
+                    tracoSelectImport.append(`<option value="${traco.id}">${traco.codigo} - ${traco.nome}</option>`);
+                });
+            } else {
+                tracoSelectImport.append('<option value="">Nenhum traço cadastrado</option>');
+                console.warn('Nenhum traço disponível para preenchimento no modal de importação.');
+            }
+
+            responsavelSelectImport.empty().append('<option value="">Selecione um responsável...</option>');
+            if (typeof colaboradoresData !== 'undefined' && colaboradoresData.length > 0) {
+                colaboradoresData.forEach(function(colaborador) {
+                    responsavelSelectImport.append(`<option value="${colaborador.id}">${colaborador.nome}</option>`);
+                });
+            } else {
+                responsavelSelectImport.append('<option value="">Nenhum responsável cadastrado</option>');
+                console.warn('Nenhum colaborador disponível para preenchimento no modal de importação.');
+            }
+            
+            // Inicializar Select2 se disponível e configurado para outros selects
+            if ($.fn.select2) {
+                tracoSelectImport.select2({
+                    dropdownParent: $('#modalImportarUsinagens'),
+                    placeholder: "Selecione um traço...",
+                    allowClear: true
+                });
+                responsavelSelectImport.select2({
+                    dropdownParent: $('#modalImportarUsinagens'),
+                    placeholder: "Selecione um responsável...",
+                    allowClear: true
+                });
+            }
+        }
+
+        $('#modalImportarUsinagens').on('show.bs.modal', function () {
+            preencherSelectsImportacao();
+            $('#formImportarUsinagens')[0].reset(); // Limpa o formulário
+            if ($.fn.select2) { // Limpa seleções do select2
+                $('#import_traco_id').val(null).trigger('change');
+                $('#import_responsavel_id').val(null).trigger('change');
+            }
+            $('#importacao-feedback').addClass('d-none').html('');
+            $('#importacao-loading').addClass('d-none');
+            $('#btnBaixarModeloImportacao').prop('disabled', true);
+        });
+
+        $('#import_traco_id').change(function() {
+            const tracoId = $(this).val();
+            if (tracoId) {
+                $('#btnBaixarModeloImportacao').prop('disabled', false);
+            } else {
+                $('#btnBaixarModeloImportacao').prop('disabled', true);
+            }
+        });
+
+        $('#btnBaixarModeloImportacao').click(function() {
+            const tracoId = $('#import_traco_id').val();
+            if (tracoId) {
+                // A rota no backend é /usinagem-concreto/usinagens/download-modelo-excel
+                window.location.href = `{{ url_for('usinagem_concreto.download_excel_modelo_usinagem') }}?traco_id=${tracoId}`;
+            } else {
+                alert('Por favor, selecione um traço primeiro.');
+            }
+        });
+
+        $('#formImportarUsinagens').submit(function(event) {
+            event.preventDefault();
+
+            const feedbackDiv = $('#importacao-feedback');
+            const loadingDiv = $('#importacao-loading');
+            feedbackDiv.addClass('d-none').html('');
+            loadingDiv.removeClass('d-none');
+
+            const formData = new FormData(this);
+            const csrfToken = $('input[name="csrf_token"]').val(); // Pega o CSRF do formulário
+            formData.append('csrf_token', csrfToken);
+
+
+            $.ajax({
+                url: "{{ url_for('usinagem_concreto.importar_usinagens_excel') }}",
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    loadingDiv.addClass('d-none');
+                    if (response.success) {
+                        feedbackDiv.removeClass('d-none alert-danger alert-warning').addClass('alert-success').html(response.message);
+                        // Opcional: Atualizar a tabela de usinagens ou recarregar a página
+                        if (response.errors && response.errors.length > 0) {
+                            feedbackDiv.removeClass('alert-success').addClass('alert-warning');
+                            let errorHtml = response.message + "<br><strong>Detalhes dos erros:</strong><ul>";
+                            response.errors.forEach(function(err) {
+                                errorHtml += `<li>${err}</li>`;
+                            });
+                            errorHtml += "</ul>";
+                            feedbackDiv.html(errorHtml);
+                        } else {
+                            // Considerar fechar o modal e recarregar a tabela/página se tudo 100% ok.
+                            // Exemplo: $('#modalImportarUsinagens').modal('hide'); location.reload();
+                            // Por agora, apenas exibe a mensagem e o usuário pode fechar manualmente.
+                            // Para recarregar apenas a tabela DataTable: if (typeof $('#dataTable').DataTable() !== 'undefined') { $('#dataTable').DataTable().ajax.reload(); }
+                        }
+                        // Limpar o campo de arquivo após sucesso ou erro parcial
+                        $('#arquivo_excel_import').val('');
+
+                    } else {
+                        let errorHtml = "<strong>Erro na importação:</strong><ul>";
+                        if (response.errors && response.errors.length > 0) {
+                            response.errors.forEach(function(err) {
+                                errorHtml += `<li>${err}</li>`;
+                            });
+                        } else {
+                            errorHtml += `<li>${response.message || 'Ocorreu um erro desconhecido.'}</li>`;
+                        }
+                        errorHtml += "</ul>";
+                        feedbackDiv.removeClass('d-none alert-success alert-warning').addClass('alert-danger').html(errorHtml);
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    loadingDiv.addClass('d-none');
+                    let errorMsg = 'Erro na comunicação com o servidor. ';
+                    if (jqXHR.responseJSON && jqXHR.responseJSON.errors) {
+                        errorMsg += jqXHR.responseJSON.errors.join(' ');
+                    } else if (jqXHR.responseJSON && jqXHR.responseJSON.message) {
+                        errorMsg += jqXHR.responseJSON.message;
+                    } else {
+                        errorMsg += errorThrown;
+                    }
+                    feedbackDiv.removeClass('d-none alert-success alert-warning').addClass('alert-danger').text(errorMsg);
+                }
+            });
+        });
+</script>
+{% endblock %}

@@ -1,0 +1,272 @@
+{% extends "common/base.html" %}
+
+{% block title %}Nova Movimentação de Estoque{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Nova Movimentação de Estoque</h1>
+        <a href="{{ url_for('estoque.movimentacoes') }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i> Voltar para Movimentações
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Registrar Movimentação</h6>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('estoque.nova_movimentacao') }}" id="formMovimentacao">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="form-group">
+                            <label for="estoque_id">Item*</label>
+                            <select name="estoque_id" id="estoque_id" class="form-control" required>
+                                <option value="">Selecione um item de estoque</option>
+                                {% for choice in form.estoque_id.choices %}
+                                <option value="{{ choice[0] }}" {% if form.estoque_id.data == choice[0] %}selected{% endif %}>
+                                    {{ choice[1] }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            {% if form.estoque_id.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.estoque_id.errors %}
+                                {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Selecione o item que será movimentado.
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="tipo_movimento">Tipo de Movimentação*</label>
+                            <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
+                                <label class="btn btn-outline-success {% if form.tipo_movimento.data == 'entrada' %}active{% endif %}">
+                                    <input type="radio" name="tipo_movimento" value="entrada" {% if form.tipo_movimento.data == 'entrada' %}checked{% endif %} required> 
+                                    <i class="fas fa-arrow-down"></i> Entrada
+                                </label>
+                                <label class="btn btn-outline-danger {% if form.tipo_movimento.data == 'saida' %}active{% endif %}">
+                                    <input type="radio" name="tipo_movimento" value="saida" {% if form.tipo_movimento.data == 'saida' %}checked{% endif %} required> 
+                                    <i class="fas fa-arrow-up"></i> Saída
+                                </label>
+                                <label class="btn btn-outline-warning {% if form.tipo_movimento.data == 'ajuste' %}active{% endif %}">
+                                    <input type="radio" name="tipo_movimento" value="ajuste" {% if form.tipo_movimento.data == 'ajuste' %}checked{% endif %} required> 
+                                    <i class="fas fa-sync-alt"></i> Ajuste
+                                </label>
+                            </div>
+                            {% if form.tipo_movimento.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.tipo_movimento.errors %}
+                                {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                <ul class="mb-0">
+                                    <li><strong>Entrada:</strong> Aumenta a quantidade em estoque</li>
+                                    <li><strong>Saída:</strong> Diminui a quantidade em estoque</li>
+                                    <li><strong>Ajuste:</strong> Define a quantidade exata em estoque (independente do valor anterior)</li>
+                                </ul>
+                            </small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="quantidade">Quantidade*</label>
+                            <div class="input-group">
+                                <input type="number" name="quantidade" id="quantidade" class="form-control" step="0.01" min="0" 
+                                       value="{{ form.quantidade.data }}" required>
+                                <div class="input-group-append">
+                                    <span class="input-group-text" id="unidade_display">---</span>
+                                </div>
+                            </div>
+                            {% if form.quantidade.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.quantidade.errors %}
+                                {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Para <strong>entradas</strong> e <strong>saídas</strong>, informe a quantidade a ser movimentada.
+                                Para <strong>ajustes</strong>, informe o novo valor total do estoque.
+                            </small>
+                        </div>
+                        
+                        <div id="infoEstoque" class="alert alert-info d-none">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Quantidade atual:</strong> <span id="qtd_atual">-</span>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Após movimentação:</strong> <span id="qtd_apos">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="observacao">Observação</label>
+                            <textarea name="observacao" id="observacao" class="form-control" rows="3">{{ form.observacao.data or '' }}</textarea>
+                            {% if form.observacao.errors %}
+                            <div class="invalid-feedback d-block">
+                                {% for error in form.observacao.errors %}
+                                {{ error }}
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Opcional. Descreva o motivo ou detalhes adicionais sobre esta movimentação.
+                            </small>
+                        </div>
+                        
+                        <div class="alert alert-warning" id="alertaSaida" style="display:none;">
+                            <i class="fas fa-exclamation-triangle"></i> <strong>Atenção!</strong> 
+                            A quantidade informada excede o estoque disponível.
+                        </div>
+                        
+                        <div class="text-right">
+                            <a href="{{ url_for('estoque.movimentacoes') }}" class="btn btn-secondary">Cancelar</a>
+                            <button type="submit" class="btn btn-primary" id="btnSalvar">
+                                <i class="fas fa-save"></i> Registrar Movimentação
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Dados do estoque pré-processados pelo servidor
+    const dadosEstoque = {
+        {% for choice in form.estoque_id.choices %}
+        {% if choice[0] %}
+            "{{ choice[0] }}": {
+                "id": {{ choice[0] }},
+                "nome": "{{ choice[1].split('(')[0] | trim }}",
+                "quantidade": {% if '(' in choice[1] %}{{ choice[1].split('(')[1].split(')')[0].split(' ')[0] | float }}{% else %}0{% endif %},
+                "unidade": "{% if '(' in choice[1] %}{{ choice[1].split('(')[1].split(')')[0].split(' ')[1:] | join(' ') }}{% else %}{% endif %}"
+            }{% if not loop.last %},{% endif %}
+        {% endif %}
+        {% endfor %}
+    };
+
+    $(document).ready(function() {
+        // Melhorar select com select2
+        $('#estoque_id').select2({
+            placeholder: "Selecione um item",
+            allowClear: true,
+            width: '100%'
+        });
+        
+        // Atualizar informações ao selecionar item
+        $('#estoque_id').change(function() {
+            const id = $(this).val();
+            atualizarInfoEstoque(id);
+        });
+        
+        // Atualizar cálculos ao mudar quantidade ou tipo
+        $('#quantidade, input[name="tipo_movimento"]').on('input change', function() {
+            const id = $('#estoque_id').val();
+            if (id) {
+                atualizarCalculos();
+            }
+        });
+        
+        // Função para atualizar informações do estoque selecionado
+        function atualizarInfoEstoque(id) {
+            if (id && dadosEstoque[id]) {
+                const item = dadosEstoque[id];
+                $('#unidade_display').text(item.unidade);
+                $('#qtd_atual').text(`${item.quantidade.toFixed(2)} ${item.unidade}`);
+                $('#infoEstoque').removeClass('d-none');
+                atualizarCalculos();
+            } else {
+                $('#unidade_display').text('---');
+                $('#infoEstoque').addClass('d-none');
+                $('#alertaSaida').hide();
+            }
+        }
+        
+        // Função para atualizar cálculos baseados na movimentação
+        function atualizarCalculos() {
+            const id = $('#estoque_id').val();
+            if (!id || !dadosEstoque[id]) return;
+            
+            const item = dadosEstoque[id];
+            const quantidade = parseFloat($('#quantidade').val()) || 0;
+            const tipo = $('input[name="tipo_movimento"]:checked').val();
+            
+            let qtdApos = 0;
+            
+            if (tipo === 'entrada') {
+                qtdApos = item.quantidade + quantidade;
+                $('#alertaSaida').hide();
+                $('#btnSalvar').prop('disabled', false);
+            } else if (tipo === 'saida') {
+                qtdApos = item.quantidade - quantidade;
+                
+                // Verificar se tem quantidade suficiente
+                if (qtdApos < 0) {
+                    $('#alertaSaida').show();
+                    $('#btnSalvar').prop('disabled', true);
+                } else {
+                    $('#alertaSaida').hide();
+                    $('#btnSalvar').prop('disabled', false);
+                }
+            } else if (tipo === 'ajuste') {
+                qtdApos = quantidade;
+                $('#alertaSaida').hide();
+                $('#btnSalvar').prop('disabled', false);
+            }
+            
+            $('#qtd_apos').text(`${qtdApos.toFixed(2)} ${item.unidade}`);
+        }
+        
+        // Validar formulário antes de enviar
+        $('#formMovimentacao').submit(function(e) {
+            const id = $('#estoque_id').val();
+            if (!id) {
+                alert('Selecione um item de estoque');
+                e.preventDefault();
+                return false;
+            }
+            
+            const tipo = $('input[name="tipo_movimento"]:checked').val();
+            if (!tipo) {
+                alert('Selecione o tipo de movimentação');
+                e.preventDefault();
+                return false;
+            }
+            
+            const quantidade = parseFloat($('#quantidade').val());
+            if (isNaN(quantidade) || quantidade <= 0) {
+                alert('Informe uma quantidade válida maior que zero');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (tipo === 'saida' && quantidade > dadosEstoque[id].quantidade) {
+                alert('Quantidade insuficiente em estoque para esta saída');
+                e.preventDefault();
+                return false;
+            }
+            
+            return true;
+        });
+        
+        // Inicializar com valores selecionados
+        const idInicial = $('#estoque_id').val();
+        if (idInicial) {
+            atualizarInfoEstoque(idInicial);
+        }
+    });
+</script>
+{% endblock %} 

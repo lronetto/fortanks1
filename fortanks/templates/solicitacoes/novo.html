@@ -1,0 +1,256 @@
+{% extends "common/base.html" %}
+
+{% block title %}Nova Solicitação de Materiais{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Nova Solicitação de Materiais</h1>
+        <a href="{{ url_for('solicitacao.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <form method="POST" id="formSolicitacao">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Informações da Solicitação</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="numero">Número da Solicitação</label>
+                                    <input type="text" class="form-control" id="numero" name="numero" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="data_necessidade">Data de Necessidade</label>
+                                    <input type="date" class="form-control" id="data_necessidade" name="data_necessidade" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="form-group mb-3">
+                                    <label for="centro_custo_id">Centro de Custo</label>
+                                    <select class="form-control" id="centro_custo_id" name="centro_custo_id" required>
+                                        <option value="">Selecione...</option>
+                                        {% for centro in centros_custo %}
+                                        <option value="{{ centro.id }}">{{ centro.nome }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="observacoes">Observações</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Itens da Solicitação</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="material_id">Material</label>
+                                    <select class="form-control select2" id="material_id" name="material_id">
+                                        <option value="">Selecione...</option>
+                                        {% for material in materiais %}
+                                        <option value="{{ material.id }}" data-unidade="{{ material.unidade }}">
+                                            {{ material.nome }} ({{ material.codigo }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="quantidade">Quantidade</label>
+                                    <input type="number" class="form-control" id="quantidade" name="quantidade" step="0.01">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-group">
+                                    <label for="unidade">Unidade</label>
+                                    <input type="text" class="form-control" id="unidade" name="unidade" readonly>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <button type="button" class="btn btn-primary w-100" id="btnAdicionar">
+                                        <i class="fas fa-plus"></i> Adicionar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-striped" id="tabelaItens">
+                                <thead>
+                                    <tr>
+                                        <th>Material</th>
+                                        <th>Quantidade</th>
+                                        <th>Unidade</th>
+                                        <th>Observações</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Itens serão adicionados aqui via JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Ações</h5>
+                    </div>
+                    <div class="card-body">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save"></i> Salvar Solicitação
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+let itens = [];
+
+$(document).ready(function() {
+    // Inicializar Select2
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        width: '100%'
+    });
+
+    // Atualizar unidade quando material for selecionado
+    $('#material_id').on('change', function() {
+        const option = $(this).find('option:selected');
+        const unidade = option.data('unidade');
+        if (unidade) {
+            $('#unidade').val(unidade);
+        }
+    });
+
+    // Adicionar item quando clicar no botão
+    $('#btnAdicionar').on('click', function() {
+        const materialSelect = $('#material_id');
+        const quantidadeInput = $('#quantidade');
+        const unidadeInput = $('#unidade');
+        
+        if (!materialSelect.val() || !quantidadeInput.val()) {
+            alert('Selecione um material e informe a quantidade.');
+            return;
+        }
+        
+        const materialOption = materialSelect.find('option:selected');
+        const materialId = materialSelect.val();
+        const materialNome = materialOption.text();
+        const quantidade = quantidadeInput.val();
+        const unidade = unidadeInput.val();
+        
+        itens.push({
+            material_id: materialId,
+            quantidade: quantidade,
+            unidade: unidade,
+            observacoes: ''
+        });
+        
+        atualizarTabela();
+        
+        // Limpar campos
+        materialSelect.val('').trigger('change');
+        quantidadeInput.val('');
+        unidadeInput.val('');
+    });
+});
+
+function editarItem(index) {
+    const item = itens[index];
+    $('#material_id').val(item.material_id).trigger('change');
+    $('#quantidade').val(item.quantidade);
+    $('#unidade').val(item.unidade);
+    
+    // Remover o item da lista
+    itens.splice(index, 1);
+    atualizarTabela();
+}
+
+function removerItem(index) {
+    if (confirm('Tem certeza que deseja remover este item?')) {
+        itens.splice(index, 1);
+        atualizarTabela();
+    }
+}
+
+function atualizarTabela() {
+    const tbody = $('#tabelaItens tbody');
+    tbody.empty();
+    
+    itens.forEach((item, index) => {
+        const materialOption = $(`#material_id option[value="${item.material_id}"]`);
+        const materialNome = materialOption.length ? materialOption.text() : '';
+        
+        const tr = $('<tr>');
+        tr.append(`<td>${materialNome}</td>`);
+        tr.append(`<td>${item.quantidade}</td>`);
+        tr.append(`<td>${item.unidade}</td>`);
+        tr.append(`<td>${item.observacoes || '-'}</td>`);
+        tr.append(`
+            <td>
+                <button type="button" class="btn btn-sm btn-info" onclick="editarItem(${index})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-danger" onclick="removerItem(${index})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `);
+        tbody.append(tr);
+    });
+}
+
+// Antes de enviar o formulário principal
+$('#formSolicitacao').on('submit', function(e) {
+    e.preventDefault();
+    
+    if (itens.length === 0) {
+        alert('Adicione pelo menos um item à solicitação.');
+        return;
+    }
+    
+    // Adicionar itens ao formulário
+    itens.forEach((item, index) => {
+        $(this).append(`<input type="hidden" name="material_id[]" value="${item.material_id}">`);
+        $(this).append(`<input type="hidden" name="quantidade[]" value="${item.quantidade}">`);
+        $(this).append(`<input type="hidden" name="unidade[]" value="${item.unidade}">`);
+        $(this).append(`<input type="hidden" name="observacoes_item[]" value="${item.observacoes || ''}">`);
+    });
+    
+    this.submit();
+});
+</script>
+{% endblock %} 

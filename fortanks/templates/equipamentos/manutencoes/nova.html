@@ -1,0 +1,145 @@
+{% extends "common/base.html" %}
+
+{% block title %}Nova Manutenção - {{ equipamento.nome }} - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Nova Manutenção{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Nova Manutenção - {{ equipamento.nome }}</h1>
+        <a href="{{ url_for('equipamento.manutencoes', id=equipamento.id) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            <span class="d-none d-md-inline-block ms-1">Voltar</span>
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Registro de Manutenção</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" class="needs-validation" novalidate>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="tipo" class="form-label">Tipo de Manutenção *</label>
+                        <select class="form-select" id="tipo" name="tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="Preventiva">Preventiva</option>
+                            <option value="Corretiva">Corretiva</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o tipo de manutenção.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="status" class="form-label">Status *</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="">Selecione...</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Em Andamento">Em Andamento</option>
+                            <option value="Concluída">Concluída</option>
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione o status da manutenção.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="data_inicio" class="form-label">Data de Início *</label>
+                        <input type="datetime-local" class="form-control" id="data_inicio" name="data_inicio" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe a data de início.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="data_fim" class="form-label">Data de Conclusão</label>
+                        <input type="datetime-local" class="form-control" id="data_fim" name="data_fim">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="responsavel" class="form-label">Responsável *</label>
+                        <input type="text" class="form-control" id="responsavel" name="responsavel" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe o responsável pela manutenção.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="custo" class="form-label">Custo (R$)</label>
+                        <input type="number" class="form-control" id="custo" name="custo" step="0.01" min="0">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="descricao" class="form-label">Descrição da Manutenção *</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3" required></textarea>
+                        <div class="invalid-feedback">
+                            Por favor, descreva a manutenção.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                        <a href="{{ url_for('equipamento.manutencoes', id=equipamento.id) }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.querySelector('.needs-validation');
+        const dataInicio = document.getElementById('data_inicio');
+        const dataFim = document.getElementById('data_fim');
+        const status = document.getElementById('status');
+
+        // Validação do formulário
+        form.addEventListener('submit', function (event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+
+        // Configurar data mínima e máxima
+        const hoje = new Date().toISOString().slice(0, 16);
+        dataInicio.setAttribute('max', hoje);
+
+        // Atualizar data fim mínima quando data início mudar
+        dataInicio.addEventListener('change', function () {
+            dataFim.setAttribute('min', dataInicio.value);
+        });
+
+        // Validar data fim quando status for "Concluída"
+        status.addEventListener('change', function () {
+            if (this.value === 'Concluída') {
+                dataFim.setAttribute('required', '');
+            } else {
+                dataFim.removeAttribute('required');
+            }
+        });
+    });
+</script>
+{% endblock %}

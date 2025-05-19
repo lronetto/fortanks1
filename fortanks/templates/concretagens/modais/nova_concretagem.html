@@ -1,0 +1,112 @@
+<!-- Modal de Nova Concretagem -->
+<div class="modal fade" id="modalNovaConcretagem" tabindex="-1" aria-labelledby="modalNovaConcretagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formNovaConcretagem" method="POST" action="{{ url_for('concretagem.novo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovaConcretagemLabel">Nova Concretagem</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Primeira linha: Tanques e Data -->
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6 mb-3 mb-md-0">
+                            <label for="tanque_ids" class="form-label fw-bold">Tanques *</label>
+                            <select class="form-select form-control" id="tanque_ids" name="tanque_ids" multiple required>
+                                {% for tanque in tanques %}
+                                <option value="{{ tanque.id }}">{{tanque.contrato.centro_custo.nome}} - {{ tanque.nome }} ({{ tanque.sistema }})</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Segure Ctrl para selecionar múltiplos tanques.</small>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="data_concretagem" class="form-label fw-bold">Data *</label>
+                            <input type="date" class="form-control" id="data_concretagem" name="data_concretagem" required>
+                        </div>
+                    </div>
+
+                    <!-- Segunda linha: Pista e Observações -->
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6 mb-3 mb-md-0">
+                            <label for="pista" class="form-label fw-bold">Pista *</label>
+                            <select class="form-select form-control" id="pista" name="pista" required>
+                                <option value="">Selecione a pista</option>
+                                <option value="1">Pista 1</option>
+                                <option value="2">Pista 2</option>
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="observacoes" class="form-label fw-bold">Observações</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Seleção de Peças -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold">Peças a serem concretadas *</label>
+                            <div class="alert alert-info py-2" id="alerta-selecione-tanque">
+                                <i class="fas fa-info-circle"></i> Selecione pelo menos um tanque para ver as peças disponíveis.
+                            </div>
+                            <div id="div-pecas" style="display: none;">
+                                <div class="d-flex flex-wrap align-items-center mb-3">
+                                    <div class="form-check me-3 mb-2">
+                                        <input class="form-check-input" type="checkbox" id="mostrarNaoConcretadas">
+                                        <label class="form-check-label" for="mostrarNaoConcretadas">
+                                            Apenas peças não concretadas
+                                        </label>
+                                    </div>
+                                    <div class="input-group input-group-sm mb-2" style="max-width: 300px;">
+                                        <input type="text" id="filtroPecasMobile" class="form-control"
+                                            placeholder="Filtrar peças...">
+                                        <button class="btn btn-outline-secondary" type="button">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive" style="max-height: 350px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+                                    <table class="table table-sm table-bordered table-hover" id="tabelaPecas">
+                                        <thead class="sticky-top bg-white">
+                                            <tr>
+                                                <th width="5%" class="align-middle text-center">
+                                                    <div class="d-none d-md-block">Sel.</div>
+                                                    <div class="d-md-none"><i class="fas fa-check-square"></i></div>
+                                                </th>
+                                                <th width="25%" class="align-middle">Tanque</th>
+                                                <th width="20%" class="align-middle">Tipo</th>
+                                                <th width="8%" class="align-middle">Nome</th>
+                                                <th width="8%" class="align-middle">Forma</th>
+                                                <th width="39%" class="align-middle">Usinagem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- As peças serão carregadas via JavaScript -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Contador de peças selecionadas -->
+                                <div class="mt-2 alert alert-info py-2" id="contadorPecas">
+                                    <i class="fas fa-info-circle"></i> Nenhuma peça selecionada
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Concretagem</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/concretagens-multi-tanques.js') }}"></script>
+<script>
+
+</script>
+{% endblock %}  

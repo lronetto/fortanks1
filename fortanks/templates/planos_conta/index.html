@@ -1,0 +1,204 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Planos de Conta{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Planos de Conta</h1>
+        <div>
+            <a href="{{ url_for('plano_conta.importar') }}" class="btn btn-success me-2">
+                <i class="fas fa-file-excel"></i> Importar Excel
+            </a>
+            <a href="{{ url_for('plano_conta.novo') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Novo Plano de Conta
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="filtroForm" class="row g-3">
+                <div class="col-md-4">
+                    <label for="filtro-codigo" class="form-label">Código/Descrição</label>
+                    <input type="text" class="form-control" id="filtro-codigo" placeholder="Pesquisar...">
+                </div>
+                <div class="col-md-4">
+                    <label for="filtro-indice" class="form-label">Índice</label>
+                    <input type="text" class="form-control" id="filtro-indice" placeholder="Filtrar por índice...">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro-status" class="form-label">Status</label>
+                    <select class="form-select" id="filtro-status">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="button" id="btn-filtrar" class="btn btn-primary me-2">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <button type="button" id="btn-limpar-filtro" class="btn btn-outline-secondary">
+                        <i class="fas fa-broom"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Planos de Conta -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Planos de Conta</h6>
+        </div>
+        <div class="card-body">
+            {% if planos_conta %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabelaPlanosConta" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Índice</th>
+                            <th>Status</th>
+                            <th>Data de Cadastro</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for plano in planos_conta %}
+                        <tr>
+                            <td>{{ plano.codigo }}</td>
+                            <td>{{ plano.descricao }}</td>
+                            <td>{{ plano.indice or '-' }}</td>
+                            <td>
+                                {% if plano.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ plano.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td class="text-center">
+                                <a href="{{ url_for('plano_conta.visualizar', id=plano.id) }}"
+                                    class="btn btn-sm btn-info" title="Visualizar">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{{ url_for('plano_conta.editar', id=plano.id) }}"
+                                    class="btn btn-sm btn-primary" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-danger btn-excluir" title="Excluir"
+                                    data-id="{{ plano.id }}" data-codigo="{{ plano.codigo }}" data-bs-toggle="modal"
+                                    data-bs-target="#modalExcluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                Nenhum plano de conta cadastrado.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-labelledby="modalExcluirLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalExcluirLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o plano de conta <strong id="plano-codigo"></strong>?</p>
+                <p>Esta ação não poderá ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluir" action="" method="POST">
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // DataTable
+        $('#tabelaPlanosConta').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
+            },
+            order: [[0, 'asc']]  // Ordenar por código
+        });
+
+        // Modal de exclusão
+        $('.btn-excluir').click(function () {
+            var id = $(this).data('id');
+            var codigo = $(this).data('codigo');
+            $('#plano-codigo').text(codigo);
+            $('#formExcluir').attr('action', '/plano-conta/excluir/' + id);
+        });
+
+        // Filtros
+        $('#btn-filtrar').click(function () {
+            filtrarPlanosConta();
+        });
+
+        $('#btn-limpar-filtro').click(function () {
+            $('#filtro-codigo').val('');
+            $('#filtro-indice').val('');
+            $('#filtro-status').val('');
+            filtrarPlanosConta();
+        });
+
+        function filtrarPlanosConta() {
+            var table = $('#tabelaPlanosConta').DataTable();
+            table.search($('#filtro-codigo').val()).draw();
+
+            // Filtro personalizado para índice e status
+            $.fn.dataTable.ext.search.push(
+                function (settings, data, dataIndex) {
+                    var indice = $('#filtro-indice').val().toLowerCase();
+                    var status = $('#filtro-status').val();
+                    var indiceItem = data[2].toLowerCase(); // Coluna do índice
+                    var statusItem = data[3]; // Coluna do status
+
+                    // Verificar índice
+                    if (indice && indiceItem.indexOf(indice) === -1) {
+                        return false;
+                    }
+
+                    // Verificar status
+                    if (status === 'ativo' && !statusItem.includes('Ativo')) {
+                        return false;
+                    }
+                    if (status === 'inativo' && !statusItem.includes('Inativo')) {
+                        return false;
+                    }
+
+                    return true;
+                }
+            );
+
+            table.draw();
+            $.fn.dataTable.ext.search.pop(); // Remover o filtro personalizado
+        }
+    });
+</script>
+{% endblock %}

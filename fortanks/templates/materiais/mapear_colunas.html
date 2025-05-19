@@ -1,0 +1,175 @@
+{% extends "common/base.html" %}
+
+{% block title %}Mapear Colunas - Importação de Materiais{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4">
+    <h1 class="mt-4">Importar Materiais</h1>
+    <ol class="breadcrumb mb-4">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('material.index') }}">Materiais</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('material.importar') }}">Importar</a></li>
+        <li class="breadcrumb-item active">Mapear Colunas</li>
+    </ol>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-table me-1"></i>
+            Mapear Colunas do Arquivo
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-4">
+                <h5 class="alert-heading">Instruções</h5>
+                <p>Selecione a qual campo do sistema corresponde cada coluna do seu arquivo Excel:</p>
+                <ul>
+                    <li>Os campos <strong>Nome</strong> e <strong>Categoria</strong> são obrigatórios.</li>
+                    <li>Os demais campos são opcionais.</li>
+                </ul>
+            </div>
+
+            <div class="row mb-4">
+                <div class="col-md-8 mb-3">
+                    <label for="planilha" class="form-label">Nome da Planilha</label>
+                    {% if planilhas and planilhas|length > 1 %}
+                    <form id="planilhaForm" action="{{ url_for('material.selecionar_planilha') }}" method="GET">
+                        <input type="hidden" name="arquivo" value="{{ temp_file.split('/')[-1] if '/' in temp_file else temp_file.split('\\')[-1] if '\\' in temp_file else temp_file }}">
+                        <select class="form-select" id="planilha" name="planilha"
+                            onchange="document.getElementById('planilhaForm').submit();">
+                            {% for sheet in planilhas %}
+                            <option value="{{ sheet }}" {% if sheet==planilha_atual %}selected{% endif %}>{{ sheet }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                    <div class="form-text">Selecione a planilha que contém os dados para importação.</div>
+                    {% else %}
+                    <input type="text" class="form-control" id="planilha" name="planilha"
+                        value="{{ planilha_atual if planilha_atual else '' }}"
+                        placeholder="Deixe em branco para usar a primeira planilha">
+                    <div class="form-text">Informe o nome da planilha se o arquivo contiver múltiplas abas.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <form method="POST" action="{{ url_for('material.confirmar_importacao') }}" class="mb-4" id="colunasForm">
+                <input type="hidden" name="temp_file" id="temp_file" value="{{ temp_file }}">
+                <input type="hidden" name="planilha" value="{{ planilha_atual }}">
+
+                <div class="row mb-4">
+                    <div class="col-md-4 mb-3">
+                        <label for="col_nome" class="form-label">Nome <span class="text-danger">*</span></label>
+                        <select class="form-select" id="col_nome" name="col_nome" required>
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="col_categoria" class="form-label">Categoria <span
+                                class="text-danger">*</span></label>
+                        <select class="form-select" id="col_categoria" name="col_categoria" required>
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-4 mb-3">
+                        <label for="col_codigo_erp" class="form-label">Código ERP</label>
+                        <select class="form-select" id="col_codigo_erp" name="col_codigo_erp">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="col_plano_conta" class="form-label">Plano de Contas</label>
+                        <select class="form-select" id="col_plano_conta" name="col_plano_conta">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="col_unidade" class="form-label">Unidade</label>
+                        <select class="form-select" id="col_unidade" name="col_unidade">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-check mb-4">
+                    <input class="form-check-input" type="checkbox" id="opcao_atualizacao" name="opcao_atualizacao"
+                        value="atualizar">
+                    <label class="form-check-label" for="opcao_atualizacao">
+                        Atualizar materiais existentes
+                    </label>
+                    <div class="form-text">Se desmarcado, materiais já existentes serão ignorados durante a importação.
+                    </div>
+                </div>
+
+                <h4 class="mb-3">Pré-visualização dos Dados</h4>
+                <div class="table-responsive mb-4">
+                    <table class="table table-bordered table-hover table-sm">
+                        <thead>
+                            <tr>
+                                {% for coluna in colunas %}
+                                <th>{{ coluna }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for linha in preview_data %}
+                            <tr>
+                                {% for valor in linha %}
+                                <td>{{ valor }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="{{ url_for('material.importar') }}" class="btn btn-secondary">
+                        <i class="fas fa-times me-1"></i> Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check me-1"></i> Confirmar Importação
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Garantir que a seleção da planilha funcione como esperado
+    document.addEventListener('DOMContentLoaded', function () {
+        const planilhaSelect = document.getElementById('planilha');
+        if (planilhaSelect) {
+            console.log("Select de planilhas encontrado, tem " + planilhaSelect.options.length + " opções");
+
+            // Adicionar evento de mudança (embora já tenhamos o onchange no elemento)
+            planilhaSelect.addEventListener('change', function () {
+                console.log("Planilha alterada para: " + this.value);
+                document.getElementById('planilhaForm').submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

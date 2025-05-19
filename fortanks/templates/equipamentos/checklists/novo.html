@@ -1,0 +1,137 @@
+{% extends "common/base.html" %}
+
+{% block title %}Novo Modelo de Checklist - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Novo Modelo{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Novo Modelo de Checklist</h1>
+        <a href="{{ url_for('equipamento.checklists') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i>
+            <span class="d-none d-md-inline-block ms-1">Voltar</span>
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Dados do Modelo</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="checklistForm">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label">Nome *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe o nome do modelo.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Itens do Checklist *</label>
+                    <div id="itensContainer">
+                        <div class="input-group mb-2" data-item-id="1">
+                            <input type="text" class="form-control" name="item_descricao[]" placeholder="Descrição do item" required>
+                            <select class="form-select" name="item_tipo[]" style="max-width: 150px;">
+                                <option value="text">Texto</option>
+                                <option value="checkbox">Checkbox</option>
+                                <option value="select">Seleção</option>
+                            </select>
+                            <div class="input-group-text">
+                                <div class="form-check">
+                                    <input class="form-check-input item-obrigatorio" type="checkbox" name="item_obrigatorio[]" value="1" id="obrigatorio_1">
+                                    <label class="form-check-label" for="obrigatorio_1">Obrigatório</label>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-danger" onclick="removerItem(this)">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-success" onclick="adicionarItem()">
+                        <i class="fas fa-plus"></i>
+                        <span class="ms-1">Adicionar Item</span>
+                    </button>
+                    <div class="invalid-feedback" id="itensError">
+                        Por favor, adicione pelo menos um item ao checklist.
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        <span class="d-none d-md-inline-block ms-1">Salvar</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let itemCount = 1;
+    
+    function adicionarItem() {
+        const container = document.getElementById('itensContainer');
+        const novoItem = document.createElement('div');
+        novoItem.className = 'input-group mb-2';
+        novoItem.setAttribute('data-item-id', itemCount);
+        novoItem.innerHTML = `
+            <input type="text" class="form-control" name="item_descricao[]" placeholder="Descrição do item" required>
+            <select class="form-select" name="item_tipo[]" style="max-width: 150px;">
+                <option value="text">Texto</option>
+                <option value="checkbox">Checkbox</option>
+                <option value="select">Seleção</option>
+            </select>
+            <div class="input-group-text">
+                <div class="form-check">
+                    <input class="form-check-input item-obrigatorio" type="checkbox" name="item_obrigatorio[]" value="1" id="obrigatorio_${itemCount}">
+                    <label class="form-check-label" for="obrigatorio_${itemCount}">Obrigatório</label>
+                </div>
+            </div>
+            <button type="button" class="btn btn-danger" onclick="removerItem(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+        container.appendChild(novoItem);
+        itemCount++;
+    }
+
+    function removerItem(button) {
+        const item = button.closest('.input-group');
+        item.remove();
+    }
+
+    document.getElementById('checklistForm').addEventListener('submit', function(e) {
+        const itens = document.getElementsByName('item_descricao[]');
+        if (itens.length === 0) {
+            e.preventDefault();
+            document.getElementById('itensError').style.display = 'block';
+        } else {
+            document.getElementById('itensError').style.display = 'none';
+            
+            // Garantir que checkboxes desmarcados tenham valor 0
+            const checkboxes = document.querySelectorAll('.item-obrigatorio');
+            
+            // Adiciona inputs hidden para checkboxes desmarcados
+            for (let i = 0; i < checkboxes.length; i++) {
+                if (!checkboxes[i].checked) {
+                    const hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'item_obrigatorio[]';
+                    hiddenInput.value = '0';
+                    checkboxes[i].parentNode.appendChild(hiddenInput);
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

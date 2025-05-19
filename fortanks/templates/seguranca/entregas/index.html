@@ -1,0 +1,1415 @@
+{% extends "common/base.html" %}
+
+{% block title %}Entregas de EPIs{% endblock %}
+{% block mobile_title %}Entregas de EPIs{% endblock %}
+
+{% block extra_css %}
+<!-- DataTables CSS -->
+<link href="https://cdn.datatables.net/1.10.25/css/dataTables.bootstrap4.min.css" rel="stylesheet" />
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css">
+
+<style>
+    /* Ajustes para o Select2 dentro do modal */
+    .select2-container {
+        width: 100% !important;
+    }
+
+    .select2-dropdown {
+        z-index: 9999;
+    }
+
+    /* Estilização da caixa de busca do Select2 */
+    .select2-container--default .select2-selection--single {
+        height: calc(2em + 0.75rem + 2px);
+        padding: 0.375rem 0.75rem;
+        border: 1px solid #ced4da;
+        border-radius: 0.25rem;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__rendered {
+        line-height: 2.5;
+    }
+
+    .select2-container--default .select2-selection--single .select2-selection__arrow {
+        height: 100%;
+    }
+
+    /* Badge para status */
+    .badge-pendente {
+        background-color: #f8c146;
+        color: #212529;
+    }
+
+    .badge-devolvido {
+        background-color: #28a745;
+        color: white;
+    }
+
+    /* Estilos para cards de entregas */
+    .card-entrega {
+        transition: all 0.3s ease;
+    }
+
+    .card-entrega:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Otimizações para dispositivos móveis */
+    @media (max-width: 768px) {
+        /* Ajustes gerais para telas pequenas */
+        .container-fluid {
+            padding: 0.5rem !important;
+        }
+        
+        /* Botões menores e mais adequados */
+        .btn {
+            padding: 0.375rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        /* Cards mais ajustados */
+        .card {
+            margin-bottom: 0.75rem;
+        }
+        
+        .card-body {
+            padding: 0.75rem;
+        }
+        
+        /* Tipografia ajustada */
+        h1, .h1 {
+            font-size: 1.5rem;
+        }
+        
+        h3, .h3 {
+            font-size: 1.25rem;
+        }
+        
+        /* Estatísticas em layout mais adequado */
+        .col-md-6, .col-xl-3 {
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Tabela mais compacta */
+        .table td, .table th {
+            padding: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        /* Ocultar colunas menos importantes em telas pequenas */
+        .table .mobile-hide {
+            display: none;
+        }
+        
+        /* Estilo para tabela responsiva */
+        .table-responsive {
+            font-size: 0.875rem;
+        }
+        
+        /* Botões de ações menores */
+        .btn-sm {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.75rem;
+        }
+        
+        /* Modais mais ajustados */
+        .modal-body, .modal-footer, .modal-header {
+            padding: 0.75rem;
+        }
+        
+        /* Ajustes para layout dos forms */
+        .form-control, .form-select {
+            font-size: 1rem; /* Evitar zoom no iOS */
+            height: calc(1.5em + 0.75rem + 2px);
+        }
+        
+        /* Melhoria para visualização de ações */
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+        
+        /* Evitar que todos os botões da navbar fiquem visíveis ao mesmo tempo */
+        .navbar .btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">Entregas de EPIs</h1>
+        </div>
+        <div class="col-auto d-flex flex-wrap gap-2">
+            <a href="{{ url_for('seguranca.epis_index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left d-none d-md-inline-block me-1"></i>Voltar
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novaEntregaModal">
+                <i class="fas fa-plus d-none d-md-inline-block me-1"></i>Nova Entrega
+            </button>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div class="alert-container">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <!-- Estatísticas de Entregas - Versão Mobile -->
+    <div class="d-block d-md-none">
+        <div class="row mb-3">
+            <div class="col-6 mb-2">
+                <div class="card border-left-primary shadow h-100 py-1">
+                    <div class="card-body py-2">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    Total de Entregas</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-lg text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% set pendentes = entregas|selectattr('data_devolucao', 'eq', None)|list %}
+            
+            <div class="col-6 mb-2">
+                <div class="card border-left-warning shadow h-100 py-1">
+                    <div class="card-body py-2">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    Em Uso</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pendentes|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-hand-holding fa-lg text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% set devolvidos = entregas|selectattr('data_devolucao', 'ne', None)|list %}
+            
+            <div class="col-6 mb-2">
+                <div class="card border-left-success shadow h-100 py-1">
+                    <div class="card-body py-2">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                    Devolvidos</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ devolvidos|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-undo fa-lg text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-6 mb-2">
+                <div class="card border-left-info shadow h-100 py-1">
+                    <div class="card-body py-2">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    Colaboradores</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ colaboradores|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-users fa-lg text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas de Entregas - Versão Desktop -->
+    <div class="d-none d-md-block">
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-primary shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    Total de Entregas</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    Em Uso / Pendentes</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pendentes|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-hand-holding fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-success shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                    Devolvidos</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ devolvidos|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-undo fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-info shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    Colaboradores</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ colaboradores|length }}</div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-users fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros e Pesquisa - Versão Mobile -->
+    <div class="d-block d-md-none">
+        <div class="card shadow mb-3">
+            <div class="card-header py-2 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#filtrosCollapse" aria-expanded="false" aria-controls="filtrosCollapse">
+                        <i class="fas fa-filter"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="collapse" id="filtrosCollapse">
+                <div class="card-body py-2">
+                    <div class="mb-2">
+                        <label for="filtro-colaborador-mobile" class="form-label small">Colaborador</label>
+                        <select class="form-select form-select-sm select2-filtro-mobile" id="filtro-colaborador-mobile">
+                            <option value="">Todos os colaboradores</option>
+                            {% for colaborador in colaboradores %}
+                            <option value="{{ colaborador.id }}">{{ colaborador.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="filtro-epi-mobile" class="form-label small">EPI</label>
+                        <select class="form-select form-select-sm select2-filtro-mobile" id="filtro-epi-mobile">
+                            <option value="">Todos os EPIs</option>
+                            {% for epi in epis %}
+                            <option value="{{ epi.id }}">{{ epi.material.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="filtro-status-mobile" class="form-label small">Status</label>
+                        <select class="form-select form-select-sm" id="filtro-status-mobile">
+                            <option value="">Todos</option>
+                            <option value="pendente">Em uso</option>
+                            <option value="devolvido">Devolvido</option>
+                        </select>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <button class="btn btn-sm btn-primary w-49" id="btn-aplicar-filtro-mobile">
+                            <i class="fas fa-filter me-1"></i>Aplicar
+                        </button>
+                        <button class="btn btn-sm btn-secondary w-49" id="btn-limpar-filtro-mobile">
+                            <i class="fas fa-broom me-1"></i>Limpar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros e Pesquisa - Versão Desktop -->
+    <div class="d-none d-md-block">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Filtrar Entregas</h6>
+                <form method="GET" action="{{ url_for('seguranca.entregas_index') }}" class="row g-2 align-items-end filter-form">
+                <div class="col-md-3 col-lg-3">
+                    <label for="filtro_colaborador_id" class="form-label">Colaborador</label>
+                    <select class="form-control select2-filtro" id="filtro_colaborador_id" name="colaborador_id">
+                        <option value="">Todos</option>
+                        {# Preenche com dados do backend e seleciona o ativo #}
+                        {% for col in colaboradores %}
+                        <option value="{{ col.id }}" {% if request.args.get('colaborador_id') | int == col.id %}selected{% endif %}>{{ col.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 col-lg-3">
+                    <label for="filtro_epi_id" class="form-label">EPI</label>
+                    <select class="form-control select2-filtro" id="filtro_epi_id" name="epi_id">
+                        <option value="">Todos</option>
+                        {# Preenche com dados do backend e seleciona o ativo #}
+                        {% for epi in epis_disponiveis %}
+                        <option value="{{ epi.id }}" {% if request.args.get('epi_id') | int == epi.id %}selected{% endif %}>{{ epi.material.nome }} (CA: {{ epi.ca_numero or '-' }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 col-lg-2">
+                    <label for="filtro_data_inicio" class="form-label">Data Entrega (De)</label>
+                    {# Mantém valor do filtro ativo #}
+                    <input type="date" class="form-control" id="filtro_data_inicio" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
+                </div>
+                <div class="col-md-2 col-lg-2">
+                    <label for="filtro_data_fim" class="form-label">Data Entrega (Até)</label>
+                     {# Mantém valor do filtro ativo #}
+                    <input type="date" class="form-control" id="filtro_data_fim" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
+                </div>
+                <div class="col-md-1 col-lg-1">
+                    <label for="filtro_status" class="form-label">Status</label>
+                    <select class="form-select" id="filtro_status" name="status">
+                         {# Mantém valor do filtro ativo #}
+                        <option value="" {% if not request.args.get('status') %}selected{% endif %}>Todos</option>
+                        <option value="entregue" {% if request.args.get('status') == 'entregue' %}selected{% endif %}>Em Uso</option>
+                        <option value="devolvido" {% if request.args.get('status') == 'devolvido' %}selected{% endif %}>Devolvido</option>
+                    </select>
+                </div>
+                <div class="col-md-1 col-lg-1 d-flex justify-content-start align-items-end">
+                    <button type="submit" class="btn btn-info btn-sm me-1" title="Aplicar Filtros">
+                        <i class="fas fa-filter"></i> <span class="d-none d-lg-inline">Filtrar</span>
+                    </button>
+                    {# Link para limpar filtros (volta para a URL base sem args) #}
+                    <a href="{{ url_for('seguranca.entregas_index') }}" class="btn btn-secondary btn-sm" title="Limpar Filtros">
+                        <i class="fas fa-eraser"></i>
+                    </a>
+                </div>
+            </form>
+                </div>
+            </div>
+            
+    </div>
+
+    <!-- Lista de Entregas -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Entregas Realizadas</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th class="mobile-hide">ID</th>
+                            <th>Colaborador</th>
+                            <th>EPI</th>
+                            <th class="mobile-hide">Data Entrega</th>
+                            <th class="mobile-hide">Quantidade</th>
+                            <th>Devolução</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entrega in entregas %}
+                        <tr class="entrega-row {% if entrega.data_devolucao %}devolvido{% else %}pendente{% endif %}"
+                            data-colaborador="{{ entrega.colaborador_id }}" data-epi="{{ entrega.epi_id }}"
+                            data-status="{% if entrega.data_devolucao %}devolvido{% else %}pendente{% endif %}">
+                            <td class="mobile-hide">{{ entrega.id }}</td>
+                            <td>
+                                <div data-bs-toggle="modal" data-bs-target="#fichaEpiModal" data-id="{{ entrega.colaborador_id }}" data-nome="{{ entrega.colaborador.nome }}">
+                                        {{ entrega.colaborador.nome }}
+                                </div>
+                            </td>
+                            <td>{{ entrega.epi.material.nome }}</td>
+                            <td class="mobile-hide">{{ entrega.data_entrega.strftime('%d/%m/%Y') }}</td>
+                            <td class="mobile-hide">{{ entrega.quantidade }}</td>
+                            <td>
+                                {% if entrega.data_devolucao %}
+                                {{ entrega.data_devolucao.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                <span class="text-muted">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if entrega.data_devolucao %}
+                                <span class="badge bg-success">Devolvido</span>
+                                {% else %}
+                                <span class="badge badge-pendente">Em uso</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="action-buttons">
+                                    <!-- Botão para visualizar detalhes -->
+                                    <button type="button" class="btn btn-sm btn-info btn-visualizar-entrega"
+                                        data-id="{{ entrega.id }}" title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+
+                                    {% if not entrega.data_devolucao %}
+                                    <!-- Botão para registrar devolução (apenas se não devolvido) -->
+                                    <button type="button" class="btn btn-sm btn-warning btn-devolver-entrega"
+                                        data-id="{{ entrega.id }}" title="Devolver">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                    {% endif %}
+
+                                    <!-- Botão para excluir -->
+                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                                        data-bs-target="#deleteModal{{ entrega.id }}" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- Controles de Paginação -->
+            {% if pagination and pagination.pages > 1 %}
+                <nav aria-label="Page navigation" class="mt-3">
+                    <ul class="pagination justify-content-center flex-wrap">
+                        {# Link para Primeira Página - Endpoint corrigido #}
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=1)) }}">&laquo;&laquo;</a>
+                        </li>
+                        {# Link para Página Anterior - Endpoint corrigido #}
+                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=pagination.prev_num)) }}">&laquo;</a>
+                        </li>
+                        {# Links das Páginas Vizinhas - Endpoint corrigido #}
+                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+                            {% if page_num %}
+                                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=page_num)) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        {# Link para Próxima Página - Endpoint corrigido #}
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=pagination.next_num)) }}">&raquo;</a>
+                        </li>
+                         {# Link para Última Página - Endpoint corrigido #}
+                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=pagination.pages)) }}">&raquo;&raquo;</a>
+                        </li>
+                    </ul>
+                </nav>
+                <div class="text-center text-muted small mt-2">
+                    Exibindo página {{ pagination.page }} de {{ pagination.pages }} ({{ pagination.total }} registros no total)
+                </div>
+            {% elif pagination and pagination.total > 0 %}
+                 <div class="text-center text-muted small mt-2">
+                    ({{ pagination.total }} registros encontrados)
+                </div>
+            {% endif %}
+        </div>
+    </div>
+<!-- Modal Ficha EPI (Estrutura) -->
+<div class="modal fade" id="fichaEpiModal" tabindex="-1" aria-labelledby="fichaEpiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="fichaEpiModalLabel">Ficha de EPI - Carregando...</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="fichaEpiModalBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="#" id="btn-download-ficha-pdf" class="btn btn-success no-print" target="_blank">
+                   <i class="fas fa-file-pdf"></i> Baixar PDF
+                </a>
+                <button type="button" class="btn btn-secondary no-print" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+    <!-- Modais para Exclusão de Entrega -->
+    {% for entrega in entregas %}
+    <div class="modal fade" id="deleteModal{{ entrega.id }}" tabindex="-1" 
+        aria-labelledby="deleteModalLabel{{ entrega.id }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteModalLabel{{ entrega.id }}">Confirmar Exclusão</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Tem certeza que deseja excluir o registro de entrega para "{{ entrega.colaborador.nome }}"?</p>
+                    <p class="mb-0"><strong>EPI:</strong> {{ entrega.epi.material.nome }}</p>
+                    <p class="mb-0"><strong>Data:</strong> {{ entrega.data_entrega.strftime('%d/%m/%Y') }}</p>
+                    <p class="text-danger mt-3">Esta ação não pode ser desfeita.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form action="{{ url_for('seguranca.excluir_entrega', id=entrega.id) }}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <button type="submit" class="btn btn-danger">Excluir</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Modal para Nova Entrega de EPI -->
+    <div class="modal fade" id="novaEntregaModal" tabindex="-1" aria-labelledby="novaEntregaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="novaEntregaModalLabel">Registrar Entrega de EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formNovaEntrega" method="POST" action="{{ url_for('seguranca.nova_entrega') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="colaborador_id" class="form-label">Colaborador <span class="text-danger">*</span></label>
+                                <select class="form-select select2" id="colaborador_id" name="colaborador_id" required>
+                                    <option value="">Selecione o colaborador</option>
+                                    {% for colaborador in colaboradores %}
+                                    <option value="{{ colaborador.id }}">{{ colaborador.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="epi_id" class="form-label">EPI <span class="text-danger">*</span></label>
+                                <select class="form-select select2" id="epi_id_modal" name="epi_id_modal" required>
+                                    <option value="">Selecione o EPI</option>
+                                    {% for epi in epis_disponiveis %}
+                                    
+                                    <option value="{{ epi.id }}" 
+                                            data-estoque="{{ epi.getEstoqueAtual() }}" 
+                                            data-ca-numero="{{ epi.ca_numero or '' }}">
+                                        {{ epi.material.nome }} ({{ epi.ca_numero or 'Sem CA' }}) - Disponível: {{ epi.getEstoqueAtual() }}
+                                    </option>
+                                   
+                                    {% endfor %}
+                                </select>
+                                <!-- Campo CA movido para cá -->
+                                <div class="mt-2"> <!-- Adicionado mt-2 para espaçamento -->
+                                    <label for="ca_numero_entrega" class="form-label small">Nº C.A. (Opcional, da etiqueta)</label>
+                                    <input type="text" class="form-control form-control-sm" id="ca_numero_entrega" name="ca_numero_entrega" placeholder="Digite o C.A. se diferente do cadastro">
+                                    <small id="ca-original-info" class="form-text text-muted d-none"></small>
+                                </div>
+                                <!-- Fim do campo CA movido -->
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="data_entrega" class="form-label">Data da Entrega</label>
+                                <input type="date" class="form-control" id="data_entrega" name="data_entrega" 
+                                    value="{{ now1.strftime('%Y-%m-%d') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="quantidade" class="form-label">Quantidade</label>
+                                <input type="number" class="form-control" id="quantidade" name="quantidade" min="1" value="1">
+                                <div class="form-text" id="estoque_info"></div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="motivo" class="form-label">Motivo</label>
+                                <select class="form-select" id="motivo" name="motivo">
+                                    <option value="Novo">Primeira entrega</option>
+                                    <option value="Reposição">Reposição</option>
+                                    <option value="Troca">Troca</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="observacoes" class="form-label">Observações</label>
+                                <textarea class="form-control" id="observacoes" name="observacoes" rows="2"></textarea>
+                            </div>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="assinado" name="assinado">
+                            <label class="form-check-label" for="assinado">
+                                Entrega assinada pelo colaborador
+                            </label>
+                        </div>
+                        
+                        <div id="epi-ativo-container" class="alert alert-warning mb-3" style="display: none;">
+                            <div class="d-flex align-items-center">
+                                <div class="flex-grow-1">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <span id="epi-ativo-info">Este colaborador já possui este EPI em uso e não devolvido!</span>
+                                </div>
+                            </div>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="devolver_antigo" name="devolver_antigo">
+                                <label class="form-check-label" for="devolver_antigo">
+                                    <strong>Devolver automaticamente o EPI anterior</strong> e registrar nova entrega
+                                </label>
+                            </div>
+                        </div>
+                        <div class="mb-3 form-check d-none" id="update-ca-container">
+                            <input type="checkbox" class="form-check-input" id="update_epi_ca" name="update_epi_ca" value="yes">
+                            <label class="form-check-label" for="update_epi_ca">Atualizar C.A. no cadastro principal do EPI?</label>
+                            
+                        </div>    
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnSalvarNovaEntrega">Registrar Entrega</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Visualizar Entrega -->
+    <div class="modal fade" id="visualizarEntregaModal" tabindex="-1" aria-labelledby="visualizarEntregaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title" id="visualizarEntregaModalLabel">Detalhes da Entrega</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loadingVisualizarEntrega" class="text-center my-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando dados da entrega...</p>
+                    </div>
+                    <div id="visualizarEntregaContent" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold">Informações da Entrega</h6>
+                                <p><strong>ID da Entrega:</strong> <span id="vis-entrega-id"></span></p>
+                                <p><strong>Data da Entrega:</strong> <span id="vis-data-entrega"></span></p>
+                                <p><strong>Quantidade:</strong> <span id="vis-quantidade"></span></p>
+                                <p><strong>Motivo:</strong> <span id="vis-motivo"></span></p>
+                                <p><strong>Assinado:</strong> <span id="vis-assinado"></span></p>
+                                <p><strong>Status:</strong> <span id="vis-status"></span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold">Informações do EPI</h6>
+                                <p><strong>EPI:</strong> <span id="vis-epi-nome"></span></p>
+                                <p><strong>Código CA:</strong> <span id="vis-epi-ca"></span></p>
+                                <p><strong>Colaborador:</strong> <span id="vis-colaborador"></span></p>
+                                <p><strong>Data de Devolução:</strong> <span id="vis-data-devolucao"></span></p>
+                                <p><strong>Dias em Uso:</strong> <span id="vis-dias-uso"></span></p>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <h6 class="fw-bold">Observações</h6>
+                                <div class="card">
+                                    <div class="card-body" id="vis-observacoes">
+                                        Sem observações
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-warning" id="btnDevolver" style="display: none;">
+                        Registrar Devolução
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Devolução de EPI -->
+    <div class="modal fade" id="devolucaoModal" tabindex="-1" aria-labelledby="devolucaoModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title" id="devolucaoModalLabel">Registrar Devolução de EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loadingDevolucao" class="text-center my-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando dados da entrega...</p>
+                    </div>
+                    <div id="devolucaoContent" style="display: none;">
+                        <h6 id="devolucao_info_epi" class="mb-3"></h6>
+                        <p id="devolucao_info_colaborador" class="text-muted"></p>
+                        
+                        <form id="formDevolucao" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                            <input type="hidden" id="devolucao_entrega_id" name="entrega_id">
+                            
+                            <div class="mb-3">
+                                <label for="devolucao_data" class="form-label">Data da Devolução</label>
+                                <input type="date" class="form-control" id="devolucao_data" name="data_devolucao" 
+                                    value="{{ now1.strftime('%Y-%m-%d') }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="devolucao_observacoes" class="form-label">Observações sobre a Devolução</label>
+                                <textarea class="form-control" id="devolucao_observacoes" name="observacoes_devolucao" rows="3"></textarea>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" id="btnSalvarDevolucao">Registrar Devolução</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+// --- Funções Auxiliares (Definidas fora do ready) ---
+
+// Função para resetar campos e visibilidade relacionados ao CA
+function resetCaLogic() {
+    // Obter elementos dentro da função
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const caOriginalInfo = document.getElementById('ca-original-info');
+    const updateCaContainer = document.getElementById('update-ca-container');
+    const updateEpiCaCheckbox = document.getElementById('update_epi_ca');
+
+    if (caNumeroEntregaInput) caNumeroEntregaInput.value = '';
+    if (caOriginalInfo) caOriginalInfo.classList.add('d-none');
+    if (updateCaContainer) updateCaContainer.classList.add('d-none');
+    if (updateEpiCaCheckbox) updateEpiCaCheckbox.checked = false;
+}
+
+// Função para lidar com a seleção de EPI (inclui lógica do CA)
+function handleEpiSelectionChange() {
+    console.log('handleEpiSelectionChange triggered');
+    // Obter referências aos elementos DENTRO da função
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const caOriginalInfo = document.getElementById('ca-original-info');
+
+    resetCaLogic(); // Reseta a lógica do CA antes de avaliar o novo EPI
+
+    if (!epiSelectModal) return; // Segurança
+
+    const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+
+    if (selectedOption && selectedOption.value) {
+        // Preencher o CA da entrega com o CA cadastrado no EPI
+        const caOriginalEpi = selectedOption.dataset.caNumero || ''; // Acesso correto com camelCase
+        if (caNumeroEntregaInput) caNumeroEntregaInput.value = caOriginalEpi; // Preenche input com CA original
+
+        // Mostra o CA original no small text
+        if (caOriginalInfo) {
+             caOriginalInfo.textContent = caOriginalEpi ? `C.A. no cadastro: ${caOriginalEpi}` : 'EPI sem C.A. cadastrado.';
+             caOriginalInfo.classList.remove('d-none');
+        }
+    } else {
+         // Limpa se nenhum EPI for selecionado
+         if (caNumeroEntregaInput) caNumeroEntregaInput.value = '';
+         if (caOriginalInfo) caOriginalInfo.classList.add('d-none');
+    }
+
+    // Chamar outras funções que dependem da seleção do EPI
+    verificarEstoqueModal();
+    verificarEpiAtivo(); 
+    checkShowUpdateCaOption();
+}
+
+// Função para verificar se mostra a opção de atualizar CA
+function checkShowUpdateCaOption() {
+    // Obter elementos dentro da função
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const updateCaContainer = document.getElementById('update-ca-container');
+    const updateEpiCaCheckbox = document.getElementById('update_epi_ca');
+
+    if (!epiSelectModal || !caNumeroEntregaInput || !updateCaContainer) return;
+      
+    const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+    const caOriginalEpi = selectedOption ? (selectedOption.dataset.caNumero || '') : '';
+    const caDigitado = caNumeroEntregaInput.value.trim();
+
+    // Mostra opção apenas se um EPI foi selecionado, o CA digitado é diferente do original E não está vazio
+    if (selectedOption && selectedOption.value && caDigitado && caDigitado !== caOriginalEpi) {
+        updateCaContainer.classList.remove('d-none');
+    } else {
+        updateCaContainer.classList.add('d-none');
+        if (updateEpiCaCheckbox) updateEpiCaCheckbox.checked = false;
+    }
+}
+
+// Função para verificar estoque disponível no modal
+function verificarEstoqueModal() { 
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const quantidadeInputModal = document.getElementById('quantidade');
+    const submitButtonNovaEntrega = document.getElementById('btnSalvarNovaEntrega');
+    const colabSelectModal = document.getElementById('colaborador_id');
+    const avisoEstoque = document.getElementById('estoque_info'); // Usar o ID correto do elemento de aviso
+
+    if (!epiSelectModal || !quantidadeInputModal || !submitButtonNovaEntrega) { 
+        return;
+    }
+
+    const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+    if (!selectedOption || !selectedOption.value) {
+         if(avisoEstoque) avisoEstoque.classList.add('d-none');
+         submitButtonNovaEntrega.disabled = true; // Desabilita se nenhum EPI selecionado
+         return;
+    }
+    const estoqueDisponivel = parseInt(selectedOption.dataset.estoque || '0', 10);
+    const quantidadeDesejada = parseInt(quantidadeInputModal.value || '1', 10);
+
+    let isEstoqueOk = true;
+    let msgAviso = '';
+
+    if (isNaN(quantidadeDesejada) || quantidadeDesejada <= 0) {
+        msgAviso = 'Quantidade deve ser maior que zero.';
+        isEstoqueOk = false;
+        quantidadeInputModal.value = 1; // Reset para 1
+    } else if (quantidadeDesejada > estoqueDisponivel) {
+        msgAviso = `Estoque insuficiente! Disponível: ${estoqueDisponivel}`;
+        isEstoqueOk = false;
+        quantidadeInputModal.value = estoqueDisponivel > 0 ? estoqueDisponivel : 1; // Ajusta para o max ou 1
+    }
+
+    if (avisoEstoque) {
+        if (!isEstoqueOk) {
+            avisoEstoque.textContent = msgAviso;
+            avisoEstoque.classList.remove('d-none');
+            avisoEstoque.classList.add('text-danger');
+        } else {
+            avisoEstoque.classList.add('d-none');
+            avisoEstoque.classList.remove('text-danger');
+            // Opcional: Mostrar estoque disponível normalmente
+            // avisoEstoque.textContent = `Estoque disponível: ${estoqueDisponivel}`;
+            // avisoEstoque.classList.remove('d-none');
+        }
+    }
+    // Habilita botão apenas se estoque OK e colaborador selecionado
+    submitButtonNovaEntrega.disabled = !isEstoqueOk || !(colabSelectModal && colabSelectModal.value);
+}
+
+// Função para verificar se colaborador já tem EPI ativo
+function verificarEpiAtivo() { 
+    const colabSelectModal = document.getElementById('colaborador_id');
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const epiAtivoContainer = document.getElementById('epi-ativo-container');
+    const epiAtivoInfo = document.getElementById('epi-ativo-info');
+    const devolverAntigoCheckbox = document.getElementById('devolver_antigo');
+
+    if (!colabSelectModal || !epiSelectModal || !epiAtivoContainer) return;
+
+    const colaboradorId = colabSelectModal.value;
+    const epiId = epiSelectModal.value;
+
+    if (!colaboradorId || !epiId) {
+        epiAtivoContainer.style.display = 'none';
+        if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = false;
+        return;
+    }
+
+    // Usa os dados da tabela que já estão na página
+    let encontrado = false;
+    let entregaId = null;
+    let dataEntrega = '';
+    let colaboradorNome = colabSelectModal.options[colabSelectModal.selectedIndex]?.text || '';
+    let epiNome = epiSelectModal.options[epiSelectModal.selectedIndex]?.text.split('(')[0].trim() || ''; // Tenta pegar o nome do EPI do texto da option
+
+    document.querySelectorAll('.entrega-row').forEach(function(row) {
+        const rowColaboradorId = row.dataset.colaborador;
+        const rowEpiId = row.dataset.epi;
+        const status = row.dataset.status;
+
+        if (rowColaboradorId == colaboradorId && rowEpiId == epiId && status === 'pendente') {
+            encontrado = true;
+            entregaId = row.cells[0]?.textContent || '?'; // ID na primeira coluna (oculta em mobile)
+            dataEntrega = row.cells[3]?.textContent || '?'; // Data na quarta coluna (oculta em mobile)
+            // Pega nomes das colunas visíveis se possível
+            if (!colaboradorNome) colaboradorNome = row.cells[1]?.textContent?.trim() || 'colaborador';
+            if (!epiNome) epiNome = row.cells[2]?.textContent?.trim() || 'EPI';
+            // return false; // Não funciona em forEach, mas podemos parar de processar
+        }
+    });
+
+    if (encontrado) {
+        const alertText = `<strong>${colaboradorNome}</strong> já possui o EPI <strong>${epiNome}</strong> 
+                          em uso desde <strong>${dataEntrega}</strong> (Entrega ID: ${entregaId}).`;
+        if(epiAtivoInfo) epiAtivoInfo.innerHTML = alertText;
+        epiAtivoContainer.style.display = 'block';
+        if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = true; // Marcar por padrão
+    } else {
+        epiAtivoContainer.style.display = 'none';
+        if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = false;
+    }
+}
+
+// --- Lógica Modal Nova Entrega --- 
+// Variáveis dos elementos já declaradas no início do DOMContentLoaded
+const novaEntregaModalEl = document.getElementById('novaEntregaModal');
+const epiSelectModal = document.getElementById('epi_id_modal'); // Corrigido ID
+const colabSelectModal = document.getElementById('colaborador_id'); // Corrigido ID
+const quantidadeInputModal = document.getElementById('quantidade');
+const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+const novaEntregaForm = document.getElementById('formNovaEntrega');
+const submitButtonNovaEntrega = document.getElementById('btnSalvarNovaEntrega');
+// Elementos que podem não existir em todas as views, verificar antes de usar
+const epiAtivoContainer = document.getElementById('epi-ativo-container');
+const devolverAntigoCheckbox = document.getElementById('devolver_antigo');
+
+// Função para exibir toast
+function showToast(title, message, type = 'info') {
+    const toastContainer = document.body; 
+    const toastId = `toast-${Date.now()}`;
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="5000" style="position: fixed; top: 1rem; right: 1rem; z-index: 1100; min-width: 250px;">
+            <div class="toast-header bg-${type} text-white">
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    const toastElement = document.getElementById(toastId);
+    if (toastElement) {
+         const toastInstance = new bootstrap.Toast(toastElement);
+         toastInstance.show();
+         toastElement.addEventListener('hidden.bs.toast', () => toastElement.remove());
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+        // --- Variáveis de Elementos (declaradas após DOM ready) ---
+        const fichaEpiModal = new bootstrap.Modal(document.getElementById('fichaEpiModal'));
+        const fichaEpiModalBody = document.getElementById('fichaEpiModalBody');
+        const fichaEpiModalLabel = document.getElementById('fichaEpiModalLabel');
+        const btnDownloadFichaPdf = document.getElementById('btn-download-ficha-pdf');
+
+        const novaEntregaModalEl = document.getElementById('novaEntregaModal');
+        const epiSelectModal = document.getElementById('epi_id_modal');
+        const colabSelectModal = document.getElementById('colaborador_id');
+        const quantidadeInputModal = document.getElementById('quantidade');
+        const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+        const novaEntregaForm = document.getElementById('formNovaEntrega');
+        const submitButtonNovaEntrega = document.getElementById('btnSalvarNovaEntrega');
+        const epiAtivoContainer = document.getElementById('epi-ativo-container');
+        const devolverAntigoCheckbox = document.getElementById('devolver_antigo');
+
+        // --- Inicialização de Plugins (Select2, etc.) ---
+        try {
+            $('.select2-filtro').select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                placeholder: 'Selecione uma opção',
+                allowClear: true
+            });
+            // ... (inicialização dos outros Select2) ...
+             $(novaEntregaModalEl).on('shown.bs.modal', function () {
+                $(colabSelectModal).select2({
+                    theme: 'bootstrap-5',
+                    width: '100%',
+                    placeholder: 'Selecione o colaborador',
+                    dropdownParent: $(novaEntregaModalEl)
+                }).val(null).trigger('change');
+
+                $(epiSelectModal).select2({
+                    theme: 'bootstrap-5',
+                    width: '100%',
+                    placeholder: 'Selecione o EPI',
+                    dropdownParent: $(novaEntregaModalEl)
+                }).val(null).trigger('change');
+
+                resetCaLogic();
+                verificarEstoqueModal();
+                verificarEpiAtivo();
+            });
+
+            $(novaEntregaModalEl).on('hidden.bs.modal', function () {
+                 if ($(colabSelectModal).data('select2')) {
+                     $(colabSelectModal).select2('destroy');
+                 }
+                 if ($(epiSelectModal).data('select2')) {
+                     $(epiSelectModal).select2('destroy');
+                 }
+                 if (novaEntregaForm) novaEntregaForm.reset();
+                 resetCaLogic();
+                 const avisoEstoque = document.getElementById('estoque_info');
+                 if(avisoEstoque) {
+                      avisoEstoque.textContent = '';
+                      avisoEstoque.classList.remove('text-danger');
+                  }
+                  if(epiAtivoContainer) epiAtivoContainer.style.display = 'none';
+                  if(submitButtonNovaEntrega) submitButtonNovaEntrega.disabled = true;
+             });
+
+        } catch (e) {
+            console.warn("Erro ao inicializar Select2. Verifique se jQuery e Select2 estão carregados corretamente.", e);
+        }
+        $('#epi_id_modal').on('change', handleEpiSelectionChange);
+        // --- Event Listeners ---
+        if (epiSelectModal) epiSelectModal.addEventListener('change', handleEpiSelectionChange);
+        if (caNumeroEntregaInput) caNumeroEntregaInput.addEventListener('input', checkShowUpdateCaOption);
+        if (quantidadeInputModal) quantidadeInputModal.addEventListener('input', verificarEstoqueModal);
+        if (colabSelectModal) {
+            $(colabSelectModal).on('change', function() {
+                verificarEstoqueModal();
+                verificarEpiAtivo();
+            });
+        }
+
+        if(novaEntregaForm && submitButtonNovaEntrega) {
+             submitButtonNovaEntrega.addEventListener('click', function(event) {
+                 // ... (lógica de submit AJAX como definida anteriormente) ...
+                   if (!colabSelectModal.value) {
+                      showToast('Atenção', 'Selecione um colaborador.', 'warning');
+                      return;
+                   }
+                   if (!epiSelectModal.value) {
+                      showToast('Atenção', 'Selecione um EPI.', 'warning');
+                      return;
+                   }
+                   if (!quantidadeInputModal.value || parseInt(quantidadeInputModal.value) <= 0) {
+                       showToast('Atenção', 'Informe uma quantidade válida.', 'warning');
+                       quantidadeInputModal.focus();
+                       return;
+                   }
+  
+                   verificarEstoqueModal();
+                   if(submitButtonNovaEntrega.disabled) {
+                       console.warn("Tentativa de submit com botão desabilitado (provavelmente estoque insuficiente).");
+                       showToast('Atenção', 'Verifique a quantidade e o estoque disponível.', 'warning');
+                       return;
+                   }
+  
+                   submitButtonNovaEntrega.disabled = true;
+                   submitButtonNovaEntrega.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processando...';
+  
+                   const formData = new FormData(novaEntregaForm);
+                   const updateEpiCaCheckbox = document.getElementById('update_epi_ca'); // Obter dentro do handler
+                   formData.append('update_epi_ca', updateEpiCaCheckbox && updateEpiCaCheckbox.checked ? 'yes' : 'no');
+                   formData.append('devolver_antigo', devolverAntigoCheckbox && devolverAntigoCheckbox.checked ? 'on' : 'off');
+  
+                   const actionUrl = novaEntregaForm.action;
+  
+                   console.log('Enviando dados para:', actionUrl);
+                   console.log('Dados do formulário:', Object.fromEntries(formData));
+                   fetch(actionUrl, {
+                       method: 'POST',
+                       body: formData,
+                      headers: {
+                           'X-Requested-With': 'XMLHttpRequest',
+                           // 'X-CSRFToken': novaEntregaForm.querySelector('input[name="csrf_token"]')?.value 
+                       }
+                   })
+                   .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data }))) 
+                   .then(({ ok, status, data }) => {
+                       if (ok && data.success) {
+                           showToast('Sucesso', data.message || 'Entrega registrada!', 'success');
+                           bootstrap.Modal.getInstance(novaEntregaModalEl)?.hide(); 
+                           setTimeout(() => window.location.reload(), 1500); 
+                      } else {
+                           throw new Error(data.message || `Erro ${status} ao registrar entrega.`);
+                       }
+                  })
+                  .catch(error => {
+                       console.error('Erro ao registrar entrega:', error);
+                       showToast('Erro', error.message || 'Não foi possível registrar a entrega.', 'danger');
+                       submitButtonNovaEntrega.disabled = false;
+                       submitButtonNovaEntrega.innerHTML = 'Registrar Entrega';
+                   });
+             });
+         }
+
+        // --- Lógica para Visualizar Entrega ---
+        document.querySelectorAll('.btn-visualizar-entrega').forEach(button => {
+            button.addEventListener('click', function() {
+                const entregaId = this.dataset.id;
+                const visualizarModalEl = document.getElementById('visualizarEntregaModal');
+                const visualizarModal = bootstrap.Modal.getInstance(visualizarModalEl) || new bootstrap.Modal(visualizarModalEl);
+                carregarDetalhesEntrega(entregaId, visualizarModalEl);
+                visualizarModal.show();
+            });
+        });
+
+        function carregarDetalhesEntrega(entregaId, modalEl) {
+            const contentEl = modalEl.querySelector('#visualizarEntregaContent');
+            const loadingEl = modalEl.querySelector('#loadingVisualizarEntrega');
+            const btnDevolverModal = modalEl.querySelector('#btnDevolver'); // Botão Devolver DENTRO do modal Vis
+
+            if (!contentEl || !loadingEl) return;
+
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+            if (btnDevolverModal) btnDevolverModal.style.display = 'none';
+
+            fetch(`/seguranca/epis/entregas/visualizar/${entregaId}`, { // Use a URL correta do seu backend
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`Erro ${response.status} ao buscar dados.`);
+                return response.json();
+            })
+            .then(data => {
+                // Preencher os campos do modal de visualização
+                modalEl.querySelector('#vis-entrega-id').textContent = data.id;
+                modalEl.querySelector('#vis-data-entrega').textContent = formatarData(data.data_entrega) || '-';
+                modalEl.querySelector('#vis-quantidade').textContent = data.quantidade;
+                modalEl.querySelector('#vis-motivo').textContent = data.motivo || 'Não informado';
+                modalEl.querySelector('#vis-assinado').textContent = data.assinado ? 'Sim' : 'Não';
+                modalEl.querySelector('#vis-epi-nome').textContent = data.epi?.nome || 'N/A';
+                modalEl.querySelector('#vis-epi-ca').textContent = data.epi?.ca_numero || '-';
+                modalEl.querySelector('#vis-colaborador').textContent = data.colaborador?.nome || 'N/A';
+                modalEl.querySelector('#vis-dias-uso').textContent = data.dias_em_uso || '0';
+                modalEl.querySelector('#vis-observacoes').textContent = data.observacoes || 'Sem observações';
+
+                if (data.data_devolucao) {
+                    modalEl.querySelector('#vis-status').innerHTML = '<span class="badge bg-success">Devolvido</span>';
+                    modalEl.querySelector('#vis-data-devolucao').textContent = formatarData(data.data_devolucao);
+                    if (btnDevolverModal) btnDevolverModal.style.display = 'none';
+                } else {
+                    modalEl.querySelector('#vis-status').innerHTML = '<span class="badge badge-pendente">Em uso</span>'; // Ajuste a classe se necessário
+                    modalEl.querySelector('#vis-data-devolucao').textContent = 'Pendente';
+                    if (btnDevolverModal) {
+                        btnDevolverModal.style.display = 'inline-block';
+                        btnDevolverModal.dataset.id = data.id; // Passa o ID para o botão
+                    }
+                }
+
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Erro ao carregar dados da entrega:', error);
+                // Mostrar erro no modal ou usar toast
+                loadingEl.style.display = 'none';
+                contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                contentEl.style.display = 'block';
+                // bootstrap.Modal.getInstance(modalEl)?.hide(); // Opcional: esconder modal no erro
+            });
+        }
+
+        // --- Lógica para Devolução de EPI (acionada pelos botões .btn-devolver-entrega e #btnDevolver) ---
+        const devolucaoModalEl = document.getElementById('devolucaoModal');
+        const devolucaoModal = bootstrap.Modal.getInstance(devolucaoModalEl) || new bootstrap.Modal(devolucaoModalEl);
+
+        // Listener para botões na tabela
+        document.querySelectorAll('.btn-devolver-entrega').forEach(button => {
+            button.addEventListener('click', function() {
+                const entregaId = this.dataset.id;
+                abrirModalDevolucao(entregaId);
+            });
+        });
+
+        // Listener para botão dentro do modal de Visualização
+        const btnDevolverVisualizar = document.getElementById('btnDevolver');
+        if (btnDevolverVisualizar) {
+            btnDevolverVisualizar.addEventListener('click', function() {
+                const entregaId = this.dataset.id;
+                const visualizarModalEl = document.getElementById('visualizarEntregaModal');
+                bootstrap.Modal.getInstance(visualizarModalEl)?.hide(); // Esconde modal de visualização
+                // Pequeno delay para transição suave
+                setTimeout(() => abrirModalDevolucao(entregaId), 300); 
+            });
+        }
+
+        function abrirModalDevolucao(entregaId) {
+            carregarDadosDevolucao(entregaId, devolucaoModalEl);
+            devolucaoModal.show();
+        }
+
+        function carregarDadosDevolucao(entregaId, modalEl) {
+            const contentEl = modalEl.querySelector('#devolucaoContent');
+            const loadingEl = modalEl.querySelector('#loadingDevolucao');
+            const formDevolucao = modalEl.querySelector('#formDevolucao');
+            const infoEpiEl = modalEl.querySelector('#devolucao_info_epi');
+            const infoColabEl = modalEl.querySelector('#devolucao_info_colaborador');
+            const entregaIdInput = modalEl.querySelector('#devolucao_entrega_id');
+
+            if (!contentEl || !loadingEl || !formDevolucao || !infoEpiEl || !infoColabEl || !entregaIdInput) return;
+
+            loadingEl.style.display = 'block';
+            contentEl.style.display = 'none';
+            formDevolucao.action = `/seguranca/entregas/devolver/${entregaId}`; // Define action do form
+            entregaIdInput.value = entregaId;
+            // Resetar campos do formulário de devolução
+            formDevolucao.reset();
+            // Definir data atual como padrão
+            const dataInput = modalEl.querySelector('#devolucao_data');
+            if (dataInput) dataInput.valueAsDate = new Date();
+
+            fetch(`/seguranca/epis/entregas/visualizar/${entregaId}`, { // Reutiliza endpoint de visualização
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => { 
+                if (!response.ok) throw new Error(`Erro ${response.status} ao buscar dados.`);
+                return response.json();
+            })
+            .then(data => {
+                infoEpiEl.textContent = `Devolução de ${data.epi?.nome || 'EPI não encontrado'}`;
+                infoColabEl.textContent = `Entregue a ${data.colaborador?.nome || 'Colaborador não encontrado'} em ${formatarData(data.data_entrega) || '-'}`;
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+            })
+            .catch(error => {
+                console.error('Erro ao carregar dados para devolução:', error);
+                loadingEl.style.display = 'none';
+                contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                contentEl.style.display = 'block';
+            });
+        }
+
+        // Listener para submeter o formulário de devolução (AJAX)
+        const btnSalvarDevolucao = document.getElementById('btnSalvarDevolucao');
+        const formDevolucao = document.getElementById('formDevolucao');
+        if (btnSalvarDevolucao && formDevolucao) {
+            btnSalvarDevolucao.addEventListener('click', function() {
+                // Validação simples (pode adicionar mais se necessário)
+                const dataDevolucaoInput = formDevolucao.querySelector('#devolucao_data');
+                if (!dataDevolucaoInput || !dataDevolucaoInput.value) {
+                    showToast('Atenção', 'Informe a data de devolução.', 'warning');
+                    dataDevolucaoInput.focus();
+                    return;
+                }
+
+                btnSalvarDevolucao.disabled = true;
+                btnSalvarDevolucao.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processando...';
+
+                const formData = new FormData(formDevolucao);
+                const actionUrl = formDevolucao.action;
+
+                fetch(actionUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        // Adicionar CSRF token se necessário
+                        // 'X-CSRFToken': formDevolucao.querySelector('input[name="csrf_token"]')?.value
+                    }
+                })
+                .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+                .then(({ ok, status, data }) => {
+                    if (ok && data.success) {
+                        showToast('Sucesso', data.message || 'Devolução registrada!', 'success');
+                        devolucaoModal.hide();
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        throw new Error(data.message || `Erro ${status} ao registrar devolução.`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao registrar devolução:', error);
+                    showToast('Erro', error.message || 'Não foi possível registrar a devolução.', 'danger');
+                    btnSalvarDevolucao.disabled = false;
+                    btnSalvarDevolucao.innerHTML = 'Registrar Devolução';
+                });
+            });
+        }
+
+        // --- Função Auxiliar para Formatar Datas (se não existir globalmente) ---
+        function formatarData(dataStringISO) {
+            if (!dataStringISO) return '-';
+            try {
+                // Tenta criar data a partir de YYYY-MM-DD (comum de inputs date e JSON)
+                // Adiciona T00:00:00 para evitar problemas de timezone na conversão
+                const date = new Date(`${dataStringISO}T00:00:00`);
+                // Verifica se a data é válida
+                if (isNaN(date.getTime())) {
+                    return 'Data inválida';
+                }
+                // Formata para DD/MM/YYYY
+                return date.toLocaleDateString('pt-BR');
+            } catch (e) {
+                console.error('Erro ao formatar data:', dataStringISO, e);
+                return 'Erro na data';
+            }
+        }
+
+        // --- Lógica para Ficha EPI (exemplo/início) ---
+        $('#fichaEpiModal').on('show.bs.modal', function (e) {
+             const colaboradorId = $(e.relatedTarget).data('id');
+             const colaboradorNome = $(e.relatedTarget).data('nome');
+             if (!colaboradorId) return; // Segurança
+             console.log(`Carregando ficha para Colaborador ID: ${colaboradorId}`);
+             fichaEpiModalLabel.textContent = `Ficha de EPI - ${colaboradorNome || 'Carregando...'}`;
+             fichaEpiModalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>';
+             btnDownloadFichaPdf.href = '#'; // Resetar link PDF
+ 
+             fetch(`/seguranca/${colaboradorId}/ficha_epi_modal`) // Ajuste a URL se necessário
+                 .then(response => {
+                     if (!response.ok) {
+                         throw new Error(`Erro ${response.status} ao carregar dados da ficha.`);
+                     }
+                     return response.text();
+                 })
+                 .then(html => {
+                     fichaEpiModalBody.innerHTML = html;
+                     btnDownloadFichaPdf.href = `/colaboradores/${colaboradorId}/ficha_epi_pdf`; // Ajuste a URL do PDF
+                 })
+                 .catch(error => {
+                     console.error('Erro ao carregar ficha EPI:', error);
+                     fichaEpiModalBody.innerHTML = `<div class="alert alert-danger">${error.message || 'Erro ao carregar ficha. Tente novamente.'}</div>`;
+                 });
+         });
+         // Adicionar aqui os listeners e lógicas para .btn-visualizar-entrega, .btn-devolver-entrega, etc.
+
+
+    }); // --- Fim do DOMContentLoaded ---
+</script>
+{% endblock %} 

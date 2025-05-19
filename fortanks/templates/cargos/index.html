@@ -1,0 +1,219 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Cargos - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-briefcase"></i> Cargos</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoCargo">
+            <i class="fas fa-plus"></i> Novo Cargo
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Cargos</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Status</th>
+                            <th>Data de Criação</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cargo in cargos %}
+                        <tr>
+                            <td>{{ cargo.id }}</td>
+                            <td>{{ cargo.nome }}</td>
+                            <td>{{ cargo.descricao if cargo.descricao else 'N/A' }}</td>
+                            <td>
+                                {% if cargo.status == 'Ativo' %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ cargo.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-primary" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalEditarCargo{{ cargo.id }}" 
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalVisualizarCargo{{ cargo.id }}" 
+                                            title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <form id="form-excluir-{{ cargo.id }}"
+                                          action="{{ url_for('cargo.excluir', id=cargo.id) }}" 
+                                          method="POST"
+                                          class="d-inline form-excluir">
+                                        <button type="submit" class="btn btn-sm btn-danger" 
+                                                data-bs-toggle="tooltip"
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Cargo -->
+<div class="modal fade" id="modalNovoCargo" tabindex="-1" aria-labelledby="modalNovoCargoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('cargo.novo') }}" id="form-novo-cargo">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovoCargoLabel">Novo Cargo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="Ativo" selected>Ativo</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modais de Edição -->
+{% for cargo in cargos %}
+<div class="modal fade" id="modalEditarCargo{{ cargo.id }}" tabindex="-1" aria-labelledby="modalEditarCargoLabel{{ cargo.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('cargo.editar', id=cargo.id) }}" id="form-editar-cargo-{{ cargo.id }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarCargoLabel{{ cargo.id }}">Editar Cargo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nome{{ cargo.id }}" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome{{ cargo.id }}" name="nome" value="{{ cargo.nome }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao{{ cargo.id }}" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao{{ cargo.id }}" name="descricao" rows="3">{{ cargo.descricao }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="status{{ cargo.id }}" class="form-label">Status</label>
+                        <select class="form-select" id="status{{ cargo.id }}" name="status">
+                            <option value="Ativo" {% if cargo.status == 'Ativo' %}selected{% endif %}>Ativo</option>
+                            <option value="Inativo" {% if cargo.status == 'Inativo' %}selected{% endif %}>Inativo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Visualizar -->
+<div class="modal fade" id="modalVisualizarCargo{{ cargo.id }}" tabindex="-1" aria-labelledby="modalVisualizarCargoLabel{{ cargo.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarCargoLabel{{ cargo.id }}">Detalhes do Cargo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row">
+                    <dt class="col-sm-4">ID:</dt>
+                    <dd class="col-sm-8">{{ cargo.id }}</dd>
+                    
+                    <dt class="col-sm-4">Nome:</dt>
+                    <dd class="col-sm-8">{{ cargo.nome }}</dd>
+                    
+                    <dt class="col-sm-4">Descrição:</dt>
+                    <dd class="col-sm-8">{{ cargo.descricao if cargo.descricao else 'N/A' }}</dd>
+                    
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8">
+                        {% if cargo.status == 'Ativo' %}
+                        <span class="badge bg-success">Ativo</span>
+                        {% else %}
+                        <span class="badge bg-danger">Inativo</span>
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Criado em:</dt>
+                    <dd class="col-sm-8">{{ cargo.criado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+                    
+                    <dt class="col-sm-4">Atualizado em:</dt>
+                    <dd class="col-sm-8">{{ cargo.atualizado_em.strftime('%d/%m/%Y %H:%M') }}</dd>
+                </dl>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Inicializar DataTable
+    $(document).ready(function () {
+        $('#dataTable').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            },
+            order: [[0, 'desc']]
+        });
+
+        // Confirmar exclusão
+        $('.form-excluir').on('submit', function (e) {
+            e.preventDefault();
+            const form = this;
+            const cargoName = $(this).closest('tr').find('td:nth-child(2)').text();
+
+            if (confirm(`Tem certeza que deseja excluir o cargo "${cargoName}"?`)) {
+                form.submit();
+            }
+        });
+    });
+</script>
+{% endblock %} 

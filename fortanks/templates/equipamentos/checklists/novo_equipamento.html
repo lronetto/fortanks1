@@ -1,0 +1,96 @@
+{% extends "common/base.html" %}
+
+{% block title %}Novo Checklist - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Novo Checklist{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Novo Checklist</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('equipamento.visualizar', id=equipamento.id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline-block ms-1">Voltar</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Dados do Checklist</h6>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <label class="form-label">Equipamento</label>
+                    <p class="form-control-static">{{ equipamento.nome }}</p>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Data</label>
+                    <p class="form-control-static">{{ now1.strftime('%d/%m/%Y %H:%M') }}</p>
+                </div>
+            </div>
+
+            <form method="POST" id="checklistForm">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="modelo_id" class="form-label">Modelo de Checklist *</label>
+                        <select class="form-select" id="modelo_id" name="modelo_id" required>
+                            <option value="">Selecione...</option>
+                            {% for modelo in modelos %}
+                            <option value="{{ modelo.id }}">{{ modelo.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">
+                            Por favor, selecione um modelo de checklist.
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="data_checklist" class="form-label">Data do Checklist *</label>
+                        <input type="datetime-local" class="form-control" id="data_checklist" 
+                               name="data_checklist" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
+                        <div class="invalid-feedback">
+                            Por favor, informe a data do checklist.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="observacoes" class="form-label">Observações</label>
+                    <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        <span class="d-none d-md-inline-block ms-1">Iniciar Checklist</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.getElementById('checklistForm').addEventListener('submit', function(e) {
+        const modelo = document.getElementById('modelo_id');
+        const data = document.getElementById('data_checklist');
+
+        if (!modelo.value) {
+            modelo.classList.add('is-invalid');
+            e.preventDefault();
+        } else {
+            modelo.classList.remove('is-invalid');
+        }
+
+        if (!data.value) {
+            data.classList.add('is-invalid');
+            e.preventDefault();
+        } else {
+            data.classList.remove('is-invalid');
+        }
+    });
+</script>
+{% endblock %} 

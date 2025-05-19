@@ -1,0 +1,40 @@
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-danger">EPIs com Estoque Crítico</h6>
+    </div>
+    <div class="card-body">
+        {% if dados_especificos.epis_criticos %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>EPI</th>
+                            <th>Estoque Atual</th>
+                            <th>Estoque Mínimo</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for epi in dados_especificos.epis_criticos %}
+                        <tr>
+                            <td>{{ epi.material.nome }}</td>
+                            <td class="text-center">{{ epi.get_estoque_atual }}</td>
+                            <td class="text-center">{{ epi.estoque_minimo }}</td>
+                            <td>
+                                <span class="badge badge-{{ 'danger' if epi.get_estoque_atual <= 0 else 'warning' }}">
+                                    {{ epi.status_estoque }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-center">Nenhum EPI com estoque crítico.</p>
+        {% endif %}
+        <div class="text-center mt-3">
+            <a href="{{ url_for('seguranca.epis') }}" class="btn btn-primary btn-sm">Ver Todos EPIs</a>
+        </div>
+    </div>
+</div>

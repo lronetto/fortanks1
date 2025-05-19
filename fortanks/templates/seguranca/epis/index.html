@@ -1,0 +1,1030 @@
+{% extends "common/base.html" %}
+
+{% block title %}Controle de EPIs{% endblock %}
+{% block mobile_title %}Controle de EPIs{% endblock %}
+
+{% block extra_css %}
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@1.5.2/dist/select2-bootstrap4.min.css">
+
+<style>
+/* Ajustes para o Select2 dentro do modal */
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-dropdown {
+    z-index: 9999;
+}
+
+/* Estilização da caixa de busca do Select2 */
+.select2-container--default .select2-selection--single {
+    height: calc(2em + 0.75rem + 2px);
+    padding: 0.375rem 0.75rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 2.5;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 100%;
+}
+
+/* Melhorar Select2 em mobile */
+@media (max-width: 768px) {
+    .select2-container {
+        width: 100% !important;
+    }
+    
+    input.form-control, select.form-control, .select2-selection {
+        font-size: 16px !important; /* Evita zoom em iOS */
+    }
+}
+
+/* Adicionar regras de CSS para garantir que o dropdown do Select2 fique visível no modal */
+.select2-container--open {
+    z-index: 9999;
+}
+
+.select2-dropdown {
+    z-index: 9999;
+}
+
+.select2-results__options {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.select2-search__field {
+    padding: 8px;
+}
+
+.select2-container--bootstrap4 {
+    width: 100% !important;
+}
+
+/* Estilos específicos para o Select2 em modais */
+.select2-container {
+    width: 100% !important;
+}
+
+.select2-dropdown {
+    z-index: 9999;
+}
+
+.select2-container--open .select2-dropdown {
+    z-index: 9999;
+}
+
+.select2-container--open .select2-dropdown--below {
+    z-index: 9999;
+}
+
+.select2-search--dropdown .select2-search__field {
+    padding: 8px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+}
+
+.select2-results__option {
+    padding: 8px;
+}
+
+.select2-results__option--highlighted {
+    background-color: #0d6efd;
+    color: white;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1 class="h3 mb-0 text-gray-800">Controle de EPIs</h1>
+        </div>
+        <div class="col-auto">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novoEpiModal">
+                <i class="fas fa-plus mr-2"></i>Cadastrar EPI
+            </button>
+        </div>
+    </div>
+
+    <!-- Alertas -->
+    <div class="alert-container">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <!-- Estatísticas de EPIs -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                EPIs Cadastrados</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ epis|length }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-helmet-safety fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Em Situação Crítica</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ epis_por_status.critico|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Requer Atenção</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ epis_por_status.atencao|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-bell fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Situação Normal</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ epis_por_status.normal|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- EPIs em Situação Crítica -->
+    {% if epis_por_status.critico|length > 0 %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-danger">
+            <h6 class="m-0 font-weight-bold text-white">EPIs em Situação Crítica</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Material</th>
+                            <th>Código CA</th>
+                            <th>Estoque</th>
+                            <th>Validade</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for epi in epis_por_status.critico %}
+                        <tr>
+                            <td>{{ epi.material.nome }}</td>
+                            <td>{{ epi.ca_numero or 'Não informado' }}</td>
+                            <td>
+                                {% if epi.get_estoque_atual() <= 0 %}
+                                <span class="badge bg-danger">Esgotado</span>
+                                {% elif epi.get_estoque_atual() < epi.estoque_minimo %}
+                                <span class="badge bg-warning">Crítico</span>
+                                {% else %}
+                                <span class="badge bg-success">Adequado</span>
+                                {% endif %}
+                                <span class="badge bg-secondary">{{ epi.get_estoque_atual() }} un</span>
+                            </td>
+                            <td>
+                                {% if epi.data_validade %}
+                                {{ epi.data_validade.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                Não aplicável
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if epi.status_validade == "Vencido" %}
+                                <span class="badge bg-danger text-white">Vencido</span>
+                                {% elif epi.status_validade == "Próximo ao vencimento" %}
+                                <span class="badge bg-warning text-dark">Próximo ao vencimento</span>
+                                {% else %}
+                                <span class="badge bg-success text-white">{{ epi.status_validade }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <!-- Botão para ajustar estoque -->
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                                    data-bs-target="#ajustarEstoqueModal{{ epi.id }}">
+                                    <i class="fas fa-boxes-stacked"></i>
+                                </button>
+
+                                <!-- Botão para editar -->
+                                <button type="button" class="btn btn-sm btn-info btn-editar-epi" 
+                                    data-id="{{ epi.id }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+
+                                <!-- Botão para excluir -->
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                                    data-bs-target="#deleteModal{{ epi.id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Lista Geral de EPIs -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">EPIs Cadastrados</h6>
+            <div class="form-floating">
+                <input type="text" class="form-control" id="filter-input" placeholder="Filtrar" onkeyup="filterTable()">
+                <label for="filter-input">Buscar EPI</label>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="epis-table" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Material</th>
+                            <th>Código CA</th>
+                            <th>Estoque</th>
+                            <th>Validade</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for epi in epis %}
+                        <tr>
+                            <td>{{ epi.id }}</td>
+                            <td>{{ epi.material.nome }}</td>
+                            <td>{{ epi.ca_numero or 'Não informado' }}</td>
+                            <td>
+                                {% if epi.getEstoqueAtual() <= 0 %}
+                                <span class="badge bg-danger">Esgotado</span>
+                                {% elif epi.getEstoqueAtual() < epi.estoque_minimo %}
+                                <span class="badge bg-warning">Crítico</span>
+                                {% else %}
+                                <span class="badge bg-success">Adequado</span>
+                                {% endif %}
+                                <span class="badge bg-secondary">{{ epi.getEstoqueAtual() }} un</span>
+                            </td>
+                            <td>
+                                {% if epi.data_validade %}
+                                {{ epi.data_validade.strftime('%d/%m/%Y') }}
+                                {% else %}
+                                Não aplicável
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if epi.status_validade == "Vencido" %}
+                                <span class="badge bg-danger text-white">Vencido</span>
+                                {% elif epi.status_validade == "Próximo ao vencimento" %}
+                                <span class="badge bg-warning text-dark">Próximo ao vencimento</span>
+                                {% else %}
+                                <span class="badge bg-success text-white">{{ epi.status_validade }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <!-- Botão para ajustar estoque -->
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal"
+                                    data-bs-target="ajustarEstoqueModal" data-epi-id="{{ epi.id }}">
+                                    <i class="fas fa-boxes-stacked"></i>
+                                </button>
+
+                                <!-- Botão para editar -->
+                                <button type="button" class="btn btn-sm btn-info btn-editar-epi" 
+                                    data-id="{{ epi.id }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+
+                                <!-- Botão para excluir -->
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal"
+                                    data-bs-target="deleteModal" data-epi-id="{{ epi.id }}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+   
+    {% include 'seguranca/epis/modais/exclusao.html' %}
+    {% include 'seguranca/epis/modais/ajuste_estoque.html' %}
+ 
+
+    <!-- Modal para Novo EPI -->
+    <div class="modal fade" id="novoEpiModal" tabindex="-1" aria-labelledby="novoEpiModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="novoEpiModalLabel">Cadastrar Novo EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formNovoEpi" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="material_id" class="form-label">Material <span class="text-danger">*</span></label>
+                                <select class="form-select select2" id="material_id" name="material_id" required>
+                                    <option value="">Selecione o material</option>
+                                    {% for material in materiais %}
+                                    <option value="{{ material.id }}">{{ material.codigo }} - {{ material.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="invalid-feedback">
+                                    Por favor, selecione um material.
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="ca_numero" class="form-label">Número do CA</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="ca_numero" name="ca_numero" placeholder="Ex: 12345">
+                                    <button class="btn btn-outline-secondary" type="button" id="btnConsultarCA">Consultar</button>
+                                </div>
+                                <div class="form-text" id="ca_status"></div>
+                            </div>
+                        </div>
+
+                        <div class="row" id="dadosCA" style="display: none;">
+                            <div class="col-12 mb-3">
+                                <div class="alert alert-info" id="ca_info">
+                                    <h6 class="alert-heading" id="ca_titulo"></h6>
+                                    <p id="ca_descricao" class="mb-2"></p>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Fabricante:</strong> <span id="ca_fabricante"></span><br>
+                                            <strong>Situação:</strong> <span id="ca_situacao"></span>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Validade:</strong> <span id="ca_validade"></span><br>
+                                            <strong>Normas:</strong> <span id="ca_normas"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="data_validade" class="form-label">Data de Validade</label>
+                                <input type="date" class="form-control" id="data_validade" name="data_validade">
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="vida_util_meses" class="form-label">Vida Útil (meses)</label>
+                                <input type="number" class="form-control" id="vida_util_meses" name="vida_util_meses" min="0">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="estoque_atual" class="form-label">Estoque Atual</label>
+                                <input type="number" class="form-control" id="estoque_atual" name="estoque_atual" min="0" value="0">
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="estoque_minimo" class="form-label">Estoque Mínimo</label>
+                                <input type="number" class="form-control" id="estoque_minimo" name="estoque_minimo" min="0" value="1">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnSalvarNovoEpi">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Editar EPI -->
+    <div class="modal fade" id="editarEpiModal" tabindex="-1" aria-labelledby="editarEpiModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title" id="editarEpiModalLabel">Editar EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loadingEditarEpi" class="text-center my-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando dados do EPI...</p>
+                    </div>
+                    <form id="formEditarEpi" method="POST" style="display: none;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <input type="hidden" id="editar_epi_id" name="epi_id" value="">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_material_id" class="form-label">Material</label>
+                                <select class="form-select select2" id="editar_material_id" name="material_id" required>
+                                    <option value="">Selecione o material</option>
+                                    {% for material in materiais %}
+                                    <option value="{{ material.id }}">{{ material.codigo }} - {{ material.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_ca_numero" class="form-label">Número do CA</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">CA</span>
+                                    <input type="text" class="form-control" id="editar_ca_numero" name="ca_numero"
+                                        placeholder="Número do Certificado de Aprovação">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_data_validade" class="form-label">Data de Validade</label>
+                                <input type="date" class="form-control" id="editar_data_validade" name="data_validade">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_vida_util_meses" class="form-label">Vida Útil (meses)</label>
+                                <input type="number" class="form-control" id="editar_vida_util_meses" name="vida_util_meses" min="1">
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_estoque_atual" class="form-label">Estoque Atual <span
+                                        class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="editar_estoque_atual" name="estoque_atual" min="0"
+                                    required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_estoque_minimo" class="form-label">Estoque Mínimo <span
+                                        class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="editar_estoque_minimo" name="estoque_minimo" min="1"
+                                    required>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-info" id="btnSalvarEditarEpi">Atualizar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Nova Entrega de EPI -->
+    <div class="modal fade" id="novaEntregaModal" tabindex="-1" aria-labelledby="novaEntregaModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="novaEntregaModalLabel">Registrar Entrega de EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="formNovaEntrega" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="entrega_colaborador_id" class="form-label">Colaborador <span class="text-danger">*</span></label>
+                                <select class="form-select select2" id="entrega_colaborador_id" name="colaborador_id" required>
+                                    <option value="">Selecione o colaborador</option>
+                                    {% for colaborador in colaboradores %}
+                                    <option value="{{ colaborador.id }}">{{ colaborador.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="entrega_epi_id" class="form-label">EPI <span class="text-danger">*</span></label>
+                                <select class="form-select select2" id="entrega_epi_id" name="epi_id" required>
+                                    <option value="">Selecione o EPI</option>
+                                    {% for epi in epis %}
+                                    {% if epi.getEstoqueAtual() > 0 %}
+                                    <option value="{{ epi.id }}" data-estoque="{{ epi.getEstoqueAtual() }}">{{ epi.material.nome }} ({{ epi.ca_numero or 'Sem CA' }}) - Disponível: {{ epi.getEstoqueAtual() }}</option>
+                                    {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="entrega_data" class="form-label">Data da Entrega</label>
+                                <input type="date" class="form-control" id="entrega_data" name="data_entrega" value="{{ now1.strftime('%Y-%m-%d') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="entrega_quantidade" class="form-label">Quantidade</label>
+                                <input type="number" class="form-control" id="entrega_quantidade" name="quantidade" min="1" value="1">
+                                <div class="form-text" id="entrega_estoque_info"></div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="entrega_motivo" class="form-label">Motivo</label>
+                                <select class="form-select" id="entrega_motivo" name="motivo">
+                                    <option value="Novo">Primeira entrega</option>
+                                    <option value="Reposição">Reposição</option>
+                                    <option value="Troca">Troca</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="entrega_observacoes" class="form-label">Observações</label>
+                                <textarea class="form-control" id="entrega_observacoes" name="observacoes" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btnSalvarNovaEntrega">Registrar Entrega</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Devolução de EPI -->
+    <div class="modal fade" id="devolucaoModal" tabindex="-1" aria-labelledby="devolucaoModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title" id="devolucaoModalLabel">Registrar Devolução de EPI</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loadingDevolucao" class="text-center my-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                        <p class="mt-2">Carregando dados da entrega...</p>
+                    </div>
+                    <div id="devolucaoContent" style="display: none;">
+                        <h6 id="devolucao_info_epi" class="mb-3"></h6>
+                        <p id="devolucao_info_colaborador" class="text-muted"></p>
+                        
+                        <form id="formDevolucao" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                            <input type="hidden" id="devolucao_entrega_id" name="entrega_id">
+                            
+                            <div class="mb-3">
+                                <label for="devolucao_data" class="form-label">Data da Devolução</label>
+                                <input type="date" class="form-control" id="devolucao_data" name="data_devolucao" value="{{ now1.strftime('%Y-%m-%d') }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="devolucao_observacoes" class="form-label">Observações sobre a Devolução</label>
+                                <textarea class="form-control" id="devolucao_observacoes" name="observacoes_devolucao" rows="3"></textarea>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" id="btnSalvarDevolucao">Registrar Devolução</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+    $(document).ready(function() {
+    // Configuração global para Select2
+    $.fn.select2.defaults.set('language', 'pt-BR');
+    
+    // Inicializar Select2 no select de materiais
+    $('.select2').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Selecione o material',
+        allowClear: true,
+        dropdownParent: $('#novoEpiModal')
+    });
+    
+    // Ajustar altura do Select2 em dispositivos móveis
+    $('.select2-container .select2-selection--single').css('height', 'calc(2em + 0.75rem + 2px)');
+    $('.select2-container--default .select2-selection--single .select2-selection__rendered').css('line-height', '2.5');
+    
+    // Reabrir o Select2 quando o modal for reaberto
+    $('#novoEpiModal').on('shown.bs.modal', function () {
+        $('.select2').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Selecione o material',
+            allowClear: true,
+            dropdownParent: $('#novoEpiModal')
+        });
+    });
+    
+    // Destruir instâncias do Select2 antes de fechar o modal
+    $('#novoEpiModal').on('hidden.bs.modal', function () {
+        $('.select2').each(function() {
+            if ($(this).data('select2')) {
+                $(this).select2('destroy');
+            }
+        });
+        $(window).off('resize.select2');
+    });
+});
+    document.addEventListener('DOMContentLoaded', function () {
+        // Filtro de tabela
+        function filterTable() {
+            const input = document.getElementById('filter-input');
+            const filter = input.value.toUpperCase();
+            const table = document.getElementById('epis-table');
+            const rows = table.getElementsByTagName('tr');
+
+            for (let i = 1; i < rows.length; i++) {
+                let match = false;
+                const cells = rows[i].getElementsByTagName('td');
+                for (let j = 0; j < cells.length - 1; j++) {
+                    const cell = cells[j];
+                    if (cell) {
+                        const cellText = cell.textContent || cell.innerText;
+                        if (cellText.toUpperCase().indexOf(filter) > -1) {
+                            match = true;
+                            break;
+                        }
+                    }
+                }
+                rows[i].style.display = match ? '' : 'none';
+            }
+        }
+
+        // Atribuir evento ao campo de filtro
+        const filterInput = document.getElementById('filter-input');
+        if (filterInput) {
+            filterInput.addEventListener('keyup', filterTable);
+        }
+
+        // ========= NOVO EPI (MODAL) =========
+        // Evento para botão "Cadastrar EPI" que abre o modal
+        const btnAbrirModalNovo = document.querySelector('a.btn-primary[href*="novo"]');
+        const modalNovoEpi = document.getElementById('novoEpiModal');
+        const modalNovoEpiInstance = new bootstrap.Modal(modalNovoEpi);
+        
+        // Substituir link por abertura do modal
+        if (btnAbrirModalNovo) {
+            btnAbrirModalNovo.addEventListener('click', function(e) {
+                e.preventDefault();
+                modalNovoEpiInstance.show();
+            });
+        }
+        
+        // Consulta de CA
+        const btnConsultarCA = document.getElementById('btnConsultarCA');
+        const caNumero = document.getElementById('ca_numero');
+        const caStatus = document.getElementById('ca_status');
+        const dadosCA = document.getElementById('dadosCA');
+        
+        if (btnConsultarCA) {
+            btnConsultarCA.addEventListener('click', function() {
+                const numero = caNumero.value.trim();
+
+                if (!numero) {
+                    caStatus.innerHTML = '<span class="text-danger">Informe o número do CA</span>';
+                    return;
+                }
+
+                caStatus.innerHTML = '<span class="text-info">Consultando...</span>';
+                dadosCA.style.display = 'none';
+
+                // Chamada AJAX para o endpoint de consulta de CA
+                fetch(`/seguranca/epis/consultar-ca?numero=${numero}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Erro ao consultar o CA');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // Preencher os dados do CA
+                        document.getElementById('ca_titulo').textContent = data.equipamento || 'EPI';
+                        document.getElementById('ca_descricao').textContent = data.descricao || '';
+                        document.getElementById('ca_fabricante').textContent = data.fabricante || 'Não informado';
+                        document.getElementById('ca_situacao').textContent = data.situacao || 'Não informado';
+
+                        // Verificar se há conteúdo vazio ou não informado
+                        if (!data.descricao || data.descricao === 'Sem descrição disponível') {
+                            document.getElementById('ca_descricao').innerHTML = '<em class="text-muted">Sem descrição disponível</em>';
+                        }
+
+                        // Exibir data de validade formatada
+                        if (data.data_validade) {
+                            const dataFormatada = new Date(data.data_validade).toLocaleDateString('pt-BR');
+                            document.getElementById('ca_validade').textContent = dataFormatada;
+                            document.getElementById('data_validade').value = data.data_validade;
+                        } else {
+                            document.getElementById('ca_validade').innerHTML = '<em class="text-muted">Não informada</em>';
+                        }
+
+                        // Exibir normas
+                        if (data.normas && data.normas.length > 0) {
+                            document.getElementById('ca_normas').textContent = data.normas.join(', ');
+                        } else {
+                            document.getElementById('ca_normas').innerHTML = '<em class="text-muted">Não informadas</em>';
+                        }
+
+                        // Estilo condicional para situação
+                        const caSituacao = document.getElementById('ca_situacao');
+                        if (data.situacao && data.situacao.toLowerCase().includes('válido')) {
+                            caSituacao.classList.add('text-success');
+                            caSituacao.classList.remove('text-danger', 'text-warning');
+                        } else if (data.situacao && (data.situacao.toLowerCase().includes('vencido') || data.situacao.toLowerCase().includes('venc'))) {
+                            caSituacao.classList.add('text-danger');
+                            caSituacao.classList.remove('text-success', 'text-warning');
+                        } else {
+                            caSituacao.classList.add('text-warning');
+                            caSituacao.classList.remove('text-success', 'text-danger');
+                        }
+
+                        // Exibir os dados do CA
+                        dadosCA.style.display = 'flex';
+                        caStatus.innerHTML = '<span class="text-success">CA encontrado!</span>';
+                    })
+                    .catch(error => {
+                        console.error('Erro:', error);
+                        caStatus.innerHTML = `<span class="text-danger">${error.message}</span>`;
+                        // Limpar dados anteriores em caso de erro
+                        dadosCA.style.display = 'none';
+                    });
+            });
+        }
+        
+        // Submissão do formulário de novo EPI via AJAX
+        const formNovoEpi = document.getElementById('formNovoEpi');
+        const btnSalvarNovoEpi = document.getElementById('btnSalvarNovoEpi');
+        
+        if (btnSalvarNovoEpi && formNovoEpi) {
+            btnSalvarNovoEpi.addEventListener('click', function() {
+                if (!formNovoEpi.checkValidity()) {
+                    formNovoEpi.classList.add('was-validated');
+                    return;
+                }
+                
+                btnSalvarNovoEpi.disabled = true;
+                btnSalvarNovoEpi.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
+                
+                const formData = new FormData(formNovoEpi);
+                
+                fetch('/seguranca/epis/novo', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Exibir mensagem de sucesso
+                        const alertsDiv = document.querySelector('.alert-container');
+                        if (alertsDiv) {
+                            const alert = document.createElement('div');
+                            alert.className = 'alert alert-success alert-dismissible fade show';
+                            alert.innerHTML = `
+                                ${data.message}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                            `;
+                            alertsDiv.appendChild(alert);
+                            
+                            // Auto-remover alerta após 5 segundos
+                            setTimeout(() => {
+                                alert.classList.remove('show');
+                                setTimeout(() => alert.remove(), 150);
+                            }, 5000);
+                        }
+                        
+                        // Fechar o modal
+                        modalNovoEpiInstance.hide();
+                        
+                        // Recarregar a página para mostrar o novo EPI
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        // Exibir mensagem de erro
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Erro ao cadastrar EPI. Tente novamente.');
+                })
+                .finally(() => {
+                    btnSalvarNovoEpi.disabled = false;
+                    btnSalvarNovoEpi.innerHTML = 'Salvar';
+                });
+            });
+        }
+        
+        // ========= EDITAR EPI (MODAL) =========
+        const modalEditarEpi = document.getElementById('editarEpiModal');
+        const modalEditarEpiInstance = new bootstrap.Modal(modalEditarEpi);
+        const formEditarEpi = document.getElementById('formEditarEpi');
+        const loadingEditarEpi = document.getElementById('loadingEditarEpi');
+        const btnSalvarEditarEpi = document.getElementById('btnSalvarEditarEpi');
+        
+        // Evento para botões "Editar" que abrem o modal
+        document.querySelectorAll('.btn-editar-epi').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const epiId = this.dataset.id;
+                carregarDadosEPI(epiId);
+                modalEditarEpiInstance.show();
+            });
+        });
+        
+        // Reinicializar Select2 quando o modal for mostrado
+        $('#editarEpiModal').on('shown.bs.modal', function () {
+            $('#editar_material_id').select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                placeholder: 'Selecione o material',
+                allowClear: true,
+                dropdownParent: $('#editarEpiModal')
+            });
+        });
+        
+        // Destruir instância do Select2 quando o modal for fechado
+        $('#editarEpiModal').on('hidden.bs.modal', function () {
+            if ($('#editar_material_id').data('select2')) {
+                $('#editar_material_id').select2('destroy');
+            }
+        });
+        
+        // Função para carregar dados do EPI para edição
+        function carregarDadosEPI(epiId) {
+            if (!epiId) return;
+            
+            // Mostrar loading e esconder formulário
+            loadingEditarEpi.style.display = 'block';
+            formEditarEpi.style.display = 'none';
+            
+            // Carregar dados do EPI via AJAX
+            fetch(`/seguranca/epis/editar/${epiId}`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Preencher o formulário
+                document.getElementById('editar_epi_id').value = data.id;
+                document.getElementById('editar_material_id').value = data.material_id;
+                document.getElementById('editar_ca_numero').value = data.ca_numero;
+                document.getElementById('editar_data_validade').value = data.data_validade;
+                document.getElementById('editar_vida_util_meses').value = data.vida_util_meses;
+                document.getElementById('editar_estoque_atual').value = data.estoque_atual;
+                document.getElementById('editar_estoque_minimo').value = data.estoque_minimo;
+                
+                // Atualizar título do modal
+                document.getElementById('editarEpiModalLabel').textContent = `Editar EPI: ${data.material_nome}`;
+                
+                // Esconder loading e mostrar formulário
+                loadingEditarEpi.style.display = 'none';
+                formEditarEpi.style.display = 'block';
+                
+                // Inicializar Select2 para o modal de edição
+                $('#editar_material_id').select2({
+                    theme: 'bootstrap-5',
+                    width: '100%',
+                    placeholder: 'Selecione o material',
+                    allowClear: true,
+                    dropdownParent: $('#editarEpiModal')
+                });
+            })
+            .catch(error => {
+                console.error('Erro ao carregar dados do EPI:', error);
+                alert('Erro ao carregar dados do EPI. Tente novamente.');
+                modalEditarEpiInstance.hide();
+            });
+        }
+        
+        // Submissão do formulário de edição via AJAX
+        if (btnSalvarEditarEpi && formEditarEpi) {
+            btnSalvarEditarEpi.addEventListener('click', function() {
+                if (!formEditarEpi.checkValidity()) {
+                    formEditarEpi.classList.add('was-validated');
+                    return;
+                }
+                
+                btnSalvarEditarEpi.disabled = true;
+                btnSalvarEditarEpi.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Atualizando...';
+                
+                const formData = new FormData(formEditarEpi);
+                const epiId = document.getElementById('editar_epi_id').value;
+                
+                fetch(`/seguranca/epis/editar/${epiId}`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Exibir mensagem de sucesso
+                        const alertsDiv = document.querySelector('.alert-container');
+                        if (alertsDiv) {
+                            const alert = document.createElement('div');
+                            alert.className = 'alert alert-success alert-dismissible fade show';
+                            alert.innerHTML = `
+                                ${data.message}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                            `;
+                            alertsDiv.appendChild(alert);
+                            
+                            // Auto-remover alerta após 5 segundos
+                            setTimeout(() => {
+                                alert.classList.remove('show');
+                                setTimeout(() => alert.remove(), 150);
+                            }, 5000);
+                        }
+                        
+                        // Fechar o modal
+                        modalEditarEpiInstance.hide();
+                        
+                        // Recarregar a página para mostrar as alterações
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        // Exibir mensagem de erro
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Erro ao atualizar EPI. Tente novamente.');
+                })
+                .finally(() => {
+                    btnSalvarEditarEpi.disabled = false;
+                    btnSalvarEditarEpi.innerHTML = 'Atualizar';
+                });
+            });
+        }
+        
+        
+        
+       
+
+        // (Função showToast, se não estiver globalmente disponível, precisa ser definida aqui ou importada)
+        // function showToast(title, message, type = 'info') { ... }
+
+    }); // Fim do DOMContentLoaded ou $(document).ready()
+</script>
+{% endblock %}

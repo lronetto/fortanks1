@@ -1,0 +1,39 @@
+<!-- Modal para Seleção de Material -->
+<div class="modal fade" id="modalSelecionarMaterial" tabindex="-1" aria-labelledby="modalSelecionarMaterialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalSelecionarMaterialLabel">Selecionar Material</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group mb-3">
+                    <label for="buscarMaterial">Buscar material</label>
+                    <input type="text" class="form-control" id="buscarMaterial" 
+                           placeholder="Digite para buscar material por código ou descrição">
+                </div>
+                
+                <input type="hidden" id="item_id_para_vincular">
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="tabelaMateriais">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Descrição</th>
+                                <th>Unidade</th>
+                                <th width="80">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="corpoTabelaMateriais">
+                            <!-- Será preenchido via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            </div>
+        </div>
+    </div>
+</div> 

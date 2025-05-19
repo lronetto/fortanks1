@@ -1,0 +1,77 @@
+<!-- Modal de Importação de Itens -->
+<div class="modal fade" id="modalImportarItens" tabindex="-1" aria-labelledby="modalImportarItensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarItensLabel">Importar e Vincular Itens</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formImportacao">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="importacao_nf_id" name="nf_id">
+                
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Selecione os itens para importação e vincule-os aos materiais cadastrados no sistema.
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="centro_custo_id">Centro de Custo para Importação</label>
+                        <select name="centro_custo_id" id="centro_custo_id" class="form-control select2">
+                            <option value="">Selecione um centro de custo</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="observacao">Observação</label>
+                        <textarea name="observacao" id="observacao" class="form-control" rows="2" 
+                                  placeholder="Observação opcional"></textarea>
+                    </div>
+                    
+                    <!-- Campo de filtro para busca por nome do item na importação -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="filtroItensImportacao" placeholder="Filtrar por nome do item...">
+                                <button class="btn btn-outline-primary" type="button" id="btnFiltrarItensImportacao">
+                                    <i class="fas fa-search"></i> Filtrar
+                                </button>
+                                <button class="btn btn-outline-secondary" type="button" id="btnLimparFiltroItensImportacao">
+                                    <i class="fas fa-times"></i> Limpar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table class="table table-bordered" id="tabelaItensImportacao">
+                            <thead>
+                                <tr>
+                                    <th width="40">
+                                        <input type="checkbox" id="selecionarTodos">
+                                    </th>
+                                    <th>Código</th>
+                                    <th>Descrição</th>
+                                    <th>Quantidade</th>
+                                    <th>Valor Unit.</th>
+                                    <th>Material Vinculado</th>
+                                    <th width="120">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="corpoTabelaItensImportacao">
+                                <!-- Será preenchido via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="submit" id="btnImportar" class="btn btn-primary">
+                        <i class="fas fa-file-import"></i> Importar Selecionados
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 

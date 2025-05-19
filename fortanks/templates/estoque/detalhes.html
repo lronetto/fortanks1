@@ -1,0 +1,360 @@
+{% extends "common/base.html" %}
+
+{% block title %}Detalhes do Item de Estoque{% endblock %}
+
+
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Detalhes do Item de Estoque</h1>
+        <div>
+            <a href="{{ url_for('estoque.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+            <a href="{{ url_for('estoque.nova_movimentacao') }}?estoque_id={{ estoque.id }}" class="btn btn-info btn-sm">
+                <i class="fas fa-exchange-alt"></i> Movimentar
+            </a>
+            <a href="{{ url_for('estoque.editar', id=estoque.id) }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-edit"></i> Editar
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações Básicas -->
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações Básicas</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th style="width: 35%">Tipo</th>
+                                <td>{{ estoque.tipo_item|capitalize }}</td>
+                            </tr>
+                            <tr>
+                                <th>Código</th>
+                                <td>
+                                    {% if estoque.material %}
+                                        {{ estoque.material.codigo or "N/A" }}
+                                    {% elif estoque.epi and estoque.epi.material %}
+                                        {{ estoque.epi.material.codigo or "N/A" }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Nome / Descrição</th>
+                                <td>
+                                    {% if estoque.material %}
+                                        {{ estoque.material.nome }}
+                                    {% elif estoque.epi and estoque.epi.material %}
+                                        {{ estoque.epi.material.nome }} - CA: {{ estoque.epi.ca_numero or "N/A" }}
+                                    {% else %}
+                                        Item sem descrição
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Quantidade Atual</th>
+                                <td class="font-weight-bold">
+                                    {{ "%.2f"|format(estoque.quantidade|float) }}
+                                    {% if estoque.material %}
+                                        {{ estoque.material.unidade or "" }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Quantidade Mínima</th>
+                                <td>
+                                    {{ "%.2f"|format(estoque.quantidade_minima|float) }}
+                                    {% if estoque.material %}
+                                        {{ estoque.material.unidade or "" }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Quantidade Máxima</th>
+                                <td>
+                                    {{ "%.2f"|format(estoque.quantidade_maxima|float) }}
+                                    {% if estoque.material %}
+                                        {{ estoque.material.unidade or "" }}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Status</th>
+                                <td>
+                                    {% if estoque.status_estoque == "Esgotado" %}
+                                        <span class="badge badge-danger">Esgotado</span>
+                                    {% elif estoque.status_estoque == "Crítico" %}
+                                        <span class="badge badge-warning">Crítico</span>
+                                    {% elif estoque.status_estoque == "Excesso" %}
+                                        <span class="badge badge-info">Excesso</span>
+                                    {% else %}
+                                        <span class="badge badge-success">Normal</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações Adicionais -->
+        <div class="col-md-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações Adicionais</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th style="width: 35%">Localização</th>
+                                <td>{{ estoque.localizacao or "Não especificado" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Lote</th>
+                                <td>{{ estoque.lote or "Não especificado" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Data de Validade</th>
+                                <td>
+                                    {% if estoque.data_validade %}
+                                        {{ estoque.data_validade.strftime('%d/%m/%Y') }}
+                                        
+                                        {% if estoque.status_validade == "Vencido" %}
+                                            <span class="badge badge-danger ml-2">Vencido</span>
+                                        {% elif estoque.status_validade == "Próximo ao vencimento" %}
+                                            <span class="badge badge-warning ml-2">Próximo ao vencimento</span>
+                                        {% else %}
+                                            <span class="badge badge-success ml-2">Válido</span>
+                                        {% endif %}
+                                    {% else %}
+                                        Sem validade
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Centro de Custo</th>
+                                <td>{{ estoque.centro_custo.descricao if estoque.centro_custo else "Não especificado" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Data de Cadastro</th>
+                                <td>{{ estoque.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            <tr>
+                                <th>Última Atualização</th>
+                                <td>{{ estoque.atualizado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            </tr>
+                            <tr>
+                                <th>Registrado por</th>
+                                <td>{{ estoque.usuario.nome if estoque.usuario else "Sistema" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Histórico de Saldo Gráfico -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Histórico de Saldo</h6>
+                </div>
+                <div class="card-body">
+                    <div class="form-row align-items-end mb-3">
+                        <div class="form-group col-md-3">
+                            <label for="filtroDataInicio">Data Início:</label>
+                            <input type="date" id="filtroDataInicio" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label for="filtroDataFim">Data Fim:</label>
+                            <input type="date" id="filtroDataFim" class="form-control form-control-sm">
+                        </div>
+                        <div class="form-group col-md-auto">
+                            <button id="btnAplicarFiltroGrafico" class="btn btn-primary btn-sm">Aplicar</button>
+                        </div>
+                         <div class="form-group col-md-auto">
+                            <button id="btnLimparFiltroGrafico" class="btn btn-secondary btn-sm">Limpar</button>
+                        </div>
+                    </div>
+                    <div id="graficoHistoricoSaldo" style="width:100%;height:400px;">
+                        <p class="text-center">Carregando gráfico...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Histórico de Movimentações -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Histórico de Movimentações</h6>
+            <a href="{{ url_for('estoque.movimentacoes') }}?estoque_id={{ estoque.id }}" class="btn btn-info btn-sm">
+                Ver Todas
+            </a>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Tipo</th>
+                            <th>Quantidade</th>
+                            <th>Usuário</th>
+                            <th>Observação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimentacoes %}
+                        <tr>
+                            <td>{{ mov.data_movimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td>
+                                {% if mov.tipo_movimento == 'entrada' %}
+                                    <span class="badge badge-success">Entrada</span>
+                                {% elif mov.tipo_movimento == 'saida' %}
+                                    <span class="badge badge-danger">Saída</span>
+                                {% elif mov.tipo_movimento == 'ajuste' %}
+                                    <span class="badge badge-warning">Ajuste</span>
+                                {% else %}
+                                    <span class="badge badge-info">{{ mov.tipo_movimento|capitalize }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right">
+                                {{ "%.2f"|format(mov.quantidade|float) }}
+                            </td>
+                            <td>{{ mov.usuario.nome if mov.usuario else "Sistema" }}</td>
+                            <td>{{ mov.observacao or "" }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center">Nenhuma movimentação registrada</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+
+    <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const estoqueId = "{{ estoque.id }}"; // Pega o ID do estoque do template
+    const graficoDiv = document.getElementById('graficoHistoricoSaldo');
+    const dataInicioInput = document.getElementById('filtroDataInicio');
+    const dataFimInput = document.getElementById('filtroDataFim');
+    const btnAplicar = document.getElementById('btnAplicarFiltroGrafico');
+    const btnLimpar = document.getElementById('btnLimparFiltroGrafico');
+
+    function exibirMensagem(mensagem) {
+        graficoDiv.innerHTML = `<p class="text-center text-muted">${mensagem}</p>`;
+    }
+
+    function desenharGrafico(idEstoque, dataInicio = null, dataFim = null) {
+        exibirMensagem('Carregando dados do gráfico...');
+        console.log("[GraphDebug] Iniciando desenharGrafico. ID Estoque:", idEstoque, "Data Início:", dataInicio, "Data Fim:", dataFim);
+        let apiUrl = `/estoque/api/estoque/${idEstoque}/historico-saldo`;
+        const params = new URLSearchParams();
+        if (dataInicio) {
+            params.append('data_inicio', dataInicio);
+        }
+        if (dataFim) {
+            params.append('data_fim', dataFim);
+        }
+        if (params.toString()) {
+            apiUrl += `?${params.toString()}`;
+        }
+
+        fetch(apiUrl)
+            .then(response => {
+                console.log("[GraphDebug] Resposta do fetch recebida:", response);
+                if (!response.ok) {
+                    console.error("[GraphDebug] Resposta da API não foi OK. Status:", response.status, response.statusText);
+                    throw new Error(`Erro na requisição: ${response.statusText}`);
+                }
+                console.log("[GraphDebug] Resposta OK. Convertendo para JSON...");
+                return response.json();
+            })
+            .then(data => {
+                console.log("[GraphDebug] Dados JSON recebidos da API:", data);
+                if (data.error) {
+                    console.warn("[GraphDebug] API retornou um erro nos dados:", data.error);
+                    exibirMensagem(`Erro ao carregar dados: ${data.error}`);
+                    return;
+                }
+                if (data.datas && data.saldos && data.datas.length > 0) {
+                    console.log("[GraphDebug] Dados válidos. Preparando para desenhar com Plotly.");
+                    const trace = {
+                        x: data.datas,
+                        y: data.saldos,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: 'Saldo',
+                        line: {shape: 'hv'}
+                    };
+                    const layout = {
+                        title: 'Histórico de Saldo do Item',
+                        xaxis: {
+                            title: 'Data da Movimentação',
+                            type: 'date'
+                        },
+                        yaxis: {
+                            title: 'Saldo',
+                            rangemode: 'tozero'
+                        },
+                        margin: { l: 50, r: 50, b: 100, t: 50, pad: 4 }
+                    };
+                    Plotly.newPlot(graficoDiv, [trace], layout, {responsive: true});
+                    console.log("[GraphDebug] Plotly.newPlot chamado com sucesso.");
+                } else {
+                    console.log("[GraphDebug] Sem dados (datas ou saldos) para exibir ou array de datas vazio.");
+                    exibirMensagem('Nenhuma movimentação encontrada para o período selecionado.');
+                }
+            })
+            .catch(error => {
+                console.error('[GraphDebug] Erro capturado no fetch ou processamento:', error);
+                exibirMensagem('Ocorreu um erro ao carregar o gráfico. Verifique o console para mais detalhes.');
+            });
+    }
+
+    // Carregamento inicial
+    if (estoqueId) {
+        desenharGrafico(estoqueId);
+    }
+
+    // Event Listeners para os botões
+    btnAplicar.addEventListener('click', function() {
+        const dataInicio = dataInicioInput.value;
+        const dataFim = dataFimInput.value;
+        if (!dataInicio && !dataFim){
+            alert("Por favor, selecione pelo menos uma data para filtrar.");
+            return;
+        }
+        desenharGrafico(estoqueId, dataInicio || null, dataFim || null);
+    });
+
+    btnLimpar.addEventListener('click', function() {
+        dataInicioInput.value = '';
+        dataFimInput.value = '';
+        desenharGrafico(estoqueId);
+    });
+});
+</script>
+{% endblock %} 

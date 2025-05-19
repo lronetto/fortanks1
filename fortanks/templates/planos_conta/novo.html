@@ -1,0 +1,101 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Novo Plano de Conta{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Novo Plano de Conta</h1>
+        <a href="{{ url_for('plano_conta.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Cadastro de Plano de Conta</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('plano_conta.novo') }}" id="formNovoPlano">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="codigo" class="form-label">Código*</label>
+                        <input type="text" class="form-control" id="codigo" name="codigo" placeholder="Ex.: 1.1.01"
+                            required maxlength="20">
+                        <div class="form-text">Utilize um formato padronizado (ex: 1.1.01)</div>
+                    </div>
+                    <div class="col-md-8">
+                        <label for="descricao" class="form-label">Descrição*</label>
+                        <input type="text" class="form-control" id="descricao" name="descricao"
+                            placeholder="Ex.: Receitas Operacionais" required maxlength="100">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="indice" class="form-label">Índice</label>
+                        <input type="text" class="form-control" id="indice" name="indice"
+                            placeholder="Ex.: MATERIAL.LIMPEZA" maxlength="50">
+                        <div class="form-text">Identificador para agrupamento ou categorização</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" id="ativo" name="ativo" checked>
+                            <label class="form-check-label" for="ativo">Ativo</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mb-4">
+                    <i class="fas fa-info-circle"></i> Campos marcados com * são obrigatórios.
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="reset" class="btn btn-secondary me-md-2">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function () {
+        // Validação do formulário
+        $('#formNovoPlano').submit(function (event) {
+            var codigo = $('#codigo').val();
+            var descricao = $('#descricao').val();
+
+            if (!codigo || !descricao) {
+                event.preventDefault();
+                alert('Por favor, preencha todos os campos obrigatórios.');
+                return false;
+            }
+
+            // Validação do formato do código
+            var codigoPattern = /^[\d\.]+$/;
+            if (!codigoPattern.test(codigo)) {
+                event.preventDefault();
+                alert('O código deve conter apenas números e pontos.');
+                return false;
+            }
+
+            return true;
+        });
+
+        // Formatação automática do código
+        $('#codigo').on('input', function () {
+            var valor = $(this).val();
+            // Remove caracteres inválidos (deixando apenas números e pontos)
+            valor = valor.replace(/[^\d\.]/g, '');
+            $(this).val(valor);
+        });
+    });
+</script>
+{% endblock %}

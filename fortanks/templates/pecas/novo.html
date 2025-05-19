@@ -1,0 +1,293 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Nova Peça - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-plus-circle"></i> Nova Peça</h1>
+        <div>
+            <a href="{{ url_for('peca.listar_por_tanque', tanque_id=tanque.id) }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Cadastro de Peça</h6>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-4">
+                <strong>Tanque:</strong> {{ tanque.nome }} ({{ tanque.sistema }})
+                <br>
+                <strong>Próximo Número Sequencial:</strong> <span class="badge bg-primary">{{ proximo_sequencial
+                    }}</span>
+                {% if tanque.placas_normais is not none or tanque.placas_fecho is not none %}
+                <br>
+                <strong>Configuração de Placas:</strong>
+                {% if tanque.placas_normais is not none %}
+                {{ tanque.placas_normais }} PN
+                {% endif %}
+                {% if tanque.placas_normais is not none and tanque.placas_fecho is not none %}
+                |
+                {% endif %}
+                {% if tanque.placas_fecho is not none %}
+                {{ tanque.placas_fecho }} PF
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <form method="POST" action="{{ url_for('peca.novo', tanque_id=tanque.id) }}" id="form-peca">
+                <input type="hidden" id="proximo-sequencial" value="{{ proximo_sequencial }}">
+                <input type="hidden" id="tanque-placas-normais" value="{{ tanque.placas_normais or 0 }}">
+                <input type="hidden" id="tanque-placas-fecho" value="{{ tanque.placas_fecho or 0 }}">
+                <input type="hidden" id="tanque-id" value="{{ tanque.id }}">
+                <input type="hidden" id="url-listar-por-tanque"
+                    value="{{ url_for('peca.listar_por_tanque', tanque_id=tanque.id) }}">
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="tipo" class="form-label">Tipo</label>
+                        <input type="text" class="form-control" id="tipo" name="tipo" required>
+                        <small class="form-text text-muted">Exemplo: Viga, Pilar, Placa, etc.</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="nome" name="nome" required>
+                        <small class="form-text text-muted">Nome ou identificação da peça</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="numero_tanque" class="form-label">Número do Tanque</label>
+                        <input type="number" class="form-control" id="numero_tanque" name="numero_tanque"
+                            value="{{ tanque.un|int if tanque.un and tanque.un.isdigit() else '' }}">
+                        <small class="form-text text-muted">Código numérico do tanque (opcional)</small>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="quantidade" class="form-label">Quantidade de Cópias</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="quantidade" name="quantidade" min="1"
+                                value="1" required>
+                            <span class="input-group-text">peça(s)</span>
+                        </div>
+                        <small class="form-text text-muted">Número de cópias iguais a cadastrar</small>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <button type="button" id="btn-gerar-placas" class="btn btn-info mb-3" {% if not
+                            tanque.placas_normais %} disabled {% endif %}>
+                            <i class="fas fa-magic"></i> Gerar Placas Automaticamente
+                        </button>
+                        {% if not tanque.placas_normais %}
+                        <small class="text-muted d-block">
+                            O tanque não possui quantidade de placas normais configurada.
+                        </small>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="reset" class="btn btn-secondary me-md-2">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Geração Automática de Placas -->
+<div class="modal fade" id="modal-gerar-placas" tabindex="-1" aria-labelledby="modal-gerar-placas-label"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-gerar-placas-label">Gerar Placas Automaticamente</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-3">
+                    <p>Esta ferramenta vai gerar automaticamente:</p>
+                    <ul>
+                        <li><strong id="placas-pn-count">0</strong> peças do tipo "PN" (Placas Normais)</li>
+                        <li><strong id="placas-pf-count">0</strong> peças do tipo "PF" (Placas de Fecho) - 1 a cada 40
+                            PN</li>
+                    </ul>
+                    <p>Total: <strong id="placas-total-count">0</strong> peças</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="prefixo-pn" class="form-label">Prefixo para Placas Normais (PN)</label>
+                            <input type="text" class="form-control" id="prefixo-pn" value="PN">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="prefixo-pf" class="form-label">Prefixo para Placas de Fecho (PF)</label>
+                            <input type="text" class="form-control" id="prefixo-pf" value="PF">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="numero-inicial" class="form-label">Número Inicial</label>
+                            <input type="number" class="form-control" id="numero-inicial" value="1" min="1">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="intervalo-pf" class="form-label">Inserir PF a cada quantas PN?</label>
+                            <input type="number" class="form-control" id="intervalo-pf" value="40" min="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btn-confirmar-gerar-placas" class="btn btn-primary">Gerar e Adicionar
+                    Placas</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Função para calcular e atualizar o último número sequencial
+    function atualizarUltimoSequencial() {
+        const proximoSequencial = parseInt(document.getElementById('proximo-sequencial').value);
+        const quantidade = parseInt(document.getElementById('quantidade').value) || 1;
+        const ultimoSequencial = proximoSequencial + quantidade - 1;
+        document.getElementById('ultimo_sequencial').textContent = ultimoSequencial;
+    }
+
+    // Validação do formulário
+    document.getElementById('form-peca').addEventListener('submit', function (e) {
+        const tipo = document.getElementById('tipo').value.trim();
+        const nome = document.getElementById('nome').value.trim();
+        const quantidade = parseInt(document.getElementById('quantidade').value);
+
+        if (!tipo || !nome) {
+            e.preventDefault();
+            alert('Todos os campos são obrigatórios!');
+            return false;
+        }
+
+        if (isNaN(quantidade) || quantidade < 1) {
+            e.preventDefault();
+            alert('A quantidade deve ser um número maior ou igual a 1!');
+            return false;
+        }
+
+        return true;
+    });
+
+    // Atualiza o último número sequencial quando a quantidade muda
+    document.getElementById('quantidade').addEventListener('input', atualizarUltimoSequencial);
+
+    // Inicializa o último sequencial no carregamento da página
+    document.addEventListener('DOMContentLoaded', atualizarUltimoSequencial);
+
+    // Código para a geração automática de placas
+    document.addEventListener('DOMContentLoaded', function () {
+        const btnGerarPlacas = document.getElementById('btn-gerar-placas');
+        const btnConfirmarGerarPlacas = document.getElementById('btn-confirmar-gerar-placas');
+        const modalGerarPlacas = new bootstrap.Modal(document.getElementById('modal-gerar-placas'));
+
+        // Contadores no modal
+        const placasPNCount = document.getElementById('placas-pn-count');
+        const placasPFCount = document.getElementById('placas-pf-count');
+        const placasTotalCount = document.getElementById('placas-total-count');
+
+        // Valores do tanque
+        const tanquePlacasNormais = parseInt(document.getElementById('tanque-placas-normais').value) || 0;
+        const tanquePlacasFecho = parseInt(document.getElementById('tanque-placas-fecho').value) || 0;
+        const tanqueId = document.getElementById('tanque-id').value;
+        const urlListarPorTanque = document.getElementById('url-listar-por-tanque').value;
+
+        // Função para atualizar os contadores no modal
+        function atualizarContadores() {
+            const intervaloPF = parseInt(document.getElementById('intervalo-pf').value) || 40;
+            const placasPNValor = tanquePlacasNormais;
+            // Calcular quantas placas PF serão geradas (1 a cada X placas normais)
+            const placasPFValor = Math.floor(placasPNValor / intervaloPF);
+
+            placasPNCount.textContent = placasPNValor;
+            placasPFCount.textContent = placasPFValor;
+            placasTotalCount.textContent = placasPNValor + placasPFValor;
+        }
+
+        // Atualizar contadores quando o intervalo mudar
+        document.getElementById('intervalo-pf').addEventListener('input', atualizarContadores);
+
+        // Abrir modal ao clicar no botão
+        btnGerarPlacas.addEventListener('click', function () {
+            atualizarContadores();
+            modalGerarPlacas.show();
+        });
+
+        // Gerar e adicionar placas ao confirmar
+        btnConfirmarGerarPlacas.addEventListener('click', async function () {
+            const prefixoPN = document.getElementById('prefixo-pn').value;
+            const prefixoPF = document.getElementById('prefixo-pf').value;
+            const numeroInicial = parseInt(document.getElementById('numero-inicial').value) || 1;
+            const intervaloPF = parseInt(document.getElementById('intervalo-pf').value) || 40;
+
+            // Fechar o modal
+            modalGerarPlacas.hide();
+
+            // Mostrar mensagem de processamento
+            alert('Iniciando a criação das peças. Por favor, aguarde e não atualize a página.');
+
+            try {
+                // Para cada placa normal, criar uma peça do tipo PN
+                for (let i = 0; i < tanquePlacasNormais; i++) {
+                    const sequencia = i + numeroInicial;
+                    const formData = new FormData();
+                    formData.append('tipo', 'PN');
+                    formData.append('nome', `${prefixoPN}${sequencia}`);
+                    formData.append('numero_tanque', document.getElementById('numero_tanque').value);
+                    formData.append('quantidade', 1);
+
+                    // Adicionar uma peça PF a cada X placas PN
+                    if ((i + 1) % intervaloPF === 0) {
+                        const formDataPF = new FormData();
+                        formDataPF.append('tipo', 'PF');
+                        formDataPF.append('nome', `${prefixoPF}${Math.floor((i + 1) / intervaloPF)}`);
+                        formDataPF.append('numero_tanque', document.getElementById('numero_tanque').value);
+                        formDataPF.append('quantidade', 1);
+
+                        await fetch(`/api/tanques/${tanqueId}/pecas/adicionar`, {
+                            method: 'POST',
+                            body: formDataPF
+                        });
+                    }
+
+                    await fetch(`/api/tanques/${tanqueId}/pecas/adicionar`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+
+                alert(`Peças geradas com sucesso! A página será recarregada para mostrar as novas peças.`);
+                window.location.href = urlListarPorTanque;
+            } catch (error) {
+                alert(`Erro ao gerar as peças: ${error.message}`);
+            }
+        });
+    });
+</script>
+{% endblock %}
