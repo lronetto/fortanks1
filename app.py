@@ -45,7 +45,7 @@ from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
 
-load_dotenv('fortanks/.env')
+load_dotenv('.env')
 
 # Configuração de logs
 import logging

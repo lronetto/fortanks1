@@ -3,7 +3,7 @@ from datetime import timedelta
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
-load_dotenv('fortanks/.env')
+load_dotenv('.env')
 
 class Config:
     # Configurações básicas
