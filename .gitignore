@@ -122,3 +122,5 @@ static/uploads/temp/
 # Arquivos do sistema
 .DS_Store
 Thumbs.db 
+
+wsgi.py
