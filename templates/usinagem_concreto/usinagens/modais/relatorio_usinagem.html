@@ -6,10 +6,16 @@
                 <h5 class="modal-title" id="modalRelatorioUsinagemLabel">Ficha de Moldagem e Rompimento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <div class="modal-body" id="modalRelatorioUsinagemBody">
-                <div class="text-center my-5">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Carregando...</span>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="selectTanqueRelatorio" class="form-label">Filtrar por Tanque</label>
+                    <select id="selectTanqueRelatorio" class="form-select"></select>
+                </div>
+                <div id="modalRelatorioUsinagemBody">
+                    <div class="text-center my-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -25,31 +31,84 @@
 
 {% block scripts %}
 <script>
+// Função para carregar tanques associados via AJAX
+function carregarTanquesRelatorio(usinagemId, tanqueSelecionado) {
+    $.get('/relatorios-usinagem/ficha-moldagem-rompimento-modal/' + usinagemId + '?tanques=1', function(data) {
+        var tanques = data.tanques || [];
+        var select = $('#selectTanqueRelatorio');
+        select.empty();
+        tanques.forEach(function(tanque) {
+            var option = $('<option></option>')
+                .val(tanque.id)
+                .text(tanque.nome + (tanque.descricao ? ' - ' + tanque.descricao : ''));
+            if (tanqueSelecionado && tanque.id == tanqueSelecionado) {
+                option.attr('selected', 'selected');
+            }
+            select.append(option);
+        });
+    });
+}
+
 $('#modalRelatorioUsinagem').on('show.bs.modal', function (event) {
     var button = $(event.relatedTarget);
     var usinagemId = button.data('usinagem-id');
     var modalBody = $(this).find('#modalRelatorioUsinagemBody');
     var btnPDF = $(this).find('#btnRelatorioPDF');
+    var selectTanque = $('#selectTanqueRelatorio');
     // Mostrar spinner de carregamento
     modalBody.html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
     btnPDF.hide();
     if (!usinagemId) return;
-    // Fazer requisição AJAX para carregar o relatório
-    $.get('/relatorios-usinagem/ficha-moldagem-rompimento-modal/' + usinagemId, function(data) {
+    // Carregar tanques e relatório
+    $.get('/relatorios-usinagem/ficha-moldagem-rompimento-modal/' + usinagemId + '?tanques=1', function(data) {
+        var tanques = data.tanques || [];
+        selectTanque.empty();
+        selectTanque.append($('<option></option>').val('').text('Todos os tanques'));
+        tanques.forEach(function(tanque, idx) {
+            var option = $('<option></option>')
+                .val(tanque.id)
+                .text(tanque.nome + (tanque.descricao ? ' - ' + tanque.descricao : ''));
+            selectTanque.append(option);
+        });
+        var tanqueId = selectTanque.val();
+        carregarRelatorio(usinagemId, tanqueId, modalBody, btnPDF);
+    });
+    // Ao trocar o tanque, recarregar relatório
+    selectTanque.off('change').on('change', function() {
+        var tanqueId = $(this).val();
+        carregarRelatorio(usinagemId, tanqueId, modalBody, btnPDF);
+    });
+});
+
+function carregarRelatorio(usinagemId, tanqueId, modalBody, btnPDF) {
+    modalBody.html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+    btnPDF.hide();
+    var url = '/relatorios-usinagem/ficha-moldagem-rompimento-modal/' + usinagemId;
+    if (tanqueId) {
+        url += '?tanque_id=' + tanqueId;
+    }
+    $.get(url, function(data) {
         modalBody.html(data);
-        btnPDF.attr('href', '/relatorios-usinagem/ficha-moldagem-rompimento-pdf/' + usinagemId);
+        var pdfUrl = '/relatorios-usinagem/ficha-moldagem-rompimento-pdf/' + usinagemId;
+        if (tanqueId) {
+            pdfUrl += '?tanque_id=' + tanqueId;
+        }
+        btnPDF.attr('href', pdfUrl);
         btnPDF.show();
     }).fail(function() {
         modalBody.html('<div class="alert alert-danger">Erro ao carregar relatório.</div>');
         btnPDF.hide();
     });
-});
+}
+
 $('#modalRelatorioUsinagem').on('hidden.bs.modal', function () {
     var modalBody = $(this).find('#modalRelatorioUsinagemBody');
     var btnPDF = $(this).find('#btnRelatorioPDF');
+    var selectTanque = $('#selectTanqueRelatorio');
     modalBody.html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
     btnPDF.hide();
     btnPDF.attr('href', '#');
+    selectTanque.empty();
 });
 </script>
 {% endblock %} 

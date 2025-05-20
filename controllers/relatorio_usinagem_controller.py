@@ -88,45 +88,41 @@ def ficha_moldagem_rompimento(usinagem_id):
 @relatorio_usinagem_bp.route('/ficha-moldagem-rompimento-pdf/<int:usinagem_id>')
 @login_required
 def ficha_moldagem_rompimento_pdf(usinagem_id):
-    """Gera um PDF da ficha de moldagem e rompimento para uma usinagem específica"""
+    """Gera um PDF da ficha de moldagem e rompimento para uma usinagem específica, filtrando por tanque se fornecido"""
     usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
-    
-    # Buscar concretagem relacionada a esta usinagem
     concretagem = Concretagem.query.join(ConcretagemPeca).filter(
         ConcretagemPeca.usinagem_id == usinagem_id,
     ).first()
-    
     if not concretagem:
         flash('Não foi encontrada concretagem relacionada a esta usinagem', 'warning')
         return redirect(url_for('relatorio_usinagem.index'))
-    
-    # Buscar rompimentos desta usinagem
+    tanque_id = request.args.get('tanque_id', type=int)
+    print(tanque_id)
+    tanques = concretagem.tanques
+    if tanque_id:
+        tanque = next((t for t in tanques if t.id == tanque_id), None)
+    else:
+        tanque = None  # Para exibir todos os tanques/agregado
     rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem_id).order_by(
         RompimentoCorpoProva.numero_cp
     ).all()
-    
-    # Buscar traço relacionado
     traco = usinagem.traco
-    
-    # Buscar o cliente final (usaremos o cliente do contrato)
     cliente = None
-    tanque = None
     obra = None
-    
-    if concretagem and concretagem.tanques_associados:
-        # Pegar o primeiro tanque associado para simplificar
-        tanque = concretagem.tanques[0] if concretagem.tanques else None
-        
-        if tanque and tanque.contrato_id:
-            # Buscar contrato relacionado ao centro de custo do tanque
+    if tanque:
+        if tanque.contrato_id:
             contrato = tanque.contrato
-            
             if contrato and contrato.cliente_final_id:
                 cliente = Cliente.query.get(contrato.cliente_final_id)
-            
-            # Definir obra como a descrição do tanque
             obra = f"{tanque.nome}"
-    
+    elif tanques:
+        # Se for todos, pegar o primeiro para exibir cliente/obra genérico
+        t = tanques[0]
+        if t.contrato_id:
+            contrato = t.contrato
+            if contrato and contrato.cliente_final_id:
+                cliente = Cliente.query.get(contrato.cliente_final_id)
+            obra = f"{t.nome} (e outros)"
     # Criar PDF na memória
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -159,12 +155,13 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
         ['', f'OBRA: {obra if obra else "Não especificada"}', '']
     ]
     
-    header_table = Table(header_data, colWidths=[doc.width*0.2, doc.width*0.7, doc.width*0.1])
+    header_table = Table(header_data, colWidths=[doc.width*0.2, doc.width*0.68, doc.width*0.12])
     header_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('BOX', (0, 0), (-1, -1), 2, colors.black),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-       
         ('SPAN', (0, 0), (0, 2)),
+        ('SPAN', (1, 1), (2, 1)),
+        ('SPAN', (1, 2), (2, 2)),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
@@ -174,32 +171,32 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
     elements.append(header_table)
     elements.append(Spacer(1, 0.5*cm))
     
-    # Especificação do concreto
-    spec_title = Paragraph("ESPECIFICAÇÃO DO CONCRETO", title_style)
-    elements.append(spec_title)
-    
     # Dados da especificação
     spec_data = [
-        ['TIPO DO CONCRETO:', f'fck>= {traco.resistencia}', 'MPa', f'28 dias', 'TRAÇO FTK:', f'{traco.codigo}', 'BRITA:', '0'],
-        ['RESTRIÇÃO:', 'fck>= 24,0', 'MPa p/ desprotensão', 'CIMENTO 1:', 'CPIII 40 RS', 'CIMENTO 2:', 'CP V'],
-        ['CONSISTÊNCIA PREVISTA:', f'{"SLUMP=" if traco.tipo_abatimento == "slump" else "FLOW="}', 'mm', f'{traco.valor_abatimento} ± 50', 'CONSUMO DE CIMENTO (kg/m³):', '1 (50%)', '2 (50%)'],
+        ['ESPECIFICAÇÃO DO CONCRETO', '', '', '', '', '', ''],
+        ['TIPO DO CONCRETO:', '', '', '', '', '', ''],
+        ['fck>= 24,0 MPa', '', '', '', '', '', ''],
+        ['fck>= 24,0 MPa p/ desprotensão', '', '', '', '', '', ''],
+        ['SLUMP= 660/670 mm', '', '', '', '', '', ''],
+        ['CONSUMO DE CIMENTO (kg/m³):', '1 (50%)', '2 (50%)', '', '', '', ''],
         ['ADITIVO:', 'SUPER PLASTIFICANTE', 'LANÇAMENTO:', 'BOMBEADO', 'X', 'CONVENCIONAL', '']
     ]
     
-    spec_table = Table(spec_data,colWidths=[doc.width*0.2, doc.width*0.1, doc.width*0.1, doc.width*0.1, doc.width*0.1, doc.width*0.1, doc.width*0.1])
+    spec_table = Table(spec_data,colWidths=[doc.width*0.2, 
+                                            doc.width*0.1, 
+                                            doc.width*0.1, 
+                                            doc.width*0.1, 
+                                            doc.width*0.1, 
+                                            doc.width*0.1, 
+                                            doc.width*0.3])
     spec_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('BOX', (0, 0), (-1, -1), 2, colors.black),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('SPAN', (1, 0), (2, 0)),  # fck
-        ('SPAN', (3, 0), (3, 0)),  # 28 dias
-        ('SPAN', (1, 1), (2, 1)),  # fck desprotensão
-        ('SPAN', (4, 1), (4, 1)),  # CPIII 40 RS
-        ('SPAN', (1, 2), (1, 2)),  # SLUMP=
-        ('SPAN', (3, 2), (3, 2)),  # valor abatimento
-        ('SPAN', (1, 3), (1, 3)),  # SUPER PLASTIFICANTE
-        ('SPAN', (3, 3), (3, 3)),  # BOMBEADO
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('SPAN', (0, 0), (-1, 0)),
+        ('FONTSIZE', (0, 0), (0, 0), 15),
+        ('HALIGN', (0, 0), (0, 0), 'CENTER'),
+        ('HEIGHT', (0, 0), (-1, 0), 20*cm)
     ]))
     elements.append(spec_table)
     elements.append(Spacer(1, 0.5*cm))
@@ -474,26 +471,36 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
 @relatorio_usinagem_bp.route('/ficha-moldagem-rompimento-modal/<int:usinagem_id>')
 @login_required
 def ficha_moldagem_rompimento_modal(usinagem_id):
-    """Retorna apenas o conteúdo HTML do relatório para exibir no modal (sem layout base)"""
+    """Retorna apenas o conteúdo HTML do relatório para exibir no modal (sem layout base) ou lista de tanques se solicitado"""
+    from flask import jsonify
     usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
     concretagem = Concretagem.query.join(ConcretagemPeca).filter(
         ConcretagemPeca.usinagem_id == usinagem_id
     ).first()
     if not concretagem:
+        if request.args.get('tanques') == '1':
+            return jsonify({'tanques': []})
         return '<div class="alert alert-warning">Não foi encontrada concretagem relacionada a esta usinagem.</div>'
+    if request.args.get('tanques') == '1':
+        tanques = concretagem.tanques
+        return jsonify({'tanques': [ {'id': t.id, 'nome': t.nome, 'descricao': getattr(t, 'descricao', None)} for t in tanques ]})
+    tanque_id = request.args.get('tanque_id', type=int)
+    tanques = concretagem.tanques
+    if tanque_id:
+        tanque = next((t for t in tanques if t.id == tanque_id), None)
+    else:
+        tanque = None  # Para exibir todos os tanques/agregado
     rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem_id).order_by(
         RompimentoCorpoProva.numero_cp
     ).all()
     traco = usinagem.traco
-    tanque = None
-    if concretagem and concretagem.tanques_associados:
-        tanque = concretagem.tanques[0] if concretagem.tanques else None
     return render_template('relatorios/usinagem/_ficha_moldagem_rompimento_modal.html',
                           usinagem=usinagem,
                           concretagem=concretagem,
                           rompimentos=rompimentos,
                           traco=traco,
-                          tanque=tanque)
+                          tanque=tanque,
+                          tanques=tanques)
 
 @relatorio_usinagem_bp.route('/api/contratos')
 @login_required

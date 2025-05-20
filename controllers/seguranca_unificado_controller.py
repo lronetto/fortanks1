@@ -354,7 +354,7 @@ def epi_ajustar_estoque(id):
                 flash('A quantidade real em estoque não pode ser negativa.', 'danger')
                 return redirect(url_for('seguranca.epis_index'))
             
-            epi.ajustar_estoque(quantidade_ajuste,current_user.id,motivo)
+            epi.ajustar_estoque(quantidade_ajuste,current_user.id)
             return jsonify({'success': True, 'message': f'{quantidade_ajuste} item(s) adicionado(s) ao estoque com sucesso!'})
 
         elif operacao == 'adicionar':

@@ -116,7 +116,7 @@ class EPI(db.Model):
         
         return True
     
-    def ajustar_estoque(self,quantidade,usuario_id,motivo=None):
+    def ajustar_estoque(self,quantidade,usuario_id):
         """
         Ajusta o estoque do EPI
         """
@@ -125,9 +125,7 @@ class EPI(db.Model):
         movimentacao = MovimentacaoEstoque.query.filter_by(estoque_id=estoque.id).order_by(MovimentacaoEstoque.data_movimento.desc()).first()
         if not estoque:
             raise ValueError("Não existe estoque para este material")
-        if not motivo:
-            motivo = f"Ajuste de estoque para EPI {self.material.nome}"
-        mov = movimentacao.Ajuste(quantidade,estoque.id,self.id,'EPI',usuario_id,motivo)
+        mov = movimentacao.Ajuste(quantidade,estoque.id,self.id,'EPI',usuario_id)
         mov.save()
         return mov
         

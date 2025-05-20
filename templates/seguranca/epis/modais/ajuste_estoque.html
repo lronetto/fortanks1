@@ -25,7 +25,7 @@
                         <div class="mb-3">
                             <label for="quantidade" class="form-label" id="labelQuantidade">Quantidade</label>
                             <input type="number" class="form-control" name="quantidade"
-                                id="quantidade" min="1" required>
+                                id="aemquantidade" min="1" required>
                         </div>
                         <div class="mb-3">
                             <label for="motivo" class="form-label">Motivo</label>
@@ -50,6 +50,7 @@
                 const epiId = this.getAttribute('data-epi-id');
                 const modal = new bootstrap.Modal(document.getElementById('ajustarEstoqueModal'));
                 console.log(epiId);
+                document.getElementById('aemquantidade').value='';
                 fetch(`/seguranca/epis/ajustar-estoque/${epiId}`, {
                     method: 'GET',
                     headers: {
@@ -100,7 +101,6 @@
             const originalButtonHtml = submitButton.innerHTML;
             submitButton.disabled = true;
             submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
-
             const formData = new FormData(form);
             const actionUrl = form.action;
             console.log(actionUrl); 

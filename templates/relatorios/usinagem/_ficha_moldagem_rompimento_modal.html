@@ -277,4 +277,8 @@
             </div>
         </div>
     </div>
-</div> 
+</div>
+
+{% if not tanque %}
+<div class="alert alert-info">Exibindo relatório agregado de <b>todos os tanques</b> associados a esta usinagem/concretagem.</div>
+{% endif %} 

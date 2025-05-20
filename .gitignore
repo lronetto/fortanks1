@@ -126,4 +126,5 @@ Thumbs.db
 wsgi.py
 github-action-key
 github-actions-key
+github-actions-key.pub
 github-action-key.pub
