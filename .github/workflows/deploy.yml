@@ -13,9 +13,6 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Checar variáveis de ambiente
-        run: env | grep SSH_
-
       - name: Executar deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
