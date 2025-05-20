@@ -9,6 +9,7 @@ class Peca(db.Model):
     nome = db.Column(db.String(100), nullable=False)
     numero_sequencial = db.Column(db.Integer, nullable=False)
     numero_tanque = db.Column(db.Integer, nullable=True)
+    volume = db.Column(db.DECIMAL(10, 2), nullable=True)
     
     # Relacionamento com tanque
     tanque_id = db.Column(db.Integer, db.ForeignKey('tanques.id', ondelete='CASCADE'), nullable=False)

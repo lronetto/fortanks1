@@ -61,8 +61,7 @@
                             <td class="d-none d-md-table-cell">{{ concretagem.data_cadastro.strftime('%d/%m/%Y') }}</td>
                             <td>
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{{ url_for('concretagem.visualizar', id=concretagem.id) }}"
-                                        class="btn btn-info" title="Visualizar">
+                                    <a href="#" class="btn btn-info visualizar-concretagem" title="Visualizar" data-id="{{ concretagem.id }}">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     <a href="{{ url_for('concretagem.editar', id=concretagem.id) }}"
@@ -119,82 +118,16 @@
 {% include 'concretagens/modais/nova_concretagem.html' %}
 {% include 'concretagens/modais/exclusao.html' %}
 {% include 'concretagens/modais/editar.html' %}
+{% include 'concretagens/modais/visualizar.html' %}
+{% include 'concretagens/modais/referenciar_usinagem.html' %}
 
 <!-- Modal de Referência de Usinagem -->
-<div class="modal fade" id="modalReferenciarUsinagem" tabindex="-1" aria-labelledby="modalReferenciarUsinagemLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <form id="formReferenciarUsinagem" method="POST" action="">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalReferenciarUsinagemLabel">Referenciar Usinagem</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle"></i> Selecione a usinagem que foi utilizada para as peças da concretagem <strong id="concretagem-info-usinagem"></strong>
-                    </div>
-                    
-                    <!-- Seleção da Usinagem -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label for="usinagem_id" class="form-label fw-bold">Usinagem *</label>
-                            <select class="form-select form-control" id="usinagem_id" name="usinagem_id" required>
-                                <option value="">Selecione uma usinagem</option>
-                                {% for usinagem in usinagens %}
-                                <option value="{{ usinagem.id }}">{{ usinagem.data_usinagem.strftime('%d/%m/%Y') }} - {{ usinagem.descricao }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Tabela de Peças da Concretagem -->
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="form-label fw-bold">Peças da concretagem</label>
-                            <div class="alert alert-info py-2" id="alerta-carregando-pecas-usinagem">
-                                <i class="fas fa-spinner fa-spin"></i> Carregando peças...
-                            </div>
-                            <div id="div-pecas-usinagem" style="display: none;">
-                                <div class="table-responsive" style="max-height: 350px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
-                                    <table class="table table-sm table-bordered table-hover" id="tabelaPecasUsinagem">
-                                        <thead class="sticky-top bg-white">
-                                            <tr>
-                                                <th width="5%" class="align-middle text-center">
-                                                    <input type="checkbox" class="form-check-input" id="selecionar-todas-pecas">
-                                                </th>
-                                                <th width="15%" class="align-middle">Tipo</th>
-                                                <th width="20%" class="align-middle">Nome</th>
-                                                <th width="10%" class="align-middle">Forma</th>
-                                                <th width="20%" class="align-middle">Usinagem Atual</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <!-- As peças serão carregadas via JavaScript -->
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <!-- Contador de peças selecionadas -->
-                                <div class="mt-2 alert alert-info py-2" id="contadorPecasUsinagem">
-                                    <i class="fas fa-info-circle"></i> Nenhuma peça selecionada
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Salvar Referências</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+<!-- (removido, agora está em arquivo separado) -->
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/concretagens-edicao.js') }}"></script>
+<script src="{{ url_for('static', filename='js/concretagens-visualizar.js') }}"></script>
 
 
 <script>
@@ -202,14 +135,6 @@
     // Estas variáveis precisam ser globais para serem acessadas por concretagens-multi-tanques.js
     let dadosConcretagemEdicao = null; // Será preenchida ao editar
     let dataTablePortugueseTranslation = null; // Será preenchida após carregar o JSON
-
-    function gerarOpcoesUsinagem() {
-        let options = '';
-        {% for usinagem in usinagens %}
-                options += '<option value="{{ usinagem.id }}">{{ usinagem.data_usinagem.strftime("%d/%m/%Y") }} - {{ usinagem.traco.nome }}</option>';
-        {% endfor %}
-        return options;
-    }
 
     function initializeMainDataTable() {
         const mainTableRows = $('#tabelaConcretagens tbody tr').not('.expandable-info');
@@ -249,97 +174,6 @@
 
         // Tratar clique no botão de editar
 
-        // Configuração do modal de referenciar usinagem
-        $('.referenciar-usinagem').click(function() {
-            const id = $(this).data('id');
-            const tanques = $(this).data('tanques');
-            
-            // Atualizar o strong dentro do alerta com as informações da concretagem
-            $('#concretagem-info-usinagem').text(`(#${id} - ${tanques})`); 
-            
-            // Corrigir o action do formulário
-            $('#formReferenciarUsinagem').attr('action', `/concretagens/referenciar-usinagem/${id}`);
-            
-            // Mostrar o alerta de carregamento e esconder a div da tabela
-            $('#alerta-carregando-pecas-usinagem').show();
-            $('#div-pecas-usinagem').hide();
-            $('#formReferenciarUsinagem button[type="submit"]').prop('disabled', true); // Desabilitar botão de salvar inicialmente
-
-            // Limpar tabela de peças anterior (caso o modal seja reutilizado)
-            const pecasTableBody = $('#tabelaPecasUsinagem tbody');
-            pecasTableBody.empty();
-            
-            fetch(`/concretagens/api/concretagem/${id}/pecas`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Erro HTTP: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(pecas => {
-                    if (pecas.length > 0) {
-                        pecas.forEach((peca, index) => {
-                            const row = `
-                                <tr>
-                                    <td class="text-center">
-                                        <input type="checkbox" name="peca_ids" value="${peca.id}" class="form-check-input">
-                                    </td>
-                                    <td>${peca.tipo}</td>
-                                    <td>${peca.nome}</td>
-                                    <td>${peca.forma || '-'}</td>
-                                    <td>${peca.usinagem_id ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-secondary">Não</span>'}</td>
-                                </tr>
-                            `;
-                            pecasTableBody.append(row);
-                        });
-                        $('#formReferenciarUsinagem button[type="submit"]').prop('disabled', false);
-                    } else {
-                        pecasTableBody.append(`
-                            <tr>
-                                <td colspan="5" class="text-center">Nenhuma peça encontrada nesta concretagem</td>
-                            </tr>
-                        `);
-                        $('#formReferenciarUsinagem button[type="submit"]').prop('disabled', true);
-                    }
-                    
-                    $('#alerta-carregando-pecas-usinagem').hide();
-                    $('#div-pecas-usinagem').show();
-                    
-                    const referenciarModal = bootstrap.Modal.getInstance(document.getElementById('modalReferenciarUsinagem')) || new bootstrap.Modal(document.getElementById('modalReferenciarUsinagem'));
-                    referenciarModal.show();
-                })
-                .catch(error => {
-                    console.error('Erro ao carregar peças para referenciar usinagem:', error);
-                    pecasTableBody.empty().append('<tr><td colspan="5" class="text-center text-danger">Erro ao carregar peças. Tente novamente.</td></tr>');
-                    $('#alerta-carregando-pecas-usinagem').hide();
-                    $('#div-pecas-usinagem').show();
-                    $('#formReferenciarUsinagem button[type="submit"]').prop('disabled', true);
-
-                    // Ainda assim, abrir o modal para mostrar o erro
-                    const referenciarModal = bootstrap.Modal.getInstance(document.getElementById('modalReferenciarUsinagem')) || new bootstrap.Modal(document.getElementById('modalReferenciarUsinagem'));
-                    referenciarModal.show();
-                });
-        });
-        
-        // Validar formulário de referenciar usinagem
-        $('#formReferenciarUsinagem').submit(function(e) {
-            const usinagemId = $('#usinagem_id').val();
-            const pecasSelecionadas = $('#tabelaPecasUsinagem input[name="peca_ids"]:checked').length;
-            
-            if (!usinagemId) {
-                e.preventDefault();
-                alert('Selecione uma usinagem');
-                return false;
-            }
-            
-            if (pecasSelecionadas === 0) {
-                e.preventDefault();
-                alert('Selecione pelo menos uma peça');
-                return false;
-            }
-            
-            return true;
-        });
     });
 </script>
 {% endblock %}

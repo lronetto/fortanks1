@@ -152,9 +152,9 @@
                                     <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNovoRompimento" data-usinagem-id="{{ usinagem.id }}" title="Adicionar Rompimento">
                                         <i class="fas fa-flask"></i>
                                     </button>
-                                    <a href="{{ url_for('relatorio_usinagem.ficha_moldagem_rompimento', usinagem_id=usinagem.id) }}" class="btn btn-sm btn-secondary" title="Gerar Relatório">
+                                    <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalRelatorioUsinagem" data-usinagem-id="{{ usinagem.id }}" title="Gerar Relatório">
                                         <i class="fas fa-file-alt"></i>
-                                    </a>
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ usinagem.id }}" title="Excluir">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -212,6 +212,7 @@
 {% include 'usinagem_concreto/usinagens/modais/importar_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/visualizar_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/rompimento.html' %}
+{% include 'usinagem_concreto/usinagens/modais/relatorio_usinagem.html' %}
 
 
 {% endblock %}

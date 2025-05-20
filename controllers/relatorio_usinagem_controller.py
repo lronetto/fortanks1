@@ -471,6 +471,30 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
     
     return response
 
+@relatorio_usinagem_bp.route('/ficha-moldagem-rompimento-modal/<int:usinagem_id>')
+@login_required
+def ficha_moldagem_rompimento_modal(usinagem_id):
+    """Retorna apenas o conteúdo HTML do relatório para exibir no modal (sem layout base)"""
+    usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
+    concretagem = Concretagem.query.join(ConcretagemPeca).filter(
+        ConcretagemPeca.usinagem_id == usinagem_id
+    ).first()
+    if not concretagem:
+        return '<div class="alert alert-warning">Não foi encontrada concretagem relacionada a esta usinagem.</div>'
+    rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem_id).order_by(
+        RompimentoCorpoProva.numero_cp
+    ).all()
+    traco = usinagem.traco
+    tanque = None
+    if concretagem and concretagem.tanques_associados:
+        tanque = concretagem.tanques[0] if concretagem.tanques else None
+    return render_template('relatorios/usinagem/_ficha_moldagem_rompimento_modal.html',
+                          usinagem=usinagem,
+                          concretagem=concretagem,
+                          rompimentos=rompimentos,
+                          traco=traco,
+                          tanque=tanque)
+
 @relatorio_usinagem_bp.route('/api/contratos')
 @login_required
 def api_listar_contratos():

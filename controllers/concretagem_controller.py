@@ -18,7 +18,7 @@ def index():
     
     # Buscar dados para o modal de nova concretagem
     tanques = Tanque.query.join(Contrato).join(CentroCusto).order_by(CentroCusto.nome).all()
-    usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc()).all()
+    usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc(),UsinagemConcreto.nbt.desc(),UsinagemConcreto.nota.desc()).all()
     
     return render_template('concretagens/index.html', 
                            concretagens=concretagens,
@@ -377,6 +377,7 @@ def get_pecas_concretagem(concretagem_id):
         for cp in concretagem.pecas_associadas:
             pecas.append({
                 'id': cp.peca.id,
+                'tanque': cp.peca.tanque.nome,
                 'nome': cp.peca.nome,
                 'tipo': cp.peca.tipo,
                 'numero_sequencial': cp.peca.numero_sequencial,
@@ -623,4 +624,32 @@ def get_pecas_por_tanques():
     except Exception as e:
         print(f"[API] Erro ao buscar peças dos tanques: {str(e)}")
         logging.error(f"[API] Erro ao buscar peças dos tanques {tanque_ids}: {str(e)}", exc_info=True)
-        return jsonify({'erro': f'Erro ao buscar peças: {str(e)}', 'status': 'error'}), 500 
+        return jsonify({'erro': f'Erro ao buscar peças: {str(e)}', 'status': 'error'}), 500
+
+@concretagem.route('/api/<int:id>/visualizar')
+@login_required
+def api_visualizar(id):
+    concretagem = Concretagem.query.get_or_404(id)
+    pecas = []
+    for cp in concretagem.pecas_associadas:
+        pecas.append({
+            'tipo': cp.peca.tipo,
+            'nome': cp.peca.nome,
+            'numero_sequencial': cp.peca.numero_sequencial,
+            'forma': cp.forma,
+            'usinagem': {
+                'data_usinagem': cp.usinagem.data_usinagem.strftime('%d/%m/%Y') if cp.usinagem else None,
+                'traco_nome': cp.usinagem.traco.nome if cp.usinagem and cp.usinagem.traco else None
+            } if cp.usinagem else None
+        })
+    tanques = [{'id': t.id, 'nome': t.nome, 'sistema': t.sistema} for t in concretagem.tanques]
+    return jsonify({
+        'id': concretagem.id,
+        'pista': concretagem.pista,
+        'data_concretagem': concretagem.data_concretagem.strftime('%d/%m/%Y'),
+        'observacoes': concretagem.observacoes,
+        'data_cadastro': concretagem.data_cadastro.strftime('%d/%m/%Y %H:%M'),
+        'ultima_atualizacao': concretagem.ultima_atualizacao.strftime('%d/%m/%Y %H:%M'),
+        'tanques': tanques,
+        'pecas': pecas
+    }) 
