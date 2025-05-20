@@ -1,0 +1,55 @@
+<!-- Modal de Relatório de Usinagem -->
+<div class="modal fade" id="modalRelatorioUsinagem" tabindex="-1" role="dialog" aria-labelledby="modalRelatorioUsinagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRelatorioUsinagemLabel">Ficha de Moldagem e Rompimento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalRelatorioUsinagemBody">
+                <div class="text-center my-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <a id="btnRelatorioPDF" href="#" class="btn btn-danger" target="_blank" style="display:none;">
+                    <i class="fas fa-file-pdf"></i> Gerar PDF
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+$('#modalRelatorioUsinagem').on('show.bs.modal', function (event) {
+    var button = $(event.relatedTarget);
+    var usinagemId = button.data('usinagem-id');
+    var modalBody = $(this).find('#modalRelatorioUsinagemBody');
+    var btnPDF = $(this).find('#btnRelatorioPDF');
+    // Mostrar spinner de carregamento
+    modalBody.html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+    btnPDF.hide();
+    if (!usinagemId) return;
+    // Fazer requisição AJAX para carregar o relatório
+    $.get('/relatorios-usinagem/ficha-moldagem-rompimento-modal/' + usinagemId, function(data) {
+        modalBody.html(data);
+        btnPDF.attr('href', '/relatorios-usinagem/ficha-moldagem-rompimento-pdf/' + usinagemId);
+        btnPDF.show();
+    }).fail(function() {
+        modalBody.html('<div class="alert alert-danger">Erro ao carregar relatório.</div>');
+        btnPDF.hide();
+    });
+});
+$('#modalRelatorioUsinagem').on('hidden.bs.modal', function () {
+    var modalBody = $(this).find('#modalRelatorioUsinagemBody');
+    var btnPDF = $(this).find('#btnRelatorioPDF');
+    modalBody.html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+    btnPDF.hide();
+    btnPDF.attr('href', '#');
+});
+</script>
+{% endblock %} 
