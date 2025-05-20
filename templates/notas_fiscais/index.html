@@ -49,6 +49,14 @@
                         <option value="pendentes" {% if status_importacao == 'pendentes' %}selected{% endif %}>Pendentes</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label for="data_emissao_inicio" class="form-label">Data Emissão (Início)</label>
+                    <input type="date" name="data_emissao_inicio" id="data_emissao_inicio" class="form-control" value="{{ request.args.get('data_emissao_inicio', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="data_emissao_fim" class="form-label">Data Emissão (Fim)</label>
+                    <input type="date" name="data_emissao_fim" id="data_emissao_fim" class="form-control" value="{{ request.args.get('data_emissao_fim', '') }}">
+                </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="btn-group">
                         <button type="submit" class="btn btn-primary">

@@ -85,6 +85,23 @@ def index():
         flash(f"Filtro por status '{status_importacao}' não está otimizado para paginação e foi desativado. Mostrando todos os status.", "warning")
         status_importacao = '' # Resetar para não quebrar a lógica do template
     
+    # Filtro por data de emissão
+    data_emissao_inicio = request.args.get('data_emissao_inicio', '')
+    data_emissao_fim = request.args.get('data_emissao_fim', '')
+    
+    if data_emissao_inicio:
+        try:
+            data_inicio = datetime.strptime(data_emissao_inicio, '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+        except Exception:
+            flash('Data de início inválida.', 'warning')
+    if data_emissao_fim:
+        try:
+            data_fim = datetime.strptime(data_emissao_fim, '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao <= data_fim)
+        except Exception:
+            flash('Data final inválida.', 'warning')
+    
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc())
     
@@ -98,6 +115,8 @@ def index():
                           status_importacao=status_importacao,
                           busca=busca,
                           item_nome=item_nome,
+                          data_emissao_inicio=data_emissao_inicio,
+                          data_emissao_fim=data_emissao_fim,
                           import_form=import_form) # Passar formulário do modal
 
 @nota_fiscal_bp.route('/novo', methods=['GET', 'POST'])
