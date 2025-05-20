@@ -23,12 +23,13 @@ logger = logging.getLogger(__name__)
 material_bp = Blueprint('material', __name__, url_prefix='/materiais')
 
 # Middleware para verificar se o usuário tem permissão
-@material_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_gerente_ou_superior:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+#@material_bp.before_request
+#@login_required
+#def verificar_permissao():
+
+#    if not current_user.is_gerente_ou_superior:
+#        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
+#        return redirect(url_for('dashboard.index'))
 
 @material_bp.route('/')
 @login_required

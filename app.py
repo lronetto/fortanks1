@@ -61,7 +61,7 @@ if not os.path.exists(log_dir):
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
 # Configurar o logger da aplicação
-if not app.debug:
+if False:
     # Configurar o handler para arquivo
     file_handler = RotatingFileHandler(
         os.path.join(log_dir, 'fortanks.log'),
