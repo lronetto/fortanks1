@@ -1,4 +1,4 @@
-from controllers.seguranca_unificado_controller import seguranca_bp
+from controllers.seguranca_controller import seguranca_bp
 from controllers.colaborador_controller import colaborador_bp
 from controllers.equipamento_controller import equipamento_bp
 from controllers.concretagem_controller import concretagem
@@ -25,7 +25,7 @@ from controllers.unidade_controller import unidade_bp
 from controllers.produto_composto_controller import produto_composto_bp
 from controllers.producao_peca_controller import producao_peca_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
-from controllers.relatorio_usinagem_controller import relatorio_usinagem_bp
+from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from models.usuario import Usuario
 # Isso carregará e configurará todos os modelos
 from models import configure_mappers

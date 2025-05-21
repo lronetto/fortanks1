@@ -2,8 +2,7 @@ from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from models.database import db
-
+from models.database import db  
 
 class Usuario(db.Model, UserMixin):
     """
@@ -38,6 +37,14 @@ class Usuario(db.Model, UserMixin):
         self.ultimo_login = datetime.utcnow()
         db.session.commit()
 
+    def is_cargo(self,cargo):
+        """Verifica se o usuário tem o cargo informado"""
+        return self.colaborador.cargo.nome == cargo
+    
+    def is_departamento(self,departamento):
+        """Verifica se o usuário tem o departamento informado"""
+        return self.colaborador.departamento.nome == departamento
+    
     @property
     def is_admin(self):
         """Verifica se o usuário é administrador"""
@@ -62,6 +69,74 @@ class Usuario(db.Model, UserMixin):
     def is_tecnico_superior(self):
         """Verifica se o usuário é gerente ou superior"""
         return self.cargo in ['gerente', 'diretor', 'admin','']
+    
+    def is_permissao(self,modulo):
+        """Verifica se o usuário tem permissão para o módulo informado"""
+        Tecnico = self.is_cargo('TÉCNICO DE EDIFICAÇÕES')
+        Gestor = self.is_cargo('GESTOR DE DESENVOLVIMENTO') or \
+                self.is_cargo('GESTOR DE FABRICA') or \
+                self.is_cargo('ENGENHEIRO CIVIL')
+        Usina = self.is_cargo('OPERADOR CENTRAL DE CONCRETO')
+        Administrativo = self.is_cargo('ASSISTENTE ADMINISTRATIVO')
+        Admin = self.is_departamento('ADMINISTRATIVO')
+        if modulo == 'CARGO':
+            if Gestor or Administrativo:
+                return True
+        if modulo =='CENTROCUSTO':
+            if Gestor:
+                return True
+        if modulo == 'CLIENTE':
+            if Gestor:
+                return True
+        if modulo == 'COLABORADOR':
+            if Gestor or Administrativo:
+                return True
+        if modulo == 'CONCRETAGEM':
+            if Gestor or Tecnico:
+                return True
+        if modulo == 'CONTRATO':
+            if Gestor:
+                return True
+        if modulo == 'CONVERSAO':
+            if Admin:
+                return True
+        if modulo == 'DADOSANALITICOS':
+            if Gestor:
+                return True
+        if modulo == 'DEPARTAMENTO':
+            if Admin:
+                return True
+        if modulo == 'ESTRUTURA':
+            if Gestor:
+                return True
+        if modulo == 'EQUIPAMENTO':
+            if Gestor or Tecnico or Usina:
+                return True
+        if modulo == 'ESTOQUE':
+            if Gestor or Tecnico:
+                return True
+        if modulo == 'MATERIAL':
+            if Tecnico or Gestor:
+                return True
+        if modulo == 'NOTA_FISCAL':
+            if Gestor or Administrativo or Tecnico:
+                return True
+        if modulo == 'PECA':
+            if Gestor or Tecnico:
+                return True
+        if modulo == 'PLANO_DE_CONTAS':
+            if Gestor:
+                return True
+        if modulo == 'PRODUTO':
+            if Gestor or Tecnico:
+                return True
+        if modulo == 'PROJETO':
+            if Gestor or Tecnico:
+                return True
+        if modulo == 'RELATORIO_USINAGEM':
+            if Tecnico or Usina:
+                return True
+        return False
 
     def __repr__(self):
         return f'<Usuario {self.email}>'

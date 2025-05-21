@@ -44,6 +44,11 @@ if not logger.handlers:
 # Criar o blueprint
 dados_analiticos_bp = Blueprint('dados_analiticos', __name__)
 
+@dados_analiticos_bp.before_request
+def verificar_permissao():
+    if not current_user.is_permissao('DADOSANALITICOS'):
+        flash('Você não tem permissão para acessar esta página.', 'danger')
+        return redirect(url_for('dashboard.index'))
 
 def aplicar_ordenacao(query, sort_by, sort_dir):
     """

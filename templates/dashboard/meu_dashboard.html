@@ -108,20 +108,20 @@
             {% endif %}
        
 
-                {% if exibir_card_epis_estoque_critico %}
-                <!-- EPIs com Estoque Crítico -->
-                {% include 'dashboard/cards/epis_estoque_critico.html' %}
-                {% endif %}
+            {% if exibir_card_epis_estoque_critico %}
+            <!-- EPIs com Estoque Crítico -->
+            {% include 'dashboard/cards/epis_estoque_critico.html' %}
+            {% endif %}
 
-                {% if exibir_card_epis_vencimento %}
-                <!-- EPIs Próximos ao Vencimento -->
-                {% include 'dashboard/cards/epis_vencimento.html' %}
-                {% endif %}
+            {% if exibir_card_epis_vencimento %}
+            <!-- EPIs Próximos ao Vencimento -->
+            {% include 'dashboard/cards/epis_vencimento.html' %}
+            {% endif %}
 
-                
-                {% if exibir_card_volume_usinado %}
-                {% include 'dashboard/cards/volume_usinado.html' %}
-                {% endif %}
+            
+            {% if exibir_card_volume_usinado %}
+            {% include 'dashboard/cards/volume_usinado.html' %}
+            {% endif %}
 
            
         </div>

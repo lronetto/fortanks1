@@ -155,227 +155,176 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
         ['', f'OBRA: {obra if obra else "Não especificada"}', '']
     ]
     
-    header_table = Table(header_data, colWidths=[doc.width*0.2, doc.width*0.68, doc.width*0.12])
+    header_table = Table(header_data, rowHeights=[0.6*cm,0.5*cm,0.5*cm],colWidths=[doc.width*0.2, doc.width*0.68, doc.width*0.12])
     header_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 2, colors.black),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (1, 0), (1, 0), 'Times-Bold'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('FONTSIZE', (1, 0), (1, 0), 10),
         ('SPAN', (0, 0), (0, 2)),
         ('SPAN', (1, 1), (2, 1)),
         ('SPAN', (1, 2), (2, 2)),
-        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 7),
+        
        
     ]))
     elements.append(header_table)
     elements.append(Spacer(1, 0.5*cm))
-    
-    # Dados da especificação
+    tipo_concreto = "fck>= 40 MPa 28 Dias" 
+    traco_concreto = "FTK 40"
+    restricoes = "fck>=15,0 MPa P/ DESPROTENÇÂO"
     spec_data = [
         ['ESPECIFICAÇÃO DO CONCRETO', '', '', '', '', '', ''],
-        ['TIPO DO CONCRETO:', '', '', '', '', '', ''],
-        ['fck>= 24,0 MPa', '', '', '', '', '', ''],
-        ['fck>= 24,0 MPa p/ desprotensão', '', '', '', '', '', ''],
-        ['SLUMP= 660/670 mm', '', '', '', '', '', ''],
-        ['CONSUMO DE CIMENTO (kg/m³):', '1 (50%)', '2 (50%)', '', '', '', ''],
-        ['ADITIVO:', 'SUPER PLASTIFICANTE', 'LANÇAMENTO:', 'BOMBEADO', 'X', 'CONVENCIONAL', '']
+        ['TIPO DO CONCRETO:', tipo_concreto, 'TRAÇO:', traco_concreto, '', '', ''],
+        ['RESTRIÇÂO:', restricoes, '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '']
     ]
     
-    spec_table = Table(spec_data,colWidths=[doc.width*0.2, 
-                                            doc.width*0.1, 
-                                            doc.width*0.1, 
-                                            doc.width*0.1, 
-                                            doc.width*0.1, 
-                                            doc.width*0.1, 
-                                            doc.width*0.3])
+    spec_table = Table(spec_data,rowHeights=[0.5*cm,
+                                             0.5*cm,
+                                             0.5*cm,
+                                             0.5*cm,
+                                             0.5*cm,
+                                             0.5*cm,
+                                             0.5*cm],colWidths=[doc.width*0.2, 
+                                                                doc.width*0.3, 
+                                                                doc.width*0.1, 
+                                                                doc.width*0.1, 
+                                                                doc.width*0.1, 
+                                                                doc.width*0.1, 
+                                                                doc.width*0.2])
     spec_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('BOX', (0, 0), (-1, -1), 2, colors.black),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (0, 0), 'Times-Bold'),
+        ('FONTSIZE', (0, 0), (0, 0), 10),
         ('SPAN', (0, 0), (-1, 0)),
-        ('FONTSIZE', (0, 0), (0, 0), 15),
-        ('HALIGN', (0, 0), (0, 0), 'CENTER'),
-        ('HEIGHT', (0, 0), (-1, 0), 20*cm)
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
     ]))
     elements.append(spec_table)
     elements.append(Spacer(1, 0.5*cm))
     
-    # Recebimento do concreto / moldagem
-    receb_title = Paragraph("RECEBIMENTO DO CONCRETO / MOLDAGEM (NBR 5738 / 2015)", title_style)
-    elements.append(receb_title)
     
     # Data formatada
     data_usinagem = usinagem.data_usinagem.strftime('%d/%m/%Y')
     horario_saida = usinagem.data_usinagem.strftime('%H:%M')
     
     receb_data = [
-        ['CONCRETEIRA:', 'FORTANKS', 'DATA:', data_usinagem, 'NÚMERO DO CAMINHÃO / PLACA:', '01'],
-        ['NOTA FISCAL:', f'{usinagem.id}', 'HORÁRIO SAÍDA DA USINA:', horario_saida, 'HORÁRIO CHEGADA NO DESTINO:', horario_saida]
+        ['RECEBIMENTO DO CONCRETO / MOLDAGEM (NBR 5738 / 2015)'],
+        ['CONCRETEIRA', 'FORTANKS', 'DATA:', data_usinagem, 'NOTA FISCAL:', f'{usinagem.nota}'],
+        ['SAÍDA DA USINA:', horario_saida,'N. CAMINHÃO:', usinagem.nbt],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', ''],
+        
+        
     ]
     
-    receb_table = Table(receb_data)
+    receb_table = Table(receb_data,colWidths=[doc.width*0.2, 
+                                              doc.width*0.2, 
+                                              doc.width*0.13, 
+                                              doc.width*0.10, 
+                                              doc.width*0.12, 
+                                              doc.width*0.1, 
+                                              doc.width*0.2])
     receb_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOX', (0, 0), (-1, -1), 2, colors.black),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, 0), (0, 0), 'Times-Bold'),
+        ('FONTSIZE', (0, 0), (0, 0), 10),
+        ('SPAN', (0, 0), (-1, 0)),
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
     ]))
     elements.append(receb_table)
     
-    # Consistência real
-    consist_data = [
-        ['CONSISTÊNCIA REAL:', 'SLUMP=', 'mm', 'MOLDADOR: GEAN JR'],
-        ['', 'FLOW=', '660/670', 'mm', 'caso não aceitar concreto justificar:']
-    ]
-    
-    consist_table = Table(consist_data)
-    consist_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('SPAN', (3, 0), (4, 0)),  # Moldador
-        ('SPAN', (2, 1), (2, 1)),  # FLOW valor
-        ('SPAN', (4, 1), (4, 1)),  # Justificativa
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    elements.append(consist_table)
-    
-    # Verificado as características e liberação
-    verificado_data = [
-        ['verificada as características do concreto na Nota e o abatimento,'],
-        ['liberar para lançamento ?', 'X', 'sim', '', 'não']
-    ]
-    
-    verificado_table = Table(verificado_data)
-    verificado_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('GRID', (1, 1), (4, 1), 0.5, colors.black),
-        ('SPAN', (0, 0), (4, 0)),  # Primeira linha
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    elements.append(verificado_table)
-    
-    # Horário e volume
-    horario_data = [
-        ['HORÁRIO DA MOLDAGEM:', '10:02', 'VOLUME:', '8,15', 'm³', 'observações:'],
-        ['SÉRIE Nº:', f'{usinagem.id}', 'CRITÉRIO DE ROMPIMENTO PREVISTO:', 'TP: (sentido da concretagem TOPO para "PÉ" do painel)'],
-        ['QUANTIDADE DE CP\'s:', f'{usinagem.quantidade_cps}', '2 (24 h) - 2 (28 dias)', '']
-    ]
-    
-    horario_table = Table(horario_data)
-    horario_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('SPAN', (2, 1), (5, 1)),  # Critério de rompimento
-        ('SPAN', (2, 2), (5, 2)),  # Critério dias
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    elements.append(horario_table)
     elements.append(Spacer(1, 0.5*cm))
-    
-    # Peça concretada
-    peca_title = Paragraph("PEÇA CONCRETADA", title_style)
-    elements.append(peca_title)
-    
+    pcstxt = ""
+    for peca in concretagem.pecas:
+        pcstxt += f"P{peca.nome} / "
     peca_data = [
-        [f'PN-{tanque.nome if tanque else "?"}-P']
+        ['PEÇA CONCRETADA'],
+        [pcstxt]
     ]
     
-    peca_table = Table(peca_data, colWidths=[doc.width])
+    peca_table = Table(peca_data, rowHeights=[0.5*cm,2*cm],colWidths=[doc.width])
     peca_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (0, 0), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOX', (0, 0), (-1, -1), 2, colors.black),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, 0), (0, 0), 'Times-Bold'),
+        ('FONTSIZE', (0, 0), (0, 0), 10),
         ('ALIGN', (0, 0), (0, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (0, 0), 'MIDDLE'),
-        ('FONTNAME', (0, 0), (0, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (0, 0), 12),
     ]))
     elements.append(peca_table)
     elements.append(Spacer(1, 0.5*cm))
     
-    # Rompimento do concreto
-    romp_title = Paragraph("ROMPIMENTO DO CONCRETO - RESISTÊNCIA À COMPRESSÃO (NBR 5739 / 2007)", title_style)
-    elements.append(romp_title)
+
+    cisalhada=Image(os.path.join(os.path.dirname(__file__), '..', 'static', 'img', 'cisalhada.png'), width=50, height=90)
+    bipartida=Image(os.path.join(os.path.dirname(__file__), '..', 'static', 'img', 'conicaecisalhada.png'), width=50, height=90)
+    colunar=Image(os.path.join(os.path.dirname(__file__), '..', 'static', 'img', 'colunar.png'), width=50, height=90)
+    conica=Image(os.path.join(os.path.dirname(__file__), '..', 'static', 'img', 'conica.png'), width=50, height=90)
+    conicaebipartida=Image(os.path.join(os.path.dirname(__file__), '..', 'static', 'img', 'conicaecisalhada.png'), width=50, height=90)
     
     # Tipo da ruptura
     tipo_ruptura_data = [
-        ['TIPO DA RUPTURA DO CORPO DE PROVA (x)'],
-        ['cônica', 'cônica e bipartida', 'cônica e cisalhada', 'cisalhada', 'colunar']
+        ['ROMPIMENTO DO CONCRETO - RESISTÊNCIA À COMPRESSÃO (NBR 5739 / 2007)','','','','','','','','','','','',''],
+        ['RESPONSÁVEL PELO ROMPIMENTO','ROMPIMENTO','DATA','PRAZO','HORÁRIO','FCK OBTIDO','TIPO DA RUPTURA DO CORPO DE PROVA','','','','',''],
+        ['','','','','','','','',conica,conicaebipartida,colunar,cisalhada,bipartida],
+        ['','','','','','','','','','','','']
+        
     ]
     
-    tipo_ruptura_table = Table(tipo_ruptura_data)
+    tipo_ruptura_table = Table(tipo_ruptura_data,colWidths=[doc.width*0.1, 
+                                                            doc.width*0.1, 
+                                                            doc.width*0.1, 
+                                                            doc.width*0.1, 
+                                                            doc.width*0.1, 
+                                                            doc.width*0.1, 
+                                                            doc.width*0.1,
+                                                            doc.width*0.1,
+                                                            doc.width*0.01,
+                                                            doc.width*0.01,
+                                                            doc.width*0.01,
+                                                            doc.width*0.01,
+                                                            doc.width*0.01])
     tipo_ruptura_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (4, 1), 1, colors.black),
-        ('GRID', (0, 1), (4, 1), 0.5, colors.black),
-        ('SPAN', (0, 0), (4, 0)),  # Título
-        ('ALIGN', (0, 0), (4, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (4, 1), 'MIDDLE'),
-        ('BACKGROUND', (0, 0), (4, 0), colors.lightgrey),
-        ('FONTNAME', (0, 0), (4, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Times-Roman'),
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOX', (0, 0), (-1, -1), 2, colors.black),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTNAME', (0, 0), (0, 0), 'Times-Bold'),
+        ('FONTSIZE', (0, 0), (0, 0), 10),
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+        ('SPAN', (0, 0), (-1, 0)),
+        ('SPAN', (0, 1), (0, 3)),
+        ('ROTATE', (0, 1), (0, 1), 45),
+        ('SPAN', (1, 1), (1, 3)),
+        ('SPAN', (2, 1), (2, 3)),
+        ('SPAN', (3, 1), (3, 3)),
+        ('SPAN', (4, 1), (4, 3)),
+        ('SPAN', (5, 1), (5, 3)),
+        ('SPAN', (6, 1), (12, 1)),
     ]))
-    
+    elements.append(tipo_ruptura_table)
     # Tabela de rompimentos
-    romp_data = [
-        ['Responsável pelo rompimento', 'Rompimento', 'DATA', 'PRAZO dia (d) ou hora (h)', 'HORÁRIO', 'Fck obtido (MPa)'],
-    ]
-    
-    # Adicionar rompimentos existentes
-    for rompimento in rompimentos:
-        # Determinar o prazo (dias ou horas)
-        data_usinagem = usinagem.data_usinagem.date()
-        data_rompimento = rompimento.data_rompimento.date()
-        
-        dias_diff = (data_rompimento - data_usinagem).days
-        horas = "H" if dias_diff < 1 else "D"
-        prazo = f"{dias_diff if dias_diff >= 1 else rompimento.idade_cp}"
-        
-        # Adicionar linha
-        romp_data.append([
-            "RR-1",
-            str(rompimento.numero_cp),
-            rompimento.data_rompimento.strftime('%d/%m/%Y'),
-            f"{prazo}",
-            f"{horas}",
-            f"{rompimento.resultado}" if rompimento.resultado else ""
-        ])
-    
-    # Preencher até 8 linhas no total (para manter o formato)
-    while len(romp_data) < 9:
-        romp_data.append(["RR-1", "", "", "", "", ""])
-    
-    # Adicionar linhas de assinatura
-    romp_data.extend([
-        ['CÓDIGO', 'NOME', '', 'FUNÇÃO', 'ASSINATURA', ''],
-        ['RR-1', 'Gean Junior Reinholz', '', 'Técnico de Edificações', '', ''],
-        ['RR-2', 'Leandro Rodrigues Netto', '', 'Gestor de Fábrica', '', ''],
-        ['RR-3', '', '', '', '', '']
-    ])
-    
-    romp_table = Table(romp_data)
-    romp_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (5, -1), 1, colors.black),
-        ('GRID', (0, 0), (5, -1), 0.5, colors.black),
-        ('BACKGROUND', (0, 0), (5, 0), colors.lightgrey),
-        ('BACKGROUND', (0, 9), (0, 12), colors.lightgrey),
-        ('BACKGROUND', (0, 9), (5, 9), colors.lightgrey),
-        ('FONTNAME', (0, 0), (5, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, 9), (5, 9), 'Helvetica-Bold'),
-        ('ALIGN', (0, 0), (5, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (5, -1), 'MIDDLE'),
-        ('SPAN', (1, 9), (2, 9)),  # Nome título
-        ('SPAN', (1, 10), (2, 10)),  # Nome Gean
-        ('SPAN', (1, 11), (2, 11)),  # Nome Leandro
-        ('SPAN', (1, 12), (2, 12)),  # Nome vazio
-        ('SPAN', (3, 9), (5, 9)),  # Função título
-        ('SPAN', (3, 10), (3, 10)),  # Função Gean
-        ('SPAN', (3, 11), (3, 11)),  # Função Leandro
-        ('SPAN', (3, 12), (3, 12)),  # Função vazia
-        ('SPAN', (4, 10), (5, 10)),  # Assinatura Gean
-        ('SPAN', (4, 11), (5, 11)),  # Assinatura Leandro
-        ('SPAN', (4, 12), (5, 12)),  # Assinatura vazia
-    ]))
-    
-    # Adicionar tabelas à tabela principal de rompimento
-    romp_tables = [tipo_ruptura_table, romp_table]
-    elements.extend(romp_tables)
+
     elements.append(Spacer(1, 0.5*cm))
     
     # Ensaio executado
