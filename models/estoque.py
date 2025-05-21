@@ -136,11 +136,14 @@ class MovimentacaoEstoque(db.Model):
     origem_tipo = db.Column(db.String(50), nullable=True)  # Tipo do registro de origem
     
     observacao = db.Column(db.Text)
-    
+    entregas_epi = db.relationship('EntregaEPI', back_populates='movimentacao_estoque')
     # Controle de auditoria
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     usuario = db.relationship('Usuario', backref='movimentacoes_realizadas')
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        print(f"kwargs: {kwargs}")
     @classmethod
     def get_historico_saldo_para_grafico(cls, estoque_id, data_inicio=None, data_fim=None):
         """

@@ -1,0 +1,38 @@
+<!-- Modal de Envio de PDF por Email -->
+{% if current_user.is_gerente_ou_superior %}
+<div class="modal fade" id="enviarPdfEmailModal{{ solicitacao.id }}" tabindex="-1" aria-labelledby="enviarPdfEmailModalLabel{{ solicitacao.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ url_for('solicitacao.enviar_pdf_email', id=solicitacao.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-secondary text-white">
+                    <h5 class="modal-title" id="enviarPdfEmailModalLabel{{ solicitacao.id }}">Enviar Solicitação #{{ solicitacao.id }} por Email</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>O PDF da solicitação será enviado para:</p>
+                    <ul>
+                        <li><strong>Solicitante:</strong> {{ solicitacao.solicitante.email or 'N/A' }}</li>
+                        <li><strong>Pré-definidos:</strong> [EMAIL_PREDEFINIDO_1], [EMAIL_PREDEFINIDO_2]</li> 
+                    </ul>
+                    <div class="mb-3">
+                        <label for="mensagem_email_{{ solicitacao.id }}" class="form-label">Mensagem Adicional (Opcional):</label>
+                        <textarea class="form-control" id="mensagem_email_{{ solicitacao.id }}" name="mensagem_adicional" rows="3"></textarea>
+                    </div>
+                    <small class="text-muted">O PDF da solicitação será anexado automaticamente.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-secondary">
+                        <i class="fas fa-paper-plane"></i> Confirmar Envio
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block scripts %}
+<!-- Nenhum script JS específico para este modal -->
+{% endblock %} 

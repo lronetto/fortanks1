@@ -1,0 +1,301 @@
+<!-- Modal de Nova Solicitação -->
+<div class="modal fade" id="novaSolicitacaoModal" tabindex="-1" aria-labelledby="novaSolicitacaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="novaSolicitacaoModalLabel">Nova Solicitação de Materiais</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('solicitacao.novo') }}" id="formSolicitacao">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card mb-4">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Informações da Solicitação</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group mb-3">
+                                                <label for="data_necessidade">Data de Necessidade</label>
+                                                <input type="date" class="form-control" id="data_necessidade" name="data_necessidade" required>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group mb-3">
+                                                <label for="centro_custo_id">Centro de Custo</label>
+                                                <select class="form-control" id="centro_custo_id" name="centro_custo_id" required>
+                                                    <option value="">Selecione...</option>
+                                                    {% for centro in centros_custo %}
+                                                    <option value="{{ centro.id }}">{{ centro.codigo }} - {{ centro.nome }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-12">
+                                            <div class="form-group mb-3">
+                                                <label for="observacoes">Observações</label>
+                                                <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5 class="card-title mb-0">Itens da Solicitação</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <div class="form-group">
+                                                <label for="material_id">Material</label>
+                                                <select class="form-control" id="material_id" name="material_id">
+                                                    <option value="">Selecione...</option>
+                                                    {% for material in materiais %}
+                                                    <option value="{{ material.id }}" data-unidade-id="{{ material.unidade_id }}" data-unidade="{{ material.unidade_obj.nome }}">
+                                                        {{ material.nome }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label for="quantidade">Quantidade</label>
+                                                <input type="number" class="form-control" id="quantidade" name="quantidade" step="0.01">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="form-group">
+                                                <label for="unidade">Unidade</label>
+                                                <input type="text" class="form-control" id="unidade" name="unidade" data-unidade-id="" readonly>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <div class="form-group">
+                                                <label>&nbsp;</label>
+                                                <button type="button" class="btn btn-primary w-100" id="btnAdicionar">
+                                                    <i class="fas fa-plus"></i> Adicionar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-striped" id="tabelaItens">
+                                            <thead>
+                                                <tr>
+                                                    <th>Material</th>
+                                                    <th>Quantidade</th>
+                                                    <th>Unidade</th>
+                                                    <th>Observações</th>
+                                                    <th>Ações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <!-- Itens serão adicionados aqui via JavaScript -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarSolicitacao">
+                    <i class="fas fa-save"></i> Salvar Solicitação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+// Scripts específicos para o modal de nova solicitação
+$(document).ready(function() {
+    // Inicializar select2 para o select de material
+    $('#material_id').select2({
+        dropdownParent: $('#novaSolicitacaoModal'),
+        width: '100%',
+        placeholder: 'Selecione um material'
+    });
+    // Atualizar unidade ao selecionar material
+    $('#material_id').change(function() {
+        const unidade_id = $(this).find('option:selected').data('unidade-id') || '';
+        const unidade = $(this).find('option:selected').data('unidade') || '';
+        $('#unidade').val(unidade);
+        $('#unidade').data('unidade-id', unidade_id);
+    });
+        // Adicionar item à nova solicitação
+        $('#btnAdicionar').click(function() {
+        const materialId = $('#material_id').val();
+        const materialNome = $('#material_id option:selected').text();
+        const quantidade = $('#quantidade').val();
+        const unidadeNome = $('#unidade').val();
+        const unidadeId = $('#unidade').data('unidade-id');
+
+        // Validações
+        if (!materialId) {
+            alert('Selecione um material.');
+            return;
+        }
+        
+        if (!quantidade || quantidade <= 0) {
+            alert('Informe uma quantidade válida.');
+            return;
+        }
+        
+        // Verificar se o item já existe na lista
+        const itemExistente = itens.findIndex(item => item.material_id == materialId);
+        if (itemExistente >= 0) {
+            if (confirm('Este material já está na lista. Deseja atualizar a quantidade?')) {
+                itens[itemExistente].quantidade = parseFloat(quantidade);
+                atualizarTabelaItens();
+            }
+            return;
+        }
+        
+        // Adicionar novo item
+        itens.push({
+            material_id: materialId,
+            material_nome: materialNome,
+            quantidade: parseFloat(quantidade),
+            unidade_id: unidadeId,
+            unidadeNome: unidadeNome,
+            observacoes: ''
+        });
+        
+        // Atualizar tabela
+        atualizarTabelaItens();
+        
+        // Limpar campos
+        $('#material_id').val('').trigger('change');
+        $('#quantidade').val('');
+        $('#unidade').val('');
+    });
+    // Adicionar item à solicitação em edição
+    $('.btn-adicionar-item').click(function() {
+        const id = $(this).data('id');
+        const materialId = $(`#material_id${id}`).val();
+        const materialNome = $(`#material_id${id} option:selected`).text();
+        const quantidade = $(`#quantidade${id}`).val();
+        const unidade = $(`#unidade${id}`).val();
+        
+        // Validações
+        if (!materialId) {
+            alert('Selecione um material.');
+            return;
+        }
+        
+        if (!quantidade || quantidade <= 0) {
+            alert('Informe uma quantidade válida.');
+            return;
+        }
+        
+        // Verificar se o item já existe na lista
+        const itemExistente = itensSolicitacoes[id].findIndex(item => item.material_id == materialId);
+        if (itemExistente >= 0) {
+            if (confirm('Este material já está na lista. Deseja atualizar a quantidade?')) {
+                itensSolicitacoes[id][itemExistente].quantidade = parseFloat(quantidade);
+                atualizarTabelaItensEdicao(id);
+            }
+            return;
+        }
+        
+        // Adicionar novo item
+        itensSolicitacoes[id].push({
+            material_id: materialId,
+            material_nome: materialNome,
+            quantidade: parseFloat(quantidade),
+            unidade: unidade,
+            observacoes: ''
+        });
+        
+        // Atualizar tabela
+        atualizarTabelaItensEdicao(id);
+        
+        // Limpar campos
+        $(`#material_id${id}`).val('').trigger('change');
+        $(`#quantidade${id}`).val('');
+        $(`#unidade${id}`).val('');
+    });
+    // Salvar nova solicitação
+    $('#btnSalvarSolicitacao').click(function() {
+        // Verificar se há itens
+        if (itens.length === 0) {
+            alert('Adicione pelo menos um item à solicitação.');
+            return;
+        }
+        
+        // Adicionar os itens ao formulário
+        const form = $('#formSolicitacao');
+        form.find('input[name^="material_id"], input[name^="quantidade"], input[name^="unidade"], input[name^="observacoes_item"]').remove();
+        
+        itens.forEach((item, index) => {
+            form.append(`<input type="hidden" name="material_id[]" value="${item.material_id}">`);
+            form.append(`<input type="hidden" name="quantidade[]" value="${item.quantidade}">`);
+            form.append(`<input type="hidden" name="unidade[]" value="${item.unidade}">`);
+            form.append(`<input type="hidden" name="observacoes_item[]" value="${item.observacoes || ''}">`);
+        });
+        
+        // Submeter o formulário
+        form.submit();
+    });
+});
+// Função para atualizar a tabela de itens para nova solicitação
+function atualizarTabelaItens() {
+    const tabela = $('#tabelaItens tbody');
+    tabela.empty();
+    
+    if (itens.length === 0) {
+        tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
+        return;
+    }
+    
+    itens.forEach((item, index) => {
+        const tr = $('<tr>');
+        
+        tr.append(`<td>${item.material_nome}</td>`);
+        tr.append(`<td>${item.quantidade}</td>`);
+        tr.append(`<td>${item.unidadeNome}</td>`);
+        
+        const tdObs = $('<td>');
+        const inputObs = $('<input>')
+            .attr('type', 'text')
+            .addClass('form-control form-control-sm')
+            .val(item.observacoes || '')
+            .on('change', function() {
+                itens[index].observacoes = $(this).val();
+            });
+        tdObs.append(inputObs);
+        tr.append(tdObs);
+        
+        const tdAcoes = $('<td>');
+        const btnRemover = $('<button>')
+            .addClass('btn btn-sm btn-danger')
+            .html('<i class="fas fa-trash"></i>')
+            .on('click', function() {
+                if (confirm('Tem certeza que deseja remover este item?')) {
+                    itens.splice(index, 1);
+                    atualizarTabelaItens();
+                }
+            });
+        tdAcoes.append(btnRemover);
+        tr.append(tdAcoes);
+        
+        tabela.append(tr);
+    });
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,27 @@
+<!-- Modal de Envio de Email de Aprovação -->
+{% if solicitacao.status == 'Aprovada' and current_user.is_gerente_ou_superior %}
+<div class="modal fade" id="enviarEmailAprovacaoModal{{ solicitacao.id }}" tabindex="-1" aria-labelledby="enviarEmailAprovacaoModalLabel{{ solicitacao.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="enviarEmailAprovacaoModalLabel{{ solicitacao.id }}">Enviar Email de Aprovação</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Deseja enviar um e-mail de notificação para o solicitante <strong>{{ solicitacao.solicitante.nome }}</strong> sobre a aprovação da solicitação <strong>#{{ solicitacao.id }}</strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{{ url_for('solicitacao.enviar_email_aprovacao', id=solicitacao.id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-primary">Confirmar Envio</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block scripts %}
+<!-- Nenhum script JS específico para este modal -->
+{% endblock %} 

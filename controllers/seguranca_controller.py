@@ -617,8 +617,8 @@ def nova_entrega():
             flash(msg, 'danger')
             return redirect(url_for('seguranca.entregas_index'))
         
-        if int(quantidade) > epi.get_estoque_atual():
-            msg = f'Estoque insuficiente. Disponível: {epi.get_estoque_atual()}'
+        if int(quantidade) > epi.getEstoqueAtual():
+            msg = f'Estoque insuficiente. Disponível: {epi.getEstoqueAtual()}'
             if is_ajax:
                 return jsonify({'success': False, 'message': msg})
             flash(msg, 'danger')
@@ -655,7 +655,7 @@ def nova_entrega():
         # Criar a nova entrega
         entrega = EntregaEPI()
         entrega.colaborador_id = colaborador_id
-        entrega.epi_id = epi_id
+        entrega.epi = epi
         entrega.quantidade = int(quantidade)
         entrega.motivo = motivo
         entrega.observacoes = observacoes
@@ -702,7 +702,7 @@ def nova_entrega():
     colaboradores = Colaborador.query.all()
     
     return jsonify({
-        'epis': [{'id': epi.id, 'nome': epi.material.nome, 'estoque': epi.get_estoque_atual()} for epi in epis],
+        'epis': [{'id': epi.id, 'nome': epi.material.nome, 'estoque': epi.getEstoqueAtual()} for epi in epis],
         'colaboradores': [{'id': col.id, 'nome': col.nome} for col in colaboradores]
     })
 

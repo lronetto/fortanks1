@@ -4,6 +4,7 @@ from models.colaborador import Colaborador
 from models.material import Material
 from decimal import Decimal
 
+
 class EPI(db.Model):
     __tablename__ = 'epis'
     
@@ -15,11 +16,12 @@ class EPI(db.Model):
     vida_util_meses = db.Column(db.Integer)
     estoque_atual = db.Column(db.Integer, default=0)
     estoque_minimo = db.Column(db.Integer, default=1)
-    
     # Controle de auditoria
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
+
+    entregas_epi = db.relationship('EntregaEPI', back_populates='epi')
     
     def save(self):
         """
@@ -125,7 +127,7 @@ class EPI(db.Model):
         movimentacao = MovimentacaoEstoque.query.filter_by(estoque_id=estoque.id).order_by(MovimentacaoEstoque.data_movimento.desc()).first()
         if not estoque:
             raise ValueError("Não existe estoque para este material")
-        mov = movimentacao.Ajuste(quantidade,estoque.id,self.id,'EPI',usuario_id)
+        mov = MovimentacaoEstoque.Ajuste(quantidade,estoque.id,self.id,'EPI',usuario_id)
         mov.save()
         return mov
         
@@ -184,7 +186,7 @@ class EntregaEPI(db.Model):
     colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'), nullable=False)
     colaborador = db.relationship('Colaborador', backref='entregas_epi')
     epi_id = db.Column(db.Integer, db.ForeignKey('epis.id'), nullable=False)
-    epi = db.relationship('EPI', backref='entregas')
+    epi = db.relationship('EPI', back_populates='entregas_epi',foreign_keys=[epi_id])
     data_entrega = db.Column(db.Date, nullable=False, default=datetime.now().date())
     data_devolucao = db.Column(db.Date)
     quantidade = db.Column(db.Integer, default=1)
@@ -193,38 +195,41 @@ class EntregaEPI(db.Model):
     motivo = db.Column(db.String(100))  # Novo, Reposição, etc.
     observacoes = db.Column(db.Text)
     movimentacao_estoque_id = db.Column(db.Integer, db.ForeignKey('movimentacoes_estoque.id'), nullable=True)
-    movimentacao_estoque = db.relationship('MovimentacaoEstoque', backref='entregas_epi')
+    movimentacao_estoque = db.relationship('MovimentacaoEstoque', back_populates='entregas_epi',foreign_keys=[movimentacao_estoque_id])
     
     # Controle de auditoria
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     
+
     def save(self):
+        from models.estoque import Estoque,MovimentacaoEstoque
+        print(f"EntregaEPI: {self.id}")
+        print(f"self.epi: {self.epi}")
+        print(f"self.epi.material_id: {self.epi.material_id}")
+        print(f"self.usuario_id: {self.usuario_id}")
+        print(f"self.colaborador_id: {self.colaborador_id}")
+        print(f"self.data_entrega: {self.data_entrega}")
+        print(f"self.data_devolucao: {self.data_devolucao}")
+        print(f"self.quantidade: {self.quantidade}")
+        print(f"self.ca: {self.ca}")
+        print(f"self.assinado: {self.assinado}")
+        print(f"self.motivo: {self.motivo}")
         if not self.id:
-            # Ao registrar uma entrega, diminui o estoque
-            # Garantir que o objeto EPI esteja carregado
-            from models.epi import EPI
-            if self.epi_id and not hasattr(self, '_epi') or self.epi is None:
-                self.epi = EPI.query.get(self.epi_id)
-            
-            if self.epi is None:
-                raise ValueError("EPI não encontrado ou não especificado")
-            
-            # Garantir que o objeto Colaborador esteja carregado
-            from models.colaborador import Colaborador
-            if self.colaborador_id and (not hasattr(self, '_colaborador') or self.colaborador is None):
-                self.colaborador = Colaborador.query.get(self.colaborador_id)
-                
-            if self.colaborador is None:
-                raise ValueError("Colaborador não encontrado ou não especificado")
-            
             # Diminuir estoque usando o método da classe EPI
-            motivo = f"Entrega para {self.colaborador.nome} - {self.motivo or 'Sem motivo'}"
-            self.epi.remover_estoque(self.quantidade, self.usuario_id, motivo)
-            
+            estoque = Estoque.query.filter_by(material_id=self.epi.material_id).first()
+            print(f"estoque: {estoque.id}")
+            if not estoque:
+                raise ValueError("Estoque não encontrado para este material")
             db.session.add(self)
-        db.session.commit()
+            db.session.commit()
+            mov=MovimentacaoEstoque()
+            mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id)
+            print(f"mov: {mov}")
+            mov.save()
+            #self.epi.remover_estoque(self.quantidade, self.usuario_id)
+            
         
     def delete(self):
         # Ao excluir uma entrega, restaura o estoque

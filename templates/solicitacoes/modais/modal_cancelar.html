@@ -1,0 +1,27 @@
+<!-- Modal de Cancelamento -->
+{% if solicitacao.status == 'Pendente' and (current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id) %}
+<div class="modal fade" id="cancelarModal{{ solicitacao.id }}" tabindex="-1" aria-labelledby="cancelarModalLabel{{ solicitacao.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title" id="cancelarModalLabel{{ solicitacao.id }}">Confirmar Cancelamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja cancelar a solicitação <strong>#{{ solicitacao.numero }}</strong>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form action="{{ url_for('solicitacao.cancelar', id=solicitacao.id) }}" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Confirmar Cancelamento</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% block scripts %}
+<!-- Nenhum script JS específico para este modal -->
+{% endblock %} 
