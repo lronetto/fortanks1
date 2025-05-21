@@ -15,6 +15,8 @@ class Material(db.Model):
     codigo_erp = db.Column(db.String(50), nullable=True)
     ativo = db.Column(db.Boolean, default=True)
     plano_conta = db.Column(db.String(30), nullable=True)
+    plano_conta_id = db.Column(db.Integer, db.ForeignKey('planos_conta.id'), nullable=True)
+    plano_conta_obj = relationship('PlanoConta', back_populates='materiais',foreign_keys=[plano_conta_id])
   
     
     # Referência à tabela de unidades

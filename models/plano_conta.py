@@ -1,6 +1,6 @@
 from datetime import datetime
 from models.database import db
-
+from sqlalchemy.orm import relationship
 class PlanoConta(db.Model):
     """
     Modelo para representar Planos de Conta
@@ -13,6 +13,8 @@ class PlanoConta(db.Model):
     indice = db.Column(db.String(50), default='')
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.now)
+
+    materiais = relationship('Material', back_populates='plano_conta_obj')
     
     def save(self):
         """

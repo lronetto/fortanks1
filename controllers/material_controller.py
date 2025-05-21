@@ -37,6 +37,11 @@ def index():
     """
     Lista materiais com filtros e paginação
     """
+    #materiais = Material.query.all()
+    #for material in materiais:
+    #    if material.plano_conta:
+    #        material.plano_conta_id = PlanoConta.query.filter_by(codigo=int(material.plano_conta)).first().id
+    #db.session.commit()
     # Obter parâmetros de filtro e paginação
     page = request.args.get('page', 1, type=int)
     search_term = request.args.get('search', '').strip()

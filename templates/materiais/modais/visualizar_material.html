@@ -1,0 +1,80 @@
+<!-- Modal de Visualização de Material -->
+<div class="modal fade" id="modalVisualizarMaterial" tabindex="-1" aria-labelledby="modalVisualizarMaterialLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarMaterialLabel"><i class="fas fa-eye"></i> Detalhes do Material</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Código SOX</label>
+                        <p id="view_codigo" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Código ERP</label>
+                        <p id="view_codigo_erp" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Categoria</label>
+                        <p id="view_categoria" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label fw-bold">Nome</label>
+                        <p id="view_nome" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Unidade de Medida</label>
+                        <p id="view_unidade" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Plano de Conta</label>
+                        <p id="view_plano_conta" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label fw-bold">Descrição</label>
+                        <p id="view_descricao" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div> 
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para preencher o modal de visualização
+    function preencherModalVisualizacao(button) {
+        const data = button.dataset;
+        document.getElementById('view_codigo').textContent = data.codigo || '-';
+        document.getElementById('view_codigo_erp').textContent = data.codigo_erp || '-';
+        document.getElementById('view_nome').textContent = data.nome || '-';
+        document.getElementById('view_categoria').textContent = data.categoria || '-';
+        document.getElementById('view_unidade').textContent = data.unidade || '-';
+        document.getElementById('view_plano_conta').textContent = data.plano_conta || '-';
+        document.getElementById('view_descricao').textContent = data.descricao || '-';
+    }
+    // Modal de Visualização
+    const modalVisualizacao = new bootstrap.Modal(document.getElementById('modalVisualizarMaterial'));
+    // Event listener para botões de visualização
+    document.querySelectorAll('.btn-visualizar').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            preencherModalVisualizacao(this);
+            modalVisualizacao.show();
+        });
+    });
+});
+</script>
+{% endblock %} 

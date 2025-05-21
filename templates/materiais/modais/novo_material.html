@@ -1,0 +1,144 @@
+<!-- Modal de Novo Material -->
+<div class="modal fade" id="modalNovoMaterial" tabindex="-1" aria-labelledby="modalNovoMaterialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNovoMaterialLabel"><i class="fas fa-plus-circle"></i> Novo Material</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('material.novo') }}" id="form-novo-material">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="codigo" class="form-label">Código SOX</label>
+                            <input type="text" class="form-control" id="codigo" name="codigo">
+                            <small class="text-muted">Código interno ou SKU do material</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="codigo_erp" class="form-label">Código ERP</label>
+                            <input type="text" class="form-control" id="codigo_erp" name="codigo_erp">
+                            <small class="text-muted">Código usado no sistema ERP (opcional)</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="categoria" class="form-label">Categoria</label>
+                            <select class="form-select" id="categoria" name="categoria" required>
+                                <option value="" selected disabled>Selecione uma categoria</option>
+                                <option value="Matéria-prima">Matéria-prima</option>
+                                <option value="Insumo">Insumo</option>
+                                <option value="Ferramenta">Ferramenta</option>
+                                <option value="Equipamento">Equipamento</option>
+                                <option value="Material de Escritório">Material de Escritório</option>
+                                <option value="Serviço">Serviço</option>
+                                <option value="EPI">EPI</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="nome" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="nome" name="nome" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="unidade" class="form-label">Unidade de Medida</label>
+                            <select class="form-select" id="unidade" name="unidade">
+                                <option value="">Selecione uma unidade</option>
+                                {% for unidade in unidades %}
+                                <option value="{{ unidade.id }}">{{ unidade.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <!-- Campo alternativo de texto para unidade, inicialmente oculto -->
+                            <input type="text" id="unidade_texto_novo" name="unidade_texto" class="form-control mt-2" style="display:none;">
+                            
+                            <!-- Botão para alternar para input de texto se o select não funcionar -->
+                            <button type="button" id="btn-alternar-unidade-novo" class="btn btn-sm btn-outline-secondary mt-2">
+                                Digitar unidade manualmente
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="plano_conta" class="form-label">Plano de Conta</label>
+                            <select class="form-select select2-plano-conta-novo" id="plano_conta" name="plano_conta">
+                                <option value="">Selecione o plano de conta (opcional)</option>
+                                {% for plano in planos_conta %}
+                                <option value="{{ plano.codigo }}">
+                                    {{ plano.indice }} - {{ plano.codigo }} - {{ plano.descricao }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-8 mb-3">
+                            <label for="descricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="pc" class="form-label">Informações Adicionais (PC)</label>
+                            <input type="text" class="form-control" id="pc" name="pc">
+                            <small class="text-muted">Informações para Pedido de Compra (opcional)</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div> 
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Botão para alternar para input de texto de unidade no modal de novo material
+    $('#btn-alternar-unidade-novo').click(function() {
+        $('#unidade').hide();
+        $('#unidade_texto_novo').show();
+        $(this).hide();
+    });
+    // Inicializar Select2 para o campo de plano de conta no modal de novo material
+    $('.select2-plano-conta-novo').select2({
+        placeholder: 'Selecione ou pesquise um plano de conta',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#modalNovoMaterial'),
+        language: {
+            noResults: function() {
+                return "Nenhum resultado encontrado";
+            },
+            searching: function() {
+                return "Buscando...";
+            }
+        }
+    });
+    // Validação do formulário de novo material
+    $('#form-novo-material').submit(function(e) {
+        const nome = $('#nome').val().trim();
+        const categoria = $('#categoria').val();
+        if (!nome) {
+            e.preventDefault();
+            alert('O nome do material é obrigatório!');
+            $('#nome').focus();
+            return false;
+        }
+        if (!categoria) {
+            e.preventDefault();
+            alert('A categoria do material é obrigatória!');
+            $('#categoria').focus();
+            return false;
+        }
+        return true;
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,56 @@
+<!-- Modal de Importação de Material -->
+<div class="modal fade" id="modalImportarMaterial" tabindex="-1" aria-labelledby="modalImportarMaterialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalImportarMaterialLabel"><i class="fas fa-file-import"></i> Importar Materiais</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('material.upload_arquivo') }}" enctype="multipart/form-data" id="form-importar-material">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="arquivo" class="form-label">Arquivo Excel (.xlsx)</label>
+                        <input class="form-control" type="file" id="arquivo" name="arquivo" accept=".xlsx" required>
+                    </div>
+                    <div class="mt-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Instruções
+                            </div>
+                            <div class="card-body">
+                                <p>Para importar materiais, siga as instruções abaixo:</p>
+                                <ol>
+                                    <li>Prepare um arquivo Excel (.xlsx) com os dados dos materiais.</li>
+                                    <li>As colunas obrigatórias são: <strong>Nome</strong> e <strong>Categoria</strong>.</li>
+                                    <li>Colunas opcionais: Código, Código ERP, Plano de Contas, Descrição, PC e Unidade.</li>
+                                    <li>Envie o arquivo clicando no botão "Enviar Arquivo".</li>
+                                    <li>Na próxima tela, mapeie as colunas do seu arquivo com os campos do sistema.</li>
+                                    <li>Confirme a importação para concluir o processo.</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <a href="{{ url_for('material.download_modelo') }}" class="btn btn-outline-primary me-auto">
+                            <i class="fas fa-download me-1"></i> Baixar Modelo
+                        </a>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-upload me-1"></i> Enviar Arquivo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div> 
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Nenhuma lógica JS específica para o modal de importação além do padrão do Bootstrap
+    // O envio do formulário já é padrão, mas pode-se adicionar validação customizada se necessário
+});
+</script>
+{% endblock %} 
