@@ -122,20 +122,160 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Dados do material não encontrados!');
             return;
         }
-        // ... (restante da função preencherModal igual ao index.html)
+        try {
+            document.getElementById('edit_id').value = material.id || '';
+            document.getElementById('edit_codigo').value = material.codigo || '';
+            document.getElementById('edit_codigo_erp').value = material.codigo_erp || '';
+            document.getElementById('edit_nome').value = material.nome || '';
+            document.getElementById('edit_descricao').value = material.descricao || '';
+            const categoriaSelect = document.getElementById('edit_categoria');
+            if (categoriaSelect) {
+                categoriaSelect.value = material.categoria || '';
+            }
+            const planoContaSelect = document.getElementById('edit_plano_conta');
+            if (planoContaSelect) {
+                planoContaSelect.value = material.plano_conta || '';
+                try { $(planoContaSelect).trigger('change'); } catch (e) {}
+            }
+            const unidadeSelect = document.getElementById('edit_unidade');
+            const unidadeTexto = document.getElementById('unidade_texto');
+            if (unidadeSelect && unidadeTexto) {
+                let unidadeExiste = false;
+                for (let i = 0; i < unidadeSelect.options.length; i++) {
+                    if (unidadeSelect.options[i].value === material.unidade) {
+                        unidadeExiste = true;
+                        break;
+                    }
+                }
+                if (!unidadeExiste && material.unidade) {
+                    const novaOpcao = new Option(material.unidade, material.unidade);
+                    unidadeSelect.add(novaOpcao);
+                }
+                unidadeSelect.value = material.unidade || '';
+                unidadeTexto.value = material.unidade || '';
+                const btnAlternarUnidade = document.getElementById('btn-alternar-unidade');
+                if (unidadeExiste || !material.unidade) {
+                    unidadeSelect.style.display = 'block';
+                    unidadeTexto.style.display = 'none';
+                    if (btnAlternarUnidade) btnAlternarUnidade.textContent = 'Digitar unidade manualmente';
+                } else {
+                    unidadeSelect.style.display = 'none';
+                    unidadeTexto.style.display = 'block';
+                    if (btnAlternarUnidade) btnAlternarUnidade.textContent = 'Usar opções pré-definidas';
+                }
+            }
+        } catch (error) {
+            console.error('Erro ao preencher o modal:', error);
+        }
     }
     // Adicionar evento para o botão de editar
     const editButtons = document.querySelectorAll('.btn-editar');
     editButtons.forEach(button => {
         button.addEventListener('click', function() {
-            // ... (lógica de click igual ao index.html)
+            try {
+                const materialId = this.getAttribute('data-id');
+                if (this.dataset) {
+                    const material = {
+                        id: this.dataset.id,
+                        codigo: this.dataset.codigo || '',
+                        codigo_erp: this.dataset.codigoErp || '',
+                        nome: this.dataset.nome || '',
+                        descricao: this.dataset.descricao || '',
+                        categoria: this.dataset.categoria || '',
+                        plano_conta: this.dataset.planoConta || '',
+                        unidade: this.dataset.unidade || ''
+                    };
+                    preencherModal(material);
+                    return;
+                }
+                const url = `/materiais/obter-ajax/${materialId}`;
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (response.headers.get('content-type').includes('application/json')) {
+                        return response.json();
+                    } else {
+                        return response.text().then(text => { throw new Error('Resposta do servidor não é JSON válido'); });
+                    }
+                })
+                .then(data => {
+                    if (data.success) {
+                        preencherModal(data.material);
+                    } else {
+                        alert('Erro ao carregar os dados do material: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao carregar os dados do material: ' + error.message);
+                });
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
         });
     });
     // Adicionar evento para o botão de salvar edição
     const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
     if (btnSalvarEdicao) {
         btnSalvarEdicao.addEventListener('click', function() {
-            // ... (lógica de salvar igual ao index.html)
+            try {
+                const materialId = document.getElementById('edit_id').value;
+                const unidadeSelect = document.getElementById('edit_unidade');
+                const unidadeTexto = document.getElementById('unidade_texto');
+                const categoriaSelect = document.getElementById('edit_categoria');
+                if (!categoriaSelect.value) {
+                    alert('A categoria é obrigatória. Por favor, selecione uma categoria para o material.');
+                    categoriaSelect.focus();
+                    return;
+                }
+                const nomeInput = document.getElementById('edit_nome');
+                if (!nomeInput.value.trim()) {
+                    alert('O nome do material é obrigatório. Por favor, preencha o nome do material.');
+                    nomeInput.focus();
+                    return;
+                }
+                let unidadeValue = unidadeSelect.style.display !== 'none' ? unidadeSelect.value : unidadeTexto.value;
+                if (!unidadeSelect.value && unidadeTexto.value) {
+                    const novaOpcao = new Option(unidadeTexto.value, unidadeTexto.value);
+                    unidadeSelect.add(novaOpcao);
+                    unidadeSelect.value = unidadeTexto.value;
+                    unidadeValue = unidadeTexto.value;
+                }
+                const form = document.getElementById('form-editar-material');
+                const formData = new FormData(form);
+                const url = `/material/editar-material-ajax/${materialId}`;
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url, true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            try {
+                                const resposta = JSON.parse(xhr.responseText);
+                                if (resposta.success) {
+                                    window.location.reload();
+                                } else {
+                                    alert(resposta.message || resposta.error || 'Erro ao salvar o material.');
+                                }
+                            } catch (e) {
+                                alert('Erro ao processar resposta do servidor. Verifique o console para mais detalhes.');
+                            }
+                        } else {
+                            alert('Erro ao enviar requisição para o servidor. Status: ' + xhr.status);
+                        }
+                    }
+                };
+                xhr.onerror = function() {
+                    alert('Erro de conexão ao tentar salvar. Verifique sua conexão de internet.');
+                };
+                xhr.send(formData);
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação: ' + error.message);
+            }
         });
     }
     // Validação do formulário de edição

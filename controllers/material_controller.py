@@ -145,16 +145,6 @@ def novo():
                     return redirect(url_for('material.index'))
                 return render_template('materiais/novo.html', planos_conta=planos_conta, unidades=unidades)
             
-            # Buscar a unidade pelo nome, se existir
-            unidade_id = None
-            if unidade:
-                unidade_obj = Unidade.query.filter(Unidade.nome.ilike(unidade)).first()
-                if unidade_obj:
-                    unidade_id = unidade_obj.id
-                else:
-                    # Opcional: Criar nova unidade se não existir
-                    logger.info(f"Unidade '{unidade}' não encontrada no sistema")
-            
             # Criar nova instância
             material = Material(
                 codigo=codigo,
@@ -163,7 +153,7 @@ def novo():
                 categoria=categoria,
                 plano_conta=plano_conta,
                 codigo_erp=codigo_erp,
-                unidade_id=unidade_id  # Novo campo com relacionamento
+                unidade_id=unidade  # Novo campo com relacionamento
             )
             
             # Definir usuário que criou
@@ -235,13 +225,6 @@ def editar(id):
             codigo_erp = request.form.get('codigo_erp', '')
             unidade = request.form.get('unidade', '')
             
-            # Verificar o campo alternativo de unidade
-            unidade_texto = request.form.get('unidade_texto', '')
-            if not unidade and unidade_texto:
-                logger.info(f"Usando o campo alternativo de unidade: {unidade_texto}")
-                unidade = unidade_texto
-            
-            logger.info(f"Valor final da unidade: {unidade}")
             
             # Validar campos obrigatórios
             if not nome or not categoria:
@@ -278,16 +261,7 @@ def editar(id):
                 # Se o banco não aceitar NULL, gerar um código único temporário
                 codigo = f"AUTO-{id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                 logger.info(f"Código vazio: gerando código temporário '{codigo}'")
-            
-            # Buscar a unidade pelo nome, se existir
-            unidade_id = None
-            if unidade:
-                unidade_obj = Unidade.query.filter(Unidade.nome.ilike(unidade)).first()
-                if unidade_obj:
-                    unidade_id = unidade_obj.id
-                else:
-                    logger.info(f"Unidade '{unidade}' não encontrada no sistema")
-            
+  
             # Atualizar dados
             material.codigo = codigo
             material.nome = nome
@@ -295,17 +269,7 @@ def editar(id):
             material.categoria = categoria
             material.plano_conta = plano_conta
             material.codigo_erp = codigo_erp
-            
-            # Tratar o campo de unidade especificamente
-            if unidade == '':
-                # Se não tiver unidade, manter o valor atual se existir, caso contrário salvar como NULL
-                if not material.unidade:
-                    material.unidade = None
-                material.unidade_id = None
-            else:
-                # Se tiver unidade, salvar e atualizar unidade_id
-                material.unidade = unidade
-                material.unidade_id = unidade_id
+            material.unidade_id = unidade
             
             try:
                 # Salvar no banco
