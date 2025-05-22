@@ -230,7 +230,8 @@ class EntregaEPI(db.Model):
                 raise ValueError("Estoque não encontrado para este material")
             mov=MovimentacaoEstoque()
             db.session.add(mov)
-            mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id)
+            observacao = f'Entrega de EPI para colaborador {self.colaborador.nome}'
+            mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id,observacao)
             mov.save()
             self.movimentacao_estoque_id=mov.id
             db.session.add(self)

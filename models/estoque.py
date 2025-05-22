@@ -305,7 +305,7 @@ class MovimentacaoEstoque(db.Model):
         self.observacao = observacao
         self.tipo_movimento = 'entrada'
     
-    def remover(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id):
+    def remover(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id,motivo=None):
         """
         Cria uma nova movimentação de estoque de saída
         """
@@ -317,7 +317,11 @@ class MovimentacaoEstoque(db.Model):
         self.origem_id = origem_id
         self.origem_tipo = origem_tipo
         self.usuario_id = usuario_id
-        self.observacao = f'Saída de estoque #{origem_tipo} #{origem_id}'
+        if motivo:
+            observacao = f'Saída de estoque #{origem_tipo} #{origem_id} - {motivo}'
+        else:
+            observacao = f'Saída de estoque #{origem_tipo} #{origem_id}'
+        self.observacao = observacao
         self.tipo_movimento = 'saida'
 
     def Ajuste(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id):
