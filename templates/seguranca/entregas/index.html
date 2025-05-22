@@ -571,7 +571,7 @@
     {% for entrega in entregas %}
     <div class="modal fade" id="deleteModal{{ entrega.id }}" tabindex="-1" 
         aria-labelledby="deleteModalLabel{{ entrega.id }}" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="deleteModalLabel{{ entrega.id }}">Confirmar Exclusão</h5>
@@ -597,7 +597,7 @@
 
     <!-- Modal para Nova Entrega de EPI -->
     <div class="modal fade" id="novaEntregaModal" tabindex="-1" aria-labelledby="novaEntregaModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title" id="novaEntregaModalLabel">Registrar Entrega de EPI</h5>
@@ -707,7 +707,7 @@
 
     <!-- Modal para Visualizar Entrega -->
     <div class="modal fade" id="visualizarEntregaModal" tabindex="-1" aria-labelledby="visualizarEntregaModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-info text-white">
                     <h5 class="modal-title" id="visualizarEntregaModalLabel">Detalhes da Entrega</h5>
@@ -764,7 +764,7 @@
 
     <!-- Modal para Devolução de EPI -->
     <div class="modal fade" id="devolucaoModal" tabindex="-1" aria-labelledby="devolucaoModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header bg-warning">
                     <h5 class="modal-title" id="devolucaoModalLabel">Registrar Devolução de EPI</h5>
