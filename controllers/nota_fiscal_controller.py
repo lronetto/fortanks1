@@ -573,61 +573,12 @@ def importar_arquivei():
                         # Decodificar o XML da base64
                         xml_text = base64.b64decode(xml_base64).decode('utf-8')
                         
-                        # Extrair dados do XML
-                        chave_acesso, dados_nf = extrair_dados_xml(xml_text)
-                        
-                        if not chave_acesso or not dados_nf:
-                            logger.warning(f"Não foi possível extrair dados do XML")
-                            notas_ignoradas += 1
-                            continue
-                        
-                        # Verificar se a nota fiscal já existe
-                        if NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first():
-                            logger.info(f"Nota {chave_acesso} já existe no banco")
-                            notas_ignoradas += 1
-                            continue
-                        
-                        # Criar instância de nota fiscal
-                        nota_fiscal = NotaFiscal(
-                            numero_nf=dados_nf.get('numero'),
-                            chave_acesso=chave_acesso,
-                            data_emissao=dados_nf.get('data_emissao'),
-                            valor_total=dados_nf.get('valor_total'),
-                            cnpj_emitente=dados_nf.get('cnpj_emitente'),
-                            nome_emitente=dados_nf.get('nome_emitente'),
-                            cnpj_destinatario=dados_nf.get('cnpj_destinatario'),
-                            nome_destinatario=dados_nf.get('nome_destinatario'),
-                            xml_data='',#xml_text, # Não armazenar o XML para economizar espaço
-                            status_processamento='importado'
-                        )
-                        
-                        # Salvar nota fiscal
-                        nota_fiscal.save()
-                        logger.info(f"Nota fiscal {nota_fiscal.numero_nf} - {nota_fiscal.nome_emitente} importada")
-                        
-                        # Criar itens da nota fiscal
-                        for item_nf in dados_nf.get('itens', []):
-                            item_fiscal = NotaFiscalItem(
-                                nf_id=nota_fiscal.id,
-                                codigo=item_nf.get('codigo'),
-                                descricao=item_nf.get('descricao'),
-                                quantidade=item_nf.get('quantidade'),
-                                valor_unitario=item_nf.get('valor_unitario'),
-                                valor_total=item_nf.get('valor_total'),
-                                ncm=item_nf.get('ncm'),
-                                cfop=item_nf.get('cfop'),
-                                unidade=item_nf.get('unidade')
-                            )
-                            item_fiscal.save()
-                        
-                        # Vincular materiais automaticamente após importação
-                        vincular_automaticamente_materiais_nota_fiscal(nota_fiscal.id)
-                        
+                        # Refatoração: processar nota fiscal em função auxiliar
+                        processar_nota_fiscal_xml(xml_text)
                         notas_processadas += 1
-                        
                     except Exception as e:
+                        logger.error(f"Erro ao processar nota fiscal: {str(e)}")
                         notas_ignoradas += 1
-                        logger.error(f"Erro ao processar XML: {str(e)}")
                 
                 # Se alguma nota foi processada, mostrar mensagem de sucesso
                 if notas_processadas > 0:
@@ -658,6 +609,55 @@ def importar_arquivei():
     
     # Se for GET, redirecionar para index
     return jsonify({'success': False, 'message': 'Método inválido'}), 405
+
+def processar_nota_fiscal_xml(xml_text):
+    """
+    Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
+    """
+    try:
+        # Extrair dados do XML
+        chave_acesso, dados_nf = extrair_dados_xml(xml_text)
+        
+        if not chave_acesso or not dados_nf:
+            logger.warning(f"Não foi possível extrair dados do XML")
+            return
+        
+        # Verificar se a nota fiscal já existe
+        if NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first():
+            logger.info(f"Nota {chave_acesso} já existe no banco")
+
+        nota_fiscal = NotaFiscal(
+            numero_nf=dados_nf.get('numero'),
+            chave_acesso=chave_acesso,
+            data_emissao=dados_nf.get('data_emissao'),
+            valor_total=dados_nf.get('valor_total'),
+            cnpj_emitente=dados_nf.get('cnpj_emitente'),
+            nome_emitente=dados_nf.get('nome_emitente'),
+            cnpj_destinatario=dados_nf.get('cnpj_destinatario'),
+            nome_destinatario=dados_nf.get('nome_destinatario'),
+            xml_data='',  # Não armazenar o XML para economizar espaço
+            status_processamento='importado'
+        )
+        nota_fiscal.save()
+        logger.info(f"Nota fiscal {nota_fiscal.numero_nf} - {nota_fiscal.nome_emitente} importada")
+        for item_nf in dados_nf.get('itens', []):
+            item_fiscal = NotaFiscalItem(
+                nf_id=nota_fiscal.id,
+                codigo=item_nf.get('codigo'),
+                descricao=item_nf.get('descricao'),
+                quantidade=item_nf.get('quantidade'),
+                valor_unitario=item_nf.get('valor_unitario'),
+                valor_total=item_nf.get('valor_total'),
+                ncm=item_nf.get('ncm'),
+                cfop=item_nf.get('cfop'),
+                unidade=item_nf.get('unidade')
+            )
+            item_fiscal.save()
+        vincular_automaticamente_materiais_nota_fiscal(nota_fiscal.id)
+
+    except Exception as e:
+        logger.error(f"Erro ao processar nota fiscal: {str(e)}")
+        return
 
 def extrair_dados_xml(xml_data):
     """
