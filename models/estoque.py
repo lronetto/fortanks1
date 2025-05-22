@@ -143,7 +143,7 @@ class MovimentacaoEstoque(db.Model):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        print(f"kwargs: {kwargs}")
+        #print(f"kwargs: {kwargs}")
     @classmethod
     def get_historico_saldo_para_grafico(cls, estoque_id, data_inicio=None, data_fim=None):
         """
@@ -283,8 +283,8 @@ class MovimentacaoEstoque(db.Model):
             print(f"Erro ao criar movimentação: {str(e)}")
             print(traceback.format_exc())
             raise
-    @classmethod
-    def adicionar(cls,quantidade,estoque_id,origem_id,origem_tipo,usuario_id):
+
+    def adicionar(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id,motivo=None):
         """
         Cria uma nova movimentação de estoque de entrada
         """
@@ -293,16 +293,18 @@ class MovimentacaoEstoque(db.Model):
         if not estoque:
             raise ValueError(f"Estoque ID {estoque_id} não encontrado")
         print(f"Adicionando {quantidade} item(s) ao estoque4")
-        movimentacao = MovimentacaoEstoque(
-            tipo_movimento='entrada',
-            quantidade=quantidade,
-            estoque_id=estoque_id,
-            origem_id=origem_id,
-            origem_tipo=origem_tipo,
-            usuario_id=usuario_id,
-            observacao=f'Entrada de estoque #{origem_tipo} #{origem_id}'
-        )
-        return movimentacao
+        if motivo:
+            observacao = f'Entrada de estoque #{origem_tipo} #{origem_id} - {motivo}'
+        else:
+            observacao = f'Entrada de estoque #{origem_tipo} #{origem_id}'
+        self.quantidade = quantidade
+        self.estoque_id = estoque_id
+        self.origem_id = origem_id
+        self.origem_tipo = origem_tipo
+        self.usuario_id = usuario_id
+        self.observacao = observacao
+        self.tipo_movimento = 'entrada'
+    
     def remover(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id):
         """
         Cria uma nova movimentação de estoque de saída
@@ -310,16 +312,14 @@ class MovimentacaoEstoque(db.Model):
         estoque = Estoque.query.get(estoque_id)
         if not estoque:
             raise ValueError(f"Estoque ID {estoque_id} não encontrado") 
-        movimentacao = MovimentacaoEstoque(
-            tipo_movimento='saida',
-            quantidade=quantidade,
-            estoque_id=estoque_id,
-            origem_id=origem_id,
-            origem_tipo=origem_tipo,
-            usuario_id=usuario_id,
-            observacao=f'Saída de estoque #{origem_tipo} #{origem_id}'
-        )
-        return movimentacao
+        self.quantidade = quantidade
+        self.estoque_id = estoque_id
+        self.origem_id = origem_id
+        self.origem_tipo = origem_tipo
+        self.usuario_id = usuario_id
+        self.observacao = f'Saída de estoque #{origem_tipo} #{origem_id}'
+        self.tipo_movimento = 'saida'
+
     def Ajuste(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id):
         """
         Cria uma nova movimentação de estoque
@@ -335,16 +335,13 @@ class MovimentacaoEstoque(db.Model):
         else:
             tipo_movimento = 'saida'
         quantidade = abs(diferenca)
-        movimentacao = MovimentacaoEstoque(
-            tipo_movimento=tipo_movimento,
-            quantidade=quantidade,
-            estoque_id=estoque_id,
-            origem_id=origem_id,
-            origem_tipo=origem_tipo,
-            usuario_id=usuario_id,
-            observacao=f'Ajuste de estoque #{origem_tipo} #{origem_id}'
-        )   
-        return movimentacao
+        self.quantidade = quantidade
+        self.estoque_id = estoque_id
+        self.origem_id = origem_id
+        self.origem_tipo = origem_tipo
+        self.usuario_id = usuario_id
+        self.observacao = f'Ajuste de estoque #{origem_tipo} #{origem_id}'
+        self.tipo_movimento = tipo_movimento
 
     def save(self):
         """

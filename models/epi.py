@@ -84,7 +84,7 @@ class EPI(db.Model):
             estoque.quantidade_minima = self.estoque_minimo
             db.session.commit()
     
-    def adicionar_estoque(self, quantidade, usuario_id):
+    def adicionar_estoque(self, quantidade, usuario_id,motivo=None):
         """
         Adiciona quantidade ao estoque
         """
@@ -95,7 +95,9 @@ class EPI(db.Model):
         
         # Criar movimentação de entrada
         print(f"Adicionando {quantidade} item(s) ao estoque2")
-        mov = MovimentacaoEstoque.adicionar(quantidade,estoque.id,self.id,'EPI',usuario_id)
+        mov = MovimentacaoEstoque()
+        db.session.add(mov)
+        mov.adicionar(quantidade,estoque.id,self.id,'EPI',usuario_id,motivo)
         mov.save()
         return True
     
@@ -202,7 +204,9 @@ class EntregaEPI(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     
-
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        #print(f"kwargs: {kwargs}")
     def save(self):
         from models.estoque import Estoque,MovimentacaoEstoque
         print(f"EntregaEPI: {self.id}")
@@ -217,17 +221,22 @@ class EntregaEPI(db.Model):
         print(f"self.assinado: {self.assinado}")
         print(f"self.motivo: {self.motivo}")
         if not self.id:
+            print(f"self.id: {self.id}")
             # Diminuir estoque usando o método da classe EPI
             estoque = Estoque.query.filter_by(material_id=self.epi.material_id).first()
+            print(f"estoque: {estoque}")
             print(f"estoque: {estoque.id}")
             if not estoque:
                 raise ValueError("Estoque não encontrado para este material")
+            mov=MovimentacaoEstoque()
+            db.session.add(mov)
+            mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id)
+            mov.save()
+            self.movimentacao_estoque_id=mov.id
             db.session.add(self)
             db.session.commit()
-            mov=MovimentacaoEstoque()
-            mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id)
             print(f"mov: {mov}")
-            mov.save()
+           
             #self.epi.remover_estoque(self.quantidade, self.usuario_id)
             
         
@@ -249,10 +258,11 @@ class EntregaEPI(db.Model):
                 
             if self.colaborador is None:
                 raise ValueError("Colaborador não encontrado ou não especificado")
-            
-            # Adicionar estoque usando o método da classe EPI
-            motivo = f"Cancelamento de entrega para {self.colaborador.nome}"
-            self.epi.adicionar_estoque(self.quantidade, self.usuario_id, motivo)
+            print(f"self.movimentacao_estoque: {self.movimentacao_estoque}")
+            if self.movimentacao_estoque:
+                # Adicionar estoque usando o método da classe EPI
+                motivo = f"Cancelamento de entrega para {self.colaborador.nome}"
+                self.epi.adicionar_estoque(self.quantidade, self.usuario_id,motivo)
             
         db.session.delete(self)
         db.session.commit()

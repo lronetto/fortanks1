@@ -595,7 +595,7 @@ def nova_entrega():
         data_entrega = request.form.get('data_entrega') or datetime.now().date().strftime('%Y-%m-%d')
         assinado = request.form.get('assinado') == 'on'
         devolver_antigo = request.form.get('devolver_antigo') == 'on'
-        
+        print(f"request.form: {request.form}")
         # Novos campos do formulário para o CA
         ca_numero_entrega = request.form.get('ca_numero_entrega')
         update_epi_ca = request.form.get('update_epi_ca') == 'yes' # O valor será 'yes' ou 'no' do JS
@@ -607,7 +607,7 @@ def nova_entrega():
                 return jsonify({'success': False, 'message': msg})
             flash(msg, 'danger')
             return redirect(url_for('seguranca.entregas_index'))
-        
+        colaborador = Colaborador.query.get(colaborador_id)
         # Verificar estoque
         epi = EPI.query.get(epi_id)
         if not epi:
@@ -653,8 +653,11 @@ def nova_entrega():
                 entrega_anterior.registrar_devolucao(data_devolucao, observacoes_devolucao)
         
         # Criar a nova entrega
+        print(f"colaborador: {colaborador}")
         entrega = EntregaEPI()
-        entrega.colaborador_id = colaborador_id
+        db.session.add(entrega)
+        print(f"entrega: {entrega}")
+        entrega.colaborador = colaborador
         entrega.epi = epi
         entrega.quantidade = int(quantidade)
         entrega.motivo = motivo
@@ -666,7 +669,9 @@ def nova_entrega():
         
         # Salvar a entrega
         try:
+            print(f"entrega1: {entrega}")
             entrega.save()
+            print(f"entrega2: {entrega}")
             msg = 'Entrega de EPI registrada com sucesso!'
             if is_ajax:
                 return jsonify({
@@ -795,10 +800,12 @@ def excluir_entrega(id):
     """
     Exclui uma entrega de EPI
     """
+    print(f"excluir_entrega: {id}")
     entrega = EntregaEPI.query.get_or_404(id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     try:
+        print(f"entrega: {entrega}")
         entrega.delete()
         msg = 'Registro de entrega excluído com sucesso!'
         if is_ajax:
