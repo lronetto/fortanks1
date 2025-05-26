@@ -31,6 +31,15 @@ class Material(db.Model):
     # Renomeado para evitar conflito com o campo string 'unidade' e para maior clareza
     unidade_obj = db.relationship('Unidade', back_populates='materiais', foreign_keys=[unidade_id])
     
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'unidade': self.unidade_obj.nome if self.unidade_obj else None,
+            'unidade_id': self.unidade_id
+        }
+    
     def save(self):
         """
         Salva o material no banco de dados

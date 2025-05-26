@@ -17,6 +17,13 @@ class Departamento(db.Model):
     # Relacionamentos
     colaboradores = db.relationship('Colaborador', backref='departamento', lazy=True)
     
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'status': self.status
+        }
     def save(self):
         if not self.id:
             db.session.add(self)

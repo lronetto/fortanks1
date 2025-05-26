@@ -14,7 +14,7 @@ class Config:
     
     # Configurações do banco de dados
     DB_password = os.environ.get('DB_PASSWORD') or ''
-    sql = 'mysql+pymysql://remote:%s@192.168.8.150/sistema_solicitacoes' % quote_plus(DB_password)
+    sql = 'mysql+pymysql://remote:%s@179.105.90.127:33066/sistema_solicitacoes' % quote_plus(DB_password)
     #sql = 'mysql+pymysql://remote:%s@179.105.90.127:33066/sistema_solicitacoes?charset=utf8mb4' % quote_plus("8225Le@28")
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URI') or sql
     SQLALCHEMY_TRACK_MODIFICATIONS = False

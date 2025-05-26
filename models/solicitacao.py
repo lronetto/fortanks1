@@ -27,7 +27,19 @@ class Solicitacao(db.Model):
     centro_custo = db.relationship('CentroCusto', backref='solicitacoes')
     itens = db.relationship('ItemSolicitacao', backref='solicitacao', cascade='all, delete-orphan')
     
-    def save(self):
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'data_solicitacao': self.data_solicitacao,
+            'data_necessidade': self.data_necessidade,
+            'status': self.status,
+            'observacoes': self.observacoes,
+            'centro_custo_id': self.centro_custo_id,
+            'solicitante_id': self.solicitante_id,
+            'aprovador_id': self.aprovador_id,
+            'data_aprovacao': self.data_aprovacao
+        }
+    def save(self): 
         """Salva a solicitação no banco de dados"""
         if not self.id:
             db.session.add(self)
@@ -76,6 +88,13 @@ class ItemSolicitacao(db.Model):
     # Relacionamento com material
     material = db.relationship('Material', back_populates='itens_solicitacao')
     
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'material_id': self.material_id,
+            'quantidade': self.quantidade,
+            'unidade': self.unidade
+        }
     def save(self):
         """Salva o item no banco de dados"""
         if not self.id:

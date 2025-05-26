@@ -45,7 +45,7 @@ def index():
     """
     Lista todos os colaboradores
     """
-    colaboradores = Colaborador.query.order_by(Colaborador.nome.asc()).all()
+    colaboradores = Colaborador.query.order_by(Colaborador.data_admissao.desc()).all()
     departamentos = Departamento.query.filter_by(status='Ativo').all()
     cargos = Cargo.query.filter_by(status='Ativo').all()
     

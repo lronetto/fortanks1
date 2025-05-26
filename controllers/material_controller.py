@@ -215,7 +215,7 @@ def editar(id):
         # Para requisições POST
         if request.method == 'POST':
             form_data = request.form.to_dict()
-            logger.info(f"Dados recebidos do formulário: {form_data}")
+            print(f"Dados recebidos do formulário: {form_data}")
             
             codigo = request.form.get('codigo', '')
             nome = request.form.get('nome', '')
@@ -862,12 +862,10 @@ def editar_material_ajax(id):
             plano_conta = data.get('edit_plano_conta', '')
             codigo_erp = data.get('edit_codigo_erp', '')
             unidade = data.get('edit_unidade', '')
+            print(f'form_data: {data}')
             
             # Verificar o campo alternativo de unidade
-            unidade_texto = data.get('unidade_texto', '')
-            if not unidade and unidade_texto:
-                logger.info(f"Usando o campo alternativo de unidade: {unidade_texto}")
-                unidade = unidade_texto
+           
             
             logger.info(f"Valor final da unidade para atualização: {unidade}")
             
@@ -895,17 +893,9 @@ def editar_material_ajax(id):
                 material.categoria = categoria
                 material.plano_conta = plano_conta
                 material.codigo_erp = codigo_erp
-                material.unidade = unidade
+                material.unidade_id = unidade
                 
-                # Atualizar o ID da unidade, se existir
-                if unidade:
-                    unidade_obj = Unidade.query.filter(Unidade.nome.ilike(unidade)).first()
-                    if unidade_obj:
-                        material.unidade_id = unidade_obj.id
-                    else:
-                        material.unidade_id = None  # Limpar o relacionamento se a unidade não existir
-                else:
-                    material.unidade_id = None
+               
                     
                 # Atualizar data e usuário
                 from flask_login import current_user

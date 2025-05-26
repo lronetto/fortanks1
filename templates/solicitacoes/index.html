@@ -240,6 +240,8 @@ $(document).ready(function() {
             placeholder: 'Selecione um material'
         });
     });
+
+ 
     
     // -- Carregar itens das solicitações em edição --
     // 1. Gerar dados iniciais com Jinja em uma estrutura separada
@@ -254,7 +256,8 @@ $(document).ready(function() {
               material_id: {{ item.material_id | tojson }},
               material_nome: {{ item.material.nome | tojson }},
               quantidade: {{ item.quantidade | tojson }},
-              unidade: {{ item.unidade | tojson }},
+              unidade_id: {{ item.material.unidade_id | tojson }},
+
               observacoes: {{ (item.observacoes or '') | tojson }}
           });
         {% endfor %}
@@ -338,7 +341,7 @@ function atualizarTabelaItensEdicao(id) {
         
         tr.append(`<td>${item.material_nome}</td>`);
         tr.append(`<td>${item.quantidade}</td>`);
-        tr.append(`<td>${item.unidade}</td>`);
+        tr.append(`<td>${item.unidade_nome}</td>`);
         
         const tdObs = $('<td>');
         const inputObs = $('<input>')

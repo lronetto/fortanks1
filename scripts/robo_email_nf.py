@@ -23,7 +23,7 @@ def processar_emails():
     if not IMAP_HOST or not IMAP_USER or not IMAP_PASS:
         logging.error('Credenciais IMAP não configuradas corretamente.')
         return
-    with MailBoxTls(host=IMAP_HOST, port=993, timeout=400).login(IMAP_USER, IMAP_PASS, initial_folder=IMAP_FOLDER) as mailbox:
+    with MailBoxTls(host=IMAP_HOST, port=597, timeout=400).login(IMAP_USER, IMAP_PASS, initial_folder=IMAP_FOLDER) as mailbox:
         # Buscar e-mails não lidos com o assunto padrão
         emails = mailbox.fetch(AND(seen=False, subject=ASSUNTO_PADRAO, from_='leandro.netto@fortanks.ind.br'))
         for msg in emails:

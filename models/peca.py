@@ -6,10 +6,14 @@ class Peca(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.String(50), nullable=False)
+    altura = db.Column(db.DECIMAL(10, 2), nullable=True)
     nome = db.Column(db.String(100), nullable=False)
     numero_sequencial = db.Column(db.Integer, nullable=False)
     numero_tanque = db.Column(db.Integer, nullable=True)
     volume = db.Column(db.DECIMAL(10, 2), nullable=True)
+    data_prevista = db.Column(db.Date, nullable=True)
+    data_concretagem = db.Column(db.Date, nullable=True)
+    data_entrega = db.Column(db.Date, nullable=True)
     
     # Relacionamento com tanque
     tanque_id = db.Column(db.Integer, db.ForeignKey('tanques.id', ondelete='CASCADE'), nullable=False)

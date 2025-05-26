@@ -843,6 +843,11 @@ function handleEpiSelectionChange() {
     if (!epiSelectModal) return; // Segurança
 
     const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+    const epiId = selectedOption.value;
+    const colabSelectModal = document.getElementById('colaborador_id');
+    const colaboradorId = colabSelectModal.options[colabSelectModal.selectedIndex].value;
+
+    verificarEpiAtivo(colaboradorId, epiId);
 
     if (selectedOption && selectedOption.value) {
         // Preencher o CA da entrega com o CA cadastrado no EPI
@@ -862,7 +867,7 @@ function handleEpiSelectionChange() {
 
     // Chamar outras funções que dependem da seleção do EPI
     verificarEstoqueModal();
-    verificarEpiAtivo(); 
+    //verificarEpiAtivo(); 
     checkShowUpdateCaOption();
 }
 
@@ -941,17 +946,11 @@ function verificarEstoqueModal() {
 }
 
 // Função para verificar se colaborador já tem EPI ativo
-function verificarEpiAtivo() { 
-    const colabSelectModal = document.getElementById('colaborador_id');
-    const epiSelectModal = document.getElementById('epi_id_modal');
+function verificarEpiAtivo(colaboradorId, epiId) { 
     const epiAtivoContainer = document.getElementById('epi-ativo-container');
     const epiAtivoInfo = document.getElementById('epi-ativo-info');
     const devolverAntigoCheckbox = document.getElementById('devolver_antigo');
 
-    if (!colabSelectModal || !epiSelectModal || !epiAtivoContainer) return;
-
-    const colaboradorId = colabSelectModal.value;
-    const epiId = epiSelectModal.value;
 
     if (!colaboradorId || !epiId) {
         epiAtivoContainer.style.display = 'none';
@@ -963,35 +962,32 @@ function verificarEpiAtivo() {
     let encontrado = false;
     let entregaId = null;
     let dataEntrega = '';
-    let colaboradorNome = colabSelectModal.options[colabSelectModal.selectedIndex]?.text || '';
-    let epiNome = epiSelectModal.options[epiSelectModal.selectedIndex]?.text.split('(')[0].trim() || ''; // Tenta pegar o nome do EPI do texto da option
+    fetch(`/seguranca/epis/ativo`, { // Use a URL correta do seu backend
+            method: "POST",
+            body: new FormData(document.getElementById('formNovaEntrega')),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': '{{ csrf_token() }}'
+                       }
+        })
+        .then(response => {
+            return response.json();
+        })
+        .then(data => {
+            console.log(data);
+            if (data.success) {
+                const alertText = `<strong>${data.entrega.colaborador.nome}</strong> já possui o EPI <strong>${data.entrega.epi.material.nome}</strong> 
+                                em uso desde <strong>${data.entrega.data_entrega}</strong> (Entrega ID: ${data.entrega.id}).`;
+                 epiAtivoInfo.innerHTML = alertText;
+                epiAtivoContainer.style.display = 'block';
+                if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = true; // Marcar por padrão
+            } else {
+                epiAtivoContainer.style.display = 'none';
+                if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = false;
+            }
+        });
 
-    document.querySelectorAll('.entrega-row').forEach(function(row) {
-        const rowColaboradorId = row.dataset.colaborador;
-        const rowEpiId = row.dataset.epi;
-        const status = row.dataset.status;
-
-        if (rowColaboradorId == colaboradorId && rowEpiId == epiId && status === 'pendente') {
-            encontrado = true;
-            entregaId = row.cells[0]?.textContent || '?'; // ID na primeira coluna (oculta em mobile)
-            dataEntrega = row.cells[3]?.textContent || '?'; // Data na quarta coluna (oculta em mobile)
-            // Pega nomes das colunas visíveis se possível
-            if (!colaboradorNome) colaboradorNome = row.cells[1]?.textContent?.trim() || 'colaborador';
-            if (!epiNome) epiNome = row.cells[2]?.textContent?.trim() || 'EPI';
-            // return false; // Não funciona em forEach, mas podemos parar de processar
-        }
-    });
-
-    if (encontrado) {
-        const alertText = `<strong>${colaboradorNome}</strong> já possui o EPI <strong>${epiNome}</strong> 
-                          em uso desde <strong>${dataEntrega}</strong> (Entrega ID: ${entregaId}).`;
-        if(epiAtivoInfo) epiAtivoInfo.innerHTML = alertText;
-        epiAtivoContainer.style.display = 'block';
-        if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = true; // Marcar por padrão
-    } else {
-        epiAtivoContainer.style.display = 'none';
-        if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = false;
-    }
+    
 }
 
 // --- Lógica Modal Nova Entrega --- 

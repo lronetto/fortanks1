@@ -52,13 +52,6 @@
                                 {% endfor %}
                             </select>
                             
-                            <!-- Campo alternativo de texto para unidade, inicialmente oculto -->
-                            <input type="text" id="unidade_texto" name="unidade_texto" class="form-control mt-2" style="display:none;">
-                            
-                            <!-- Botão para alternar para input de texto se o select não funcionar -->
-                            <button type="button" id="btn-alternar-unidade" class="btn btn-sm btn-outline-secondary mt-2">
-                                Digitar unidade manualmente
-                            </button>
                         </div>
                     </div>
 
@@ -137,33 +130,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 planoContaSelect.value = material.plano_conta || '';
                 try { $(planoContaSelect).trigger('change'); } catch (e) {}
             }
-            const unidadeSelect = document.getElementById('edit_unidade');
-            const unidadeTexto = document.getElementById('unidade_texto');
-            if (unidadeSelect && unidadeTexto) {
-                let unidadeExiste = false;
-                for (let i = 0; i < unidadeSelect.options.length; i++) {
-                    if (unidadeSelect.options[i].value === material.unidade) {
-                        unidadeExiste = true;
-                        break;
-                    }
-                }
-                if (!unidadeExiste && material.unidade) {
-                    const novaOpcao = new Option(material.unidade, material.unidade);
-                    unidadeSelect.add(novaOpcao);
-                }
-                unidadeSelect.value = material.unidade || '';
-                unidadeTexto.value = material.unidade || '';
-                const btnAlternarUnidade = document.getElementById('btn-alternar-unidade');
-                if (unidadeExiste || !material.unidade) {
-                    unidadeSelect.style.display = 'block';
-                    unidadeTexto.style.display = 'none';
-                    if (btnAlternarUnidade) btnAlternarUnidade.textContent = 'Digitar unidade manualmente';
-                } else {
-                    unidadeSelect.style.display = 'none';
-                    unidadeTexto.style.display = 'block';
-                    if (btnAlternarUnidade) btnAlternarUnidade.textContent = 'Usar opções pré-definidas';
-                }
-            }
+                
+            unidadeSelect.value = material.unidade || '';
+                
+            
         } catch (error) {
             console.error('Erro ao preencher o modal:', error);
         }
@@ -225,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const materialId = document.getElementById('edit_id').value;
                 const unidadeSelect = document.getElementById('edit_unidade');
-                const unidadeTexto = document.getElementById('unidade_texto');
+                const unidadeTexto = document.getElementById('unidade_edit');
                 const categoriaSelect = document.getElementById('edit_categoria');
                 if (!categoriaSelect.value) {
                     alert('A categoria é obrigatória. Por favor, selecione uma categoria para o material.');
@@ -237,13 +207,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     alert('O nome do material é obrigatório. Por favor, preencha o nome do material.');
                     nomeInput.focus();
                     return;
-                }
-                let unidadeValue = unidadeSelect.style.display !== 'none' ? unidadeSelect.value : unidadeTexto.value;
-                if (!unidadeSelect.value && unidadeTexto.value) {
-                    const novaOpcao = new Option(unidadeTexto.value, unidadeTexto.value);
-                    unidadeSelect.add(novaOpcao);
-                    unidadeSelect.value = unidadeTexto.value;
-                    unidadeValue = unidadeTexto.value;
                 }
                 const form = document.getElementById('form-editar-material');
                 const formData = new FormData(form);

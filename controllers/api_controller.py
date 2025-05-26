@@ -7,6 +7,10 @@ import io
 import os
 import tempfile
 from datetime import datetime
+from models.solicitacao import Solicitacao, ItemSolicitacao
+from models.unidade import Unidade
+from models.centro_custo import CentroCusto
+from models.material import Material
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -354,3 +358,28 @@ def obter_tanque(tanque_id):
             'success': False,
             'error': str(e)
         }), 500 
+@api_bp.route('/solicitacoes/<int:solicitacao_id>/itens', methods=['GET'])
+def listar_itens(solicitacao_id):
+    """Retorna todos os itens de uma solicitação"""
+    try:
+        # Verifica se a solicitação existe
+        solicitacao = Solicitacao.query.get_or_404(solicitacao_id)
+        unidades = Unidade.query.all()
+        centros_custo = CentroCusto.query.all()
+        materiais = Material.query.all()
+        itensSolicitacao = ItemSolicitacao.query.filter_by(solicitacao_id=solicitacao_id).all()
+        
+        # Retorna os itens da solicitação
+        return jsonify({
+            'success': True,
+            'solicitacao': solicitacao.to_dict(),
+            'itens': [item.to_dict() for item in itensSolicitacao],  
+            'unidades': [unidade.to_dict() for unidade in unidades],
+            'centros_custo': [centro.to_dict() for centro in centros_custo],
+            'materiais': [material.to_dict() for material in materiais]
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

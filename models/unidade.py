@@ -77,3 +77,10 @@ class Unidade(db.Model):
         except Exception as e:
             db.session.rollback()
             print(f"Erro ao criar unidades padrão: {str(e)}") 
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao
+        }

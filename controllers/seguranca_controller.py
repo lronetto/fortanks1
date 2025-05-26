@@ -640,6 +640,7 @@ def nova_entrega():
 
         # Verificar se o colaborador já possui este EPI em uso (não devolvido)
         if devolver_antigo:
+            print(f"devolver_antigo: {devolver_antigo}")
             entrega_anterior = EntregaEPI.query.filter_by(
                 colaborador_id=colaborador_id, 
                 epi_id=epi_id, 
@@ -651,8 +652,9 @@ def nova_entrega():
                 data_devolucao = datetime.strptime(data_entrega, '%Y-%m-%d').date()
                 observacoes_devolucao = f"Devolução automática devido à nova entrega de EPI. {observacoes if observacoes else ''}"
                 entrega_anterior.registrar_devolucao(data_devolucao, observacoes_devolucao)
+            else:
+                return jsonify({'success': False, 'message': 'Não foi possível encontrar a entrega anterior para o colaborador e o EPI informados.'}), 400        # Criar a nova entrega
         
-        # Criar a nova entrega
         print(f"colaborador: {colaborador}")
         entrega = EntregaEPI()
         db.session.add(entrega)
@@ -711,6 +713,27 @@ def nova_entrega():
         'colaboradores': [{'id': col.id, 'nome': col.nome} for col in colaboradores]
     })
 
+
+@seguranca_bp.route('/epis/ativo', methods=['POST'])
+@login_required
+def epi_ativor():
+    if request.method == "POST":
+#        print(f'request: {request.args[]}')
+        #print(f'request.form: {request.form}')
+        epiId = request.form.get('epi_id_modal')
+        colaboradorId = request.form.get('colaborador_id') 
+        print(f'epiId: {epiId}')
+        print(f'colaboradorId: {colaboradorId}')
+        try:
+            entrega = EntregaEPI.query.filter_by(colaborador_id=colaboradorId, epi_id=epiId, data_devolucao=None).first()
+            print(f'entrega: {entrega}')
+            if entrega:
+                return jsonify({'success': True, 'message': 'EPI ativo para o colaborador.', 'entrega': entrega.to_dict()})
+            else:
+                return jsonify({'success': False, 'message': 'EPI não ativo para o colaborador.'})
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'Erro ao verificar EPI ativo: {str(e)}'})
+        
 
 @seguranca_bp.route('/epis/entregas/visualizar/<int:id>')
 @login_required

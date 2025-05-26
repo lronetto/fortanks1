@@ -28,6 +28,24 @@ class Colaborador(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     #usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'cpf': self.cpf,
+            'rg': self.rg,  
+            'data_nascimento': self.data_nascimento,
+            'data_admissao': self.data_admissao,
+            'data_demissao': self.data_demissao,
+            'cargo': self.cargo.to_dict(),
+            'departamento': self.departamento.to_dict(),
+            'status': self.status,  
+            'telefone': self.telefone,
+            'email': self.email,
+            'endereco': self.endereco,
+            'observacoes': self.observacoes
+        }
+    
     def __repr__(self):
         return f'<Colaborador {self.nome}>'
     

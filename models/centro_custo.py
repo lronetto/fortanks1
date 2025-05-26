@@ -20,3 +20,11 @@ class CentroCusto(db.Model):
     
     def __repr__(self):
         return f'<CentroCusto {self.codigo} - {self.nome}>' 
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'codigo': self.codigo,
+            'nome': self.nome,
+            'descricao': self.descricao
+        }

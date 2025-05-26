@@ -23,6 +23,18 @@ class EPI(db.Model):
 
     entregas_epi = db.relationship('EntregaEPI', back_populates='epi')
     
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'material_id': self.material_id,
+            'material': self.material.to_dict(),
+            'ca_numero': self.ca_numero,
+            'data_validade': self.data_validade,
+            'vida_util_meses': self.vida_util_meses,
+            'estoque_atual': self.estoque_atual,
+            'estoque_minimo': self.estoque_minimo,
+            'usuario_id': self.usuario_id
+        }
     def save(self):
         """
         Salva o EPI no banco de dados e sincroniza com o estoque principal
@@ -204,6 +216,19 @@ class EntregaEPI(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
     
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'colaborador': self.colaborador.to_dict(),
+            'epi': self.epi.to_dict(),
+            'data_entrega': self.data_entrega,  
+            'data_devolucao': self.data_devolucao,
+            'quantidade': self.quantidade,
+            'ca': self.ca,
+            'assinado': self.assinado,
+            'motivo': self.motivo,
+            'observacoes': self.observacoes
+        }
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         #print(f"kwargs: {kwargs}")
@@ -220,23 +245,23 @@ class EntregaEPI(db.Model):
         print(f"self.ca: {self.ca}")
         print(f"self.assinado: {self.assinado}")
         print(f"self.motivo: {self.motivo}")
-        if not self.id:
-            print(f"self.id: {self.id}")
-            # Diminuir estoque usando o método da classe EPI
-            estoque = Estoque.query.filter_by(material_id=self.epi.material_id).first()
-            print(f"estoque: {estoque}")
-            print(f"estoque: {estoque.id}")
-            if not estoque:
-                raise ValueError("Estoque não encontrado para este material")
-            mov=MovimentacaoEstoque()
-            db.session.add(mov)
-            observacao = f'Entrega de EPI para colaborador {self.colaborador.nome}'
-            mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id,observacao)
-            mov.save()
-            self.movimentacao_estoque_id=mov.id
-            db.session.add(self)
-            db.session.commit()
-            print(f"mov: {mov}")
+
+        print(f"self.id: {self.id}")
+        # Diminuir estoque usando o método da classe EPI
+        estoque = Estoque.query.filter_by(material_id=self.epi.material_id).first()
+        print(f"estoque: {estoque}")
+        print(f"estoque: {estoque.id}")
+        if not estoque:
+            raise ValueError("Estoque não encontrado para este material")
+        mov=MovimentacaoEstoque()
+        db.session.add(mov)
+        observacao = f'Entrega de EPI para colaborador {self.colaborador.nome}'
+        mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id,observacao)
+        mov.save()
+        self.movimentacao_estoque_id=mov.id
+        db.session.add(self)
+        db.session.commit()
+        print(f"mov: {mov}")
            
             #self.epi.remover_estoque(self.quantidade, self.usuario_id)
             
