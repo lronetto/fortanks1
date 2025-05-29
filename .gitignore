@@ -8,6 +8,8 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+env/
+venv/
 build/
 develop-eggs/
 dist/
@@ -22,7 +24,6 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # Installer logs
 pip-log.txt
@@ -48,7 +49,6 @@ coverage.xml
 # Django stuff:
 *.log
 local_settings.py
-db.sqlite3
 
 # Flask stuff:
 instance/
@@ -58,7 +58,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-docs/_build/
+/docs/_build/
 
 # PyBuilder
 .target/
@@ -73,11 +73,25 @@ ipython_config.py
 # pyenv
 .python-version
 
-# pipenv
-Pipfile.lock
+# celery beat schedule file
+celerybeat-schedule
 
-# pytest
-.cache
+# dotenv
+.env
+.env.*
+
+# virtualenv
+.venv/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
 
 # mypy
 .mypy_cache/
@@ -86,46 +100,48 @@ Pipfile.lock
 # Pyre type checker
 .pyre/
 
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
 # VS Code
 .vscode/
 
-# Environments
-venv/
-ENV/
-env/
-.venv/
+# PyCharm
+.idea/
 
-# Docker
-*.pid
-
-# Logs
-*.log
-logs/
-
-# Uploads temporários
-static/uploads/temp/
-
-# Arquivos de configuração sensíveis
-.env
-.env.*
-
-# Banco de dados local
-*.db
-*.sqlite3
-
-# Arquivos do sistema
+# System files
 .DS_Store
-Thumbs.db 
+Thumbs.db
 
-wsgi.py
+# Arquivos sensíveis
+*.pem
+*.key
+*.crt
+*.p12
+*.bak
+*.old
+
+# Outros
+*.log
+*.sqlite3
+*.db
+*.zip
+*.tar.gz
+*.tgz
+*.gz
+*.swp
+*.swo
+
+# Arquivos temporários
+~$* 
 requirements.txt
+fortanks.log
+*.log
+*.log.*
+*.log.*.*
+*.log.*.*.*
+*.log.*.*.*.*
+*.log.*.*.*.*.*
+*.log.*.*.*.*.*.*
 github-action-key
 github-actions-key
 github-actions-key.pub
-github-action-key.pub
+relatorio_financeiro.xlsx
+wsgi.py
