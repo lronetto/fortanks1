@@ -1,9 +1,9 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
-*/__pycache__/
-*/__pycache__/*
-*/*/*/__pycache__/
-*/*/*/__pycache__/*
+__pycache__/*
+*/__pycache/*
+*/__pycache/*
+*/*/*/__pycache/*
+*/*/*/__pycache/*
 
 
 *.py[cod]
@@ -158,3 +158,4 @@ wsgi.py
 *.crt
 *.p12
 *.bak
+~$*
