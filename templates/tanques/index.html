@@ -23,13 +23,13 @@
                         <tr>
                             <th>ID</th>
                             <th>Contrato</th>
-                            <th>UN</th>
                             <th>Nome</th>
                             <th>Sistema</th>
                             <th>Dimensões</th>
                             <th>Altura Total</th>
                             <th>Altura Útil</th>
                             <th>Quantidade</th>
+                            <th>Peças cad</th>
                             <th>Cobertura</th>
                             <th class="text-center">Ações</th>
                         </tr>
@@ -43,13 +43,13 @@
                                     {{ tanque.contrato.nome }}
                                 </a>
                             </td>
-                            <td>{{ tanque.un }}</td>
                             <td>{{ tanque.nome }}</td>
                             <td>{{ tanque.sistema }}</td>
                             <td>{{ tanque.dimensoes }}</td>
                             <td>{{ tanque.altura_total }} m</td>
                             <td>{{ tanque.altura_util }} m</td>
                             <td>{{ tanque.quantidade }}</td>
+                            <td>{{ tanque.pecas_cadastradas }}</td>
                             <td>{{ tanque.possui_cobertura }}</td>
                             <td class="text-center">
                                 <a href="{{ url_for('tanque.visualizar', id=tanque.id) }}" class="btn btn-info btn-sm"
@@ -141,6 +141,7 @@
                     <!-- Aba para Importação por Excel -->
                     <div class="tab-pane fade" id="importar-content" role="tabpanel" aria-labelledby="importar-tab">
                         <form id="formImportarPecas" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" id="tanqueIdImport" name="tanque_id">
                             <div class="mb-3">
                                 <label for="arquivoExcel" class="form-label">Selecione o arquivo Excel</label>
@@ -508,13 +509,13 @@
                     return;
                 }
 
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
+                const formData = new FormData(document.getElementById('formImportarPecas'));
+                
                 // console.log('Dados do formulário de importação (btnImportarPecas):', fileInput.files[0].name, 'para tanqueId:', tanqueId);
 
                 fetch(`/api/tanques/${tanqueId}/pecas/importar`, {
                     method: 'POST',
-                    body: formData
+                    body: formData,
                 })
                 .then(response => response.json())
                 .then(data => {

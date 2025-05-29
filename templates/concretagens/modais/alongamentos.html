@@ -1,0 +1,178 @@
+<!-- Modal de Alongamentos -->
+<div class="modal fade" id="modalAlongamentos" tabindex="-1" aria-labelledby="modalAlongamentosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formAlongamentos" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalAlongamentosLabel">Registrar Alongamentos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Registre os alongamentos para a concretagem <strong id="concretagem-info-alongamentos"></strong>
+                    </div>
+                    
+                    <!-- Campos de alongamentos serão inseridos aqui dinamicamente -->
+                    <div id="campos-alongamentos">
+                        <!-- Campos PN -->
+                        <div id="campos-pn" class="mb-4">
+                            <h6 class="border-bottom pb-2">Alongamentos PN</h6>
+                            <div id="campos-pn-container" class="row g-3">
+                                <!-- Campos serão inseridos aqui via JavaScript -->
+                            </div>
+                        </div>
+                        
+                        <!-- Campos PF -->
+                        <div id="campos-pf" class="mb-4">
+                            <h6 class="border-bottom pb-2">Alongamentos PF</h6>
+                            <div id="campos-pf-container" class="row g-3">
+                                <!-- Campos serão inseridos aqui via JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alongamentos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Função para criar uma linha de campos de alongamento
+        function criarCamposLinha(tipo, inicio, fim) {
+            let linha = '<div class="row mb-1">';
+            for (let i = inicio; i <= fim; i++) {
+                linha += `
+                    <div class="col-6 col-md-2 text-center mb-1">
+                        <label class="form-label fw-bold" for="alongamento_${tipo.toLowerCase()}_${i}">CABO ${i}</label>
+                        <input type="number" class="form-control alongamento-input"
+                            id="alongamento_${tipo.toLowerCase()}_${i}"
+                            name="cabo_${i}"
+                            step="0.1" min="0" max="999" maxlength="5"
+                            oninput="this.value = this.value.slice(0, 3)"
+                            placeholder="">
+                    </div>
+                `;
+            }
+            linha += '</div>';
+            return linha;
+        }
+
+        // Função para carregar os campos de alongamento
+        function carregarCamposAlongamento(tanques) {
+            const containerPN = $('#campos-pn-container');
+            const containerPF = $('#campos-pf-container');
+            
+            // Limpar containers
+            containerPN.empty();
+            containerPF.empty();
+            
+            // Encontrar o maior número de cabos PN e PF entre os tanques
+            let maxPN = 0;
+            let maxPF = 0;
+            
+            tanques.forEach(tanque => {
+                maxPN = Math.max(maxPN, tanque.ncabospn || 0);
+                maxPF = Math.max(maxPF, tanque.ncabospf || 0);
+            });
+            
+            // Criar campos para PN (8 por linha)
+            for (let i = 1; i <= maxPN; i += 6) {
+                const fim = Math.min(i + 5, maxPN);
+                containerPN.append(criarCamposLinha('PN', i, fim));
+            }
+            // Criar campos para PF (8 por linha)
+            for (let i = 1; i <= maxPF; i += 6) {
+                const fim = Math.min(i + 5, maxPF);
+                containerPF.append(criarCamposLinha('PF', i, fim));
+            }
+            // Mostrar/ocultar seções baseado na existência de campos
+            $('#campos-pn').toggle(maxPN > 0);
+            $('#campos-pf').toggle(maxPF > 0);
+        }
+
+        // Quando o modal de alongamentos for aberto
+        $('#modalAlongamentos').on('show.bs.modal', function (e) {
+            const button = $(e.relatedTarget);
+            const id = button.data('id');
+            const tanques = button.data('tanques');
+            const alongamentos = button.data('alongamentos');
+            
+            // Atualizar informações do modal
+            $('#concretagem-info-alongamentos').text(`#${id} - ${tanques}`);
+            $('#formAlongamentos').attr('action', `/concretagens/${id}/alongamentos`);
+            
+            // Carregar dados dos tanques via AJAX
+            fetch(`/concretagens/api/tanques/${id}/detalhes`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`Erro HTTP: ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log(data);
+                    if (data.success) {
+                        carregarCamposAlongamento(data.tanques);
+                        
+                        // Preencher campos com valores existentes
+                        if (data.alongamentos) {
+                            try {
+                                const dados = JSON.parse(data.alongamentos);
+                                Object.entries(dados).forEach(([key, value]) => {
+                                    $(`[name="${key}"]`).val(value);
+                                });
+                            } catch (e) {
+                                console.error('Erro ao parsear alongamentos:', e);
+                            }
+                    }
+                } else {
+                    alert('Erro ao carregar dados dos tanques: ' + data.message);
+                }
+                
+               
+            });
+        });
+
+        // Quando o formulário for submetido
+        $('#formAlongamentos').on('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = {};
+            $('.alongamento-input').each(function() {
+                const value = $(this).val();
+                if (value) {
+                    formData[$(this).attr('name')] = parseFloat(value);
+                }
+            });
+            
+            const id = $('#formAlongamentos').attr('action').split('/')[2];
+            
+            $.ajax({
+                url: `/concretagens/${id}/alongamentos`,
+                method: 'POST',
+                data: {
+                    csrf_token: $('input[name="csrf_token"]').val(),
+                    alongamentos: JSON.stringify(formData)
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#modalAlongamentos').modal('hide');
+                        // Recarregar a página para atualizar os dados
+                        location.reload();
+                    } else {
+                        alert('Erro ao salvar alongamentos: ' + response.message);
+                    }
+                },
+                error: function() {
+                    alert('Erro ao salvar alongamentos. Tente novamente.');
+                }
+            });
+        });
+    }); 
+</script>
+{% endblock %}

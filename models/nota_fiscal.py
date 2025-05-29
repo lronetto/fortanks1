@@ -6,7 +6,8 @@ from io import BytesIO
 import tempfile
 ##from .unidade import Unidade
 ##from .conversao_unidade import ConversaoUnidade
-
+CFOPS_COMPRA = [6101,5101,5405,6105,6401]
+CFOPS_VENDA = [6101,5101]
 class NotaFiscal(db.Model):
     """
     Modelo para representar Notas Fiscais

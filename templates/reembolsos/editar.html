@@ -1,0 +1,39 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Editar Reembolso{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Editar Reembolso</h3>
+                </div>
+                <div class="card-body">
+                    <form id="formReembolso" method="POST" enctype="multipart/form-data">
+                        {{ form.csrf_token }}
+                        <input type="hidden" name="notas_selecionadas" id="notas_selecionadas" value='{{ reembolso | notas_json }}'>
+                        <input type="hidden" name="avulsos_data" id="avulsos_data" value='{{ reembolso | avulsos_json }}'>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.centro_custo_id.label }}
+                                    {{ form.centro_custo_id(class="form-control", value=reembolso.centro_custo_id) }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="numero_relatorio">Número do Relatório</label>
+                                    <input type="text" class="form-control" name="numero_relatorio" id="numero_relatorio" value="{{ reembolso.numero_relatorio }}">
+                                </div>
+                            </div>
+                        </div>
+                        {% include 'reembolsos/_form_fields.html' %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

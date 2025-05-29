@@ -22,6 +22,8 @@ class Contrato(db.Model):
     valor_total = db.Column(db.Numeric(15, 2), nullable=False)
     valor_mat = db.Column(db.Numeric(15, 2), nullable=False)
     valor_ser = db.Column(db.Numeric(15, 2), nullable=False)
+    prazo_pagamento_mat = db.Column(db.Integer, nullable=True)
+    prazo_pagamento_ser = db.Column(db.Integer, nullable=True)
     
     # Chaves estrangeiras
     centro_custo_id = db.Column(db.Integer, db.ForeignKey('centros_custo.id'), nullable=True)

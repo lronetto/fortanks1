@@ -24,9 +24,12 @@
 <script>
     $(document).ready(function() {
         $('#modalExcluir').on('show.bs.modal', function (e) {
-            var id = $(this).data('id');
-            var tanques = $(this).data('tanques');
-            var data = $(this).data('data');
+            var id = $('.btn-excluir').data('id');
+            var tanques = $('.btn-excluir').data('tanques');
+            var data = $('.btn-excluir').data('data');
+            console.log('id: ' + id);
+            console.log('tanques: ' + tanques);
+            console.log('data: ' + data);
 
             $('#concretagem-info').text(`#${id} - ${tanques} (${data})`);
             $('#form-excluir').attr('action', `{{ url_for('concretagem.excluir', id=0) }}`.replace('0', id));

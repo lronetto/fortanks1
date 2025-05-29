@@ -1,0 +1,63 @@
+<div class="modal fade" id="modalAvulso" tabindex="-1" role="dialog" aria-labelledby="modalAvulsoLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalAvulsoLabel">Adicionar Documento Avulso</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="formAvulso">
+          <div class="form-group">
+            <label for="avulsoFornecedor">Fornecedor</label>
+            <input type="text" class="form-control" id="avulsoFornecedor" list="datalistFornecedores" autocomplete="off">
+            <datalist id="datalistFornecedores"></datalist>
+          </div>
+          <div class="form-group">
+            <label for="avulsoNumeroDoc">Nº do Documento</label>
+            <input type="text" class="form-control" id="avulsoNumeroDoc">
+          </div>
+          <div class="form-group">
+            <label for="avulsoDataDoc">Data do Documento</label>
+            <input type="date" class="form-control" id="avulsoDataDoc">
+          </div>
+          <div class="form-group">
+            <label for="avulsoDescricao">Descrição</label>
+            <input type="text" class="form-control" id="avulsoDescricao" required>
+          </div>
+          <div class="form-group">
+            <label for="avulsoValor">Valor</label>
+            <input type="number" class="form-control" id="avulsoValor" step="0.01" min="0" required>
+          </div>
+          <div class="form-group">
+            <label for="avulsoAnexos">Anexos</label>
+            <input type="file" class="form-control" id="avulsoAnexos" multiple accept=".pdf,.jpg,.jpeg,.png">
+            <small class="form-text text-muted">Você pode selecionar múltiplos arquivos (PDF, JPG, PNG)</small>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarAvulso()">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Buscar fornecedores ao abrir o modal
+$('#modalAvulso').on('show.bs.modal', function () {
+  fetch('/reembolsos/fornecedores_avulsos')
+    .then(r => r.json())
+    .then(lista => {
+      const datalist = document.getElementById('datalistFornecedores');
+      datalist.innerHTML = '';
+      lista.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f;
+        datalist.appendChild(opt);
+      });
+    });
+});
+</script> 

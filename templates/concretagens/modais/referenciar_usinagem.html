@@ -71,9 +71,15 @@
 <script>
 $(function() {
     // Configuração do modal de referenciar usinagem
-    $('#selecionar-todas-pecas').click(function() {
-        const isChecked = $(this).is(':checked');
-        $('#tabelaPecasUsinagem tbody input[name="peca_ids"]').prop('checked', isChecked);
+    document.addEventListener('DOMContentLoaded', function() {
+        $('#selecionar-todas-pecas').click(function() {
+            const isChecked = $(this).is(':checked');
+            $('#tabelaPecasUsinagem tbody input[name="peca_ids"]').prop('checked', isChecked);
+            });
+        $('#tabelaPecasUsinagem tbody input[name="peca_ids"]').is(':checked', function() {
+            console.log('click');
+            $('#contadorPecasUsinagem').text(`${$('#tabelaPecasUsinagem tbody input[name="peca_ids"]:checked').length} peças selecionadas`);
+        });
     });
     $('.referenciar-usinagem').click(function() {
         const id = $(this).data('id');

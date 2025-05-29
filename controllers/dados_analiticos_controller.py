@@ -2113,8 +2113,8 @@ def api_detalhes_hierarquicos_periodo():
             chaves_raiz_ordenadas = sorted(arvore_especifica.keys())
         arvore_especifica_ordenada = {k: arvore_especifica[k] for k in chaves_raiz_ordenadas}
         
-        logger.info(f"Árvore específica construída e calculada. Total: {valor_total_arvore}")
-        logger.debug(f"Estrutura Árvore Específica:\n{pprint.pformat(arvore_especifica_ordenada)}")
+        #logger.info(f"Árvore específica construída e calculada. Total: {valor_total_arvore}")
+        #logger.debug(f"Estrutura Árvore Específica:\n{pprint.pformat(arvore_especifica_ordenada)}")
         
         # Retornar a árvore diretamente (o frontend espera a árvore dentro de um grupo, mas podemos adaptar)
         # Para manter consistência com o que o JS espera AGORA ao clicar na tabela, 

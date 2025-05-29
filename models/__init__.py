@@ -45,6 +45,8 @@ from .conversao_unidade import ConversaoUnidade
 # Importamos os novos modelos de produto composto
 from .produto_composto import ProdutoComposto, ComponenteProduto, ProducaoPeca, ProducaoPecaMaterial
 from .dados_analiticos import DadoAnalitico
+from .reembolso import Reembolso, ReembolsoDocumento, ReembolsoAnexo
+
 def configure_mappers():
     """
     Configura explicitamente todos os mappers SQLAlchemy
@@ -81,5 +83,5 @@ __all__ = [
     'TracoConcreto', 'ItemTracoConcreto', 'UsinagemConcreto', 'UsinagemEquipamento',
     'UsinagemMaterial', 'ConversaoUnidade', 'Unidade', 'RompimentoCorpoProva',
     'Colaborador', 'ProdutoComposto', 'ComponenteProduto', 'ProducaoPeca', 'ProducaoPecaMaterial',
-    'DadoAnalitico', 'configure_mappers',
+    'DadoAnalitico', 'configure_mappers', 'Reembolso', 'ReembolsoDocumento', 'ReembolsoAnexo',
 ] 

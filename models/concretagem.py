@@ -54,7 +54,7 @@ class Concretagem(db.Model):
     
     # Novo campo para pista (1 ou 2)
     pista = db.Column(db.Integer, nullable=False)
-    
+    alongamentos = db.Column(db.String(500), nullable=True)
     # Datas de controle
     data_cadastro = db.Column(db.DateTime, default=datetime.now)
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

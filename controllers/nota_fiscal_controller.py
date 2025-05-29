@@ -17,7 +17,8 @@ from models.centro_custo import CentroCusto
 from models.unidade import Unidade
 from models.conversao_unidade import ConversaoUnidade
 from forms.nota_fiscal_forms import NotaFiscalImportForm # Import para formulário do modal
-
+from scripts.robo_email_nf import processar_emails
+from utils.relatorio_financeiro import gerar_relatorio_financeiro
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,12 @@ def verificar_permissao():
     # if not current_user.is_gerente_ou_superior:
     #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
     #     return redirect(url_for('dashboard.index'))
+
+@nota_fiscal_bp.route('/relatorio_financeiro')
+@login_required
+def relatorio_financeiro():
+    gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
+    return redirect(url_for('nota_fiscal.index'))
 
 @nota_fiscal_bp.route('/')
 @login_required
@@ -620,11 +627,12 @@ def processar_nota_fiscal_xml(xml_text):
         
         if not chave_acesso or not dados_nf:
             logger.warning(f"Não foi possível extrair dados do XML")
-            return
+            return False
         
         # Verificar se a nota fiscal já existe
         if NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first():
             logger.info(f"Nota {chave_acesso} já existe no banco")
+            return False
 
         nota_fiscal = NotaFiscal(
             numero_nf=dados_nf.get('numero'),
@@ -635,7 +643,7 @@ def processar_nota_fiscal_xml(xml_text):
             nome_emitente=dados_nf.get('nome_emitente'),
             cnpj_destinatario=dados_nf.get('cnpj_destinatario'),
             nome_destinatario=dados_nf.get('nome_destinatario'),
-            xml_data='',  # Não armazenar o XML para economizar espaço
+            xml_data=base64.b64encode(xml_text.encode('utf-8')).decode('utf-8'),  # Não armazenar o XML para economizar espaço
             status_processamento='importado'
         )
         nota_fiscal.save()
@@ -654,10 +662,11 @@ def processar_nota_fiscal_xml(xml_text):
             )
             item_fiscal.save()
         vincular_automaticamente_materiais_nota_fiscal(nota_fiscal.id)
+        return nota_fiscal.numero_nf
 
     except Exception as e:
         logger.error(f"Erro ao processar nota fiscal: {str(e)}")
-        return
+        return False
 
 def extrair_dados_xml(xml_data):
     """
@@ -1118,6 +1127,7 @@ def api_itens(nf_id):
             items.append({
                 'id': item.id,
                 'codigo': item.codigo,
+                'cfop': item.cfop,
                 'descricao': item.descricao,
                 'quantidade': float(item.quantidade),
                 'unidade': item.unidade,

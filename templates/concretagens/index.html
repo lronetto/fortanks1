@@ -72,6 +72,13 @@
                                             data-id="{{ concretagem.id }}" data-tanques="{% for tanque in concretagem.tanques %}{% if not loop.first %}, {% endif %}{{ tanque.nome }}{% endfor %}">
                                         <i class="fas fa-vial"></i>
                                     </button>
+                                    <button type="button" class="btn btn-info btn-alongamentos" title="Registrar Alongamentos"
+                                            data-bs-toggle="modal" data-bs-target="#modalAlongamentos"
+                                            data-id="{{ concretagem.id }}"
+                                            data-tanques="{% for tanque in concretagem.tanques %}{% if not loop.first %}, {% endif %}{{ tanque.nome }}{% endfor %}"
+                                            data-alongamentos="{{ concretagem.alongamentos }}">
+                                        <i class="fas fa-ruler"></i>
+                                    </button>
                                     <button type="button" class="btn btn-danger btn-excluir" data-bs-toggle="modal"
                                         data-bs-target="#modalExcluir" data-id="{{ concretagem.id }}"
                                         data-tanques="{% for tanque in concretagem.tanques %}{% if not loop.first %}, {% endif %}{{ tanque.nome }}{% endfor %}"
@@ -120,6 +127,7 @@
 {% include 'concretagens/modais/editar.html' %}
 {% include 'concretagens/modais/visualizar.html' %}
 {% include 'concretagens/modais/referenciar_usinagem.html' %}
+{% include 'concretagens/modais/alongamentos.html' %}
 
 <!-- Modal de Referência de Usinagem -->
 <!-- (removido, agora está em arquivo separado) -->
@@ -128,7 +136,6 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/concretagens-edicao.js') }}"></script>
 <script src="{{ url_for('static', filename='js/concretagens-visualizar.js') }}"></script>
-
 
 <script>
     // Script que formata opções de usinagem para serem usadas no arquivo concretagens-multi-tanques.js

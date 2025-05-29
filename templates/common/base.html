@@ -662,6 +662,12 @@
                         <i class="fas fa-list"></i> Minhas Solicitações
                     </a>
                 </li>
+                <!-- Módulo de Reembolso -->
+                <li class="{{ is_active('reembolso') }}">
+                    <a href="{{ url_for('reembolso.index') }}">
+                        <i class="fas fa-money-bill-wave"></i> Reembolsos
+                    </a>
+                </li>
                 
                 <!-- Módulo de Estoque -->
                 <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }} {{ is_active('estoque.inventarios') }}">

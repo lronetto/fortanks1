@@ -22,13 +22,16 @@ class Tanque(db.Model):
     altura_util = db.Column(db.Float, nullable=False)
     quantidade = db.Column(db.Integer, nullable=False, default=1)
     cobertura = db.Column(db.Boolean, default=False)
-    
+    ncabospn = db.Column(db.Integer, nullable=False, default=0)
+    ncabospf = db.Column(db.Integer, nullable=False, default=0)
     # Quantidades de placas
     placas_normais = db.Column(db.Integer, default=0)
     placas_fecho = db.Column(db.Integer, default=0)
     
     # Chave estrangeira para contrato
     contrato_id = db.Column(db.Integer, db.ForeignKey('contratos.id'), nullable=True)
+
+    item_nf = db.Column(db.Integer, nullable=True)
     
     # Datas de controle
     data_cadastro = db.Column(db.DateTime, default=datetime.now)

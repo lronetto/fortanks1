@@ -49,7 +49,7 @@ class Config:
     # Configurações da API do Arquivei
     ARQUIVEI_API_ID = os.environ.get('ARQUIVEI_API_ID') or ''
     ARQUIVEI_API_KEY = os.environ.get('ARQUIVEI_API_KEY') or ''
-    ARQUIVEI_API_URL = os.environ.get('ARQUIVEI_API_KEY') or ''
+    ARQUIVEI_API_URL = os.environ.get('ARQUIVEI_API_URL') or ''
 
 class DevelopmentConfig(Config):
     DEBUG = True

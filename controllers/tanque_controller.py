@@ -5,7 +5,7 @@ from datetime import datetime
 from models.database import db
 from models.tanque import Tanque
 from models.contrato import Contrato
-
+from models.peca import Peca
 tanque_bp = Blueprint('tanque', __name__)
 
 # Middleware para verificar se o usuário tem permissão
@@ -22,6 +22,12 @@ def index():
     Lista todos os tanques
     """
     tanques = Tanque.query.all()
+    tanques_com_pecas = []
+    for tanque in tanques:
+        pecas = Peca.query.filter_by(tanque_id=tanque.id).count()
+        tanque.pecas_cadastradas = pecas
+        tanques_com_pecas.append(tanque)
+    tanques = tanques_com_pecas
     return render_template('tanques/index.html', tanques=tanques)
 
 @tanque_bp.route('/contrato/<int:contrato_id>')

@@ -652,6 +652,7 @@ document.addEventListener('DOMContentLoaded', function() {
             html += `
                 <tr>
                     <td>${item.codigo || '-'}</td>
+                    <td>${item.cfop || '-'}</td>
                     <td>${item.descricao}</td>
                     <td>${item.quantidade}</td>
                     <td>${item.unidade}</td>

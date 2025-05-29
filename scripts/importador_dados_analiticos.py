@@ -161,7 +161,7 @@ class ImportadorDadosAnaliticos:
                 raise ValueError("Não foi possível abrir o arquivo com nenhuma das codificações tentadas")
             
             # Usar lxml parser que é mais robusto
-            soup = BeautifulSoup(html_content, 'lxml')
+            soup = BeautifulSoup(html_content, 'html.parser')
             
             # Variáveis para armazenar os valores atuais
             centro_custo = ""

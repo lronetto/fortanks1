@@ -26,6 +26,7 @@ from controllers.produto_composto_controller import produto_composto_bp
 from controllers.producao_peca_controller import producao_peca_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
 from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
+from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from models.usuario import Usuario
 # Isso carregará e configurará todos os modelos
 from models import configure_mappers
@@ -41,10 +42,12 @@ from werkzeug.exceptions import HTTPException
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-
+from scripts.processar_email_pdf import processar_emails
+from apscheduler.schedulers.background import BackgroundScheduler
 load_dotenv('.env')
 
 # Configuração de logs
@@ -60,6 +63,8 @@ if not os.path.exists(log_dir):
 # Criar a aplicação Flask
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
+
+sslify = SSLify(app)
 # Configurar o logger da aplicação
 if False:
     # Configurar o handler para arquivo
@@ -184,6 +189,7 @@ app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
 app.register_blueprint(producao_peca_bp, url_prefix='/producao-peca')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(relatorio_usinagem_bp)
+app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
 logger.info("Blueprints registrados com sucesso!")
 
 # Registrar comandos CLI
@@ -325,6 +331,13 @@ def handle_exception(e):
                                error_message=description), code
 
 
+def job_email():
+    with app.app_context():
+        processar_emails()
+
+scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')  # Ajuste o timezone conforme necessário
+scheduler.add_job(job_email, 'cron', minute='*/5')
+
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():
     logger.info("Inicializando banco de dados...")
@@ -332,10 +345,14 @@ with app.app_context():
     try:
         init_db()
         logger.info("Banco de dados inicializado com sucesso!")
+        scheduler.start()
+        # Gerar relatório financeiro
+        with app.app_context():
+            processar_emails()
     except Exception as e:
         logger.error(
             f"Erro ao inicializar banco de dados: {str(e)}", exc_info=True)
 
-if __name__ == '__main__':
-    logger.info("Iniciando servidor de desenvolvimento...")
-    app.run(debug=True, host='0.0.0.0')
+app.jinja_env.filters['notas_json'] = notas_json
+app.jinja_env.filters['avulsos_json'] = avulsos_json
+

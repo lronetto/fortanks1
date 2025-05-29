@@ -1,0 +1,70 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Visualizar Reembolso{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Reembolso Nº {{ reembolso.numero_relatorio }}</h1>
+        <a href="{{ url_for('reembolso.exportar_pdf', reembolso_id=reembolso.id) }}" class="btn btn-danger">
+            <i class="fas fa-file-pdf"></i> Exportar PDF
+        </a>
+    </div>
+    <div class="card mb-4">
+        <div class="card-header">
+            <strong>Dados do Reembolso</strong>
+        </div>
+        <div class="card-body">
+            <div class="row mb-2">
+                <div class="col-md-4"><b>Data:</b> {{ reembolso.data.strftime('%d/%m/%Y') }}</div>
+                <div class="col-md-4"><b>Centro de Custo:</b> {{ reembolso.centro_custo.codigo }} - {{ reembolso.centro_custo.nome }}</div>
+                <div class="col-md-4"><b>Valor Total:</b> R$ {{ '%.2f'|format(reembolso.valor_total) }}</div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-4"><b>Usuário:</b> {{ reembolso.usuario.nome }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="card mb-4">
+        <div class="card-header">
+            <strong>Documentos do Reembolso</strong>
+        </div>
+        <div class="card-body">
+            <table class="table table-bordered table-sm">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Nº Nota</th>
+                        <th>Data</th>
+                        <th>Fornecedor</th>
+                        <th>Descrição</th>
+                        <th>Valor</th>
+                        <th>Anexos</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in reembolso.documentos %}
+                    <tr>
+                        <td>{{ 'Nota Fiscal' if doc.tipo == 'nota' else 'Avulso' }}</td>
+                        <td>{% if doc.nota_fiscal %}{{ doc.nota_fiscal.numero_nf }}{% else %}-{% endif %}</td>
+                        <td>{% if doc.nota_fiscal %}{{ doc.nota_fiscal.data_emissao.strftime('%d/%m/%Y') }}{% else %}-{% endif %}</td>
+                        <td>{% if doc.nota_fiscal %}{{ doc.nota_fiscal.nome_emitente }}{% else %}-{% endif %}</td>
+                        <td>{{ doc.descricao }}</td>
+                        <td>R$ {{ '%.2f'|format(doc.valor) }}</td>
+                        <td>
+                            {% for anexo in doc.anexos %}
+                            <a href="{{ url_for('reembolso.download_anexo', anexo_id=anexo.id) }}" class="btn btn-outline-secondary btn-sm" target="_blank">
+                                <i class="fas fa-paperclip"></i> {{ anexo.filename }}
+                            </a><br>
+                            {% else %}
+                            <span class="text-muted">Nenhum anexo</span>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

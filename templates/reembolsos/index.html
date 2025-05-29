@@ -1,0 +1,50 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Meus Reembolsos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Meus Reembolsos</h1>
+        <a href="{{ url_for('reembolso.novo') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Novo Reembolso
+        </a>
+    </div>
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Reembolsos</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nº Relatório</th>
+                            <th>Data</th>
+                            <th>Centro de Custo</th>
+                            <th>Valor Total</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in reembolsos %}
+                        <tr>
+                            <td>{{ r.numero_relatorio }}</td>
+                            <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
+                            <td>{{ r.centro_custo.codigo }} - {{ r.centro_custo.nome }}</td>
+                            <td>R$ {{ '%.2f'|format(r.valor_total) }}</td>
+                            <td>
+                                <a href="{{ url_for('reembolso.editar', reembolso_id=r.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
+                                <a href="{{ url_for('reembolso.exportar_pdf', reembolso_id=r.id) }}" class="btn btn-sm btn-danger" target="_blank"><i class="fas fa-file-pdf"></i></a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="5" class="text-center">Nenhum reembolso encontrado.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

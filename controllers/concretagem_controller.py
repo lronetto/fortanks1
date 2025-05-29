@@ -652,4 +652,37 @@ def api_visualizar(id):
         'ultima_atualizacao': concretagem.ultima_atualizacao.strftime('%d/%m/%Y %H:%M'),
         'tanques': tanques,
         'pecas': pecas
-    }) 
+    })
+
+@concretagem.route('/<int:id>/alongamentos', methods=['POST'])
+@login_required
+def salvar_alongamentos(id):
+    concretagem = Concretagem.query.get_or_404(id)
+    
+    try:
+        alongamentos = request.form.get('alongamentos')
+        if alongamentos:
+            concretagem.alongamentos = alongamentos
+            concretagem.save()
+            return jsonify({'success': True})
+        return jsonify({'success': False, 'message': 'Dados de alongamentos inválidos'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@concretagem.route('/api/tanques/<int:id>/detalhes')
+@login_required
+def detalhes_tanques(id):
+    concretagem = Concretagem.query.get_or_404(id)
+    tanques = []
+    
+    for tanque in concretagem.tanques:
+        tanques.append({
+            'id': tanque.id,
+            'nome': tanque.nome,
+            'ncabospn': tanque.ncabospn,
+            'ncabospf': tanque.ncabospf
+        })
+    if tanques:
+        return jsonify({'success': True, 'tanques': tanques, 'alongamentos': concretagem.alongamentos})
+    else:
+        return jsonify({'success': False, 'message': 'Nenhum tanque encontrado'})

@@ -1,0 +1,337 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Novo Reembolso{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">Novo Reembolso</h3>
+                </div>
+                <div class="card-body">
+                    <form id="formReembolso" method="POST" enctype="multipart/form-data">
+                        {{ form.csrf_token }}
+                        <input type="hidden" name="notas_selecionadas" id="notas_selecionadas" value="[]">
+                        <input type="hidden" name="avulsos_data" id="avulsos_data" value="[]">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.centro_custo_id.label }}
+                                    {{ form.centro_custo_id(class="form-control") }}
+                                </div>
+                            </div>
+                        {% include 'reembolsos/_form_fields.html' %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Avulso -->
+{% include 'reembolsos/modais/avulso.html' %}
+
+<!-- Modal PDF Nota -->
+<div class="modal fade" id="modalPdfNota" tabindex="-1" aria-labelledby="modalPdfNotaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalPdfNotaLabel">Nota Fiscal (DANFE)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" style="height:80vh;">
+        <iframe id="iframePdfNota" src="" style="width:100%;height:100%;border:none;"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let notasSelecionadas = [];
+let avulsos = [];
+let paginaNotas = 1;
+let totalPaginasNotas = 1;
+const notasPorPagina = 50;
+
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(valor);
+}
+
+function atualizarTotal() {
+    let total = 0;
+    
+    // Somar notas selecionadas
+    notasSelecionadas.forEach(nota => {
+        total += parseFloat(nota.valor);
+    });
+    
+    // Somar avulsos
+    avulsos.forEach(avulso => {
+        total += parseFloat(avulso.valor);
+    });
+    
+    document.getElementById('valorTotal').textContent = formatarMoeda(total);
+}
+
+function filtrarNotas(page = 1) {
+    paginaNotas = page;
+    const spinner = document.getElementById('spinnerNotas');
+    if (spinner) spinner.style.display = '';
+    const filtros = {
+        numero: document.getElementById('filtroNumero').value,
+        fornecedor: document.getElementById('filtroFornecedor').value,
+        data_inicial: document.getElementById('filtroDataInicial').value,
+        data_final: document.getElementById('filtroDataFinal').value,
+        pagamento: document.getElementById('filtroPagamento') ? document.getElementById('filtroPagamento').value : '',
+        page: paginaNotas,
+        per_page: notasPorPagina,
+        ids: notasSelecionadas.map(n => n.id)
+    };
+    fetch('{{ url_for("reembolso.buscar_notas") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ form.csrf_token.current_token }}'
+        },
+        body: JSON.stringify(filtros)
+    })
+    .then(response => response.json())
+    .then(data => {
+        const tbody = document.querySelector('#tabelaNotas tbody');
+        tbody.innerHTML = '';
+        if (data.notas) {
+            data.notas.forEach(nota => {
+                const checked = notasSelecionadas.some(n => n.id === parseInt(nota.id)) ? 'checked' : '';
+                const descricao = (notasSelecionadas.find(n => n.id === parseInt(nota.id)) || {}).descricao || '';
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked}>
+                    </td>
+                    <td>${nota.numero_nf}</td>
+                    <td><a href="#" onclick="abrirPdfNota(${nota.id}, '${nota.chave_acesso}'); return false;">${nota.nome_emitente}</a></td>
+                    <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
+                    <td>${formatarMoeda(nota.valor_total)}</td>
+                    <td>${formatarMoeda(nota.pagamento)}</td>
+                    <td>
+                        <input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}">
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            totalPaginasNotas = data.pages;
+            renderPaginacaoNotas();
+            adicionarListenersNotas();
+        }
+        if (spinner) spinner.style.display = 'none';
+    })
+    .catch(() => { if (spinner) spinner.style.display = 'none'; });
+}
+
+function renderPaginacaoNotas() {
+    const paginacao = document.getElementById('paginacaoNotas');
+    paginacao.innerHTML = '';
+    if (totalPaginasNotas <= 1) return;
+    
+    let html = '';
+    html += `<li class="page-item${paginaNotas === 1 ? ' disabled' : ''}">
+        <a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas - 1}); return false;">Anterior</a>
+    </li>`;
+    
+    // Limitar a exibição a no máximo 5 páginas ao redor da página atual
+    let start = Math.max(1, paginaNotas - 2);
+    let end = Math.min(totalPaginasNotas, paginaNotas + 2);
+    if (paginaNotas <= 3) {
+        end = Math.min(5, totalPaginasNotas);
+    }
+    if (paginaNotas > totalPaginasNotas - 2) {
+        start = Math.max(1, totalPaginasNotas - 4);
+    }
+    for (let i = start; i <= end; i++) {
+        html += `<li class="page-item${paginaNotas === i ? ' active' : ''}">
+            <a class="page-link" href="#" onclick="filtrarNotas(${i}); return false;">${i}</a>
+        </li>`;
+    }
+    html += `<li class="page-item${paginaNotas === totalPaginasNotas ? ' disabled' : ''}">
+        <a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas + 1}); return false;">Próxima</a>
+    </li>`;
+    paginacao.innerHTML = html;
+}
+
+function adicionarListenersNotas() {
+    // Checkbox seleção
+    document.querySelectorAll('.nota-checkbox').forEach(cb => {
+        cb.addEventListener('change', function(e) {
+            const notaId = parseInt(this.value);
+            const tr = this.closest('tr');
+            const descricao = tr.querySelector('.nota-descricao').value;
+            const valor = parseFloat(tr.querySelector('td:nth-child(5)').textContent.replace(/[^\d,-]/g, '').replace(',', '.'));
+            let nota = { id: notaId, descricao, valor };
+            if (this.checked) {
+                if (!notasSelecionadas.find(n => n.id === notaId)) notasSelecionadas.push(nota);
+            } else {
+                notasSelecionadas = notasSelecionadas.filter(n => n.id !== notaId);
+            }
+            atualizarTotal();
+        });
+    });
+    // Campo descrição
+    document.querySelectorAll('.nota-descricao').forEach(input => {
+        input.addEventListener('input', function(e) {
+            const notaId = parseInt(this.dataset.id);
+            const nota = notasSelecionadas.find(n => n.id === notaId);
+            if (nota) nota.descricao = this.value;
+        });
+    });
+}
+
+function adicionarAvulso(descricao, valor, anexos) {
+    const avulso = {
+        id: Date.now(),
+        descricao,
+        valor,
+        anexos
+    };
+    avulsos.push(avulso);
+    atualizarTabelaAvulsos();
+    atualizarTotal();
+}
+
+function removerAvulso(id) {
+    avulsos = avulsos.filter(a => a.id !== id);
+    atualizarTabelaAvulsos();
+    atualizarTotal();
+}
+
+function atualizarTabelaAvulsos() {
+    const tbody = document.querySelector('#tabelaAvulsos tbody');
+    tbody.innerHTML = '';
+    
+    avulsos.forEach(avulso => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${avulso.descricao}</td>
+            <td>${formatarMoeda(avulso.valor)}</td>
+            <td>${avulso.anexos.length} arquivo(s)</td>
+            <td>
+                <button type="button" class="btn btn-danger btn-sm" onclick="removerAvulso(${avulso.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function abrirPdfNota(notaId, chaveAcesso) {
+    const iframe = document.getElementById('iframePdfNota');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalPdfNota');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    // Remove mensagens/elementos antigos
+    let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+
+    // Exibe loading
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'pdfLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+    iframe.parentNode.appendChild(loading);
+
+    fetch(`/reembolsos/notas-fiscais/${notaId}/pdf_arquivei`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar PDF');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+            msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Inicializar arrays com dados do backend se em edição
+    const notasInput = document.getElementById('notas_selecionadas');
+    const avulsosInput = document.getElementById('avulsos_data');
+    try {
+        if (notasInput && notasInput.value && notasInput.value !== '[]') {
+            notasSelecionadas = JSON.parse(notasInput.value).map(n => ({...n, id: parseInt(n.id)}));
+        }
+        if (avulsosInput && avulsosInput.value && avulsosInput.value !== '[]') {
+            avulsos = JSON.parse(avulsosInput.value);
+            atualizarTabelaAvulsos();
+        }
+    } catch (e) { /* ignora erro de parse */ }
+
+    // Inicializar filtros
+    filtrarNotas();
+    
+    // Submissão do formulário
+    document.getElementById('formReembolso').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validar seleção
+        if (notasSelecionadas.length === 0 && avulsos.length === 0) {
+            alert('Selecione pelo menos uma nota fiscal ou adicione um documento avulso.');
+            return;
+        }
+        
+        // Atualizar campos ocultos
+        document.getElementById('notas_selecionadas').value = JSON.stringify(notasSelecionadas);
+        document.getElementById('avulsos_data').value = JSON.stringify(avulsos);
+        
+        // Enviar formulário
+        this.submit();
+    });
+
+    // Adicionar documento avulso ao clicar no botão do modal
+    document.getElementById('btnSalvarAvulso').addEventListener('click', function() {
+        const descricao = document.getElementById('avulsoDescricao').value;
+        const valor = document.getElementById('avulsoValor').value;
+        const anexos = Array.from(document.getElementById('avulsoAnexos').files);
+
+        if (!descricao || !valor) {
+            alert('Preencha a descrição e o valor!');
+            return;
+        }
+
+        adicionarAvulso(descricao, parseFloat(valor), anexos);
+
+        // Limpar campos do modal
+        document.getElementById('formAvulso').reset();
+
+        // Fechar modal (Bootstrap 5)
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAvulso'));
+        modal.hide();
+    });
+});
+</script>
+{% endblock %} 
