@@ -41,7 +41,7 @@ def novo():
             centro_custo_id = request.form.get('centro_custo_id')
             notas_selecionadas = json.loads(request.form.get('notas_selecionadas', '[]'))
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
-            
+            print(f'request.form: {request.form}')
             # Validar centro de custo
             centro_custo = CentroCusto.query.get_or_404(centro_custo_id)
             
@@ -76,12 +76,12 @@ def novo():
             for idx, avulso_data in enumerate(avulsos_data):
                 doc = ReembolsoDocumento(
                     reembolso=reembolso,
-                    fornecedor=avulso_data['avulsofornecedor'],
-                    ndocumento=avulso_data['avulsoNumeroDoc'],
-                    data_documento=avulso_data['avulsoDataDoc'],
+                    fornecedor=avulso_data['fornecedor'],
+                    ndocumento=avulso_data['ndocumento'],
+                    data_documento=avulso_data['data_documento'],
                     tipo='avulso',
-                    descricao=avulso_data['avulso_descricao'],
-                    valor=avulso_data['avulso_valor']
+                    descricao=avulso_data['descricao'],
+                    valor=avulso_data['valor']
                 )
                 db.session.add(doc)
                 valor_total += float(avulso_data['valor'])
@@ -357,4 +357,26 @@ def fornecedores_avulsos():
             fornecedores.add(nota.nome_emitente)
     return jsonify(list(fornecedores))
 
-# Rotas para upload/download de anexos e exportação PDF serão implementadas na próxima etapa. 
+# Rotas para upload/download de anexos e exportação PDF serão implementadas na próxima etapa.
+
+@reembolso_bp.route('/<int:reembolso_id>/apagar', methods=['POST'])
+@login_required
+def apagar(reembolso_id):
+    reembolso = Reembolso.query.get_or_404(reembolso_id)
+    if reembolso.usuario_id != current_user.id and not current_user.is_admin:
+        flash('Você não tem permissão para apagar este reembolso.', 'danger')
+        return redirect(url_for('reembolso.index'))
+    try:
+        # Remover anexos dos documentos avulsos
+        for doc in list(reembolso.documentos):
+            if doc.tipo == 'avulso':
+                for anexo in list(doc.anexos):
+                    db.session.delete(anexo)
+            db.session.delete(doc)
+        db.session.delete(reembolso)
+        db.session.commit()
+        flash('Reembolso apagado com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao apagar reembolso: {str(e)}', 'danger')
+    return redirect(url_for('reembolso.index')) 

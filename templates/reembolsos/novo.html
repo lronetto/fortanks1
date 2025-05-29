@@ -193,12 +193,15 @@ function adicionarListenersNotas() {
     });
 }
 
-function adicionarAvulso(descricao, valor, anexos) {
+function adicionarAvulso(descricao, valor, anexos, fornecedor, ndocumento, data_documento) {
     const avulso = {
         id: Date.now(),
         descricao,
         valor,
-        anexos
+        anexos,
+        fornecedor,
+        ndocumento,
+        data_documento
     };
     avulsos.push(avulso);
     atualizarTabelaAvulsos();
@@ -316,6 +319,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('btnSalvarAvulso').addEventListener('click', function() {
         const descricao = document.getElementById('avulsoDescricao').value;
         const valor = document.getElementById('avulsoValor').value;
+        const fornecedor = document.getElementById('avulsoFornecedor').value;
+        const ndocumento = document.getElementById('avulsoNumeroDoc').value;
+        const data_documento = document.getElementById('avulsoDataDoc').value;
         const anexos = Array.from(document.getElementById('avulsoAnexos').files);
 
         if (!descricao || !valor) {
@@ -323,7 +329,7 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        adicionarAvulso(descricao, parseFloat(valor), anexos);
+        adicionarAvulso(descricao, parseFloat(valor), anexos, fornecedor, ndocumento, data_documento);
 
         // Limpar campos do modal
         document.getElementById('formAvulso').reset();

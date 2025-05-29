@@ -64,9 +64,9 @@
         <tbody>
             {% for doc in reembolso.documentos %}
             <tr>
-                <td>{% if doc.nota_fiscal %}{{ doc.fornecedor }}{% else %}-{% endif %}</td>
-                <td>{% if doc.nota_fiscal %}{{ doc.ndocumento }}{% else %}-{% endif %}</td>
-                <td>{% if doc.nota_fiscal %}{{ doc.data_documento.strftime('%d/%m/%Y') }}{% else %}-{% endif %}</td>
+                <td>{{ doc.fornecedor }}</td>
+                <td>{{ doc.ndocumento }}</td>
+                <td>{{ doc.data_documento.strftime('%d/%m/%Y') }}</td>
                 <td>{{ doc.descricao }}</td>
                 <td class="right">R$ {{ '%.2f'|format(doc.valor) }}</td>
             </tr>

@@ -36,6 +36,10 @@
                             <td>
                                 <a href="{{ url_for('reembolso.editar', reembolso_id=r.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
                                 <a href="{{ url_for('reembolso.exportar_pdf', reembolso_id=r.id) }}" class="btn btn-sm btn-danger" target="_blank"><i class="fas fa-file-pdf"></i></a>
+                                <form method="POST" action="{{ url_for('reembolso.apagar', reembolso_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja apagar este reembolso? Esta ação não pode ser desfeita.');">
+                                    <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Apagar"><i class="fas fa-trash"></i></button>
+                                </form>
                             </td>
                         </tr>
                         {% else %}

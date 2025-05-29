@@ -124,6 +124,7 @@ static/uploads/temp/
 Thumbs.db 
 
 wsgi.py
+requirements.txt
 github-action-key
 github-actions-key
 github-actions-key.pub
