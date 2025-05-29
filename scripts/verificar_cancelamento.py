@@ -21,7 +21,7 @@ import requests
 import time
 from models.nota_fiscal import NotaFiscal
 
-from pynfe.processamento.comunicacao import ComunicacaoSefaz
+#from pynfe.processamento.comunicacao import ComunicacaoSefaz
 # Carregar variáveis de ambiente
 load_dotenv()
 
@@ -42,7 +42,7 @@ def verificar():
             n.status_processamento = 'cancelada'
             db.session.add(n)
             db.session.commit()
-            
+
             i+=1
         else:
             print(f"Nota fiscal {n.numero_nf} não foi cancelada")
