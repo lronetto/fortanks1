@@ -346,7 +346,7 @@ with app.app_context():
     try:
         init_db()
         logger.info("Banco de dados inicializado com sucesso!")
-        scheduler.start()
+        #scheduler.start()
         # Gerar relatório financeiro
         #with app.app_context():
         #    processar_emails()
