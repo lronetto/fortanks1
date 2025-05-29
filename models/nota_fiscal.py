@@ -4,8 +4,14 @@ from datetime import datetime
 from flask import render_template, current_app
 from io import BytesIO
 import tempfile
-##from .unidade import Unidade
-##from .conversao_unidade import ConversaoUnidade
+import requests
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
+ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
+
 CFOPS_COMPRA = [6101,5101,5405,6105,6401]
 CFOPS_VENDA = [6101,5101]
 class NotaFiscal(db.Model):
@@ -43,6 +49,8 @@ class NotaFiscal(db.Model):
         """
         Salva a nota fiscal no banco de dados
         """
+        if self.verificar_cancelamento():
+            self.status_processamento = 'cancelada'
         db.session.add(self)
         db.session.commit()
     
@@ -147,7 +155,38 @@ class NotaFiscal(db.Model):
         """
         return f'<NotaFiscal {self.numero_nf} - {self.chave_acesso}>'
 
-
+    def upload_arquivei(xml):
+        headers = {
+                    'X-API-ID': ARQUIVEI_API_ID,
+                    'X-API-KEY': ARQUIVEI_API_KEY,
+                    'Content-Type': 'application/json'
+                }
+        url="https://api.arquivei.com.br/v1/nfe/upload";
+        payload = {
+            "invoices":[
+                {
+                    "xml":f"{xml}"
+                }
+            ]
+        }
+        response = requests.request('POST',url, headers=headers, json=payload)
+        return response.json()
+    
+    def verificar_cancelamento(self):
+        headers = {
+            'X-API-ID': ARQUIVEI_API_ID,
+            'X-API-KEY': ARQUIVEI_API_KEY,
+            'Content-Type': 'application/json'
+        }
+        url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"
+        response = requests.get(url, headers=headers)
+        response=response.json()
+        if response.get('status').get('code') == 200:
+            if response.get('data'):
+                for event in response.get('data'):
+                    if event.get('type') == '110111':
+                        return True
+        return False
 class NotaFiscalItem(db.Model):
     """
     Modelo para representar itens de Nota Fiscal

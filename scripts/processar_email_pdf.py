@@ -20,6 +20,7 @@ from evolutionapi.client import EvolutionClient
 from evolutionapi.models.message import TextMessage, QuotedMessage
 import requests
 import time
+from models.nota_fiscal import upload_arquivei
 # Carregar variáveis de ambiente
 load_dotenv()
 
@@ -28,22 +29,6 @@ EVOLUTION_API_TOKEN= os.getenv('EVOLUTION_API_TOKEN')
 ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
 
-def upload_arquivei(xml):
-    headers = {
-                'X-API-ID': ARQUIVEI_API_ID,
-                'X-API-KEY': ARQUIVEI_API_KEY,
-                'Content-Type': 'application/json'
-            }
-    url="https://api.arquivei.com.br/v1/nfe/upload";
-    payload = {
-        "invoices":[
-            {
-                "xml":f"{xml}"
-            }
-        ]
-    }
-    response = requests.request('POST',url, headers=headers, json=payload)
-    return response.json()
 
 def enviar_mensagem(payload,tipo='sendText'):
     url = f"http://192.168.8.150:8081/message/{tipo}/{EVOLUTION_API_INSTANCE}"
@@ -144,6 +129,7 @@ def processar_emails():
         # Buscar e-mails não lidos com o assunto padrão
         emails = mailbox.fetch(AND(seen=False, from_='leandro.netto@fortanks.ind.br'))
         emailsDat = []
+        cc = None
         for msg in emails:
             if ASSUNTO_PADRAO_CTE in msg.subject:
                 logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
@@ -191,7 +177,8 @@ def processar_emails():
                                     }
                                 print(f"Enviando mensagem: ")
                                 tinicial=time.time()
-                                response = enviar_mensagem(payload)
+                                response = None
+                               # response = enviar_mensagem(payload)
                                 tfinal=time.time()
                                 logging.info(f"Tempo de execução xml: {tfinal-tinicial} segundos")
                                 if response:
@@ -208,7 +195,7 @@ def processar_emails():
                         if att.filename.lower().endswith('.pdf'):
                             print(f"Processando pdf: {att.filename} nnf: {nnf}")
                             tinicial=time.time()
-                            if nnf and key:
+                            if nnf:
                                 try:
                                     print(f"Enviando pdf: ")
                                     base64_pdf = base64.b64encode(att.payload).decode('utf-8')
@@ -219,7 +206,7 @@ def processar_emails():
                                         "mediaMessage": {
                                             "mediatype": "document",
                                             "fileName": f'NF {nnf}.pdf',
-                                            "caption": f'NF {nnf}.pdf',
+                                            "caption": f'NF {nnf}.pdf - CC: {cc}',
                                             "media": base64_pdf}
 
                                     }

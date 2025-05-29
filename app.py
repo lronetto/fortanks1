@@ -46,7 +46,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-from scripts.processar_email_pdf import processar_emails
+#from scripts.processar_email_pdf import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 load_dotenv('.env')
 
@@ -333,7 +333,8 @@ def handle_exception(e):
 
 def job_email():
     with app.app_context():
-        processar_emails()
+        pass
+    #processar_emails()
 
 scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')  # Ajuste o timezone conforme necessário
 scheduler.add_job(job_email, 'cron', minute='*/5')
@@ -347,8 +348,8 @@ with app.app_context():
         logger.info("Banco de dados inicializado com sucesso!")
         scheduler.start()
         # Gerar relatório financeiro
-        with app.app_context():
-            processar_emails()
+        #with app.app_context():
+        #    processar_emails()
     except Exception as e:
         logger.error(
             f"Erro ao inicializar banco de dados: {str(e)}", exc_info=True)

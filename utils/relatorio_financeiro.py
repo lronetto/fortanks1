@@ -64,18 +64,18 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None, output_path=None
             data_prevista = None
             if tanque and contrato:
                 data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
-        dados_analiticos = db.session.query(DadoAnalitico).\
-            join(PlanoConta,PlanoConta.id==DadoAnalitico.plano_conta_id).\
-            filter(DadoAnalitico.documento.like("%"+nf.numero_nf.lstrip('0')+"%"),PlanoConta.codigo==118
-            ).first()
-        dados_relatorio.append({
-            'Data': nf.data_emissao,  # Mantém como datetime para ordenação
-            'Centro de Custo': centro_custo.codigo if centro_custo else 'Não definido',
-            'Nota Fiscal': nf.numero_nf,
-            'Valor': float(nf.valor_total),
-            'Data Prevista': data_prevista,  # Mantém como datetime para ordenação
-            'Pago': dados_analiticos.data_pagamento if dados_analiticos else 'Não'
-        })
+            dados_analiticos = db.session.query(DadoAnalitico).\
+                join(PlanoConta,PlanoConta.id==DadoAnalitico.plano_conta_id).\
+                filter(DadoAnalitico.documento.like("%"+nf.numero_nf.lstrip('0')+"%"),PlanoConta.codigo==118
+                ).first()
+            dados_relatorio.append({
+                'Data': nf.data_emissao,  # Mantém como datetime para ordenação
+                'Centro de Custo': centro_custo.codigo if centro_custo else 'Não definido',
+                'Nota Fiscal': nf.numero_nf,
+                'Valor': float(nf.valor_total),
+                'Data Prevista': data_prevista,  # Mantém como datetime para ordenação
+                'Pago': dados_analiticos.data_pagamento if dados_analiticos else 'Não'
+            })
     tfinal=time.time()
     print(f"Tempo de execução dados_relatorio: {tfinal-tinicial} segundos")
     if len(dados_relatorio) > 0:

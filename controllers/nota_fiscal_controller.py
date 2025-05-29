@@ -19,6 +19,7 @@ from models.conversao_unidade import ConversaoUnidade
 from forms.nota_fiscal_forms import NotaFiscalImportForm # Import para formulário do modal
 from scripts.robo_email_nf import processar_emails
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
+from scripts.verificar_cancelamento import verificar
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,11 @@ def relatorio_financeiro():
     gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
     return redirect(url_for('nota_fiscal.index'))
 
+@nota_fiscal_bp.route('/teste')
+@login_required
+def teste():
+    verificar()
+    return redirect(url_for('nota_fiscal.index'))
 @nota_fiscal_bp.route('/')
 @login_required
 def index():

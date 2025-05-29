@@ -151,3 +151,10 @@ github-actions-key
 github-actions-key.pub
 relatorio_financeiro.xlsx
 wsgi.py
+*.pfx
+*.p12
+*.pem
+*.key
+*.crt
+*.p12
+*.bak
