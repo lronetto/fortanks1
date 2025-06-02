@@ -46,7 +46,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-#from scripts.processar_email_pdf import processar_emails
+from scripts.processar_email_pdf import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 load_dotenv('.env')
 
@@ -331,13 +331,13 @@ def handle_exception(e):
                                error_message=description), code
 
 
-def job_email():
-    with app.app_context():
-        pass
-    #processar_emails()
+#def job_email():
+#    with app.app_context():
+        
+        #processar_emails()
 
-scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')  # Ajuste o timezone conforme necessário
-scheduler.add_job(job_email, 'cron', minute='*/5')
+#scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')  # Ajuste o timezone conforme necessário
+#scheduler.add_job(job_email, 'cron', minute='*/5')
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():

@@ -7,13 +7,38 @@ import tempfile
 import requests
 from dotenv import load_dotenv
 import os
-
+import json
+from flask_login import current_user
+from models.conversao_unidade import comparar_unidades
+from flask import Response
+import base64
+from utils.gerar_pdf import gerar_pdf_danfe
+import xml.etree.ElementTree as ET
+from decimal import Decimal
+import logging
+from models.upload import Upload
+from utils.arquivei import Arquivei
+logger = logging.getLogger(__name__)
 load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
 ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 
+CNPJS = ['27126997000187','27126997000349','27126997000268']
 CFOPS_COMPRA = [6101,5101,5405,6105,6401]
 CFOPS_VENDA = [6101,5101]
+
+def get_xml_text(element, xpath, ns):
+    """
+    Função auxiliar para obter texto de um elemento XML, retornando None se o elemento não existir
+    """
+    if element is None:
+        return None
+    
+    try:
+        found = element.find(xpath, ns)
+        return found.text if found is not None else None
+    except:
+        return None
 class NotaFiscal(db.Model):
     """
     Modelo para representar Notas Fiscais
@@ -21,6 +46,7 @@ class NotaFiscal(db.Model):
     __tablename__ = 'nf_notas'
     
     id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.Integer, nullable=False)
     numero_nf = db.Column(db.String(20), nullable=False)
     chave_acesso = db.Column(db.String(44), unique=True, nullable=False)
     data_emissao = db.Column(db.DateTime, nullable=False)
@@ -34,7 +60,7 @@ class NotaFiscal(db.Model):
     
     # Dados de processamento
     xml_data = db.Column(db.Text, nullable=True)
-    status_processamento = db.Column(db.String(20), default='Importada', nullable=False)
+    status_processamento = db.Column(db.String(20), default='importado', nullable=False)
     #solicitacao_id = db.Column(db.Integer, db.ForeignKey('solicitacoes.id'), nullable=True)
     
     # Datas de controle
@@ -44,13 +70,35 @@ class NotaFiscal(db.Model):
     
     # Relacionamentos
     itens = db.relationship('NotaFiscalItem', backref='nota_fiscal', cascade='all, delete-orphan')
+
+    upload = None
     
+    def __init__(self, xml_data=None, chave_acesso=None, id=None):
+        self.xml_data = xml_data
+        self.chave_acesso = chave_acesso
+        self.id = id
+        self.upload = None
+        if xml_data:
+            self = self.processar_nota_fiscal_xml()
+        if chave_acesso:
+            self = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+        if id:
+            self = NotaFiscal.query.get_or_404(id)
+            upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first()
+            if not upload:
+                pdf_data = Arquivei(chave_acesso=self.chave_acesso).pdf
+                print(f'id: {self.id} chave: {self.chave_acesso}')
+                self.upload = Upload('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data)
+            else:
+                self.upload = upload
+            print('self.upload: ',self.upload)
+        return self
+    
+
     def save(self):
         """
         Salva a nota fiscal no banco de dados
         """
-        if self.verificar_cancelamento():
-            self.status_processamento = 'cancelada'
         db.session.add(self)
         db.session.commit()
     
@@ -92,101 +140,240 @@ class NotaFiscal(db.Model):
         
         return (itens_importados / total_itens) * 100
     
-    def gerar_pdf(self):
+    def get_pdf(self):
+        self.upload = Upload('NotaFiscal', self.id, 1)
+        if self.upload:
+            print('upload1: ',self.upload)
+            return self
+        else:
+            return False
+
+    def processar_nota_fiscal_xml(self):
         """
-        Gera um PDF da nota fiscal
+        Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
         try:
-            # Verificar se a biblioteca WeasyPrint está disponível
-            from weasyprint import HTML, CSS
-            from weasyprint.text.fonts import FontConfiguration
-            
-            # Renderizar o template com os dados da nota fiscal
-            html_content = render_template(
-                'notas_fiscais/pdf_template.html',
-                nota_fiscal=self,
-                data_geracao=datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-            )
-            
-            # Configuração de fontes
-            font_config = FontConfiguration()
-            
-            # Criar arquivo temporário para salvar o HTML
-            with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as f:
-                f.write(html_content.encode('utf-8'))
-                html_file = f.name
-            
-            # Gerar PDF a partir do HTML
-            html = HTML(filename=html_file)
-            css = CSS(string='''
-                @page { 
-                    size: A4; 
-                    margin: 1cm;
-                    @top-center {
-                        content: "Nota Fiscal";
-                        font-weight: bold;
-                    }
-                    @bottom-center {
-                        content: "Página " counter(page) " de " counter(pages);
-                    }
-                }
-                body { font-family: Arial, sans-serif; }
-                .header { text-align: center; margin-bottom: 20px; }
-                .logo { text-align: right; }
-                .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                .info-table th, .info-table td { border: 1px solid #ddd; padding: 8px; }
-                .info-table th { background-color: #f2f2f2; width: 40%; text-align: right; }
-            ''', font_config=font_config)
-            
-            # Criar buffer para o PDF
-            pdf_buffer = BytesIO()
-            html.write_pdf(pdf_buffer, stylesheets=[css])
-            pdf_buffer.seek(0)
-            
-            return pdf_buffer
-            
-        except ImportError:
-            # Caso WeasyPrint não esteja disponível
-            return None
-    
-    def __repr__(self):
-        """
-        Representação em string da nota fiscal
-        """
-        return f'<NotaFiscal {self.numero_nf} - {self.chave_acesso}>'
+            # Extrair dados do XML
+            #self.xml_data = base64.b64encode(xml_text.encode('utf-8')).decode('utf-8')
+            print('processando nota fiscal xml')
+            chave_acesso, dados_nf = self.extrair_dados_xml()
+            #print('chave_acesso: ',chave_acesso)
+            #print('dados_nf: ',dados_nf)
+            if not chave_acesso or not dados_nf:
+                logger.warning(f"Não foi possível extrair dados do XML")
+                return False
+            self.chave_acesso=chave_acesso
+            # Verificar se a nota fiscal já existe
+            nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+            #print('nf: ',nf)
+            #print('self: ',self)
+            if nf:
+                logger.info(f"Nota {chave_acesso} já existe no banco de dados")
+                self.id=nf.id
+                self.numero_nf=nf.numero_nf
+                self.chave_acesso=nf.chave_acesso
+                self.data_emissao=nf.data_emissao
+                self.valor_total=nf.valor_total
+                self.cnpj_emitente=nf.cnpj_emitente
+                self.nome_emitente=nf.nome_emitente
+                self.cnpj_destinatario=nf.cnpj_destinatario
+                return nf
 
-    def upload_arquivei(xml):
-        headers = {
-                    'X-API-ID': ARQUIVEI_API_ID,
-                    'X-API-KEY': ARQUIVEI_API_KEY,
-                    'Content-Type': 'application/json'
-                }
-        url="https://api.arquivei.com.br/v1/nfe/upload";
-        payload = {
-            "invoices":[
-                {
-                    "xml":f"{xml}"
-                }
-            ]
-        }
-        response = requests.request('POST',url, headers=headers, json=payload)
-        return response.json()
-    
-    def verificar_cancelamento(self):
-        headers = {
-            'X-API-ID': ARQUIVEI_API_ID,
-            'X-API-KEY': ARQUIVEI_API_KEY,
-            'Content-Type': 'application/json'
-        }
-        url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"
-        response = requests.get(url, headers=headers)
-        response=response.json()
-        if response.get('status').get('code') == 200:
-            if response.get('data'):
-                for event in response.get('data'):
-                    if event.get('type') == '110111':
-                        return True
-        return False
+            self.numero_nf=dados_nf.get('numero')
+            self.tipo=dados_nf.get('tipo')
+            self.chave_acesso=chave_acesso
+            self.data_emissao=dados_nf.get('data_emissao')
+            self.valor_total=dados_nf.get('valor_total')
+            self.cnpj_emitente=dados_nf.get('cnpj_emitente')
+            self.nome_emitente=dados_nf.get('nome_emitente')
+            self.cnpj_destinatario=dados_nf.get('cnpj_destinatario')
+            self.nome_destinatario=dados_nf.get('nome_destinatario')
+            self.status_processamento='importado'
+            self.save()
+            for item_nf in dados_nf.get('itens', []):
+                item_fiscal = NotaFiscalItem(
+                    nf_id=self.id,
+                    codigo=item_nf.get('codigo'),
+                    descricao=item_nf.get('descricao'),
+                    quantidade=item_nf.get('quantidade'),
+                    valor_unitario=item_nf.get('valor_unitario'),
+                    valor_total=item_nf.get('valor_total'),
+                    ncm=item_nf.get('ncm'),
+                    cfop=item_nf.get('cfop'),
+                    unidade=item_nf.get('unidade')
+                )
+                item_fiscal.save()
+            self.vincular_automaticamente()
+            if not (self.cnpj_emitente in CNPJS):
+                self.importar_itens_para_estoque()
+            return self
+
+        except Exception as e:
+            logger.error(f"Erro ao processar nota fiscal: {str(e)}")
+            return False
+    def extrair_dados_xml(self):
+        """
+        Extrai os dados de uma nota fiscal a partir do XML
+        Retorna a chave de acesso e um dicionário com os dados da nota fiscal
+        """
+        try:
+            # Parse do XML
+            root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
+            
+            # Definir os namespaces
+            ns = {
+                'nfe': 'http://www.portalfiscal.inf.br/nfe'
+            }
+            
+            # Extrair dados da nota
+            inf_nfe = root.find('.//nfe:infNFe', ns) or root.find('.//infNFe', ns)
+            if inf_nfe is None:
+                # Tentar com outro namespace
+                ns = {'': 'http://www.portalfiscal.inf.br/nfe'}
+                inf_nfe = root.find('.//infNFe', ns)
+                if inf_nfe is None:
+                    logger.error("Não foi possível encontrar os dados da nota fiscal no XML")
+                    return None, None
+            
+            # Extrair a chave de acesso
+            chave_acesso = inf_nfe.attrib.get('Id', '')
+            if chave_acesso.startswith('NFe'):
+                chave_acesso = chave_acesso[3:]  # Remove o prefixo 'NFe'
+            
+            # Extrair dados essenciais
+            ide = inf_nfe.find('.//nfe:ide', ns) or inf_nfe.find('.//ide', ns)
+            emit = inf_nfe.find('.//nfe:emit', ns) or inf_nfe.find('.//emit', ns)
+            dest = inf_nfe.find('.//nfe:dest', ns) or inf_nfe.find('.//dest', ns)
+            total = inf_nfe.find('.//nfe:total/nfe:ICMSTot', ns) or inf_nfe.find('.//total/ICMSTot', ns)
+            itens = inf_nfe.findall('.//nfe:det', ns) or inf_nfe.findall('.//det', ns)
+            
+            if not ide or not emit or not dest or not total:
+                logger.error("Dados essenciais ausentes no XML da NFe")
+                return chave_acesso, None
+            
+            # Extrair número da nota
+            numero = get_xml_text(ide, './/nfe:nNF', ns) or get_xml_text(ide, './/nNF', ns)
+            tipo = get_xml_text(ide, './/nfe:tpNF', ns) or get_xml_text(ide, './/tpNF', ns)
+            # Extrair data de emissão
+            data_emissao_text = get_xml_text(ide, './/nfe:dhEmi', ns) or get_xml_text(ide, './/dhEmi', ns) or get_xml_text(ide, './/dEmi', ns)
+            if not data_emissao_text:
+                logger.error("Data de emissão não encontrada no XML")
+                return chave_acesso, None
+                
+            # Ajustar formato da data
+            if 'T' in data_emissao_text:
+                data_emissao = data_emissao_text.split('T')[0]
+            else:
+                data_emissao = data_emissao_text
+            
+            # Extrair CNPJ emitente
+            cnpj_emitente = get_xml_text(emit, './/nfe:CNPJ', ns) or get_xml_text(emit, './/CNPJ', ns)
+            nome_emitente = get_xml_text(emit, './/nfe:xNome', ns) or get_xml_text(emit, './/xNome', ns)
+            
+            # Extrair CNPJ destinatário
+            cnpj_destinatario = get_xml_text(dest, './/nfe:CNPJ', ns) or get_xml_text(dest, './/CNPJ', ns) or ''
+            if not cnpj_destinatario:
+                # Tentar CPF
+                cnpj_destinatario = get_xml_text(dest, './/nfe:CPF', ns) or get_xml_text(dest, './/CPF', ns) or ''
+                
+            nome_destinatario = get_xml_text(dest, './/nfe:xNome', ns) or get_xml_text(dest, './/xNome', ns) or 'Consumidor'
+            
+            # Extrair valor total
+            valor_total_text = get_xml_text(total, './/nfe:vNF', ns) or get_xml_text(total, './/vNF', ns)
+            if not valor_total_text:
+                logger.error("Valor total não encontrado no XML")
+                return chave_acesso, None
+                
+            valor_total = Decimal(valor_total_text)
+            
+            # Dados básicos da nota
+            nfe_data = {
+                'numero': numero,
+                'tipo': tipo,
+                'data_emissao': data_emissao,
+                'cnpj_emitente': cnpj_emitente,
+                'nome_emitente': nome_emitente,
+                'cnpj_destinatario': cnpj_destinatario,
+                'nome_destinatario': nome_destinatario,
+                'valor_total': valor_total,
+                'itens': []
+            }
+            
+            # Extrair dados dos itens
+            for item in itens:
+                try:
+                    num_item = item.attrib.get('nItem', '0')
+                    prod = item.find('.//nfe:prod', ns) or item.find('.//prod', ns)
+                    
+                    if not prod:
+                        logger.warning(f"Produto não encontrado para o item {num_item}")
+                        continue
+                    
+                    codigo = get_xml_text(prod, './/nfe:cProd', ns) or get_xml_text(prod, './/cProd', ns) or ''
+                    descricao = get_xml_text(prod, './/nfe:xProd', ns) or get_xml_text(prod, './/xProd', ns) or 'Sem descrição'
+                    
+                    quantidade_text = get_xml_text(prod, './/nfe:qCom', ns) or get_xml_text(prod, './/qCom', ns) or '0'
+                    valor_unitario_text = get_xml_text(prod, './/nfe:vUnCom', ns) or get_xml_text(prod, './/vUnCom', ns) or '0'
+                    valor_total_item_text = get_xml_text(prod, './/nfe:vProd', ns) or get_xml_text(prod, './/vProd', ns) or '0'
+                    
+                    ncm = get_xml_text(prod, './/nfe:NCM', ns) or get_xml_text(prod, './/NCM', ns) or ''
+                    cfop = get_xml_text(prod, './/nfe:CFOP', ns) or get_xml_text(prod, './/CFOP', ns) or ''
+                    unidade = get_xml_text(prod, './/nfe:uCom', ns) or get_xml_text(prod, './/uCom', ns) or 'UN'
+                    
+                    item_data = {
+                        'codigo': codigo,
+                        'descricao': descricao,
+                        'quantidade': Decimal(quantidade_text),
+                        'valor_unitario': Decimal(valor_unitario_text),
+                        'valor_total': Decimal(valor_total_item_text),
+                        'ncm': ncm,
+                        'cfop': cfop,
+                        'unidade': unidade
+                    }
+                    
+                    nfe_data['itens'].append(item_data)
+                except Exception as e:
+                    logger.error(f"Erro ao processar item {num_item}: {str(e)}")
+            
+            return chave_acesso, nfe_data
+        
+        except Exception as e:
+            logger.error(f"Erro ao extrair dados do XML: {str(e)}")
+            return None, None
+
+
+    def vincular_automaticamente(self):
+        """
+        Tenta vincular automaticamente materiais a todos os itens de uma nota fiscal
+        com base em vinculações anteriores e importa para o estoque se o material já estiver vinculado
+        
+        Args:
+            nota_fiscal_id: ID da nota fiscal
+        """
+            # Para cada item sem material vinculado, tentar buscar um material
+        itens_vinculados = 0
+        for item in self.itens:
+           
+            # Buscar item com base em vinculações anteriores
+            item_anterior = item.buscar_material_vinculado_anteriormente()
+            
+            # Se encontrar, vincular
+            if item_anterior:
+                print(f'item_anterior: {item_anterior.unidade} {item.unidade}')
+                if comparar_unidades(item.unidade, item_anterior.unidade):
+                    print(f'fator_conversao: {item_anterior.fator_conversao_aplicado}')
+                    fator_conversao = item_anterior.fator_conversao_aplicado
+                    if fator_conversao:
+                        item.fator_conversao_aplicado = fator_conversao
+                        itens_vinculados += 1
+                    else:
+                        item.fator_conversao_aplicado = fator_conversao
+                        itens_vinculados += 1
+                    item.save()
+    def importar_itens_para_estoque(self):
+        for item in self.itens:
+            item.importar_para_estoque()
+
 class NotaFiscalItem(db.Model):
     """
     Modelo para representar itens de Nota Fiscal
@@ -248,8 +435,44 @@ class NotaFiscalItem(db.Model):
         """
         db.session.delete(self)
         db.session.commit()
-    
-    def importar_para_estoque(self, usuario_id, centro_custo_id=None, observacao=None):
+    def buscar_material_vinculado_anteriormente(self):
+        """
+        Busca por um material que já foi vinculado anteriormente a um item com o mesmo código ou descrição
+        
+        Args:
+            codigo: Código do item na nota fiscal
+            descricao: Descrição do item na nota fiscal
+            
+        Returns:
+            int: ID do material vinculado ou None se não encontrado
+        """
+        try:
+            # Prioridade 1: Buscar a primeira vinculacao
+            if self.codigo:
+                item_anterior = NotaFiscalItem.query.filter(
+                    NotaFiscalItem.codigo == self.codigo,
+                    NotaFiscalItem.material_id.isnot(None),
+                    NotaFiscalItem.importado_estoque == True
+                ).order_by(NotaFiscalItem.data_importacao_estoque.asc()).first()
+                
+                if item_anterior and item_anterior.material_id:
+                    return item_anterior
+            
+            # Prioridade 2: Buscar por correspondência exata na descrição
+            if self.descricao:
+                item_anterior = NotaFiscalItem.query.filter(
+                    NotaFiscalItem.descricao == self.descricao,
+                    NotaFiscalItem.material_id.isnot(None),
+                    NotaFiscalItem.importado_estoque == True
+                ).order_by(NotaFiscalItem.data_importacao_estoque.asc()).first()
+                
+                if item_anterior and item_anterior.material_id:
+                    return item_anterior
+                    
+            return None
+        except Exception as e:
+            return None
+    def importar_para_estoque(self,usuario_id=None,centro_custo_id=None,observacao=None):
         """
         Importa o item da nota fiscal para o estoque
         
@@ -295,8 +518,8 @@ class NotaFiscalItem(db.Model):
                 observacao = f"Importação da NF {self.nota_fiscal.numero_nf} de {self.nota_fiscal.nome_emitente}"
                 
             # Adicionar informação sobre conversão de unidade, se aplicável
-            if self.fator_conversao_aplicado and self.unidade_original:
-                observacao += f" (Conversão: {self.quantidade_original} {self.unidade_original} → {self.quantidade} {self.unidade})"
+            if self.fator_conversao_aplicado:
+                observacao += f" (Conversão: {self.quantidade} {self.unidade} → {self.quantidade} {self.unidade})"
             
             # Registrar a quantidade atual antes da atualização para log
             quantidade_anterior = float(estoque.quantidade) if estoque.quantidade else 0
@@ -305,7 +528,7 @@ class NotaFiscalItem(db.Model):
             movimentacao = MovimentacaoEstoque(
                 estoque_id=estoque.id,
                 tipo_movimento='entrada',
-                quantidade=self.quantidade,
+                quantidade=self.quantidade*(self.fator_conversao_aplicado if self.fator_conversao_aplicado else 1),
                 data_movimento=self.nota_fiscal.data_emissao,
                 nota_fiscal_item_id=self.id,
                 origem_tipo='NotaFiscal',

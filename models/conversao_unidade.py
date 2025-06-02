@@ -1,5 +1,35 @@
 from datetime import datetime
 from .database import db
+UNIDADES_IGUAIS = [
+    ['UN','UND','UNIDADE','UNIDADES','UNID','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID'],
+    ['KG','KILOS','Kg'],
+    ['GALAO','GALAO','Galao'],
+    ['PCT','PCT','Pct'],
+    ['L','LITROS','Litro'],
+    ['M²','M²','M²'],
+    ['M³','M³','M³'],
+    ['TON','TON','Ton','TL'],
+    ['M','Metro','Mt','MTR'],
+    ['G','G','G'],
+    ['ML','ML','Ml'],
+    ['CM','CM','Cm'],
+    ['CX','CX','Cx'],
+    ['PAR','PAR','Par'],
+    ['MIL','MIL','Mil'],
+    ['MIL','MIL','Mil'],
+]
+def comparar_unidades(unidade_entrada, unidade_saida):
+    unidade_entrada = unidade_entrada.upper()
+    unidade_saida = unidade_saida.upper()
+    if unidade_entrada == unidade_saida:
+        return True
+    else:       
+        for unidade in UNIDADES_IGUAIS.values():
+            if unidade_entrada in unidade and unidade_saida in unidade:
+                return True
+            else:
+                return False
+    return False
 
 class ConversaoUnidade(db.Model):
     """Modelo para armazenar as conversões de unidades."""

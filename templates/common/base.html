@@ -716,6 +716,11 @@
                                 <i class="fas fa-chart-pie"></i> Análise de Notas Fiscais
                             </a>
                         </li>
+                        <li class="{{ is_active('nota_fiscal.analise_transferencias') }}">
+                            <a href="{{ url_for('nota_fiscal.analise_transferencias') }}">
+                                <i class="fas fa-random"></i> Análise de Transferências
+                            </a>
+                        </li>
                     </ul>
                 </li>
             </ul>

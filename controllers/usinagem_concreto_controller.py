@@ -786,7 +786,7 @@ def listar_usinagens():
     # Passar dados serializados como JSON para o template
     return render_template(
         'usinagem_concreto/usinagens/index.html', 
-        now=datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
+        now=datetime.now().strftime('%Y-%m-%dT%H:%M'),
         usinagens=usinagens_data, 
         tracos=tracos, 
         colaboradores=colaboradores, 

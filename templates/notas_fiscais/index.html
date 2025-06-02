@@ -14,6 +14,9 @@
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImportarArquivei">
                 <i class="fas fa-cloud-download-alt"></i> Importar Arquivei
             </button>
+            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
+                <i class="fas fa-file-upload"></i> Importar XML
+            </button>
             <a href="{{ url_for('nota_fiscal.importar_todas_pendentes') }}" class="btn btn-warning" id="btnImportarTodasPendentes">
                 <i class="fas fa-file-import"></i> Importar Pendentes
             </a>
@@ -47,6 +50,14 @@
                         <option value="importadas" {% if status_importacao == 'importadas' %}selected{% endif %}>Importadas</option>
                         <option value="parciais" {% if status_importacao == 'parciais' %}selected{% endif %}>Parcialmente Importadas</option>
                         <option value="pendentes" {% if status_importacao == 'pendentes' %}selected{% endif %}>Pendentes</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="cnpj_emitente" class="form-label">CNPJ Emitente</label>
+                    <select name="cnpj_emitente" id="cnpj_emitente" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="proprio" {% if cnpj_emitente == 'proprio' %}selected{% endif %}>Próprio</option>
+                        <option value="terceiros" {% if cnpj_emitente == 'terceiros' %}selected{% endif %}>Terceiros</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -95,26 +106,34 @@
                         <tr>
                             <td>{{ nf.numero_nf }}</td>
                             <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
-                            <td>{{ nf.nome_emitente }}</td>
+                            <td>
+                                <a href="#" class="visualizar-pdf" data-id="{{ nf.id }}" title="Visualizar PDF">
+                                    {{ nf.nome_emitente }}
+                                </a>
+                            </td>
                             <td>R$ {{ "%.2f"|format(nf.valor_total) if nf.valor_total is not none else '0.00' }}</td>
                             <td>
                                 <!-- Lógica de status atual -->
-                                {# Verificar se o método existe antes de chamar #}
-                                {% set percentual = -1 %} {# Valor padrão caso método não exista #}
-                                {% if nf.percentual_importacao is defined %}
-                                    {% set percentual = nf.percentual_importacao() %}
-                                {% endif %}
-                                <span class="badge {% if percentual == 0 %}bg-danger{% elif percentual == 100 %}bg-success{% elif percentual > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
-                                    {% if percentual == 0 %}
-                                        Pendente
-                                    {% elif percentual == 100 %}
-                                        Importada
-                                    {% elif percentual > 0 %}
-                                        Parcial ({{ "%.0f"|format(percentual) }}%)
-                                    {% else %}
-                                        N/A {# Ou status Indefinido #}
+                                {% if nf.status_processamento == 'cancelada' %}
+                                    <span class="badge bg-danger">Cancelada</span>
+                                {% else %}
+                                    {# Verificar se o método existe antes de chamar #}
+                                    {% set percentual = -1 %} {# Valor padrão caso método não exista #}
+                                    {% if nf.percentual_importacao is defined %}
+                                        {% set percentual = nf.percentual_importacao() %}
                                     {% endif %}
-                                </span>
+                                    <span class="badge {% if percentual == 0 %}bg-danger{% elif percentual == 100 %}bg-success{% elif percentual > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                        {% if percentual == 0 %}
+                                            Pendente
+                                        {% elif percentual == 100 %}
+                                            Importada
+                                        {% elif percentual > 0 %}
+                                            Parcial ({{ "%.0f"|format(percentual) }}%)
+                                        {% else %}
+                                            N/A {# Ou status Indefinido #}
+                                        {% endif %}
+                                    </span>
+                                {% endif %}
                             </td>
                             <td>
                                 <div class="btn-group">
@@ -152,7 +171,7 @@
                 <ul class="pagination justify-content-center">
                     <!-- Link Anterior -->
                     <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
-                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.prev_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', '')) }}" aria-label="Anterior">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.prev_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', '')) }}" aria-label="Anterior">
                             <span aria-hidden="true">&laquo;</span>
                         </a>
                     </li>
@@ -160,7 +179,7 @@
                     {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
-                                <a class="page-link" href="{{ url_for('nota_fiscal.index', page=page_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', '')) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('nota_fiscal.index', page=page_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', '')) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -168,7 +187,7 @@
                     {% endfor %}
                     <!-- Link Próximo -->
                     <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
-                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.next_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', '')) }}" aria-label="Próximo">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.next_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', '')) }}" aria-label="Próximo">
                             <span aria-hidden="true">&raquo;</span>
                         </a>
                     </li>
@@ -191,6 +210,22 @@
 {% include 'notas_fiscais/modais/conversao_unidades.html' %}
 {% include 'notas_fiscais/modais/importar_arquivei.html' %}
 {% include 'notas_fiscais/modais/excluir_nota.html' %}
+{% include 'notas_fiscais/modais/importar_xml.html' %}
+
+<!-- Modal para Visualizar PDF -->
+<div class="modal fade" id="modalVisualizarPDF" tabindex="-1" aria-labelledby="modalVisualizarPDFLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarPDFLabel">Visualizar Nota Fiscal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <iframe id="pdfViewer" style="width: 100%; height: 80vh; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_css %}
@@ -225,4 +260,59 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <!-- Script principal -->
 <script src="{{ url_for('static', filename='js/notas_fiscais/index.js') }}"></script>
+<script>
+$(document).ready(function() {
+    // Manipular clique no link de visualizar PDF
+    $('.visualizar-pdf').on('click', function(e) {
+        e.preventDefault();
+        var notaId = $(this).data('id');
+        abrirPdfNota(notaId);
+    
+    });
+    function abrirPdfNota(notaId) {
+    const iframe = document.getElementById('pdfViewer');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalVisualizarPDF');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    // Remove mensagens/elementos antigos
+    let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+
+    // Exibe loading
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'pdfLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+    iframe.parentNode.appendChild(loading);
+
+    fetch(`/notas-fiscais/pdf/${notaId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar PDF');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+            msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
+});
+</script>
 {% endblock %} 

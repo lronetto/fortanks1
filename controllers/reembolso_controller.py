@@ -317,29 +317,6 @@ def avulsos_json(reembolso):
             })
     return Markup(json.dumps(avulsos))
 
-@reembolso_bp.route('/notas-fiscais/<int:nota_id>/pdf_arquivei')
-@login_required
-def pdf_arquivei(nota_id):
-    nota = NotaFiscal.query.get_or_404(nota_id)
-    chave = nota.chave_acesso
-    if not chave:
-        return 'Chave de acesso não encontrada para esta nota.', 404
-    url = f'https://api.arquivei.com.br/v1/nfe/danfe?access_key={chave}'
-    headers = {
-        'X-API-ID': os.getenv('ARQUIVEI_API_ID'),
-        'X-API-KEY': os.getenv('ARQUIVEI_API_KEY'),
-        'Content-Type': 'application/json'
-    }
-    r = requests.get(url, headers=headers)
-    if r.status_code == 200:
-        data = r.json()
-        encoded_pdf = data.get('data', {}).get('encoded_pdf')
-        if encoded_pdf:
-            pdf_bytes = base64.b64decode(encoded_pdf)
-            return Response(pdf_bytes, mimetype='application/pdf')
-        return 'PDF não encontrado na resposta da API.', 404
-    return f'Erro ao buscar PDF na Arquivei: {r.status_code}', 400
-
 # Modificar endpoint para fornecedores de documentos avulsos e emitentes de notas fiscais
 @reembolso_bp.route('/fornecedores_avulsos')
 @login_required

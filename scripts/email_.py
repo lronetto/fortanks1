@@ -12,9 +12,8 @@ from utils.email_utils import enviar_email
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
+from controllers.nota_fiscal_controller import processar_nota_fiscal_xml, extrair_dados_xml
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
-from models.nota_fiscal import NotaFiscal
-from models.upload import Upload
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -71,6 +70,56 @@ IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'  # Ajuste para o caminho d
 #difal
 #NUMBER_WHATSAPP = '120363399210607974@g.us'
 NUMBER_WHATSAPP = '5527996440664-1630085280@g.us'
+def processar_pdf_com_marca_dagua(pdf_bytes, imagem_marca_dagua):
+    """
+    Adiciona uma imagem como marca d'água no canto superior direito da primeira página do PDF.
+    """
+    try:
+        # Ler o PDF original
+        pdf_reader = PdfReader(io.BytesIO(pdf_bytes))
+        pdf_writer = PdfWriter()
+
+        # Pega o tamanho da primeira página
+        first_page = pdf_reader.pages[0]
+        width = float(first_page.mediabox.width)
+        height = float(first_page.mediabox.height)
+
+        # Cria um PDF temporário com a imagem no canto superior direito
+        marca_dagua_stream = io.BytesIO()
+        c = canvas.Canvas(marca_dagua_stream, pagesize=(width, height))
+        img = ImageReader(imagem_marca_dagua)
+        img_width, img_height = img.getSize()
+        # Redimensiona a imagem se necessário (exemplo: 120x120 px)
+        max_img_width = 120
+        max_img_height = 240
+        scale = min(max_img_width / img_width, max_img_height / img_height, 1)
+        img_width_scaled = img_width * scale
+        img_height_scaled = img_height * scale
+        # Posição: canto superior direito
+        x = width - img_width_scaled - 1000  # 20 px de margem
+        y = height - img_height_scaled - 20
+        c.drawImage(img, x, y, width=img_width_scaled, height=img_height_scaled, mask='auto')
+        c.save()
+        marca_dagua_stream.seek(0)
+
+        # Mescla a marca d'água na primeira página
+        from PyPDF2 import PdfReader as RLReader
+        marca_dagua_pdf = RLReader(marca_dagua_stream)
+        first_page.merge_page(marca_dagua_pdf.pages[0])
+        pdf_writer.add_page(first_page)
+
+        # Adiciona as demais páginas sem alteração
+        for page in pdf_reader.pages[1:]:
+            pdf_writer.add_page(page)
+
+        # Salva o PDF modificado
+        output = io.BytesIO()
+        pdf_writer.write(output)
+        return output.getvalue()
+    except Exception as e:
+        logging.error(f"Erro ao processar PDF: {e}")
+        return None
+
 def processar_emails():
     if not IMAP_HOST or not IMAP_USER or not IMAP_PASS:
         logging.error('Credenciais IMAP não configuradas corretamente.')
@@ -82,7 +131,6 @@ def processar_emails():
         emailsDat = []
         cc = None
         for msg in emails:
-            print(msg.subject)
             if ASSUNTO_PADRAO_CTE in msg.subject:
                 logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
 
@@ -98,23 +146,22 @@ def processar_emails():
                     for att in msg.attachments:
                         if att.filename.lower().endswith('.xml'):
                             print(f"Processando xml: {att.filename}")
+                            xml_text = att.payload.decode('utf-8')
                             try:
                                 tinicial=time.time()
-                                nf=NotaFiscal(xml_data=att.payload)
+                                nf = processar_nota_fiscal_xml(xml_text)
                                 tfinal=time.time()
                                 logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
                             except Exception as e:
                                 logging.error(f"Erro ao processar nota fiscal: {e}")
                             if not nf:
-                                logging.error(f"Erro ao processar nota fiscal")
                                 #chave,data = extrair_dados_xml(xml_text)
                                 #nf = data['numero']
                                 continue
-                            print(f"Gerando relatorio financeiro: {nf.numero_nf()}")
                             path = os.path.join(temp_dir, 'relatorio_financeiro.xlsx')
                             print(f"Gerando relatorio financeiro: {path}")
                             tinicial=time.time()
-                            gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
+                            #gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
                             tfinal=time.time()
                             logging.info(f"Tempo de execução relatorio financeiro: {tfinal-tinicial} segundos")
                             cc = get_CC(nf.numero_nf)
@@ -146,16 +193,11 @@ def processar_emails():
                                     ))
                     for att in msg.attachments:
                         if att.filename.lower().endswith('.pdf'):
-                            print(f"Processando pdf: {att.filename} nnf: {nf.numero_nf}")
+                            print(f"Processando pdf: {att.filename} nnf: {nnf}")
                             tinicial=time.time()
                             if nf:
                                 try:
                                     print(f"Enviando pdf: ")
-                                    print('gravando upload')
-                                    Upload('NotaFiscal',nf.id, 1, \
-                                            f'NF {nf.numero_nf}.pdf', \
-                                            'application/pdf', \
-                                            att.payload)
                                     base64_pdf = base64.b64encode(att.payload).decode('utf-8')
                                     tfinal=time.time()
                                     logging.info(f"Tempo de execução: {tfinal-tinicial} segundos")
@@ -178,13 +220,36 @@ def processar_emails():
                                     logging.error(f"Erro ao enviar mensagem: {e}")
                                 
                                 anexos_processados.append((
-                                    f'NF {nf.numero_nf}.pdf',
+                                    f'NF {nnf}.pdf',
                                     att.content_type,
                                     att.payload
                                 ))
                     
-  
-                mailbox.flag(msg.uid, 'SEEN', True)
+                # Reenviar email com anexos processados
+                if False:
+                    if anexos_processados:
+
+                        corpo_html = f"""
+                        <html>
+                            <body>
+                                <p>Segue o email original de {msg.from_} com os anexos processados.</p>
+                                <p>Assunto original: {msg.subject}</p>
+                            </body>
+                        </html>
+                        """
+                        cte = '1234567890'
+                        nfe = '1234567890'
+                        enviar_email(
+                            destinatario=EMAIL_DESTINO,
+                            assunto=f"Documentos CTE ${cte} e NFe ${nfe} ",
+                            corpo_html=corpo_html,
+                            anexos=anexos_processados
+                        )
+                     # Marcar email como lido
+                        mailbox.flag(msg.uid, 'SEEN', True)
+                        logging.info(f'Email processado e reenviado com sucesso para {EMAIL_DESTINO}')
+             # Marcar email como lido
+            mailbox.flag(msg.uid, 'SEEN', True)
                        
 
 def procurar_anexos_xml():

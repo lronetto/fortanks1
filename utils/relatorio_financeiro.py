@@ -11,6 +11,7 @@ from models.database import db
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
 from models.nota_fiscal import CFOPS_VENDA,CFOPS_COMPRA
+from utils.arquivei import Arquivei
 
 def gerar_relatorio_financeiro(data_inicio=None, data_fim=None, output_path=None):
     """
@@ -42,25 +43,29 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None, output_path=None
     dados_relatorio = []
     tinicial=time.time()
     for nf in notas_fiscais:
-        tq = db.session.query(Tanque,Contrato,CentroCusto,NotaFiscalItem,NotaFiscal).\
-            join(Contrato,Contrato.id==Tanque.contrato_id).\
+        if Arquivei(nf.chave_acesso).cancelamento():
+                nf.status_processamento = 'cancelada'
+                db.session.commit(nf)
+        else:
+            tq = db.session.query(Tanque,Contrato,CentroCusto,NotaFiscalItem,NotaFiscal).\
+                join(Contrato,Contrato.id==Tanque.contrato_id).\
             join(CentroCusto,CentroCusto.id==Contrato.centro_custo_id).\
             join(NotaFiscalItem,NotaFiscalItem.codigo==Tanque.item_nf).\
             join(NotaFiscal,NotaFiscal.id==NotaFiscalItem.nf_id).\
-            filter(NotaFiscal.id==nf.id).first()
-        tanque = None   
-        contrato = None
-        centro_custo = None
-        nota_fiscal_item = None
-        nota_fiscal = None
-        if tq:
-            tanque = tq[0]
-            contrato = tq[1]
-            centro_custo = tq[2]
-            nota_fiscal_item = tq[3]
-            nota_fiscal = tq[4]
-            
-            # Calcular data prevista
+            filter(NotaFiscal.id==nf.id,NotaFiscal.status_processamento=='importado').first()
+            tanque = None   
+            contrato = None
+            centro_custo = None
+            nota_fiscal_item = None
+            nota_fiscal = None
+            if tq:
+                tanque = tq[0]
+                contrato = tq[1]
+                centro_custo = tq[2]
+                nota_fiscal_item = tq[3]
+                nota_fiscal = tq[4]
+                
+                # Calcular data prevista
             data_prevista = None
             if tanque and contrato:
                 data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
@@ -68,13 +73,15 @@ def gerar_relatorio_financeiro(data_inicio=None, data_fim=None, output_path=None
                 join(PlanoConta,PlanoConta.id==DadoAnalitico.plano_conta_id).\
                 filter(DadoAnalitico.documento.like("%"+nf.numero_nf.lstrip('0')+"%"),PlanoConta.codigo==118
                 ).first()
+            
             dados_relatorio.append({
                 'Data': nf.data_emissao,  # Mantém como datetime para ordenação
-                'Centro de Custo': centro_custo.codigo if centro_custo else 'Não definido',
+                'Centro de Custo': dados_analiticos.centro_custo.codigo if dados_analiticos else centro_custo.codigo if centro_custo else 'Não definido',
                 'Nota Fiscal': nf.numero_nf,
                 'Valor': float(nf.valor_total),
-                'Data Prevista': data_prevista,  # Mantém como datetime para ordenação
-                'Pago': dados_analiticos.data_pagamento if dados_analiticos else 'Não'
+                'Data Prevista': data_prevista if tanque and contrato else 'Não definido',  # Mantém como datetime para ordenação
+                'Pago': dados_analiticos.data_pagamento if dados_analiticos else 'Não',
+                'Status': nf.status_processamento
             })
     tfinal=time.time()
     print(f"Tempo de execução dados_relatorio: {tfinal-tinicial} segundos")

@@ -30,7 +30,6 @@ def index():
 def novo():
     """Cria uma nova concretagem"""
     tanques = Tanque.query.order_by(Tanque.nome).all()
-    usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc()).all()
     
     if request.method == 'POST':
         try:
@@ -41,19 +40,18 @@ def novo():
             observacoes = request.form.get('observacoes', '')
             peca_ids = request.form.getlist('peca_ids')
             formas = request.form.getlist('formas')
-            usinagem_ids = request.form.getlist('usinagem_ids')
             
             # Validar dados
             if not tanque_ids or not data_concretagem or not pista or not peca_ids:
                 flash('Todos os campos obrigatórios devem ser preenchidos', 'danger')
-                return render_template('concretagens/novo.html', tanques=tanques, usinagens=usinagens)
+                return render_template('concretagens/novo.html', tanques=tanques)
             
             # Converter data
             try:
                 data_concretagem = datetime.strptime(data_concretagem, '%Y-%m-%d').date()
             except ValueError:
                 flash('Formato de data inválido', 'danger')
-                return render_template('concretagens/novo.html', tanques=tanques, usinagens=usinagens)
+                return render_template('concretagens/novo.html', tanques=tanques)
             
             # Criar nova concretagem
             concretagem = Concretagem(
@@ -68,18 +66,13 @@ def novo():
                 if tanque:
                     concretagem.adicionar_tanque(tanque)
             
-            # Adicionar peças com suas formas e usinagens
+            # Adicionar peças com suas formas
             for i, peca_id in enumerate(peca_ids):
                 peca = Peca.query.get(peca_id)
                 if peca and str(peca.tanque_id) in tanque_ids:
                     # Obter a forma correspondente, se existir
                     forma = formas[i] if i < len(formas) else None
-                    
-                    # Obter a usinagem correspondente, se existir
-                    usinagem_id = usinagem_ids[i] if i < len(usinagem_ids) and usinagem_ids[i] else None
-                    usinagem = UsinagemConcreto.query.get(usinagem_id) if usinagem_id else None
-                    
-                    concretagem.adicionar_peca(peca, forma, usinagem)
+                    concretagem.adicionar_peca(peca, forma)
             
             # Salvar no banco de dados
             concretagem.save()
@@ -91,7 +84,7 @@ def novo():
             db.session.rollback()
             flash(f'Erro ao cadastrar concretagem: {str(e)}', 'danger')
     
-    return render_template('concretagens/novo.html', tanques=tanques, usinagens=usinagens)
+    return render_template('concretagens/novo.html', tanques=tanques)
 
 @concretagem.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required

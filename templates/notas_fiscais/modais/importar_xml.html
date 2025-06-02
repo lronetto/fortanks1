@@ -1,0 +1,69 @@
+<!-- Modal de Importação de Nota Fiscal via XML/ZIP -->
+<div class="modal fade" id="modalImportarXML" tabindex="-1" aria-labelledby="modalImportarXMLLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarXMLLabel">Importar Nota Fiscal (XML ou ZIP)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formImportarXML" enctype="multipart/form-data" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Selecione um ou mais arquivos XML de nota fiscal ou um arquivo ZIP contendo vários XMLs.
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="xml_zip_files">Arquivos XML ou ZIP</label>
+                        <input type="file" id="xml_zip_files" name="xml_zip_files" class="form-control" accept=".xml,.zip" multiple required>
+                        <small class="form-text text-muted">Você pode selecionar múltiplos arquivos XML ou um único arquivo ZIP.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" id="btnImportarXML" class="btn btn-primary">
+                        <i class="fas fa-file-upload"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<!-- Script JS para submissão do modal de importação XML -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('formImportarXML');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            Swal.fire({
+                title: 'Importando...',
+                text: 'Aguarde enquanto os arquivos são processados.',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                willOpen: () => { Swal.showLoading(); }
+            });
+            fetch('/notas-fiscais/importar-xml', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                Swal.close();
+                if (data.success) {
+                    Swal.fire('Sucesso', data.message, 'success').then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire('Erro', data.message || 'Erro ao importar XML.', 'error');
+                }
+            })
+            .catch(error => {
+                Swal.close();
+                Swal.fire('Erro', 'Erro inesperado ao importar XML.', 'error');
+            });
+        });
+    }
+});
+</script> 
