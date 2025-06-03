@@ -131,24 +131,38 @@ def novo():
 def buscar_notas():
     if request.method == 'POST':
         try:
+            print(f'request.get_json(): {request.get_json()}')
             filtros = request.get_json()
             page = int(filtros.get('page', 1))
             per_page = int(filtros.get('per_page', 10))
             ids = filtros.get('ids', [])
             pagamento_filtro = filtros.get('pagamento', '')
+            valor_minimo = filtros.get('valor_minimo')
+            valor_maximo = filtros.get('valor_maximo')
             tinicial = time.time()
-            query = NotaFiscal.query
-            query = query.filter(NotaFiscal.cnpj_emitente.notlike('%27126997000187%'))
-            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notlike('%5949%')))
+            query = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada')
+            #query = query.filter(NotaFiscal.cnpj_emitente.notlike('%27126997000187%'))
+            #query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notlike('%5949%')))
             if filtros.get('numero'):
+                print(f'filtros["numero"]: {filtros["numero"]}')
                 query = query.filter(NotaFiscal.numero_nf.ilike(f'%{filtros["numero"]}%'))
             if filtros.get('fornecedor'):
+                print(f'filtros["fornecedor"]: {filtros["fornecedor"]}')
                 query = query.filter(NotaFiscal.nome_emitente.ilike(f'%{filtros["fornecedor"]}%'))
             if filtros.get('data_inicial'):
+                print(f'filtros["data_inicial"]: {filtros["data_inicial"]}')
                 query = query.filter(NotaFiscal.data_emissao >= filtros['data_inicial'])
             if filtros.get('data_final'):
+                print(f'filtros["data_final"]: {filtros["data_final"]}')
                 query = query.filter(NotaFiscal.data_emissao <= filtros['data_final'])
+            if valor_minimo:
+                print(f'valor_minimo: {valor_minimo}')
+                query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
+            if valor_maximo:
+                print(f'valor_maximo: {valor_maximo}')
+                query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
             if ids:
+                print(f'ids: {ids}')
                 query = query.filter(or_(NotaFiscal.id.in_(ids)))
             # Filtrar por pagamento
             notas = query.order_by(NotaFiscal.data_emissao.desc()).all()
@@ -193,6 +207,7 @@ def buscar_notas():
                 'has_prev': start > 0
             })
         except Exception as e:
+            print(f'request.get_json(): {str(e)}')
             return jsonify({'error': str(e)}), 400
     return jsonify({'error': 'Método não permitido'}), 405
 

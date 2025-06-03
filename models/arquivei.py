@@ -12,6 +12,14 @@ load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
 ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 class Arquivei: 
+    pdf = None
+    chave_acesso = None
+    xml_data = None
+    data_inicial = None
+    data_final = None
+    xml_datas = []
+    cancelada = False
+    
     def __init__(self, data_inicial=None, data_final=None, chave_acesso=None, xml_data=None,cancelamento=False,send=False):
         self.chave_acesso = chave_acesso
         self.xml_data = xml_data
@@ -200,6 +208,6 @@ class Arquivei:
         response_data = response.json() 
         print('get pdf')
         if response_data.get('status').get('code') == 200:
-            self._pdf = response_data.get('data').get('encoded_pdf')
+            self.pdf = response_data.get('data').get('encoded_pdf')
             #print('pdf: ',self._pdf)
     

@@ -121,8 +121,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     url: '/static/js/plugins/datatables/pt-BR.json'
                 },
                 order: [[1, 'desc']], // Ordenar por data de emissão (desc)
-                pageLength: 25,
-                responsive: true,
+                pageLength: 100,
+                responsive: false,
+                paging: false,
+                searching: false,
+                info: false,
                 columnDefs: [
                     {
                         // Coluna de data (índice 1)
@@ -314,11 +317,30 @@ document.addEventListener('DOMContentLoaded', function() {
             if (modalSelecionar) modalSelecionar.hide();
             
             // Verificar se precisa de conversão de unidades
-            if (materialUnidade && itemUnidade && materialUnidade.toUpperCase() !== itemUnidade.toUpperCase()) {
+            if (materialUnidade && itemUnidade && !compararUnidades(itemUnidade, materialUnidade)) {
                 abrirModalConversao(itemId, materialId, itemUnidade, materialUnidade);
             }
         }
     });
+    function compararUnidades(unidadeNota, unidadeMaterial) {
+        fetch('/notas-fiscais/api/comparar_unidades', {
+            method: 'POST',
+            body: JSON.stringify({unidadeNota, unidadeMaterial})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                return true;
+            } else {
+                return false;
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao comparar unidades:', error);
+            return false;
+        });
+    }
+                
 
     // ===== MODAL DE CONVERSÃO DE UNIDADES =====
     // Abrir modal de conversão de unidades

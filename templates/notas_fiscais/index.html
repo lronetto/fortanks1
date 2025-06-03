@@ -56,8 +56,8 @@
                     <label for="cnpj_emitente" class="form-label">CNPJ Emitente</label>
                     <select name="cnpj_emitente" id="cnpj_emitente" class="form-select">
                         <option value="">Todos</option>
-                        <option value="proprio" {% if cnpj_emitente == 'proprio' %}selected{% endif %}>Próprio</option>
-                        <option value="terceiros" {% if cnpj_emitente == 'terceiros' %}selected{% endif %}>Terceiros</option>
+                        <option value="proprio">Próprio</option>
+                        <option value="terceiros" selected>Terceiros</option>
                     </select>
                 </div>
                 <div class="col-md-3">

@@ -25,7 +25,7 @@ class Config:
     
     # Configurações de upload
     UPLOAD_FOLDER = os.path.join('static', 'uploads')
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 16MB
     
     # Configurações de paginação
     ITEMS_PER_PAGE = 10

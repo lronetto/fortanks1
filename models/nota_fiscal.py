@@ -17,7 +17,8 @@ import xml.etree.ElementTree as ET
 from decimal import Decimal
 import logging
 from models.upload import Upload
-from utils.arquivei import Arquivei
+from models.arquivei import Arquivei
+
 logger = logging.getLogger(__name__)
 load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
@@ -78,22 +79,36 @@ class NotaFiscal(db.Model):
         self.chave_acesso = chave_acesso
         self.id = id
         self.upload = None
+        
         if xml_data:
-            self = self.processar_nota_fiscal_xml()
+            resultado = self.processar_nota_fiscal_xml()
+            if resultado:
+                for key, value in resultado.__dict__.items():
+                    setattr(self, key, value)
+                
         if chave_acesso:
-            self = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+            nota = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+            if nota:
+                for key, value in nota.__dict__.items():
+                    setattr(self, key, value)
+                
         if id:
-            self = NotaFiscal.query.get_or_404(id)
-            upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first()
-            if not upload:
-                pdf_data = Arquivei(chave_acesso=self.chave_acesso).pdf
-                print(f'id: {self.id} chave: {self.chave_acesso}')
-                self.upload = Upload('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data)
-            else:
-                self.upload = upload
-            print('self.upload: ',self.upload)
-        return self
+            nota = NotaFiscal.query.get_or_404(id)
+            if nota:
+                for key, value in nota.__dict__.items():
+                    setattr(self, key, value)
+                    
+                upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first()
+                if not upload:
+                    pdf_data = Arquivei(chave_acesso=self.chave_acesso)
+                    print(f'pdf_data: {pdf_data}')
+                    print(f'id: {self.id} chave: {self.chave_acesso}')
+                    self.upload = Upload('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
+                else:
+                    self.upload = upload
+                print('self.upload: ',self.upload)
     
+
 
     def save(self):
         """
@@ -141,12 +156,9 @@ class NotaFiscal(db.Model):
         return (itens_importados / total_itens) * 100
     
     def get_pdf(self):
-        self.upload = Upload('NotaFiscal', self.id, 1)
-        if self.upload:
-            print('upload1: ',self.upload)
-            return self
-        else:
-            return False
+        return self.upload
+    def get_chave_acesso(self):
+        return self.chave_acesso
 
     def processar_nota_fiscal_xml(self):
         """
@@ -170,6 +182,7 @@ class NotaFiscal(db.Model):
             if nf:
                 logger.info(f"Nota {chave_acesso} já existe no banco de dados")
                 self.id=nf.id
+                self.tipo=nf.tipo
                 self.numero_nf=nf.numero_nf
                 self.chave_acesso=nf.chave_acesso
                 self.data_emissao=nf.data_emissao
@@ -366,10 +379,12 @@ class NotaFiscal(db.Model):
                     if fator_conversao:
                         item.fator_conversao_aplicado = fator_conversao
                         itens_vinculados += 1
+                        item.material_id = item_anterior.material_id
                     else:
                         item.fator_conversao_aplicado = fator_conversao
                         itens_vinculados += 1
                     item.save()
+        return itens_vinculados
     def importar_itens_para_estoque(self):
         for item in self.itens:
             item.importar_para_estoque()
@@ -519,7 +534,8 @@ class NotaFiscalItem(db.Model):
                 
             # Adicionar informação sobre conversão de unidade, se aplicável
             if self.fator_conversao_aplicado:
-                observacao += f" (Conversão: {self.quantidade} {self.unidade} → {self.quantidade} {self.unidade})"
+                self.quantidade = self.quantidade*self.fator_conversao_aplicado
+                observacao += f" (Conversão: {self.quantidade} {self.unidade} → {self.quantidade} {estoque.material.unidade_obj.nome})"
             
             # Registrar a quantidade atual antes da atualização para log
             quantidade_anterior = float(estoque.quantidade) if estoque.quantidade else 0
@@ -528,13 +544,13 @@ class NotaFiscalItem(db.Model):
             movimentacao = MovimentacaoEstoque(
                 estoque_id=estoque.id,
                 tipo_movimento='entrada',
-                quantidade=self.quantidade*(self.fator_conversao_aplicado if self.fator_conversao_aplicado else 1),
+                quantidade=self.quantidade,
                 data_movimento=self.nota_fiscal.data_emissao,
                 nota_fiscal_item_id=self.id,
                 origem_tipo='NotaFiscal',
                 origem_id=self.nota_fiscal.id,
                 observacao=observacao,
-                usuario_id=usuario_id
+                usuario_id=current_user.id
             )
             
             # Salvar movimentação (isso vai atualizar o estoque automaticamente)
@@ -556,17 +572,10 @@ class NotaFiscalItem(db.Model):
             self.importado_estoque = True
             self.data_importacao_estoque = datetime.now()
             self.usuario_importacao_id = usuario_id
-            self.status_importacao = 'Importado'
+            self.status_importacao = 'importado'
             self.ultima_tentativa_importacao = datetime.now()
             self.tentativas_importacao += 1
             
-            # Verificar se é uma importação automática baseada na observação
-            if observacao and "Importação automática" in observacao:
-                import json
-                self.dados_adicionais = json.dumps({
-                    "importacao_automatica": True,
-                    "data_importacao_automatica": datetime.now().isoformat()
-                })
             
             self.save()
             

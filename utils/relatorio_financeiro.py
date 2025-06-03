@@ -11,7 +11,7 @@ from models.database import db
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
 from models.nota_fiscal import CFOPS_VENDA,CFOPS_COMPRA
-from utils.arquivei import Arquivei
+from models.arquivei import Arquivei
 
 def gerar_relatorio_financeiro(data_inicio=None, data_fim=None, output_path=None):
     """

@@ -81,8 +81,8 @@
                             <td>{{ transf.nome_item }}</td>
                             <td>{{ transf.codigo_item }}</td>
                             <td>{{ transf.numero_nf }}</td>
-                            <td>{{ transf.cnpj_emitente }}</td>
-                            <td>{{ transf.cnpj_destinatario }}</td>
+                            <td>{{ transf.nome_emitente }}</td>
+                            <td>{{ transf.nome_destinatario }}</td>
                             <td>{% if transf.tipo_nota == 0 %}Entrada{% elif transf.tipo_nota == 1 %}Saída{% else %}{{ transf.tipo_nota }}{% endif %}</td>
                             <td>{{ '%.2f'|format(transf.quantidade) }}</td>
                             <td>R$ {{ '%.2f'|format(transf.valor) }}</td>

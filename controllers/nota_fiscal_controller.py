@@ -20,7 +20,7 @@ from forms.nota_fiscal_forms import NotaFiscalImportForm # Import para formulár
 from scripts.robo_email_nf import processar_emails
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from scripts.verificar_cancelamento import verificar
-from utils.arquivei import Arquivei
+from models.arquivei import Arquivei
 from scripts.processar_email_pdf import processar_emails
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
@@ -69,7 +69,7 @@ def index():
     """
     # Parâmetros de Paginação
     page = request.args.get('page', 1, type=int)
-    per_page = current_app.config.get('NOTAS_FISCAIS_PER_PAGE', 20) # Pegar da config ou usar 20
+    per_page = 100 # Pegar da config ou usar 20
     
     # Obter parâmetros de filtro
     busca = request.args.get('busca', '')
@@ -572,11 +572,11 @@ def gerar_pdf(id):
     """
     try:
         nota = NotaFiscal(id=id)
-        print(f'nota: {nota.chave_acesso}')
-        pdf = nota.upload
+        print(f'nota: {nota.get_chave_acesso()}')
+        pdf = nota.get_pdf()
         print('pdf: ',pdf)
         if pdf:
-            response = make_response(pdf.blob)
+            response = make_response(base64.b64decode(pdf.blob))
             response.headers['Content-Type'] = 'application/pdf'
             response.headers['Content-Disposition'] = f'inline; filename=nota_fiscal_{nota.numero_nf}.pdf'
             return response
@@ -595,7 +595,7 @@ def importar_itens():
     Interface para importar itens da nota fiscal para estoque
     """
     if request.method == 'POST':
-        try:
+       # try:
            # print(f"Request form: {request.form}")
             # Processar os itens selecionados
             itens = json.loads(request.form.get('itens'))
@@ -615,13 +615,20 @@ def importar_itens():
                     item1.fator_conversao_aplicado = 1
                 item1.save()
                 db.session.refresh(item1)
-                item1.importar_para_estoque(usuario_id=current_user.id, 
-                                      centro_custo_id=request.form.get('centro_custo_id'), 
-                                      observacao=request.form.get('observacao'))
+                cnpj_emitente = NotaFiscal.query.\
+                    join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
+                    filter(NotaFiscalItem.id==item_id).first().cnpj_emitente
+        
+                notas_fiscais = NotaFiscal.query.\
+                    filter(NotaFiscal.cnpj_emitente==cnpj_emitente).all()
+                for nota_fiscal in notas_fiscais:
+                    nota_fiscal.vincular_automaticamente()
+                    nota_fiscal.importar_itens_para_estoque()
+                
             return jsonify({'success': True, 'message': f'Item {item_id} importado com sucesso!'})
-        except Exception as e:
-            logger.error(f"Erro ao importar itens: {str(e)}")
-            return jsonify({'success': False, 'message': f'Erro ao importar itens: {str(e)}'}), 500
+       # except Exception as e:
+       #     logger.error(f"Erro ao importar itens: {str(e)}")
+       #     return jsonify({'success': False, 'message': f'Erro ao importar itens: {str(e)}'}), 500
     return jsonify({'success': False, 'message': 'Método inválido'}), 405
 def importar_estoque(id):
     """
@@ -767,6 +774,16 @@ def api_vincular_material(item_id):
         # Atualizar o item da nota fiscal
         item.material_id = material_id
         item.save()
+
+        cnpj_emitente = NotaFiscal.query.\
+            join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
+            filter(NotaFiscalItem.id==item_id).first().cnpj_emitente
+        
+        notas_fiscais = NotaFiscal.query.\
+            filter(NotaFiscal.cnpj_emitente==cnpj_emitente).all()
+        for nota_fiscal in notas_fiscais:
+            nota_fiscal.vincular_automaticamente()
+            nota_fiscal.importar_itens_para_estoque(usuario_id=current_user.id)
             
         return jsonify({
             'success': True,
@@ -1086,23 +1103,30 @@ def importar_todas_pendentes():
     """
     try:
         # Buscar todas as notas fiscais
-        notas_fiscais = NotaFiscal.query.all()
+        notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada').all()
         
         itens_importados = 0
         notas_processadas = 0
-        
+        notas_importadas = 0
+        notas_canceladas = 0
         # Para cada nota fiscal
+        total_notas = len(notas_fiscais)
         for nota_fiscal in notas_fiscais:
+            notas_processadas += 1
             if(Arquivei(chave_acesso=nota_fiscal.chave_acesso,cancelamento=True).cancelada):
                 nota_fiscal.status_processamento = 'cancelada'
                 nota_fiscal.save()
-                continue
-            nota_teve_importacao = False
-            nota_fiscal.vincular_automaticamente()
-            nota_fiscal.importar_itens_para_estoque()
-            if nota_teve_importacao:
-                notas_processadas += 1
+                notas_canceladas+=1
+            else:
+                nota_teve_importacao = False
+                itens_vinculados = nota_fiscal.vincular_automaticamente()
+                if itens_vinculados > 0:
+                    nota_fiscal.importar_itens_para_estoque()
+                    notas_importadas+=1
+                
         
+            print(f'{notas_processadas} - {notas_importadas} - {notas_canceladas} - {total_notas}')
+
         if itens_importados > 0:
             flash(f"{itens_importados} itens de {notas_processadas} notas fiscais foram importados automaticamente para o estoque.", "success")
         else:
@@ -1163,6 +1187,25 @@ def api_material_por_id(id):
     except Exception as e:
         logger.error(f'Erro ao buscar material por ID: {str(e)}')
         return jsonify({'error': f'Erro ao buscar material: {str(e)}', 'material': None}), 500
+
+
+@nota_fiscal_bp.route('/api/comparar-unidades', methods=['POST'])
+@login_required
+def api_comparar_unidades():
+    """
+    API para comparar unidades de nota fiscal e material
+    """
+    try:
+        unidade_nota = request.json.get('unidadeNota')
+        unidade_material = request.json.get('unidadeMaterial')
+
+        if comparar_unidades(unidade_nota, unidade_material):
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False})
+    except Exception as e:
+        logger.error(f'Erro ao comparar unidades: {str(e)}')
+        return jsonify({'error': f'Erro ao comparar unidades: {str(e)}', 'success': False}), 500
 
 @nota_fiscal_bp.route('/api/importar-item-estoque/<int:item_id>', methods=['POST'])
 @login_required
@@ -1594,11 +1637,14 @@ def analise_transferencias():
         NotaFiscalItem.codigo.label('codigo_item'),
         NotaFiscal.cnpj_emitente,
         NotaFiscal.cnpj_destinatario,
+        NotaFiscal.nome_emitente,
+        NotaFiscal.nome_destinatario,
         NotaFiscal.tipo.label('tipo_nota'),
         NotaFiscalItem.quantidade,
         NotaFiscalItem.valor_total.label('valor'),
         NotaFiscal.data_emissao.label('data')
     ).join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+    query = query.filter(NotaFiscal.status_processamento !='cancelada')
 
     # Filtros
     if filtro_data_inicio:

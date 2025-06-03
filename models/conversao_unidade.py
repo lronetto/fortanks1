@@ -1,7 +1,7 @@
 from datetime import datetime
 from .database import db
 UNIDADES_IGUAIS = [
-    ['UN','UND','UNIDADE','UNIDADES','UNID','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID.','UNID'],
+    ['UN','UND','UNIDADE','UNIDADES','UNID','UNID.','PAR','PR','PC','PA'],
     ['KG','KILOS','Kg'],
     ['GALAO','GALAO','Galao'],
     ['PCT','PCT','Pct'],
@@ -13,8 +13,6 @@ UNIDADES_IGUAIS = [
     ['G','G','G'],
     ['ML','ML','Ml'],
     ['CM','CM','Cm'],
-    ['CX','CX','Cx'],
-    ['PAR','PAR','Par'],
     ['MIL','MIL','Mil'],
     ['MIL','MIL','Mil'],
 ]
@@ -24,7 +22,7 @@ def comparar_unidades(unidade_entrada, unidade_saida):
     if unidade_entrada == unidade_saida:
         return True
     else:       
-        for unidade in UNIDADES_IGUAIS.values():
+        for unidade in UNIDADES_IGUAIS:
             if unidade_entrada in unidade and unidade_saida in unidade:
                 return True
             else:
