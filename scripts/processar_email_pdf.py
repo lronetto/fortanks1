@@ -15,6 +15,7 @@ from reportlab.lib.utils import ImageReader
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from models.nota_fiscal import NotaFiscal
 from models.upload import Upload
+from models.arquivei import Arquivei
 import re
 import unicodedata
 
@@ -395,8 +396,6 @@ def processar_notas_fiscais():
         cc = None
         for msg in emails:
             print(msg.subject)
-            if ASSUNTO_PADRAO_CTE in msg.subject:
-                logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
 
             if ASSUNTO_PADRAO_NFE in msg.subject:
                 logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
@@ -413,6 +412,7 @@ def processar_notas_fiscais():
                             try:
                                 tinicial=time.time()
                                 nf=NotaFiscal(xml_data=att.payload)
+                                Arquivei(xml_data=att.payload)
                                 tfinal=time.time()
                                 logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
                             except Exception as e:
@@ -480,12 +480,12 @@ def processar_notas_fiscais():
                                             "media": base64_pdf}
 
                                     }
-                                    response = enviar_mensagem(payload,tipo='sendMedia')
+                                    #response = enviar_mensagem(payload,tipo='sendMedia')
                                     #print(f"Resposta: {response}")
                                     tfinal1=time.time()
                                     logging.info(f"Tempo de execução1: {tfinal1-tfinal} segundos")
-                                    if response:
-                                        key = response.get('key')
+                                    #if response:
+                                    #    key = response.get('key')
                                 except Exception as e:
                                     logging.error(f"Erro ao enviar mensagem: {e}")
                                 

@@ -28,6 +28,9 @@ class Arquivei:
         self.xml_datas = []
         self.pdf = None
         self.cancelada = False
+        if xml_data:
+            self.xml_data = xml_data
+            self.upload()
         if data_inicial and data_final:
             print('processando arquivei')
             self.processar_arquivei()

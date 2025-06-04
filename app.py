@@ -331,11 +331,17 @@ def handle_exception(e):
                                error_message=description), code
 
 
-def job_email():
+def job_email5min():
+    with app.app_context():
+        #processar_protocolos()
+        #processar_reembolsos()
+        processar_notas_fiscais()
+
+def job_email15min():
     with app.app_context():
         processar_protocolos()
         processar_reembolsos()
-
+        #processar_notas_fiscais()
 def job_diario():
     """
     Job que executa uma vez por dia
@@ -366,7 +372,11 @@ def gerenciar_scheduler():
             app.scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')
             
             # Adiciona o job de email (a cada 5 minutos)
-            app.scheduler.add_job(job_email, 'cron', minute='*/5')
+            app.scheduler.add_job(job_email5min, 'cron', minute='*/5')
+            logger.info("Job de email adicionado ao scheduler")
+
+             # Adiciona o job de email (a cada 5 minutos)
+            app.scheduler.add_job(job_email15min, 'cron', minute='*/15')
             logger.info("Job de email adicionado ao scheduler")
             
             # Adiciona o job diário (todos os dias às 00:00)

@@ -25,6 +25,7 @@ from scripts.processar_email_pdf import processar_protocolos, processar_reembols
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
 from models.nota_fiscal import CNPJS
+from models.dados_analiticos import DadoAnalitico
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -140,10 +141,23 @@ def index():
     # Executar a paginação
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     notas_fiscais_pagina = pagination.items # Itens para a página atual
+    notas_fiscais_pagina_upload = []
+    for nota in notas_fiscais_pagina:
+        nota.upload = None
+        nota.pago = False
+        dadosAnaliticos = DadoAnalitico.query.filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
+                                                       DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
+                                                       DadoAnalitico.valor == nota.valor_total).first()
+        if dadosAnaliticos:
+            nota.pago = True
+        if Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').first():
+            nota.upload = Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').first()
+        notas_fiscais_pagina_upload.append(nota)
+        
     
     return render_template('notas_fiscais/index.html', 
                           pagination=pagination, # Passar objeto de paginação
-                          notas_fiscais=notas_fiscais_pagina, # Manter para compatibilidade ou remover e usar pagination.items no template
+                          notas_fiscais=notas_fiscais_pagina_upload, # Manter para compatibilidade ou remover e usar pagination.items no template
                           status_importacao=status_importacao,
                           busca=busca,
                           item_nome=item_nome,
