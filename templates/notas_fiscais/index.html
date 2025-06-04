@@ -133,6 +133,13 @@
                                             N/A {# Ou status Indefinido #}
                                         {% endif %}
                                     </span>
+                                    
+                                    {# Verificar se tem documentos anexados #}
+                                    {% if nf.upload %}
+                                        <span class="badge bg-info ms-1" title="Documentos anexados">
+                                            <i class="fas fa-paperclip"></i>
+                                        </span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
                             <td>
@@ -152,6 +159,10 @@
                                     <button type="button" class="btn btn-sm btn-danger excluir-nota" 
                                             data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Excluir">
                                         <i class="fas fa-trash"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-info visualizar-documentos" 
+                                            data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Documentos">
+                                        <i class="fas fa-file-alt"></i>
                                     </button>
                                 </div>
                             </td>
@@ -211,7 +222,7 @@
 {% include 'notas_fiscais/modais/importar_arquivei.html' %}
 {% include 'notas_fiscais/modais/excluir_nota.html' %}
 {% include 'notas_fiscais/modais/importar_xml.html' %}
-
+{% include 'notas_fiscais/modais/documentos.html' %}
 <!-- Modal para Visualizar PDF -->
 <div class="modal fade" id="modalVisualizarPDF" tabindex="-1" aria-labelledby="modalVisualizarPDFLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
@@ -226,6 +237,7 @@
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block extra_css %}
@@ -267,52 +279,52 @@ $(document).ready(function() {
         e.preventDefault();
         var notaId = $(this).data('id');
         abrirPdfNota(notaId);
-    
     });
+
     function abrirPdfNota(notaId) {
-    const iframe = document.getElementById('pdfViewer');
-    iframe.src = '';
-    const modalEl = document.getElementById('modalVisualizarPDF');
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
+        const iframe = document.getElementById('pdfViewer');
+        iframe.src = '';
+        const modalEl = document.getElementById('modalVisualizarPDF');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
 
-    // Remove mensagens/elementos antigos
-    let oldMsg = modalEl.querySelector('.pdf-erro-msg');
-    if (oldMsg) oldMsg.remove();
-    let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
-    if (oldSpinner) oldSpinner.remove();
+        // Remove mensagens/elementos antigos
+        let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+        if (oldMsg) oldMsg.remove();
+        let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+        if (oldSpinner) oldSpinner.remove();
 
-    // Exibe loading
-    iframe.style.display = 'none';
-    let loading = document.createElement('div');
-    loading.id = 'pdfLoadingSpinner';
-    loading.className = 'd-flex justify-content-center align-items-center';
-    loading.style.height = '100%';
-    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
-    iframe.parentNode.appendChild(loading);
+        // Exibe loading
+        iframe.style.display = 'none';
+        let loading = document.createElement('div');
+        loading.id = 'pdfLoadingSpinner';
+        loading.className = 'd-flex justify-content-center align-items-center';
+        loading.style.height = '100%';
+        loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+        iframe.parentNode.appendChild(loading);
 
-    fetch(`/notas-fiscais/pdf/${notaId}`)
-        .then(response => {
-            if (!response.ok) throw new Error('Erro ao buscar PDF');
-            return response.blob();
-        })
-        .then(blob => {
-            const url = URL.createObjectURL(blob);
-            iframe.src = url;
-            iframe.onload = () => {
-                iframe.style.display = '';
+        fetch(`/notas-fiscais/pdf/${notaId}`)
+            .then(response => {
+                if (!response.ok) throw new Error('Erro ao buscar PDF');
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                iframe.src = url;
+                iframe.onload = () => {
+                    iframe.style.display = '';
+                    if (loading) loading.remove();
+                };
+            })
+            .catch(() => {
                 if (loading) loading.remove();
-            };
-        })
-        .catch(() => {
-            if (loading) loading.remove();
-            iframe.style.display = 'none';
-            let msg = document.createElement('div');
-            msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
-            msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
-            iframe.parentNode.appendChild(msg);
-        });
-}
+                iframe.style.display = 'none';
+                let msg = document.createElement('div');
+                msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+                msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+                iframe.parentNode.appendChild(msg);
+            });
+    }
 });
 </script>
 {% endblock %} 

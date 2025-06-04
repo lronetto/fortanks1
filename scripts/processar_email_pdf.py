@@ -15,6 +15,8 @@ from reportlab.lib.utils import ImageReader
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from models.nota_fiscal import NotaFiscal
 from models.upload import Upload
+import re
+import unicodedata
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -22,61 +24,371 @@ from evolutionapi.client import EvolutionClient
 from evolutionapi.models.message import TextMessage, QuotedMessage
 import requests
 import time
-# Carregar variáveis de ambiente
-load_dotenv()
 
-EVOLUTION_API_INSTANCE= os.getenv('EVOLUTION_API_INSTANCE')
-EVOLUTION_API_TOKEN= os.getenv('EVOLUTION_API_TOKEN')
-ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
-ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
+def carregar_variaveis_ambiente():
+    """
+    Carrega as variáveis de ambiente do arquivo .env
+    """
+    load_dotenv(override=True)
+    return {
+        'IMAP_HOST': os.getenv('IMAP_HOST'),
+        'IMAP_USER': os.getenv('IMAP_USER'),
+        'IMAP_PASS': os.getenv('IMAP_PASS'),
+        'EVOLUTION_API_INSTANCE': os.getenv('EVOLUTION_API_INSTANCE'),
+        'EVOLUTION_API_TOKEN': os.getenv('EVOLUTION_API_TOKEN'),
+        'ARQUIVEI_API_KEY': os.getenv('ARQUIVEI_API_KEY'),
+        'ARQUIVEI_API_ID': os.getenv('ARQUIVEI_API_ID')
+    }
 
-
-def enviar_mensagem(payload,tipo='sendText'):
-    url = f"http://192.168.8.150:8081/message/{tipo}/{EVOLUTION_API_INSTANCE}"
+def enviar_mensagem(payload, tipo='sendText'):
+    env = carregar_variaveis_ambiente()
+    url = f"http://192.168.8.150:8081/message/{tipo}/{env['EVOLUTION_API_INSTANCE']}"
     headers = {
-        "apikey": EVOLUTION_API_TOKEN,
+        "apikey": env['EVOLUTION_API_TOKEN'],
         "Content-Type": "application/json"
     }
 
     try:
-        response = requests.request('POST',url, headers=headers, json=payload)
+        response = requests.request('POST', url, headers=headers, json=payload)
         return response.json()
     except Exception as e:
         logging.error(f'Erro ao enviar mensagem: {e}')
         return None
-    
+
 def get_CC(nnf):
-    from models.nota_fiscal import NotaFiscal,NotaFiscalItem
+    from models.nota_fiscal import NotaFiscal, NotaFiscalItem
     from models.centro_custo import CentroCusto
     from models.contrato import Contrato
     from models.tanque import Tanque
     cc = db.session.query(CentroCusto).\
     join(Contrato).\
     join(Tanque).\
-    join(NotaFiscalItem,NotaFiscalItem.codigo == Tanque.item_nf).\
-    join(NotaFiscal,NotaFiscal.id == NotaFiscalItem.nf_id).\
-    filter(NotaFiscal.numero_nf == nnf,NotaFiscal.cnpj_emitente.like('%27126997000187%')).first()
+    join(NotaFiscalItem, NotaFiscalItem.codigo == Tanque.item_nf).\
+    join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id).\
+    filter(NotaFiscal.numero_nf == nnf, NotaFiscal.cnpj_emitente.like('%27126997000187%')).first()
     print(cc)
     return cc.codigo
 
-IMAP_HOST = os.getenv('IMAP_HOST')
-IMAP_USER = os.getenv('IMAP_USER')
-IMAP_PASS = os.getenv('IMAP_PASS')
-IMAP_FOLDER = 'sfortanks'
+# Constantes que não dependem de variáveis de ambiente
+IMAP_FOLDER = 'Inbox'
 ASSUNTO_PADRAO_NFE = 'Envio de Nota Fiscal Eletrônica'
 ASSUNTO_PADRAO_CTE = 'Envio de Nota Fiscal Eletrônica - DUA'
-EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'  # Email para reenvio
-IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'  # Ajuste para o caminho da sua imagem
-
-#difal
-#NUMBER_WHATSAPP = '120363399210607974@g.us'
+ASSUNTO_PADRAO_PROTOCOLO = 'ENC: NF\'S PROTOCOLOS'
+EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
+IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
 NUMBER_WHATSAPP = '5527996440664-1630085280@g.us'
-def processar_emails():
-    if not IMAP_HOST or not IMAP_USER or not IMAP_PASS:
+
+def normalizar_texto(texto):
+    """
+    Remove acentos e caracteres especiais do texto
+    Exemplo: 'CENTRALFER - CENTRAL DE FERRO LTDA' -> 'CENTRALFER - CENTRAL DE FERRO LTDA'
+    """
+    if not texto:
+        return texto
+        
+    # Normaliza o texto (NFKD) e remove os caracteres diacríticos
+    texto = unicodedata.normalize('NFKD', texto)
+    
+    # Remove caracteres não ASCII
+    texto = ''.join(c for c in texto if not unicodedata.combining(c))
+    
+    # Substitui caracteres específicos
+    substituicoes = {
+        'ç': 'c', 'Ç': 'C',
+        'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
+        'Á': 'A', 'À': 'A', 'Ã': 'A', 'Â': 'A', 'Ä': 'A',
+        'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+        'É': 'E', 'È': 'E', 'Ê': 'E', 'Ë': 'E',
+        'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+        'Í': 'I', 'Ì': 'I', 'Î': 'I', 'Ï': 'I',
+        'ó': 'o', 'ò': 'o', 'õ': 'o', 'ô': 'o', 'ö': 'o',
+        'Ó': 'O', 'Ò': 'O', 'Õ': 'O', 'Ô': 'O', 'Ö': 'O',
+        'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+        'Ú': 'U', 'Ù': 'U', 'Û': 'U', 'Ü': 'U',
+        'ý': 'y', 'ÿ': 'y',
+        'Ý': 'Y', 'Ÿ': 'Y',
+        'ñ': 'n', 'Ñ': 'N',
+        '/': '.',  # Substitui / por .
+        '\\': '.', # Substitui \ por .
+        '&': 'E',  # Substitui & por E
+        'E.': 'E', # Remove ponto após E
+        ' S.A': ' SA', # Normaliza S.A
+        ' S/A': ' SA', # Normaliza S/A
+        ' LTDA': ' LTDA', # Normaliza LTDA
+        ' ME': ' ME', # Normaliza ME
+        ' EPP': ' EPP', # Normaliza EPP
+        '.': '', # Remove ponto
+    }
+    
+    for char, replacement in substituicoes.items():
+        texto = texto.replace(char, replacement)
+    
+    # Remove espaços extras
+    texto = ' '.join(texto.split())
+    
+    return texto
+
+def extrair_numero_fornecedor_do_nome(nome_arquivo):
+    """
+    Extrai o número da nota fiscal e o nome do fornecedor do nome do arquivo
+    Suporta os seguintes formatos:
+    - O FORTE DOS PARAFUSOS E FERRAMENTAS LTDA - NF 298.590.pdf (Reembolso)
+    - NF162.876 - ES PRODUTOS SIDERURGICOS LTDA.pdf (Protocolo)
+    - 03-07-2025 - NF 80.540 - ARCELORMITTAL BRASIL S.A.pdf (Protocolo)
+    - 08-06-2025 - NF 2810 - HOLANDA ENGENHARIA LTDA.pdf (Protocolo)
+    - 09-06-2025 - FL 3364 - JACKTRACKER GEOPROCESSAMENTO LTDA.pdf (Protocolo)
+    - Protocolo 264231708.pdf (Protocolo)
+    """
+    try:
+        logging.info(f"Processando arquivo: {nome_arquivo}")
+        
+        # Remove a extensão .pdf
+        nome_sem_ext = nome_arquivo.replace('.pdf', '')
+        logging.info(f"Nome sem extensão: {nome_sem_ext}")
+        
+        # Se for um protocolo simples
+        if nome_sem_ext.startswith('Protocolo'):
+            numero_protocolo = nome_sem_ext.replace('Protocolo', '').strip()
+            logging.info(f"Protocolo simples encontrado: {numero_protocolo}")
+            return numero_protocolo, 'PROTOCOLO'
+            
+        # Verifica se o formato é "FORNECEDOR - NF NUMERO" (Reembolso)
+        if ' - NF ' in nome_sem_ext:
+            partes = nome_sem_ext.split(' - NF ')
+            logging.info(f"Partes do nome (reembolso): {partes}")
+            if len(partes) == 2:
+                fornecedor = partes[0].strip()
+                numero_nf = partes[1].replace('.', '').strip()
+                logging.info(f"Reembolso encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
+                return numero_nf, fornecedor
+            
+        # Procura por NF, FL ou CTE no nome (Protocolo)
+        if 'NF ' in nome_sem_ext:
+            prefixo = 'NF '
+        elif 'FL ' in nome_sem_ext:
+            prefixo = 'FL '
+        elif 'CTE ' in nome_sem_ext:
+            prefixo = 'CTE '
+        else:
+            logging.info("Nenhum prefixo encontrado")
+            return None, None
+            
+        # Encontra a posição do prefixo
+        pos_prefixo = nome_sem_ext.find(prefixo)
+        if pos_prefixo == -1:
+            logging.info(f"Prefixo {prefixo} não encontrado na posição esperada")
+            return None, None
+            
+        # Pega o texto após o prefixo
+        texto_apos_prefixo = nome_sem_ext[pos_prefixo + len(prefixo):]
+        logging.info(f"Texto após prefixo: {texto_apos_prefixo}")
+        
+        # Encontra o próximo hífen
+        pos_proximo_hifen = texto_apos_prefixo.find(' - ')
+        if pos_proximo_hifen == -1:
+            logging.info("Hífen não encontrado após o número")
+            return None, None
+            
+        # Extrai o número (do prefixo até o próximo hífen)
+        numero_parte = texto_apos_prefixo[:pos_proximo_hifen].strip()
+        # Remove pontos e espaços do número
+        numero_nf = numero_parte.replace('.', '').replace(' ', '')
+        
+        # O resto é o nome do fornecedor
+        fornecedor = normalizar_texto(texto_apos_prefixo[pos_proximo_hifen + 3:].strip())
+        
+        logging.info(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
+        return numero_nf, fornecedor
+    except Exception as e:
+        logging.error(f"Erro ao extrair número e fornecedor do nome do arquivo: {e}")
+        return None, None
+
+def extrair_chave_acesso_pdf(pdf_data):
+    """
+    Tenta extrair a chave de acesso do PDF
+    Retorna a chave de acesso se encontrada, None caso contrário
+    """
+    try:
+        # Criar um objeto BytesIO com os dados do PDF
+        pdf_file = io.BytesIO(pdf_data)
+        
+        # Ler o PDF
+        pdf_reader = PdfReader(pdf_file)
+        
+        # Procurar a chave de acesso em todas as páginas
+        for page in pdf_reader.pages:
+            text = page.extract_text()
+            
+            # Padrão para chave de acesso (44 dígitos)
+            padrao = r'[0-9]{44}'
+            matches = re.findall(padrao, text)
+            
+            for match in matches:
+                # Verificar se é uma chave de acesso válida (começa com 35, 36, 37, 38, 39, 41, 42, 43, 44)
+                if match.startswith(('35', '36', '37', '38', '39', '41', '42', '43', '44')):
+                    return match
+                    
+        return None
+    except Exception as e:
+        logging.error(f"Erro ao extrair chave de acesso do PDF: {e}")
+        return None
+
+def processar_protocolos():
+    """
+    Processa emails com o assunto NF'S PROTOCOLOS e faz upload dos PDFs para as notas fiscais existentes
+    """
+    env = carregar_variaveis_ambiente()
+    if not env['IMAP_HOST'] or not env['IMAP_USER'] or not env['IMAP_PASS']:
         logging.error('Credenciais IMAP não configuradas corretamente.')
         return
 
-    with MailBox(host=IMAP_HOST, port=993, timeout=400).login(IMAP_USER, IMAP_PASS) as mailbox:
+    print('processar_protocolos')
+    with MailBox(host=env['IMAP_HOST'], port=993, timeout=400).login(env['IMAP_USER'], env['IMAP_PASS']) as mailbox:
+        print(f'buscando emails {mailbox.login_result}')
+        try:
+            # Buscar e-mails não lidos com o assunto de protocolos
+            emails = mailbox.fetch(AND(seen=False, subject=ASSUNTO_PADRAO_PROTOCOLO, from_='leandro.netto@fortanks.ind.br'))
+        except Exception as e:
+            logging.error(f"Erro ao buscar emails: {e}")
+            return
+        for msg in emails:
+            logging.info(f'Processando email de protocolo: {msg.subject}')
+            
+            for att in msg.attachments:
+                if att.filename.lower().endswith('.pdf'):
+                    # Ignora arquivos que contenham 'protocolo' no nome
+                    if 'protocolo' in att.filename.lower():
+                        logging.info(f"Ignorando arquivo de protocolo: {att.filename}")
+                        continue
+                        
+
+                    # Se não encontrou a chave de acesso, tenta pelo número e fornecedor
+                    numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(att.filename)
+                    
+                    print(f"Numero NF: {numero_nf} Fornecedor: {fornecedor}")
+                    if not numero_nf or not fornecedor:
+                        logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {att.filename}")
+                        continue
+                    
+                    # Buscar a nota fiscal no banco de dados
+                    from models.nota_fiscal import NotaFiscal
+                    from sqlalchemy import func
+                    
+                    # Primeiro busca todas as notas com o número correspondente
+                    notas = NotaFiscal.query.filter(NotaFiscal.numero_nf.like(f'%{numero_nf}%')).all()
+                    
+                    # Depois procura a que tem o nome do emitente normalizado correspondente
+                    nota = None
+                    fornecedor_normalizado = normalizar_texto(fornecedor)
+                    for n in notas:
+                        emitente_normalizado = normalizar_texto(n.nome_emitente)
+                        # Verifica se o nome do fornecedor está contido no nome do emitente
+                        if fornecedor_normalizado in emitente_normalizado:
+                            nota = n
+                            break
+                    
+                    if nota:
+                        try:
+                            if Upload('NotaFiscal', nota.id, 2, att.filename, 'application/pdf'):
+                                logging.info(f"PDF ja existe {numero_nf}")
+                            else:
+                                Upload('NotaFiscal', nota.id, 2, att.filename, 'application/pdf', att.payload)
+                                logging.info(f"PDF protocolo enviado com sucesso para a NF {numero_nf}")
+                        except Exception as e:
+                            logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
+                    else:
+                        print(f"Nota fiscal {numero_nf} não encontrada no sistema")
+                        if not Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf'):
+                            Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf', att.payload)
+                        else:
+                            logging.info(f"PDF protocolo ja existe {numero_nf}")
+                        logging.warning(f"Nota fiscal {numero_nf} não encontrada no sistema")
+        
+            # Marcar o email como lido
+            mailbox.flag(msg.uid, 'SEEN', True)
+        
+def processar_reembolsos():
+    """
+    Processa emails com o assunto REEMBOLSO e faz upload dos PDFs para as notas fiscais existentes
+    """
+    env = carregar_variaveis_ambiente()
+    if not env['IMAP_HOST'] or not env['IMAP_USER'] or not env['IMAP_PASS']:
+        logging.error('Credenciais IMAP não configuradas corretamente.')
+        return
+
+    print('processar_reembolsos')
+    with MailBox(host=env['IMAP_HOST'], port=993, timeout=400).login(env['IMAP_USER'], env['IMAP_PASS']) as mailbox:
+        print(f'buscando emails {mailbox.login_result}')
+        try:
+            # Buscar e-mails não lidos com o assunto REEMBOLSO
+            emails = mailbox.fetch(AND(seen=False, subject='REEMBOLSO', from_='leandro.netto@fortanks.ind.br'))
+        except Exception as e:
+            logging.error(f"Erro ao buscar emails: {e}")
+            return
+        for msg in emails:
+            logging.info(f'Processando email de reembolso: {msg.subject}')
+            
+            for att in msg.attachments:
+                if att.filename.lower().endswith('.pdf'):
+                    # Ignora arquivos que contenham 'protocolo' no nome
+                    if 'protocolo' in att.filename.lower():
+                        logging.info(f"Ignorando arquivo de protocolo: {att.filename}")
+                        continue
+                        
+                    # Se não encontrou a chave de acesso, tenta pelo número e fornecedor
+                    numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(att.filename)
+                    
+                    print(f"Numero NF: {numero_nf} Fornecedor: {fornecedor}")
+                    if not numero_nf or not fornecedor:
+                        logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {att.filename}")
+                        continue
+                    
+                    # Buscar a nota fiscal no banco de dados
+                    from models.nota_fiscal import NotaFiscal
+                    from sqlalchemy import func
+                    
+                    # Primeiro busca todas as notas com o número correspondente
+                    notas = NotaFiscal.query.filter(NotaFiscal.numero_nf.like(f'%{numero_nf}%')).all()
+                    
+                    # Depois procura a que tem o nome do emitente normalizado correspondente
+                    nota = None
+                    fornecedor_normalizado = normalizar_texto(fornecedor)
+                    print(f"Fornecedor normalizado: {fornecedor_normalizado}")
+                    for n in notas:
+                        emitente_normalizado = normalizar_texto(n.nome_emitente)
+                        # Verifica se o nome do fornecedor está contido no nome do emitente
+                        if fornecedor_normalizado in emitente_normalizado:
+                            nota = n
+                            break
+                    
+                    if nota:
+                        try:
+                            if Upload('NotaFiscal', nota.id, 3, att.filename, 'application/pdf'):
+                                logging.info(f"PDF reembolso ja existe {numero_nf}")
+                            else:
+                                Upload('NotaFiscal', nota.id, 3, att.filename, 'application/pdf', att.payload)
+                                logging.info(f"PDF reembolso enviado com sucesso para a NF {numero_nf}")
+                        except Exception as e:
+                            logging.error(f"Erro ao fazer upload do PDF reembolso para NF {numero_nf}: {e}")
+                    else:
+                        print(f"Nota fiscal {numero_nf} não encontrada no sistema")
+                        if not Upload('NotaFiscal', 0, 3, att.filename, 'application/pdf'):
+                            print(f"Gravando reembolso {numero_nf}")
+                            Upload('NotaFiscal', 0, 3, att.filename, 'application/pdf', att.payload)
+                        else:
+                            logging.info(f"PDF reembolso ja existe {numero_nf}")
+                        logging.warning(f"Nota fiscal {numero_nf} não encontrada no sistema")
+        
+            # Marcar o email como lido
+            mailbox.flag(msg.uid, 'SEEN', True)
+        
+def processar_notas_fiscais():
+    env = carregar_variaveis_ambiente()
+    if not env['IMAP_HOST'] or not env['IMAP_USER'] or not env['IMAP_PASS']:
+        logging.error('Credenciais IMAP não configuradas corretamente.')
+        return
+
+    with MailBox(host=env['IMAP_HOST'], port=993, timeout=400).login(env['IMAP_USER'], env['IMAP_PASS']) as mailbox:
         # Buscar e-mails não lidos com o assunto padrão
         emails = mailbox.fetch(AND(seen=False, from_='leandro.netto@fortanks.ind.br'))
         emailsDat = []
@@ -199,13 +511,13 @@ def procurar_anexos_xml():
         - xml_filename: Nome do arquivo XML
         - xml_content: Conteúdo do arquivo XML
     """
-    if not IMAP_HOST or not IMAP_USER or not IMAP_PASS:
+    if not env['IMAP_HOST'] or not env['IMAP_USER'] or not env['IMAP_PASS']:
         logging.error('Credenciais IMAP não configuradas corretamente.')
         return []
 
     xmls_encontrados = []
     
-    with MailBox(host=IMAP_HOST, port=993, timeout=400).login(IMAP_USER, IMAP_PASS) as mailbox:
+    with MailBox(host=env['IMAP_HOST'], port=993, timeout=400).login(env['IMAP_USER'], env['IMAP_PASS']) as mailbox:
         # Buscar e-mails não lidos
         emails = mailbox.fetch(AND(seen=False))
         

@@ -46,7 +46,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-from scripts.processar_email_pdf import processar_emails
+from scripts.processar_email_pdf import processar_notas_fiscais, processar_protocolos, processar_reembolsos
 from apscheduler.schedulers.background import BackgroundScheduler
 load_dotenv('.env')
 
@@ -331,13 +331,59 @@ def handle_exception(e):
                                error_message=description), code
 
 
-#def job_email():
-#    with app.app_context():
-        
-        #processar_emails()
+def job_email():
+    with app.app_context():
+        processar_protocolos()
+        processar_reembolsos()
 
-#scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')  # Ajuste o timezone conforme necessário
-#scheduler.add_job(job_email, 'cron', minute='*/5')
+def job_diario():
+    """
+    Job que executa uma vez por dia
+    """
+    with app.app_context():
+        logger.info("Executando job diário...")
+        # Aqui você pode adicionar as funções que deseja executar diariamente
+        # Por exemplo:
+        # processar_relatorios_diarios()
+        # enviar_relatorio_diario()
+        # etc...
+
+def gerenciar_scheduler():
+    """
+    Gerencia os schedulers da aplicação, garantindo que não haja duplicatas
+    """
+    try:
+        # Parar todos os schedulers existentes
+        if hasattr(app, 'scheduler'):
+            try:
+                app.scheduler.shutdown()
+                logger.info("Scheduler existente parado com sucesso")
+            except:
+                pass
+
+        # Criar novo scheduler se não existir
+        if not hasattr(app, 'scheduler'):
+            app.scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')
+            
+            # Adiciona o job de email (a cada 5 minutos)
+            app.scheduler.add_job(job_email, 'cron', minute='*/5')
+            logger.info("Job de email adicionado ao scheduler")
+            
+            # Adiciona o job diário (todos os dias às 00:00)
+            app.scheduler.add_job(job_diario, 'cron', hour=0, minute=0)
+            logger.info("Job diário adicionado ao scheduler")
+            
+            logger.info("Novo scheduler criado com sucesso")
+        
+        # Iniciar o scheduler se não estiver rodando
+        if not app.scheduler.running:
+            app.scheduler.start()
+            logger.info("Scheduler iniciado com sucesso")
+    except Exception as e:
+        logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
+
+# Gerenciar o scheduler
+gerenciar_scheduler()
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():
@@ -346,13 +392,8 @@ with app.app_context():
     try:
         init_db()
         logger.info("Banco de dados inicializado com sucesso!")
-        #scheduler.start()
-        # Gerar relatório financeiro
-        #with app.app_context():
-        #    processar_emails()
     except Exception as e:
-        logger.error(
-            f"Erro ao inicializar banco de dados: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao inicializar banco de dados: {str(e)}", exc_info=True)
 
 app.jinja_env.filters['notas_json'] = notas_json
 app.jinja_env.filters['avulsos_json'] = avulsos_json

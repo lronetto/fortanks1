@@ -20,6 +20,7 @@
                 data-codigo="{{ centro_custo.codigo }}" data-nome="{{ centro_custo.nome }}"
                 data-descricao="{{ centro_custo.descricao }}"
                 data-ativo="{{ 'true' if centro_custo.ativo else 'false' }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row">
                     <div class="col-md-4 mb-3">
                         <label for="codigo" class="form-label">Código</label>

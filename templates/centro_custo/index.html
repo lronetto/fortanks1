@@ -53,6 +53,7 @@
                                     <form id="form-excluir-{{ centro.id }}"
                                         action="{{ url_for('centro_custo.excluir', id=centro.id) }}" method="POST"
                                         class="d-inline form-excluir">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-sm btn-danger" data-bs-toggle="tooltip"
                                             title="Excluir" {% if centro.contratos or centro.solicitacoes %}disabled{%
                                             endif %}>

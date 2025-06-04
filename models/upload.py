@@ -1,6 +1,7 @@
 from datetime import datetime
 from models.database import db
 import base64
+from sqlalchemy import Text
 
 
 class Upload(db.Model):
@@ -11,7 +12,7 @@ class Upload(db.Model):
     tipo = db.Column(db.Integer, nullable=True)
     filename = db.Column(db.String(255), nullable=False)
     mimetype = db.Column(db.String(100), nullable=False)
-    blob = db.Column(db.Text, nullable=False)
+    blob = db.Column(Text(length=4294967295), nullable=False)  # LONGTEXT
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def __repr__(self):
@@ -24,7 +25,7 @@ class Upload(db.Model):
             print('pai: ',pai)
             print('pai_id: ',pai_id)
             print('tipo: ',tipo)
-            self = Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo).first()
+            self = Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo, filename=filename, mimetype=mimetype).first()
             print('upload: ',self)
             return self
         else:
@@ -33,7 +34,11 @@ class Upload(db.Model):
             self.tipo = tipo
             self.filename = filename
             self.mimetype = mimetype
-            self.blob = blob
+            # Codifica o blob em base64 antes de salvar
+            if isinstance(blob, bytes):
+                self.blob = base64.b64encode(blob).decode('utf-8')
+            else:
+                self.blob = blob
             up = Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo).first()
             if not up:
                 self.save()
@@ -50,6 +55,15 @@ class Upload(db.Model):
             print('upload error: ',e)
             db.session.rollback()
             raise e
+
+    def get_blob(self):
+        """
+        Retorna o blob decodificado do base64
+        """
+        if self.blob:
+            return base64.b64decode(self.blob)
+        return None
+
     def get(self, pai, pai_id, tipo=None):
         if tipo:
             return Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo).all()

@@ -21,7 +21,7 @@ from scripts.robo_email_nf import processar_emails
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from scripts.verificar_cancelamento import verificar
 from models.arquivei import Arquivei
-from scripts.processar_email_pdf import processar_emails
+from scripts.processar_email_pdf import processar_protocolos, processar_reembolsos
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
 from models.nota_fiscal import CNPJS
@@ -39,10 +39,11 @@ def verificar_permissao():
     #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
     #     return redirect(url_for('dashboard.index'))
 
-@nota_fiscal_bp.route('/relatorio_financeiro')
+@nota_fiscal_bp.route('/teste1')
 @login_required
-def relatorio_financeiro():
-    gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
+def teste1():
+    processar_reembolsos()
+    #processar_protocolos()
     return redirect(url_for('nota_fiscal.index'))
 
 @nota_fiscal_bp.route('/teste')
@@ -1679,3 +1680,94 @@ def analise_transferencias():
         filtro_codigo_item=filtro_codigo_item,
         filtro_nome_item=filtro_nome_item
     )
+
+@nota_fiscal_bp.route('/api/documentos/<int:nota_id>', methods=['GET'])
+@login_required
+def api_listar_documentos(nota_id):
+    """
+    API para listar documentos de uma nota fiscal
+    """
+    try:
+        documentos = Upload.query.filter_by(pai='NotaFiscal', pai_id=nota_id).all()
+        resultado = []
+        for doc in documentos:
+            resultado.append({
+                'id': doc.id,
+                'filename': doc.filename,
+                'tipo': doc.tipo,
+                'uploaded_at': doc.uploaded_at.isoformat()
+            })
+        return jsonify({'documentos': resultado, 'success': True})
+    except Exception as e:
+        logger.error(f'Erro ao listar documentos: {str(e)}')
+        return jsonify({'error': f'Erro ao listar documentos: {str(e)}', 'success': False}), 500
+
+@nota_fiscal_bp.route('/api/documentos', methods=['POST'])
+@login_required
+def api_adicionar_documento():
+    """
+    API para adicionar um documento a uma nota fiscal
+    """
+    try:
+        nota_id = request.form.get('nota_fiscal_id')
+        tipo = request.form.get('tipo')
+        arquivo = request.files.get('arquivo')
+        
+        if not nota_id or not tipo or not arquivo:
+            return jsonify({'success': False, 'message': 'Dados incompletos'}), 400
+            
+        # Verificar se a nota fiscal existe
+        nota = NotaFiscal.query.get(nota_id)
+        if not nota:
+            return jsonify({'success': False, 'message': 'Nota fiscal não encontrada'}), 404
+            
+        # Ler o arquivo e converter para base64
+        arquivo_bytes = arquivo.read()
+        arquivo_b64 = base64.b64encode(arquivo_bytes).decode('utf-8')
+        
+        # Criar novo upload
+        upload = Upload(
+            pai='nota_fiscal',
+            pai_id=nota_id,
+            tipo=tipo,
+            filename=arquivo.filename,
+            mimetype=arquivo.content_type,
+            blob=arquivo_b64
+        )
+        
+        upload.save()
+        
+        return jsonify({'success': True, 'message': 'Documento adicionado com sucesso'})
+    except Exception as e:
+        logger.error(f'Erro ao adicionar documento: {str(e)}')
+        return jsonify({'success': False, 'message': f'Erro ao adicionar documento: {str(e)}'}), 500
+
+@nota_fiscal_bp.route('/api/documentos/<int:doc_id>', methods=['DELETE'])
+@login_required
+def api_excluir_documento(doc_id):
+    """
+    API para excluir um documento
+    """
+    try:
+        documento = Upload.query.get_or_404(doc_id)
+        documento.delete()
+        return jsonify({'success': True, 'message': 'Documento excluído com sucesso'})
+    except Exception as e:
+        logger.error(f'Erro ao excluir documento: {str(e)}')
+        return jsonify({'success': False, 'message': f'Erro ao excluir documento: {str(e)}'}), 500
+
+@nota_fiscal_bp.route('/api/documentos/<int:doc_id>/visualizar')
+@login_required
+def api_visualizar_documento(doc_id):
+    """
+    API para visualizar um documento
+    """
+    try:
+        documento = Upload.query.get_or_404(doc_id)
+        response = make_response(base64.b64decode(documento.blob))
+        response.headers['Content-Type'] = documento.mimetype
+        response.headers['Content-Disposition'] = f'inline; filename={documento.filename}'
+        return response
+    except Exception as e:
+        logger.error(f'Erro ao visualizar documento: {str(e)}')
+        return jsonify({'error': f'Erro ao visualizar documento: {str(e)}'}), 500

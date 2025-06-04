@@ -48,6 +48,50 @@
   </div>
 </div>
 
+<!-- Modal de Documentos -->
+<div class="modal fade" id="modalDocumentos" tabindex="-1" aria-labelledby="modalDocumentosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDocumentosLabel">Documentos da Nota</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="notaIdDocumentos">
+                
+                <div class="mb-3">
+                    <label for="anexos" class="form-label">Adicionar Documentos</label>
+                    <input type="file" class="form-control" id="anexos" multiple accept=".pdf,.jpg,.jpeg,.png">
+                    <div class="form-text">Formatos aceitos: PDF, JPG, PNG</div>
+                </div>
+
+                <div class="list-group" id="listaDocumentos">
+                    <!-- Lista de documentos será preenchida via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarDocumentos()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Visualização de Documento -->
+<div class="modal fade" id="modalVisualizarDocumento" tabindex="-1" aria-labelledby="modalVisualizarDocumentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarDocumentoLabel">Visualizar Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" style="height:80vh;">
+                <iframe id="iframeDocumento" src="" style="width:100%;height:100%;border:none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -56,7 +100,7 @@ let notasSelecionadas = [];
 let avulsos = [];
 let paginaNotas = 1;
 let totalPaginasNotas = 1;
-const notasPorPagina = 50;
+const notasPorPagina = 25;
 
 function formatarMoeda(valor) {
     return new Intl.NumberFormat('pt-BR', {
@@ -85,6 +129,7 @@ function filtrarNotas(page = 1) {
     paginaNotas = page;
     const spinner = document.getElementById('spinnerNotas');
     if (spinner) spinner.style.display = '';
+    
     const filtros = {
         numero: document.getElementById('filtroNumero').value,
         fornecedor: document.getElementById('filtroFornecedor').value,
@@ -95,8 +140,12 @@ function filtrarNotas(page = 1) {
         pagamento: document.getElementById('filtroPagamento') ? document.getElementById('filtroPagamento').value : '',
         page: paginaNotas,
         per_page: notasPorPagina,
-        ids: notasSelecionadas.map(n => n.id)
+        ids: notasSelecionadas.map(n => n.id),
+        notas_selecionadas: notasSelecionadas // Adicionar notas selecionadas para manter os centros de custo
     };
+
+    console.log('Enviando filtros:', filtros);
+
     fetch('{{ url_for("reembolso.buscar_notas") }}', {
         method: 'POST',
         headers: {
@@ -105,14 +154,24 @@ function filtrarNotas(page = 1) {
         },
         body: JSON.stringify(filtros)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('Resposta recebida:', data);
         const tbody = document.querySelector('#tabelaNotas tbody');
         tbody.innerHTML = '';
-        if (data.notas) {
+        
+        if (data.notas && Array.isArray(data.notas)) {
             data.notas.forEach(nota => {
                 const checked = notasSelecionadas.some(n => n.id === parseInt(nota.id)) ? 'checked' : '';
-                const descricao = (notasSelecionadas.find(n => n.id === parseInt(nota.id)) || {}).descricao || '';
+                const notaSelecionada = notasSelecionadas.find(n => n.id === parseInt(nota.id)) || {};
+                const descricao = notaSelecionada.descricao || '';
+                const centro_custo_id = notaSelecionada.centro_custo_id || '';
+                
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>
@@ -130,20 +189,35 @@ function filtrarNotas(page = 1) {
                         <select class="form-control nota-centro-custo" data-id="${nota.id}">
                             <option value="">Selecione...</option>
                             {% for centro in centros_custo %}
-                            <option value="{{ centro.id }}">{{ centro.nome }}</option>
+                            <option value="{{ centro.id }}">{{ centro.codigo }} - {{ centro.nome }}</option>
                             {% endfor %}
                         </select>
+                    </td>
+                    <td>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="abrirModalDocumentos(${nota.id})">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
                     </td>
                 `;
                 tbody.appendChild(tr);
             });
+            
             totalPaginasNotas = data.pages;
             renderPaginacaoNotas();
             adicionarListenersNotas();
+        } else {
+            console.error('Dados inválidos recebidos:', data);
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar notas</td></tr>';
         }
-        if (spinner) spinner.style.display = 'none';
     })
-    .catch(() => { if (spinner) spinner.style.display = 'none'; });
+    .catch(error => {
+        console.error('Erro ao buscar notas:', error);
+        const tbody = document.querySelector('#tabelaNotas tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar notas</td></tr>';
+    })
+    .finally(() => {
+        if (spinner) spinner.style.display = 'none';
+    });
 }
 
 function renderPaginacaoNotas() {
@@ -309,6 +383,149 @@ function abrirPdfNota(notaId, chaveAcesso) {
         });
 }
 
+function abrirModalDocumentos(notaId) {
+    document.getElementById('notaIdDocumentos').value = notaId;
+    carregarDocumentos(notaId);
+    $('#modalDocumentos').modal('show');
+}
+
+function carregarDocumentos(notaId) {
+    fetch(`/reembolsos/nota/${notaId}/documentos`)
+        .then(response => response.json())
+        .then(data => {
+            const lista = document.getElementById('listaDocumentos');
+            lista.innerHTML = '';
+            
+            data.forEach(doc => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <div>
+                        <i class="fas fa-file me-2"></i>
+                        ${doc.filename}
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-info me-2" onclick="visualizarDocumento(${doc.id}, '${doc.mimetype}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-primary me-2" onclick="downloadDocumento(${doc.id})">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="excluirDocumento(${doc.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                lista.appendChild(item);
+            });
+        })
+        .catch(error => {
+            console.error('Erro ao carregar documentos:', error);
+            alert('Erro ao carregar documentos');
+        });
+}
+
+function salvarDocumentos() {
+    const notaId = document.getElementById('notaIdDocumentos').value;
+    const formData = new FormData();
+    formData.append('nota_id', notaId);
+    
+    const anexos = document.getElementById('anexos');
+    for (let i = 0; i < anexos.files.length; i++) {
+        formData.append('anexos', anexos.files[i]);
+    }
+
+    fetch('/reembolsos/nota/documentos', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            carregarDocumentos(notaId);
+            document.getElementById('anexos').value = '';
+        } else {
+            throw new Error(data.error || 'Erro ao salvar documentos');
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao salvar documentos:', error);
+        alert('Erro ao salvar documentos');
+    });
+}
+
+function excluirDocumento(documentoId) {
+    if (!confirm('Tem certeza que deseja excluir este documento?')) {
+        return;
+    }
+
+    fetch(`/reembolso/documento/${documentoId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const notaId = document.getElementById('notaIdDocumentos').value;
+            carregarDocumentos(notaId);
+        } else {
+            throw new Error(data.error || 'Erro ao excluir documento');
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao excluir documento:', error);
+        alert('Erro ao excluir documento');
+    });
+}
+
+function downloadDocumento(documentoId) {
+    window.location.href = `/reembolso/documento/${documentoId}/download`;
+}
+
+function visualizarDocumento(documentoId, mimetype) {
+    const iframe = document.getElementById('iframeDocumento');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalVisualizarDocumento');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    // Remove mensagens/elementos antigos
+    let oldMsg = modalEl.querySelector('.documento-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#documentoLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+
+    // Exibe loading
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'documentoLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando documento...</span></div>';
+    iframe.parentNode.appendChild(loading);
+
+    fetch(`/reembolsos/documento/${documentoId}/download`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar documento');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 documento-erro-msg';
+            msg.innerText = 'Não foi possível carregar o documento.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', function() {
     // Inicializar arrays com dados do backend se em edição
@@ -367,6 +584,44 @@ document.addEventListener('DOMContentLoaded', function() {
         // Fechar modal (Bootstrap 5)
         const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAvulso'));
         modal.hide();
+    });
+
+    // Salvar documentos
+    document.getElementById('btnSalvarDocumentos').addEventListener('click', function() {
+        const notaId = document.getElementById('documentoNotaId').value;
+        const files = document.getElementById('documentoAnexos').files;
+        
+        if (files.length === 0) {
+            alert('Selecione pelo menos um arquivo');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('nota_id', notaId);
+        for (let i = 0; i < files.length; i++) {
+            formData.append('anexos', files[i]);
+        }
+
+        fetch('/reembolsos/nota/documentos', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ form.csrf_token.current_token }}'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Recarregar lista de documentos
+                abrirModalDocumentos(notaId);
+            } else {
+                alert('Erro ao salvar documentos: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao salvar documentos:', error);
+            alert('Erro ao salvar documentos');
+        });
     });
 });
 </script>

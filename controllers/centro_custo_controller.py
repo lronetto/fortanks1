@@ -20,7 +20,7 @@ def index():
     """
     Lista todos os centros de custo
     """
-    centros_custo = CentroCusto.query.all()
+    centros_custo = CentroCusto.query.order_by(CentroCusto.codigo.desc()).all()
     return render_template('centro_custo/index.html', centros_custo=centros_custo)
 
 @centro_custo_bp.route('/novo', methods=['GET', 'POST'])
