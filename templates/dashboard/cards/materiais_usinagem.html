@@ -4,7 +4,7 @@
         <h6 class="m-0 font-weight-bold text-info">Estoque de Materiais de Usinagem</h6>
     </div>
     <div class="card-body">
-        {% if materiais_usinagem_estoque %}
+        {% if cards.analitico.dados %}
             <div class="table-responsive">
                 <table class="table table-sm table-hover" width="100%" cellspacing="0">
                     <thead>
@@ -16,7 +16,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in materiais_usinagem_estoque %}
+                        {% for item in cards.analitico.dados %}
                         <tr>
                             <td>{{ item.nome }}</td>
                             <td class="text-end">{{ "%.2f"|format(item.estoque_convertido|float) }}</td>

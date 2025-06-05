@@ -686,6 +686,7 @@ def detalhes_tanques(id):
 def teste_planilha():
     try:
         df = pd.read_excel("pecas.xlsx", sheet_name="CADASTRO")
+        df.replace(np.nan, None, inplace=True)
 
         df=df.sort_values(by='SEQ')
         seq=0
@@ -701,7 +702,7 @@ def teste_planilha():
                     partes = row['PISTA'].split('-')
                     pista = None
                     if len(partes)==2:
-                        pista = int(partes[-1].lstrip('0'))
+                        pista = int(partes[-1])
 
                     concretagem = Concretagem(
                         data_concretagem=row['DATA'],
@@ -718,7 +719,7 @@ def teste_planilha():
                 pc.data_concretagem=row['DATA'].strftime('%Y-%m-%d') if pd.notna(row['DATA']) else None
                 acabamento=None
                 if row['ACABAMENTO'] not in [None, np.nan]:
-                    acabamento=row['ACABAMENTO']
+                    acabamento=row['ACABAMENTO'].strftime('%Y-%m-%d') if pd.notna(row['ACABAMENTO']) else None
                 chapa=None
                 if row['CHAPA'] not in [None, np.nan,'A DEFINIR','SEM CHAPA','NÃO TEM CHAPA']:
                     chapa=row['CHAPA']

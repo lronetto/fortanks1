@@ -22,11 +22,11 @@ class Upload(db.Model):
         if not pai and not pai_id and not tipo and not filename and not mimetype and not blob:
             return self
         if not blob:
-            print('pai: ',pai)
-            print('pai_id: ',pai_id)
-            print('tipo: ',tipo)
+            #print('pai: ',pai)
+            #print('pai_id: ',pai_id)
+            #print('tipo: ',tipo)
             self = Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo, filename=filename, mimetype=mimetype).first()
-            print('upload: ',self)
+            #print('upload: ',self)
             return self
         else:
             self.pai = pai

@@ -4,7 +4,7 @@
         <h6 class="m-0 font-weight-bold text-primary">Concretagens Recentes</h6>
     </div>
     <div class="card-body">
-        {% if dados_especificos.concretagens_recentes %}
+        {% if cards.concretagens_recentes.dados %}
             <div class="table-responsive">
                 <table class="table table-bordered table-sm" width="100%" cellspacing="0">
                     <thead>
@@ -16,7 +16,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for concretagem in dados_especificos.concretagens_recentes %}
+                        {% for concretagem in cards.concretagens_recentes.dados.concretagens_recentes %}
                         <tr>
                             <td>{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}</td>
                             <td class="text-center">{{ concretagem.pista }}</td>
@@ -46,18 +46,25 @@
             <canvas id="concretagensChart"></canvas>
         </div>
         <div class="text-center mt-3">
-            <p>Total de peças concretadas nos últimos 30 dias: <strong>{{ dados_especificos.total_pecas_recentes }}</strong></p>
+            <p>Total de peças concretadas nos últimos 30 dias: <strong>{{ cards.concretagens_recentes.dados.total_pecas_recentes }}</strong></p>
         </div>
     </div>
 </div>
 {% block scripts %}
 <script>
-    fetch("{{ url_for('dashboard.api_dados_concretagens') }}")
-        .then(response => response.json())
-        .then(data => {
+    $(document).ready(function() {
+        loadConcretagensChart();
+    });
+    function loadConcretagensChart() {
+
+        dados = {{ cards.concretagens_recentes.dados.concretagens_semanais|tojson }}
+        console.log(dados);
+        if (dados.concretagens_semanais && dados.volume_usinado_semanal) {
             const ctxConcretagens = document.getElementById("concretagensChart");
-            if (ctxConcretagens && data.concretagens_semanais) {
-                const concretagensData = data.concretagens_semanais;
+            if (ctxConcretagens) {
+                const concretagensData = dados.concretagens_semanais;
+                const volumeUsinadoData = dados.volume_usinado_semanal;
+                
                 new Chart(ctxConcretagens, {
                     type: 'line',
                     data: {
@@ -74,8 +81,20 @@
                             pointHoverBackgroundColor: "rgba(78, 115, 223, 1)",
                             pointHoverBorderColor: "rgba(78, 115, 223, 1)",
                             pointHitRadius: 10,
-                            pointBorderWidth: 2,
                             data: concretagensData.map(item => item.quantidade),
+                        }, {
+                            label: 'Volume Usinado Semanais',
+                            lineTension: 0.3,
+                            backgroundColor: "rgba(255, 99, 132, 0.05)",
+                            borderColor: "rgba(255, 99, 132, 1)",
+                            pointRadius: 3,
+                            pointBackgroundColor: "rgba(255, 99, 132, 1)",
+                            pointBorderColor: "rgba(255, 99, 132, 1)",
+                            pointHoverRadius: 3,
+                            pointHoverBackgroundColor: "rgba(255, 99, 132, 1)",
+                            pointHoverBorderColor: "rgba(255, 99, 132, 1)",
+                            pointHitRadius: 10,
+                            data: volumeUsinadoData.map(item => item.volume),
                         }],
                     },
                     options: {
@@ -88,6 +107,8 @@
                     }
                 });
             }
-        });
+        }
+    }
 </script>
 {% endblock %}
+    

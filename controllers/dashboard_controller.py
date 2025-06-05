@@ -18,6 +18,7 @@ from models.usinagem_concreto import UsinagemConcreto, UsinagemMaterial, ItemTra
 from models.unidade import Unidade
 from models.conversao_unidade import ConversaoUnidade
 from models.dados_analiticos import DadoAnalitico, PL_CUSTO, PL_RECOP
+from models.epi import EntregaEPI
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -78,135 +79,215 @@ def meu_dashboard():
         exibir_card_analitico = True
         centros_custo_analitico_data = CentroCusto.query.filter_by(ativo=True).order_by(CentroCusto.nome).all()
 
-    # --- Dados para TST (Técnico de Segurança do Trabalho) ---
-    if current_user.is_tst:
-        # EPIs com estoque crítico
-        epis_criticos_tst = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
-            Estoque.quantidade <= EPI.estoque_minimo
-        ).limit(10).all()
-        
-        # EPIs próximos ao vencimento (30 dias)
-        data_limite = datetime.now().date() + timedelta(days=30)
-        epis_vencimento = EPI.query.filter(
-            EPI.data_validade <= data_limite,
-            EPI.data_validade >= datetime.now().date()
-        ).order_by(EPI.data_validade).limit(10).all()
-        
-        # Entregas de EPIs recentes
-        entregas_recentes = EntregaEPI.query.order_by(
-            desc(EntregaEPI.data_entrega)
-        ).limit(10).all()
-        
-        # Colaboradores com mais EPIs
-        colaboradores_epis = db.session.query(
-            Colaborador.id, 
-            Colaborador.nome,
-            func.count(EntregaEPI.id).label('total_epis')
-        ).join(EntregaEPI, EntregaEPI.colaborador_id == Colaborador.id
-        ).group_by(Colaborador.id
-        ).order_by(desc('total_epis')
-        ).limit(5).all()
-        
-        dados_especificos = {
-            'epis_criticos': epis_criticos_tst,
-            'epis_vencimento': epis_vencimento,
-            'entregas_recentes': entregas_recentes,
-            'colaboradores_epis': colaboradores_epis
-        }
+
+    exibir_card_epis_vencimento = False
+    epis_vencimento = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_epis_vencimento = True
+        epis_vencimento = card_epis_vencimento()
+
+    exibir_card_epis_estoque_critico = False
+    epis_criticos_data = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_epis_estoque_critico = True
+        epis_criticos_data = card_epis_estoque_critico()
+
+    exibir_card_concretagens_recentes = False
+    concretagens_recentes_op = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_concretagens_recentes = True
+        concretagens_recentes_op = card_concretagens_recentes()
+
+    exibir_card_concretagens = False
+    concretagens_recentes = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_concretagens = True
+        concretagens_recentes = card_concretagens()
     
-    # --- Dados para Operacional ---
-    elif current_user.is_operacional:
-        # Concretagens recentes
-        concretagens_recentes_op = Concretagem.query.order_by(
-            desc(Concretagem.data_concretagem)
-        ).limit(5).all()
-        
-        # Total de peças concretadas nos últimos 30 dias
-        data_limite = datetime.now().date() - timedelta(days=30)
-        total_pecas_recentes = db.session.query(
-            func.count(ConcretagemPeca.peca_id)
-        ).join(
-            Concretagem, 
-            Concretagem.id == ConcretagemPeca.concretagem_id
-        ).filter(
-            Concretagem.data_concretagem >= data_limite
-        ).scalar() or 0
-        
-        # Materiais com estoque crítico
-        materiais_criticos = Estoque.query.join(
-            Material, 
-            Material.id == Estoque.material_id
-        ).filter(
-            Estoque.quantidade <= Estoque.quantidade_minima
-        ).limit(10).all()
-        
-        # Movimentações de estoque recentes
-        movimentacoes_recentes = MovimentacaoEstoque.query.order_by(
-            desc(MovimentacaoEstoque.data_movimento)
-        ).limit(10).all()
-        
-        dados_especificos = {
-            'concretagens_recentes': concretagens_recentes_op,
-            'total_pecas_recentes': total_pecas_recentes,
-            'materiais_criticos': materiais_criticos,
-            'movimentacoes_recentes': movimentacoes_recentes
-        }
+    exibir_card_volume_usinado = False
+    volume_usinado = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_volume_usinado = True
+        volume_usinado = card_concretagens_semanais()
+
     
-    # --- Dados para Gerentes e Diretores ---
-    elif current_user.is_gerente_ou_superior:
-        # Solicitações pendentes de aprovação
-        solicitacoes_pendentes_ger = Solicitacao.query.filter_by(
-            status='Pendente'
-        ).order_by(desc(Solicitacao.data_solicitacao)).limit(10).all()
-        
-        # Total de solicitações por status
-        total_sol_pendentes_sistema = Solicitacao.query.filter_by(status='Pendente').count()
-        total_sol_aprovadas_sistema = Solicitacao.query.filter_by(status='Aprovada').count()
-        total_sol_rejeitadas_sistema = Solicitacao.query.filter_by(status='Rejeitada').count()
-        
-        # Materiais com estoque crítico 
-        materiais_criticos = Estoque.query.join(
-            Material, 
-            Material.id == Estoque.material_id
-        ).filter(
-            Estoque.quantidade <= Estoque.quantidade_minima
-        ).limit(10).all()
-        
-        # EPIs com estoque crítico
-        epis_criticos = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
-            Estoque.quantidade <= EPI.estoque_minimo
-        ).limit(5).all()
-        
-        # Concretagens recentes
-        concretagens_recentes = Concretagem.query.order_by(
-            desc(Concretagem.data_concretagem)
-        ).limit(5).all()
-        
-        dados_especificos = {
-            'solicitacoes_pendentes': solicitacoes_pendentes_ger,
-            'total_sol_pendentes_sistema': total_sol_pendentes_sistema,
-            'total_sol_aprovadas_sistema': total_sol_aprovadas_sistema,
-            'total_sol_rejeitadas_sistema': total_sol_rejeitadas_sistema,
-            'materiais_criticos': materiais_criticos,
-            'epis_criticos': epis_criticos,
-            'concretagens_recentes': concretagens_recentes
-        }
-    
+   
     # Renderizar o template apropriado com base no cargo do usuário
     return render_template(
         'dashboard/meu_dashboard.html',
         usuario=current_user,
-        solicitacoes_usuario=solicitacoes_usuario_recentes,
-        total_solicitacoes_usuario=total_solicitacoes_usuario,
-        total_sol_pendentes=total_sol_pendentes_usuario,
-        total_sol_aprovadas=total_sol_aprovadas_usuario,
-        total_sol_rejeitadas=total_sol_rejeitadas_usuario,
-        dados_especificos=dados_especificos,
-        materiais_usinagem_estoque=materiais_usinagem_estoque_data,
-        exibir_card_materiais_usinagem=exibir_card_materiais_usinagem,
-        exibir_card_analitico=exibir_card_analitico,
-        centros_custo_analitico=centros_custo_analitico_data
+        cards={
+            'analitico': {
+                'dados': materiais_usinagem_estoque_data,
+                'exibir': exibir_card_materiais_usinagem
+            },
+            'epis_vencimento': {
+                'dados': epis_vencimento,
+                'exibir': exibir_card_epis_vencimento
+            },
+            'epis_estoque_critico': {
+                'dados': epis_criticos_data,
+                'exibir': exibir_card_epis_estoque_critico
+            },
+            'concretagens_recentes': {
+                'dados': concretagens_recentes_op,
+                'exibir': exibir_card_concretagens_recentes
+            },
+            'concretagens': {
+                'dados': concretagens_recentes,
+                'exibir': exibir_card_concretagens
+            },
+            'volume_usinado': {
+                'dados': volume_usinado,
+                'exibir': exibir_card_volume_usinado
+            }
+        }
     )
+def card_concretagens():
+    pass
+def card_epis_estoque_critico():
+    epis_criticos_tst = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
+        Estoque.quantidade <= EPI.estoque_minimo
+    ).limit(5).all()
+    return epis_criticos_tst
+
+def card_concretagens_semanais():
+    num_semanas = 8
+    concretagens_semanais_api = []
+    volume_usinado_semanal_api = [] # Nova lista para volume
+    hoje = datetime.now().date()
+    
+    for i in range(num_semanas):
+        # Correção da lógica para as semanas:
+        # Semana 0: Domingo desta semana até hoje.
+        # Semana 1: Domingo da semana passada até Sábado da semana passada.
+        # ...
+        # Semana N: Domingo de (N semanas atrás) até Sábado de (N semanas atrás).
+
+        if i == 0: # Semana corrente
+            fim_periodo = hoje
+            # Início do período é o domingo da semana corrente
+            inicio_periodo = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
+        else: # Semanas anteriores completas
+            # Ajuste para garantir que o fim_periodo seja o sábado da semana i-ésima anterior
+            dias_ate_ultimo_domingo = (hoje.weekday() + 1) % 7
+            sabado_da_semana_anterior_i = hoje - timedelta(days=(dias_ate_ultimo_domingo + 1 + (i-1)*7))
+            fim_periodo = sabado_da_semana_anterior_i
+            # Início do período é o domingo da semana (i) semanas atrás
+            inicio_periodo = fim_periodo - timedelta(days=6)
+
+        # Contagem de concretagens (baseado na data da concretagem)
+        qtd_concretagens = Concretagem.query.filter(
+            Concretagem.data_concretagem >= inicio_periodo,
+            Concretagem.data_concretagem <= fim_periodo
+        ).count()
+        
+        # Cálculo do volume usinado (baseado na data da usinagem)
+        # Usamos func.date para comparar a parte da data de data_usinagem (DateTime) com inicio_periodo e fim_periodo (date)
+        volume_total_periodo_usinagem = db.session.query(
+            func.sum(UsinagemConcreto.volume_produzido)
+        ).filter(
+            func.date(UsinagemConcreto.data_usinagem) >= inicio_periodo,
+            func.date(UsinagemConcreto.data_usinagem) <= fim_periodo
+        ).scalar() or Decimal(0.0)
+        
+        if i == 0:
+            rotulo_semana = f"Atual ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
+        else:
+            rotulo_semana = f"Sem {i} ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
+        
+        concretagens_semanais_api.append({
+            'semana': rotulo_semana,
+            'quantidade': qtd_concretagens
+        })
+        
+        volume_usinado_semanal_api.append({
+            'semana': rotulo_semana,
+            'volume': float(volume_total_periodo_usinagem) # Converter Decimal para float para JSON
+        })
+    
+    concretagens_semanais_api.reverse()
+    volume_usinado_semanal_api.reverse()
+    return {
+        'concretagens_semanais':concretagens_semanais_api,
+        'volume_usinado_semanal':volume_usinado_semanal_api
+    }
+def card_concretagens_recentes():
+
+
+    
+        # Concretagens recentes
+    concretagens_recentes_op = Concretagem.query.order_by(
+        desc(Concretagem.data_concretagem)
+    ).limit(5).all()
+    
+    # Total de peças concretadas nos últimos 30 dias
+    data_limite = datetime.now().date() - timedelta(days=30)
+    total_pecas_recentes = db.session.query(
+        func.count(ConcretagemPeca.peca_id)
+    ).join(
+        Concretagem, 
+        Concretagem.id == ConcretagemPeca.concretagem_id
+    ).filter(
+        Concretagem.data_concretagem >= data_limite
+    ).scalar() or 0
+    
+    # Materiais com estoque crítico
+    materiais_criticos = Estoque.query.join(
+        Material, 
+        Material.id == Estoque.material_id
+    ).filter(
+        Estoque.quantidade <= Estoque.quantidade_minima
+    ).limit(10).all()
+    
+    # Movimentações de estoque recentes
+    movimentacoes_recentes = MovimentacaoEstoque.query.order_by(
+        desc(MovimentacaoEstoque.data_movimento)
+    ).limit(10).all()
+    concretagens_semanais_api = card_concretagens_semanais()
+    dados_especificos = {
+        'concretagens_recentes': concretagens_recentes_op,
+        'total_pecas_recentes': total_pecas_recentes,
+        'materiais_criticos': materiais_criticos,
+        'movimentacoes_recentes': movimentacoes_recentes,
+        'concretagens_semanais':concretagens_semanais_api
+    }
+    return dados_especificos
+def card_epis_vencimento():
+     # EPIs com estoque crítico
+    epis_criticos_tst = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
+        Estoque.quantidade <= EPI.estoque_minimo
+    ).limit(10).all()
+    
+    # EPIs próximos ao vencimento (30 dias)
+    data_limite = datetime.now().date() + timedelta(days=30)
+    epis_vencimento = EPI.query.filter(
+        EPI.data_validade <= data_limite,
+        EPI.data_validade >= datetime.now().date()
+    ).order_by(EPI.data_validade).limit(10).all()
+    
+    # Entregas de EPIs recentes
+    entregas_recentes = EntregaEPI.query.order_by(
+        desc(EntregaEPI.data_entrega)
+    ).limit(10).all()
+    
+    # Colaboradores com mais EPIs
+    colaboradores_epis = db.session.query(
+        Colaborador.id, 
+        Colaborador.nome,
+        func.count(EntregaEPI.id).label('total_epis')
+    ).join(EntregaEPI, EntregaEPI.colaborador_id == Colaborador.id
+    ).group_by(Colaborador.id
+    ).order_by(desc('total_epis')
+    ).limit(5).all()
+    
+    dados_especificos = {
+        'epis_criticos': epis_criticos_tst,
+        'epis_vencimento': epis_vencimento,
+        'entregas_recentes': entregas_recentes,
+        'colaboradores_epis': colaboradores_epis
+    }
+    return dados_especificos
 def card_materiais_usinagem():
     materiais_usinagem_estoque_data = []
 
@@ -368,8 +449,8 @@ def solicitacoes_pendentes():
     return redirect(url_for('solicitacao.index'))
 
 # Endpoint de API para obter dados do dashboard
-@dashboard_bp.route('/api/dados')
-@login_required
+#@dashboard_bp.route('/api/dados')
+#@login_required
 def api_dados():
     """
     Retorna dados para os gráficos do dashboard via API
@@ -390,63 +471,7 @@ def api_dados():
     }
     
     # Dados de concretagens e volume usinado nas últimas 8 semanas
-    num_semanas = 8
-    concretagens_semanais_api = []
-    volume_usinado_semanal_api = [] # Nova lista para volume
-    hoje = datetime.now().date()
-    
-    for i in range(num_semanas):
-        # Correção da lógica para as semanas:
-        # Semana 0: Domingo desta semana até hoje.
-        # Semana 1: Domingo da semana passada até Sábado da semana passada.
-        # ...
-        # Semana N: Domingo de (N semanas atrás) até Sábado de (N semanas atrás).
 
-        if i == 0: # Semana corrente
-            fim_periodo = hoje
-            # Início do período é o domingo da semana corrente
-            inicio_periodo = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
-        else: # Semanas anteriores completas
-            # Ajuste para garantir que o fim_periodo seja o sábado da semana i-ésima anterior
-            dias_ate_ultimo_domingo = (hoje.weekday() + 1) % 7
-            sabado_da_semana_anterior_i = hoje - timedelta(days=(dias_ate_ultimo_domingo + 1 + (i-1)*7))
-            fim_periodo = sabado_da_semana_anterior_i
-            # Início do período é o domingo da semana (i) semanas atrás
-            inicio_periodo = fim_periodo - timedelta(days=6)
-
-        # Contagem de concretagens (baseado na data da concretagem)
-        qtd_concretagens = Concretagem.query.filter(
-            Concretagem.data_concretagem >= inicio_periodo,
-            Concretagem.data_concretagem <= fim_periodo
-        ).count()
-        
-        # Cálculo do volume usinado (baseado na data da usinagem)
-        # Usamos func.date para comparar a parte da data de data_usinagem (DateTime) com inicio_periodo e fim_periodo (date)
-        volume_total_periodo_usinagem = db.session.query(
-            func.sum(UsinagemConcreto.volume_produzido)
-        ).filter(
-            func.date(UsinagemConcreto.data_usinagem) >= inicio_periodo,
-            func.date(UsinagemConcreto.data_usinagem) <= fim_periodo
-        ).scalar() or Decimal(0.0)
-        
-        if i == 0:
-            rotulo_semana = f"Atual ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
-        else:
-            rotulo_semana = f"Sem {i} ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
-        
-        concretagens_semanais_api.append({
-            'semana': rotulo_semana,
-            'quantidade': qtd_concretagens
-        })
-        
-        volume_usinado_semanal_api.append({
-            'semana': rotulo_semana,
-            'volume': float(volume_total_periodo_usinagem) # Converter Decimal para float para JSON
-        })
-    
-    concretagens_semanais_api.reverse()
-    volume_usinado_semanal_api.reverse()
-    
     # Dados de estoque de EPIs críticos
     epis_criticos_api_data = []
     epis_criticos_query_res = db.session.query(

@@ -335,7 +335,7 @@ def handle_exception(e):
                                error_title=name,
                                error_message=description), code
 def processar_arquivei():
-    notas=Arquivei(data_inicial=datetime.now()-timedelta(days=1),data_final=datetime.now())
+    notas=Arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'))
     if notas:
         for nota in notas.xml_datas:
             NotaFiscal(xml_data=nota)
