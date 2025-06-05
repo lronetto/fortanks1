@@ -141,67 +141,54 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
     - Protocolo 264231708.pdf (Protocolo)
     """
     try:
-        logging.info(f"Processando arquivo: {nome_arquivo}")
-        
+        print(f"Processando arquivo: {nome_arquivo}")
+        numero_nf = None
+        fornecedor = None
         # Remove a extensão .pdf
         nome_sem_ext = nome_arquivo.replace('.pdf', '')
-        logging.info(f"Nome sem extensão: {nome_sem_ext}")
+        print(f"Nome sem extensão: {nome_sem_ext}")
         
         # Se for um protocolo simples
         if nome_sem_ext.startswith('Protocolo'):
             numero_protocolo = nome_sem_ext.replace('Protocolo', '').strip()
-            logging.info(f"Protocolo simples encontrado: {numero_protocolo}")
+            print(f"Protocolo simples encontrado: {numero_protocolo}")
             return numero_protocolo, 'PROTOCOLO'
-            
-        # Verifica se o formato é "FORNECEDOR - NF NUMERO" (Reembolso)
-        if ' - NF ' in nome_sem_ext:
-            partes = nome_sem_ext.split(' - NF ')
-            logging.info(f"Partes do nome (reembolso): {partes}")
-            if len(partes) == 2:
-                fornecedor = partes[0].strip()
-                numero_nf = partes[1].replace('.', '').strip()
-                logging.info(f"Reembolso encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
-                return numero_nf, fornecedor
-            
-        # Procura por NF, FL ou CTE no nome (Protocolo)
-        if 'NF ' in nome_sem_ext:
-            prefixo = 'NF '
-        elif 'FL ' in nome_sem_ext:
-            prefixo = 'FL '
-        elif 'CTE ' in nome_sem_ext:
-            prefixo = 'CTE '
+        
+        qtd_hifens = nome_sem_ext.count('-')
+        if qtd_hifens == 1:
+            #reembolso
+            if '- NF' in nome_sem_ext:
+                partes = nome_sem_ext.split(' - NF')
+                print(f"Partes do nome (reembolso): {partes}")
+                if len(partes) == 2:
+                    fornecedor = partes[0].strip()
+                    numero_nf = partes[1].replace('.', '').strip()
+                    print(f"Reembolso encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
         else:
-            logging.info("Nenhum prefixo encontrado")
-            return None, None
-            
-        # Encontra a posição do prefixo
-        pos_prefixo = nome_sem_ext.find(prefixo)
-        if pos_prefixo == -1:
-            logging.info(f"Prefixo {prefixo} não encontrado na posição esperada")
-            return None, None
-            
-        # Pega o texto após o prefixo
-        texto_apos_prefixo = nome_sem_ext[pos_prefixo + len(prefixo):]
-        logging.info(f"Texto após prefixo: {texto_apos_prefixo}")
+            #protocolo
+            partes = nome_sem_ext.split(' - ')
+            print(f"Partes do nome (protocolo): {partes}")
+            if len(partes) == 3:
+                fornecedor = partes[2].strip()
+                partes[1] = partes[1].replace('.', '')
+                delimitador = re.sub(r'\d', '', partes[1])
+                numero_nf = partes[1].split(delimitador)[1].strip().replace('.', '')
+                print(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
+            elif len(partes) > 3:
+                fornecedor = (partes[2]+' - '+partes[3]).strip()
+                numero_nf = partes[1].split('NF')[1].strip().replace('.', '')
+                print(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
+            else:
+                print("Formato de protocolo inválido")
         
-        # Encontra o próximo hífen
-        pos_proximo_hifen = texto_apos_prefixo.find(' - ')
-        if pos_proximo_hifen == -1:
-            logging.info("Hífen não encontrado após o número")
+        if numero_nf and fornecedor:
+            fornecedor = normalizar_texto(fornecedor)
+            return numero_nf, fornecedor
+        else:
+            print("Formato de protocolo inválido")
             return None, None
-            
-        # Extrai o número (do prefixo até o próximo hífen)
-        numero_parte = texto_apos_prefixo[:pos_proximo_hifen].strip()
-        # Remove pontos e espaços do número
-        numero_nf = numero_parte.replace('.', '').replace(' ', '')
-        
-        # O resto é o nome do fornecedor
-        fornecedor = normalizar_texto(texto_apos_prefixo[pos_proximo_hifen + 3:].strip())
-        
-        logging.info(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
-        return numero_nf, fornecedor
     except Exception as e:
-        logging.error(f"Erro ao extrair número e fornecedor do nome do arquivo: {e}")
+        print(f"Erro ao extrair número e fornecedor do nome do arquivo: {e}")
         return None, None
 
 def extrair_chave_acesso_pdf(pdf_data):
