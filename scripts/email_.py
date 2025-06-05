@@ -126,8 +126,8 @@ def processar_emails():
         return
 
     with MailBox(host=IMAP_HOST, port=993, timeout=400).login(IMAP_USER, IMAP_PASS) as mailbox:
-        # Buscar e-mails não lidos com o assunto padrão
-        emails = mailbox.fetch(AND(seen=False, from_='leandro.netto@fortanks.ind.br'))
+        # Buscar e-mails não lidos com o assunto padrão, limitando a quantidade
+        emails = mailbox.fetch(AND(seen=False, from_='leandro.netto@fortanks.ind.br'), limit=50)
         emailsDat = []
         cc = None
         for msg in emails:
@@ -155,13 +155,10 @@ def processar_emails():
                             except Exception as e:
                                 logging.error(f"Erro ao processar nota fiscal: {e}")
                             if not nf:
-                                #chave,data = extrair_dados_xml(xml_text)
-                                #nf = data['numero']
                                 continue
                             path = os.path.join(temp_dir, 'relatorio_financeiro.xlsx')
                             print(f"Gerando relatorio financeiro: {path}")
                             tinicial=time.time()
-                            #gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
                             tfinal=time.time()
                             logging.info(f"Tempo de execução relatorio financeiro: {tfinal-tinicial} segundos")
                             cc = get_CC(nf.numero_nf)
@@ -178,7 +175,6 @@ def processar_emails():
                                 print(f"Enviando mensagem: ")
                                 tinicial=time.time()
                                 response = None
-                               # response = enviar_mensagem(payload)
                                 tfinal=time.time()
                                 logging.info(f"Tempo de execução xml: {tfinal-tinicial} segundos")
                                 if response:
@@ -193,7 +189,7 @@ def processar_emails():
                                     ))
                     for att in msg.attachments:
                         if att.filename.lower().endswith('.pdf'):
-                            print(f"Processando pdf: {att.filename} nnf: {nnf}")
+                            print(f"Processando pdf: {att.filename}")
                             tinicial=time.time()
                             if nf:
                                 try:
@@ -208,10 +204,8 @@ def processar_emails():
                                             "fileName": f'NF {nf.numero_nf}.pdf',
                                             "caption": f'NF {nf.numero_nf}.pdf - CC: {cc}',
                                             "media": base64_pdf}
-
                                     }
                                     response = enviar_mensagem(payload,tipo='sendMedia')
-                                    #print(f"Resposta: {response}")
                                     tfinal1=time.time()
                                     logging.info(f"Tempo de execução1: {tfinal1-tfinal} segundos")
                                     if response:
@@ -220,36 +214,13 @@ def processar_emails():
                                     logging.error(f"Erro ao enviar mensagem: {e}")
                                 
                                 anexos_processados.append((
-                                    f'NF {nnf}.pdf',
+                                    f'NF {nf.numero_nf}.pdf',
                                     att.content_type,
                                     att.payload
                                 ))
                     
-                # Reenviar email com anexos processados
-                if False:
-                    if anexos_processados:
-
-                        corpo_html = f"""
-                        <html>
-                            <body>
-                                <p>Segue o email original de {msg.from_} com os anexos processados.</p>
-                                <p>Assunto original: {msg.subject}</p>
-                            </body>
-                        </html>
-                        """
-                        cte = '1234567890'
-                        nfe = '1234567890'
-                        enviar_email(
-                            destinatario=EMAIL_DESTINO,
-                            assunto=f"Documentos CTE ${cte} e NFe ${nfe} ",
-                            corpo_html=corpo_html,
-                            anexos=anexos_processados
-                        )
-                     # Marcar email como lido
-                        mailbox.flag(msg.uid, 'SEEN', True)
-                        logging.info(f'Email processado e reenviado com sucesso para {EMAIL_DESTINO}')
-             # Marcar email como lido
-            mailbox.flag(msg.uid, 'SEEN', True)
+                # Marcar email como lido
+                mailbox.flag(msg.uid, 'SEEN', True)
                        
 
 def procurar_anexos_xml():

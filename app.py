@@ -48,7 +48,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-from scripts.processar_email_pdf import processar_notas_fiscais, processar_protocolos, processar_reembolsos
+from scripts.processar_email import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 from controllers.relatorio_controller import relatorio_bp
 from controllers.dados_analiticos_controller import executar_importacao_async
@@ -342,14 +342,16 @@ def processar_arquivei():
 
 def job_email5min():
     with app.app_context():
+        processar_emails()
         #processar_protocolos()
         #processar_reembolsos()
-        processar_notas_fiscais()
+        #processar_notas_fiscais()
 
 def job_email15min():
     with app.app_context():
-        processar_protocolos()
-        processar_reembolsos()
+        #processar_protocolos()
+        #processar_reembolsos()
+        pass
         
         #processar_notas_fiscais()
 def job_diario():

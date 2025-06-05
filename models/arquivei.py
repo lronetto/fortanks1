@@ -116,8 +116,8 @@ class Arquivei:
         
         if response.status_code == 200:
             response_data = response.json()
-            print('response_data: ',len(response_data['data']))
-            print('response_data: ',response_data)
+            #print('response_data: ',len(response_data['data']))
+            #print('response_data: ',response_data)
             
             # Verificar se há dados retornados
             if 'data' not in response_data or not response_data['data']:

@@ -21,7 +21,7 @@ from scripts.robo_email_nf import processar_emails
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from scripts.verificar_cancelamento import verificar
 from models.arquivei import Arquivei
-from scripts.processar_email_pdf import processar_protocolos, processar_reembolsos
+from scripts.processar_email import processar_emails
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
 from models.nota_fiscal import CNPJS
@@ -43,7 +43,7 @@ def verificar_permissao():
 @nota_fiscal_bp.route('/teste1')
 @login_required
 def teste1():
-    processar_reembolsos()
+    
     #processar_protocolos()
     return redirect(url_for('nota_fiscal.index'))
 

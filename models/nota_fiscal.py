@@ -101,7 +101,7 @@ class NotaFiscal(db.Model):
                 upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first()
                 if not upload:
                     pdf_data = Arquivei(chave_acesso=self.chave_acesso)
-                    print(f'pdf_data: {pdf_data}')
+                    #print(f'pdf_data: {pdf_data}')
                     print(f'id: {self.id} chave: {self.chave_acesso}')
                     self.upload = Upload('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
                 else:
