@@ -422,7 +422,7 @@ def processar_notas_fiscais():
                                 #chave,data = extrair_dados_xml(xml_text)
                                 #nf = data['numero']
                                 continue
-                            print(f"Gerando relatorio financeiro: {nf.numero_nf()}")
+                            print(f"Gerando relatorio financeiro: {nf.numero_nf}")
                             path = os.path.join(temp_dir, 'relatorio_financeiro.xlsx')
                             print(f"Gerando relatorio financeiro: {path}")
                             tinicial=time.time()

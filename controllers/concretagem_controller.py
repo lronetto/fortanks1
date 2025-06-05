@@ -695,7 +695,7 @@ def teste_planilha():
                     tq_id=4
                 if 'REATOR' in row['TANQUE']:
                     tq_id=1
-                pc = Peca.query.filter(Peca.nome.like(f'%{row['NOME']}%'),Peca.tanque_id==tq_id).first()
+                pc = Peca.query.filter(Peca.nome.like(f"%{row['NOME']}%"), Peca.tanque_id==tq_id).first()
                 if row['SEQ']!=seq and seq not in [None, np.nan]:
                     seq=row['SEQ']
                     partes = row['PISTA'].split('-')
