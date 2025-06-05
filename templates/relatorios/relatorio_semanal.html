@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório Semanal</title>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo da Empresa" class="logo">
+        <h1>Relatório Semanal</h1>
+        <p>Período: {{ data_inicio.strftime('%d/%m/%Y') }} a {{ data_fim.strftime('%d/%m/%Y') }}</p>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Recebimentos por Centro de Custo</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Centro de Custo</th>
+                    <th>Valor Recebido (R$)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for centro in recebimentos %}
+                <tr>
+                    <td>{{ centro.nome }}</td>
+                    <td>{{ "%.2f"|format(centro.valor) }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td>Total</td>
+                    <td>{{ "%.2f"|format(recebimentos|sum(attribute='valor')) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Notas Emitidas por Centro de Custo</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Centro de Custo</th>
+                    <th>Quantidade de Notas</th>
+                    <th>Valor Total (R$)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for centro in notas_emitidas %}
+                <tr>
+                    <td>{{ centro.nome }}</td>
+                    <td>{{ centro.quantidade }}</td>
+                    <td>{{ "%.2f"|format(centro.valor_total) }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td>Total</td>
+                    <td>{{ notas_emitidas|sum(attribute='quantidade') }}</td>
+                    <td>{{ "%.2f"|format(notas_emitidas|sum(attribute='valor_total')) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2 class="section-title">Custos Realizados por Centro de Custo</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Centro de Custo</th>
+                    <th>Valor (R$)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for centro in custos %}
+                <tr>
+                    <td>{{ centro.nome }}</td>
+                    <td>{{ "%.2f"|format(centro.valor) }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td>Total</td>
+                    <td>{{ "%.2f"|format(custos|sum(attribute='valor')) }}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Relatório gerado em {{ data_geracao.strftime('%d/%m/%Y %H:%M') }}</p>
+    </div>
+</body>
+</html> 

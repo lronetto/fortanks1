@@ -5,8 +5,9 @@ from flask_login import login_required
 #from flask_wtf.csrf import csrf_exempt
 import json
 from datetime import datetime
-
-
+import pandas as pd
+import numpy as np
+from sqlalchemy import text
 # Definir o blueprint
 concretagem = Blueprint('concretagem', __name__, url_prefix='/concretagens')
 
@@ -679,3 +680,60 @@ def detalhes_tanques(id):
         return jsonify({'success': True, 'tanques': tanques, 'alongamentos': concretagem.alongamentos})
     else:
         return jsonify({'success': False, 'message': 'Nenhum tanque encontrado'})
+
+@concretagem.route('/api/teste_planilha')
+@login_required
+def teste_planilha():
+   
+    df = pd.read_excel("pecas.xlsx", sheet_name="CADASTRO")
+    df=df.sort_values(by='SEQ')
+    seq=0
+    for index, row in df.iterrows():
+        if row['DATA'] not in [None, np.nan]:
+            if 'PRIMARIO' in row['TANQUE']:
+                tq_id=4
+            if 'REATOR' in row['TANQUE']:
+                tq_id=1
+            pc = Peca.query.filter(Peca.nome.like(f'%{row['NOME']}%'),Peca.tanque_id==tq_id).first()
+            if row['SEQ']!=seq and seq not in [None, np.nan]:
+                seq=row['SEQ']
+                partes = row['PISTA'].split('-')
+                pista = None
+                if len(partes)==2:
+                    pista = int(partes[-1].lstrip('0'))
+
+                concretagem = Concretagem(
+                    data_concretagem=row['DATA'],
+                    pista=pista
+                )
+                db.session.add(concretagem)
+                db.session.flush()
+            conPeca = ConcretagemPeca(
+                concretagem_id=concretagem.id,
+                peca_id=pc.id
+            )
+            db.session.add(conPeca)
+            db.session.flush()
+            pc.data_concretagem=row['DATA'].strftime('%Y-%m-%d') if pd.notna(row['DATA']) else None
+            acabamento=None
+            if row['ACABAMENTO'] not in [None, np.nan]:
+                acabamento=row['ACABAMENTO']
+            chapa=None
+            if row['CHAPA'] not in [None, np.nan,'A DEFINIR','SEM CHAPA','NÃO TEM CHAPA']:
+                chapa=row['CHAPA']
+            transporte=None
+            if row['DATA TRANS.'] not in [None, np.nan]:
+                transporte={
+                    'data_transporte': row['DATA TRANS.'].strftime('%Y-%m-%d') if pd.notna(row['DATA TRANS.']) else None,
+                    'placa': row['PLACA'] if pd.notna(row['PLACA']) else None,
+                    'nota': row['NF'] if pd.notna(row['NF']) else None
+                }
+                pc.data_entrega=row['DATA TRANS.'].strftime('%Y-%m-%d') if pd.notna(row['DATA TRANS.']) else None
+            pc.qualidade={
+                'acabamento':acabamento,
+                'chapa':chapa,
+                'transporte':transporte
+            }
+            db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Planilha teste'})

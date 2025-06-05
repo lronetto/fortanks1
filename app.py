@@ -28,6 +28,8 @@ from controllers.dados_analiticos_controller import dados_analiticos_bp
 from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from models.usuario import Usuario
+from models.arquivei import Arquivei
+from models.nota_fiscal import NotaFiscal
 # Isso carregará e configurará todos os modelos
 from models import configure_mappers
 from models.database import db, init_db
@@ -48,6 +50,8 @@ from flask_mail import Mail
 from dotenv import load_dotenv
 from scripts.processar_email_pdf import processar_notas_fiscais, processar_protocolos, processar_reembolsos
 from apscheduler.schedulers.background import BackgroundScheduler
+from controllers.relatorio_controller import relatorio_bp
+from controllers.dados_analiticos_controller import executar_importacao_async
 load_dotenv('.env')
 
 # Configuração de logs
@@ -190,6 +194,7 @@ app.register_blueprint(producao_peca_bp, url_prefix='/producao-peca')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(relatorio_usinagem_bp)
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
+app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
 logger.info("Blueprints registrados com sucesso!")
 
 # Registrar comandos CLI
@@ -329,7 +334,11 @@ def handle_exception(e):
                                error_code=code,
                                error_title=name,
                                error_message=description), code
-
+def processar_arquivei():
+    notas=Arquivei(data_inicio=datetime.now()-timedelta(days=1),data_fim=datetime.now())
+    if notas:
+        for nota in notas.xml_datas:
+            NotaFiscal(xml_data=nota)
 
 def job_email5min():
     with app.app_context():
@@ -341,6 +350,7 @@ def job_email15min():
     with app.app_context():
         processar_protocolos()
         processar_reembolsos()
+        
         #processar_notas_fiscais()
 def job_diario():
     """
@@ -348,10 +358,36 @@ def job_diario():
     """
     with app.app_context():
         logger.info("Executando job diário...")
+        executar_importacao_async(0)
         # Aqui você pode adicionar as funções que deseja executar diariamente
         # Por exemplo:
         # processar_relatorios_diarios()
         # enviar_relatorio_diario()
+        # etc...
+
+def job_semanal():
+    """
+    Job que executa uma vez por semana (todo domingo às 00:00)
+    """
+    with app.app_context():
+        logger.info("Executando job semanal...")
+        # Aqui você pode adicionar as funções que deseja executar semanalmente
+        # Por exemplo:
+        # processar_relatorios_semanais()
+        # enviar_relatorio_semanal()
+        # etc...
+
+def job_hora():
+    """
+    Job que executa a cada hora
+    """
+    with app.app_context():
+        logger.info("Executando job horário...")
+        processar_arquivei()
+        # Aqui você pode adicionar as funções que deseja executar a cada hora
+        # Por exemplo:
+        # verificar_status_sistema()
+        # atualizar_cache()
         # etc...
 
 def gerenciar_scheduler():
@@ -375,13 +411,21 @@ def gerenciar_scheduler():
             app.scheduler.add_job(job_email5min, 'cron', minute='*/5')
             logger.info("Job de email adicionado ao scheduler")
 
-             # Adiciona o job de email (a cada 5 minutos)
+            # Adiciona o job de email (a cada 15 minutos)
             app.scheduler.add_job(job_email15min, 'cron', minute='*/15')
             logger.info("Job de email adicionado ao scheduler")
             
             # Adiciona o job diário (todos os dias às 00:00)
             app.scheduler.add_job(job_diario, 'cron', hour=0, minute=0)
             logger.info("Job diário adicionado ao scheduler")
+
+            # Adiciona o job semanal (todo domingo às 00:00)
+            app.scheduler.add_job(job_semanal, 'cron', day_of_week='sun', hour=0, minute=0)
+            logger.info("Job semanal adicionado ao scheduler")
+
+            # Adiciona o job horário (a cada hora)
+            app.scheduler.add_job(job_hora, 'cron', hour='*')
+            logger.info("Job horário adicionado ao scheduler")
             
             logger.info("Novo scheduler criado com sucesso")
         

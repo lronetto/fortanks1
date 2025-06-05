@@ -613,6 +613,27 @@ def importar_dados_csv():
     else:
         return redirect(url_for('dados_analiticos.index'))
 
+def executar_importacao_async(user_id):
+    """
+    Função assíncrona para executar a importação de dados analíticos
+    """
+    try:
+        # Inicializar a extração em background usando asyncio
+        loop = asyncio.new_event_loop() 
+        asyncio.set_event_loop(loop)
+        
+        # Executar a importação usando o ID do usuário atual
+        resultado = loop.run_until_complete(
+            executar_importacao_async(user_id)
+        )   
+        return resultado
+    except Exception as e:
+        logger.error(f"Erro ao iniciar extração: {str(e)}", exc_info=True)
+        return {
+            'sucesso': False,
+            'mensagem': f'Erro ao iniciar extração: {str(e)}'   
+        }
+
 @dados_analiticos_bp.route('/api/iniciar-extracao', methods=['GET'])
 @login_required
 #@verificar_permissao('importar_dados_analiticos')
@@ -621,35 +642,8 @@ def api_iniciar_extracao():
     Inicia a extração automática de dados usando Playwright
     """
     logger.info("Iniciando extração de dados analíticos...")
-    try:
-        # Iniciar a extração em background usando asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # Executar a importação usando o ID do usuário atual
-        resultado = loop.run_until_complete(
-            executar_importacao_async(current_user.id)
-        )
-        
-        # Verificar resultado
-        if resultado['sucesso']:
-            flash(f"Importação concluída com sucesso! {resultado['registros']} registros importados.", 'success')
-            return jsonify({
-                'sucesso': True,
-                'mensagem': f"Importação concluída com sucesso! {resultado['registros']} registros importados."
-            })
-        else:
-            flash(f"Erro na importação: {resultado['mensagem']}", 'danger')
-            return jsonify({
-                'sucesso': False,
-                'mensagem': resultado['mensagem']
-            })
-    except Exception as e:
-        logger.error(f"Erro ao iniciar extração: {str(e)}", exc_info=True)
-        return jsonify({
-            'sucesso': False,
-            'mensagem': f'Erro ao iniciar extração: {str(e)}'
-        })
+    resultado = executar_importacao_async(current_user.id)
+    return jsonify(resultado)
 
 @dados_analiticos_bp.route('/dashboard')
 @login_required
