@@ -266,7 +266,7 @@ def processar_protocolos():
                     notas = NotaFiscal.query.filter(NotaFiscal.numero_nf.like(f'%{numero_nf}%')).all()
                     
                     # Depois procura a que tem o nome do emitente normalizado correspondente
-                    nota = None
+                    nota = None 
                     fornecedor_normalizado = normalizar_texto(fornecedor)
                     for n in notas:
                         emitente_normalizado = normalizar_texto(n.nome_emitente)
