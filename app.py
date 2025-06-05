@@ -335,7 +335,7 @@ def handle_exception(e):
                                error_title=name,
                                error_message=description), code
 def processar_arquivei():
-    notas=Arquivei(data_inicio=datetime.now()-timedelta(days=1),data_fim=datetime.now())
+    notas=Arquivei(data_inicial=datetime.now()-timedelta(days=1),data_final=datetime.now())
     if notas:
         for nota in notas.xml_datas:
             NotaFiscal(xml_data=nota)
@@ -437,7 +437,7 @@ def gerenciar_scheduler():
         logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
 
 # Gerenciar o scheduler
-gerenciar_scheduler()
+#gerenciar_scheduler()
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():
