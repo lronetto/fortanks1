@@ -1118,7 +1118,9 @@ def importar_todas_pendentes():
     """
     try:
         # Buscar todas as notas fiscais
-        notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada').all()
+        notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada',
+                                                NotaFiscal.data_emissao<=datetime.now()-timedelta(months=12))\
+                                                .all()
         
         itens_importados = 0
         notas_processadas = 0
