@@ -22,6 +22,10 @@
                                     {{ form.centro_custo_id(class="form-control") }}
                                 </div>
                             </div>
+                            <div class="col-md-2">
+                                <label for="filtroValorExato" class="form-label">Valor Exato</label>
+                                <input type="number" step="0.01" class="form-control" id="filtroValorExato" placeholder="Valor exato">
+                            </div>
                         {% include 'reembolsos/_form_fields.html' %}
                     </form>
                 </div>
@@ -137,6 +141,7 @@ function filtrarNotas(page = 1) {
         data_final: document.getElementById('filtroDataFinal').value,
         valor_minimo: document.getElementById('filtroValorMinimo').value,
         valor_maximo: document.getElementById('filtroValorMaximo').value,
+        valor_exato: document.getElementById('filtroValorExato').value,
         pagamento: document.getElementById('filtroPagamento') ? document.getElementById('filtroPagamento').value : '',
         page: paginaNotas,
         per_page: notasPorPagina,

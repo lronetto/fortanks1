@@ -1,3 +1,4 @@
+import asyncio
 from controllers.seguranca_controller import seguranca_bp
 from controllers.colaborador_controller import colaborador_bp
 from controllers.equipamento_controller import equipamento_bp
@@ -360,7 +361,13 @@ def job_diario():
     """
     with app.app_context():
         logger.info("Executando job diário...")
-        executar_importacao_async(0)
+        loop = asyncio.new_event_loop() 
+        asyncio.set_event_loop(loop)
+        logger.info("Iniciando extração de dados analíticos...")
+        resultado = loop.run_until_complete(
+                executar_importacao_async(0)
+            )  
+        logger.info(f"Resultado da extração: {resultado}")
         # Aqui você pode adicionar as funções que deseja executar diariamente
         # Por exemplo:
         # processar_relatorios_diarios()

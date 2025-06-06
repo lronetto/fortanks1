@@ -25,8 +25,6 @@ from evolutionapi.client import EvolutionClient
 from evolutionapi.models.message import TextMessage, QuotedMessage
 import requests
 import time
-from pyzbar.pyzbar import decode
-from pdf2image import convert_from_path, convert_from_bytes
 
 def carregar_variaveis_ambiente():
     """
@@ -187,19 +185,19 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
         else:
             #protocolo
             partes = nome_sem_ext.split(' - ')
-            #print(f"Partes do nome (protocolo): {partes}")
+            print(f"Partes do nome (protocolo): {partes}")
             if len(partes) == 3:
                 fornecedor = partes[2].strip()
                 partes[1] = partes[1].replace('.', '')
                 delimitador = re.sub(r'\d', '', partes[1])
                 numero_nf = partes[1].split(delimitador)[1].strip().replace('.', '')
-                #print(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
+                print(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
             elif len(partes) > 3:
                 fornecedor = (partes[2]+' - '+partes[3]).strip()
                 numero_nf = partes[1].split('NF')[1].strip().replace('.', '')
-                #print(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
+                print(f"Protocolo encontrado - Fornecedor: {fornecedor}, NF: {numero_nf}")
             else:
-                print("Formato inválido")
+                print("Formato de protocolo inválido")
         
         if numero_nf and fornecedor:
             fornecedor = normalizar_texto(fornecedor)
@@ -234,11 +232,8 @@ def processar_emails():
         for msg in emails:
             logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
             try:
-                if ASSUNTO_PADRAO_PROTOCOLO or ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
-                    if ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
-                        tipo = 3
-                    else:
-                        tipo = 2
+                if ASSUNTO_PADRAO_PROTOCOLO in msg.subject:
+
                     logging.info(f'Processando email de protocolo: {msg.subject}')
                     
                     for att in msg.attachments:
@@ -247,79 +242,114 @@ def processar_emails():
                             if 'protocolo' in att.filename.lower():
                                 logging.info(f"Ignorando arquivo de protocolo: {att.filename}")
                                 continue
-                            print(f"tentando a chave do arquivo {att.filename}")
-                            img = convert_from_bytes(att.payload,500)[0]
-                            dec = decode(img)
-                            dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-                            if dec1:
-                                print(f"Decodificado: {dec1} nota")
-                                nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
+                                
+                            # Se não encontrou a chave de acesso, tenta pelo número e fornecedor
+                            numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(att.filename)
+                            if not numero_nf or not fornecedor:
+                                logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {att.filename}")
+                                continue
+                            
+                            # Buscar a nota fiscal no banco de dados
+                            from models.nota_fiscal import NotaFiscal
+                            from sqlalchemy import func
+                            
+                            # Primeiro busca todas as notas com o número correspondente
+                            numero_nf = int(numero_nf.strip())
+                            notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
+                            
+                            # Depois procura a que tem o nome do emitente normalizado correspondente
+                            nota = None 
+                            fornecedor_normalizado = normalizar_texto(fornecedor)
+                            if not notas:
+                                print(f"Nota1 fiscal1 {numero_nf} não encontrada no sistema")
+                                up = Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf')
+                                if up.id:
+                                    logging.info(f"PDF2 protocolo ja existe {numero_nf}")
+                                else:
+                                    Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf', att.payload)
+                                    logging.info(f"PDF3 protocolo enviado com sucesso para a NF {numero_nf}")
+                            else:
+                                for n in notas:
+                                    emitente_normalizado = normalizar_texto(n.nome_emitente)
+                                    # Verifica se o nome do fornecedor está contido no nome do emitente
+                                    if fornecedor_normalizado in emitente_normalizado:
+                                        nota = n
+                                        break
                                 
                                 if nota:
-                                    print(f"Nota: {nota.id} {nota.numero_nf}")
-                                    up = Upload('NotaFiscal', nota.id, tipo, att.filename, 'application/pdf')
-                                    if up.id:
-                                        logging.info(f"upload ja existe {nota.numero_nf}")
-                                    else:
-                                        Upload('NotaFiscal', nota.id, tipo, att.filename, 'application/pdf', att.payload)
-                                        logging.info(f"upload realizado {nota.numero_nf}")
-                                    continue
-                                else:
-                                    if Arquivei(chave_acesso=dec1,cancelamento=True).cancelada:
-                                        logging.info(f"Nota cancelada: {dec1}")
-                            else:
-                                print(f"tentando pelo numero e fornecedor {att.filename}")
-                                numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(att.filename)
-                                if not numero_nf or not fornecedor:
-                                    logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {att.filename}")
-                                    continue
-                            
-                                
-                                # Primeiro busca todas as notas com o número correspondente
-                                numero_nf = int(numero_nf.strip())
-                                notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
-                                
-                                # Depois procura a que tem o nome do emitente normalizado correspondente
-                                nota = None 
-                                fornecedor_normalizado = normalizar_texto(fornecedor)
-                                if not notas:
-                                    print(f"numero nf {numero_nf} nao encontrado no db")
-                                    up = Upload('NotaFiscal', 0, tipo, att.filename, 'application/pdf')
-                                    if up.id:
-                                        logging.info(f"upload ja existe sem nota {numero_nf}")
-                                    else:
-                                        Upload('NotaFiscal', 0, tipo, att.filename, 'application/pdf', att.payload)
-                                        logging.info(f"upload realizado sem nota {numero_nf}")
-                                else:
-                                    for n in notas:
-                                        emitente_normalizado = normalizar_texto(n.nome_emitente)
-                                        # Verifica se o nome do fornecedor está contido no nome do emitente
-                                        if fornecedor_normalizado in emitente_normalizado:
-                                            nota = n
-                                            break
-                                    
-                                    if nota:
-                                        print(f"nota encontrada {nota.id} {nota.numero_nf}")
-                                        try:
-                                            up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=att.filename, mimetype='application/pdf')
-                                            if up.id:
-                                                logging.info(f"upload ja existe {numero_nf}")
-                                            else:
-                                                Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=att.filename, mimetype='application/pdf', blob=att.payload)
-                                                logging.info(f"upload realizado {numero_nf}")
-                                        except Exception as e:
-                                            logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
-                                    else:
-                                        print(f"fornecedor nao encontrado {numero_nf}")
-                                        up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=att.filename, mimetype='application/pdf')
-                                        if not up.id:
-                                            print(f"upload realizado sem nota {numero_nf}")
-                                            Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=att.filename, mimetype='application/pdf', blob=att.payload)
+                                    try:
+                                        up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=2, filename=att.filename, mimetype='application/pdf')
+                                        if up.id:
+                                            logging.info(f"PDF4 ja existe1 {numero_nf}")
                                         else:
-                                            logging.info(f"upload ja existe sem nota {numero_nf}")
+                                            Upload(pai='NotaFiscal', pai_id=nota.id, tipo=2, filename=att.filename, mimetype='application/pdf', blob=att.payload)
+                                            logging.info(f"PDF5 protocolo enviado com sucesso para a NF {numero_nf}")
+                                    except Exception as e:
+                                        logging.error(f"Erro6 ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
+                                else:
+                                    print(f"Nota7 fiscal2 {numero_nf} não encontrada no sistema")
+                                    up = Upload(pai='NotaFiscal', pai_id=0, tipo=2, filename=att.filename, mimetype='application/pdf')
+                                    if not up.id:
+                                        Upload(pai='NotaFiscal', pai_id=0, tipo=2, filename=att.filename, mimetype='application/pdf', blob=att.payload)
+                                    else:
+                                        logging.info(f"PDF8 protocolo ja existe {numero_nf}")
                     
                     # Marcar o email como lido
                    
+                
+                if ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
+                    logging.info(f'Processando email de reembolso: {msg.subject}')
+                    for att in msg.attachments:
+                        if att.filename.lower().endswith('.pdf'):
+                            # Ignora arquivos que contenham 'protocolo' no nome
+                            if 'protocolo' in att.filename.lower():
+                                logging.info(f"Ignorando arquivo de protocolo: {att.filename}")
+                                continue
+                                
+                            # Se não encontrou a chave de acesso, tenta pelo número e fornecedor
+                            numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(att.filename)
+                            
+                            print(f"Numero NF: {numero_nf} Fornecedor: {fornecedor}")
+                            if not numero_nf or not fornecedor:
+                                logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {att.filename}")
+                                continue
+                            
+                            # Buscar a nota fiscal no banco de dados
+                            from models.nota_fiscal import NotaFiscal
+                            from sqlalchemy import func
+                            
+                            # Primeiro busca todas as notas com o número correspondente
+                            notas = NotaFiscal.query.filter(NotaFiscal.numero_nf.like(f'%{numero_nf}%')).all()
+                            
+                            # Depois procura a que tem o nome do emitente normalizado correspondente
+                            nota = None
+                            fornecedor_normalizado = normalizar_texto(fornecedor)
+                            print(f"Fornecedor normalizado: {fornecedor_normalizado}")
+                            for n in notas:
+                                emitente_normalizado = normalizar_texto(n.nome_emitente)
+                                # Verifica se o nome do fornecedor está contido no nome do emitente
+                                if fornecedor_normalizado in emitente_normalizado:
+                                    nota = n
+                                    break
+                            
+                            if nota:
+                                try:
+                                    if Upload('NotaFiscal', nota.id, 3, att.filename, 'application/pdf'):
+                                        logging.info(f"PDF reembolso ja existe {numero_nf}")
+                                    else:
+                                        Upload('NotaFiscal', nota.id, 3, att.filename, 'application/pdf', att.payload)
+                                        logging.info(f"PDF reembolso enviado com sucesso para a NF {numero_nf}")
+                                except Exception as e:
+                                    logging.error(f"Erro ao fazer upload do PDF reembolso para NF {numero_nf}: {e}")
+                            else:
+                                print(f"Nota fiscal {numero_nf} não encontrada no sistema")
+                                if not Upload('NotaFiscal', 0, 3, att.filename, 'application/pdf'):
+                                    print(f"Gravando reembolso {numero_nf}")
+                                    Upload('NotaFiscal', 0, 3, att.filename, 'application/pdf', att.payload)
+                                else:
+                                    logging.info(f"PDF reembolso ja existe {numero_nf}")
+                                logging.warning(f"Nota fiscal {numero_nf} não encontrada no sistema")
+            
                 if ASSUNTO_PADRAO_NFE in msg.subject:
                     
                     logging.info(f'Processando email de nfe: {msg.subject}')
@@ -346,7 +376,7 @@ def processar_emails():
                                 path = os.path.join(temp_dir, 'relatorio_financeiro.xlsx')
                                 print(f"Gerando relatorio financeiro: {path}")
                                 tinicial=time.time()
-                                #gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
+                                gerar_relatorio_financeiro(output_path='relatorio_financeiro.xlsx')
                                 tfinal=time.time()
                                 logging.info(f"Tempo de execução relatorio financeiro: {tfinal-tinicial} segundos")
                                 cc = get_CC(nf.numero_nf)

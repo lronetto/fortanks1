@@ -87,7 +87,7 @@ class NotaFiscal(db.Model):
                     setattr(self, key, value)
                 
         if chave_acesso:
-            nota = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+            nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==chave_acesso).first()
             if nota:
                 for key, value in nota.__dict__.items():
                     setattr(self, key, value)
@@ -107,7 +107,7 @@ class NotaFiscal(db.Model):
                 else:
                     self.upload = upload
                 print('self.upload: ',self.upload)
-    
+        return self
 
 
     def save(self):

@@ -147,6 +147,7 @@ def buscar_notas():
             pagamento_filtro = filtros.get('pagamento', '')
             valor_minimo = filtros.get('valor_minimo')
             valor_maximo = filtros.get('valor_maximo')
+            valor_exato = filtros.get('valor_exato')
             notas_selecionadas = filtros.get('notas_selecionadas', [])
 
             tinicial = time.time()
@@ -164,10 +165,13 @@ def buscar_notas():
                 query = query.filter(NotaFiscal.data_emissao >= filtros['data_inicial'])
             if filtros.get('data_final'):
                 query = query.filter(NotaFiscal.data_emissao <= filtros['data_final'])
-            if valor_minimo:
-                query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
-            if valor_maximo:
-                query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
+            if valor_exato:
+                query = query.filter(NotaFiscal.valor_total == float(valor_exato))
+            else:
+                if valor_minimo:
+                    query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
+                if valor_maximo:
+                    query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
             if ids:
                 query = query.filter(NotaFiscal.id.in_(ids))
 

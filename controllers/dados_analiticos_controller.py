@@ -613,27 +613,6 @@ def importar_dados_csv():
     else:
         return redirect(url_for('dados_analiticos.index'))
 
-def executar_importacao_async(user_id):
-    """
-    Função assíncrona para executar a importação de dados analíticos
-    """
-    try:
-        # Inicializar a extração em background usando asyncio
-        loop = asyncio.new_event_loop() 
-        asyncio.set_event_loop(loop)
-        
-        # Executar a importação usando o ID do usuário atual
-        resultado = loop.run_until_complete(
-            executar_importacao_async(user_id)
-        )   
-        return resultado
-    except Exception as e:
-        logger.error(f"Erro ao iniciar extração: {str(e)}", exc_info=True)
-        return {
-            'sucesso': False,
-            'mensagem': f'Erro ao iniciar extração: {str(e)}'   
-        }
-
 @dados_analiticos_bp.route('/api/iniciar-extracao', methods=['GET'])
 @login_required
 #@verificar_permissao('importar_dados_analiticos')
@@ -641,8 +620,13 @@ def api_iniciar_extracao():
     """
     Inicia a extração automática de dados usando Playwright
     """
+    loop = asyncio.new_event_loop() 
+    asyncio.set_event_loop(loop)
     logger.info("Iniciando extração de dados analíticos...")
-    resultado = executar_importacao_async(current_user.id)
+    resultado = loop.run_until_complete(
+            executar_importacao_async(current_user.id)
+        )   
+    #resultado = executar_importacao_async(current_user.id)
     return jsonify(resultado)
 
 @dados_analiticos_bp.route('/dashboard')

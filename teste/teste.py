@@ -1,5 +1,9 @@
+import os
 import unicodedata
 import re
+from pyzbar.pyzbar import decode
+from pdf2image import convert_from_path
+
 def normalizar_texto(texto):
     """
     Remove acentos e caracteres especiais do texto
@@ -113,13 +117,7 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
         return None, None
 def main():
 
-    arquivos = ['03-07-2025 - NF 80.540 - ARCELORMITTAL BRASIL S.A.pdf',
-                '08-06-2025 - NF 2810 - HOLANDA ENGENHARIA LTDA.pdf',
-                '07-06-2025 - NF 1.070 - LN SCAQUETI.pdf',
-                '07-06-2025 - NF1.070 - LN SCAQUETI.pdf',
-                '07-06-2025 - CTE1070 - LN SCAQUETI.pdf',
-                '07-06-2025 - NF1070 - DADALTO LUVAS E UNIFORMES EIRELI - ME.pdf']
-    for arquivo in arquivos:
-        e=extrair_numero_fornecedor_do_nome(arquivo)
-        print(e)
+    pdfs = [i for i in os.listdir() if '.pdf' in i]
+    img = convert_from_path(pdfs[0],500)[0]
+    print(decode(img)[0].data.decode('utf-8'))
 main()

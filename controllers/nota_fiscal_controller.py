@@ -26,6 +26,8 @@ from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
 from models.nota_fiscal import CNPJS
 from models.dados_analiticos import DadoAnalitico
+from dateutil.relativedelta import relativedelta
+from datetime import datetime, timedelta
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -1119,7 +1121,7 @@ def importar_todas_pendentes():
     try:
         # Buscar todas as notas fiscais
         notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada',
-                                                NotaFiscal.data_emissao<=datetime.now()-timedelta(months=12))\
+                                                NotaFiscal.data_emissao<=datetime.now()-relativedelta(months=3))\
                                                 .all()
         
         itens_importados = 0
