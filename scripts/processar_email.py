@@ -1,6 +1,7 @@
 import os
 import tempfile
 from imap_tools import MailBox, AND
+from imbox import Imbox
 from dotenv import load_dotenv
 import logging
 from PyPDF2 import PdfReader, PdfWriter

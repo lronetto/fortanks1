@@ -21,7 +21,7 @@ from scripts.robo_email_nf import processar_emails
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from scripts.verificar_cancelamento import verificar
 from models.arquivei import Arquivei
-from scripts.processar_email import processar_emails
+from scripts.processar_email1 import processar_emails
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
 from models.nota_fiscal import CNPJS

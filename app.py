@@ -49,7 +49,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-from scripts.processar_email import processar_emails
+from scripts.processar_email1 import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 from controllers.relatorio_controller import relatorio_bp
 from controllers.dados_analiticos_controller import executar_importacao_async
