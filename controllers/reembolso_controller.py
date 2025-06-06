@@ -156,6 +156,12 @@ def buscar_notas():
             query = query.filter(NotaFiscal.cnpj_emitente.notlike('%27126997000187%'))
             query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notlike('%5949%')))
 
+            if pagamento_filtro == '2':
+                notas = Upload.query.filter(Upload.tipo==2, 
+                                            Upload.pai_id!=0,
+                                            Upload.pai=='NotaFiscal').all()
+                ids_notas = [n.pai_id for n in notas]
+                query = query.filter(NotaFiscal.id.notin_(ids_notas))
             # Aplicar filtros
             if filtros.get('numero'):
                 query = query.filter(NotaFiscal.numero_nf.ilike(f'%{filtros["numero"]}%'))
@@ -208,6 +214,9 @@ def buscar_notas():
                     if pagamento_filtro == '1' and valor_pagamento == 0:
                         continue  # Só pagos
 
+                    uploads = Upload.query.filter(Upload.pai_id==n.id,
+                                            Upload.pai=='NotaFiscal').all()
+
                     # Buscar centro de custo da nota se já estiver selecionada
                     centro_custo_id = None
                     if ids and n.id in ids:
@@ -217,6 +226,7 @@ def buscar_notas():
 
                     notas_filtradas.append({
                         'id': n.id,
+                        'upload': uploads,
                         'numero_nf': n.numero_nf,
                         'nome_emitente': n.nome_emitente,
                         'data_emissao': n.data_emissao.isoformat(),

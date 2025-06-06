@@ -186,7 +186,12 @@ function filtrarNotas(page = 1) {
                     <td><a href="#" onclick="abrirPdfNota(${nota.id}, '${nota.chave_acesso}'); return false;">${nota.nome_emitente}</a></td>
                     <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
                     <td>${formatarMoeda(nota.valor_total)}</td>
-                    <td>${formatarMoeda(nota.pagamento)}</td>
+                    <td>${nota.pagamento ? '\
+                        <span class="badge bg-success ms-1" title="Pago">\
+                            <i class="fas fa-check"></i></span>' : ''}
+                        ${nota.upload ? '\
+                        <span class="badge bg-info ms-1" title="Documentos anexados">\
+                            <i class="fas fa-paperclip"></i></span>' : ''}</td>
                     <td>
                         <input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}">
                     </td>
