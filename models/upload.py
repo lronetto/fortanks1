@@ -19,15 +19,17 @@ class Upload(db.Model):
         return f'<Upload {self.id} - {self.filename}>'
     
     def __init__(self, pai=None, pai_id=None, tipo=None, filename=None, mimetype=None, blob=None):
-        if not pai and not pai_id and not tipo and not filename and not mimetype and not blob:
-            return self
+
         if not blob:
             #print('pai: ',pai)
             #print('pai_id: ',pai_id)
             #print('tipo: ',tipo)
-            self = Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo, filename=filename, mimetype=mimetype).first()
-            #print('upload: ',self)
-            return self
+            up = Upload.query.filter(Upload.pai==pai, Upload.pai_id==pai_id, Upload.tipo==tipo, Upload.filename==filename, Upload.mimetype==mimetype).first()
+            print('up: ',up)
+            if up:
+                for key, value in up.__dict__.items():
+                    setattr(self, key, value)
+                #print('upload: ',self)
         else:
             self.pai = pai
             self.pai_id = pai_id

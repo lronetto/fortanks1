@@ -82,7 +82,7 @@ def get_CC(nnf):
 IMAP_FOLDER = 'Inbox'
 ASSUNTO_PADRAO_NFE = 'Envio de Nota Fiscal Eletrônica'
 ASSUNTO_PADRAO_CTE = 'Envio de Nota Fiscal Eletrônica - DUA'
-ASSUNTO_PADRAO_PROTOCOLO = 'ENC: NF\'S PROTOCOLOS'
+ASSUNTO_PADRAO_PROTOCOLO = "ENC: NF´S PROTOCOLOS"
 ASSUNTO_PADRAO_REEMBOLSO = 'REEMBOLSO'
 EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
 IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
@@ -125,9 +125,18 @@ def normalizar_texto(texto):
         ' S.A': ' SA', # Normaliza S.A
         ' S/A': ' SA', # Normaliza S/A
         ' LTDA': ' LTDA', # Normaliza LTDA
+        'LTDA.': 'LTDA', # Normaliza LTDA
         ' ME': ' ME', # Normaliza ME
         ' EPP': ' EPP', # Normaliza EPP
         '.': '', # Remove ponto
+        'DADALTO LUCAS E UNIFORMES ME': 'DADALTO LUVAS E UNIFORMES ME',
+        'DADALTO LUVAS E UNIFORMES - ME': 'DADALTO LUVAS E UNIFORMES ME',
+        'MIRANDA RESTAURANTE LTDA': 'MIRANDA RESTAURANTES LTDA',
+        'BRASITALIA AGREGADOS LTDA':'BRASITALIA AGREGADOS PARA CONSTRUCAO LTDA',
+        'NEOBETEL EQUIP DE PROTEÇÃO INDIVIDUAL LTDA': 'NEOBETEL EPI, EQUIPAMENTOS DE PROTECAO INDIVIDUAL LTDA',
+        'ES PRODUTOS SIDERGÚRGICOS LTDA': 'ES PRODUTOS SIDERURGICOS LTDA',
+        'FERRARI MAQ E FERRAMENTAS LTDA': 'FERRARI MAQUINAS E FERRAMENTAS LTDA EPP',
+        'TECNOSIL IND E COM DE PRODUTOS QUIMICOS': 'Tecnosil Industria e Comercio de Produtos Quimicos Ltda.'
     }
     
     for char, replacement in substituicoes.items():
@@ -155,12 +164,12 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
         fornecedor = None
         # Remove a extensão .pdf
         nome_sem_ext = nome_arquivo.replace('.pdf', '')
-        print(f"Nome sem extensão: {nome_sem_ext}")
+        #print(f"Nome sem extensão: {nome_sem_ext}")
         
         # Se for um protocolo simples
         if nome_sem_ext.startswith('Protocolo'):
             numero_protocolo = nome_sem_ext.replace('Protocolo', '').strip()
-            print(f"Protocolo simples encontrado: {numero_protocolo}")
+            #print(f"Protocolo simples encontrado: {numero_protocolo}")
             return numero_protocolo, 'PROTOCOLO'
         
         qtd_hifens = nome_sem_ext.count('-')
@@ -211,7 +220,7 @@ def processar_emails():
         return
 
     print('processar_emails')
-    with MailBox(host=env['IMAP_HOST'], port=993, timeout=400).login(env['IMAP_USER'], env['IMAP_PASS']) as mailbox:
+    with MailBox(host=env['IMAP_HOST'], port=993).login(env['IMAP_USER'], env['IMAP_PASS']) as mailbox:
         print(f'buscando emails {mailbox.login_result}')
         try:
             # Buscar e-mails não lidos com o assunto de protocolos, limitando a quantidade
@@ -221,6 +230,7 @@ def processar_emails():
             return
 
         for msg in emails:
+            logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
             try:
                 if ASSUNTO_PADRAO_PROTOCOLO in msg.subject:
 
@@ -244,17 +254,20 @@ def processar_emails():
                             from sqlalchemy import func
                             
                             # Primeiro busca todas as notas com o número correspondente
-                            notas = NotaFiscal.query.filter(NotaFiscal.numero_nf.like(f'%{numero_nf}%')).all()
+                            numero_nf = int(numero_nf.strip())
+                            notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
                             
                             # Depois procura a que tem o nome do emitente normalizado correspondente
                             nota = None 
                             fornecedor_normalizado = normalizar_texto(fornecedor)
                             if not notas:
-                                if Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf'):
-                                    logging.info(f"PDF protocolo ja existe {numero_nf}")
+                                print(f"Nota1 fiscal1 {numero_nf} não encontrada no sistema")
+                                up = Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf')
+                                if up.id:
+                                    logging.info(f"PDF2 protocolo ja existe {numero_nf}")
                                 else:
                                     Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf', att.payload)
-                                    logging.info(f"PDF protocolo enviado com sucesso para a NF {numero_nf}")
+                                    logging.info(f"PDF3 protocolo enviado com sucesso para a NF {numero_nf}")
                             else:
                                 for n in notas:
                                     emitente_normalizado = normalizar_texto(n.nome_emitente)
@@ -265,20 +278,21 @@ def processar_emails():
                                 
                                 if nota:
                                     try:
-                                        if Upload('NotaFiscal', nota.id, 2, att.filename, 'application/pdf'):
-                                            logging.info(f"PDF ja existe {numero_nf}")
+                                        up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=2, filename=att.filename, mimetype='application/pdf')
+                                        if up.id:
+                                            logging.info(f"PDF4 ja existe1 {numero_nf}")
                                         else:
-                                            Upload('NotaFiscal', nota.id, 2, att.filename, 'application/pdf', att.payload)
-                                            logging.info(f"PDF protocolo enviado com sucesso para a NF {numero_nf}")
+                                            Upload(pai='NotaFiscal', pai_id=nota.id, tipo=2, filename=att.filename, mimetype='application/pdf', blob=att.payload)
+                                            logging.info(f"PDF5 protocolo enviado com sucesso para a NF {numero_nf}")
                                     except Exception as e:
-                                        logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
+                                        logging.error(f"Erro6 ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
                                 else:
-                                    print(f"Nota fiscal {numero_nf} não encontrada no sistema")
-                                    if not Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf'):
-                                        Upload('NotaFiscal', 0, 2, att.filename, 'application/pdf', att.payload)
+                                    print(f"Nota7 fiscal2 {numero_nf} não encontrada no sistema")
+                                    up = Upload(pai='NotaFiscal', pai_id=0, tipo=2, filename=att.filename, mimetype='application/pdf')
+                                    if not up.id:
+                                        Upload(pai='NotaFiscal', pai_id=0, tipo=2, filename=att.filename, mimetype='application/pdf', blob=att.payload)
                                     else:
-                                        logging.info(f"PDF protocolo ja existe {numero_nf}")
-                                    logging.warning(f"Nota fiscal {numero_nf} não encontrada no sistema")
+                                        logging.info(f"PDF8 protocolo ja existe {numero_nf}")
                     
                     # Marcar o email como lido
                    
@@ -337,8 +351,8 @@ def processar_emails():
                                 logging.warning(f"Nota fiscal {numero_nf} não encontrada no sistema")
             
                 if ASSUNTO_PADRAO_NFE in msg.subject:
-                    logging.info(f'Processando e-mail: {msg.subject} de {msg.from_}')
                     
+                    logging.info(f'Processando email de nfe: {msg.subject}')
                     # Lista para armazenar os anexos processados
                     anexos_processados = []
                     # Criar diretório temporário para os anexos
@@ -348,14 +362,13 @@ def processar_emails():
                         for att in msg.attachments:
                             if att.filename.lower().endswith('.xml'):
                                 print(f"Processando xml: {att.filename}")
-                                try:
-                                    tinicial=time.time()
-                                    nf=NotaFiscal(xml_data=att.payload)
-                                    Arquivei(xml_data=att.payload)
-                                    tfinal=time.time()
-                                    logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
-                                except Exception as e:
-                                    logging.error(f"Erro ao processar nota fiscal: {e}")
+                                
+                                tinicial=time.time()
+                                nf=NotaFiscal(xml_data=att.payload)
+                                Arquivei(xml_data=att.payload)
+                                tfinal=time.time()
+                                logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
+                                
                                 if not nf:
                                     logging.error(f"Erro ao processar nota fiscal")
                                     continue

@@ -43,7 +43,7 @@ def verificar_permissao():
 @nota_fiscal_bp.route('/teste1')
 @login_required
 def teste1():
-    
+    processar_emails()
     #processar_protocolos()
     return redirect(url_for('nota_fiscal.index'))
 
