@@ -189,7 +189,7 @@ function filtrarNotas(page = 1) {
                     <td>${nota.pagamento ? '\
                         <span class="badge bg-success ms-1" title="Pago">\
                             <i class="fas fa-check"></i></span>' : ''}
-                        ${nota.upload ? '\
+                        ${nota.upload > 0 ? '\
                         <span class="badge bg-info ms-1" title="Documentos anexados">\
                             <i class="fas fa-paperclip"></i></span>' : ''}</td>
                     <td>

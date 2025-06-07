@@ -162,6 +162,12 @@ def buscar_notas():
                                             Upload.pai=='NotaFiscal').all()
                 ids_notas = [n.pai_id for n in notas]
                 query = query.filter(NotaFiscal.id.notin_(ids_notas))
+            if pagamento_filtro == '3':
+                notas = Upload.query.filter(Upload.tipo==3, 
+                                            Upload.pai_id!=0,
+                                            Upload.pai=='NotaFiscal').all()
+                ids_notas = [n.pai_id for n in notas]
+                query = query.filter(NotaFiscal.id.in_(ids_notas))
             # Aplicar filtros
             if filtros.get('numero'):
                 query = query.filter(NotaFiscal.numero_nf.ilike(f'%{filtros["numero"]}%'))
@@ -226,7 +232,7 @@ def buscar_notas():
 
                     notas_filtradas.append({
                         'id': n.id,
-                        'upload': uploads,
+                        'upload': len(uploads),
                         'numero_nf': n.numero_nf,
                         'nome_emitente': n.nome_emitente,
                         'data_emissao': n.data_emissao.isoformat(),
@@ -276,6 +282,7 @@ def buscar_notas():
 
                         notas_filtradas.append({
                             'id': n.id,
+                            'upload': len(uploads),
                             'numero_nf': n.numero_nf,
                             'nome_emitente': n.nome_emitente,
                             'data_emissao': n.data_emissao.isoformat(),
@@ -477,8 +484,7 @@ def apagar(reembolso_id):
 @login_required
 def listar_documentos_nota(nota_id):
     try:
-        upload = Upload()
-        documentos = upload.get('NotaFiscal', nota_id)
+        documentos = Upload.query.filter(Upload.pai_id==nota_id, Upload.pai=='NotaFiscal').all()
         return jsonify([{
             'id': doc.id,
             'tipo': doc.tipo,
