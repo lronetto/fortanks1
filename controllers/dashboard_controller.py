@@ -1,10 +1,12 @@
+import json
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
 from decimal import Decimal
-
+from models.peca import Peca
 from models.database import db
+from models.tanque import Tanque
 from models.usuario import Usuario
 from models.nota_fiscal import NotaFiscal
 from models.material import Material
@@ -34,32 +36,7 @@ def meu_dashboard():
     Dashboard personalizado por usuário, exibindo informações relevantes
     baseadas no cargo e permissões do usuário.
     """
-    # --- Dados comuns para todos os usuários ---
-    # Solicitações recentes do usuário
-    solicitacoes_usuario_recentes = Solicitacao.query.filter_by(
-        solicitante_id=current_user.id
-    ).order_by(desc(Solicitacao.data_solicitacao)).limit(5).all()
-    
-    # Total de solicitações do usuário por status
-    total_solicitacoes_usuario = Solicitacao.query.filter_by(
-        solicitante_id=current_user.id
-    ).count()
-    
-    # Estes totais são para o gráfico de pizza "Minhas Solicitações" do usuário
-    total_sol_pendentes_usuario = Solicitacao.query.filter_by(
-        solicitante_id=current_user.id, 
-        status='Pendente'
-    ).count()
-    
-    total_sol_aprovadas_usuario = Solicitacao.query.filter_by(
-        solicitante_id=current_user.id, 
-        status='Aprovada'
-    ).count()
-    
-    total_sol_rejeitadas_usuario = Solicitacao.query.filter_by(
-        solicitante_id=current_user.id, 
-        status='Rejeitada'
-    ).count()
+
         
     # Dados específicos por perfil de usuário
     dados_especificos = {}
@@ -98,28 +75,30 @@ def meu_dashboard():
         exibir_card_concretagens_recentes = True
         concretagens_recentes_op = card_concretagens_recentes()
 
-    exibir_card_concretagens = False
-    concretagens_recentes = []
+    exibir_card_historico_usinagem = False
+    historico_usinagem = []
     if current_user.colaborador and current_user.colaborador.departamento_id == 4:
-        exibir_card_concretagens = True
-        concretagens_recentes = card_concretagens()
+        exibir_card_historico_usinagem = True
+        historico_usinagem = card_historico_usinagem()
     
-    exibir_card_volume_usinado = False
-    volume_usinado = []
+    exibir_card_resumo_placas = False
+    resumo_placas = []
     if current_user.colaborador and current_user.colaborador.departamento_id == 4:
-        exibir_card_volume_usinado = True
-        volume_usinado = card_concretagens_semanais()
-
-    
+        exibir_card_resumo_placas = True
+        resumo_placas = card_resumo_placas()
    
     # Renderizar o template apropriado com base no cargo do usuário
     return render_template(
         'dashboard/meu_dashboard.html',
         usuario=current_user,
         cards={
-            'analitico': {
+            'materiais_usinagem': {
                 'dados': materiais_usinagem_estoque_data,
                 'exibir': exibir_card_materiais_usinagem
+            },
+            'analitico': {
+                'dados': centros_custo_analitico_data,
+                'exibir': exibir_card_analitico
             },
             'epis_vencimento': {
                 'dados': epis_vencimento,
@@ -133,25 +112,24 @@ def meu_dashboard():
                 'dados': concretagens_recentes_op,
                 'exibir': exibir_card_concretagens_recentes
             },
-            'concretagens': {
-                'dados': concretagens_recentes,
-                'exibir': exibir_card_concretagens
+            'historico_usinagem': {
+                'dados': historico_usinagem,
+                'exibir': exibir_card_historico_usinagem
             },
-            'volume_usinado': {
-                'dados': volume_usinado,
-                'exibir': exibir_card_volume_usinado
+            'resumo_placas': {
+                'dados': resumo_placas,
+                'exibir': exibir_card_resumo_placas
             }
         }
     )
-def card_concretagens():
-    pass
+
 def card_epis_estoque_critico():
     epis_criticos_tst = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
         Estoque.quantidade <= EPI.estoque_minimo
     ).limit(5).all()
     return epis_criticos_tst
 
-def card_concretagens_semanais():
+def card_historico_usinagem():
     num_semanas = 8
     concretagens_semanais_api = []
     volume_usinado_semanal_api = [] # Nova lista para volume
@@ -231,26 +209,10 @@ def card_concretagens_recentes():
     ).filter(
         Concretagem.data_concretagem >= data_limite
     ).scalar() or 0
-    
-    # Materiais com estoque crítico
-    materiais_criticos = Estoque.query.join(
-        Material, 
-        Material.id == Estoque.material_id
-    ).filter(
-        Estoque.quantidade <= Estoque.quantidade_minima
-    ).limit(10).all()
-    
-    # Movimentações de estoque recentes
-    movimentacoes_recentes = MovimentacaoEstoque.query.order_by(
-        desc(MovimentacaoEstoque.data_movimento)
-    ).limit(10).all()
-    concretagens_semanais_api = card_concretagens_semanais()
+
     dados_especificos = {
         'concretagens_recentes': concretagens_recentes_op,
         'total_pecas_recentes': total_pecas_recentes,
-        'materiais_criticos': materiais_criticos,
-        'movimentacoes_recentes': movimentacoes_recentes,
-        'concretagens_semanais':concretagens_semanais_api
     }
     return dados_especificos
 def card_epis_vencimento():
@@ -369,7 +331,38 @@ def card_materiais_usinagem():
             'potencial_m3': potencial_m3_concreto
         })
     return materiais_usinagem_estoque_data
-
+def card_resumo_placas():
+    tanques = Tanque.query.all()
+    dados_especificos = []
+    for tanque in tanques:
+        pecas = Peca.query.filter_by(tanque_id=tanque.id).all()
+        concretadas = 0
+        acabadas = 0
+        transportadas = 0
+        total_pecas = len(pecas)
+        for peca in pecas:
+            if peca.data_concretagem:
+                concretadas += 1
+            if peca.qualidade and peca.qualidade != '':
+                json_data = json.loads(peca.qualidade)
+                if json_data['acabamento']:
+                    acabadas += 1
+                if json_data['transporte'].get('data_transporte'):
+                    transportadas += 1
+                if json_data['transporte'].get('data_entrega'):
+                    entregadas += 1
+        em_estoque = concretadas - transportadas
+        prontas_transportar = acabadas - transportadas
+        dados_especificos.append({
+            'tanque': tanque.nome,
+            'concretadas': concretadas,
+            'acabadas': acabadas,
+            'transportadas': transportadas,
+            'total_pecas': total_pecas,
+            'em_estoque': em_estoque,
+            'prontas_transportar': prontas_transportar
+        })
+    return dados_especificos
 def index1():
     """
     Rota principal do dashboard

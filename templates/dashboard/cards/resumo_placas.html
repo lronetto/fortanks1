@@ -1,0 +1,33 @@
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-info">Resumo de Placas</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Tanque</th>
+                        <th>Concretadas</th>
+                        <th>Acabadas</th>
+                        <th>Transportadas</th>
+                        <th>Em Estoque</th>
+                        <th>Prontas para Transp.</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cards.resumo_placas.dados %}
+                    <tr>
+                        <td>{{ item.tanque }}</td>
+                        <td>{{ item.concretadas }}</td>
+                        <td>{{ item.acabadas }}</td>
+                        <td>{{ item.transportadas }}</td>
+                        <td>{{ item.em_estoque }}</td>
+                        <td>{{ item.prontas_transportar }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

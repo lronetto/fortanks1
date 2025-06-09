@@ -1,0 +1,76 @@
+<div class="modal fade" id="modalTransporte" tabindex="-1" aria-labelledby="modalTransporteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formTransporte" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTransporteLabel">Registrar Transporte</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body" style="max-height: 65vh; overflow-y: auto;">
+          <div class="mb-3">
+            <label for="tanque_ids" class="form-label">Tanques</label>
+            <select class="form-select" id="tanque_ids" name="tanque_ids" multiple required>
+              {% for tanque in tanques %}
+                <option value="{{ tanque.id }}"> {{ tanque.contrato.centro_custo.codigo }} - {{ tanque.nome }}</option>
+              {% endfor %}
+            </select>
+            <small class="form-text text-muted">Selecione um ou mais tanques</small>
+          </div>
+          <div class="mb-3">
+            <label for="peca_nome_search" class="form-label">Pesquisar Peça</label>
+            <div class="input-group">
+              <input type="text" class="form-control" id="peca_nome_search" placeholder="Digite parte do nome da peça">
+              <button class="btn btn-outline-secondary" type="button" id="btnBuscarPecas">Buscar</button>
+            </div>
+            <small class="form-text text-muted">Pesquise pelo nome e selecione as peças abaixo</small>
+          </div>
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="apenasAcabadas">
+              <label class="form-check-label" for="apenasAcabadas">
+                Mostrar apenas peças acabadas
+              </label>
+            </div>
+          </div>
+          <div class="mb-3">
+            <table class="table table-bordered table-sm" id="tabelaPecasSelecionar">
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" id="checkAllPecas"></th>
+                  <th>Nome</th>
+                  <th>Tanque</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Linhas preenchidas via JS -->
+              </tbody>
+            </table>
+          </div>
+          <input type="hidden" name="peca_ids" id="peca_ids">
+          <div class="mb-3">
+            <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
+            <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal" required>
+          </div>
+          <div class="mb-3">
+            <label for="placa_carreta" class="form-label">Placa da Carreta</label>
+            <input type="text" class="form-control" id="placa_carreta" name="placa_carreta" required>
+          </div>
+          <div class="mb-3">
+            <label for="data_transporte" class="form-label">Data do Transporte</label>
+            <input type="date" class="form-control" id="data_transporte" name="data_transporte" value="{{ now}}">
+          </div>
+          <div class="mb-3">
+            <label for="transportadora" class="form-label">Transportadora</label>
+            <input type="text" class="form-control" id="transportadora" name="transportadora" required>
+          </div>
+          
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div> 

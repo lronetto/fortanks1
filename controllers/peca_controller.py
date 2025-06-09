@@ -1,6 +1,9 @@
-from flask import Blueprint, render_template, redirect, url_for, request, flash
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from models import Peca, Tanque
 from models import db
+from flask_wtf.csrf import generate_csrf
+from datetime import datetime
+import json
 
 # Criação do blueprint
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
@@ -146,4 +149,70 @@ def excluir(id):
         db.session.rollback()
         flash(f'Erro ao excluir peça: {str(e)}', 'danger')
     
-    return redirect(url_for('peca.listar_por_tanque', tanque_id=tanque_id)) 
+    return redirect(url_for('peca.listar_por_tanque', tanque_id=tanque_id))
+
+@peca.route('/acabamento', methods=['GET', 'POST'])
+def acabamento():
+    """Registra acabamento de uma peça"""
+    if request.method == 'POST':
+        tanque_id = request.form.get('tanque_id')
+        peca_nome = request.form.get('peca_nome')
+        placa = request.form.get('placa')
+        data_acabamento = request.form.get('data_acabamento')
+        if not data_acabamento:
+            data_acabamento = datetime.now().strftime('%Y-%m-%d')
+        try:
+            peca = Peca.query.filter_by(tanque_id=tanque_id, nome=peca_nome).first()
+            if not peca:
+                return jsonify({'success': False, 'message': 'Peça não encontrada'}), 404
+            qualidade = peca.qualidade or '{}'
+            qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
+            qualidade_dict['acabamento'] = {
+                'placa': placa,
+                'data': data_acabamento
+            }
+            peca.qualidade = json.dumps(qualidade_dict)
+            peca.save()
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
+    # GET: retorna o modal
+    tanques = Tanque.query.order_by(Tanque.nome).all()
+    csrf_token = generate_csrf()
+    return render_template('pecas/modais/acabamento.html', tanques=tanques, csrf_token=csrf_token)
+
+@peca.route('/transporte', methods=['GET', 'POST'])
+def transporte():
+    """Registra transporte de peças"""
+    if request.method == 'POST':
+        tanque_ids = request.form.getlist('tanque_ids')
+        peca_nomes = request.form.getlist('peca_nomes')
+        placas = request.form.getlist('placas')
+        nota_fiscal = request.form.get('nota_fiscal')
+        placa_carreta = request.form.get('placa_carreta')
+        data_transporte = request.form.get('data_transporte')
+        transportadora = request.form.get('transportadora')
+        if not data_transporte:
+            data_transporte = datetime.now().strftime('%Y-%m-%d')
+        try:
+            pecas = Peca.query.filter(Peca.tanque_id.in_(tanque_ids), Peca.nome.in_(peca_nomes)).all()
+            for peca in pecas:
+                qualidade = peca.qualidade or '{}'
+                qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
+                qualidade_dict['transporte'] = {
+                    'data_transporte': data_transporte,
+                    'placas': placas,
+                    'nota': nota_fiscal,
+                    'placa_carreta': placa_carreta,
+                    'transportadora': transportadora
+                }
+                peca.qualidade = json.dumps(qualidade_dict)
+                peca.data_entrega = data_transporte
+                peca.save()
+            return jsonify({'success': True, 'pecas_afetadas': [p.id for p in pecas]})
+        except Exception as e:
+            return jsonify({'success': False, 'message': str(e)}), 500
+    # GET: retorna o modal
+    tanques = Tanque.query.order_by(Tanque.nome).all()
+    csrf_token = generate_csrf()
+    return render_template('pecas/modais/transporte.html', tanques=tanques, csrf_token=csrf_token) 

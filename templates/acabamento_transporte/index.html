@@ -1,0 +1,82 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Acabamento e Transporte de Peças{% endblock %}
+{% block mobile_title %}Acabamento/Transporte{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cube"></i> Acabamento e Transporte</h1>
+        <div>
+            <button class="btn btn-success mt-2 mt-sm-0" data-bs-toggle="modal" data-bs-target="#modalAcabamento">
+                <i class="fas fa-paint-roller"></i> Acabamento
+            </button>
+            <button class="btn btn-primary mt-2 mt-sm-0" data-bs-toggle="modal" data-bs-target="#modalTransporte">
+                <i class="fas fa-truck"></i> Transporte
+            </button>
+        </div>
+    </div>
+    <div class="alert alert-info">Selecione uma das opções acima para registrar acabamento ou transporte de peças.</div>
+    <div class="row mb-3">
+      <form method="get" class="form-inline">
+        <div class="form-group me-2">
+          <label for="filtro" class="me-2">Filtrar:</label>
+          <select name="filtro" id="filtro" class="form-select form-select-sm" onchange="this.form.submit()">
+            <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
+            <option value="acabadas" {% if filtro == 'acabadas' %}selected{% endif %}>Apenas Acabadas</option>
+            <option value="transportadas" {% if filtro == 'transportadas' %}selected{% endif %}>Apenas Transportadas</option>
+            <option value="acabada_nao_transportada" {% if filtro == 'acabada_nao_transportada' %}selected{% endif %}>Acabada e Não Transportada</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="row">
+       <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Tanque</th>
+                <th>Peça</th>
+                <th>Acabamento</th>
+                <th>Data</th>
+                <th>Transportadora</th>
+                <th>Placa</th>
+                <th>Nota Fiscal</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for peca in pecas %}
+            <tr>
+                <td>{{ peca.tanque.nome }}</td>
+                <td>{{ peca.nome }}</td>
+                <td>{{ peca.acabamento if peca.acabamento else '' }}</td>
+                <td>{{ peca.transporte if peca.transporte else '' }}</td>
+                <td>{{ peca.transportadora if peca.transportadora else '' }}</td>
+                <td>{{ peca.placa_carreta if peca.placa_carreta else '' }}</td>
+                <td>{{ peca.nota_fiscal if peca.nota_fiscal else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+       </div>
+    </div>
+    <nav aria-label="Paginação">
+      <ul class="pagination">
+        <li class="page-item {% if page == 1 %}disabled{% endif %}">
+          <a class="page-link" href="?filtro={{ filtro }}&page={{ page-1 }}">Anterior</a>
+        </li>
+        {% for p in range(1, total_pages+1) %}
+        <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?filtro={{ filtro }}&page={{ p }}">{{ p }}</a></li>
+        {% endfor %}
+        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
+          <a class="page-link" href="?filtro={{ filtro }}&page={{ page+1 }}">Próxima</a>
+        </li>
+      </ul>
+    </nav>
+</div>
+{% include 'acabamento_transporte/modais/acabamento.html' %}
+{% include 'acabamento_transporte/modais/transporte.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script src="{{ url_for('static', filename='js/acabamento-transporte.js') }}"></script>
+{% endblock %} 

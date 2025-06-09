@@ -1,0 +1,40 @@
+<div class="modal fade" id="modalAcabamento" tabindex="-1" aria-labelledby="modalAcabamentoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formAcabamento" method="post" action="{{ url_for('acabamento_transporte.acabamento') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalAcabamentoLabel">Registrar Acabamento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="tanque_id" class="form-label">Tanque</label>
+            <select class="form-select" id="tanque_id" name="tanque_id" required>
+              <option value="">Selecione...</option>
+              {% for tanque in tanques %}
+                <option value="{{ tanque.id }}">{{ tanque.nome }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="peca_nome" class="form-label">Peça (pesquise pelo nome)</label>
+            <input type="text" class="form-control" id="peca_nome" name="peca_nome" required autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label for="placa" class="form-label">Placa</label>
+            <input type="text" class="form-control" id="placa" name="placa" required>
+          </div> 
+          <div class="mb-3">
+            <label for="data_acabamento" class="form-label">Data do Acabamento</label>
+            <input type="date" class="form-control" id="data_acabamento" name="data_acabamento" value="{{ now }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div> 

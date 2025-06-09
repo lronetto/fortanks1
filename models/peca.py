@@ -14,7 +14,7 @@ class Peca(db.Model):
     data_prevista = db.Column(db.DateTime, nullable=True)
     data_concretagem = db.Column(db.DateTime, nullable=True)
     data_entrega = db.Column(db.DateTime, nullable=True)
-    qualidade = db.Column(db.JSON, nullable=True)
+    qualidade = db.Column(db.String(1000), nullable=True)
     
     # Relacionamento com tanque
     tanque_id = db.Column(db.Integer, db.ForeignKey('tanques.id', ondelete='CASCADE'), nullable=False)

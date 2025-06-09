@@ -56,7 +56,7 @@
                                 {% endfor %}
                             </td>
                             <td class="d-none d-md-table-cell">{{ concretagem.pista }}</td>
-                            <td>{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}</td>
+                            <td data-order="{{ concretagem.data_concretagem.strftime('%Y-%m-%d') }}">{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}</td>
                             <td class="d-none d-md-table-cell">{{ concretagem.pecas|length }}</td>
                             <td class="d-none d-md-table-cell">{{ concretagem.data_cadastro.strftime('%d/%m/%Y') }}</td>
                             <td>
@@ -134,6 +134,8 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Plugin para ordenação de datas no DataTables -->
+<script src="https://cdn.datatables.net/plug-ins/1.13.4/sorting/datetime-moment.js"></script>
 <script src="{{ url_for('static', filename='js/concretagens-edicao.js') }}"></script>
 <script src="{{ url_for('static', filename='js/concretagens-visualizar.js') }}"></script>
 
@@ -167,6 +169,11 @@
     }
 
     $(document).ready(function () {
+        // Registrar o formato de data brasileiro para o DataTables
+        if ($.fn.dataTable && $.fn.dataTable.moment) {
+            $.fn.dataTable.moment('DD/MM/YYYY');
+        }
+
         $.getJSON("{{ url_for('static', filename='js/datatables-pt-BR.json') }}", function(json) {
             console.log("Tradução pt-BR do DataTables carregada com sucesso (index.html).", json);
             window.dataTablePortugueseTranslation = json; // Atribui à variável global
