@@ -248,7 +248,7 @@ def processar_emails():
                                     print(f"tentando a chave do arquivo {filename}")
                                     dec1 = None
                                    
-                                    img = convert_from_bytes(payload,500)[0]
+                                    img = convert_from_bytes(payload,500,poppler_path='/usr/bin/pdftoppm')[0]
                                     print(f"img1")
                                     dec = decode(img)
                                     if dec:
