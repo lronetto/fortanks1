@@ -20,6 +20,7 @@ class Reembolso(db.Model):
 class ReembolsoDocumento(db.Model):
     __tablename__ = 'reembolso_documentos'
     id = db.Column(db.Integer, primary_key=True)
+    centro_custo_id = db.Column(db.Integer, db.ForeignKey('centros_custo.id'), nullable=False)
     reembolso_id = db.Column(db.Integer, db.ForeignKey('reembolsos.id'), nullable=False)
     tipo = db.Column(db.Enum('nota', 'avulso', name='tipo_documento_reembolso'), nullable=False)
     nota_fiscal_id = db.Column(db.Integer, db.ForeignKey('nf_notas.id'), nullable=True)

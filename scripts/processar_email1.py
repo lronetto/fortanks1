@@ -247,13 +247,15 @@ def processar_emails():
                                         continue
                                     print(f"tentando a chave do arquivo {filename}")
                                     dec1 = None
-                                    try:
-                                        img = convert_from_bytes(payload,500)[0]
-                                        dec = decode(img)
+                                   
+                                    img = convert_from_bytes(payload,500)[0]
+                                    print(f"img1")
+                                    dec = decode(img)
+                                    if dec:
                                         dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-                                    except Exception as e:
-                                        logging.error(f"Erro ao decodificar imagem: {e}")
+                                    else:
                                         dec1 = None
+                                    
 
                                     if dec1:
                                         print(f"Decodificado: {dec1} nota")

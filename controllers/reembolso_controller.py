@@ -125,10 +125,18 @@ def novo():
                 return redirect(url_for('reembolso.index'))
     
     # GET: Exibir formulário
+    centros_custo_objs = CentroCusto.query.filter_by(ativo=True).order_by(CentroCusto.codigo.desc()).all()
+    centros_custo = [{'id': c.id, 'codigo': c.codigo, 'nome': c.nome} for c in centros_custo_objs]
     form = ReembolsoForm()
-    centros_custo = CentroCusto.query.filter_by(ativo=True).order_by(CentroCusto.codigo.desc()).all()
-    form.centro_custo_id.choices = [(c.id, f"{c.codigo} - {c.nome}") for c in centros_custo]
-    return render_template('reembolsos/novo.html', form=form, centros_custo=centros_custo)
+    form.centro_custo_id.choices = [(c['id'], f"{c['codigo']} - {c['nome']}") for c in centros_custo]
+    return render_template(
+        'reembolsos/form.html',
+        form=form,
+        modo='novo',
+        notas_json='[]',
+        avulsos_json='[]',
+        centros_custo=centros_custo
+    )
 
 @reembolso_bp.route('/buscar_notas', methods=['GET','POST'])
 @login_required
@@ -168,6 +176,56 @@ def buscar_notas():
                                             Upload.pai=='NotaFiscal').all()
                 ids_notas = [n.pai_id for n in notas]
                 query = query.filter(NotaFiscal.id.in_(ids_notas))
+            # Filtro especial para modo edição: mostrar apenas selecionados
+            if pagamento_filtro == '4':
+                if ids:
+                    notas = NotaFiscal.query.filter(NotaFiscal.id.in_(ids)).all()
+                    notas_filtradas = []
+                    for n in notas:
+                        try:
+                            pag = DadoAnalitico.query.\
+                                join(PlanoConta, DadoAnalitico.plano_conta_id==PlanoConta.id).\
+                                filter(PlanoConta.codigo.notin_(PL_0202+PL_0207+PL_0209)).\
+                                filter(DadoAnalitico.documento==n.numero_nf.lstrip('0')).\
+                                filter(DadoAnalitico.valor==n.valor_total).first()
+                            valor_pagamento = pag.valor if pag else 0
+                            uploads = Upload.query.filter(Upload.pai_id==n.id, Upload.pai=='NotaFiscal').all()
+                            centro_custo_id = None
+                            if ids and n.id in ids:
+                                nota_selecionada = next((nota for nota in notas_selecionadas if nota['id'] == n.id), None)
+                                if nota_selecionada:
+                                    centro_custo_id = nota_selecionada.get('centro_custo_id')
+                            notas_filtradas.append({
+                                'id': n.id,
+                                'upload': len(uploads),
+                                'numero_nf': n.numero_nf,
+                                'nome_emitente': n.nome_emitente,
+                                'data_emissao': n.data_emissao.isoformat(),
+                                'valor_total': float(n.valor_total),
+                                'pagamento': valor_pagamento,
+                                'chave_acesso': getattr(n, 'chave_acesso', ''),
+                                'centro_custo_id': centro_custo_id
+                            })
+                        except Exception as e:
+                            print(f'Erro ao processar nota {n.id}: {str(e)}')
+                            continue
+                    return jsonify({
+                        'notas': notas_filtradas,
+                        'page': 1,
+                        'pages': 1,
+                        'total': len(notas_filtradas),
+                        'has_next': False,
+                        'has_prev': False
+                    })
+                else:
+                    return jsonify({
+                        'notas': [],
+                        'page': 1,
+                        'pages': 1,
+                        'total': 0,
+                        'has_next': False,
+                        'has_prev': False
+                    })
             # Aplicar filtros
             if filtros.get('numero'):
                 query = query.filter(NotaFiscal.numero_nf.ilike(f'%{filtros["numero"]}%'))
@@ -184,8 +242,8 @@ def buscar_notas():
                     query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
                 if valor_maximo:
                     query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
-            if ids:
-                query = query.filter(NotaFiscal.id.in_(ids))
+            #if ids:
+            #    query = query.filter(NotaFiscal.id.in_(ids))
 
             # Ordenar por data de emissão
             query = query.order_by(NotaFiscal.data_emissao.desc())
@@ -197,6 +255,16 @@ def buscar_notas():
             # Aplicar paginação
             pagination = query.paginate(page=page, per_page=per_page, error_out=False)
             notas = pagination.items
+
+            # Adicionar notas já selecionadas que não estão na página atual
+            notas_ids_set = set([n.id for n in notas])
+            notas_selecionadas_extra = []
+            if ids:
+                ids_faltantes = set(ids) - notas_ids_set
+                if ids_faltantes:
+                    notas_extra = NotaFiscal.query.filter(NotaFiscal.id.in_(ids_faltantes)).all()
+                    notas_selecionadas_extra.extend(notas_extra)
+            notas += notas_selecionadas_extra
 
             tfinal = time.time()
             print(f'Tempo de execução2: {tfinal - tinicial} segundos')
@@ -238,7 +306,7 @@ def buscar_notas():
                         'data_emissao': n.data_emissao.isoformat(),
                         'valor_total': float(n.valor_total),
                         'pagamento': valor_pagamento,
-                        'chave_acesso': getattr(n, 'chave_acesso', ''),
+                        'chave_acesso': getattr(    n, 'chave_acesso', ''),
                         'centro_custo_id': centro_custo_id
                     })
                 except Exception as e:
@@ -409,9 +477,19 @@ def editar(reembolso_id):
             flash(f'Erro ao atualizar reembolso: {str(e)}', 'danger')
             return redirect(url_for('reembolso.editar', reembolso_id=reembolso_id))
     # GET: Preencher formulário
+    centros_custo_objs = CentroCusto.query.filter_by(ativo=True).all()
+    centros_custo = [{'id': c.id, 'codigo': c.codigo, 'nome': c.nome} for c in centros_custo_objs]
     form = ReembolsoForm(obj=reembolso)
-    form.centro_custo_id.choices = [(c.id, f"{c.codigo} - {c.nome}") for c in CentroCusto.query.filter_by(ativo=True).all()]
-    return render_template('reembolsos/editar.html', form=form, reembolso=reembolso)
+    form.centro_custo_id.choices = [(c['id'], f"{c['codigo']} - {c['nome']}") for c in centros_custo]
+    return render_template(
+        'reembolsos/form.html',
+        form=form,
+        modo='editar',
+        reembolso=reembolso,
+        notas_json=notas_json(reembolso),
+        avulsos_json=avulsos_json(reembolso),
+        centros_custo=centros_custo
+    )
 
 def notas_json(reembolso):
     notas = []
@@ -420,7 +498,8 @@ def notas_json(reembolso):
             notas.append({
                 'id': doc.nota_fiscal.id,
                 'descricao': doc.descricao,
-                'valor': float(doc.valor)
+                'valor': float(doc.valor),
+                'centro_custo_id': doc.centro_custo_id
             })
     return Markup(json.dumps(notas))
 
@@ -432,6 +511,7 @@ def avulsos_json(reembolso):
                 'id': doc.id,
                 'descricao': doc.descricao,
                 'valor': float(doc.valor),
+                'centro_custo_id': doc.centro_custo_id,
                 'anexos': [
                     {'id': anexo.id, 'filename': anexo.filename}
                     for anexo in doc.anexos
