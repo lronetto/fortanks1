@@ -331,9 +331,20 @@ def card_materiais_usinagem():
             'potencial_m3': potencial_m3_concreto
         })
     return materiais_usinagem_estoque_data
+def acerto_data_concretagem():
+    concretagens = Concretagem.query.all()
+    for concretagem in concretagens:
+        pecas = ConcretagemPeca.query.join(Peca, Peca.id == ConcretagemPeca.peca_id).filter(ConcretagemPeca.concretagem_id==concretagem.id).all()
+        for peca in pecas:
+            peca1 = Peca.query.filter_by(id=peca.peca_id).first()
+            if peca1.data_concretagem is None or peca1.data_concretagem == '':
+                Peca.query.filter_by(id=peca.peca_id).update({'data_concretagem': concretagem.data_concretagem})
+                db.session.commit()
+    return True
 def card_resumo_placas():
     tanques = Tanque.query.all()
     dados_especificos = []
+    #acerto_data_concretagem()
     for tanque in tanques:
         pecas = Peca.query.filter_by(tanque_id=tanque.id).all()
         concretadas = 0
@@ -341,7 +352,7 @@ def card_resumo_placas():
         transportadas = 0
         total_pecas = len(pecas)
         for peca in pecas:
-            if peca.data_concretagem:
+            if peca.data_concretagem is not None and peca.data_concretagem != '':
                 concretadas += 1
             if peca.qualidade and peca.qualidade != '':
                 json_data = json.loads(peca.qualidade)
@@ -349,8 +360,6 @@ def card_resumo_placas():
                     acabadas += 1
                 if json_data['transporte'].get('data_transporte'):
                     transportadas += 1
-                if json_data['transporte'].get('data_entrega'):
-                    entregadas += 1
         em_estoque = concretadas - transportadas
         prontas_transportar = acabadas - transportadas
         dados_especificos.append({
@@ -362,6 +371,7 @@ def card_resumo_placas():
             'em_estoque': em_estoque,
             'prontas_transportar': prontas_transportar
         })
+    print(dados_especificos)
     return dados_especificos
 def index1():
     """

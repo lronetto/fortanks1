@@ -66,26 +66,24 @@ def index():
 
 @acabamento_transporte_bp.route('/acabamento', methods=['GET', 'POST'])
 def acabamento():
-    """Registra acabamento de uma peça"""
+    """Registra acabamento de uma ou mais peças"""
     if request.method == 'POST':
         tanque_id = request.form.get('tanque_id')
-        peca_nome = request.form.get('peca_nome')
-        placa = request.form.get('placa')
+        peca_ids = request.form.getlist('peca_ids[]')
         data_acabamento = request.form.get('data_acabamento')
         if not data_acabamento:
             data_acabamento = datetime.now().strftime('%Y-%m-%d')
         try:
-            peca = Peca.query.filter_by(tanque_id=tanque_id, nome=peca_nome).first()
-            if not peca:
-                return jsonify({'success': False, 'message': 'Peça não encontrada'}), 404
-            qualidade = peca.qualidade or '{}'
-            qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
-            qualidade_dict['acabamento'] = {
-                'data': data_acabamento
-            }
-            peca.qualidade = json.dumps(qualidade_dict)
-            peca.save()
-            return jsonify({'success': True})
+            pecas = Peca.query.filter(Peca.id.in_(peca_ids), Peca.tanque_id == tanque_id).all()
+            if not pecas:
+                return jsonify({'success': False, 'message': 'Nenhuma peça encontrada'}), 404
+            for peca in pecas:
+                qualidade = peca.qualidade or '{}'
+                qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
+                qualidade_dict['acabamento'] = data_acabamento
+                peca.qualidade = json.dumps(qualidade_dict)
+                peca.save()
+            return jsonify({'success': True, 'pecas_afetadas': [p.id for p in pecas]})
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 500
     # GET: retorna o modal
@@ -139,21 +137,35 @@ def api_pecas():
     """Retorna peças filtradas por tanques e nome (AJAX)"""
     tanque_ids = request.args.getlist('tanque_ids[]')
     nome = request.args.get('nome', '').strip()
+    apenas_concretadas = request.args.get('apenas_concretadas', '0') == '1'
     apenas_acabadas = request.args.get('apenas_acabadas', '0') == '1'
+    nao_acabadas = request.args.get('nao_acabadas', '0') == '1'
     query = Peca.query
     if tanque_ids:
         query = query.filter(Peca.tanque_id.in_(tanque_ids))
     if nome:
         query = query.filter(Peca.nome.ilike(f'%{nome}%'))
+    if apenas_concretadas:
+        query = query.filter(Peca.data_concretagem.isnot(None))
     pecas = query.order_by(Peca.tanque_id, Peca.numero_sequencial).all()
     pecas1 = pecas
+    print('tamanho da lista', len(pecas1))
+    if nao_acabadas:
+        print('nao_acabadas')
+        pecas = []
+        for p in pecas1:
+            qualidade = p.qualidade or '{}'
+            qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
+            if 'acabamento' in qualidade_dict and qualidade_dict['acabamento'] is None:
+                pecas.append(p)
     if apenas_acabadas:
-        pecas1 = []
-        for p in pecas:
+        print('apenas_acabadas')
+        pecas = []
+        for p in pecas1:
             qualidade = p.qualidade or '{}'
             qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
             if 'acabamento' in qualidade_dict and 'data_transporte' in qualidade_dict['transporte']:
-                pecas1.append(p)
+                pecas.append(p)
         #pecas = [p for p in pecas if p.qualidade and 'acabamento' in (json.loads(p.qualidade) and 'data_acabamento' in json.loads(p.qualidade)['transporte'] if isinstance(p.qualidade, str) else p.qualidade)]
     result = [
         {
@@ -163,7 +175,7 @@ def api_pecas():
             'tanque_id': p.tanque_id,
             'tanque_nome': p.tanque.nome
         }
-        for p in pecas1
+        for p in pecas
     ]
     return jsonify(result) 
 

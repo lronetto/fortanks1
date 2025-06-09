@@ -24,11 +24,10 @@ $(function() {
     // Transformar campos múltiplos em arrays
     var data = form.serializeArray();
     // Corrigir campos múltiplos (peca_nomes, placas)
-    var peca_nomes = $('#peca_nomes').val().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    var placas = $('#placas').val().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-    data = data.filter(function(item) { return item.name !== 'peca_nomes' && item.name !== 'placas'; });
-    data.push({name: 'peca_nomes', value: peca_nomes});
-    data.push({name: 'placas', value: placas});
+    var checkPecas = $('.checkPeca:checked').map(function() { return this.value; }).get();
+    data = data.filter(function(item) { return item.name !== 'peca_ids'; });
+    data.push({name: 'peca_ids', value: checkPecas});
+    console.log(data);
     $.post(form.attr('action'), $.param(data))
       .done(function(resp) {
         if (resp.success) {
@@ -43,18 +42,23 @@ $(function() {
       });
   });
 
-  // Autocomplete de peça por nome no acabamento
-  $('#peca_nome').autocomplete({
-    source: function(request, response) {
-      var tanque_id = $('#tanque_id').val();
-      if (!tanque_id) return response([]);
-      $.getJSON('/concretagens/api/tanque/' + tanque_id + '/pecas', function(data) {
-        var nomes = data.map(function(p) { return p.nome; });
-        response($.ui.autocomplete.filter(nomes, request.term));
+  $('#datalistPecas').on('focus', function() {
+    var tanque_ids = $('#tanque_id').val();
+    if (!tanque_ids || tanque_ids.length === 0) return;
+    fetch('/concretagens/api/tanques/' + tanque_ids + '/pecas')
+    .then(response => response.json())
+    .then(data => {
+      const datalist = document.getElementById('datalistPecas');
+      datalist.innerHTML = '';
+      data.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.nome;
+        datalist.appendChild(opt);  
       });
-    },
-    minLength: 2
+    });
   });
+
+  
  // Autocomplete de transporte
  $('#transportadora').on('focus', function() {
     var tanque_ids = $('#tanque_ids').val();
@@ -93,7 +97,14 @@ $(function() {
       },
       success: function(data) {
         var nomes = data.map(function(p) { return p.nome; });
+        
         $('#peca_nomes').autocomplete({
+          appendTo: $('#peca_nomes'),
+          select: function(event, ui) {
+            $('#peca_nomes').val(ui.item.value);
+            return false;
+          },
+
           source: nomes,
           minLength: 2
         });
@@ -110,30 +121,33 @@ $(function() {
       alert('Selecione ao menos um tanque.');
       return;
     }
-    $.ajax({
-      url: '/acabamento-transporte/api/pecas',
-      method: 'GET',
-      contentType: 'application/json',
-      data: JSON.stringify({ tanque_ids: tanque_ids, nome: nome, apenas_acabadas: apenasAcabadas }),
-      headers: {
-        'X-CSRFToken': '{{ csrf_token }}'
-      },
-      success: function(data) {
-      var tbody = $('#tabelaPecasSelecionar tbody');
-      tbody.empty();
-      if (data.length === 0) {
-        tbody.append('<tr><td colspan="4" class="text-center">Nenhuma peça encontrada</td></tr>');
-        return;
-      }
-      data.forEach(function(p) {
-        tbody.append('<tr>' +
-          '<td><input type="checkbox" class="checkPeca" value="' + p.id + '"></td>' +
-          '<td>' + p.nome + '</td>' +
-          '<td>' + p.tanque_nome + '</td>' +
-          '</tr>');
+    $.get('/acabamento-transporte/api/pecas', { tanque_ids: tanque_ids, nome: nome, apenas_acabadas: apenasAcabadas })
+      .done(function(data) {
+        var tbody = $('#tabelaPecasSelecionar tbody');
+        tbody.empty();
+        if (!Array.isArray(data)) {
+          tbody.append('<tr><td colspan="3" class="text-center text-danger">Erro ao buscar peças</td></tr>');
+          alert('Erro ao buscar peças. Tente novamente.');
+          return;
+        }
+        if (data.length === 0) {
+          tbody.append('<tr><td colspan="3" class="text-center">Nenhuma peça encontrada</td></tr>');
+          return;
+        }
+        data.forEach(function(p) {
+          tbody.append('<tr>' +
+            '<td><input type="checkbox" class="checkPeca" value="' + p.id + '"></td>' +
+            '<td>' + p.nome + '</td>' +
+            '<td>' + p.tanque_nome + '</td>' +
+            '</tr>');
+        });
+      })
+      .fail(function(xhr) {
+        var tbody = $('#tabelaPecasSelecionar tbody');
+        tbody.empty();
+        tbody.append('<tr><td colspan="3" class="text-center text-danger">Erro ao buscar peças</td></tr>');
+        alert('Erro ao buscar peças: ' + xhr.statusText);
       });
-    }
-    });
   });
 
   // Selecionar todos
@@ -151,4 +165,50 @@ $(function() {
     }
     $('#peca_ids').val(selecionadas.join(','));
   });
+
+  // Inicialização do select2 para o campo de peça no acabamento (agora múltiplo)
+  $('#peca_id').select2({
+    dropdownParent: $('#modalAcabamento'),
+    theme: 'bootstrap-5',
+    placeholder: 'Pesquise a peça pelo nome',
+    allowClear: true,
+    multiple: true,
+    ajax: {
+      url: '/acabamento-transporte/api/pecas',
+      method: 'GET',
+      dataType: 'json',
+      delay: 250,
+      data: function(params) {
+        return {
+          tanque_ids: [$('#tanque_id').val()],
+          nome: params.term || '',
+          apenas_concretadas: 1,
+          apenas_acabadas:0,
+          nao_acabadas: 1
+        };
+      },
+      processResults: function(data) {
+        return {
+          results: data.map(function(peca) {
+            return {
+              id: peca.id,
+              text: peca.nome + ' (' + peca.numero_sequencial + ')',
+              tanque_nome: peca.tanque_nome
+            };
+          })
+        };
+      },
+      cache: true
+    },
+    minimumInputLength: 2
+  });
+
+  // Limpar o select2 ao trocar o tanque
+  $('#tanque_id').on('change', function() {
+    $('#peca_id').val(null).trigger('change');
+  });
+
+  // Remover autocomplete/datalist antigo do campo de peça no acabamento, se existir
+  $('#peca_nome').autocomplete && $('#peca_nome').autocomplete('destroy');
+  $('#datalistPecas').remove();
 }); 

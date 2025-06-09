@@ -146,6 +146,9 @@
     let dataTablePortugueseTranslation = null; // Será preenchida após carregar o JSON
 
     function initializeMainDataTable() {
+        // Remove as linhas de detalhes antes de inicializar o DataTables
+        $('#tabelaConcretagens tbody tr.expandable-info').remove();
+
         const mainTableRows = $('#tabelaConcretagens tbody tr').not('.expandable-info');
         if (mainTableRows.length === 0) return; // Não inicializar se não houver dados
 
@@ -154,6 +157,8 @@
             responsive: true,
             autoWidth: false,
             pageLength: 10,
+            detail: false,
+            search: false,
             lengthMenu: [10, 25, 50, 100],
             dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
                  "<'row'<'col-sm-12'tr>>" +

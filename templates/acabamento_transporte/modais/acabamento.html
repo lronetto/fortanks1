@@ -2,7 +2,7 @@
   <div class="modal-dialog">
     <div class="modal-content">
       <form id="formAcabamento" method="post" action="{{ url_for('acabamento_transporte.acabamento') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-header">
           <h5 class="modal-title" id="modalAcabamentoLabel">Registrar Acabamento</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -18,13 +18,11 @@
             </select>
           </div>
           <div class="mb-3">
-            <label for="peca_nome" class="form-label">Peça (pesquise pelo nome)</label>
-            <input type="text" class="form-control" id="peca_nome" name="peca_nome" required autocomplete="off">
+            <label for="peca_id" class="form-label">Peça(s) (pesquise pelo nome)</label>
+            <select class="form-select" id="peca_id" name="peca_ids[]" required style="width: 100%" multiple>
+                <!-- As opções serão carregadas via AJAX pelo select2 -->
+            </select>
           </div>
-          <div class="mb-3">
-            <label for="placa" class="form-label">Placa</label>
-            <input type="text" class="form-control" id="placa" name="placa" required>
-          </div> 
           <div class="mb-3">
             <label for="data_acabamento" class="form-label">Data do Acabamento</label>
             <input type="date" class="form-control" id="data_acabamento" name="data_acabamento" value="{{ now }}">
