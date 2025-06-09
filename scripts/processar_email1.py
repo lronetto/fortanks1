@@ -245,11 +245,11 @@ def processar_emails():
                                 if 'protocolo' in filename.lower():
                                     logging.info(f"Ignorando arquivo de protocolo: {filename}")
                                     continue
-                                print(f"tentando a chave do arquivo {filename}")
+                                logging.info(f"tentando a chave do arquivo {filename}")
                                 dec1 = None
                                 
                                 img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                                print(f"img1")
+                                logging.info(f"img1")
                                 dec = decode(img)
                                 if dec:
                                     dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
@@ -258,11 +258,11 @@ def processar_emails():
                                 
 
                                 if dec1:
-                                    print(f"Decodificado: {dec1} nota")
+                                    logging.info(f"Decodificado: {dec1} nota")
                                     nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
                                     
                                     if nota:
-                                        print(f"Nota: {nota.id} {nota.numero_nf}")
+                                        logging.info(f"Nota: {nota.id} {nota.numero_nf}")
                                         up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
                                         if up.id:
                                             logging.info(f"upload ja existe {nota.numero_nf}")
@@ -274,7 +274,7 @@ def processar_emails():
                                         if Arquivei(chave_acesso=dec1,cancelamento=True).cancelada:
                                             logging.info(f"Nota cancelada: {dec1}")
                                 else:
-                                    print(f"tentando pelo numero e fornecedor {filename}")
+                                    logging.info(f"tentando pelo numero e fornecedor {filename}")
                                     numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
                                     if not numero_nf or not fornecedor:
                                         logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {filename}")
@@ -289,7 +289,7 @@ def processar_emails():
                                     nota = None 
                                     fornecedor_normalizado = normalizar_texto(fornecedor)
                                     if not notas:
-                                        print(f"numero nf {numero_nf} nao encontrado no db")
+                                        logging.info(f"numero nf {numero_nf} nao encontrado no db")
                                         up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf')
                                         if up.id:
                                             logging.info(f"upload ja existe sem nota {numero_nf}")
@@ -305,7 +305,7 @@ def processar_emails():
                                                 break
                                         
                                         if nota:
-                                            print(f"nota encontrada {nota.id} {nota.numero_nf}")
+                                            logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
                                             try:
                                                 up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
                                                 if up.id:
@@ -316,10 +316,10 @@ def processar_emails():
                                             except Exception as e:
                                                 logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
                                         else:
-                                            print(f"fornecedor nao encontrado {numero_nf}")
+                                            logging.info(f"fornecedor nao encontrado {numero_nf}")
                                             up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf')
                                             if not up.id:
-                                                print(f"upload realizado sem nota {numero_nf}")
+                                                logging.info(f"upload realizado sem nota {numero_nf}")
                                                 Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
                                             else:
                                                 logging.info(f"upload ja existe sem nota {numero_nf}")
@@ -337,7 +337,7 @@ def processar_emails():
                             filename = att["filename"]
                             payload = att["content"].getvalue()
                             if filename.lower().endswith('.xml'):
-                                print(f"Processando xml: {filename}")
+                                logging.info(f"Processando xml: {filename}")
                                 tinicial=time.time()
                                 nf=NotaFiscal(xml_data=payload)
                                 Arquivei(xml_data=payload)
