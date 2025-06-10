@@ -19,14 +19,6 @@
             <small class="form-text text-muted">Selecione um ou mais tanques</small>
           </div>
           <div class="mb-2">
-            <label for="peca_nome_search" class="form-label">Pesquisar Peça</label>
-            <div class="input-group">
-              <input type="text" class="form-control" id="peca_nome_search" placeholder="Digite parte do nome da peça">
-              <button class="btn btn-outline-secondary" type="button" id="btnBuscarPecas">Buscar</button>
-            </div>
-            <small class="form-text text-muted">Pesquise pelo nome e selecione as peças abaixo</small>
-          </div>
-          <div class="mb-2">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" value="1" id="apenasAcabadas">
               <label class="form-check-label" for="apenasAcabadas">
@@ -34,23 +26,11 @@
               </label>
             </div>
           </div>
-          <div class="mb-2">
-            
-            <label for="tabelaPecasSelecionar" class="form-label">Peças Selecionadas</label>
-            <div class="table-responsive" style="max-height: 350px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 4px;">
-                <table class="table table-sm table-bordered table-hover" id="tabelaPecasSelecionar">
-                    <thead class="sticky-top bg-white">
-                        <tr>
-                            <th style="width:40px"><input type="checkbox" id="checkAllPecas"></th>
-                            <th>Nome</th>
-                            <th>Tanque</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        
-                    </tbody>
-                </table>
-            </div>
+          <div class="mb-3">
+            <label for="transporte-peca_id" class="form-label">Peça(s) (pesquise pelo nome)</label>
+            <select class="form-select" id="transporte-peca_id" name="peca_ids[]" required style="width: 100%" multiple>
+                <!-- As opções serão carregadas via AJAX pelo select2 -->
+            </select>
           </div>
           
           <div class="mb-2">

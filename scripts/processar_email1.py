@@ -85,6 +85,7 @@ def get_CC(nnf):
 IMAP_FOLDER = 'Inbox'
 ASSUNTO_PADRAO_NFE = 'Envio de Nota Fiscal Eletrônica'
 ASSUNTO_PADRAO_CTE = 'Envio de Nota Fiscal Eletrônica - DUA'
+ASSUNTO_PADRAO_DUA = 'CTE, NF Fortanks e DUA'
 ASSUNTO_PADRAO_PROTOCOLO = "ENC: NF´S PROTOCOLOS"
 ASSUNTO_PADRAO_REEMBOLSO = 'REEMBOLSO'
 EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
@@ -228,14 +229,14 @@ def processar_emails():
         if len(emails) > 0:
             for uid, msg in emails:
 
-                #logging.info(f'Processando e-mail: {msg.subject}')
+                logging.info(f'Processando e-mail: {msg.subject}')
                 
                 if ASSUNTO_PADRAO_PROTOCOLO or ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
                     if ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
                         tipo = 3
                     else:
                         tipo = 2
-                    logging.info(f'Processando email de protocolo: {msg.subject}')
+                    logging.info(f'Processando email de protocolo')
                     if len(msg.attachments) > 0:
                         for att in msg.attachments:
                             filename = att["filename"]
@@ -248,7 +249,7 @@ def processar_emails():
                                 logging.info(f"tentando a chave do arquivo {filename}")
                                 dec1 = None
                                 
-                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                img = convert_from_bytes(payload,500)[0]
                                 logging.info(f"img1")
                                 dec = decode(img)
                                 if dec:
@@ -271,8 +272,15 @@ def processar_emails():
                                             logging.info(f"upload realizado {nota.numero_nf}")
                                         continue
                                     else:
-                                        if Arquivei(chave_acesso=dec1,cancelamento=True).cancelada:
-                                            logging.info(f"Nota cancelada: {dec1}")
+                                        nota = NotaFiscal(xml_data=base64.b64encode(payload))
+                                        if nota.id:
+                                            logging.info(f"Nota: {nota.id} {nota.numero_nf}")
+                                            up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
+                                            if up.id:
+                                                logging.info(f"upload ja existe {nota.numero_nf}")
+                                            else:
+                                                Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                                logging.info(f"upload realizado {nota.numero_nf}")
                                 else:
                                     logging.info(f"tentando pelo numero e fornecedor {filename}")
                                     numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
@@ -326,9 +334,12 @@ def processar_emails():
                         
                         # Marcar o email como lido
                 
+                
+
+
                 if ASSUNTO_PADRAO_NFE in msg.subject:
                     
-                    logging.info(f'Processando email de nfe: {msg.subject}')
+                    logging.info(f'Processando email de nfe')
                     # Lista para armazenar os anexos processados
                     anexos_processados = []
                     # Criar diretório temporário para os anexos
@@ -340,7 +351,7 @@ def processar_emails():
                                 logging.info(f"Processando xml: {filename}")
                                 tinicial=time.time()
                                 nf=NotaFiscal(xml_data=payload)
-                                Arquivei(xml_data=payload)
+                                #Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
                                 tfinal=time.time()
                                 logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
             

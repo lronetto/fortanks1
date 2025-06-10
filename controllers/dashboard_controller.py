@@ -59,13 +59,13 @@ def meu_dashboard():
 
     exibir_card_epis_vencimento = False
     epis_vencimento = []
-    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+    if current_user.colaborador and current_user.colaborador.departamento_id == 99:
         exibir_card_epis_vencimento = True
         epis_vencimento = card_epis_vencimento()
 
     exibir_card_epis_estoque_critico = False
     epis_criticos_data = []
-    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+    if current_user.colaborador and current_user.colaborador.departamento_id == 99:
         exibir_card_epis_estoque_critico = True
         epis_criticos_data = card_epis_estoque_critico()
 

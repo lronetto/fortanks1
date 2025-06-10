@@ -73,14 +73,16 @@ class NotaFiscal(db.Model):
     itens = db.relationship('NotaFiscalItem', backref='nota_fiscal', cascade='all, delete-orphan')
 
     upload = None
+    cancelada = False
     
-    def __init__(self, xml_data=None, chave_acesso=None, id=None):
+    def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False):
         self.xml_data = xml_data
         self.chave_acesso = chave_acesso
         self.id = id
         self.upload = None
-        
+        self.cancelada = cancelada
         if xml_data:
+            print(f'NotaFiscal xml')
             resultado = self.processar_nota_fiscal_xml()
             if resultado:
                 for key, value in resultado.__dict__.items():

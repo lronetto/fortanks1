@@ -167,7 +167,7 @@ $(function() {
   });
 
   // Inicialização do select2 para o campo de peça no acabamento (agora múltiplo)
-  $('#peca_id').select2({
+  $('#acabamento-peca_id').select2({
     dropdownParent: $('#modalAcabamento'),
     theme: 'bootstrap-5',
     placeholder: 'Pesquise a peça pelo nome',
@@ -202,7 +202,41 @@ $(function() {
     },
     minimumInputLength: 2
   });
-
+  $('#transporte-peca_id').select2({
+    dropdownParent: $('#modalTransporte'),
+    theme: 'bootstrap-5',
+    placeholder: 'Pesquise a peça pelo nome',
+    allowClear: true,
+    multiple: true,
+    ajax: {
+      url: '/acabamento-transporte/api/pecas',
+      method: 'GET',
+      dataType: 'json',
+      delay: 250,
+      data: function(params) {
+        return {
+          tanque_ids: [$('#tanque_ids').val()],
+          nome: params.term || '',
+          apenas_concretadas: 1,
+          apenas_acabadas:0,
+          nao_acabadas: 1
+        };
+      },
+      processResults: function(data) {
+        return {
+          results: data.map(function(peca) {
+            return {
+              id: peca.id,
+              text: peca.tanque_nome + ' - ' + peca.nome,
+              tanque_nome: peca.tanque_nome
+            };
+          })
+        };
+      },
+      cache: true
+    },
+    minimumInputLength: 2
+  });
   // Limpar o select2 ao trocar o tanque
   $('#tanque_id').on('change', function() {
     $('#peca_id').val(null).trigger('change');

@@ -39,17 +39,17 @@ def novo():
     if request.method == 'POST':
         try:
             # Obter dados do formulário
-            centro_custo_id = request.form.get('centro_custo_id')
             notas_selecionadas = json.loads(request.form.get('notas_selecionadas', '[]'))
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
             
+            print(notas_selecionadas)
+            print(avulsos_data)
             # Validar centro de custo
-            centro_custo = CentroCusto.query.get_or_404(centro_custo_id)
+            
             
             # Criar reembolso
             reembolso = Reembolso(
                 usuario_id=current_user.id,
-                centro_custo_id=centro_custo_id,
                 data=datetime.utcnow(),
                 valor_total=0,  # Será atualizado após adicionar documentos
                 numero_relatorio=f"RE{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
@@ -238,10 +238,14 @@ def buscar_notas():
             if valor_exato:
                 query = query.filter(NotaFiscal.valor_total == float(valor_exato))
             else:
-                if valor_minimo:
-                    query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
-                if valor_maximo:
-                    query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
+                if valor_minimo and not valor_maximo:
+                    query = query.filter(NotaFiscal.valor_total == float(valor_minimo))
+                else:
+                    if valor_minimo:
+                        query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
+                    if valor_maximo:
+                        query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
+                
             #if ids:
             #    query = query.filter(NotaFiscal.id.in_(ids))
 
