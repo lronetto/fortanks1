@@ -98,8 +98,11 @@ def acabamento():
 def transporte():
     """Registra transporte de peças"""
     if request.method == 'POST':
-        tanque_ids = request.form.getlist('tanque_ids')
-        peca_ids = request.form.get('peca_ids', '').split(',')
+       # print(request.form)
+        tanque_ids = request.form.getlist('transporte-tanque_ids[]')
+        peca_ids = request.form.getlist('transporte-peca_ids[]')
+        print('tanques',tanque_ids)
+        print('pecas',peca_ids)
         placas = request.form.getlist('placas')
         nota_fiscal = request.form.get('nota_fiscal')
         placa_carreta = request.form.get('placa_carreta')
@@ -135,6 +138,7 @@ def transporte():
 @acabamento_transporte_bp.route('/api/pecas', methods=['GET'])
 def api_pecas():
     """Retorna peças filtradas por tanques e nome (AJAX)"""
+    print(request.args)
     tanque_ids = request.args.getlist('tanque_ids[]')
     nome = request.args.get('nome', '').strip()
     apenas_concretadas = request.args.get('apenas_concretadas', '0') == '1'
@@ -192,3 +196,8 @@ def api_transportadoras():
             transportadoras.append(qualidade_dict['transporte']['transportadora'])
     transportadoras = list(set(transportadoras))
     return jsonify(transportadoras)
+@acabamento_transporte_bp.route('/api/tanques', methods=['GET'])
+def api_tanques():
+    """Retorna tanques filtradas por tanques (AJAX)"""
+    tanques = Tanque.query.all()
+    return jsonify([tanque.to_dict() for tanque in tanques])

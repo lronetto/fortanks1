@@ -94,7 +94,32 @@ class Tanque(db.Model):
         # Garantir que o campo UN sempre tenha um valor
         if not self.un:
             self.un = self.gerar_un()
-    
+    def to_dict(self):
+        """
+        Retorna um dicionário com os campos do tanque
+        """
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'un': self.un,
+            'sistema': self.sistema,
+            'dimensoes': self.dimensoes,
+            'diametro': self.diametro,
+            'comprimento': self.comprimento,
+            'largura': self.largura,
+            'altura_total': self.altura_total,
+            'altura_util': self.altura_util,
+            'quantidade': self.quantidade,
+            'cobertura': self.cobertura,
+            'ncabospn': self.ncabospn,
+            'ncabospf': self.ncabospf,
+            'placas_normais': self.placas_normais,
+            'placas_fecho': self.placas_fecho,
+            'contrato_id': self.contrato_id,
+            'item_nf': self.item_nf,
+            'data_cadastro': self.data_cadastro,
+            'ultima_atualizacao': self.ultima_atualizacao
+        }
     def save(self):
         """
         Salva o tanque no banco de dados

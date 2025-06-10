@@ -9,8 +9,8 @@
         </div>
         <div class="modal-body">
           <div class="mb-3">
-            <label for="tanque_id" class="form-label">Tanque</label>
-            <select class="form-select" id="tanque_id" name="tanque_id" required>
+            <label for="acabamento-tanque_id" class="form-label">Tanque</label>
+            <select class="form-select" id="acabamento-tanque_id" name="acabamento-tanque_id" required>
               <option value="">Selecione...</option>
               {% for tanque in tanques %}
                 <option value="{{ tanque.id }}">{{ tanque.nome }}</option>
@@ -19,7 +19,7 @@
           </div>
           <div class="mb-3">
             <label for="acabamento-peca_id" class="form-label">Peça(s) (pesquise pelo nome)</label>
-            <select class="form-select" id="acabamento-peca_id" name="peca_ids[]" required style="width: 100%" multiple>
+            <select class="form-select" id="acabamento-peca_id" name="acabamento-peca_ids[]" required style="width: 100%" multiple>
                 <!-- As opções serão carregadas via AJAX pelo select2 -->
             </select>
           </div>
