@@ -69,6 +69,9 @@ $(function() {
     placeholder: 'Pesquise a peça pelo nome',
     allowClear: true,
     multiple: true,
+    width: '100%',
+    scrollAfterSelect: true,
+    dropdownAutoWidth: true,
     ajax: {
       url: '/acabamento-transporte/api/pecas',
       method: 'GET',
@@ -104,6 +107,9 @@ $(function() {
     placeholder: 'Pesquise a peça pelo nome',
     allowClear: true,
     multiple: true,
+    width: '100%',
+    scrollAfterSelect: true,
+    dropdownAutoWidth: true,
     ajax: {
       url: '/acabamento-transporte/api/pecas',
       method: 'GET',

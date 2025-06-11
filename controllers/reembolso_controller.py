@@ -78,13 +78,13 @@ def novo():
             for idx, avulso_data in enumerate(avulsos_data):
                 doc = ReembolsoDocumento(
                     reembolso=reembolso,
-                    fornecedor=avulso_data['fornecedor'],
-                    ndocumento=avulso_data['ndocumento'],
-                    data_documento=avulso_data['data_documento'],
                     tipo='avulso',
                     descricao=avulso_data['descricao'],
                     valor=avulso_data['valor'],
-                    centro_custo_id=avulso_data.get('centro_custo_id')  # Adicionar centro de custo
+                    fornecedor=avulso_data.get('fornecedor', ''),
+                    ndocumento=avulso_data.get('ndocumento', ''),
+                    data_documento=datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d'),
+                    centro_custo_id=avulso_data.get('centro_custo_id')
                 )
                 db.session.add(doc)
                 valor_total += float(avulso_data['valor'])
@@ -421,7 +421,6 @@ def editar(reembolso_id):
     if request.method == 'POST':
         try:
             # Atualizar campos principais
-            reembolso.centro_custo_id = request.form.get('centro_custo_id')
             reembolso.numero_relatorio = request.form.get('numero_relatorio')
             notas_selecionadas = json.loads(request.form.get('notas_selecionadas', '[]'))
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
@@ -444,7 +443,11 @@ def editar(reembolso_id):
                     tipo='nota',
                     nota_fiscal_id=nota.id,
                     descricao=nota_data['descricao'],
-                    valor=nota.valor_total
+                    valor=nota.valor_total,
+                    fornecedor=nota.nome_emitente,
+                    ndocumento=nota.numero_nf,
+                    data_documento=nota.data_emissao,
+                    centro_custo_id=nota_data['centro_custo_id']
                 )
                 db.session.add(doc)
                 valor_total += float(nota.valor_total)
@@ -454,7 +457,11 @@ def editar(reembolso_id):
                     reembolso=reembolso,
                     tipo='avulso',
                     descricao=avulso_data['descricao'],
-                    valor=avulso_data['valor']
+                    valor=avulso_data['valor'],
+                    fornecedor=avulso_data.get('fornecedor', ''),
+                    ndocumento=avulso_data.get('ndocumento', ''),
+                    data_documento=datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d'),
+                    centro_custo_id=avulso_data.get('centro_custo_id')
                 )
                 db.session.add(doc)
                 valor_total += float(avulso_data['valor'])

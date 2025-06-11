@@ -231,7 +231,7 @@ def processar_emails():
 
                 logging.info(f'Processando e-mail: {msg.subject}')
                 
-                if ASSUNTO_PADRAO_PROTOCOLO or ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
+                if (ASSUNTO_PADRAO_PROTOCOLO in msg.subject) or (ASSUNTO_PADRAO_REEMBOLSO in msg.subject):
                     if ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
                         tipo = 3
                     else:
@@ -250,7 +250,7 @@ def processar_emails():
                                 dec1 = None
                                 
                                 img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                                logging.info(f"img1")
+                                #logging.info(f"img1")
                                 dec = decode(img)
                                 if dec:
                                     dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
@@ -263,7 +263,7 @@ def processar_emails():
                                     nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
                                     
                                     if nota:
-                                        logging.info(f"Nota: {nota.id} {nota.numero_nf}")
+                                        #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
                                         up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
                                         if up.id:
                                             logging.info(f"upload ja existe {nota.numero_nf}")
@@ -272,15 +272,8 @@ def processar_emails():
                                             logging.info(f"upload realizado {nota.numero_nf}")
                                         continue
                                     else:
-                                        nota = NotaFiscal(xml_data=base64.b64encode(payload))
-                                        if nota.id:
-                                            logging.info(f"Nota: {nota.id} {nota.numero_nf}")
-                                            up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
-                                            if up.id:
-                                                logging.info(f"upload ja existe {nota.numero_nf}")
-                                            else:
-                                                Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
-                                                logging.info(f"upload realizado {nota.numero_nf}")
+                                        pass
+                                        
                                 else:
                                     logging.info(f"tentando pelo numero e fornecedor {filename}")
                                     numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
@@ -350,10 +343,34 @@ def processar_emails():
                             if filename.lower().endswith('.xml'):
                                 logging.info(f"Processando xml: {filename}")
                                 tinicial=time.time()
-                                nf=NotaFiscal(xml_data=payload)
+                                nf=NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'))
                                 #Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
                                 tfinal=time.time()
-                                logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
+                                #logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
+                        for att in msg.attachments:
+                            filename = att["filename"]
+                            payload = att["content"].getvalue() 
+                            if filename.lower().endswith('.pdf'):
+                                logging.info(f"Processando pdf: {filename}")
+                                tinicial=time.time()
+                                tipo=2
+                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                #logging.info(f"img1,kgfy")
+                                dec = decode(img)
+                                if dec:
+                                    dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
+                                else:
+                                    dec1 = None
+                                nota=NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
+                                up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
+                                if up.id:
+                                    logging.info(f"upload ja existe")
+                                else:
+                                    Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                    logging.info(f"upload realizado")
+                                #Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                                tfinal=time.time()
+                                #logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
             
 
                 imap.mark_seen(uid)

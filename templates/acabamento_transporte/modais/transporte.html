@@ -1,6 +1,18 @@
 <div class="modal fade" id="modalTransporte" tabindex="-1" aria-labelledby="modalTransporteLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
+      <style>
+        .select2-container--bootstrap-5 .select2-dropdown {
+          max-height: 300px;
+          overflow-y: auto;
+        }
+        #modalTransporte .select2-container {
+          z-index: 9999;
+        }
+        #modalTransporte .select2-dropdown {
+          z-index: 9999;
+        }
+      </style>
       <form id="formTransporte" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="peca_ids" id="peca_ids">
