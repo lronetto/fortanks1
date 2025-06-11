@@ -390,7 +390,14 @@ class NotaFiscal(db.Model):
     def importar_itens_para_estoque(self):
         for item in self.itens:
             item.importar_para_estoque()
-
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'numero_nf': self.numero_nf,
+            'chave_acesso': self.chave_acesso,
+            'data_emissao': self.data_emissao,
+            'valor_total': self.valor_total,
+        }
 class NotaFiscalItem(db.Model):
     """
     Modelo para representar itens de Nota Fiscal

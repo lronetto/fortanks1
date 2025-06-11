@@ -16,6 +16,15 @@ class Reembolso(db.Model):
 
     def __repr__(self):
         return f'<Reembolso {self.id} - {self.numero_relatorio}>'
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'usuario_id': self.usuario_id,
+            'centro_custo_id': self.centro_custo_id,
+            'data': self.data,
+            'valor_total': self.valor_total,
+            'numero_relatorio': self.numero_relatorio
+        }
 
 class ReembolsoDocumento(db.Model):
     __tablename__ = 'reembolso_documentos'
@@ -32,9 +41,25 @@ class ReembolsoDocumento(db.Model):
 
     anexos = db.relationship('ReembolsoAnexo', backref='documento', cascade='all, delete-orphan')
     nota_fiscal = db.relationship('NotaFiscal', backref='documentos_reembolso')
+    centro_custo = db.relationship('CentroCusto', backref='documentos_reembolso')
 
     def __repr__(self):
         return f'<ReembolsoDocumento {self.id} - {self.tipo}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'tipo': self.tipo,
+            'nota_fiscal_id': self.nota_fiscal_id,
+            'fornecedor': self.fornecedor,
+            'ndocumento': self.ndocumento,
+            'data_documento': self.data_documento,
+            'descricao': self.descricao,
+            'valor': self.valor,
+            'nota_fiscal': self.nota_fiscal.to_dict() if self.nota_fiscal else None,
+            'centro_custo': self.centro_custo.to_dict() if self.centro_custo else None,
+            'anexos': [anexo.to_dict() for anexo in self.anexos]
+        }
 
 class ReembolsoAnexo(db.Model):
     __tablename__ = 'reembolso_anexos'
@@ -47,3 +72,11 @@ class ReembolsoAnexo(db.Model):
 
     def __repr__(self):
         return f'<ReembolsoAnexo {self.id} - {self.filename}>' 
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'filename': self.filename,
+            'mimetype': self.mimetype,
+            'uploaded_at': self.uploaded_at
+        }

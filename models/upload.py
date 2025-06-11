@@ -49,7 +49,14 @@ class Upload(db.Model):
                 self.id = up.id
                 self.uploaded_at = up.uploaded_at
                 return self
-
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'filename': self.filename,
+            'mimetype': self.mimetype,
+            'uploaded_at': self.uploaded_at,
+            'blob': self.blob
+        }
     def save(self):
         try:
             db.session.add(self)

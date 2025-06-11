@@ -8,7 +8,7 @@ from models.upload import Upload
 from forms.reembolso_forms import ReembolsoForm, DocumentoAvulsoForm
 from sqlalchemy import or_, and_
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, date
 from weasyprint import HTML
 import json
 import time
@@ -16,10 +16,17 @@ from models import PlanoConta
 from models.dados_analiticos import PL_CUSTO,PL_0202,PL_0207,PL_0209
 import requests
 import base64
+from PyPDF2 import PdfReader, PdfWriter
+import tempfile
+import os
 reembolso_bp = Blueprint('reembolso', __name__, url_prefix='/reembolsos')
 import dotenv
 import os
 dotenv.load_dotenv()
+import pdfkit
+
+# Configuração do wkhtmltopdf
+config = pdfkit.configuration(wkhtmltopdf='C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe')
 
 @reembolso_bp.route('/')
 @login_required
@@ -390,15 +397,99 @@ def buscar_notas():
             return jsonify({'error': str(e)}), 400
     return jsonify({'error': 'Método não permitido'}), 405
 
-@reembolso_bp.route('/<int:reembolso_id>/pdf')
+@reembolso_bp.route('/<int:reembolso_id>/pdf_template')
 @login_required
-def exportar_pdf(reembolso_id):
+def pdf_template(reembolso_id):
     reembolso = Reembolso.query.get_or_404(reembolso_id)
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
+    
+    # Carregar uploads das notas fiscais
+    for doc in reembolso.documentos:
+        if doc.tipo == 'nota' and doc.nota_fiscal:
+            print(f'Carregando uploads para nota fiscal {doc.nota_fiscal.id}')
+            uploads = Upload.query.filter(
+                Upload.pai_id == doc.nota_fiscal.id,
+                Upload.pai == 'NotaFiscal',
+                Upload.tipo == 3
+            ).all()
+            print(f'Uploads encontrados: {len(uploads)}')
+            doc.nota_fiscal.uploads = uploads
+    
+    print(f'Total de documentos: {len(reembolso.documentos)}')
+    for doc in reembolso.documentos:
+        print(f'Documento: {doc.tipo} - {doc.ndocumento}')
+        if doc.tipo == 'nota' and doc.nota_fiscal:
+            print(f'Uploads da nota: {len(doc.nota_fiscal.uploads)}')
+        else:
+            print(f'Anexos do documento: {len(doc.anexos)}')
+    
     html = render_template('reembolsos/pdf_template.html', reembolso=reembolso)
-    pdf = HTML(string=html, base_url=request.base_url).write_pdf()
-    response = make_response(pdf)
+    return reembolso,html
+
+def dias_desde_1900(data):
+    """Calcula o número de dias desde 01/01/1900 até a data informada"""
+    data_inicial = date(1900, 1, 1)
+    return (data - data_inicial).days
+
+@reembolso_bp.route('/exportar_pdf/<int:id>')
+def exportar_pdf(id):
+    reembolso = Reembolso.query.get_or_404(id)
+    pdf_writer = PdfWriter()
+    CCs = ReembolsoDocumento.query.\
+    filter(ReembolsoDocumento.reembolso_id==id)\
+    .join(CentroCusto, ReembolsoDocumento.centro_custo_id==CentroCusto.id)\
+    .group_by(ReembolsoDocumento.centro_custo_id)\
+            .order_by(CentroCusto.nome).all()
+    
+    for cc in CCs:
+        docs = ReembolsoDocumento.query.\
+            filter(ReembolsoDocumento.reembolso_id==id, 
+                   ReembolsoDocumento.centro_custo_id==cc.centro_custo_id).\
+                    order_by(ReembolsoDocumento.data_documento.desc()).all()
+        valor_total = sum(doc.valor for doc in docs)
+        # Calcula o número de dias desde 1900
+        dias = dias_desde_1900(reembolso.data.date())
+        nrel = valor_total+dias
+        html = render_template('reembolsos/pdf_template.html', docs=docs, reembolso=reembolso, nrel=nrel)
+        pdf_bytes = HTML(string=html, base_url=request.base_url).write_pdf()
+        pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
+
+        for doc in docs:
+            if doc.tipo == 'nota' and doc.nota_fiscal:
+                doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).all()
+            elif doc.tipo == 'avulso':
+                doc.anexos = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=3).all()
+        
+            if doc.tipo == 'nota' and doc.nota_fiscal and doc.nota_fiscal.uploads:
+                for upload in doc.nota_fiscal.uploads:
+                    if upload.mimetype == 'application/pdf':
+                        try:
+                            # Converte o blob base64 para bytes
+                            pdf_bytes = base64.b64decode(upload.blob)
+                            # Adiciona o PDF ao final
+                            pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
+                        except Exception as e:
+                            print(f"Erro ao processar PDF da nota fiscal {doc.ndocumento}: {str(e)}")
+            elif doc.tipo == 'avulso' and doc.anexos:
+                for anexo in doc.anexos:
+                    if anexo.mimetype == 'application/pdf':
+                        try:
+                            # Converte o blob base64 para bytes
+                            pdf_bytes = base64.b64decode(anexo.blob)
+                            # Adiciona o PDF ao final
+                            pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
+                        except Exception as e:
+                            print(f"Erro ao processar PDF do documento avulso {doc.ndocumento}: {str(e)}")
+    
+    # Salva o PDF final em um BytesIO
+    output = BytesIO()
+    pdf_writer.write(output)
+    output.seek(0)
+    
+    response = make_response(output.getvalue())
+    output.close()
+    pdf_writer.close()
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=reembolso_{reembolso.numero_relatorio}.pdf'
     return response

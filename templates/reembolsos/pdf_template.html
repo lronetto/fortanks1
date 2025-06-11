@@ -13,17 +13,21 @@
         .logo { height: 50px; }
         .titulo { text-align: center; font-size: 22px; font-weight: bold; }
         .subtitulo { text-align: center; font-size: 14px; margin-bottom: 10px; }
-        .info-table { width: 100%; margin-bottom: 10px; }
+        .info-table { width: 100%; margin-bottom: 10px;  border: 1px solid #333;}
         .info-table td { padding: 2px 6px; }
         .dados { margin-bottom: 10px; }
         .dados strong { display: inline-block; width: 120px; }
-        .relatorio-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .relatorio-table th, .relatorio-table td { border: 1px solid #333; padding: 4px 6px; font-size: 11px; }
+        .relatorio-table { width: 100%; border: 1px solid #333; margin-top: 10px; }
+        .relatorio-table th, .relatorio-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 11px; }
         .relatorio-table th { background: #f0f0f0; }
         .assinatura { margin-top: 40px; }
         .assinatura .linha { border-top: 1px solid #333; width: 250px; margin: 0 auto; text-align: center; padding-top: 4px; }
         .right { text-align: right; }
         .center { text-align: center; }
+        .centro-custo { page-break-before: auto; margin-top: 20px; }
+        .centro-custo:first-child { page-break-before: auto; }
+        .centro-custo h2 { font-size: 16px; margin-bottom: 15px; color: #333; }
+        .total-centro { text-align: right; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -42,47 +46,49 @@
     <table class="info-table">
         <tr>
             <td><strong>NOME:</strong> {{ reembolso.usuario.nome }}</td>
-            <td><strong>Nº:</strong> <span style="color:red; font-weight:bold;">{{ reembolso.numero_relatorio }}</span></td>
+            <td class="right"><strong>Nº:</strong> <span style="color:red; font-weight:bold;">{{ nrel }}</span></td>
         </tr>
         <tr>
-            <td><strong>CARGO:</strong> {{ reembolso.usuario.colaborador.cargo.nome if reembolso.usuario.colaborador and reembolso.usuario.colaborador.cargo else '-' }}</td>
-            <td></td>
+            <td class="left" colspan="2"><strong>CARGO:</strong> {{ reembolso.usuario.colaborador.cargo.nome if reembolso.usuario.colaborador and reembolso.usuario.colaborador.cargo else '-' }}</td>
         </tr>
         <tr>
-            <td colspan="2"><strong>UN :</strong> {{ reembolso.centro_custo.codigo }} - {{ reembolso.centro_custo.nome }}</td>
+            <td colspan="2" class="left"><strong>Centro de Custo:</strong> {{ docs[0].centro_custo.codigo }} - {{ docs[0].centro_custo.nome }}</td>
+        </tr>
+        <tr>
+            <table class="relatorio-table">
+                <thead>
+                    <tr>
+                        <th>Fornecedor</th>
+                        <th>Nº Nota</th>
+                        <th>Data</th>
+                        <th>Descrição da(s) despesa(s)</th>
+                        <th class="right">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in docs %}
+                    <tr>
+                        <td>{{ doc.fornecedor.upper() }}</td>
+                        <td style="width:40px;">{{ doc.ndocumento }}</td>
+                        <td style="width:40px;">{{ doc.data_documento.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ doc.descricao.upper() }}</td>
+                        <td class="left" style="width:60px;">R$ {{ '%.2f'|format(doc.valor) }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% for i in range(15 - docs|length) %}
+                    <tr>
+                        <td>&nbsp;</td><td></td><td></td><td></td><td></td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <td colspan="4" class="right">Total do Centro de Custo:</td>
+                        <td>R$ {{ '%.2f'|format(docs|sum(attribute='valor')) }}</td>
+                    </tr>
+                </tbody>
+            </table>
         </tr>
     </table>
-    <div class="dados">
-        Solicito o reembolso dos valores correspondentes às despesas relacionadas à Fortanks e pagas por mim conforme descrição abaixo e comprovante(s) anexo(s)
-    </div>
-    <table class="relatorio-table">
-        <thead>
-            <tr>
-                <th>Fornecedor</th>
-                <th>Nº Nota</th>
-                <th>Data</th>
-                <th>Descrição da(s) despesa(s)</th>
-                <th class="right">Valor</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for doc in reembolso.documentos %}
-            <tr>
-                <td>{{ doc.fornecedor }}</td>
-                <td>{{ doc.ndocumento }}</td>
-                <td>{{ doc.data_documento.strftime('%d/%m/%Y') }}</td>
-                <td>{{ doc.descricao }}</td>
-                <td class="right">R$ {{ '%.2f'|format(doc.valor) }}</td>
-            </tr>
-            {% endfor %}
-            {% for i in range(15 - reembolso.documentos|length) %}
-            <tr>
-                <td>&nbsp;</td><td></td><td></td><td></td><td></td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <div class="right" style="margin-top:10px; font-size:14px;"><strong>Total: R$ {{ '%.2f'|format(reembolso.valor_total) }}</strong></div>
+
     <div class="assinatura">
         <div class="linha">Assinatura do Solicitante</div>
     </div>
