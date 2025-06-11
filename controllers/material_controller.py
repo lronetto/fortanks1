@@ -1077,7 +1077,7 @@ def exportar_excel():
                 'Nome': mat.nome,
                 'Descrição': mat.descricao,
                 'Categoria': mat.categoria,
-                'Unidade': mat.unidade,
+                'Unidade': mat.unidade_obj.nome,
                 'Plano de Conta': mat.plano_conta,
                 'Código ERP': mat.codigo_erp,
                 'Data Criação': mat.data_criacao.strftime('%Y-%m-%d %H:%M:%S') if mat.data_criacao else '',
