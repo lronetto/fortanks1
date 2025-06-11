@@ -23,10 +23,6 @@ reembolso_bp = Blueprint('reembolso', __name__, url_prefix='/reembolsos')
 import dotenv
 import os
 dotenv.load_dotenv()
-import pdfkit
-
-# Configuração do wkhtmltopdf
-config = pdfkit.configuration(wkhtmltopdf='C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltopdf.exe')
 
 @reembolso_bp.route('/')
 @login_required
