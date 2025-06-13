@@ -263,20 +263,6 @@ def buscar_notas():
             pagination = query.paginate(page=page, per_page=per_page, error_out=False)
             notas = pagination.items
 
-            # Adicionar notas já selecionadas que não estão na página atual
-            notas_ids_set = set([n.id for n in notas])
-            notas_selecionadas_extra = []
-            if ids:
-                ids_faltantes = set(ids) - notas_ids_set
-                if ids_faltantes:
-                    notas_extra = NotaFiscal.query.filter(NotaFiscal.id.in_(ids_faltantes)).all()
-                    notas_selecionadas_extra.extend(notas_extra)
-            notas += notas_selecionadas_extra
-
-            tfinal = time.time()
-            print(f'Tempo de execução2: {tfinal - tinicial} segundos')
-            tinicial = time.time()
-
             # Processar notas com pagamento
             notas_filtradas = []
             for n in notas:
@@ -313,16 +299,12 @@ def buscar_notas():
                         'data_emissao': n.data_emissao.isoformat(),
                         'valor_total': float(n.valor_total),
                         'pagamento': valor_pagamento,
-                        'chave_acesso': getattr(    n, 'chave_acesso', ''),
+                        'chave_acesso': getattr(n, 'chave_acesso', ''),
                         'centro_custo_id': centro_custo_id
                     })
                 except Exception as e:
                     print(f'Erro ao processar nota {n.id}: {str(e)}')
                     continue
-
-            tfinal = time.time()
-            print(f'Tempo de execução3: {tfinal - tinicial} segundos')
-            tinicial = time.time()
 
             # Se após filtrar por pagamento ficar com menos itens que a página atual,
             # precisamos buscar mais itens para preencher a página

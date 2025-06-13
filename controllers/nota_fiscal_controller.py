@@ -7,7 +7,7 @@ import base64
 import xml.etree.ElementTree as ET
 import json
 from decimal import Decimal
-from sqlalchemy import func, or_, case, distinct # Adicionar distinct
+from sqlalchemy import func, or_, case, distinct, and_, exists # Adicionar distinct e exists
 from sqlalchemy.sql import func as sqlfunc # Alias para func
 from flask import make_response
 from models.database import db
@@ -80,6 +80,7 @@ def index():
     item_nome = request.args.get('item_nome', '')
     status_importacao = request.args.get('status_importacao', '')
     cnpj_emitente = request.args.get('cnpj_emitente', '')
+    status_pagamento = request.args.get('status_pagamento', '')
     data_emissao_inicio = request.args.get('data_emissao_inicio', '')
     data_emissao_fim = request.args.get('data_emissao_fim', '')
     
@@ -136,7 +137,6 @@ def index():
             query = query.filter(NotaFiscal.data_emissao <= data_fim)
         except Exception:
             flash('Data final inválida.', 'warning')
-    
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc())
     
@@ -154,12 +154,18 @@ def index():
             nota.pago = True
         if Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').first():
             nota.upload = Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').first()
-        notas_fiscais_pagina_upload.append(nota)
+        if status_pagamento:
+            if status_pagamento == 'pago' and nota.pago :
+                notas_fiscais_pagina_upload.append(nota)
+            elif status_pagamento == 'nao_pago' and not nota.pago:
+                notas_fiscais_pagina_upload.append(nota)
+        else:
+            notas_fiscais_pagina_upload.append(nota)
         
     
     return render_template('notas_fiscais/index.html', 
                           pagination=pagination, # Passar objeto de paginação
-                          notas_fiscais=notas_fiscais_pagina_upload, # Manter para compatibilidade ou remover e usar pagination.items no template
+                          notas_fiscais=notas_fiscais_pagia_upload, # Manter para compatibilidade ou remover e usar pagination.items no template
                           status_importacao=status_importacao,
                           busca=busca,
                           item_nome=item_nome,

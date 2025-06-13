@@ -48,17 +48,17 @@ def novo():
     try:
         # Criar nova solicitação sem número (será definido após obter o ID)
         solicitacao = Solicitacao(
-            data_necessidade=datetime.strptime(request.form.get('data_necessidade'), '%Y-%m-%d').date(),
-            centro_custo_id=request.form.get('centro_custo_id'),
+            data_necessidade=datetime.strptime(request.form.get('nova_data_necessidade'), '%Y-%m-%d').date(),
+            centro_custo_id=request.form.get('nova_centro_custo_id'),
             solicitante_id=current_user.id,
-            observacoes=request.form.get('observacoes')
+            observacoes=request.form.get('nova_observacoes')
         )
         
         # Adicionar itens
-        materiais = request.form.getlist('material_id[]')
-        quantidades = request.form.getlist('quantidade[]')
-        unidades = request.form.getlist('unidade[]')
-        observacoes = request.form.getlist('observacoes_item[]')
+        materiais = request.form.getlist('nova_material_id[]')
+        quantidades = request.form.getlist('nova_quantidade[]')
+        unidades = request.form.getlist('nova_unidade[]')
+        observacoes = request.form.getlist('nova_observacoes_item[]')
         
         for i in range(len(materiais)):
             if materiais[i] and quantidades[i]:
@@ -366,3 +366,36 @@ def enviar_pdf_email(id):
         flash(f'Erro interno ao tentar enviar o e-mail: {str(e)}', 'danger')
 
     return redirect(url_for('solicitacao.index')) 
+
+@solicitacao_bp.route('/<int:id>/dados', methods=['GET'])
+@login_required
+def get_dados_solicitacao(id):
+    """Retorna os dados de uma solicitação em formato JSON"""
+    solicitacao = Solicitacao.query.get_or_404(id)
+    
+    # Verificar permissão
+    if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
+        return jsonify({'error': 'Sem permissão'}), 403
+    
+    # Preparar dados da solicitação
+    dados = {
+        'id': solicitacao.id,
+        'data_necessidade': solicitacao.data_necessidade.strftime('%Y-%m-%d'),
+        'centro_custo_id': solicitacao.centro_custo_id,
+        'observacoes': solicitacao.observacoes,
+        'itens': []
+    }
+    
+    # Adicionar itens
+    for item in solicitacao.itens:
+        dados['itens'].append({
+            'id': item.id,
+            'material_id': item.material_id,
+            'material_nome': item.material.nome,
+            'quantidade': item.quantidade,
+            'unidade_id': item.material.unidade_id,
+            'unidade_nome': item.material.unidade_obj.nome,
+            'observacoes': item.observacoes
+        })
+    
+    return jsonify(dados) 

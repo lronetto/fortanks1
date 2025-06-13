@@ -1,14 +1,19 @@
 <!-- Modal de Edição de Solicitação -->
-{% if solicitacao.status == 'Pendente' and (current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id) %}
-<div class="modal fade" id="editarModal{{ solicitacao.id }}" tabindex="-1" aria-labelledby="editarModalLabel{{ solicitacao.id }}" aria-hidden="true">
+<div class="modal fade" id="editarModal" tabindex="-1" aria-labelledby="editarModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-warning text-white">
-                <h5 class="modal-title" id="editarModalLabel{{ solicitacao.id }}">Editar Solicitação #{{ solicitacao.id }}</h5>
+                <h5 class="modal-title" id="editarModalLabel">Editar Solicitação </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="POST" action="{{ url_for('solicitacao.editar', id=solicitacao.id) }}" id="formEditarSolicitacao{{ solicitacao.id }}">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p>Carregando dados da solicitação...</p>
+                </div>
+                <form method="POST" action="" id="formEditarSolicitacao" style="display: none;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row">
                         <div class="col-md-12">
@@ -20,18 +25,17 @@
                                     <div class="row">
                                         <div class="col-md-6">
                                             <div class="form-group mb-3">
-                                                <label for="data_necessidade{{ solicitacao.id }}">Data de Necessidade</label>
-                                                <input type="date" class="form-control" id="data_necessidade{{ solicitacao.id }}" name="data_necessidade" 
-                                                       value="{{ solicitacao.data_necessidade.strftime('%Y-%m-%d') }}" required>
+                                                <label for="editar_data_necessidade">Data de Necessidade</label>
+                                                <input type="date" class="form-control" id="editar_data_necessidade" name="editar_data_necessidade" required>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
                                             <div class="form-group mb-3">
-                                                <label for="centro_custo_id{{ solicitacao.id }}">Centro de Custo</label>
-                                                <select class="form-control" id="centro_custo_id{{ solicitacao.id }}" name="centro_custo_id" required>
+                                                <label for="editar_centro_custo_id">Centro de Custo</label>
+                                                <select class="form-control" id="editar_centro_custo_id" name="editar_centro_custo_id" required>
                                                     <option value="">Selecione...</option>
                                                     {% for centro in centros_custo %}
-                                                    <option value="{{ centro.id }}" {% if centro.id == solicitacao.centro_custo_id %}selected{% endif %}>
+                                                    <option value="{{ centro.id }}">
                                                         {{ centro.codigo }} - {{ centro.nome }}
                                                     </option>
                                                     {% endfor %}
@@ -43,8 +47,8 @@
                                     <div class="row">
                                         <div class="col-md-12">
                                             <div class="form-group mb-3">
-                                                <label for="observacoes{{ solicitacao.id }}">Observações</label>
-                                                <textarea class="form-control" id="observacoes{{ solicitacao.id }}" name="observacoes" rows="3">{{ solicitacao.observacoes or '' }}</textarea>
+                                                <label for="editar_observacoes">Observações</label>
+                                                <textarea class="form-control" id="editar_observacoes" name="editar_observacoes" rows="3"></textarea>
                                             </div>
                                         </div>
                                     </div>
@@ -59,8 +63,8 @@
                                     <div class="row mb-3">
                                         <div class="col-md-4">
                                             <div class="form-group">
-                                                <label for="material_id{{ solicitacao.id }}">Material</label>
-                                                <select class="form-control material-select" id="material_id{{ solicitacao.id }}" data-id="{{ solicitacao.id }}">
+                                                <label for="editar_material_id">Material</label>
+                                                <select class="form-control material-select" id="editar_material_id" data-id="">
                                                     <option value="">Selecione...</option>
                                                     {% for material in materiais %}
                                                     <option value="{{ material.id }}" data-unidade="{{ material.unidade }}">
@@ -72,20 +76,20 @@
                                         </div>
                                         <div class="col-md-3">
                                             <div class="form-group">
-                                                <label for="quantidade{{ solicitacao.id }}">Quantidade</label>
-                                                <input type="number" class="form-control" id="quantidade{{ solicitacao.id }}" step="0.01">
+                                                <label for="editar_quantidade">Quantidade</label>
+                                                <input type="number" class="form-control" id="editar_quantidade" step="0.01">
                                             </div>
                                         </div>
                                         <div class="col-md-3">
                                             <div class="form-group">
-                                                <label for="unidade{{ solicitacao.id }}">Unidade</label>
-                                                <input type="text" class="form-control" id="unidade{{ solicitacao.id }}" readonly>
+                                                <label for="editar_unidade">Unidade</label>
+                                                <input type="text" class="form-control" id="editar_unidade" readonly>
                                             </div>
                                         </div>
                                         <div class="col-md-2">
                                             <div class="form-group">
                                                 <label>&nbsp;</label>
-                                                <button type="button" class="btn btn-primary w-100 btn-adicionar-item" data-id="{{ solicitacao.id }}">
+                                                <button type="button" class="btn btn-primary w-100 btn-adicionar-item" data-id="">
                                                     <i class="fas fa-plus"></i> Adicionar
                                                 </button>
                                             </div>
@@ -93,7 +97,7 @@
                                     </div>
 
                                     <div class="table-responsive">
-                                        <table class="table table-striped" id="tabelaItens{{ solicitacao.id }}">
+                                        <table class="table table-striped" id="tabelaItensEdicao">
                                             <thead>
                                                 <tr>
                                                     <th>Material</th>
@@ -104,7 +108,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <!-- Itens atuais serão carregados pelo JavaScript -->
+                                                <!-- Itens serão carregados via AJAX -->
                                             </tbody>
                                         </table>
                                     </div>
@@ -116,38 +120,172 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-salvar-edicao" data-id="{{ solicitacao.id }}">
+                <button type="button" class="btn btn-primary btn-salvar-edicao" data-id="">
                     <i class="fas fa-save"></i> Salvar Alterações
                 </button>
             </div>
         </div>
     </div>
 </div>
-{% endif %}
 
 {% block scripts %}
 <script>
 // Scripts específicos para edição de solicitação
 $(document).ready(function() {
     // Inicializar select2 para o select de material
-    $('#material_id{{ solicitacao.id }}').select2({
-        dropdownParent: $('#editarModal{{ solicitacao.id }}'),
+    $('#editar_material_id').select2({
+        dropdownParent: $('#editarModal'),
         width: '100%',
         placeholder: 'Selecione um material'
     });
+
     // Atualizar unidade ao selecionar material
-    $('#material_id{{ solicitacao.id }}').change(function() {
+    $('#editar_material_id').change(function() {
         const unidade = $(this).find('option:selected').data('unidade') || '';
-        $('#unidade{{ solicitacao.id }}').val(unidade);
+        $('#editar_unidade').val(unidade);
     });
+    let itensSolicitacoes = [];
+    // Carregar dados da solicitação quando o modal for aberto
+    $('#editarModal').on('show.bs.modal', function() {
+        const id = $("#btnEditar").data('id');
+        console.log(id);
+        const modal = $(this);
+        const form = modal.find('form');
+        const spinner = modal.find('.spinner-border').parent();
+        
+        // Mostrar spinner e esconder formulário
+        spinner.show();
+        form.hide();
+        
+        // Carregar dados via AJAX
+        $.get('/solicitacoes/'+id+'/dados', function(data) {
+            console.log(data);
+            // Preencher dados do formulário
+            $('#editar_data_necessidade').val(data.data_necessidade);
+            $('#editar_centro_custo_id').val(data.centro_custo_id);
+            $('#editar_observacoes').val(data.observacoes);
+            console.log('teste1');
+            // Limpar e preencher itens
+            itensSolicitacoes = data.itens;
+            console.log(itensSolicitacoes);
+            atualizarTabelaItensEdicao(id);
+            console.log('teste2');
+            
+            // Esconder spinner e mostrar formulário
+            spinner.hide();
+            form.show();
+        }).fail(function(jqXHR) {
+            if (jqXHR.status === 403) {
+                alert('Você não tem permissão para editar esta solicitação.');
+                modal.modal('hide');
+            } else {
+                alert('Erro ao carregar dados da solicitação. Tente novamente.');
+            }
+        });
+    });
+
     // Adicionar item à solicitação em edição
-    $('.btn-adicionar-item[data-id="{{ solicitacao.id }}"]').click(function() {
-        // Lógica já está no JS global, se necessário pode ser customizado aqui
+    $('.btn-adicionar-item').click(function() {
+        const materialSelect = $('#editar_material_id');
+        const quantidade = $('#editar_quantidade').val();
+        const unidade = $('#editar_unidade').val();
+        const id = $("#btnEditar").data('id');
+        
+        if (!materialSelect.val() || !quantidade) {
+            alert('Selecione um material e informe a quantidade.');
+            return;
+        }
+        
+        const materialNome = materialSelect.find('option:selected').text();
+        
+        if (!itensSolicitacoes) {
+            itensSolicitacoes = [];
+        }
+        
+        itensSolicitacoes.push({
+            material_id: materialSelect.val(),
+            material_nome: materialNome,
+            quantidade: quantidade,
+            unidade_id: unidade_id,
+            unidade_nome: unidade_nome,
+            observacoes: ''
+        });
+        
+        atualizarTabelaItensEdicao(id);
+        
+        // Limpar campos
+        materialSelect.val('').trigger('change');
+        $('#editar_quantidade').val('');
+        $('#editar_unidade').val('');
     });
+
     // Salvar edição de solicitação
-    $('.btn-salvar-edicao[data-id="{{ solicitacao.id }}"]').click(function() {
-        // Lógica já está no JS global, se necessário pode ser customizado aqui
+    $('.btn-salvar-edicao').click(function() {
+        const form = $('#formEditarSolicitacao');
+        
+        // Verificar se há itens
+        if (!itensSolicitacoes || itensSolicitacoes.length === 0) {
+            alert('Adicione pelo menos um item à solicitação.');
+            return;
+        }
+        
+        // Adicionar os itens ao formulário
+        form.find('input[name^="editar_material_id"], input[name^="editar_quantidade"], input[name^="editar_unidade"], input[name^="editar_observacoes_item"]').remove();
+        
+        itensSolicitacoes.forEach((item, index) => {
+            form.append(`<input type="hidden" name="editar_material_id[]" value="${item.material_id}">`);
+            form.append(`<input type="hidden" name="editar_quantidade[]" value="${item.quantidade}">`);
+            form.append(`<input type="hidden" name="editar_unidade[]" value="${item.unidade_id}">`);
+            form.append(`<input type="hidden" name="editar_observacoes_item[]" value="${item.observacoes || ''}">`);
+        });
+        
+        // Submeter o formulário
+        form.submit();
     });
+    function atualizarTabelaItensEdicao(id) {
+        const tabela = $(`#tabelaItensEdicao tbody`);
+        tabela.empty();
+        console.log('teste3');
+        if (!itensSolicitacoes || itensSolicitacoes.length === 0) {
+            tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
+            return;
+        }
+        console.log('teste4');
+        itensSolicitacoes.forEach((item, index) => {
+            const tr = $('<tr>');
+            console.log('teste5');
+            tr.append(`<td>${item.material_nome}</td>`);
+            tr.append(`<td>${item.quantidade}</td>`);
+            tr.append(`<td>${item.unidade_nome}</td>`);
+            
+            const tdObs = $('<td>');
+            const inputObs = $('<input>')
+                .attr('type', 'text')
+                .addClass('form-control form-control-sm')
+                .val(item.observacoes || '')
+                .on('change', function() {
+                    itensSolicitacoes[index].observacoes = $(this).val();
+                });
+            tdObs.append(inputObs);
+            tr.append(tdObs);
+            
+            const tdAcoes = $('<td>');
+            const btnRemover = $('<button>')
+                .addClass('btn btn-sm btn-danger')
+                .html('<i class="fas fa-trash"></i>')
+                .on('click', function() {
+                    if (confirm('Tem certeza que deseja remover este item?')) {
+                        itensSolicitacoes.splice(index, 1);
+                        atualizarTabelaItensEdicao(id);
+                    }
+                });
+            tdAcoes.append(btnRemover);
+            tr.append(tdAcoes);
+            
+            tabela.append(tr);
+        });
+    }
 });
+
 </script>
 {% endblock %} 

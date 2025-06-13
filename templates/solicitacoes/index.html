@@ -53,9 +53,11 @@
                                     
                                     {% if solicitacao.status == 'Pendente' %}
                                         {% if current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id %}
-                                        <button type="button" class="btn btn-sm btn-warning" 
+                                        <button type="button" class="btn btn-sm btn-warning"
+                                                id="btnEditar"
                                                 data-bs-toggle="modal" 
-                                                data-bs-target="#editarModal{{ solicitacao.id }}" 
+                                                data-bs-target="#editarModal" 
+                                                data-id="{{ solicitacao.id }}"
                                                 title="Editar">
                                             <i class="fas fa-edit"></i>
                                         </button>
@@ -113,16 +115,8 @@
 </div>
 
 <!-- Modais para cada solicitação -->
-{% for solicitacao in solicitacoes %}
-    {% include 'solicitacoes/modais/modal_visualizar.html' %}
-    {% include 'solicitacoes/modais/modal_aprovar.html' %}
-    {% include 'solicitacoes/modais/modal_rejeitar.html' %}
-    {% include 'solicitacoes/modais/modal_cancelar.html' %}
-    {% include 'solicitacoes/modais/modal_editar.html' %}
-    {% include 'solicitacoes/modais/modal_email_aprovacao.html' %}
-    {% include 'solicitacoes/modais/modal_email_pdf.html' %}
-{% endfor %}
 
+{% include 'solicitacoes/modais/modal_editar.html' %}
 <!-- Modal de Nova Solicitação -->
 {% include 'solicitacoes/modais/modal_nova_solicitacao.html' %}
 {% endblock %}
@@ -219,7 +213,7 @@
 let itens = []; // Para nova solicitação
 const itensSolicitacoes = {}; // Para solicitações em edição
 
-// Função para exportar solicitação para PDF
+// Função para atualizar a tabela de itens em edição
 
 
 // Quando o documento estiver pronto
@@ -240,37 +234,6 @@ $(document).ready(function() {
             placeholder: 'Selecione um material'
         });
     });
-
- 
-    
-    // -- Carregar itens das solicitações em edição --
-    // 1. Gerar dados iniciais com Jinja em uma estrutura separada
-    const initialItensData = {};
-    {% for solicitacao in solicitacoes %}
-      {% if solicitacao.status == 'Pendente' %}
-        initialItensData['{{ solicitacao.id }}'] = []; // Usar ID como chave string
-        {% for item in solicitacao.itens %}
-          initialItensData['{{ solicitacao.id }}'].push({
-              // Usar filtro tojson para garantir formatação JSON correta
-              id: {{ item.id | tojson }},
-              material_id: {{ item.material_id | tojson }},
-              material_nome: {{ item.material.nome | tojson }},
-              quantidade: {{ item.quantidade | tojson }},
-              unidade_id: {{ item.material.unidade_id | tojson }},
-
-              observacoes: {{ (item.observacoes or '') | tojson }}
-          });
-        {% endfor %}
-      {% endif %}
-    {% endfor %}
-
-    // 2. Atribuir e atualizar tabelas no lado do cliente
-    for (const solId in initialItensData) {
-        if (initialItensData.hasOwnProperty(solId)) {
-            itensSolicitacoes[solId] = initialItensData[solId];
-            atualizarTabelaItensEdicao(solId);
-        }
-    }
     
     // Atualizar unidade ao selecionar material (nova solicitação)
     $('#material_id').change(function() {
@@ -285,90 +248,11 @@ $(document).ready(function() {
         $(`#unidade${id}`).val(unidade);
     });
     
-
-    
-    
-    
-    // Salvar nova solicitação
-    
-    
-    // Salvar edição de solicitação
-    $('.btn-salvar-edicao').click(function() {
-        const id = $(this).data('id');
-        
-        // Verificar se há itens
-        if (!itensSolicitacoes[id] || itensSolicitacoes[id].length === 0) {
-            alert('Adicione pelo menos um item à solicitação.');
-            return;
-        }
-        
-        // Adicionar os itens ao formulário
-        const form = $(`#formEditarSolicitacao${id}`);
-        form.find('input[name^="material_id"], input[name^="quantidade"], input[name^="unidade"], input[name^="observacoes_item"]').remove();
-        
-        itensSolicitacoes[id].forEach((item, index) => {
-            form.append(`<input type="hidden" name="material_id[]" value="${item.material_id}">`);
-            form.append(`<input type="hidden" name="quantidade[]" value="${item.quantidade}">`);
-            form.append(`<input type="hidden" name="unidade[]" value="${item.unidade}">`);
-            form.append(`<input type="hidden" name="observacoes_item[]" value="${item.observacoes || ''}">`);
-        });
-        
-        // Submeter o formulário
-        form.submit();
-    });
-    
     // Botões de exportação PDF
     $('[id^="btnExportarPDF"]').click(function() {
         const id = $(this).attr('id').replace('btnExportarPDF', '');
         exportarSolicitacaoPDF(id);
     });
 });
-
-
-
-// Função para atualizar a tabela de itens em edição
-function atualizarTabelaItensEdicao(id) {
-    const tabela = $(`#tabelaItens${id} tbody`);
-    tabela.empty();
-    
-    if (!itensSolicitacoes[id] || itensSolicitacoes[id].length === 0) {
-        tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
-        return;
-    }
-    
-    itensSolicitacoes[id].forEach((item, index) => {
-        const tr = $('<tr>');
-        
-        tr.append(`<td>${item.material_nome}</td>`);
-        tr.append(`<td>${item.quantidade}</td>`);
-        tr.append(`<td>${item.unidade_nome}</td>`);
-        
-        const tdObs = $('<td>');
-        const inputObs = $('<input>')
-            .attr('type', 'text')
-            .addClass('form-control form-control-sm')
-            .val(item.observacoes || '')
-            .on('change', function() {
-                itensSolicitacoes[id][index].observacoes = $(this).val();
-            });
-        tdObs.append(inputObs);
-        tr.append(tdObs);
-        
-        const tdAcoes = $('<td>');
-        const btnRemover = $('<button>')
-            .addClass('btn btn-sm btn-danger')
-            .html('<i class="fas fa-trash"></i>')
-            .on('click', function() {
-                if (confirm('Tem certeza que deseja remover este item?')) {
-                    itensSolicitacoes[id].splice(index, 1);
-                    atualizarTabelaItensEdicao(id);
-                }
-            });
-        tdAcoes.append(btnRemover);
-        tr.append(tdAcoes);
-        
-        tabela.append(tr);
-    });
-}
 </script>
 {% endblock %} 

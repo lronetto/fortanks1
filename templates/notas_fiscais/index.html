@@ -61,6 +61,14 @@
                     </select>
                 </div>
                 <div class="col-md-3">
+                    <label for="status_pagamento" class="form-label">Status de Pagamento</label>
+                    <select name="status_pagamento" id="status_pagamento" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="pago" {% if request.args.get('status_pagamento') == 'pago' %}selected{% endif %}>Pago</option>
+                        <option value="nao_pago" {% if request.args.get('status_pagamento') == 'nao_pago' %}selected{% endif %}>Não Pago</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label for="data_emissao_inicio" class="form-label">Data Emissão (Início)</label>
                     <input type="date" name="data_emissao_inicio" id="data_emissao_inicio" class="form-control" value="{{ request.args.get('data_emissao_inicio', '') }}">
                 </div>
@@ -189,7 +197,7 @@
                 <ul class="pagination justify-content-center">
                     <!-- Link Anterior -->
                     <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
-                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.prev_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', '')) }}" aria-label="Anterior">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.prev_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', ''), status_pagamento=request.args.get('status_pagamento', ''), data_emissao_inicio=request.args.get('data_emissao_inicio', ''), data_emissao_fim=request.args.get('data_emissao_fim', '')) }}" aria-label="Anterior">
                             <span aria-hidden="true">&laquo;</span>
                         </a>
                     </li>
@@ -197,7 +205,7 @@
                     {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
                         {% if page_num %}
                             <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
-                                <a class="page-link" href="{{ url_for('nota_fiscal.index', page=page_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', '')) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('nota_fiscal.index', page=page_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', ''), status_pagamento=request.args.get('status_pagamento', ''), data_emissao_inicio=request.args.get('data_emissao_inicio', ''), data_emissao_fim=request.args.get('data_emissao_fim', '')) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -205,7 +213,7 @@
                     {% endfor %}
                     <!-- Link Próximo -->
                     <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
-                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.next_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', '')) }}" aria-label="Próximo">
+                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.next_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', ''), status_pagamento=request.args.get('status_pagamento', ''), data_emissao_inicio=request.args.get('data_emissao_inicio', ''), data_emissao_fim=request.args.get('data_emissao_fim', '')) }}" aria-label="Próximo">
                             <span aria-hidden="true">&raquo;</span>
                         </a>
                     </li>
