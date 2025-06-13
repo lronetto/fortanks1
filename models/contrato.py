@@ -39,6 +39,31 @@ class Contrato(db.Model):
     cliente_direto = db.relationship('Cliente', foreign_keys=[cliente_direto_id], backref='contratos_como_cliente_direto')
     cliente_final = db.relationship('Cliente', foreign_keys=[cliente_final_id], backref='contratos_como_cliente_final')
     #centro_custo = db.relationship('CentroCusto', foreign_keys=[centro_custo_id], backref='contratos')
+    
+    def to_dict(self):
+        """
+        Converte o contrato para um dicionário
+        """
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'estado': self.estado,
+            'cidade': self.cidade,
+            'cliente_direto_id': self.cliente_direto_id,
+            'cliente_final_id': self.cliente_final_id,  
+            'data_base': self.data_base,
+            'valor_total': self.valor_total,
+            'valor_mat': self.valor_mat,
+            'valor_ser': self.valor_ser,
+            'prazo_pagamento_mat': self.prazo_pagamento_mat,
+            'prazo_pagamento_ser': self.prazo_pagamento_ser,
+            'centro_custo_id': self.centro_custo_id,
+            'responsavel_id': self.responsavel_id,
+            'data_cadastro': self.data_cadastro,
+            'ultima_atualizacao': self.ultima_atualizacao
+        }
+    
     def save(self):
         """
         Salva o contrato no banco de dados

@@ -8,7 +8,7 @@ from models.peca import Peca
 from models.database import db
 from models.tanque import Tanque
 from models.usuario import Usuario
-from models.nota_fiscal import NotaFiscal
+from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.material import Material
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
@@ -21,6 +21,7 @@ from models.unidade import Unidade
 from models.conversao_unidade import ConversaoUnidade
 from models.dados_analiticos import DadoAnalitico, PL_CUSTO, PL_RECOP
 from models.epi import EntregaEPI
+
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -87,6 +88,13 @@ def meu_dashboard():
         exibir_card_resumo_placas = True
         resumo_placas = card_resumo_placas()
    
+    exibir_card_resumo_notas = False
+    resumo_notas = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_resumo_notas = True
+        resumo_notas = card_resumo_notas()
+        contratos = [ contrato.to_dict() for contrato in Contrato.query.all() ]
+
     # Renderizar o template apropriado com base no cargo do usuário
     return render_template(
         'dashboard/meu_dashboard.html',
@@ -119,6 +127,11 @@ def meu_dashboard():
             'resumo_placas': {
                 'dados': resumo_placas,
                 'exibir': exibir_card_resumo_placas
+            },
+            'resumo_notas': {
+                'dados': resumo_notas,
+                'contratos': contratos,
+                'exibir': exibir_card_resumo_notas
             }
         }
     )
@@ -373,7 +386,43 @@ def card_resumo_placas():
         })
     print(dados_especificos)
     return dados_especificos
+def card_resumo_notas():
+    projetos = Contrato.query.all()
+    dados_especificos = []
+
+    return dados_especificos
+
+@dashboard_bp.route('/api/dados-resumo-notas')
+@login_required
+def api_dados_resumo_notas():
+    print(request.form)
+    contrato_id = request.args.get('contrato_id')
+    notas = db.session.query(NotaFiscal.numero_nf, 
+                     NotaFiscal.data_emissao, 
+                     NotaFiscal.valor_total, 
+                     ).join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
+                     join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
+                     join(Contrato, Contrato.id == Tanque.contrato_id).\
+                     order_by(NotaFiscal.data_emissao.desc()).\
+                     filter(Contrato.id == contrato_id, 
+                            NotaFiscal.cnpj_emitente == '27126997000187').all()
+    
+    dados = []
+    total_valor = 0
+    for nota in notas:
+        dados.append({
+            'numero_nf': nota.numero_nf,
+            'data_emissao': nota.data_emissao.strftime('%d/%m/%Y'),
+            'valor_total': nota.valor_total
+        })
+        total_valor += nota.valor_total
+    return jsonify({
+        'dados': dados,
+        'total_valor': total_valor
+    })
+
 def index1():
+
     """
     Rota principal do dashboard
     """

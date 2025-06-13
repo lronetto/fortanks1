@@ -1,0 +1,120 @@
+
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-success">Resumo Notas</h6>
+    </div>
+    <div class="card-body">
+        <div class="form-group mb-3">
+            <label for="filtroContrato">Contrato:</label>
+            <select id="filtroContrato" class="form-control form-control-sm">
+               
+            </select>
+        </div>
+        <div id="loadingResumoNotas" style="display: none;" class="text-center">
+            <div class="spinner-border spinner-border-sm text-primary" role="status">
+                <span class="sr-only">Carregando...</span>
+            </div>
+            <p class="text-muted small">Carregando dados...</p>
+        </div>
+        <div id="contentResumoNotas">
+            <table border="1" id="tableResumoNotas" class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>Nota Fiscal</th>
+                        <th>Data de Emissão</th>
+                        <th>Valor Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // --- Lógica para o Card de Resumo Analítico ---
+    const filtroContrato = document.getElementById('filtroContrato');
+    const displayCusto = document.getElementById('displayCustoRealizado');
+    const displayReceita = document.getElementById('displayReceitaRealizada');
+    const loadingResumoNotasDiv = document.getElementById('loadingResumoNotas');
+    const contentResumoNotasDiv = document.getElementById('contentResumoNotas');
+    const errorResumoNotasDiv = document.getElementById('errorResumoNotas');
+    const tableResumoNotas = document.getElementById('tableResumoNotas');
+    function formatCurrency(value) {
+        // console.log('Formatando valor:', value);
+        const num = parseFloat(value);
+        if (isNaN(num)) {
+            // console.error('formatCurrency recebeu valor não numérico:', value);
+            return 'R$ 0,00'; // Ou algum valor padrão/indicador de erro
+        }
+        return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    async function carregaContratos() {
+        const data = {{ cards.resumo_notas.contratos|tojson }};
+        const select = document.getElementById('filtroContrato');
+        select.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = 0;
+        option.textContent = 'Todos os Contratos';
+        select.appendChild(option);
+        
+        data.forEach(contrato => {
+            const option = document.createElement('option');
+            option.value = contrato.id;
+            option.textContent = contrato.nome;
+            select.appendChild(option);
+        });
+        console.log('[Resumo Notas] Dados dos contratos:', data);
+        select.selectedIndex = 0;
+    };
+    carregaContratos();
+    
+    $('#filtroContrato').change(function() {
+        loadingResumoNotasDiv.style.display = 'block';
+        carregarDadosResumoNotas(this.value);
+        loadingResumoNotasDiv.style.display = 'none';
+    });
+
+    function carregarDadosResumoNotas(contratoId) {
+        console.log('[Resumo Notas] Carregando dados do contrato:', contratoId);
+
+        fetch('{{ url_for("dashboard.api_dados_resumo_notas") }}?contrato_id=' + contratoId, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('[Resumo Notas] Dados do contrato:', data); 
+            tbody = document.querySelector('#tableResumoNotas tbody');
+            tbody.innerHTML = '';
+            data.dados.forEach(nota => {
+                tr = document.createElement('tr');
+                tr.innerHTML = `<td>${nota.numero_nf}</td>
+                                <td>${nota.data_emissao}</td>
+                                <td>${formatCurrency(nota.valor_total)}</td>`;
+                tbody.appendChild(tr); 
+                
+            })
+            tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="2" class="text-right">Total:</td>
+                            <td>${formatCurrency(data.total_valor)}</td>`;
+            tbody.appendChild(tr);
+        })
+        .catch(error => {
+            console.error('[Resumo Notas] Erro ao carregar dados do contrato:', error);
+            contentResumoNotasDiv.innerHTML = '<p>Erro ao carregar dados do contrato.</p>';
+        })
+        .finally(() => {
+            loadingResumoNotasDiv.style.display = 'none';
+        });
+    }
+});
+</script>
+{% endblock %}

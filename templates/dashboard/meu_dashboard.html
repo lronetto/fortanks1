@@ -30,6 +30,9 @@
         </div>
         <!-- Coluna Esquerda -->
         <div class="col-lg-6">
+            {% if cards.resumo_notas.exibir %}
+            {% include 'dashboard/cards/resumo_notas.html' %}
+            {% endif %}
             <!-- Card Resumo Analítico -->
             {% if cards.analitico.exibir %}
             {% include 'dashboard/cards/analitico.html' %}
