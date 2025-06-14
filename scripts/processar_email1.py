@@ -361,15 +361,17 @@ def processar_emails():
                                     dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
                                 else:
                                     dec1 = None
+                                print(f"dec1: {dec1}")
                                 nota=NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
-                                up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
-                                if up.id:
-                                    logging.info(f"upload ja existe")
-                                else:
-                                    Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
-                                    logging.info(f"upload realizado")
-                                #Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
-                                tfinal=time.time()
+                                if nota:
+                                    up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
+                                    if up.id:
+                                        logging.info(f"upload ja existe")
+                                    else:
+                                        Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                        logging.info(f"upload realizado")
+                                    #Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                                    tfinal=time.time()
                                 #logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
             
 
