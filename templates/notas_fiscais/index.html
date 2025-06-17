@@ -152,18 +152,17 @@
                                     </span>
                                     
                                     {# Verificar se tem documentos anexados #}
-                                    {% if nf.upload %}
-                                        {% if nf.upload.tipo in [2] %}
+                                    {% if nf.uploads['total'] > 0 %}
+                                        {% if nf.uploads['scan'] %}
                                             <span class="badge bg-info ms-1" title="Documentos anexados">
                                                 <i class="fas fa-paperclip" style="color: green;"></i>
                                             </span>
-                                        {% else %}
+                                        {% elif nf.uploads['padrao'] %}
                                             <span class="badge bg-info ms-1" title="Documentos anexados">
                                                 <i class="fas fa-paperclip"></i>
                                             </span>
                                         {% endif %}
                                     {% endif %}
-                                
 
                                 {% if nf.pago %}
                                         <span class="badge bg-success ms-1" title="Pago">

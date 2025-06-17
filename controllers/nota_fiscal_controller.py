@@ -154,15 +154,18 @@ def index():
                                                        DadoAnalitico.valor == nota.valor_total).first()
         if dadosAnaliticos:
             nota.pago = True
-        if Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').first():
-            nota.upload = Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').first()
-        if status_pagamento:
-            if status_pagamento == 'pago' and nota.pago :
-                notas_fiscais_pagina_upload.append(nota)
-            elif status_pagamento == 'nao_pago' and not nota.pago:
-                notas_fiscais_pagina_upload.append(nota)
-        else:
-            notas_fiscais_pagina_upload.append(nota)
+        
+        nota.uploads = {'scan':False,
+                        'padrao':False,
+                        'total':0}
+        uploads = Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').all()
+        if uploads:
+            nota.uploads = {'scan':any(u for u in uploads if u.tipo == 2),
+                            'padrao': any(u for u in uploads if u.tipo == 1),
+                            'total': len(uploads)}
+            
+        
+        notas_fiscais_pagina_upload.append(nota)
         
     
     return render_template('notas_fiscais/index.html', 
