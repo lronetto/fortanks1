@@ -176,7 +176,7 @@ class NotaFiscal(db.Model):
         if existente:
             print(f"CT-e já importado: {dados.get('chave_acesso')}")
             return existente
-        self.tipo = 3
+        self.tipo = 2
         self.numero_nf = dados.get('numero_cte')
         self.chave_acesso = dados.get('chave_acesso')
         self.data_emissao = dados.get('data_emissao')

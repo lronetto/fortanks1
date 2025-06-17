@@ -113,31 +113,7 @@ def extrair_dados_cte(xml_data):
     }
 
 
-def importar_cte(xml_path):
-    with app.app_context():
-        dados = extrair_dados_cte(xml_path)
-        # Verifica se já existe
-        existente = NotaFiscal.query.filter_by(chave_acesso=dados['chave_acesso']).first()
-        if existente:
-            print(f"CT-e já importado: {dados['chave_acesso']}")
-            return existente
-        nota = NotaFiscal(
-            tipo=3,
-            numero_nf=dados['numero_cte'],
-            chave_acesso=dados['chave_acesso'],
-            data_emissao=dados['data_emissao'],
-            valor_total=dados['valor_total'],
-            cnpj_emitente=dados['cnpj_emitente'],
-            nome_emitente=dados['nome_emitente'],
-            cnpj_destinatario=dados['cnpj_destinatario'],
-            nome_destinatario=dados['nome_destinatario'],
-            xml_data=base64.b64encode(open(xml_path, 'rb').read()).decode('utf-8'),
-            status_processamento='importado',
-            dados_adicionais=json.dumps(dados['dados_adicionais'], ensure_ascii=False)
-        )
-        nota.save()
-        print(f"CT-e importado com sucesso: {nota.chave_acesso}")
-        return nota
+
 
 if __name__ == '__main__':
     import argparse

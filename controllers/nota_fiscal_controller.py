@@ -76,6 +76,7 @@ def index():
     status_pagamento = request.args.get('status_pagamento', '')
     data_emissao_inicio = request.args.get('data_emissao_inicio', '')
     data_emissao_fim = request.args.get('data_emissao_fim', '')
+    tipo_nfe = request.args.get('tipo_nfe', '')
     
     # Instanciar formulário de importação para o modal
     import_form = NotaFiscalImportForm()
@@ -130,6 +131,14 @@ def index():
             query = query.filter(NotaFiscal.data_emissao <= data_fim)
         except Exception:
             flash('Data final inválida.', 'warning')
+    if tipo_nfe:
+        if tipo_nfe == '0':
+            tipo = [0,1]
+        elif tipo_nfe == '2':
+            tipo = [2]
+        elif tipo_nfe == '3':
+            tipo = [3]
+        query = query.filter(NotaFiscal.tipo.in_(tipo))
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc())
     

@@ -86,8 +86,8 @@ IMAP_FOLDER = 'Inbox'
 ASSUNTO_PADRAO_NFE = 'Envio de Nota Fiscal Eletrônica'
 ASSUNTO_PADRAO_CTE = 'Envio de Nota Fiscal Eletrônica - DUA'
 ASSUNTO_PADRAO_DUA = 'CTE, NF Fortanks e DUA'
-ASSUNTO_PADRAO_PROTOCOLO = "ENC: NF´S PROTOCOLOS"
-ASSUNTO_PADRAO_REEMBOLSO = 'REEMBOLSO'
+ASSUNTO_PADRAO_PROTOCOLO = ["ENC: NF´S PROTOCOLOS","ENC: NF PROTOCOLO"]
+ASSUNTO_PADRAO_REEMBOLSO = ['REEMBOLSO']
 EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
 IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
 NUMBER_WHATSAPP = '5527996440664-1630085280@g.us'
@@ -230,13 +230,19 @@ def processar_emails():
             for uid, msg in emails:
 
                 logging.info(f'Processando e-mail: {msg.subject}')
+                protocolo = False
+                reembolso = False
+                protocolo = any(p in msg.subject for p in ASSUNTO_PADRAO_PROTOCOLO)
+                reembolso = any(p in msg.subject for p in ASSUNTO_PADRAO_REEMBOLSO)
                 
-                if (ASSUNTO_PADRAO_PROTOCOLO in msg.subject) or (ASSUNTO_PADRAO_REEMBOLSO in msg.subject):
-                    if ASSUNTO_PADRAO_REEMBOLSO in msg.subject:
+                if protocolo or reembolso:
+                    if reembolso:
+                        logging.info(f'Processando email de reembolso')
                         tipo = 3
-                    else:
+                    elif protocolo:
+                        logging.info(f'Processando email de protocolo')
                         tipo = 2
-                    logging.info(f'Processando email de protocolo')
+                    
                     if len(msg.attachments) > 0:
                         for att in msg.attachments:
                             filename = att["filename"]
