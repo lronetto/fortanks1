@@ -342,10 +342,13 @@ def processar_arquivei():
     if notas:
         for nota in notas.xml_datas:
             NotaFiscal(xml_data=nota)
-
+    notas=Arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='cte')
+    if notas:
+        for nota in notas.xml_datas:
+            NotaFiscal(xml_data=nota,tipo='cte')
 def job_email5min():
     with app.app_context():
-        processar_emails()
+        pass#processar_emails()
         #processar_protocolos()
         #processar_reembolsos()
         #processar_notas_fiscais()
@@ -448,7 +451,7 @@ def gerenciar_scheduler():
         logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
 
 # Gerenciar o scheduler
-gerenciar_scheduler()
+#gerenciar_scheduler()
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():

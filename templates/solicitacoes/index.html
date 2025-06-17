@@ -46,18 +46,21 @@
                                 <div class="btn-group">
                                     <button type="button" class="btn btn-sm btn-info" 
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#visualizarModal{{ solicitacao.id }}" 
+                                            data-bs-target="visualizarModal" 
+                                            data-id="{{ solicitacao.id }}"
                                             title="Visualizar">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     
                                     {% if solicitacao.status == 'Pendente' %}
                                         {% if current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id %}
-                                        <button type="button" class="btn btn-sm btn-warning"
+                                        <button type="button" class="btn btn-sm btn-warning btn-editar"
                                                 id="btnEditar"
+                                                data-id="{{ solicitacao.id }}"
                                                 data-bs-toggle="modal" 
                                                 data-bs-target="#editarModal" 
-                                                data-id="{{ solicitacao.id }}"
+                                                data-bs-dismiss="modal"
+                                                name="btnEditar"
                                                 title="Editar">
                                             <i class="fas fa-edit"></i>
                                         </button>
@@ -66,7 +69,8 @@
                                         {% if current_user.is_gerente_ou_superior %}
                                         <button type="button" class="btn btn-sm btn-success" 
                                                 data-bs-toggle="modal" 
-                                                data-bs-target="#aprovarModal{{ solicitacao.id }}" 
+                                                data-bs-target="#aprovarModal" 
+                                                data-id="{{ solicitacao.id }}"
                                                 title="Aprovar">
                                             <i class="fas fa-check"></i>
                                         </button>
@@ -82,7 +86,8 @@
                                         {% if current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id %}
                                         <button type="button" class="btn btn-sm btn-secondary" 
                                                 data-bs-toggle="modal" 
-                                                data-bs-target="#cancelarModal{{ solicitacao.id }}" 
+                                                data-bs-target="#cancelarModal" 
+                                                data-id="{{ solicitacao.id }}"
                                                 title="Cancelar">
                                             <i class="fas fa-ban"></i>
                                         </button>

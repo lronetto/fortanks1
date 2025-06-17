@@ -67,8 +67,8 @@
                                                 <select class="form-control material-select" id="editar_material_id" data-id="">
                                                     <option value="">Selecione...</option>
                                                     {% for material in materiais %}
-                                                    <option value="{{ material.id }}" data-unidade="{{ material.unidade }}">
-                                                        {{ material.nome }} ({{ material.codigo }})
+                                                    <option value="{{ material.id }}" data-unidade_id="{{ material.unidade_obj.id }}" data-unidade_nome="{{ material.unidade_obj.nome }}">
+                                                        {{ material.nome }}
                                                     </option>
                                                     {% endfor %}
                                                 </select>
@@ -83,7 +83,7 @@
                                         <div class="col-md-3">
                                             <div class="form-group">
                                                 <label for="editar_unidade">Unidade</label>
-                                                <input type="text" class="form-control" id="editar_unidade" readonly>
+                                                <input type="text" class="form-control" id="editar_unidade" data-unidade_id="" readonly>
                                             </div>
                                         </div>
                                         <div class="col-md-2">
@@ -130,26 +130,19 @@
 
 {% block scripts %}
 <script>
-// Scripts específicos para edição de solicitação
-$(document).ready(function() {
-    // Inicializar select2 para o select de material
-    $('#editar_material_id').select2({
-        dropdownParent: $('#editarModal'),
-        width: '100%',
-        placeholder: 'Selecione um material'
-    });
-
-    // Atualizar unidade ao selecionar material
-    $('#editar_material_id').change(function() {
-        const unidade = $(this).find('option:selected').data('unidade') || '';
-        $('#editar_unidade').val(unidade);
-    });
+     
+document.addEventListener('DOMContentLoaded', function() {
     let itensSolicitacoes = [];
-    // Carregar dados da solicitação quando o modal for aberto
-    $('#editarModal').on('show.bs.modal', function() {
-        const id = $("#btnEditar").data('id');
+    editButtons = document.querySelectorAll('.btn-editar');
+    editButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const id = this.getAttribute('data-id');
+            carregarDadosSolicitacao(id)
+        });
+    });
+    function carregarDadosSolicitacao(id) {
         console.log(id);
-        const modal = $(this);
+        const modal = $('#editarModal');
         const form = modal.find('form');
         const spinner = modal.find('.spinner-border').parent();
         
@@ -167,8 +160,7 @@ $(document).ready(function() {
             console.log('teste1');
             // Limpar e preencher itens
             itensSolicitacoes = data.itens;
-            console.log(itensSolicitacoes);
-            atualizarTabelaItensEdicao(id);
+            atualizarTabelaItensEdicao(data.itens);
             console.log('teste2');
             
             // Esconder spinner e mostrar formulário
@@ -182,13 +174,75 @@ $(document).ready(function() {
                 alert('Erro ao carregar dados da solicitação. Tente novamente.');
             }
         });
+    };
+    function atualizarTabelaItensEdicao(itens) {
+    const tabela = $(`#tabelaItensEdicao tbody`);
+    tabela.empty();
+    console.log('teste3');
+    if (!itens || itens.length === 0) {
+        tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
+        return;
+    }
+    console.log('teste4');
+    itens.forEach((item, index) => {
+        const tr = $('<tr>');
+        console.log('teste5');
+        tr.append(`<td>${item.material_nome}</td>`);
+        tr.append(`<td>${item.quantidade}</td>`);
+        tr.append(`<td>${item.unidade_nome}</td>`);
+        
+        const tdObs = $('<td>');
+        const inputObs = $('<input>')
+            .attr('type', 'text')
+            .addClass('form-control form-control-sm')
+            .val(item.observacoes || '')
+            .on('change', function() {
+                itensSolicitacoes[index].observacoes = $(this).val();
+            });
+        tdObs.append(inputObs);
+        tr.append(tdObs);
+        
+        const tdAcoes = $('<td>');
+        const btnRemover = $('<button>')
+            .addClass('btn btn-sm btn-danger')
+            .html('<i class="fas fa-trash"></i>')
+            .on('click', function() {
+                if (confirm('Tem certeza que deseja remover este item?')) {
+                    itensSolicitacoes.splice(index, 1);
+                    atualizarTabelaItensEdicao(id);
+                }
+            });
+        tdAcoes.append(btnRemover);
+        tr.append(tdAcoes);
+        
+        tabela.append(tr);
     });
+}
+// Scripts específicos para edição de solicitação
+    // Inicializar select2 para o select de material
+    $('#editar_material_id').select2({
+        dropdownParent: $('#editarModal'),
+        width: '100%',
+        placeholder: 'Selecione um material'
+    });
+
+    // Atualizar unidade ao selecionar material
+    $('#editar_material_id').change(function() {
+        const unidade_id = $(this).find('option:selected').data('unidade_id') || '';
+        const unidade_nome = $(this).find('option:selected').data('unidade_nome') || '';
+        $('#editar_unidade').val(unidade_nome);
+        $('#editar_unidade').data('unidade_id', unidade_id);
+    });
+   
+    // Carregar dados da solicitação quando o modal for aberto
+    
 
     // Adicionar item à solicitação em edição
     $('.btn-adicionar-item').click(function() {
         const materialSelect = $('#editar_material_id');
         const quantidade = $('#editar_quantidade').val();
-        const unidade = $('#editar_unidade').val();
+        const unidade_id = $('#editar_unidade').data('unidade_id');
+        const unidade_nome = $('#editar_unidade').val();
         const id = $("#btnEditar").data('id');
         
         if (!materialSelect.val() || !quantidade) {
@@ -211,7 +265,7 @@ $(document).ready(function() {
             observacoes: ''
         });
         
-        atualizarTabelaItensEdicao(id);
+        atualizarTabelaItensEdicao(itensSolicitacoes);
         
         // Limpar campos
         materialSelect.val('').trigger('change');
@@ -222,6 +276,7 @@ $(document).ready(function() {
     // Salvar edição de solicitação
     $('.btn-salvar-edicao').click(function() {
         const form = $('#formEditarSolicitacao');
+        form.attr('action', '/solicitacoes/'+id+'/editar');
         
         // Verificar se há itens
         if (!itensSolicitacoes || itensSolicitacoes.length === 0) {
@@ -242,50 +297,8 @@ $(document).ready(function() {
         // Submeter o formulário
         form.submit();
     });
-    function atualizarTabelaItensEdicao(id) {
-        const tabela = $(`#tabelaItensEdicao tbody`);
-        tabela.empty();
-        console.log('teste3');
-        if (!itensSolicitacoes || itensSolicitacoes.length === 0) {
-            tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
-            return;
-        }
-        console.log('teste4');
-        itensSolicitacoes.forEach((item, index) => {
-            const tr = $('<tr>');
-            console.log('teste5');
-            tr.append(`<td>${item.material_nome}</td>`);
-            tr.append(`<td>${item.quantidade}</td>`);
-            tr.append(`<td>${item.unidade_nome}</td>`);
-            
-            const tdObs = $('<td>');
-            const inputObs = $('<input>')
-                .attr('type', 'text')
-                .addClass('form-control form-control-sm')
-                .val(item.observacoes || '')
-                .on('change', function() {
-                    itensSolicitacoes[index].observacoes = $(this).val();
-                });
-            tdObs.append(inputObs);
-            tr.append(tdObs);
-            
-            const tdAcoes = $('<td>');
-            const btnRemover = $('<button>')
-                .addClass('btn btn-sm btn-danger')
-                .html('<i class="fas fa-trash"></i>')
-                .on('click', function() {
-                    if (confirm('Tem certeza que deseja remover este item?')) {
-                        itensSolicitacoes.splice(index, 1);
-                        atualizarTabelaItensEdicao(id);
-                    }
-                });
-            tdAcoes.append(btnRemover);
-            tr.append(tdAcoes);
-            
-            tabela.append(tr);
-        });
-    }
 });
+
 
 </script>
 {% endblock %} 

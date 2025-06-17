@@ -10,6 +10,7 @@ from models.nota_fiscal import NotaFiscalItem
 from sqlalchemy import func
 from models.database import db
 from weasyprint import HTML, CSS
+from utils.relatorio_financeiro import dados_relatorio_financeiro
 import os
 import tempfile
 
@@ -158,3 +159,22 @@ def relatorio_semanal():
             download_name=f'relatorio_semanal_{data_inicio.strftime("%Y%m%d")}_{data_fim.strftime("%Y%m%d")}.pdf',
             mimetype='application/pdf'
         ) 
+
+@relatorio_bp.route('/notas', methods=['GET'])
+def relatorio_notas():
+    centros_custo = CentroCusto.query.order_by(CentroCusto.codigo).all()
+    dados_relatorio = dados_relatorio_financeiro()
+    return render_template('relatorios/relatorio_notas.html', relatorio=dados_relatorio, centros_custo=centros_custo)
+
+@relatorio_bp.route('/notas/ajax', methods=['GET'])
+def relatorio_notas_ajax():
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    centro_custo_ids = request.args.getlist('centro_custo')
+    
+    data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
+    data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
+    centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+    
+    dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
+    return render_template('relatorios/relatorio_notas_tabela.html', relatorio=dados_relatorio)

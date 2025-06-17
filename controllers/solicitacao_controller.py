@@ -371,7 +371,7 @@ def enviar_pdf_email(id):
 @login_required
 def get_dados_solicitacao(id):
     """Retorna os dados de uma solicitação em formato JSON"""
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacao.query.join(ItemSolicitacao).filter(Solicitacao.id==id).all()
     
     # Verificar permissão
     if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
@@ -379,15 +379,15 @@ def get_dados_solicitacao(id):
     
     # Preparar dados da solicitação
     dados = {
-        'id': solicitacao.id,
-        'data_necessidade': solicitacao.data_necessidade.strftime('%Y-%m-%d'),
-        'centro_custo_id': solicitacao.centro_custo_id,
-        'observacoes': solicitacao.observacoes,
+        'id': solicitacao[0].id,
+        'data_necessidade': solicitacao[0].data_necessidade.strftime('%Y-%m-%d'),
+        'centro_custo_id': solicitacao[0].centro_custo_id,
+        'observacoes': solicitacao[0].observacoes,
         'itens': []
     }
     
     # Adicionar itens
-    for item in solicitacao.itens:
+    for item in solicitacao[0].itens:
         dados['itens'].append({
             'id': item.id,
             'material_id': item.material_id,

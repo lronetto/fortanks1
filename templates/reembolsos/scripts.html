@@ -5,7 +5,50 @@ let avulsos = [];
 let paginaNotas = 1;
 let totalPaginasNotas = 1;
 const notasPorPagina = 25;
+function abrirPdfNota(notaId) {
+    const iframe = document.getElementById('iframeDocumento');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalVisualizarDocumento');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
 
+    // Remove mensagens/elementos antigos
+    let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+
+    // Exibe loading
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'pdfLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+    iframe.parentNode.appendChild(loading);
+
+    fetch(`/notas-fiscais/pdf/${notaId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar PDF');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+            msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
 function formatarMoeda(valor) {
     return new Intl.NumberFormat('pt-BR', {
         style: 'currency',
@@ -72,7 +115,7 @@ function filtrarNotas(page = 1) {
                 tr.innerHTML = `
                     <td><input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked}></td>
                     <td>${nota.numero_nf}</td>
-                    <td><a href="#" onclick="abrirPdfNota(${nota.id}, '${nota.chave_acesso}'); return false;">${nota.nome_emitente}</a></td>
+                    <td><a href="#" onclick="abrirPdfNota(${nota.id}); return false;">${nota.nome_emitente}</a></td>
                     <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
                     <td>${formatarMoeda(nota.valor_total)}</td>
                     <td>${nota.pagamento ? '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>' : ''}
@@ -340,4 +383,5 @@ document.addEventListener('DOMContentLoaded', function() {
         this.submit();
     });
 });
+
 </script> 

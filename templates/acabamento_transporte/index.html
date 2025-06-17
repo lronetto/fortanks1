@@ -28,7 +28,20 @@
             <option value="acabada_nao_transportada" {% if filtro == 'acabada_nao_transportada' %}selected{% endif %}>Acabada e Não Transportada</option>
           </select>
         </div>
+        <div class="form-group me-2">
+          <label for="nome_peca" class="me-2">Nome da Peça:</label>
+          <input type="text" name="nome_peca" id="nome_peca" class="form-control form-control-sm" value="{{ nome_peca|default('') }}" placeholder="Digite o nome da peça" onchange="this.form.submit()">
+        </div>
       </form>
+      <div class="col text-end">
+        <form method="get" action="{{ url_for('acabamento_transporte.exportar_excel') }}" style="display:inline">
+          <input type="hidden" name="filtro" value="{{ filtro }}">
+          <input type="hidden" name="nome_peca" value="{{ nome_peca }}">
+          <button type="submit" class="btn btn-outline-success btn-sm">
+            <i class="fas fa-file-excel"></i> Exportar Excel
+          </button>
+        </form>
+      </div>
     </div>
     <div class="row">
        <table class="table table-bordered">

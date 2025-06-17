@@ -17,9 +17,7 @@ from models.centro_custo import CentroCusto
 from models.unidade import Unidade
 from models.conversao_unidade import ConversaoUnidade
 from forms.nota_fiscal_forms import NotaFiscalImportForm # Import para formulário do modal
-from scripts.robo_email_nf import processar_emails
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
-from scripts.verificar_cancelamento import verificar
 from models.arquivei import Arquivei
 from scripts.processar_email1 import processar_emails
 from models.conversao_unidade import comparar_unidades
@@ -28,6 +26,7 @@ from models.nota_fiscal import CNPJS
 from models.dados_analiticos import DadoAnalitico
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
+from scripts.importar_cte import extrair_dados_cte
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -45,7 +44,10 @@ def verificar_permissao():
 @nota_fiscal_bp.route('/teste1')
 @login_required
 def teste1():
-    processar_emails()
+    xmls = Arquivei(data_inicial='2025-06-15', data_final='2025-06-16',tipo='cte')
+    for xml in xmls.xml_datas:
+        dados = extrair_dados_cte(xml)
+        print(dados)
     #processar_protocolos()
     return redirect(url_for('nota_fiscal.index'))
 
@@ -53,16 +55,7 @@ def teste1():
 @login_required
 def teste():
     print('teste')
-    notas = Arquivei(data_inicial='2024-06-01', data_final='2025-05-31')
-    #notas = Arquivei(send=True)
-    tamanho = len(notas.xml_datas)
-    print('tamanho: ',tamanho)
-    if tamanho > 0:
-        i=0
-        for xml_data in notas.xml_datas:
-            nf = NotaFiscal(xml_data=xml_data)
-            print(f'id: {nf.id} numero_nf: {nf.numero_nf} {i}/{tamanho} ')
-            i+=1
+    processar_emails()
            
     return redirect(url_for('nota_fiscal.index'))
 @nota_fiscal_bp.route('/')
@@ -165,7 +158,7 @@ def index():
     
     return render_template('notas_fiscais/index.html', 
                           pagination=pagination, # Passar objeto de paginação
-                          notas_fiscais=notas_fiscais_pagia_upload, # Manter para compatibilidade ou remover e usar pagination.items no template
+                          notas_fiscais=notas_fiscais_pagina_upload, # Manter para compatibilidade ou remover e usar pagination.items no template
                           status_importacao=status_importacao,
                           busca=busca,
                           item_nome=item_nome,
@@ -567,11 +560,23 @@ def importar_arquivei():
             notas = Arquivei(data_inicial=data_inicial, data_final=data_final)
             #notas = Arquivei(send=True)
             tamanho = len(notas.xml_datas)
-            print('tamanho: ',tamanho)
+            print('tamanho nfe: ',tamanho)
             if tamanho > 0:
                 i=0
                 for xml_data in notas.xml_datas:
                     nf = NotaFiscal(xml_data=xml_data)
+                    print(f'id: {nf.id} numero_nf: {nf.numero_nf} {i}/{tamanho} ')
+                    i+=1
+
+        
+            notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo='cte')
+            #notas = Arquivei(send=True)
+            tamanho = len(notas.xml_datas)
+            print('tamanho cte: ',tamanho)
+            if tamanho > 0:
+                i=0
+                for xml_data in notas.xml_datas:
+                    nf = NotaFiscal(xml_data=xml_data,tipo='cte')
                     print(f'id: {nf.id} numero_nf: {nf.numero_nf} {i}/{tamanho} ')
                     i+=1
                 

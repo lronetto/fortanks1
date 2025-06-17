@@ -1,10 +1,11 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, send_file
 from models import Peca, Tanque, db
 from flask_wtf.csrf import generate_csrf
 from datetime import datetime
 import json
 from models.contrato import Contrato
 from models.centro_custo import CentroCusto
+import pandas as pd
 
 acabamento_transporte_bp  = Blueprint('acabamento_transporte', __name__)
 
@@ -13,7 +14,10 @@ def index():
     filtro = request.args.get('filtro', 'todos')
     page = int(request.args.get('page', 1))
     per_page = 20
+    nome_peca = request.args.get('nome_peca', '').strip()
     pecas_query = Peca.query.join(Tanque).filter(Peca.qualidade.isnot(None))
+    if nome_peca:
+        pecas_query = pecas_query.filter(Peca.nome.ilike(f'%{nome_peca}%'))
     tanques = Tanque.query.order_by(Tanque.nome).all()
     pecas = []
     for peca in pecas_query:
@@ -62,15 +66,17 @@ def index():
                            now=datetime.now().strftime('%Y-%m-%d'),
                            filtro=filtro,
                            page=page,
-                           total_pages=total_pages)
+                           total_pages=total_pages,
+                           nome_peca=nome_peca)
 
 @acabamento_transporte_bp.route('/acabamento', methods=['GET', 'POST'])
 def acabamento():
     """Registra acabamento de uma ou mais peças"""
     if request.method == 'POST':
-        tanque_id = request.form.get('tanque_id')
-        peca_ids = request.form.getlist('peca_ids[]')
+        tanque_id = request.form.get('acabamento-tanque_id')
+        peca_ids = request.form.getlist('acabamento-peca_ids[]')
         data_acabamento = request.form.get('data_acabamento')
+        print(f"form: {request.form}")
         if not data_acabamento:
             data_acabamento = datetime.now().strftime('%Y-%m-%d')
         try:
@@ -201,3 +207,67 @@ def api_tanques():
     """Retorna tanques filtradas por tanques (AJAX)"""
     tanques = Tanque.query.all()
     return jsonify([tanque.to_dict() for tanque in tanques])
+
+@acabamento_transporte_bp.route('/exportar_excel')
+def exportar_excel():
+    filtro = request.args.get('filtro', 'todos')
+    nome_peca = request.args.get('nome_peca', '').strip()
+    pecas_query = Peca.query.join(Tanque).filter(Peca.qualidade.isnot(None))
+    if nome_peca:
+        pecas_query = pecas_query.filter(Peca.nome.ilike(f'%{nome_peca}%'))
+    pecas = []
+    for peca in pecas_query:
+        qualidade = peca.qualidade or '{}'
+        qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
+        if 'acabamento' in qualidade_dict:
+            peca.acabamento = qualidade_dict['acabamento']
+        else:
+            peca.acabamento = None
+        if 'transporte' in qualidade_dict and 'data_transporte' in qualidade_dict['transporte']:
+            peca.transporte = qualidade_dict['transporte']['data_transporte']
+        else:
+            peca.transporte = None
+        if 'transporte' in qualidade_dict and 'transportadora' in qualidade_dict['transporte']:
+            peca.transportadora = qualidade_dict['transporte']['transportadora']
+        else:
+            peca.transportadora = None
+        if 'transporte' in qualidade_dict and 'placa_carreta' in qualidade_dict['transporte']:
+            peca.placa_carreta = qualidade_dict['transporte']['placa_carreta']
+        else:
+            peca.placa_carreta = None
+        if 'transporte' in qualidade_dict and 'nota' in qualidade_dict['transporte']:
+            peca.nota_fiscal = qualidade_dict['transporte']['nota']
+        else:
+            peca.nota_fiscal = None
+        pecas.append(peca)
+    # Aplicar filtro
+    if filtro == 'acabadas':
+        pecas = [p for p in pecas if p.acabamento]
+        pecas.sort(key=lambda x: x.acabamento, reverse=True)
+    elif filtro == 'transportadas':
+        pecas = [p for p in pecas if p.transporte]
+        pecas.sort(key=lambda x: x.transporte, reverse=True)
+    elif filtro == 'acabada_nao_transportada':
+        pecas = [p for p in pecas if p.acabamento and not p.transporte]
+        pecas.sort(key=lambda x: x.transporte, reverse=True)
+    # Montar DataFrame
+    data = [
+        {
+            'Tanque': p.tanque.nome,
+            'Peça': p.nome,
+            'Acabamento': p.acabamento or '',
+            'Data Transporte': p.transporte or '',
+            'Transportadora': p.transportadora or '',
+            'Placa': p.placa_carreta or '',
+            'Nota Fiscal': p.nota_fiscal or ''
+        }
+        for p in pecas
+    ]
+    df = pd.DataFrame(data)
+    # Gerar arquivo Excel em memória
+    from io import BytesIO
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Pecas')
+    output.seek(0)
+    return send_file(output, download_name='pecas_acabamento_transporte.xlsx', as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

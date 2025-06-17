@@ -246,20 +246,25 @@ def processar_emails():
                                 if 'protocolo' in filename.lower():
                                     logging.info(f"Ignorando arquivo de protocolo: {filename}")
                                     continue
-                                logging.info(f"tentando a chave do arquivo {filename}")
+                                logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
                                 dec1 = None
-                                
-                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                img = convert_from_bytes(payload,500)[0]
+                                #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                #print(f"img: {img}")
                                 #logging.info(f"img1")
-                                dec = decode(img)
-                                if dec:
-                                    dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-                                else:
-                                    dec1 = None
-                                
+                                decs = decode(img)
+                                dec1 = None
+                                if decs:
+                                    dec = [dec for dec in decs if dec.type == 'CODE128']
+                                    tiponf = None
+                                    if dec:
+                                        dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
+                                        tiponf = int(dec1[20:22])
+                                        
+                                        
 
                                 if dec1:
-                                    logging.info(f"Decodificado: {dec1} nota")
+                                    logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
                                     nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
                                     
                                     if nota:
@@ -272,7 +277,17 @@ def processar_emails():
                                             logging.info(f"upload realizado {nota.numero_nf}")
                                         continue
                                     else:
-                                        pass
+                                        logging.info(f"tentando cte")
+                                        if tiponf == 57:
+                                            arquivei = Arquivei(chave_acesso=dec1,tipo='cte')
+                                            if arquivei.xml_data:
+                                                logging.info(f"achado arquivei")
+                                                nota = NotaFiscal(xml_data=arquivei.xml_data,tipo='cte')
+                                                if nota:
+                                                    logging.info(f"fazendo o upload da nota: {nota}")
+                                                    up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                                    if up.id:
+                                                        logging.info(f"upload ja existe {nota.numero_nf}")
                                         
                                 else:
                                     logging.info(f"tentando pelo numero e fornecedor {filename}")
@@ -353,7 +368,7 @@ def processar_emails():
                             if filename.lower().endswith('.pdf'):
                                 logging.info(f"Processando pdf: {filename}")
                                 tinicial=time.time()
-                                tipo=2
+                                tipo=1
                                 img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
                                 #logging.info(f"img1,kgfy")
                                 dec = decode(img)

@@ -68,26 +68,33 @@ class NotaFiscal(db.Model):
     data_importacao = db.Column(db.DateTime, default=datetime.now, nullable=False)
     #data_cadastro = db.Column(db.DateTime, default=datetime.now)
     data_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    dados_adicionais = db.Column(db.Text, nullable=True)
     
     # Relacionamentos
     itens = db.relationship('NotaFiscalItem', backref='nota_fiscal', cascade='all, delete-orphan')
 
     upload = None
     cancelada = False
+    pdf = None
     
-    def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False):
+    def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False,tipo='nfe'):
         self.xml_data = xml_data
         self.chave_acesso = chave_acesso
         self.id = id
         self.upload = None
         self.cancelada = cancelada
-        if xml_data:
+        if xml_data and tipo == 'nfe':
             print(f'NotaFiscal xml')
-            resultado = self.processar_nota_fiscal_xml()
+            resultado = self.processar_nf()
             if resultado:
                 for key, value in resultado.__dict__.items():
                     setattr(self, key, value)
                 
+        if xml_data and tipo == 'cte':
+            print(f'NotaFiscal cte')
+            return  self.processar_cte()
+            
         if chave_acesso:
             nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==chave_acesso).first()
             if nota:
@@ -161,8 +168,28 @@ class NotaFiscal(db.Model):
         return self.upload
     def get_chave_acesso(self):
         return self.chave_acesso
-
-    def processar_nota_fiscal_xml(self):
+    def processar_cte(self):
+        dados = self.extrair_dados_xml_cte()
+        #print(f'dados: {dados}')
+        # Verifica se já existe
+        existente = NotaFiscal.query.filter_by(chave_acesso=dados.get('chave_acesso')).first()
+        if existente:
+            print(f"CT-e já importado: {dados.get('chave_acesso')}")
+            return existente
+        self.tipo = 3
+        self.numero_nf = dados.get('numero_cte')
+        self.chave_acesso = dados.get('chave_acesso')
+        self.data_emissao = dados.get('data_emissao')
+        self.valor_total = dados.get('valor_total')
+        self.cnpj_emitente = dados.get('cnpj_emitente')
+        self.nome_emitente = dados.get('nome_emitente')
+        self.cnpj_destinatario = dados.get('cnpj_destinatario')
+        self.nome_destinatario = dados.get('nome_destinatario')
+        self.status_processamento = 'importado'
+        self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+        self.save()
+        return self
+    def processar_nf(self):
         """
         Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
@@ -170,7 +197,7 @@ class NotaFiscal(db.Model):
             # Extrair dados do XML
             #self.xml_data = base64.b64encode(xml_text.encode('utf-8')).decode('utf-8')
             print('processando nota fiscal xml')
-            chave_acesso, dados_nf = self.extrair_dados_xml()
+            chave_acesso, dados_nf = self.extrair_dados_xml_nfe()
             #print('chave_acesso: ',chave_acesso)
             #print('dados_nf: ',dados_nf)
             if not chave_acesso or not dados_nf:
@@ -193,7 +220,8 @@ class NotaFiscal(db.Model):
                 self.nome_emitente=nf.nome_emitente
                 self.cnpj_destinatario=nf.cnpj_destinatario
                 return nf
-
+            
+            #self.xml_data=self.xml_data
             self.numero_nf=dados_nf.get('numero')
             self.tipo=dados_nf.get('tipo')
             self.chave_acesso=chave_acesso
@@ -226,7 +254,98 @@ class NotaFiscal(db.Model):
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
             return False
-    def extrair_dados_xml(self):
+    def extrair_dados_xml_cte(self):
+
+        root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
+        ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
+
+        # Caminhos principais
+        infCte = root.find('.//cte:infCte', ns)
+        emit = infCte.find('.//cte:emit', ns)
+        dest = infCte.find('.//cte:dest', ns)
+        ide = infCte.find('.//cte:ide', ns)
+        vPrest = infCte.find('.//cte:vPrest', ns)
+        compl = infCte.find('.//cte:compl', ns)
+        infModal = infCte.find('.//cte:infModal', ns)
+        rodo = infModal.find('.//cte:rodo', ns) if infModal is not None else None
+
+        # Chave de acesso
+        chave_acesso = infCte.attrib.get('Id', '')
+        if chave_acesso.startswith('CTe'):
+            chave_acesso = chave_acesso[3:]
+
+        numero_cte = ide.findtext('cte:nCT', default='', namespaces=ns)
+
+        # Emitente
+        cnpj_emitente = emit.findtext('cte:CNPJ', default='', namespaces=ns)
+        nome_emitente = emit.findtext('cte:xNome', default='', namespaces=ns)
+
+        # Destinatário
+        cnpj_destinatario = dest.findtext('cte:CNPJ', default='', namespaces=ns)
+        nome_destinatario = dest.findtext('cte:xNome', default='', namespaces=ns)
+
+        # Valor total
+        valor_total = vPrest.findtext('cte:vTPrest', default='0', namespaces=ns)
+        valor_total = float(valor_total.replace(',', '.'))
+
+        # Data de emissão
+        data_emissao = ide.findtext('cte:dhEmi', default='', namespaces=ns)
+        if data_emissao:
+            data_emissao = data_emissao.split('T')[0]
+            data_emissao = datetime.strptime(data_emissao, '%Y-%m-%d')
+        else:
+            data_emissao = datetime.now()
+
+        # Origem e destino
+        municipio_inicio = ide.findtext('cte:xMunIni', default='', namespaces=ns)
+        uf_inicio = ide.findtext('cte:UFIni', default='', namespaces=ns)
+        municipio_destino = ide.findtext('cte:xMunFim', default='', namespaces=ns)
+        uf_destino = ide.findtext('cte:UFFim', default='', namespaces=ns)
+
+        # Placa e motorista
+        placa = ''
+        motorista = ''
+        if compl is not None:
+            xObs = compl.findtext('cte:xObs', default='', namespaces=ns)
+            if xObs:
+                import re
+                placa_match = re.search(r'PLACA ([A-Z0-9])', xObs)
+                if placa_match:
+                    placa = placa_match.group(1)
+                motorista_match = re.search(r'MOTORISTA ([A-Z .A-Z]+), CPF', xObs)
+                if motorista_match:
+                    motorista = motorista_match.group(1)
+        # fallback para placa no modal rodo
+        if not placa and rodo is not None:
+            placa = rodo.findtext('cte:placa', default='', namespaces=ns)
+        # fallback para motorista (nome pode estar no xObs)
+        if not motorista and compl is not None and xObs:
+            import re
+            motorista_match = re.search(r'MOTORISTA ([A-Z .A-Z]+), CPF', xObs)
+            if motorista_match:
+                motorista = motorista_match.group(1)
+
+        dados_adicionais = {
+            'municipio_inicio': municipio_inicio,
+            'uf_inicio': uf_inicio,
+            'municipio_destino': municipio_destino,
+            'uf_destino': uf_destino,
+            'placa': placa,
+            'motorista': motorista
+        }
+        dados_nf = {
+            'chave_acesso': chave_acesso,
+            'numero_cte': numero_cte,
+            'cnpj_emitente': cnpj_emitente,
+            'nome_emitente': nome_emitente,
+            'cnpj_destinatario': cnpj_destinatario,
+            'nome_destinatario': nome_destinatario,
+            'valor_total': valor_total,
+            'data_emissao': data_emissao,
+            'dados_adicionais': dados_adicionais
+        }
+        return dados_nf     
+    def extrair_dados_xml_nfe(self):
         """
         Extrai os dados de uma nota fiscal a partir do XML
         Retorna a chave de acesso e um dicionário com os dados da nota fiscal
@@ -355,8 +474,6 @@ class NotaFiscal(db.Model):
         except Exception as e:
             logger.error(f"Erro ao extrair dados do XML: {str(e)}")
             return None, None
-
-
     def vincular_automaticamente(self):
         """
         Tenta vincular automaticamente materiais a todos os itens de uma nota fiscal

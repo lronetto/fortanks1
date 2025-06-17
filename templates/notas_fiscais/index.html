@@ -144,9 +144,15 @@
                                     
                                     {# Verificar se tem documentos anexados #}
                                     {% if nf.upload %}
-                                        <span class="badge bg-info ms-1" title="Documentos anexados">
-                                            <i class="fas fa-paperclip"></i>
-                                        </span>
+                                        {% if nf.upload.tipo in [2] %}
+                                            <span class="badge bg-info ms-1" title="Documentos anexados">
+                                                <i class="fas fa-paperclip" style="color: green;"></i>
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-info ms-1" title="Documentos anexados">
+                                                <i class="fas fa-paperclip"></i>
+                                            </span>
+                                        {% endif %}
                                     {% endif %}
                                 
 

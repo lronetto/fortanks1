@@ -16,13 +16,14 @@ concretagem = Blueprint('concretagem', __name__, url_prefix='/concretagens')
 @login_required
 def index():
     """Lista todas as concretagens cadastradas"""
-    concretagens = Concretagem.query.options( 
-        joinedload(Concretagem.tanques),
-        joinedload(Concretagem.pecas)
-    ).order_by(Concretagem.data_concretagem.desc()).all()
-    
+    concretagens = Concretagem.query.\
+        join(ConcretagemPeca).\
+        join(Peca).\
+        join(Tanque).\
+        join(Contrato).\
+        join(CentroCusto).order_by(CentroCusto.nome).all()
     # Buscar dados para o modal de nova concretagem
-    tanques = []#Tanque.query.join(Contrato).join(CentroCusto).order_by(CentroCusto.nome).all()
+    tanques = Tanque.query.join(Contrato).join(CentroCusto).order_by(CentroCusto.nome).all()
     usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc(),UsinagemConcreto.nbt.desc(),UsinagemConcreto.nota.desc()).all()
     
     return render_template('concretagens/index.html', 

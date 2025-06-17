@@ -160,10 +160,22 @@ def buscar_notas():
             valor_maximo = filtros.get('valor_maximo')
             valor_exato = filtros.get('valor_exato')
             notas_selecionadas = filtros.get('notas_selecionadas', [])
+            data_inicial = filtros.get('data_inicial')
+            data_final = filtros.get('data_final')
+            fornecedor = filtros.get('fornecedor')
+            numero = filtros.get('numero')
 
             tinicial = time.time()
             # Construir query base
             query = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada')
+            if data_inicial:
+                query = query.filter(NotaFiscal.data_emissao >= data_inicial)
+            if data_final:
+                query = query.filter(NotaFiscal.data_emissao <= data_final)
+            if fornecedor:
+                query = query.filter(NotaFiscal.nome_emitente.ilike(f'%{fornecedor}%'))
+            if numero:
+                query = query.filter(NotaFiscal.numero_nf.ilike(f'%{numero}%'))
             query = query.filter(NotaFiscal.cnpj_emitente.notlike('%27126997000187%'))
             query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notlike('%5949%')))
 
@@ -229,27 +241,7 @@ def buscar_notas():
                         'has_next': False,
                         'has_prev': False
                     })
-            # Aplicar filtros
-            if filtros.get('numero'):
-                query = query.filter(NotaFiscal.numero_nf.ilike(f'%{filtros["numero"]}%'))
-            if filtros.get('fornecedor'):
-                query = query.filter(NotaFiscal.nome_emitente.ilike(f'%{filtros["fornecedor"]}%'))
-            if filtros.get('data_inicial'):
-                query = query.filter(NotaFiscal.data_emissao >= filtros['data_inicial'])
-            if filtros.get('data_final'):
-                query = query.filter(NotaFiscal.data_emissao <= filtros['data_final'])
-            if valor_exato:
-                query = query.filter(NotaFiscal.valor_total == float(valor_exato))
-            else:
-                if valor_minimo and not valor_maximo:
-                    query = query.filter(NotaFiscal.valor_total == float(valor_minimo))
-                else:
-                    if valor_minimo:
-                        query = query.filter(NotaFiscal.valor_total >= float(valor_minimo))
-                    if valor_maximo:
-                        query = query.filter(NotaFiscal.valor_total <= float(valor_maximo))
-                
-            #if ids:
+
             #    query = query.filter(NotaFiscal.id.in_(ids))
 
             # Ordenar por data de emissão

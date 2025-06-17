@@ -1,0 +1,52 @@
+{% if relatorio and relatorio|length > 0 %}
+<div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Data Emissão</th>
+                <th>Centro de Custo</th>
+                <th>Nº Nota Fiscal</th>
+                <th>Valor (R$)</th>
+                <th>Data Prevista Vencimento</th>
+                <th>Pago em</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set total = 0 %}
+            {% for item in relatorio %}
+            <tr>
+                <td>{{ item['Data'] }}</td>
+                <td>{{ item['Centro de Custo'] }}</td>
+                <td>{{ item['Nota Fiscal'] }}</td>
+                <td>R$ {{ '%.2f'|format(item['Valor']) }}</td>
+                <td>{{ item['Data Prevista'] }}</td>
+                <td>
+                    {% if item['Pago'] != 'Não definido' %}
+                        <span class="badge bg-success">{{ item['Pago'] }}</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark">Não Pago</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item['Status'] == 'cancelada' %}
+                        <span class="badge bg-danger">Cancelada</span>
+                    {% else %}
+                        <span class="badge bg-primary">Importada</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% set total = total + item['Valor'] %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="table-secondary">
+                <th colspan="3" class="text-end">Total</th>
+                <th colspan="4">R$ {{ '%.2f'|format(total) }}</th>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% else %}
+    <div class="alert alert-info mt-4">Nenhuma nota fiscal encontrada para o período selecionado.</div>
+{% endif %} 

@@ -19,8 +19,9 @@ class Arquivei:
     data_final = None
     xml_datas = []
     cancelada = False
+    tipo = 'nfe'
     
-    def __init__(self, data_inicial=None, data_final=None, chave_acesso=None, xml_data=None,cancelamento=False,send=False):
+    def __init__(self, data_inicial=None, data_final=None, chave_acesso=None, xml_data=None,cancelamento=False,send=False,tipo='nfe'):
         self.chave_acesso = chave_acesso
         self.xml_data = xml_data
         self.data_inicial = data_inicial
@@ -28,14 +29,17 @@ class Arquivei:
         self.xml_datas = []
         self.pdf = None
         self.cancelada = False
+        self.tipo = tipo
         if xml_data:
             self.xml_data = xml_data
             self.upload()
         if data_inicial and data_final:
-            print('processando arquivei')
+            print(f'processando arquivei {tipo}')
             self.processar_arquivei()
         if chave_acesso and cancelamento==False:
-            self.get_pdf()
+            if int(chave_acesso[20:22]) == 57:
+                self.tipo = 'cte'
+            self.get()
         if chave_acesso and cancelamento:
             self.cancelada = self.cancelamento()
         if send:
@@ -86,28 +90,33 @@ class Arquivei:
             'X-API-KEY': ARQUIVEI_API_KEY,
             'Content-Type': 'application/json'
         }
-        
-        # Construir parâmetros da consulta
-        params = {
-            'document_type': 'nfe'
-        }
-        if send:
-            self.data_inicial = '2020-01-01'
-            self.data_final = datetime.now().strftime("%Y-%m-%d")
-
-
+        params = {}
         if self.data_inicial:
             params['created_at[from]'] = self.data_inicial
         if self.data_final:
             params['created_at[to]'] = self.data_final
-        #print(params)
-        # Executar a consulta na API
-        if send:
-            url = 'https://api.arquivei.com.br/v1/nfe/emitted'
-        else:
-            url = 'https://api.arquivei.com.br/v1/nfe/received'
+        if self.tipo=='nfe':
+            # Construir parâmetros da consulta
+            params = {
+                'document_type': 'nfe'
+            }
+            if send:
+                self.data_inicial = '2020-01-01'
+                self.data_final = datetime.now().strftime("%Y-%m-%d")
+
+
+           
+            #print(params)
+            # Executar a consulta na API
+
+            if send:
+                url = 'https://api.arquivei.com.br/v1/nfe/emitted'
+            else:
+                url = 'https://api.arquivei.com.br/v1/nfe/received'
+        if self.tipo=='cte':
+            url='https://api.arquivei.com.br/v1/cte/taker'
         response = requests.get(url, headers=headers, params=params)
-        print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')
+        #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')
             #print(response.json())
             
         # Processar cada nota fiscal
@@ -158,7 +167,7 @@ class Arquivei:
                 data_ini = data_fim
                 data_fim = data_fim+timedelta(days=d)
                 #processar_nota_fiscal_xml(item.get('xml'))
-                print(f'processando notas fiscais processadas: {notas_processadas} ignoradas: {notas_ignoradas}')
+                print(f'processando notas {self.tipo} processadas: {notas_processadas} ignoradas: {notas_ignoradas}')
                 params['created_at[from]'] = data_ini.strftime("%Y-%m-%d")
                 params['created_at[to]'] = data_fim.strftime("%Y-%m-%d")
                 response = requests.get(url, headers=headers, params=params)
@@ -175,7 +184,7 @@ class Arquivei:
                     params['created_at[from]'] = data_ini.strftime("%Y-%m-%d")
                     params['created_at[to]'] = data_fim.strftime("%Y-%m-%d")
                     response = requests.get(url, headers=headers, params=params)  
-                    print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 2')
+                    #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 2')
                 
 
 
@@ -199,6 +208,25 @@ class Arquivei:
                 return jsonify({'success': False, 'message': error_msg})
             except:
                 pass
+    def get_xml(self):
+        headers = {
+            'X-API-ID': ARQUIVEI_API_ID,
+            'X-API-KEY': ARQUIVEI_API_KEY,
+            'Content-Type': 'application/json'
+        }
+        if self.tipo == 'cte':
+            url = f"https://api.arquivei.com.br/v1/cte/taker?access_key[]={self.chave_acesso}"
+        else:
+            url = f"https://api.arquivei.com.br/v1/nfe/received?access_key[]={self.chave_acesso}"
+        response = requests.get(url, headers=headers)
+        response_data = response.json() 
+        print('get xml')
+        if response_data.get('status').get('code') == 200:
+            self.xml_data = response_data.get('data')[0].get('xml')
+
+    def get(self):
+        self.get_xml()
+        self.get_pdf()
 
     def get_pdf(self):
         headers = {
@@ -206,7 +234,10 @@ class Arquivei:
             'X-API-KEY': ARQUIVEI_API_KEY,
             'Content-Type': 'application/json'
         }
-        url = f"https://api.arquivei.com.br/v1/nfe/danfe?access_key={self.chave_acesso}"
+        if self.tipo == 'cte':
+            url = f"https://api.arquivei.com.br//v1/cte/dacte?access_key={self.chave_acesso}"
+        else:
+            url = f"https://api.arquivei.com.br/v1/nfe/danfe?access_key={self.chave_acesso}"
         response = requests.get(url, headers=headers)
         response_data = response.json() 
         print('get pdf')
