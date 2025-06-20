@@ -44,9 +44,10 @@
                             </td>
                             <td>
                                 <div class="btn-group">
-                                    <button type="button" class="btn btn-sm btn-info" 
+                                    <button type="button" class="btn btn-sm btn-info btn-visualizar" 
+                                            id="btnVisualizar"
                                             data-bs-toggle="modal" 
-                                            data-bs-target="visualizarModal" 
+                                            data-bs-target="#visualizarModal" 
                                             data-id="{{ solicitacao.id }}"
                                             title="Visualizar">
                                         <i class="fas fa-eye"></i>
@@ -258,6 +259,8 @@ $(document).ready(function() {
         const id = $(this).attr('id').replace('btnExportarPDF', '');
         exportarSolicitacaoPDF(id);
     });
+    
 });
+
 </script>
 {% endblock %} 

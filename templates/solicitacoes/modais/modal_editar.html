@@ -14,6 +14,7 @@
                     <p>Carregando dados da solicitação...</p>
                 </div>
                 <form method="POST" action="" id="formEditarSolicitacao" style="display: none;">
+                    <input type="hidden" name="id" value="">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row">
                         <div class="col-md-12">
@@ -132,11 +133,13 @@
 <script>
      
 document.addEventListener('DOMContentLoaded', function() {
+    const form = $('#formEditarSolicitacao');
     let itensSolicitacoes = [];
     editButtons = document.querySelectorAll('.btn-editar');
     editButtons.forEach(button => {
         button.addEventListener('click', function() {
             const id = this.getAttribute('data-id');
+            $('input[name="id"]').val(id);
             carregarDadosSolicitacao(id)
         });
     });
@@ -176,47 +179,47 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
     function atualizarTabelaItensEdicao(itens) {
-    const tabela = $(`#tabelaItensEdicao tbody`);
-    tabela.empty();
-    console.log('teste3');
-    if (!itens || itens.length === 0) {
-        tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
-        return;
-    }
-    console.log('teste4');
-    itens.forEach((item, index) => {
-        const tr = $('<tr>');
-        console.log('teste5');
-        tr.append(`<td>${item.material_nome}</td>`);
-        tr.append(`<td>${item.quantidade}</td>`);
-        tr.append(`<td>${item.unidade_nome}</td>`);
-        
-        const tdObs = $('<td>');
-        const inputObs = $('<input>')
-            .attr('type', 'text')
-            .addClass('form-control form-control-sm')
-            .val(item.observacoes || '')
-            .on('change', function() {
-                itensSolicitacoes[index].observacoes = $(this).val();
-            });
-        tdObs.append(inputObs);
-        tr.append(tdObs);
-        
-        const tdAcoes = $('<td>');
-        const btnRemover = $('<button>')
-            .addClass('btn btn-sm btn-danger')
-            .html('<i class="fas fa-trash"></i>')
-            .on('click', function() {
-                if (confirm('Tem certeza que deseja remover este item?')) {
-                    itensSolicitacoes.splice(index, 1);
-                    atualizarTabelaItensEdicao(id);
-                }
-            });
-        tdAcoes.append(btnRemover);
-        tr.append(tdAcoes);
-        
-        tabela.append(tr);
-    });
+        const tabela = $(`#tabelaItensEdicao tbody`);
+        tabela.empty();
+        console.log('teste3');
+        if (!itens || itens.length === 0) {
+            tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
+            return;
+        }
+        console.log('teste4');
+        itens.forEach((item, index) => {
+            const tr = $('<tr>');
+            console.log('teste5');
+            tr.append(`<td>${item.material_nome}</td>`);
+            tr.append(`<td>${item.quantidade}</td>`);
+            tr.append(`<td>${item.unidade_nome}</td>`);
+            
+            const tdObs = $('<td>');
+            const inputObs = $('<input>')
+                .attr('type', 'text')
+                .addClass('form-control form-control-sm')
+                .val(item.observacoes || '')
+                .on('change', function() {
+                    itensSolicitacoes[index].observacoes = $(this).val();
+                });
+            tdObs.append(inputObs);
+            tr.append(tdObs);
+            
+            const tdAcoes = $('<td>');
+            const btnRemover = $('<button>')
+                .addClass('btn btn-sm btn-danger')
+                .html('<i class="fas fa-trash"></i>')
+                .on('click', function() {
+                    if (confirm('Tem certeza que deseja remover este item?')) {
+                        itensSolicitacoes.splice(index, 1);
+                        atualizarTabelaItensEdicao(itensSolicitacoes);
+                    }
+                });
+            tdAcoes.append(btnRemover);
+            tr.append(tdAcoes);
+            
+            tabela.append(tr);
+        });
 }
 // Scripts específicos para edição de solicitação
     // Inicializar select2 para o select de material
@@ -275,7 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Salvar edição de solicitação
     $('.btn-salvar-edicao').click(function() {
-        const form = $('#formEditarSolicitacao');
+        const id = $('input[name="id"]').val()
         form.attr('action', '/solicitacoes/'+id+'/editar');
         
         // Verificar se há itens

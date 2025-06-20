@@ -9,6 +9,7 @@ from PIL import Image
 import io
 import base64
 from models.database import db
+from models.logs import Logs
 from utils.email_utils import enviar_email
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
@@ -19,6 +20,8 @@ from models.upload import Upload
 from models.arquivei import Arquivei
 import re
 import unicodedata
+import json
+from datetime import datetime
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -225,36 +228,63 @@ def processar_emails():
 
     print('processar_emails')
     with Imbox(env['IMAP_HOST'], env['IMAP_USER'], env['IMAP_PASS']) as imap:
-        emails = imap.messages(unread=True,sent_from='leandro.netto@fortanks.ind.br')
+        emails = imap.messages(unread=True,sent_from='leandro.netto@fortanks.ind.br',
+                               raw='has:attachment')
+        log = {}
+        log['total'] = len(emails)
+        log['email'] = []
+        #log['email'].append({
+        #    'subject': msg.subject,
+        #    'anexos': len(msg.attachments)
+        #    'tipo': tipo
+        #    'data': datetime.now()
+        #    'email': msg.subject
+        #})
         if len(emails) > 0:
             for uid, msg in emails:
-
                 logging.info(f'Processando e-mail: {msg.subject}')
                 protocolo = False
                 reembolso = False
+
+                nfe = False
+                nfe = any(p in msg.subject for p in ASSUNTO_PADRAO_NFE)
                 protocolo = any(p in msg.subject for p in ASSUNTO_PADRAO_PROTOCOLO)
                 reembolso = any(p in msg.subject for p in ASSUNTO_PADRAO_REEMBOLSO)
                 
+                tipo = 2 if protocolo else 3 if reembolso else 1 if nfe else 0
+
+                log_email = {
+                    'subject': msg.subject,
+                    'anexos': len(msg.attachments),
+                    'tipo': tipo,
+                    'codigo_barras': {
+                        'qtd_Identificados': 0,
+                        'qtd_Nao_Identificados': 0,
+                        'qtd_Nao_Identificados_DB': 0,
+                        'qtd_Identificados_arquivei': 0,
+                        'qtd_Identificados_arquivei_DB': 0,
+                        'qtd_Upload_Existente': 0,
+                        'qtd_Upload_Realizado': 0,
+                        'codigos_nao_identificados': []
+                    }
+                }
                 if protocolo or reembolso:
-                    if reembolso:
-                        logging.info(f'Processando email de reembolso')
-                        tipo = 3
-                    elif protocolo:
-                        logging.info(f'Processando email de protocolo')
-                        tipo = 2
-                    
+                    total = 0
+                    ignorado = 0
                     if len(msg.attachments) > 0:
                         for att in msg.attachments:
+                            total += 1
                             filename = att["filename"]
                             payload = att["content"].getvalue()
                             if filename.lower().endswith('.pdf'):
                                 # Ignora arquivos que contenham 'protocolo' no nome
                                 if 'protocolo' in filename.lower():
                                     logging.info(f"Ignorando arquivo de protocolo: {filename}")
+                                    ignorado += 1
                                     continue
                                 logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
                                 dec1 = None
-                                img = convert_from_bytes(payload,500)[0]
+                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
                                 #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
                                 #print(f"img: {img}")
                                 #logging.info(f"img1")
@@ -266,35 +296,47 @@ def processar_emails():
                                     if dec:
                                         dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
                                         tiponf = int(dec1[20:22])
-                                        
-                                        
-
+                                    else:
+                                        log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
+                                        log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
+                                else:
+                                    log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
                                 if dec1:
                                     logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
                                     nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
                                     
                                     if nota:
+                                        log_email['codigo_barras']['qtd_Identificados'] += 1
                                         #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
                                         up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
                                         if up.id:
                                             logging.info(f"upload ja existe {nota.numero_nf}")
+                                            log_email['codigo_barras']['qtd_Upload_Existente'] += 1
                                         else:
                                             Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                            log_email['codigo_barras']['qtd_Upload_Realizado'] += 1
                                             logging.info(f"upload realizado {nota.numero_nf}")
                                         continue
                                     else:
                                         logging.info(f"tentando cte")
-                                        if tiponf == 57:
-                                            arquivei = Arquivei(chave_acesso=dec1,tipo='cte')
+                                        log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
+                                        tiponfc = ('nfe' if tiponf == 55 else 'cte' if tiponf == 57 else None)
+                                        if tiponfc:
+                                            arquivei = Arquivei(chave_acesso=dec1,tipo=tiponfc)
                                             if arquivei.xml_data:
+                                                log_email['codigo_barras']['qtd_Identificados_arquivei'] += 1
                                                 logging.info(f"achado arquivei")
-                                                nota = NotaFiscal(xml_data=arquivei.xml_data,tipo='cte')
+                                                nota = NotaFiscal(xml_data=arquivei.xml_data,tipo=tiponfc)
                                                 if nota:
+                                                    log_email['codigo_barras']['qtd_Identificados_arquivei_DB'] += 1
                                                     logging.info(f"fazendo o upload da nota: {nota}")
                                                     up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
                                                     if up.id:
                                                         logging.info(f"upload ja existe {nota.numero_nf}")
-                                        
+                                        else:
+                                            log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
+                                            logging.info(f"codBarras nao identificado {dec1}")
+                                            log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
                                 else:
                                     logging.info(f"tentando pelo numero e fornecedor {filename}")
                                     numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
@@ -345,13 +387,10 @@ def processar_emails():
                                                 Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
                                             else:
                                                 logging.info(f"upload ja existe sem nota {numero_nf}")
-                        
+                       
                         # Marcar o email como lido
                 
-                
-
-
-                if ASSUNTO_PADRAO_NFE in msg.subject:
+                if nfe:
                     
                     logging.info(f'Processando email de nfe')
                     # Lista para armazenar os anexos processados
@@ -394,10 +433,7 @@ def processar_emails():
                                     #Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
                                     tfinal=time.time()
                                 #logging.info(f"Tempo de execução nota fiscal: {tfinal-tinicial} segundos")
-            
-
+                log['email'].append(log_email)
                 imap.mark_seen(uid)
                 logging.info(f'Email {msg.subject} processado com sucesso')
-
-
-    
+                Logs(local='processar_email',data=datetime.now(),texto=json.dumps(log_email))

@@ -5,6 +5,8 @@ import base64
 from flask import jsonify
 from datetime import datetime, timedelta
 import logging
+import json
+from models.logs import Logs
 
 load_dotenv()
 
@@ -97,9 +99,7 @@ class Arquivei:
             params['created_at[to]'] = self.data_final
         if self.tipo=='nfe':
             # Construir parâmetros da consulta
-            params = {
-                'document_type': 'nfe'
-            }
+            params['document_type'] = 'nfe'
             if send:
                 self.data_inicial = '2020-01-01'
                 self.data_final = datetime.now().strftime("%Y-%m-%d")
@@ -115,7 +115,10 @@ class Arquivei:
                 url = 'https://api.arquivei.com.br/v1/nfe/received'
         if self.tipo=='cte':
             url='https://api.arquivei.com.br/v1/cte/taker'
+
+        
         response = requests.get(url, headers=headers, params=params)
+        #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 1')
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')
             #print(response.json())
             
@@ -167,11 +170,12 @@ class Arquivei:
                 data_ini = data_fim
                 data_fim = data_fim+timedelta(days=d)
                 #processar_nota_fiscal_xml(item.get('xml'))
-                print(f'processando notas {self.tipo} processadas: {notas_processadas} ignoradas: {notas_ignoradas}')
+                #print(f'processando notas {self.tipo} processadas: {notas_processadas} ignoradas: {notas_ignoradas}')
                 params['created_at[from]'] = data_ini.strftime("%Y-%m-%d")
                 params['created_at[to]'] = data_fim.strftime("%Y-%m-%d")
                 response = requests.get(url, headers=headers, params=params)
-                print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 1')
+                #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 2')
+                #print(f'data_fim: {data_fim} data_final: {dt_final}')
                 while len(response.json()['data']) == 50:
                     
                     if(dt_final - data_fim).days > 20 and d > 20:
@@ -180,7 +184,7 @@ class Arquivei:
                         d-=5
                     data_ini = data_ini
                     data_fim = data_ini+timedelta(days=d)        
-                    print(f'dt_final - data_fim: {(dt_final - data_fim).days} d {d}')
+                    #print(f'dt_final - data_fim: {(dt_final - data_fim).days} d {d}')
                     params['created_at[from]'] = data_ini.strftime("%Y-%m-%d")
                     params['created_at[to]'] = data_fim.strftime("%Y-%m-%d")
                     response = requests.get(url, headers=headers, params=params)  
@@ -189,15 +193,14 @@ class Arquivei:
 
 
             # Se alguma nota foi processada, mostrar mensagem de sucesso
-            if notas_processadas > 0:
-                return jsonify({'success': True, 
-                                'xml_data': xml_data, 
-                                'notas_processadas': notas_processadas, 
-                                'notas_ignoradas': notas_ignoradas, 
-                                'message': f'{notas_processadas} notas fiscais importadas com sucesso! {notas_ignoradas} ignoradas.'})
-            else:
-                # Se nenhuma nota foi processada, mostrar aviso
-                return jsonify({'success': False, 'message': f'Nenhuma nota fiscal nova foi importada. {notas_ignoradas} notas ignoradas (já existentes ou com erros).'})
+            log = {
+                'data_ini': self.data_inicial,
+                'data_fim': self.data_final,
+                'notas_processadas': notas_processadas,
+                'notas_ignoradas': notas_ignoradas,
+                'tipo': self.tipo
+            }
+            Logs(local='arquivei', data=datetime.now(), texto=json.dumps(log))
         else: 
             try:
                 error_data = response.json()
@@ -222,7 +225,11 @@ class Arquivei:
         response_data = response.json() 
         print('get xml')
         if response_data.get('status').get('code') == 200:
-            self.xml_data = response_data.get('data')[0].get('xml')
+            if response_data.get('data'):
+                for item in response_data.get('data'):
+                    if item.get('xml'):
+                        self.xml_data = item.get('xml')
+                        break
 
     def get(self):
         self.get_xml()

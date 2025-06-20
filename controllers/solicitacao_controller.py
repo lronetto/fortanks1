@@ -148,20 +148,21 @@ def editar(id):
         return redirect(url_for('solicitacao.index'))
     
     try:
+        print(request.form)
         # Atualizar dados da solicitação
-        solicitacao.data_necessidade = datetime.strptime(request.form.get('data_necessidade'), '%Y-%m-%d').date()
-        solicitacao.centro_custo_id = request.form.get('centro_custo_id')
-        solicitacao.observacoes = request.form.get('observacoes')
+        solicitacao.data_necessidade = datetime.strptime(request.form.get('editar_data_necessidade'), '%Y-%m-%d').date()
+        solicitacao.centro_custo_id = request.form.get('editar_centro_custo_id')
+        solicitacao.observacoes = request.form.get('editar_observacoes')
         
         # Remover todos os itens atuais
         for item in solicitacao.itens:
             db.session.delete(item)
         
         # Adicionar novos itens
-        materiais = request.form.getlist('material_id[]')
-        quantidades = request.form.getlist('quantidade[]')
-        unidades = request.form.getlist('unidade[]')
-        observacoes = request.form.getlist('observacoes_item[]')
+        materiais = request.form.getlist('editar_material_id[]')
+        quantidades = request.form.getlist('editar_quantidade[]')
+        unidades = request.form.getlist('editar_unidade[]')
+        observacoes = request.form.getlist('editar_observacoes_item[]')
         
         for i in range(len(materiais)):
             if materiais[i] and quantidades[i]:

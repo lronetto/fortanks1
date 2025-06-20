@@ -561,37 +561,17 @@ def importar_arquivei():
             tipo_documento = request.form.get('tipo_documento', 'nfe')
             cnpj_consulta = request.form.get('cnpj_consulta', '')
             
-            # Log para auxiliar no diagnóstico
-            logger.info(f"Importando notas do Arquivei: {data_inicial} a {data_final}, tipo: {tipo_documento}, CNPJ: {cnpj_consulta or 'todos'}")
-            
+            # Log para auxiliar no diagnóstic            
             # Validar campos obrigatórios
             if not data_inicial or not data_final:
                 flash('Datas inicial e final são obrigatórias!', 'danger')
                 return redirect(url_for('nota_fiscal.index'))
             
-            notas = Arquivei(data_inicial=data_inicial, data_final=data_final)
-            #notas = Arquivei(send=True)
-            tamanho = len(notas.xml_datas)
-            print('tamanho nfe: ',tamanho)
-            if tamanho > 0:
-                i=0
-                for xml_data in notas.xml_datas:
-                    nf = NotaFiscal(xml_data=xml_data)
-                    print(f'id: {nf.id} numero_nf: {nf.numero_nf} {i}/{tamanho} ')
-                    i+=1
+            print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: nfe')
+            NotaFiscal.importar_arquivei(data_inicial,data_final,'nfe')
+            print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: cte')
+            NotaFiscal.importar_arquivei(data_inicial,data_final,'cte')
 
-        
-            notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo='cte')
-            #notas = Arquivei(send=True)
-            tamanho = len(notas.xml_datas)
-            print('tamanho cte: ',tamanho)
-            if tamanho > 0:
-                i=0
-                for xml_data in notas.xml_datas:
-                    nf = NotaFiscal(xml_data=xml_data,tipo='cte')
-                    print(f'id: {nf.id} numero_nf: {nf.numero_nf} {i}/{tamanho} ')
-                    i+=1
-                
         except Exception as e:
             logger.error(f"Erro ao importar notas fiscais: {str(e)}", exc_info=True)
             flash(f'Erro ao importar notas fiscais: {str(e)}', 'danger')

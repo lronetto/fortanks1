@@ -18,7 +18,7 @@ from decimal import Decimal
 import logging
 from models.upload import Upload
 from models.arquivei import Arquivei
-
+from models.logs import Logs
 logger = logging.getLogger(__name__)
 load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
@@ -77,6 +77,7 @@ class NotaFiscal(db.Model):
     upload = None
     cancelada = False
     pdf = None
+    inserido = False
     
     def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False,tipo='nfe'):
         self.xml_data = xml_data
@@ -168,13 +169,34 @@ class NotaFiscal(db.Model):
         return self.upload
     def get_chave_acesso(self):
         return self.chave_acesso
+    
+    def importar_arquivei(data_inicial,data_final,tipo='nfe'):
+        notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
+        total = len(notas.xml_datas)
+        i=0
+        existente=0
+        if total > 0:
+            
+            for xml_data in notas.xml_datas:
+                nf = NotaFiscal(xml_data=xml_data,tipo=tipo)
+                existente+=(1 if nf.inserido else 0)
+                i+=1
+        log = {
+            'data_ini': data_inicial,
+            'data_fim': data_final,
+            'total': total,
+            'existentes': existente,
+            'tipo': tipo
+        }
+        Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log))
+        
     def processar_cte(self):
         dados = self.extrair_dados_xml_cte()
         #print(f'dados: {dados}')
         # Verifica se já existe
         existente = NotaFiscal.query.filter_by(chave_acesso=dados.get('chave_acesso')).first()
         if existente:
-            print(f"CT-e já importado: {dados.get('chave_acesso')}")
+            existente.inserido = False
             return existente
         self.tipo = 2
         self.numero_nf = dados.get('numero_cte')
@@ -188,6 +210,7 @@ class NotaFiscal(db.Model):
         self.status_processamento = 'importado'
         self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
         self.save()
+        self.inserido = True
         return self
     def processar_nf(self):
         """
@@ -196,7 +219,7 @@ class NotaFiscal(db.Model):
         try:
             # Extrair dados do XML
             #self.xml_data = base64.b64encode(xml_text.encode('utf-8')).decode('utf-8')
-            print('processando nota fiscal xml')
+            #print('processando nota fiscal xml')
             chave_acesso, dados_nf = self.extrair_dados_xml_nfe()
             #print('chave_acesso: ',chave_acesso)
             #print('dados_nf: ',dados_nf)
@@ -209,16 +232,8 @@ class NotaFiscal(db.Model):
             #print('nf: ',nf)
             #print('self: ',self)
             if nf:
-                logger.info(f"Nota {chave_acesso} já existe no banco de dados")
-                self.id=nf.id
-                self.tipo=nf.tipo
-                self.numero_nf=nf.numero_nf
-                self.chave_acesso=nf.chave_acesso
-                self.data_emissao=nf.data_emissao
-                self.valor_total=nf.valor_total
-                self.cnpj_emitente=nf.cnpj_emitente
-                self.nome_emitente=nf.nome_emitente
-                self.cnpj_destinatario=nf.cnpj_destinatario
+                #logger.info(f"Nota {chave_acesso} já existe no banco de dados")
+                nf.inserido = False
                 return nf
             
             #self.xml_data=self.xml_data
@@ -249,6 +264,7 @@ class NotaFiscal(db.Model):
             self.vincular_automaticamente()
             if not (self.cnpj_emitente in CNPJS):
                 self.importar_itens_para_estoque()
+            self.inserido = True
             return self
 
         except Exception as e:
