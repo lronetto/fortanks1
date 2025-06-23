@@ -70,7 +70,7 @@ if not os.path.exists(log_dir):
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
 
-sslify = SSLify(app)
+#sslify = SSLify(app)
 # Configurar o logger da aplicação
 if False:
     # Configurar o handler para arquivo
@@ -451,7 +451,7 @@ def gerenciar_scheduler():
         logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
 
 # Gerenciar o scheduler
-#gerenciar_scheduler()
+gerenciar_scheduler()
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():

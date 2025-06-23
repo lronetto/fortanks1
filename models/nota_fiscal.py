@@ -87,10 +87,8 @@ class NotaFiscal(db.Model):
         self.cancelada = cancelada
         if xml_data and tipo == 'nfe':
             print(f'NotaFiscal xml')
-            resultado = self.processar_nf()
-            if resultado:
-                for key, value in resultado.__dict__.items():
-                    setattr(self, key, value)
+            self.processar_nf()
+            
                 
         if xml_data and tipo == 'cte':
             print(f'NotaFiscal cte')
@@ -117,7 +115,6 @@ class NotaFiscal(db.Model):
                 else:
                     self.upload = upload
                 print('self.upload: ',self.upload)
-        return self
 
 
     def save(self):
