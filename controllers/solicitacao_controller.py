@@ -273,6 +273,28 @@ def enviar_email_aprovacao(id):
 
     return redirect(url_for('solicitacao.index')) 
 
+@solicitacao_bp.route('/<int:id>/pdf', methods=['GET'])
+@login_required
+def pdf(id):
+    """Visualiza uma solicitação"""
+    solicitacao = Solicitacao.query.options(db.joinedload(Solicitacao.solicitante), 
+                                            db.joinedload(Solicitacao.centro_custo),
+                                            db.joinedload(Solicitacao.aprovador),
+                                            db.joinedload(Solicitacao.itens).joinedload(ItemSolicitacao.material)
+                                            ).get_or_404(id)
+    try:
+        # Renderizar o template HTML para o PDF
+        html_string = render_template('solicitacoes/pdf_template.html', solicitacao=solicitacao)
+        
+        # Gerar PDF usando WeasyPrint
+        pdf_bytes = HTML(string=html_string).write_pdf()
+        nome_arquivo_pdf = f'solicitacao_{solicitacao.id}.pdf'
+        
+    except Exception as e:
+        current_app.logger.error(f"Erro ao gerar PDF para solicitação {id}: {e}")
+        flash('Erro interno ao gerar o PDF da solicitação.', 'danger')
+    return render_template('solicitacoes/pdf_template.html', solicitacao=solicitacao)
+
 @solicitacao_bp.route('/<int:id>/enviar_pdf_email', methods=['POST'])
 @login_required
 def enviar_pdf_email(id):

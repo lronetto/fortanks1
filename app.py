@@ -348,7 +348,7 @@ def processar_arquivei():
             NotaFiscal(xml_data=nota,tipo='cte')
 def job_email5min():
     with app.app_context():
-        pass#processar_emails()
+        processar_emails()
         #processar_protocolos()
         #processar_reembolsos()
         #processar_notas_fiscais()
