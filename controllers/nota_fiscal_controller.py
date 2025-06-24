@@ -140,7 +140,7 @@ def index():
             tipo = [3]
         query = query.filter(NotaFiscal.tipo.in_(tipo))
     # Ordenar antes de paginar
-    query = query.order_by(NotaFiscal.data_emissao.desc())
+    query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
     
     # Executar a paginação
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
