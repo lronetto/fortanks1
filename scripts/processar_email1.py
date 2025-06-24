@@ -257,6 +257,7 @@ def processar_emails():
                     'subject': msg.subject,
                     'anexos': len(msg.attachments),
                     'tipo': tipo,
+                    'arquivos': [],
                     'codigo_barras': {
                         'qtd_Identificados': 0,
                         'qtd_Nao_Identificados': 0,
@@ -264,144 +265,143 @@ def processar_emails():
                         'qtd_Identificados_arquivei': 0,
                         'qtd_Identificados_arquivei_DB': 0,
                         'qtd_Upload_Existente': 0,
-                        'qtd_Upload_Realizado': 0,
-                        'codigos_nao_identificados': []
+                        'qtd_Upload_Realizado': 0
                     }
                 }
-                if tipo > 0 and filename.lower().endswith('.pdf'):
+                #arquivo = {
+                #    'filename': filename,
+                #    'tipo': tipo,
+                #    'chave_acesso': chave_acesso,
+                #    'codigo_barra: true/false,
+                #    'numero_nf': numero_nf,
+                #    'fornecedor': fornecedor
+                #}
+                if tipo > 0:
                     total = 0
                     ignorado = 0
                     if len(msg.attachments) > 0:
                         for att in msg.attachments:
-                            total += 1
                             filename = att["filename"]
                             payload = att["content"].getvalue()
-                        
-                            # Ignora arquivos que contenham 'protocolo' no nome
-                            if 'protocolo' in filename.lower():
-                                logging.info(f"Ignorando arquivo de protocolo: {filename}")
-                                ignorado += 1
-                                continue
-                            logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
-                            dec1 = None
-                            img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                            #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                            #print(f"img: {img}")
-                            #logging.info(f"img1")
-                            decs = decode(img)
-                            dec1 = None
-                            if decs:
-                                dec = [dec for dec in decs if dec.type == 'CODE128']
-                                tiponf = None
-                                if dec:
-                                    dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-                                    tiponf = int(dec1[20:22])
+                            if filename.lower().endswith('.pdf'):
+                                total += 1
+                                
+                            
+                                # Ignora arquivos que contenham 'protocolo' no nome
+                                if 'protocolo' in filename.lower():
+                                    logging.info(f"Ignorando arquivo de protocolo: {filename}")
+                                    ignorado += 1
+                                    continue
+                                logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
+                                dec1 = None
+                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                #print(f"img: {img}")
+                                #logging.info(f"img1")
+                                decs = decode(img)
+                                dec1 = None
+                                if decs:
+                                    dec = [dec for dec in decs if dec.type == 'CODE128']
+                                    tiponf = None
+                                    if dec:
+                                        dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
+                                        tiponf = int(dec1[20:22])
+                                    else:
+                                        log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
+                                        log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
                                 else:
                                     log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
-                                    log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
-                            else:
-                                log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
-                            if dec1:
-                                logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
-                                nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
-                                
-                                if nota:
-                                    log_email['codigo_barras']['qtd_Identificados'] += 1
-                                    #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
-                                    up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
-                                    if up.id:
-                                        logging.info(f"upload ja existe {nota.numero_nf}")
-                                        log_email['codigo_barras']['qtd_Upload_Existente'] += 1
-                                    else:
-                                        Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
-                                        log_email['codigo_barras']['qtd_Upload_Realizado'] += 1
-                                        logging.info(f"upload realizado {nota.numero_nf}")
-                                    continue
-                                else:
-                                    logging.info(f"tentando cte")
-                                    log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
-                                    tiponfc = ('nfe' if tiponf == 55 else 'cte' if tiponf == 57 else None)
-                                    if tiponfc:
-                                        arquivei = Arquivei(chave_acesso=dec1,tipo=tiponfc)
-                                        if arquivei.xml_data:
-                                            log_email['codigo_barras']['qtd_Identificados_arquivei'] += 1
-                                            logging.info(f"achado arquivei")
-                                            nota = NotaFiscal(xml_data=arquivei.xml_data,tipo=tiponfc)
-                                            if nota:
-                                                log_email['codigo_barras']['qtd_Identificados_arquivei_DB'] += 1
-                                                logging.info(f"fazendo o upload da nota: {nota}")
-                                                up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
-                                                if up.id:
-                                                    logging.info(f"upload ja existe {nota.numero_nf}")
-                                    else:
-                                        log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
-                                        logging.info(f"codBarras nao identificado {dec1}")
-                                        log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
-                            else:
-                                logging.info(f"tentando pelo numero e fornecedor {filename}")
-                                numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
-                                if not numero_nf or not fornecedor:
-                                    logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {filename}")
-                                    continue
-                            
-                                
-                                # Primeiro busca todas as notas com o número correspondente
-                                numero_nf = int(numero_nf.strip())
-                                notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
-                                
-                                # Depois procura a que tem o nome do emitente normalizado correspondente
-                                nota = None 
-                                fornecedor_normalizado = normalizar_texto(fornecedor)
-                                if not notas:
-                                    logging.info(f"numero nf {numero_nf} nao encontrado no db")
-                                    up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf')
-                                    if up.id:
-                                        logging.info(f"upload ja existe sem nota {numero_nf}")
-                                    else:
-                                        Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', payload)
-                                        logging.info(f"upload realizado sem nota {numero_nf}")
-                                else:
-                                    for n in notas:
-                                        emitente_normalizado = normalizar_texto(n.nome_emitente)
-                                        # Verifica se o nome do fornecedor está contido no nome do emitente
-                                        if fornecedor_normalizado in emitente_normalizado:
-                                            nota = n
-                                            break
+                                if dec1:
+                                    logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
+                                    nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
                                     
                                     if nota:
-                                        logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
-                                        try:
-                                            up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
-                                            if up.id:
-                                                logging.info(f"upload ja existe {numero_nf}")
-                                            else:
-                                                Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
-                                                logging.info(f"upload realizado {numero_nf}")
-                                        except Exception as e:
-                                            logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
-                                    else:
-                                        logging.info(f"fornecedor nao encontrado {numero_nf}")
-                                        up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf')
-                                        if not up.id:
-                                            logging.info(f"upload realizado sem nota {numero_nf}")
-                                            Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                        log_email['codigo_barras']['qtd_Identificados'] += 1
+                                        #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
+                                        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
+                                        if up.id:
+                                            logging.info(f"upload ja existe {nota.numero_nf}")
+                                            log_email['codigo_barras']['qtd_Upload_Existente'] += 1
                                         else:
+                                            Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                            log_email['codigo_barras']['qtd_Upload_Realizado'] += 1
+                                            logging.info(f"upload realizado {nota.numero_nf}")
+                                        continue
+                                    else:
+                                        logging.info(f"tentando cte")
+                                        log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
+                                        tiponfc = ('nfe' if tiponf == 55 else 'cte' if tiponf == 57 else None)
+                                        if tiponfc:
+                                            arquivei = Arquivei(chave_acesso=dec1,tipo=tiponfc)
+                                            if arquivei.xml_data:
+                                                log_email['codigo_barras']['qtd_Identificados_arquivei'] += 1
+                                                logging.info(f"achado arquivei")
+                                                nota = NotaFiscal(xml_data=arquivei.xml_data,tipo=tiponfc)
+                                                if nota:
+                                                    log_email['codigo_barras']['qtd_Identificados_arquivei_DB'] += 1
+                                                    logging.info(f"fazendo o upload da nota: {nota}")
+                                                    up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                                    if up.id:
+                                                        logging.info(f"upload ja existe {nota.numero_nf}")
+                                        else:
+                                            log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
+                                            logging.info(f"codBarras nao identificado {dec1}")
+                                            log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
+                                else:
+                                    logging.info(f"tentando pelo numero e fornecedor {filename}")
+                                    numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
+                                    if not numero_nf or not fornecedor:
+                                        logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {filename}")
+                                        continue
+                                
+                                    
+                                    # Primeiro busca todas as notas com o número correspondente
+                                    numero_nf = int(numero_nf.strip())
+                                    notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
+                                    
+                                    # Depois procura a que tem o nome do emitente normalizado correspondente
+                                    nota = None 
+                                    fornecedor_normalizado = normalizar_texto(fornecedor)
+                                    if not notas:
+                                        logging.info(f"numero nf {numero_nf} nao encontrado no db")
+                                        up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf')
+                                        if up.id:
                                             logging.info(f"upload ja existe sem nota {numero_nf}")
-                    
-                    # Marcar o email como lido
+                                        else:
+                                            Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', payload)
+                                            logging.info(f"upload realizado sem nota {numero_nf}")
+                                    else:
+                                        for n in notas:
+                                            emitente_normalizado = normalizar_texto(n.nome_emitente)
+                                            # Verifica se o nome do fornecedor está contido no nome do emitente
+                                            if fornecedor_normalizado in emitente_normalizado:
+                                                nota = n
+                                                break
+                                        
+                                        if nota:
+                                            logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
+                                            try:
+                                                up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
+                                                if up.id:
+                                                    logging.info(f"upload ja existe {numero_nf}")
+                                                else:
+                                                    Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                                    logging.info(f"upload realizado {numero_nf}")
+                                            except Exception as e:
+                                                logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
+                                        else:
+                                            logging.info(f"fornecedor nao encontrado {numero_nf}")
+                                            up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf')
+                                            if not up.id:
+                                                logging.info(f"upload realizado sem nota {numero_nf}")
+                                                Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                            else:
+                                                logging.info(f"upload ja existe sem nota {numero_nf}")
+                        
+                        # Marcar o email como lido
                 
-                if tipo > 0 and filename.lower().endswith('.xml'):
-                    
-                    logging.info(f'Processando email de nfe')
-                    # Lista para armazenar os anexos processados
-                    anexos_processados = []
-                    # Criar diretório temporário para os anexos
-                    if len(msg.attachments) > 0:
-                        for att in msg.attachments:
-                            filename = att["filename"]
-                            payload = att["content"].getvalue()
                             if filename.lower().endswith('.xml'):
-                                logging.info(f"Processando xml: {filename}")
+                                
                                 nf=NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'))
                                 if nf.inserido:
                                     Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
