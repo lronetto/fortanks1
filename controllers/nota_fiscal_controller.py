@@ -1709,7 +1709,7 @@ def api_listar_documentos(nota_id):
     API para listar documentos de uma nota fiscal
     """
     try:
-        documentos = db.session.query(Upload.id,Upload.filename,Upload.tipo,Upload.data_upload).filter_by(pai='NotaFiscal', pai_id=nota_id).all()
+        documentos = db.session.query(Upload.id,Upload.filename,Upload.tipo,Upload.uploaded_at).filter_by(pai='NotaFiscal', pai_id=nota_id).all()
         resultado = []
         for doc in documentos:
             resultado.append({
