@@ -158,10 +158,10 @@ def index():
         nota.uploads = {'scan':False,
                         'padrao':False,
                         'total':0}
-        uploads = Upload.query.filter_by(pai_id=nota.id, pai='NotaFiscal').all()
+        uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter_by(pai_id=nota.id, pai='NotaFiscal').all()
         if uploads:
-            nota.uploads = {'scan':any(u for u in uploads if u.tipo == 2),
-                            'padrao': any(u for u in uploads if u.tipo == 1),
+            nota.uploads = {'scan':any(u[2] == 2 for u in uploads),
+                            'padrao': any(u[2] == 1 for u in uploads),
                             'total': len(uploads)}
             
         
