@@ -54,6 +54,7 @@ from scripts.processar_email1 import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 from controllers.relatorio_controller import relatorio_bp
 from controllers.dados_analiticos_controller import executar_importacao_async
+from controllers.upload_controller import upload_bp
 load_dotenv('.env')
 
 # Configuração de logs
@@ -198,6 +199,7 @@ app.register_blueprint(relatorio_usinagem_bp)
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
+app.register_blueprint(upload_bp, url_prefix='/uploads')
 logger.info("Blueprints registrados com sucesso!")
 
 # Registrar comandos CLI
@@ -451,7 +453,7 @@ def gerenciar_scheduler():
         logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
 
 # Gerenciar o scheduler
-gerenciar_scheduler()
+#gerenciar_scheduler()
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():

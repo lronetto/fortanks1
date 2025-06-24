@@ -541,6 +541,12 @@
                             </a>
                         </li>
                         {% endif %}
+
+                        <li class="{{ is_active('upload') }}">
+                            <a href="{{ url_for('upload.index') }}">
+                                <i class="fas fa-file-upload"></i> Documentos (Uploads)
+                            </a>
+                        </li>
                     </ul>
                 </li>
 

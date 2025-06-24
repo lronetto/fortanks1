@@ -232,6 +232,9 @@ class NotaFiscal(db.Model):
                 Logs(local='processar_nf',data=datetime.now(),texto=f"Nota {chave_acesso} já existe no banco de dados")
                 logger.info(f"Nota {chave_acesso} já existe no banco de dados")
                 nf.inserido = False
+                if not nf.dados_adicionais:
+                    nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
+                    nf.save()
                 return nf
             
             #self.xml_data=self.xml_data
@@ -245,6 +248,8 @@ class NotaFiscal(db.Model):
             self.cnpj_destinatario=dados_nf.get('cnpj_destinatario')
             self.nome_destinatario=dados_nf.get('nome_destinatario')
             self.status_processamento='importado'
+            self.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
+
             self.save()
             for item_nf in dados_nf.get('itens', []):
                 item_fiscal = NotaFiscalItem(
@@ -394,7 +399,9 @@ class NotaFiscal(db.Model):
             dest = inf_nfe.find('.//nfe:dest', ns) or inf_nfe.find('.//dest', ns)
             total = inf_nfe.find('.//nfe:total/nfe:ICMSTot', ns) or inf_nfe.find('.//total/ICMSTot', ns)
             itens = inf_nfe.findall('.//nfe:det', ns) or inf_nfe.findall('.//det', ns)
-            
+            cobr = inf_nfe.find('.//nfe:cobr', ns) or inf_nfe.find('.//cobr', ns)
+            fatura = cobr.find('.//nfe:fat', ns) or cobr.find('.//fat', ns)
+            dup = fatura.find('.//nfe:dup', ns) or fatura.find('.//dup', ns)
             if not ide or not emit or not dest or not total:
                 logger.error("Dados essenciais ausentes no XML da NFe")
                 return chave_acesso, None
@@ -444,7 +451,9 @@ class NotaFiscal(db.Model):
                 'cnpj_destinatario': cnpj_destinatario,
                 'nome_destinatario': nome_destinatario,
                 'valor_total': valor_total,
-                'itens': []
+                'itens': [],
+                'dados_adicionais': {},
+                
             }
             
             # Extrair dados dos itens
@@ -483,6 +492,20 @@ class NotaFiscal(db.Model):
                 except Exception as e:
                     logger.error(f"Erro ao processar item {num_item}: {str(e)}")
             
+            vencimento = dup.findtext('.//nfe:dVenc', ns) or dup.findtext('.//dVenc', ns)
+            if vencimento:
+                vencimento = datetime.strptime(vencimento, '%Y-%m-%d')
+            else:
+                vencimento = None
+            numero_fatura = fatura.findtext('.//nfe:nFat', ns) or fatura.findtext('.//nFat', ns)
+            valor_total = fatura.findtext('.//nfe:vOrig', ns) or fatura.findtext('.//vOrig', ns)
+            valor_total = Decimal(valor_total)
+            nfe_data['dados_adicionais']['fatura'] = {
+                'vencimento': vencimento,
+                'numero_fatura': numero_fatura,
+                'valor_total': valor_total
+            }
+
             return chave_acesso, nfe_data
         
         except Exception as e:

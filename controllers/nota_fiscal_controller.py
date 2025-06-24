@@ -591,17 +591,24 @@ def gerar_pdf(id):
     Gera um PDF da nota fiscal para download
     """
     try:
-        nota = NotaFiscal(id=id)
-        print(f'nota: {nota.get_chave_acesso()}')
-        pdf = nota.get_pdf()
-        print('pdf: ',pdf)
-        if pdf:
-            response = make_response(base64.b64decode(pdf.blob))
+        upload = Upload.query.filter(Upload.pai=='NotaFiscal', Upload.pai_id==id,Upload.tipo.in_([2,3])).first()    
+        if upload:
+            response = make_response(base64.b64decode(upload.blob))
             response.headers['Content-Type'] = 'application/pdf'
             response.headers['Content-Disposition'] = f'inline; filename=nota_fiscal_{nota.numero_nf}.pdf'
             return response
         else:
-            return 'PDF não encontrado para esta nota.', 404
+            nota = NotaFiscal(id=id)
+            print(f'nota: {nota.get_chave_acesso()}')
+            pdf = nota.get_pdf()
+            print('pdf: ',pdf)
+            if pdf:
+                response = make_response(base64.b64decode(pdf.blob))
+                response.headers['Content-Type'] = 'application/pdf'
+                response.headers['Content-Disposition'] = f'inline; filename=nota_fiscal_{nota.numero_nf}.pdf'
+                return response
+            else:
+                return 'PDF não encontrado para esta nota.', 404
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {str(e)}")
         flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
