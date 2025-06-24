@@ -308,7 +308,7 @@ def processar_emails():
                                         tiponf = int(dec1[20:22])
                                     else:
                                         log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
-                                        log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
+                                        #log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
                                 else:
                                     log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
                                 if dec1:
@@ -346,7 +346,7 @@ def processar_emails():
                                         else:
                                             log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
                                             logging.info(f"codBarras nao identificado {dec1}")
-                                            log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
+                                            #log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
                                 else:
                                     logging.info(f"tentando pelo numero e fornecedor {filename}")
                                     numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
