@@ -229,7 +229,8 @@ class NotaFiscal(db.Model):
             #print('nf: ',nf)
             #print('self: ',self)
             if nf:
-                #logger.info(f"Nota {chave_acesso} já existe no banco de dados")
+                Logs(local='processar_nf',data=datetime.now(),texto=f"Nota {chave_acesso} já existe no banco de dados")
+                logger.info(f"Nota {chave_acesso} já existe no banco de dados")
                 nf.inserido = False
                 return nf
             
