@@ -2,10 +2,10 @@ from io import BytesIO
 from flask import Blueprint, render_template, request, send_file
 from models.upload import Upload
 
-upload_bp = Blueprint('upload', __name__)
+upload_bp = Blueprint('uploads', __name__)
 
 @upload_bp.route('/', defaults={'upload_id': None}, methods=['GET'])
-def list_uploads():
+def index():
     filename = request.args.get('filename', '').strip()
     pai = request.args.get('pai', '').strip()
     tipo = request.args.get('tipo', '').strip()
