@@ -75,6 +75,7 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
             ).first()
         
         dados_relatorio.append({
+            'id': nf.id,
             'Data': nf.data_emissao.strftime('%d/%m/%Y'),  # Mantém como datetime para ordenação
             'Centro de Custo': dados_analiticos.centro_custo.codigo if dados_analiticos else centro_custo.codigo if centro_custo else 'Não definido',
             'Nota Fiscal': nf.numero_nf,

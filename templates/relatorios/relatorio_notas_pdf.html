@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+{% macro format_brl(value) %}
+    {{ '{:,.2f}'.format(value).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+{% endmacro %}
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            color: #222;
+            margin: 0;
+            padding: 0;
+            background: #fff;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .logo {
+            height: 60px;
+            margin-right: 20px;
+        }
+        .title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .table-container {
+            width: 100%;
+            margin: 0 auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 0.8em;
+        }
+        thead th {
+            background: #3498db;
+            color: #fff;
+            font-weight: bold;
+            padding: 10px 6px;
+            border: 1px solid #2980b9;
+        }
+        tbody tr:nth-child(even) {
+            background: #f2f6fa;
+        }
+        tbody tr:nth-child(odd) {
+            background: #fff;
+        }
+        td {
+            padding: 8px 6px;
+            border: 1px solid #d0d7de;
+        }
+        tfoot th {
+            background: #eaf1fb;
+            color: #222;
+            font-size: 1.1rem;
+            font-weight: bold;
+            padding: 10px 6px;
+            border: 1px solid #b0c4de;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.35em 0.7em;
+            font-size: 0.95em;
+            font-weight: 600;
+            border-radius: 0.5em;
+        }
+        .bg-success { background: #27ae60; color: #fff; }
+        .bg-warning { background: #f1c40f; color: #222; }
+        .bg-danger { background: #e74c3c; color: #fff; }
+        .bg-primary { background: #2980b9; color: #fff; }
+        .text-dark { color: #222 !important; }
+        .text-end { text-align: right; }
+        .footer {
+            text-align: center;
+            font-size: 0.9em;
+            color: #888;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_path }}" class="logo" alt="Logo Empresa">
+        <span class="title">Relatório de Notas Fiscais de Venda</span>
+    </div>
+    <div class="table-container">
+    {% if relatorio and relatorio|length > 0 %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Data Emissão</th>
+                    <th>Centro de Custo</th>
+                    <th>Nº Nota Fiscal</th>
+                    <th>Valor (R$)</th>
+                    <th>Data Prevista Vencimento</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in relatorio %}
+                <tr>
+                    <td>{{ item['Data'] }}</td>
+                    <td>{{ item['Centro de Custo'] }}</td>
+                    <td>{{ item['Nota Fiscal'] }}</td>
+                    <td>R$ {{ format_brl(item['Valor']) }}</td>
+                    <td>{{ item['Data Prevista'] }}</td>
+
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="3" class="text-end">Total</th>
+                    <th colspan="4">R$ {{ format_brl(total) }}</th>
+                </tr>
+            </tfoot>
+        </table>
+    {% else %}
+        <div class="alert alert-info mt-4">Nenhuma nota fiscal encontrada para o período selecionado.</div>
+    {% endif %}
+    </div>
+    <div class="footer">
+        Relatório gerado em {{ now }}
+    </div>
+</body>
+</html>
+
+{# Macro para formatar valores monetários #}
+{% macro format_brl(value) %}
+    {{ '{:,.2f}'.format(value).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+{% endmacro %} 

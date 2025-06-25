@@ -85,6 +85,19 @@
                         <option value="3" {% if request.args.get('tipo_nfe', '') == '3' %}selected{% endif %}>NFSe</option>
                     </select>
                 </div>
+                <!-- Filtros extras para CTE -->
+                <div class="col-md-3 cte-extra-filtro" id="filtro-origem" style="display: none;">
+                    <label for="origem" class="form-label">Origem (Município)</label>
+                    <input type="text" name="origem" id="origem" class="form-control" placeholder="Município de origem" value="{{ origem|default('') }}">
+                </div>
+                <div class="col-md-3 cte-extra-filtro" id="filtro-destino" style="display: none;">
+                    <label for="destino" class="form-label">Destino (Município)</label>
+                    <input type="text" name="destino" id="destino" class="form-control" placeholder="Município de destino" value="{{ destino|default('') }}">
+                </div>
+                <div class="col-md-3 cte-extra-filtro" id="filtro-remetente" style="display: none;">
+                    <label for="remetente" class="form-label">Remetente</label>
+                    <input type="text" name="remetente" id="remetente" class="form-control" placeholder="Nome do remetente" value="{{ remetente|default('') }}">
+                </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="btn-group">
                         <button type="submit" class="btn btn-primary">
@@ -354,6 +367,18 @@ $(document).ready(function() {
                 iframe.parentNode.appendChild(msg);
             });
     }
+
+    // Mostrar/ocultar filtros extras de CTE
+    function toggleCteFilters() {
+        var tipo = $('#tipo_nfe').val();
+        if (tipo === '2') {
+            $('.cte-extra-filtro').show();
+        } else {
+            $('.cte-extra-filtro').hide();
+        }
+    }
+    $('#tipo_nfe').on('change', toggleCteFilters);
+    toggleCteFilters(); // Executa ao carregar a página
 });
 </script>
 {% endblock %} 

@@ -193,6 +193,9 @@ class NotaFiscal(db.Model):
         # Verifica se já existe
         existente = NotaFiscal.query.filter_by(chave_acesso=dados.get('chave_acesso')).first()
         if existente:
+            
+            existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+            existente.save()
             existente.inserido = False
             return existente
         self.tipo = 2
@@ -285,9 +288,11 @@ class NotaFiscal(db.Model):
         infCte = root.find('.//cte:infCte', ns)
         emit = infCte.find('.//cte:emit', ns)
         dest = infCte.find('.//cte:dest', ns)
+        rem = infCte.find('.//cte:rem', ns)
         ide = infCte.find('.//cte:ide', ns)
         vPrest = infCte.find('.//cte:vPrest', ns)
         compl = infCte.find('.//cte:compl', ns)
+
         infModal = infCte.find('.//cte:infModal', ns)
         rodo = infModal.find('.//cte:rodo', ns) if infModal is not None else None
 
@@ -346,8 +351,14 @@ class NotaFiscal(db.Model):
             motorista_match = re.search(r'MOTORISTA ([A-Z .A-Z]+), CPF', xObs)
             if motorista_match:
                 motorista = motorista_match.group(1)
-
         dados_adicionais = {
+            'remetente': {
+                'nome': rem.findtext('cte:xNome', default='', namespaces=ns),
+                'cnpj': rem.findtext('cte:CNPJ', default='', namespaces=ns),
+                'endereco': rem.findtext('cte:xLgr', default='', namespaces=ns),
+                'municipio': rem.findtext('cte:xMun', default='', namespaces=ns),
+                'uf': rem.findtext('cte:UF', default='', namespaces=ns)
+            },
             'municipio_inicio': municipio_inicio,
             'uf_inicio': uf_inicio,
             'municipio_destino': municipio_destino,

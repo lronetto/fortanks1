@@ -9,15 +9,15 @@ import pandas as pd
 
 acabamento_transporte_bp  = Blueprint('acabamento_transporte', __name__)
 
-@acabamento_transporte_bp.route('/')
-def index():
-    filtro = request.args.get('filtro', 'todos')
-    page = int(request.args.get('page', 1))
+def get_pecas(filtros):
+    filtro = filtros.get('filtro', 'todos')
+    page = int(filtros.get('page', 1))
     per_page = 20
-    nome_peca = request.args.get('nome_peca', '').strip()
-    pecas_query = Peca.query.join(Tanque).filter(Peca.qualidade.isnot(None))
+    nome_peca = filtros.get('nome_peca', '').strip()
+    pecas_query = Peca.query.join(Tanque)
     if nome_peca:
         pecas_query = pecas_query.filter(Peca.nome.ilike(f'%{nome_peca}%'))
+    pecas_query = pecas_query.all()
     tanques = Tanque.query.order_by(Tanque.nome).all()
     pecas = []
     for peca in pecas_query:
@@ -54,6 +54,14 @@ def index():
     elif filtro == 'acabada_nao_transportada':
         pecas = [p for p in pecas if p.acabamento and not p.transporte]
         pecas.sort(key=lambda x: x.transporte, reverse=True)
+    return pecas
+@acabamento_transporte_bp.route('/')
+def index():
+    filtros = request.args.to_dict()
+    pecas = get_pecas(filtros)
+    page = int(request.args.get('page', 1))
+    per_page = 20
+    tanques = Tanque.query.order_by(Tanque.nome).all()
     # Paginação
     total = len(pecas)
     start = (page - 1) * per_page
@@ -64,10 +72,10 @@ def index():
                            pecas=pecas_paginadas,
                            tanques=tanques,
                            now=datetime.now().strftime('%Y-%m-%d'),
-                           filtro=filtro,
+                           filtro=filtros,
                            page=page,
                            total_pages=total_pages,
-                           nome_peca=nome_peca)
+                           nome_peca=filtros.get('nome_peca', ''))
 
 @acabamento_transporte_bp.route('/acabamento', methods=['GET', 'POST'])
 def acabamento():
@@ -141,52 +149,12 @@ def transporte():
                            csrf_token=csrf_token,
                            now=datetime.now().strftime('%Y-%m-%d'))
 
+
 @acabamento_transporte_bp.route('/api/pecas', methods=['GET'])
 def api_pecas():
     """Retorna peças filtradas por tanques e nome (AJAX)"""
-    print(request.args)
-    tanque_ids = request.args.getlist('tanque_ids[]')
-    nome = request.args.get('nome', '').strip()
-    apenas_concretadas = request.args.get('apenas_concretadas', '0') == '1'
-    apenas_acabadas = request.args.get('apenas_acabadas', '0') == '1'
-    nao_acabadas = request.args.get('nao_acabadas', '0') == '1'
-    query = Peca.query
-    if tanque_ids:
-        query = query.filter(Peca.tanque_id.in_(tanque_ids))
-    if nome:
-        query = query.filter(Peca.nome.ilike(f'%{nome}%'))
-    if apenas_concretadas:
-        query = query.filter(Peca.data_concretagem.isnot(None))
-    pecas = query.order_by(Peca.tanque_id, Peca.numero_sequencial).all()
-    pecas1 = pecas
-    print('tamanho da lista', len(pecas1))
-    if nao_acabadas:
-        print('nao_acabadas')
-        pecas = []
-        for p in pecas1:
-            qualidade = p.qualidade or '{}'
-            qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
-            if 'acabamento' in qualidade_dict and qualidade_dict['acabamento'] is None:
-                pecas.append(p)
-    if apenas_acabadas:
-        print('apenas_acabadas')
-        pecas = []
-        for p in pecas1:
-            qualidade = p.qualidade or '{}'
-            qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
-            if 'acabamento' in qualidade_dict and 'data_transporte' in qualidade_dict['transporte']:
-                pecas.append(p)
-        #pecas = [p for p in pecas if p.qualidade and 'acabamento' in (json.loads(p.qualidade) and 'data_acabamento' in json.loads(p.qualidade)['transporte'] if isinstance(p.qualidade, str) else p.qualidade)]
-    result = [
-        {
-            'id': p.id,
-            'nome': p.nome,
-            'numero_sequencial': p.numero_sequencial,
-            'tanque_id': p.tanque_id,
-            'tanque_nome': p.tanque.nome
-        }
-        for p in pecas
-    ]
+    filtros = request.args.to_dict()
+    result = get_pecas(filtros)
     return jsonify(result) 
 
 @acabamento_transporte_bp.route('/api/transportadoras', methods=['POST'])
@@ -210,60 +178,24 @@ def api_tanques():
 
 @acabamento_transporte_bp.route('/exportar_excel')
 def exportar_excel():
-    filtro = request.args.get('filtro', 'todos')
-    nome_peca = request.args.get('nome_peca', '').strip()
-    pecas_query = Peca.query.join(Tanque).filter(Peca.qualidade.isnot(None))
-    if nome_peca:
-        pecas_query = pecas_query.filter(Peca.nome.ilike(f'%{nome_peca}%'))
-    pecas = []
-    for peca in pecas_query:
-        qualidade = peca.qualidade or '{}'
+    filtros = request.args.to_dict()
+    data = get_pecas(filtros)
+    data1 = []
+    for p in data:
+        qualidade = p.qualidade or '{}'
         qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
-        if 'acabamento' in qualidade_dict:
-            peca.acabamento = qualidade_dict['acabamento']
-        else:
-            peca.acabamento = None
-        if 'transporte' in qualidade_dict and 'data_transporte' in qualidade_dict['transporte']:
-            peca.transporte = qualidade_dict['transporte']['data_transporte']
-        else:
-            peca.transporte = None
-        if 'transporte' in qualidade_dict and 'transportadora' in qualidade_dict['transporte']:
-            peca.transportadora = qualidade_dict['transporte']['transportadora']
-        else:
-            peca.transportadora = None
-        if 'transporte' in qualidade_dict and 'placa_carreta' in qualidade_dict['transporte']:
-            peca.placa_carreta = qualidade_dict['transporte']['placa_carreta']
-        else:
-            peca.placa_carreta = None
-        if 'transporte' in qualidade_dict and 'nota' in qualidade_dict['transporte']:
-            peca.nota_fiscal = qualidade_dict['transporte']['nota']
-        else:
-            peca.nota_fiscal = None
-        pecas.append(peca)
-    # Aplicar filtro
-    if filtro == 'acabadas':
-        pecas = [p for p in pecas if p.acabamento]
-        pecas.sort(key=lambda x: x.acabamento, reverse=True)
-    elif filtro == 'transportadas':
-        pecas = [p for p in pecas if p.transporte]
-        pecas.sort(key=lambda x: x.transporte, reverse=True)
-    elif filtro == 'acabada_nao_transportada':
-        pecas = [p for p in pecas if p.acabamento and not p.transporte]
-        pecas.sort(key=lambda x: x.transporte, reverse=True)
-    # Montar DataFrame
-    data = [
-        {
-            'Tanque': p.tanque.nome,
-            'Peça': p.nome,
-            'Acabamento': p.acabamento or '',
-            'Data Transporte': p.transporte or '',
-            'Transportadora': p.transportadora or '',
-            'Placa': p.placa_carreta or '',
-            'Nota Fiscal': p.nota_fiscal or ''
-        }
-        for p in pecas
-    ]
-    df = pd.DataFrame(data)
+        data1.append({
+            'nome': p.nome,
+            'concretagem': p.data_concretagem,
+            'acabamento': p.acabamento,
+            'transporte': p.transporte,
+            'transportadora': p.transportadora,
+            'placa_carreta': p.placa_carreta,
+            'nota_fiscal': p.nota_fiscal,
+            'data_entrega': p.data_entrega,
+            'tanque': p.tanque.nome,
+        })
+    df = pd.DataFrame(data1)
     # Gerar arquivo Excel em memória
     from io import BytesIO
     output = BytesIO()

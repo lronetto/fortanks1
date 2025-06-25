@@ -13,6 +13,10 @@ from weasyprint import HTML, CSS
 from utils.relatorio_financeiro import dados_relatorio_financeiro
 import os
 import tempfile
+import io
+import zipfile
+import base64
+from models.upload import Upload
 
 relatorio_bp = Blueprint('relatorio', __name__)
 
@@ -178,3 +182,79 @@ def relatorio_notas_ajax():
     
     dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
     return render_template('relatorios/relatorio_notas_tabela.html', relatorio=dados_relatorio)
+
+@relatorio_bp.route('/notas/exportar', methods=['GET'])
+def relatorio_notas_exportar():
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    centro_custo_ids = request.args.getlist('centro_custo')
+    data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
+    data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
+    centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+
+    # Buscar dados do relatório (notas filtradas)
+    dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
+
+    notas = db.session.query(NotaFiscal).filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio])).all()
+
+    # Criar ZIP em memória
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Adicionar XML e PDF de cada nota
+        total = 0
+        for nota in notas:
+            total += nota.valor_total
+            # XML
+            if nota.xml_data:
+                xml_bytes = base64.b64decode(nota.xml_data)
+                zipf.writestr(f'NF {nota.numero_nf}.xml', xml_bytes)
+            # PDF
+            upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=nota.id, tipo=1).first()
+            if upload and upload.blob:
+                pdf_bytes = base64.b64decode(upload.blob)
+                zipf.writestr(f'NF {nota.numero_nf}.pdf', pdf_bytes)
+        # Gerar PDF da tabela
+        html = render_template('relatorios/relatorio_notas_pdf.html', relatorio=dados_relatorio,total=total)
+        pdf_bytes = HTML(string=html).write_pdf(stylesheets=[CSS(string='body { font-family: Arial, sans-serif; };\
+                                                                 page { margin: 2.5cm; size: A4; }')])
+        zipf.writestr('relatorio_notas.pdf', pdf_bytes)
+    zip_buffer.seek(0)
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='notas_exportadas.zip'
+    )
+@relatorio_bp.route('/notas/exportar_pdf', methods=['GET'])
+def relatorio_notas_exportar_pdf():
+    import os
+    import io
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    centro_custo_ids = request.args.getlist('centro_custo')
+    data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
+    data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
+    centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+
+    # Buscar dados do relatório (notas filtradas)
+    dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
+
+    notas = db.session.query(NotaFiscal).filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio])).all()
+    # Adicionar XML e PDF de cada nota
+    total = 0
+    for nota in notas:
+        total += nota.valor_total
+    # Caminho absoluto da logo para o WeasyPrint
+    logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
+    logo_path_uri = 'file:///' + logo_path.replace('\\', '/').replace('\\', '/')
+    html = render_template('relatorios/relatorio_notas_pdf.html', relatorio=dados_relatorio, total=total, now=datetime.now().strftime('%d/%m/%Y %H:%M:%S'), logo_path=logo_path_uri)
+    pdf_bytes = HTML(string=html).write_pdf(stylesheets=[CSS(string='body { font-family: Arial, sans-serif;}')])
+
+    pdf_io = io.BytesIO(pdf_bytes)
+    pdf_io.seek(0)
+    return send_file(
+        pdf_io,
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name='relatorio_notas.pdf'
+    )

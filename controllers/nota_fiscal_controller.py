@@ -77,6 +77,9 @@ def index():
     data_emissao_inicio = request.args.get('data_emissao_inicio', '')
     data_emissao_fim = request.args.get('data_emissao_fim', '')
     tipo_nfe = request.args.get('tipo_nfe', '')
+    origem = request.args.get('origem', '')  # Novo filtro para origem
+    destino = request.args.get('destino', '')  # Novo filtro para destino
+    remetente = request.args.get('remetente', '')  # Novo filtro para remetente
     
     # Instanciar formulário de importação para o modal
     import_form = NotaFiscalImportForm()
@@ -139,6 +142,20 @@ def index():
         elif tipo_nfe == '3':
             tipo = [3]
         query = query.filter(NotaFiscal.tipo.in_(tipo))
+        # Filtros extras para CTE
+        if tipo_nfe == '2':
+            if origem:
+                query = query.filter(
+                    db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"municipio_inicio": "{origem}"%')
+                )
+            if destino:
+                query = query.filter(
+                    db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"municipio_destino": "{destino}"%')
+                )
+            if remetente:
+                query = query.filter(
+                    db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"remetente": %"nome": "%{remetente}%"%')
+                )
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
     
@@ -176,7 +193,10 @@ def index():
                           item_nome=item_nome,
                           data_emissao_inicio=data_emissao_inicio,
                           data_emissao_fim=data_emissao_fim,
-                          import_form=import_form) # Passar formulário do modal
+                          import_form=import_form,
+                          origem=origem,
+                          destino=destino,
+                          remetente=remetente) # Passar novos filtros para o template
 
 @nota_fiscal_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
@@ -566,11 +586,14 @@ def importar_arquivei():
             if not data_inicial or not data_final:
                 flash('Datas inicial e final são obrigatórias!', 'danger')
                 return redirect(url_for('nota_fiscal.index'))
-            
-            print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: nfe')
-            NotaFiscal.importar_arquivei(data_inicial,data_final,'nfe')
-            print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: cte')
-            NotaFiscal.importar_arquivei(data_inicial,data_final,'cte')
+            if tipo_documento == 'todos':
+                print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: nfe')
+                NotaFiscal.importar_arquivei(data_inicial,data_final,'nfe')
+                print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: cte')
+                NotaFiscal.importar_arquivei(data_inicial,data_final,'cte')
+            else:
+                print(f'importando notas fiscais do arquivei: {data_inicial} a {data_final}, tipo: {tipo_documento}')
+                NotaFiscal.importar_arquivei(data_inicial,data_final,tipo_documento)
 
         except Exception as e:
             logger.error(f"Erro ao importar notas fiscais: {str(e)}", exc_info=True)
