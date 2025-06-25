@@ -57,7 +57,7 @@ class Arquivei:
         payload = {
             "invoices":[
                 {
-                    "xml":f"{base64.b64encode(self.xml_data).decode()}"
+                    "xml":f"{self.xml_data}"
                 }
             ]
         }
