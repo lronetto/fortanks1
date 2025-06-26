@@ -280,7 +280,12 @@ def processar_emails():
                     total = 0
                     ignorado = 0
                     if len(msg.attachments) > 0:
-                        for att in msg.attachments:
+                        anexos_ordenados = sorted(
+                            msg.attachments,
+                            key=lambda att: (0 if att["filename"].lower().endswith('.xml') else
+                                             1 if att["filename"].lower().endswith('.pdf') else 2)
+                        )
+                        for att in anexos_ordenados:
                             filename = att["filename"]
                             payload = att["content"].getvalue()
                             if filename.lower().endswith('.pdf'):
