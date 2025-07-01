@@ -80,6 +80,7 @@ def index():
     origem = request.args.get('origem', '')  # Novo filtro para origem
     destino = request.args.get('destino', '')  # Novo filtro para destino
     remetente = request.args.get('remetente', '')  # Novo filtro para remetente
+    status_upload = request.args.get('status_upload', '')  # Novo filtro de status upload
     
     # Instanciar formulário de importação para o modal
     import_form = NotaFiscalImportForm()
@@ -156,6 +157,25 @@ def index():
                 query = query.filter(
                     db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"remetente": %"nome": "%{remetente}%"%')
                 )
+    # Filtro de status de upload
+    if status_upload:
+        if status_upload == '1':
+            # Notas com upload tipo 2 (scan)
+            query = query.filter(
+                db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 1).exists()
+            )
+        elif status_upload == '2':
+            # Notas com upload tipo 1 (padrão)
+            query = query.filter(
+                db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 2).exists()
+            )
+        elif status_upload == '3':
+           query = query.filter(
+                db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 3).exists()
+            )
+        elif status_upload == '4':
+            query = query.filter(~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id).exists())
+    
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
     
@@ -172,13 +192,15 @@ def index():
         if dadosAnaliticos:
             nota.pago = True
         
-        nota.uploads = {'scan':False,
-                        'padrao':False,
+        nota.uploads = {'arquivei':False,
+                        'protocolo':False,
+                        'reembolso':False,
                         'total':0}
         uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter_by(pai_id=nota.id, pai='NotaFiscal').all()
         if uploads:
-            nota.uploads = {'scan':any(u[2] == 2 for u in uploads),
-                            'padrao': any(u[2] == 1 for u in uploads),
+            nota.uploads = {'arquivei':any(u[2] == 1 for u in uploads),
+                            'protocolo': any(u[2] == 2 for u in uploads),
+                            'reembolso': any(u[2] == 3 for u in uploads),
                             'total': len(uploads)}
             
         
@@ -196,7 +218,8 @@ def index():
                           import_form=import_form,
                           origem=origem,
                           destino=destino,
-                          remetente=remetente) # Passar novos filtros para o template
+                          remetente=remetente,
+                          status_upload=status_upload) # Passar novo filtro para o template
 
 @nota_fiscal_bp.route('/novo', methods=['GET', 'POST'])
 @login_required

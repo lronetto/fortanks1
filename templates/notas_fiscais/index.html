@@ -98,6 +98,16 @@
                     <label for="remetente" class="form-label">Remetente</label>
                     <input type="text" name="remetente" id="remetente" class="form-control" placeholder="Nome do remetente" value="{{ remetente|default('') }}">
                 </div>
+                <div class="col-md-3">
+                    <label for="status_upload" class="form-label">Status Upload</label>
+                    <select name="status_upload" id="status_upload" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if status_upload == '1' %}selected{% endif %}>Arquivei</option>
+                        <option value="2" {% if status_upload == '2' %}selected{% endif %}>Protocolo</option>
+                        <option value="3" {% if status_upload == '3' %}selected{% endif %}>Reembolso</option>
+                        <option value="4" {% if status_upload == '4' %}selected{% endif %}>Nenhum</option>
+                    </select>
+                </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="btn-group">
                         <button type="submit" class="btn btn-primary">
@@ -166,13 +176,17 @@
                                     
                                     {# Verificar se tem documentos anexados #}
                                     {% if nf.uploads['total'] > 0 %}
-                                        {% if nf.uploads['scan'] %}
+                                        {% if nf.uploads['protocolo'] %}
                                             <span class="badge bg-info ms-1" title="Documentos anexados">
                                                 <i class="fas fa-paperclip" style="color: green;"></i>
                                             </span>
-                                        {% elif nf.uploads['padrao'] %}
+                                        {% elif nf.uploads['arquivei'] %}
                                             <span class="badge bg-info ms-1" title="Documentos anexados">
                                                 <i class="fas fa-paperclip"></i>
+                                            </span>
+                                        {% elif nf.uploads['reembolso'] %}
+                                            <span class="badge bg-info ms-1" title="Documentos anexados">
+                                                <i class="fas fa-paperclip" style="color: red;"></i>
                                             </span>
                                         {% endif %}
                                     {% endif %}

@@ -1,18 +1,17 @@
 <!-- Modal de Aprovação -->
-{% if solicitacao.status == 'Pendente' and current_user.is_gerente_ou_superior %}
-<div class="modal fade" id="aprovarModal{{ solicitacao.id }}" tabindex="-1" aria-labelledby="aprovarModalLabel{{ solicitacao.id }}" aria-hidden="true">
+<div class="modal fade" id="aprovarModal" tabindex="-1" aria-labelledby="aprovarModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="aprovarModalLabel{{ solicitacao.id }}">Confirmar Aprovação</h5>
+                <h5 class="modal-title" id="aprovarModalLabel">Confirmar Aprovação</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Tem certeza que deseja aprovar a solicitação <strong>#{{ solicitacao.numero }}</strong>?</p>
+                <p></p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <form action="{{ url_for('solicitacao.aprovar', id=solicitacao.id) }}" method="POST">
+                <form action="" method="POST">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-success">Confirmar Aprovação</button>
                 </form>
@@ -20,8 +19,20 @@
         </div>
     </div>
 </div>
-{% endif %}
 
 {% block scripts %}
-<!-- Nenhum script JS específico para este modal -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const aprovarModal = document.getElementById('aprovarModal');
+        const aprovarButtons = document.querySelectorAll('.btn-aprovar');
+        aprovarButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                $('.modal-body p').text('Tem certeza que deseja aprovar a solicitação <strong>#' + id + '</strong>?');
+                $('.modal-footer form').attr('action', '/solicitacoes/' + id + '/aprovar');
+                $('#aprovarModal').attr('data-id', id);
+            });
+        });
+    });
+</script>
 {% endblock %} 

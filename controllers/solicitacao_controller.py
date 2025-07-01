@@ -6,6 +6,7 @@ from models.solicitacao import Solicitacao, ItemSolicitacao
 from models.material import Material
 from models.centro_custo import CentroCusto
 from models.usuario import Usuario
+from models.colaborador import Colaborador
 from utils.email_utils import enviar_email
 
 # Importar WeasyPrint (requer instalação: pip install WeasyPrint)
@@ -295,7 +296,7 @@ def pdf(id):
         flash('Erro interno ao gerar o PDF da solicitação.', 'danger')
     return render_template('solicitacoes/pdf_template.html', solicitacao=solicitacao)
 
-@solicitacao_bp.route('/<int:id>/enviar_pdf_email', methods=['POST'])
+@solicitacao_bp.route('/<int:id>/enviar_pdf_email', methods=['POST', 'GET'])
 @login_required
 def enviar_pdf_email(id):
     """Gera um PDF da solicitação e envia por e-mail para destinatários pré-definidos e o solicitante."""
@@ -322,14 +323,14 @@ def enviar_pdf_email(id):
         destinatarios.add(solicitacao.solicitante.email)
     else:
         flash(f'Aviso: O solicitante {solicitacao.solicitante.nome} não possui e-mail cadastrado e não receberá a cópia.', 'info')
-
-    # Adicionar e-mails pré-definidos (CARREGAR DA CONFIGURAÇÃO!)
-    emails_predefinidos_str = current_app.config.get('EMAILS_PDF_SOLICITACAO', '') # Ex: 'email1@ex.com, email2@ex.com'
-    if emails_predefinidos_str:
-        lista_predefinidos = [email.strip() for email in emails_predefinidos_str.split(',') if email.strip()]
-        destinatarios.update(lista_predefinidos)
+    lista = request.form.get('lista_destinatarios', current_app.config.get('EMAILS_PDF_SOLICITACAO', ''))
+    if lista:
+        lista_destinatarios = [email.strip() for email in lista.split(',') if email.strip()]
+        destinatarios.update(lista_destinatarios)
     else:
-        current_app.logger.warning("Nenhum EMAIL_PDF_SOLICITACAO configurado.")
+        flash('Nenhum destinatário válido encontrado para enviar o e-mail.', 'danger')
+        return redirect(url_for('solicitacao.index'))
+    
         # Decida se quer impedir o envio ou apenas avisar
         # flash('Nenhum e-mail pré-definido configurado para envio.', 'warning') 
         
@@ -394,31 +395,56 @@ def enviar_pdf_email(id):
 @login_required
 def get_dados_solicitacao(id):
     """Retorna os dados de uma solicitação em formato JSON"""
-    solicitacao = Solicitacao.query.join(ItemSolicitacao).filter(Solicitacao.id==id).all()
-    
+    solicitacao = Solicitacao.query.options(
+        db.joinedload(Solicitacao.centro_custo),
+        db.joinedload(Solicitacao.aprovador).joinedload(Usuario.colaborador),
+        db.joinedload(Solicitacao.solicitante).joinedload(Usuario.colaborador),
+        db.joinedload(Solicitacao.itens).joinedload(ItemSolicitacao.material).joinedload(Material.unidade_obj)
+    ).get_or_404(id)
+
     # Verificar permissão
     if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
         return jsonify({'error': 'Sem permissão'}), 403
-    
+
     # Preparar dados da solicitação
     dados = {
-        'id': solicitacao[0].id,
-        'data_necessidade': solicitacao[0].data_necessidade.strftime('%Y-%m-%d'),
-        'centro_custo_id': solicitacao[0].centro_custo_id,
-        'observacoes': solicitacao[0].observacoes,
+        'id': solicitacao.id,
+        'data_necessidade': solicitacao.data_necessidade.strftime('%Y-%m-%d'),
+        'centro_custo_id': solicitacao.centro_custo_id,
+        'centro_custo_nome': solicitacao.centro_custo.nome,
+        'centro_custo_codigo': solicitacao.centro_custo.codigo,
+        'aprovador_id': solicitacao.aprovador_id,
+        'aprovador_nome': solicitacao.aprovador.colaborador.nome if solicitacao.aprovador and solicitacao.aprovador.colaborador else '',
+        'solicitante_id': solicitacao.solicitante_id,
+        'solicitante_nome': solicitacao.solicitante.colaborador.nome if solicitacao.solicitante and solicitacao.solicitante.colaborador else '',
+        'status': solicitacao.status,
+        'observacoes': solicitacao.observacoes,
         'itens': []
     }
-    
+
     # Adicionar itens
-    for item in solicitacao[0].itens:
+    for item in solicitacao.itens:
         dados['itens'].append({
             'id': item.id,
             'material_id': item.material_id,
-            'material_nome': item.material.nome,
+            'material': {
+                'nome': item.material.nome,
+                'codigo': item.material.codigo if item.material.codigo else '',
+                'unidade_obj': {
+                    'nome': item.material.unidade_obj.nome if item.material.unidade_obj else ''
+                }
+            } if item.material else {},
             'quantidade': item.quantidade,
-            'unidade_id': item.material.unidade_id,
-            'unidade_nome': item.material.unidade_obj.nome,
+            'unidade_id': item.material.unidade_id if item.material else None,
             'observacoes': item.observacoes
         })
-    
+
     return jsonify(dados) 
+
+@solicitacao_bp.route('/<int:id>/emails_predefinidos', methods=['GET'])
+@login_required
+def get_emails_predefinidos(id):
+    """Retorna os e-mails pré-definidos para uma solicitação"""
+    solicitacao = Solicitacao.query.get_or_404(id)
+    emails_predefinidos = current_app.config.get('EMAILS_PDF_SOLICITACAO', '')
+    return jsonify({'email_solicitante': solicitacao.solicitante.email if solicitacao.solicitante else '', 'emails_predefinidos': emails_predefinidos})

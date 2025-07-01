@@ -33,7 +33,7 @@
                 <div class="mt-4">
                     <h6>Itens da Solicitação:</h6>
                     <div class="table-responsive">
-                        <table class="table table-striped" id="tabelaItensVisualizar">
+                        <table class="table table-sm" id="tabelaItensVisualizar">
                             <thead>
                                 <tr>
                                     <th>Material</th>
@@ -43,7 +43,7 @@
                                     <th>Observações</th>
                                 </tr>
                             </thead>
-                            <tbody id="tabelaItensVisualizar">
+                            <tbody>
 
                             </tbody>
                         </table>
@@ -55,27 +55,24 @@
                 <button type="button" class="btn btn-info" id="btnExportarPDF">
                     <i class="fas fa-file-pdf"></i> Exportar PDF
                 </button>
-                    {% if current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id %}
-                    <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#editarModal" data-id="" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-warning btn-editar" data-bs-toggle="modal" data-bs-target="#editarModal" data-id="" data-bs-dismiss="modal" id="btnVisualizarEditar">
                         <i class="fas fa-edit"></i> Editar
                     </button>
-                    {% endif %}
-                    {% if current_user.is_gerente_ou_superior %}
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#aprovarModal" data-id="" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-success btn-aprovar" 
+                    data-bs-toggle="modal" 
+                    data-bs-target="#aprovarModal" 
+                    data-bs-dismiss="modal" 
+                    data-id="" 
+                    id="btnVisualizarAprovar">
                         <i class="fas fa-check"></i> Aprovar
                     </button>
-                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejeitarModal" data-id="" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-danger btn-rejeitar" data-bs-toggle="modal" data-bs-target="#rejeitarModal" data-id="" data-bs-dismiss="modal" id="btnVisualizarRejeitar">
                         <i class="fas fa-times"></i> Rejeitar
                     </button>
-                    {% endif %}
-                    {% if current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id %}
-                    <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#cancelarModal{{ solicitacao.id }}" data-bs-dismiss="modal">
+                    <button type="button" class="btn btn-secondary btn-cancelar" data-bs-toggle="modal" data-bs-target="#cancelarModal" data-bs-dismiss="modal" id="btnVisualizarCancelar">
                         <i class="fas fa-ban"></i> Cancelar
                     </button>
-                    {% endif %}
-                {% endif %}
-                {# Botão para Enviar Email de Aprovação (dentro do modal de visualização) #}
-                {% if solicitacao.status == 'Aprovada' and current_user.is_gerente_ou_superior %}
+
                 <button type="button" class="btn btn-sm btn-primary"
                         data-bs-toggle="modal"
                         data-id=""
@@ -84,10 +81,8 @@
                         title="Enviar Email de Aprovação">
                     <i class="fas fa-envelope"></i> Enviar Email
                 </button>
-                {% endif %}
-                {# Botão para Enviar PDF por Email (dentro do modal de visualização) #}
-                {% if current_user.is_gerente_ou_superior %}
-                <button type="button" class="btn btn-sm btn-secondary"
+
+                <button type="button" class="btn btn-sm btn-secondary btn-enviar-pdf-email"
                         data-bs-toggle="modal"
                         data-id=""
                         data-bs-target="#enviarPdfEmailModal"
@@ -95,7 +90,6 @@
                         title="Enviar PDF por Email">
                     <i class="fas fa-file-export"></i> Enviar PDF
                 </button>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -104,23 +98,29 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const btnVisualizar = $('#btnVisualizar');
-    btnVisualizar.addEventListener('click', function() {
-        console.log('teste');
-        const id = this.getAttribute('data-id');
-        carregarDadosSolicitacaoVisualizar(id)
-        preencherDadosSolicitacaoVisualizar(id)
-    })
+    visualizarButtons = document.querySelectorAll('.btn-visualizar');
+    visualizarButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            console.log('teste');
+            const id = this.getAttribute('data-id');
+            $(".btn-enviar-pdf-email").attr('data-id', id);
+            $('#btnExportarPDF').attr('data-id', id);
+            $('#btnVisualizarEditar').attr('data-id', id);
+            $('#btnVisualizarAprovar').attr('data-id', id);
+            $('#btnVisualizarRejeitar').attr('data-id', id);
+            $('#btnVisualizarCancelar').attr('data-id', id);
+            $('#btnEnviarEmail').attr('data-id', id);
+            $('#btnEnviarPDF').attr('data-id', id);
+            carregarDadosSolicitacaoVisualizar(id)
+        });
+    });
+    let itensSolicitacoes = [];
     function carregarDadosSolicitacaoVisualizar(id) {
         console.log(id);
         const modal = $('#visualizarModal');
-        const form = modal.find('form');
-        const spinner = modal.find('.spinner-border').parent();
-        
-        // Mostrar spinner e esconder formulário
-        spinner.show();
-        form.hide();
-        
+        const tabelaItens = $('#tabelaItensVisualizar tbody');
+        tabelaItens.empty();
+        tabelaItens.append('<tr><td colspan="5">Carregando...</td></tr>');
         // Carregar dados via AJAX
         $.get('/solicitacoes/'+id+'/dados', function(data) {
             console.log(data);
@@ -130,13 +130,10 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#editar_observacoes').val(data.observacoes);
             console.log('teste1');
             // Limpar e preencher itens
-            itensSolicitacoes = data.itens;
-            atualizarTabelaItensEdicao(data.itens);
+            preencherDadosSolicitacaoVisualizar(data);
             console.log('teste2');
             
-            // Esconder spinner e mostrar formulário
-            spinner.hide();
-            form.show();
+
         }).fail(function(jqXHR) {
             if (jqXHR.status === 403) {
                 alert('Você não tem permissão para editar esta solicitação.');
@@ -146,29 +143,29 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     };
-    function preencherDadosSolicitacaoVisualizar(id) {
-        console.log(id);
-        $('#visualizarModalLabel').text('Solicitação #'+id);
+    function preencherDadosSolicitacaoVisualizar(data) {
+        console.log(data);
+        $('#visualizarModalLabel').text('Solicitação #'+data.id);
         $('#data_solicitacao').text(data.data_solicitacao);
         $('#data_necessidade').text(data.data_necessidade);
-        $('#centro_custo').text(data.centro_custo.codigo + ' - ' + data.centro_custo.nome);
-        $('#solicitante').text(data.solicitante.nome);
+        $('#centro_custo').text(data.centro_custo_codigo + ' - ' + data.centro_custo_nome);
+        $('#solicitante').text(data.solicitante_nome);
         $('#status').text(data.status);
-        $('#aprovador').text(data.aprovador.nome);
-        const tabelaItens = $('#tabelaItensVisualizar');
+        $('#aprovador').text(data.aprovador_nome);
+        const tabelaItens = $('#tabelaItensVisualizar tbody');
         tabelaItens.empty();
-        tabelaItens.append('<tr><td colspan="5">Carregando...</td></tr>');
-        for (let i = 0; i < itensSolicitacoes.length; i++) {
-            tabelaItens.append(`<tr id="item${itensSolicitacoes[i].id}">
-                <td>${itensSolicitacoes[i].material.nome}</td>
-                <td>${itensSolicitacoes[i].quantidade}</td>
-                <td>${itensSolicitacoes[i].material.unidade_obj.nome}</td>
-                <td>${itensSolicitacoes[i].material.codigo or '-'}</td>
-                <td>${itensSolicitacoes[i].observacoes or '-'}</td>
+        for (let i = 0; i < data.itens.length; i++) {
+            tabelaItens.append(`<tr id="item${data.itens[i].id}">
+                <td>${data.itens[i].material.nome}</td>
+                <td>${data.itens[i].quantidade}</td>
+                <td>${data.itens[i].material.unidade_obj.nome}</td>
+                <td>${data.itens[i].material.codigo}</td>
+                <td>${data.itens[i].observacoes}</td>
             </tr>`);
         }
     };
-})
+
+});
 
 </script>
 {% endblock %} 

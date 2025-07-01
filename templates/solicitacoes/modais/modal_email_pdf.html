@@ -1,23 +1,26 @@
-<!-- Modal de Envio de PDF por Email -->
-{% if current_user.is_gerente_ou_superior %}
-<div class="modal fade" id="enviarPdfEmailModal{{ solicitacao.id }}" tabindex="-1" aria-labelledby="enviarPdfEmailModalLabel{{ solicitacao.id }}" aria-hidden="true">
+<div class="modal fade" id="enviarPdfEmailModal" tabindex="-1" aria-labelledby="enviarPdfEmailModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form action="{{ url_for('solicitacao.enviar_pdf_email', id=solicitacao.id) }}" method="POST">
+            <form action="" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header bg-secondary text-white">
-                    <h5 class="modal-title" id="enviarPdfEmailModalLabel{{ solicitacao.id }}">Enviar Solicitação #{{ solicitacao.id }} por Email</h5>
+                    <h5 class="modal-title">Enviar Solicitação  por Email</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>O PDF da solicitação será enviado para:</p>
-                    <ul>
-                        <li><strong>Solicitante:</strong> {{ solicitacao.solicitante.email or 'N/A' }}</li>
-                        <li><strong>Pré-definidos:</strong> [EMAIL_PREDEFINIDO_1], [EMAIL_PREDEFINIDO_2]</li> 
-                    </ul>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="email_solicitante" class="form-label">Solicitante:</label>
+                            <input type="email" class="form-control" id="email_solicitante" name="email_solicitante" value="" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="email_predefinido" class="form-label">Pré-definidos (separados por virgula):</label>
+                            <input type="email" class="form-control" id="email_predefinido" name="email_predefinido" value="">
+                        </div>
+                    </div>
                     <div class="mb-3">
-                        <label for="mensagem_email_{{ solicitacao.id }}" class="form-label">Mensagem Adicional (Opcional):</label>
-                        <textarea class="form-control" id="mensagem_email_{{ solicitacao.id }}" name="mensagem_adicional" rows="3"></textarea>
+                        <label for="mensagem_email" class="form-label">Mensagem Adicional (Opcional):</label>
+                        <textarea class="form-control" id="mensagem_email" name="mensagem_adicional" rows="3"></textarea>
                     </div>
                     <small class="text-muted">O PDF da solicitação será anexado automaticamente.</small>
                 </div>
@@ -31,8 +34,28 @@
         </div>
     </div>
 </div>
-{% endif %}
-
 {% block scripts %}
-<!-- Nenhum script JS específico para este modal -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const enviarPdfEmailModal = document.getElementById('enviarPdfEmailModal');
+        const enviarPdfEmailButtons = document.querySelectorAll('.btn-enviar-pdf-email');
+        enviarPdfEmailButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.getAttribute('data-id');
+                $('.modal-body p').text('Tem certeza que deseja enviar o PDF da solicitação <strong>#' + id + '</strong> por email?');
+                $('.modal-header h5').text('Enviar Solicitação ' + id + ' por Email');
+                $('.modal-content form').attr('action', '/solicitacoes/' + id + '/enviar_pdf_email');
+                $('#enviarPdfEmailModal').attr('data-id', id);
+                $.ajax({
+                    url: '/solicitacoes/' + id + '/emails_predefinidos',
+                    type: 'GET',
+                    success: function(data) {
+                        $('#email_predefinido').val(data.emails_predefinidos);
+                        $('#email_solicitante').val(data.email_solicitante);
+                    }
+                });
+            });
+        });
+    });
+</script>
 {% endblock %} 

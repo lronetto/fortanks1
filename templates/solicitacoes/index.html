@@ -68,7 +68,7 @@
                                         {% endif %}
                                         
                                         {% if current_user.is_gerente_ou_superior %}
-                                        <button type="button" class="btn btn-sm btn-success" 
+                                        <button type="button" class="btn btn-sm btn-success btn-aprovar" 
                                                 data-bs-toggle="modal" 
                                                 data-bs-target="#aprovarModal" 
                                                 data-id="{{ solicitacao.id }}"
@@ -76,16 +76,16 @@
                                             <i class="fas fa-check"></i>
                                         </button>
                                         
-                                        <button type="button" class="btn btn-sm btn-danger" 
+                                        <button type="button" class="btn btn-sm btn-danger btn-rejeitar" 
                                                 data-bs-toggle="modal" 
-                                                data-bs-target="#rejeitarModal{{ solicitacao.id }}" 
+                                                data-bs-target="#rejeitarModal" 
                                                 title="Rejeitar">
                                             <i class="fas fa-times"></i>
                                         </button>
                                         {% endif %}
                                         
                                         {% if current_user.is_gerente_ou_superior or solicitacao.solicitante_id == current_user.id %}
-                                        <button type="button" class="btn btn-sm btn-secondary" 
+                                        <button type="button" class="btn btn-sm btn-secondary btn-cancelar" 
                                                 data-bs-toggle="modal" 
                                                 data-bs-target="#cancelarModal" 
                                                 data-id="{{ solicitacao.id }}"
@@ -123,6 +123,9 @@
 <!-- Modais para cada solicitação -->
 
 {% include 'solicitacoes/modais/modal_editar.html' %}
+{% include 'solicitacoes/modais/modal_visualizar.html' %}
+{% include 'solicitacoes/modais/modal_aprovar.html' %}
+{% include 'solicitacoes/modais/modal_email_pdf.html' %}
 <!-- Modal de Nova Solicitação -->
 {% include 'solicitacoes/modais/modal_nova_solicitacao.html' %}
 {% endblock %}

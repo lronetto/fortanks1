@@ -214,10 +214,12 @@ def relatorio_notas_exportar():
                 pdf_bytes = base64.b64decode(upload.blob)
                 zipf.writestr(f'NF {nota.numero_nf}.pdf', pdf_bytes)
         # Gerar PDF da tabela
-        html = render_template('relatorios/relatorio_notas_pdf.html', relatorio=dados_relatorio,total=total)
-        pdf_bytes = HTML(string=html).write_pdf(stylesheets=[CSS(string='body { font-family: Arial, sans-serif; };\
-                                                                 page { margin: 2.5cm; size: A4; }')])
-        zipf.writestr('relatorio_notas.pdf', pdf_bytes)
+            logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
+    logo_path_uri = 'file:///' + logo_path.replace('\\', '/').replace('\\', '/')
+    html = render_template('relatorios/relatorio_notas_pdf.html', relatorio=dados_relatorio, total=total, now=datetime.now().strftime('%d/%m/%Y %H:%M:%S'), logo_path=logo_path_uri)
+    pdf_bytes = HTML(string=html).write_pdf(stylesheets=[CSS(string='body { font-family: Arial, sans-serif;}')])
+
+    zipf.writestr('relatorio_notas.pdf', pdf_bytes)
     zip_buffer.seek(0)
     return send_file(
         zip_buffer,
