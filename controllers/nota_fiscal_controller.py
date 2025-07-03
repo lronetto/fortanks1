@@ -27,6 +27,8 @@ from models.dados_analiticos import DadoAnalitico
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
 from scripts.importar_cte import extrair_dados_cte
+import pandas as pd
+import io
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -186,7 +188,7 @@ def index():
     for nota in notas_fiscais_pagina:
         nota.upload = None
         nota.pago = False
-        dadosAnaliticos = DadoAnalitico.query.filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
+        dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
                                                        DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
                                                        DadoAnalitico.valor == nota.valor_total).first()
         if dadosAnaliticos:
@@ -1695,7 +1697,7 @@ def importar_xml():
 @login_required
 def analise_transferencias():
     """
-    Exibe análise de transferências de itens (notas fiscais) com filtros de data, código e nome do item.
+    Exibe análise de transferências de itens (notas fiscais) com filtros de data, código, nome do item, CNPJ emitente e destinatário (permitindo múltiplos).
     """
     from sqlalchemy import and_
     from models.nota_fiscal import NotaFiscal, NotaFiscalItem
@@ -1705,6 +1707,12 @@ def analise_transferencias():
     filtro_data_fim = request.args.get('data_fim', '')
     filtro_codigo_item = request.args.get('codigo_item', '')
     filtro_nome_item = request.args.get('nome_item', '')
+    filtro_cnpj_emitente = request.args.get('cnpj_emitente', '')
+    filtro_cnpj_destinatario = request.args.get('cnpj_destinatario', '')
+
+    # Receber os filtros de CNPJ como arrays (para múltipla seleção do select2)
+    cnpjs_emitente = request.args.getlist('cnpj_emitente')
+    cnpjs_destinatario = request.args.getlist('cnpj_destinatario')
 
     # Query base
     query = db.session.query(
@@ -1741,10 +1749,20 @@ def analise_transferencias():
         query = query.filter(NotaFiscalItem.codigo.ilike(f'%{filtro_codigo_item}%'))
     if filtro_nome_item:
         query = query.filter(NotaFiscalItem.descricao.ilike(f'%{filtro_nome_item}%'))
+    if cnpjs_emitente:
+        query = query.filter(NotaFiscal.cnpj_emitente.in_(cnpjs_emitente))
+    if cnpjs_destinatario:
+        query = query.filter(NotaFiscal.cnpj_destinatario.in_(cnpjs_destinatario))
 
     query = query.order_by(NotaFiscal.data_emissao.desc())
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
     transferencias = paginacao.items
+
+    # Buscar CNPJs distintos para os dropdowns
+    cnpjs_emitentes_lista = db.session.query(NotaFiscal.cnpj_emitente).distinct().order_by(NotaFiscal.cnpj_emitente).all()
+    cnpjs_destinatarios_lista = db.session.query(NotaFiscal.cnpj_destinatario).distinct().order_by(NotaFiscal.cnpj_destinatario).all()
+    cnpjs_emitentes = [c[0] for c in cnpjs_emitentes_lista if c[0]]
+    cnpjs_destinatarios = [c[0] for c in cnpjs_destinatarios_lista if c[0]]
 
     return render_template(
         'notas_fiscais/analise_transferencias.html',
@@ -1753,7 +1771,11 @@ def analise_transferencias():
         filtro_data_inicio=filtro_data_inicio,
         filtro_data_fim=filtro_data_fim,
         filtro_codigo_item=filtro_codigo_item,
-        filtro_nome_item=filtro_nome_item
+        filtro_nome_item=filtro_nome_item,
+        filtro_cnpj_emitente=cnpjs_emitente,
+        filtro_cnpj_destinatario=cnpjs_destinatario,
+        cnpjs_emitentes=cnpjs_emitentes,
+        cnpjs_destinatarios=cnpjs_destinatarios
     )
 
 @nota_fiscal_bp.route('/api/documentos/<int:nota_id>', methods=['GET'])
@@ -1846,3 +1868,180 @@ def api_visualizar_documento(doc_id):
     except Exception as e:
         logger.error(f'Erro ao visualizar documento: {str(e)}')
         return jsonify({'error': f'Erro ao visualizar documento: {str(e)}'}), 500
+
+@nota_fiscal_bp.route('/exportar-excel')
+@login_required
+def exportar_excel():
+    """
+    Exporta as notas fiscais filtradas para um arquivo Excel.
+    """
+    # Obter filtros da query string 
+    busca = request.args.get('busca', '')
+    item_nome = request.args.get('item_nome', '')
+    status_importacao = request.args.get('status_importacao', '')
+    cnpj_emitente = request.args.get('cnpj_emitente', '')
+    status_pagamento = request.args.get('status_pagamento', '')
+    data_emissao_inicio = request.args.get('data_emissao_inicio', '')
+    data_emissao_fim = request.args.get('data_emissao_fim', '')
+    tipo_nfe = request.args.get('tipo_nfe', '')
+    status_upload = request.args.get('status_upload', '')
+    print("request: ", request.args)
+    print("exportando excel")
+
+    query = NotaFiscal.query
+    if busca:
+        busca_like = f'%{busca}%'
+        query = query.filter(
+            or_(
+                NotaFiscal.numero_nf.ilike(busca_like),
+                NotaFiscal.nome_emitente.ilike(busca_like),
+                NotaFiscal.chave_acesso.ilike(busca_like)
+            )
+        )
+    if item_nome:
+        query = query.join(NotaFiscalItem).filter(
+            NotaFiscalItem.descricao.ilike(f'%{item_nome}%')
+        )
+    if status_importacao == 'pendentes':
+        query = query.filter(~NotaFiscal.itens.any(NotaFiscalItem.importado_estoque == True))
+    if cnpj_emitente:
+        if cnpj_emitente == 'proprio':
+            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS))
+        elif cnpj_emitente == 'terceiros':
+            query = query.filter(~NotaFiscal.cnpj_emitente.in_(CNPJS))
+    if data_emissao_inicio:
+        data_inicio = datetime.strptime(data_emissao_inicio, '%Y-%m-%d')
+        query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+
+    if data_emissao_fim:
+
+        data_fim = datetime.strptime(data_emissao_fim, '%Y-%m-%d')
+        query = query.filter(NotaFiscal.data_emissao <= data_fim)
+    if tipo_nfe:
+        if tipo_nfe == '0':
+            tipo = [0,1]
+        elif tipo_nfe == '2':
+            tipo = [2]
+        elif tipo_nfe == '3':
+            tipo = [3]
+        query = query.filter(NotaFiscal.tipo.in_(tipo))
+    if status_upload:
+        if status_upload == '1':
+            query = query.filter(
+                db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 1).exists()
+            )
+        elif status_upload == '2':
+            query = query.filter(
+                db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 2).exists()
+            )
+        elif status_upload == '3':
+            query = query.filter(
+                db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 3).exists()
+            )
+        elif status_upload == '4':
+            query = query.filter(~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id).exists())
+    query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
+    notas = query.all()
+    # Montar os dados para o DataFrame
+    dados = []
+    print("montando dados tamanho", len(notas))
+    for nf in notas:
+        # Determinar status de upload
+        uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter_by(pai_id=nf.id, pai='NotaFiscal').all()
+        status_upload = []
+        if uploads:
+            if any(u[2] == 1 for u in uploads):
+                status_upload.append('Arquivei')
+            if any(u[2] == 2 for u in uploads):
+                status_upload.append('Protocolo')
+            if any(u[2] == 3 for u in uploads):
+                status_upload.append('Reembolso')
+        else:
+            status_upload.append('Nenhum')
+        dados.append({
+            'Fornecedor': nf.nome_emitente,
+            'Número': nf.numero_nf,
+            'Tipo': 'NFe' if nf.tipo in [0,1] else ('CTE' if nf.tipo == 2 else 'NFSe'),
+            'Chave de Acesso': nf.chave_acesso,
+            'Data': nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '',
+            'Valor': float(nf.valor_total) if nf.valor_total is not None else 0.0,
+            'Status Upload': ', '.join(status_upload)
+        })
+    print("montando dataframe")
+    df = pd.DataFrame(dados)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Notas Fiscais')
+    output.seek(0)
+    return send_file(output, download_name='notas_fiscais.xlsx', as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@nota_fiscal_bp.route('/analise-transferencias/ajax')
+@login_required
+def analise_transferencias_ajax():
+    """
+    Retorna apenas a tabela de transferências (HTML) para uso com AJAX.
+    """
+    from sqlalchemy import and_
+    from models.nota_fiscal import NotaFiscal, NotaFiscalItem
+    page = request.args.get('page', 1, type=int)
+    per_page = 25
+    filtro_data_inicio = request.args.get('data_inicio', '').strip() or ''
+    filtro_data_fim = request.args.get('data_fim', '').strip() or ''
+    filtro_codigo_item = request.args.get('codigo_item', '')
+    filtro_nome_item = request.args.get('nome_item', '')
+    cnpjs_emitente = request.args.getlist('cnpj_emitente')
+    cnpjs_destinatario = request.args.getlist('cnpj_destinatario')
+
+    query = db.session.query(
+        NotaFiscal.numero_nf.label('numero_nf'),
+        NotaFiscalItem.descricao.label('nome_item'),
+        NotaFiscalItem.codigo.label('codigo_item'),
+        NotaFiscal.cnpj_emitente,
+        NotaFiscal.cnpj_destinatario,
+        NotaFiscal.nome_emitente,
+        NotaFiscal.nome_destinatario,
+        NotaFiscal.tipo.label('tipo_nota'),
+        NotaFiscalItem.quantidade,
+        NotaFiscalItem.valor_total.label('valor'),
+        NotaFiscal.data_emissao.label('data')
+    ).join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+    query = query.filter(NotaFiscal.status_processamento !='cancelada')
+
+    if filtro_data_inicio:
+        try:
+            from datetime import datetime
+            data_inicio = datetime.strptime(filtro_data_inicio, '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+        except Exception:
+            pass
+    if filtro_data_fim:
+        try:
+            from datetime import datetime
+            data_fim = datetime.strptime(filtro_data_fim, '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao <= data_fim)
+        except Exception:
+            pass
+    if filtro_codigo_item:
+        query = query.filter(NotaFiscalItem.codigo.ilike(f'%{filtro_codigo_item}%'))
+    if filtro_nome_item:
+        query = query.filter(NotaFiscalItem.descricao.ilike(f'%{filtro_nome_item}%'))
+    if cnpjs_emitente:
+        query = query.filter(NotaFiscal.cnpj_emitente.in_(cnpjs_emitente))
+    if cnpjs_destinatario:
+        query = query.filter(NotaFiscal.cnpj_destinatario.in_(cnpjs_destinatario))
+
+    query = query.order_by(NotaFiscal.data_emissao.desc())
+    paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
+    transferencias = paginacao.items
+
+    return render_template(
+        'notas_fiscais/_tabela_transferencias.html',
+        transferencias=transferencias,
+        paginacao=paginacao,
+        filtro_data_inicio=filtro_data_inicio,
+        filtro_data_fim=filtro_data_fim,
+        filtro_codigo_item=filtro_codigo_item,
+        filtro_nome_item=filtro_nome_item,
+        filtro_cnpj_emitente=cnpjs_emitente,
+        filtro_cnpj_destinatario=cnpjs_destinatario
+    )

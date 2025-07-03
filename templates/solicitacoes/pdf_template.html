@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<html lang=\"pt-br\">
+<html lang="pt-br">
 <head>
-    <meta charset=\"UTF-8\">
+    <meta charset="UTF-8">
     <title>Solicitação #{{ solicitacao.id }}</title>
     <style>
         body {
@@ -73,10 +73,10 @@
     </style>
 </head>
 <body>
-    <div class=\"container\">
+    <div class="container">
         <h1>Solicitação de Material #{{ solicitacao.id }}</h1>
         
-        <div class=\"info-section\">
+        <div class="info-section">
             <h2>Informações Gerais</h2>
             <p><strong>Número da Solicitação:</strong> {{ solicitacao.id }}</p>
             <p><strong>Data de Solicitação:</strong> {{ solicitacao.data_solicitacao.strftime('%d/%m/%Y %H:%M') }}</p>
@@ -98,13 +98,13 @@
         </div>
         
         {% if solicitacao.observacoes %}
-        <div class=\"info-section\">
+        <div class="info-section">
             <h3>Observações da Solicitação:</h3>
-            <p class=\"text-muted\">{{ solicitacao.observacoes }}</p>
+            <p class="text-muted">{{ solicitacao.observacoes }}</p>
         </div>
         {% endif %}
         
-        <div class=\"items-section\">
+        <div class="items-section">
             <h2>Itens da Solicitação</h2>
             <table>
                 <thead>
@@ -121,13 +121,13 @@
                     <tr>
                         <td>{{ item.material.nome }}</td>
                         <td>{{ item.quantidade }}</td>
-                        <td>{{ item.unidade }}</td>
+                        <td>{{ item.material.unidade_obj.nome }}</td>
                         <td>{{ item.material.codigo or '-' }}</td>
                         <td>{{ item.observacoes or '-' }}</td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan=\"4\" style=\"text-align: center;\">Nenhum item encontrado.</td>
+                        <td colspan="4" style="text-align: center;">Nenhum item encontrado.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -136,4 +136,4 @@
 
     </div>
 </body>
-</html> 
+</html>

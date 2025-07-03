@@ -23,6 +23,9 @@
             <a href="{{ url_for('nota_fiscal.analise') }}" class="btn btn-info">
                 <i class="fas fa-chart-bar"></i> Análise
             </a>
+            <button type="button" class="btn btn-success" id="btnExportarExcel">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
         </div>
     </div>
 
@@ -393,6 +396,21 @@ $(document).ready(function() {
     }
     $('#tipo_nfe').on('change', toggleCteFilters);
     toggleCteFilters(); // Executa ao carregar a página
+
+    // Exportar para Excel
+    $('#btnExportarExcel').on('click', function() {
+        busca = $('#busca').val();
+        item_nome = $('#item_nome').val();
+        status_importacao = $('#status_importacao').val();
+        cnpj_emitente = $('#cnpj_emitente').val();
+        status_pagamento = $('#status_pagamento').val();
+        data_emissao_inicio = $('#data_emissao_inicio').val();
+        data_emissao_fim = $('#data_emissao_fim').val();
+        tipo_nfe = $('#tipo_nfe').val();
+        status_upload = $('#status_upload').val();
+        url = "exportar-excel?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
+        window.location.href = url;
+    });
 });
 </script>
 {% endblock %} 

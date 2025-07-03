@@ -18,13 +18,13 @@
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="data_inicio">Data Início</label>
-                            <input type="date" name="data_inicio" id="data_inicio" class="form-control" value="{{ filtro_data_inicio }}">
+                            <input type="date" name="data_inicio" id="data_inicio" class="form-control" value="{{ filtro_data_inicio.strip() if filtro_data_inicio and filtro_data_inicio.strip()|length == 10 else '' }}">
                         </div>
                     </div>
                     <div class="col-md-3">
                         <div class="form-group">
                             <label for="data_fim">Data Fim</label>
-                            <input type="date" name="data_fim" id="data_fim" class="form-control" value="{{ filtro_data_fim }}">
+                            <input type="date" name="data_fim" id="data_fim" class="form-control" value="{{ filtro_data_fim.strip() if filtro_data_fim and filtro_data_fim.strip()|length == 10 else '' }}">
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -37,6 +37,26 @@
                         <div class="form-group">
                             <label for="nome_item">Nome do Item</label>
                             <input type="text" name="nome_item" id="nome_item" class="form-control" placeholder="Nome do item" value="{{ filtro_nome_item }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="cnpj_emitente">CNPJ Emitente(s)</label>
+                            <select name="cnpj_emitente" id="cnpj_emitente" class="form-control select2" multiple>
+                                {% for cnpj in cnpjs_emitentes %}
+                                    <option value="{{ cnpj }}" {% if cnpj in filtro_cnpj_emitente %}selected{% endif %}>{{ cnpj }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="cnpj_destinatario">CNPJ Destinatário(s)</label>
+                            <select name="cnpj_destinatario" id="cnpj_destinatario" class="form-control select2" multiple>
+                                {% for cnpj in cnpjs_destinatarios %}
+                                    <option value="{{ cnpj }}" {% if cnpj in filtro_cnpj_destinatario %}selected{% endif %}>{{ cnpj }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
@@ -58,73 +78,43 @@
             <h6 class="m-0 font-weight-bold text-primary">Transferências de Itens</h6>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="tabelaTransferencias" width="100%" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th>Data</th>
-                            <th>Nome do Item</th>
-                            <th>Código do Item</th>
-                            <th>Número NF</th>
-                            <th>CNPJ Emitente</th>
-                            <th>CNPJ Destinatário</th>
-                            <th>Tipo da Nota</th>
-                            <th>Quantidade</th>
-                            <th>Valor</th>
-                            
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for transf in transferencias %}
-                        <tr>
-                            <td>{{ transf.data.strftime('%d/%m/%Y') if transf.data else '' }}</td>
-                            <td>{{ transf.nome_item }}</td>
-                            <td>{{ transf.codigo_item }}</td>
-                            <td>{{ transf.numero_nf }}</td>
-                            <td>{{ transf.nome_emitente }}</td>
-                            <td>{{ transf.nome_destinatario }}</td>
-                            <td>{% if transf.tipo_nota == 0 %}Entrada{% elif transf.tipo_nota == 1 %}Saída{% else %}{{ transf.tipo_nota }}{% endif %}</td>
-                            <td>{{ '%.2f'|format(transf.quantidade) }}</td>
-                            <td>R$ {{ '%.2f'|format(transf.valor) }}</td>
-                            
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="8" class="text-center">Nenhuma transferência encontrada para os filtros selecionados.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div id="tabela-transferencias-ajax">
+                {% include 'notas_fiscais/_tabela_transferencias.html' %}
             </div>
-            {% if paginacao %}
-            <nav aria-label="Paginação">
-                <ul class="pagination justify-content-center">
-                    <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
-                        <a class="page-link" href="?page={{ paginacao.prev_num }}&data_inicio={{ filtro_data_inicio }}&data_fim={{ filtro_data_fim }}&codigo_item={{ filtro_codigo_item }}" aria-label="Anterior">
-                            <span aria-hidden="true">&laquo;</span>
-                        </a>
-                    </li>
-                    {% for page_num in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
-                        {% if page_num %}
-                            <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
-                                <a class="page-link" href="?page={{ page_num }}&data_inicio={{ filtro_data_inicio }}&data_fim={{ filtro_data_fim }}&codigo_item={{ filtro_codigo_item }}">{{ page_num }}</a>
-                            </li>
-                        {% else %}
-                            <li class="page-item disabled"><span class="page-link">...</span></li>
-                        {% endif %}
-                    {% endfor %}
-                    <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
-                        <a class="page-link" href="?page={{ paginacao.next_num }}&data_inicio={{ filtro_data_inicio }}&data_fim={{ filtro_data_fim }}&codigo_item={{ filtro_codigo_item }}" aria-label="Próximo">
-                            <span aria-hidden="true">&raquo;</span>
-                        </a>
-                    </li>
-                </ul>
-            </nav>
-            <div class="text-center text-muted">
-                Página {{ paginacao.page }} de {{ paginacao.pages }}. Total de {{ paginacao.total }} transferências.
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('.select2').select2({
+                width: '100%',
+                placeholder: 'Selecione',
+                allowClear: true,
+                language: 'pt-BR'
+            });
+            // AJAX do filtro e paginação
+            // Delegação para garantir funcionamento após atualização da tabela
+            $('#tabela-transferencias-ajax').on('click', '.pagination a', function(e) {
+                e.preventDefault();
+                carregarTabelaAjax($(this).attr('href'));
+            });
+            $('form').on('submit', function(e) {
+                e.preventDefault();
+                let url = '/notas-fiscais/analise-transferencias/ajax?' + $(this).serialize();
+                carregarTabelaAjax(url);
+            });
+            function carregarTabelaAjax(url) {
+                $('#tabela-transferencias-ajax').html('<div class="text-center p-4"><span class="spinner-border"></span> Carregando...</div>');
+                $.get(url, function(data) {
+                    $('#tabela-transferencias-ajax').html(data);
+                });
+            }
+        });
+    </script>
 {% endblock %} 

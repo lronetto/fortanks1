@@ -1,0 +1,89 @@
+<div class="table-responsive">
+    <table class="table table-bordered" id="tabelaTransferencias" width="100%" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Data</th>
+                <th>Nome do Item</th>
+                <th>Código do Item</th>
+                <th>Número NF</th>
+                <th>CNPJ Emitente</th>
+                <th>CNPJ Destinatário</th>
+                <th>Tipo da Nota</th>
+                <th>Quantidade</th>
+                <th>Valor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transf in transferencias %}
+            <tr>
+                <td>{{ transf.data.strftime('%d/%m/%Y') if transf.data else '' }}</td>
+                <td>{{ transf.nome_item }}</td>
+                <td>{{ transf.codigo_item }}</td>
+                <td>{{ transf.numero_nf }}</td>
+                <td>{{ transf.cnpj_emitente }} ({{ transf.nome_emitente }})</td>
+                <td>{{ transf.cnpj_destinatario }} ({{ transf.nome_destinatario }})</td>
+                <td>{% if transf.tipo_nota == 0 %}Entrada{% elif transf.tipo_nota == 1 %}Saída{% else %}{{ transf.tipo_nota }}{% endif %}</td>
+                <td>{{ '%.2f'|format(transf.quantidade) }}</td>
+                <td>R$ {{ '%.2f'|format(transf.valor) }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="text-center">Nenhuma transferência encontrada para os filtros selecionados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if paginacao %}
+<nav aria-label="Paginação">
+    <ul class="pagination justify-content-center">
+        <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+            <a class="page-link"
+               href="?page={{ paginacao.prev_num }}
+                     {% if filtro_data_inicio and filtro_data_inicio.strip()|length == 10 %}&data_inicio={{ filtro_data_inicio.strip() }}{% endif %}
+                     {% if filtro_data_fim and filtro_data_fim.strip()|length == 10 %}&data_fim={{ filtro_data_fim.strip() }}{% endif %}
+                     &codigo_item={{ filtro_codigo_item }}
+                     &nome_item={{ filtro_nome_item }}
+                     {% for cnpj in filtro_cnpj_emitente %}&cnpj_emitente={{ cnpj }}{% endfor %}
+                     {% for cnpj in filtro_cnpj_destinatario %}&cnpj_destinatario={{ cnpj }}{% endfor %}"
+               aria-label="Anterior">
+                <span aria-hidden="true">&laquo;</span>
+            </a>
+        </li>
+        {% for page_num in paginacao.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
+            {% if page_num %}
+                <li class="page-item {% if page_num == paginacao.page %}active{% endif %}">
+                    <a class="page-link"
+                       href="?page={{ page_num }}
+                             {% if filtro_data_inicio and filtro_data_inicio.strip()|length == 10 %}&data_inicio={{ filtro_data_inicio.strip() }}{% endif %}
+                             {% if filtro_data_fim and filtro_data_fim.strip()|length == 10 %}&data_fim={{ filtro_data_fim.strip() }}{% endif %}
+                             &codigo_item={{ filtro_codigo_item }}
+                             &nome_item={{ filtro_nome_item }}
+                             {% for cnpj in filtro_cnpj_emitente %}&cnpj_emitente={{ cnpj }}{% endfor %}
+                             {% for cnpj in filtro_cnpj_destinatario %}&cnpj_destinatario={{ cnpj }}{% endfor %}">
+                        {{ page_num }}
+                    </a>
+                </li>
+            {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
+        {% endfor %}
+        <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+            <a class="page-link"
+               href="?page={{ paginacao.next_num }}
+                     {% if filtro_data_inicio and filtro_data_inicio.strip()|length == 10 %}&data_inicio={{ filtro_data_inicio.strip() }}{% endif %}
+                     {% if filtro_data_fim and filtro_data_fim.strip()|length == 10 %}&data_fim={{ filtro_data_fim.strip() }}{% endif %}
+                     &codigo_item={{ filtro_codigo_item }}
+                     &nome_item={{ filtro_nome_item }}
+                     {% for cnpj in filtro_cnpj_emitente %}&cnpj_emitente={{ cnpj }}{% endfor %}
+                     {% for cnpj in filtro_cnpj_destinatario %}&cnpj_destinatario={{ cnpj }}{% endfor %}"
+               aria-label="Próximo">
+                <span aria-hidden="true">&raquo;</span>
+            </a>
+        </li>
+    </ul>
+</nav>
+<div class="text-center text-muted">
+    Página {{ paginacao.page }} de {{ paginacao.pages }}. Total de {{ paginacao.total }} transferências.
+</div>
+{% endif %} 
