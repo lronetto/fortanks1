@@ -1,3 +1,4 @@
+import time
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, jsonify, send_file
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
@@ -67,22 +68,26 @@ def index():
     Lista notas fiscais com paginação e filtros.
     """
     # Parâmetros de Paginação
-    page = request.args.get('page', 1, type=int)
-    per_page = 100 # Pegar da config ou usar 20
     
+    
+    return render_template('notas_fiscais/index.html') # Passar novo filtro para o template
+
+
+def api_get_dados_notas_fiscais(request):
     # Obter parâmetros de filtro
-    busca = request.args.get('busca', '')
-    item_nome = request.args.get('item_nome', '')
-    status_importacao = request.args.get('status_importacao', '')
-    cnpj_emitente = request.args.get('cnpj_emitente', '')
-    status_pagamento = request.args.get('status_pagamento', '')
-    data_emissao_inicio = request.args.get('data_emissao_inicio', '')
-    data_emissao_fim = request.args.get('data_emissao_fim', '')
-    tipo_nfe = request.args.get('tipo_nfe', '')
-    origem = request.args.get('origem', '')  # Novo filtro para origem
-    destino = request.args.get('destino', '')  # Novo filtro para destino
-    remetente = request.args.get('remetente', '')  # Novo filtro para remetente
-    status_upload = request.args.get('status_upload', '')  # Novo filtro de status upload
+    args = request.args
+    busca = args.get('busca', '')
+    item_nome = args.get('item_nome', '')
+    status_importacao = args.get('status_importacao', '')
+    cnpj_emitente = args.get('cnpj_emitente', '')
+    status_pagamento = args.get('status_pagamento', '')
+    data_emissao_inicio = args.get('data_emissao_inicio', '')
+    data_emissao_fim = args.get('data_emissao_fim', '')
+    tipo_nfe = args.get('tipo_nfe', '')
+    origem = args.get('origem', '')  # Novo filtro para origem
+    destino = args.get('destino', '')  # Novo filtro para destino
+    remetente = args.get('remetente', '')  # Novo filtro para remetente
+    status_upload = args.get('status_upload', '')  # Novo filtro de status upload
     
     # Instanciar formulário de importação para o modal
     import_form = NotaFiscalImportForm()
@@ -181,47 +186,12 @@ def index():
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
     
-    # Executar a paginação
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-    notas_fiscais_pagina = pagination.items # Itens para a página atual
-    notas_fiscais_pagina_upload = []
-    for nota in notas_fiscais_pagina:
-        nota.upload = None
-        nota.pago = False
-        dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
-                                                       DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
-                                                       DadoAnalitico.valor == nota.valor_total).first()
-        if dadosAnaliticos:
-            nota.pago = True
-        
-        nota.uploads = {'arquivei':False,
-                        'protocolo':False,
-                        'reembolso':False,
-                        'total':0}
-        uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter_by(pai_id=nota.id, pai='NotaFiscal').all()
-        if uploads:
-            nota.uploads = {'arquivei':any(u[2] == 1 for u in uploads),
-                            'protocolo': any(u[2] == 2 for u in uploads),
-                            'reembolso': any(u[2] == 3 for u in uploads),
-                            'total': len(uploads)}
-            
-        
-        notas_fiscais_pagina_upload.append(nota)
-        
-    
-    return render_template('notas_fiscais/index.html', 
-                          pagination=pagination, # Passar objeto de paginação
-                          notas_fiscais=notas_fiscais_pagina_upload, # Manter para compatibilidade ou remover e usar pagination.items no template
-                          status_importacao=status_importacao,
-                          busca=busca,
-                          item_nome=item_nome,
-                          data_emissao_inicio=data_emissao_inicio,
-                          data_emissao_fim=data_emissao_fim,
-                          import_form=import_form,
-                          origem=origem,
-                          destino=destino,
-                          remetente=remetente,
-                          status_upload=status_upload) # Passar novo filtro para o template
+    return query
+@nota_fiscal_bp.route('/api/notas-fiscais/ajax', methods=['GET','POST'])
+@login_required
+def api_get_ajax_notas_fiscais():   
+    query = api_get_dados_notas_fiscais(request)
+    return jsonify([nota.to_dict() for nota in query.all()])
 
 @nota_fiscal_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
@@ -2045,3 +2015,36 @@ def analise_transferencias_ajax():
         filtro_cnpj_emitente=cnpjs_emitente,
         filtro_cnpj_destinatario=cnpjs_destinatario
     )
+
+@nota_fiscal_bp.route('/tabela-notas-fiscais')
+@login_required
+def tabela_notas_fiscais():
+    inicio = time.time()
+    print("tabela notas fiscais")
+    page = request.args.get('page', 1, type=int)
+    per_page = 100
+    query = api_get_dados_notas_fiscais(request)
+    print(f'query {time.time() - inicio}')
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    notas_fiscais_pagina = pagination.items
+    notas_fiscais_pagina_upload = []
+    print(f'notas_fiscais_pagina {time.time() - inicio}')
+    for nota in notas_fiscais_pagina:
+        nota.upload = None
+        nota.pago = False
+        dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
+                                                           DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
+                                                           DadoAnalitico.valor == nota.valor_total).first()
+        if dadosAnaliticos:
+            nota.pago = True
+        nota.uploads = {'arquivei':False,'protocolo':False,'reembolso':False,'total':0}
+        uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter(Upload.pai_id==nota.id, Upload.pai=='NotaFiscal').all()
+        if uploads:
+            nota.uploads = {'arquivei':any(u[2] == 1 for u in uploads),
+                            'protocolo': any(u[2] == 2 for u in uploads),
+                            'reembolso': any(u[2] == 3 for u in uploads),
+                            'total': len(uploads)}
+        notas_fiscais_pagina_upload.append(nota)
+
+    print(f'tabela notas fiscais {time.time() - inicio}')
+    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload)

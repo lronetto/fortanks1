@@ -167,7 +167,14 @@ def relatorio_semanal():
 @relatorio_bp.route('/notas', methods=['GET'])
 def relatorio_notas():
     centros_custo = CentroCusto.query.order_by(CentroCusto.codigo).all()
-    dados_relatorio = dados_relatorio_financeiro()
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    centro_custo_ids = request.args.getlist('centro_custo')
+    
+    data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
+    data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
+    centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+    dados_relatorio = dados_relatorio_financeiro(data_fim=data_fim_dt,data_inicio=data_inicio_dt,centro_custo_ids=centro_custo_ids_int)
     return render_template('relatorios/relatorio_notas.html', relatorio=dados_relatorio, centros_custo=centros_custo)
 
 @relatorio_bp.route('/notas/ajax', methods=['GET'])
@@ -191,11 +198,13 @@ def relatorio_notas_exportar():
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
-
+    print(data_inicio_dt, data_fim_dt, centro_custo_ids_int)
     # Buscar dados do relatório (notas filtradas)
     dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
 
-    notas = db.session.query(NotaFiscal).filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio])).all()
+    notas = db.session.query(NotaFiscal,Upload).\
+        join(Upload,Upload.pai_id==NotaFiscal.id,Upload.pai=='NotaFiscal').\
+        filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio])).all()
 
     # Criar ZIP em memória
     zip_buffer = io.BytesIO()
@@ -209,9 +218,8 @@ def relatorio_notas_exportar():
                 xml_bytes = base64.b64decode(nota.xml_data)
                 zipf.writestr(f'NF {nota.numero_nf}.xml', xml_bytes)
             # PDF
-            upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=nota.id, tipo=1).first()
-            if upload and upload.blob:
-                pdf_bytes = base64.b64decode(upload.blob)
+            if nota.Upload and nota.Upload.blob:
+                pdf_bytes = base64.b64decode(nota.Upload.blob)
                 zipf.writestr(f'NF {nota.numero_nf}.pdf', pdf_bytes)
         # Gerar PDF da tabela
             logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))

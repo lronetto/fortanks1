@@ -35,7 +35,7 @@
             <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
         </div>
         <div class="card-body">
-            <form method="GET" action="{{ url_for('nota_fiscal.index') }}" class="row g-3">
+            <form method="GET" action="{{ url_for('nota_fiscal.index') }}" class="row g-3" id="filtrosNotasFiscais">
                 <div class="col-md-3">
                     <label for="busca" class="form-label">Busca</label>
                     <input type="text" name="busca" id="busca" class="form-control" 
@@ -131,144 +131,7 @@
     <!-- Lista de Notas Fiscais -->
     <div class="card shadow">
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered" id="tabelaNotasFiscais">
-                    <thead>
-                        <tr>
-                            <th>Número NF</th>
-                            <th>Data Emissão</th>
-                            <th>Fornecedor</th>
-                            <th>Valor Total</th>
-                            <th>Status</th>
-                            <th width="180">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Iterar sobre os itens da página atual -->
-                        {% for nf in pagination.items %}
-                        <tr>
-                            <td>{{ nf.numero_nf }}</td>
-                            <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
-                            <td>
-                                <a href="#" class="visualizar-pdf" data-id="{{ nf.id }}" title="Visualizar PDF">
-                                    {{ nf.nome_emitente }}
-                                </a>
-                            </td>
-                            <td>R$ {{ "%.2f"|format(nf.valor_total) if nf.valor_total is not none else '0.00' }}</td>
-                            <td>
-                                <!-- Lógica de status atual -->
-                                {% if nf.status_processamento == 'cancelada' %}
-                                    <span class="badge bg-danger">Cancelada</span>
-                                {% else %}
-                                    {# Verificar se o método existe antes de chamar #}
-                                    {% set percentual = -1 %} {# Valor padrão caso método não exista #}
-                                    {% if nf.percentual_importacao is defined %}
-                                        {% set percentual = nf.percentual_importacao() %}
-                                    {% endif %}
-                                    <span class="badge {% if percentual == 0 %}bg-danger{% elif percentual == 100 %}bg-success{% elif percentual > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
-                                        {% if percentual == 0 %}
-                                            Pendente
-                                        {% elif percentual == 100 %}
-                                            Importada
-                                        {% elif percentual > 0 %}
-                                            Parcial ({{ "%.0f"|format(percentual) }}%)
-                                        {% else %}
-                                            N/A {# Ou status Indefinido #}
-                                        {% endif %}
-                                    </span>
-                                    
-                                    {# Verificar se tem documentos anexados #}
-                                    {% if nf.uploads['total'] > 0 %}
-                                        {% if nf.uploads['protocolo'] %}
-                                            <span class="badge bg-info ms-1" title="Documentos anexados">
-                                                <i class="fas fa-paperclip" style="color: green;"></i>
-                                            </span>
-                                        {% elif nf.uploads['arquivei'] %}
-                                            <span class="badge bg-info ms-1" title="Documentos anexados">
-                                                <i class="fas fa-paperclip"></i>
-                                            </span>
-                                        {% elif nf.uploads['reembolso'] %}
-                                            <span class="badge bg-info ms-1" title="Documentos anexados">
-                                                <i class="fas fa-paperclip" style="color: red;"></i>
-                                            </span>
-                                        {% endif %}
-                                    {% endif %}
-
-                                {% if nf.pago %}
-                                        <span class="badge bg-success ms-1" title="Pago">
-                                            <i class="fas fa-check"></i>
-                                        </span>
-                                    {% endif %}
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="btn-group">
-                                    <button type="button" class="btn btn-sm btn-primary visualizar-itens" 
-                                            data-id="{{ nf.id }}" title="Visualizar Itens">
-                                        <i class="fas fa-list"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-success importar-itens" 
-                                            data-id="{{ nf.id }}" title="Importar para Estoque">
-                                        <i class="fas fa-file-import"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-warning vincular-material" 
-                                            data-id="{{ nf.id }}" title="Vincular Material">
-                                        <i class="fas fa-link"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-danger excluir-nota" 
-                                            data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-info visualizar-documentos" 
-                                            data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Documentos">
-                                        <i class="fas fa-file-alt"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="6" class="text-center">Nenhuma nota fiscal encontrada.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Controles de Paginação -->
-            {% if pagination and pagination.pages > 1 %}
-            <nav aria-label="Paginação Notas Fiscais">
-                <ul class="pagination justify-content-center">
-                    <!-- Link Anterior -->
-                    <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
-                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.prev_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', ''), status_pagamento=request.args.get('status_pagamento', ''), data_emissao_inicio=request.args.get('data_emissao_inicio', ''), data_emissao_fim=request.args.get('data_emissao_fim', ''), tipo_nfe=request.args.get('tipo_nfe', '')) }}" aria-label="Anterior">
-                            <span aria-hidden="true">&laquo;</span>
-                        </a>
-                    </li>
-                    <!-- Links de Páginas -->
-                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
-                        {% if page_num %}
-                            <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
-                                <a class="page-link" href="{{ url_for('nota_fiscal.index', page=page_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', ''), status_pagamento=request.args.get('status_pagamento', ''), data_emissao_inicio=request.args.get('data_emissao_inicio', ''), data_emissao_fim=request.args.get('data_emissao_fim', ''), tipo_nfe=request.args.get('tipo_nfe', '')) }}">{{ page_num }}</a>
-                            </li>
-                        {% else %}
-                            <li class="page-item disabled"><span class="page-link">...</span></li>
-                        {% endif %}
-                    {% endfor %}
-                    <!-- Link Próximo -->
-                    <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
-                        <a class="page-link" href="{{ url_for('nota_fiscal.index', page=pagination.next_num, busca=request.args.get('busca', ''), item_nome=request.args.get('item_nome', ''), status_importacao=request.args.get('status_importacao', ''), cnpj_emitente=request.args.get('cnpj_emitente', ''), status_pagamento=request.args.get('status_pagamento', ''), data_emissao_inicio=request.args.get('data_emissao_inicio', ''), data_emissao_fim=request.args.get('data_emissao_fim', ''), tipo_nfe=request.args.get('tipo_nfe', '')) }}" aria-label="Próximo">
-                            <span aria-hidden="true">&raquo;</span>
-                        </a>
-                    </li>
-                </ul>
-            </nav>
-            <div class="text-center text-muted">
-                Página {{ pagination.page }} de {{ pagination.pages }}. Total de {{ pagination.total }} notas.
-            </div>
-            {% endif %}
-            <!-- Fim Controles de Paginação -->
-
+            <div id="tabelaNotasFiscaisContainer"></div>
         </div>
     </div>
 </div>
@@ -410,6 +273,30 @@ $(document).ready(function() {
         status_upload = $('#status_upload').val();
         url = "exportar-excel?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
         window.location.href = url;
+    });
+    function carregarTabelaNotasFiscais(params = null) {
+        let url = '/notas-fiscais/tabela-notas-fiscais';
+        console.log(params);
+        if (!params) {
+            params = $('#filtrosNotasFiscais').serialize();
+        }
+        $.get(url + '?' + params, function(html) {
+            $('#tabelaNotasFiscaisContainer').html(html);
+        });
+    }
+    // Carregar tabela ao iniciar
+    carregarTabelaNotasFiscais();
+    // Submeter filtros via AJAX
+    $('#filtrosNotasFiscais').on('submit', function(e) {
+        e.preventDefault();
+        carregarTabelaNotasFiscais($(this).serialize());
+    });
+    // Paginação via AJAX (delegação)
+    $('#tabelaNotasFiscaisContainer').on('click', '.pagination a', function(e) {
+        e.preventDefault();
+        let url = $(this).attr('href');
+        let params = url.split('?')[1];
+        carregarTabelaNotasFiscais(params);
     });
 });
 </script>

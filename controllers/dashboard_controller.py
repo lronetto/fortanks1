@@ -400,6 +400,7 @@ def api_dados_resumo_notas():
     notas = db.session.query(NotaFiscal.numero_nf, 
                      NotaFiscal.data_emissao, 
                      NotaFiscal.valor_total, 
+                     NotaFiscalItem.quantidade,
                      ).join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
                      join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
                      join(Contrato, Contrato.id == Tanque.contrato_id).\
@@ -409,16 +410,20 @@ def api_dados_resumo_notas():
     
     dados = []
     total_valor = 0
+    pecas_total =0
     for nota in notas:
         dados.append({
             'numero_nf': nota.numero_nf,
             'data_emissao': nota.data_emissao.strftime('%d/%m/%Y'),
-            'valor_total': nota.valor_total
+            'valor_total': nota.valor_total,
+            'quantidade': nota.quantidade
         })
         total_valor += nota.valor_total
+        pecas_total += nota.quantidade
     return jsonify({
         'dados': dados,
-        'total_valor': total_valor
+        'total_valor': total_valor,
+        'pecas_total': pecas_total
     })
 
 def index1():

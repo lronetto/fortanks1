@@ -23,6 +23,7 @@
                         <th>Nota Fiscal</th>
                         <th>Data de Emissão</th>
                         <th>Valor Total</th>
+                        <th>Quantidade</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -98,13 +99,19 @@ $(document).ready(function() {
                 tr = document.createElement('tr');
                 tr.innerHTML = `<td>${nota.numero_nf}</td>
                                 <td>${nota.data_emissao}</td>
-                                <td>${formatCurrency(nota.valor_total)}</td>`;
+                                <td>${formatCurrency(nota.valor_total)}</td>
+                                <td>${nota.quantidade}</td>`;
                 tbody.appendChild(tr); 
                 
             })
             tr = document.createElement('tr');
             tr.innerHTML = `<td colspan="2" class="text-right">Total:</td>
-                            <td>${formatCurrency(data.total_valor)}</td>`;
+                            <td>${formatCurrency(data.total_valor)}</td>
+                            <td>${data.pecas_total}</td>`;
+            tbody.appendChild(tr);
+            tr = document.createElement('tr');
+            tr.innerHTML = `<td colspan="2" class="text-right">Total de PECAS:</td>
+                            <td>${data.pecas_total}</td>`;
             tbody.appendChild(tr);
         })
         .catch(error => {
