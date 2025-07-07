@@ -204,7 +204,7 @@ def relatorio_notas_exportar():
 
     notas = db.session.query(NotaFiscal,Upload).\
         join(Upload,Upload.pai_id==NotaFiscal.id,Upload.pai=='NotaFiscal').\
-        filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio])).all()
+        filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio]),Upload.tipo==1).all()
 
     # Criar ZIP em memória
     zip_buffer = io.BytesIO()
