@@ -203,7 +203,7 @@ def relatorio_notas_exportar():
     dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
 
     notas = db.session.query(NotaFiscal,Upload).\
-        join(Upload,Upload.pai_id==NotaFiscal.id,Upload.pai=='NotaFiscal').\
+        join(Upload,Upload.pai_id==NotaFiscal.id and Upload.pai=='NotaFiscal').\
         filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio]),Upload.tipo==1).all()
 
     # Criar ZIP em memória
