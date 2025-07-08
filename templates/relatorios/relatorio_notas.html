@@ -36,7 +36,7 @@
         </div>
     </form>
     <div id="relatorio-tabela">
-        {% include 'relatorios/relatorio_notas_tabela.html' %}
+
     </div>
 </div>
 {% endblock %}
@@ -51,8 +51,8 @@ $(document).ready(function() {
         allowClear: true
     });
 
-    $('#filtro-relatorio').on('submit', function(e) {
-        e.preventDefault();
+    carregar_relatorio();
+    function carregar_relatorio(){
         let data_inicio = $('#data_inicio').val();
         let data_fim = $('#data_fim').val();
         let centro_custo = $('#centro_custo').val();
@@ -72,6 +72,11 @@ $(document).ready(function() {
                 alert('Erro ao buscar dados do relatório.');
             }
         });
+    }
+    $('#filtro-relatorio').on('submit', function(e) {
+        e.preventDefault();
+        $('#relatorio-tabela').html('Carregando...');
+        carregar_relatorio();
     });
 
     $('#btn-exportar-zip').on('click', function() {

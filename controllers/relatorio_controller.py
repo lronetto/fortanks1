@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request, send_file
 from datetime import datetime, timedelta
+
+import pandas as pd
 from models.dados_analiticos import DadoAnalitico, PL_RECOP
 from models.nota_fiscal import NotaFiscal, CFOPS_VENDA
 from models.centro_custo import CentroCusto
@@ -17,6 +19,7 @@ import io
 import zipfile
 import base64
 from models.upload import Upload
+import time
 
 relatorio_bp = Blueprint('relatorio', __name__)
 
@@ -192,6 +195,8 @@ def relatorio_notas_ajax():
 
 @relatorio_bp.route('/notas/exportar', methods=['GET'])
 def relatorio_notas_exportar():
+    print('exportar')
+    tinicio = time.time()
     data_inicio = request.args.get('data_inicio')
     data_fim = request.args.get('data_fim')
     centro_custo_ids = request.args.getlist('centro_custo')
@@ -201,40 +206,74 @@ def relatorio_notas_exportar():
     print(data_inicio_dt, data_fim_dt, centro_custo_ids_int)
     # Buscar dados do relatório (notas filtradas)
     dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
-
-    notas = db.session.query(NotaFiscal,Upload).\
-        join(Upload,Upload.pai_id==NotaFiscal.id and Upload.pai=='NotaFiscal').\
-        filter(NotaFiscal.id.in_([d['id'] for d in dados_relatorio]),Upload.tipo==1).all()
-
+    print(f'dados_relatorio: {time.time() - tinicio}')
     # Criar ZIP em memória
+    notas=[]
+    for d in dados_relatorio:
+        nota = db.session.query(NotaFiscal,Upload).\
+            join(Upload,Upload.pai_id==NotaFiscal.id and Upload.pai=='NotaFiscal').\
+            filter(NotaFiscal.id==d['id'],Upload.tipo==1).first()
+        if nota:
+            notas.append(nota)
+    print(f'notas: {time.time() - tinicio}')
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Adicionar XML e PDF de cada nota
         total = 0
         for nota in notas:
-            total += nota.valor_total
+            total += nota[0].valor_total
             # XML
-            if nota.xml_data:
-                xml_bytes = base64.b64decode(nota.xml_data)
-                zipf.writestr(f'NF {nota.numero_nf}.xml', xml_bytes)
+            if nota[0].xml_data:
+                xml_bytes = base64.b64decode(nota[0].xml_data)
+                zipf.writestr(f'NF {nota[0].numero_nf}.xml', xml_bytes)
             # PDF
-            if nota.Upload and nota.Upload.blob:
-                pdf_bytes = base64.b64decode(nota.Upload.blob)
-                zipf.writestr(f'NF {nota.numero_nf}.pdf', pdf_bytes)
+            if nota[1] and nota[1].blob:
+                pdf_bytes = base64.b64decode(nota[1].blob)
+                zipf.writestr(f'NF {nota[0].numero_nf}.pdf', pdf_bytes)
+        print(f'notas pdf: {time.time() - tinicio}')
         # Gerar PDF da tabela
-            logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
-    logo_path_uri = 'file:///' + logo_path.replace('\\', '/').replace('\\', '/')
-    html = render_template('relatorios/relatorio_notas_pdf.html', relatorio=dados_relatorio, total=total, now=datetime.now().strftime('%d/%m/%Y %H:%M:%S'), logo_path=logo_path_uri)
-    pdf_bytes = HTML(string=html).write_pdf(stylesheets=[CSS(string='body { font-family: Arial, sans-serif;}')])
-
-    zipf.writestr('relatorio_notas.pdf', pdf_bytes)
+        logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
+        logo_path_uri = 'file:///' + logo_path.replace('\\', '/').replace('\\', '/')
+        html = render_template('relatorios/relatorio_notas_pdf.html', relatorio=dados_relatorio, total=total, now=datetime.now().strftime('%d/%m/%Y %H:%M:%S'), logo_path=logo_path_uri)
+        pdf_bytes = HTML(string=html).write_pdf(stylesheets=[CSS(string='body { font-family: Arial, sans-serif;}')])
+        print(f'pdf_bytes: {time.time() - tinicio}')
+        zipf.writestr('relatorio_notas.pdf', pdf_bytes)
+        df = get_dataframe(dados_relatorio)
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, sheet_name='Relatório Financeiro')
+        excel_buffer.seek(0)
+        zipf.writestr('relatorio_notas.xlsx', excel_buffer.read())
+        print(f'zipf: {time.time() - tinicio}')
     zip_buffer.seek(0)
+    print(f'zip_buffer: {time.time() - tinicio}')
     return send_file(
         zip_buffer,
         mimetype='application/zip',
         as_attachment=True,
         download_name='notas_exportadas.zip'
     )
+def get_dataframe(dados_relatorio):
+    df = pd.DataFrame(dados_relatorio)
+     # Ordenar por data de emissão
+    df = df.sort_values('Data', ascending=False)
+    
+    # Formatar datas para exibição
+    df['Data'] = pd.to_datetime(df['Data']).dt.strftime('%d/%m/%Y')
+    
+    # Função auxiliar para formatar datas com tratamento de NaT
+    def formatar_data(x):
+        if pd.isna(x) or x == 'Não':
+            return 'Não definido'
+        try:
+            return pd.to_datetime(x).strftime('%d/%m/%Y')
+        except:
+            return 'Não definido'
+    
+    # Aplicar formatação nas colunas de data
+    df['Data Prevista'] = df['Data Prevista'].apply(formatar_data)
+    df['Pago'] = df['Pago'].apply(formatar_data)
+    return df
+
 @relatorio_bp.route('/notas/exportar_pdf', methods=['GET'])
 def relatorio_notas_exportar_pdf():
     import os

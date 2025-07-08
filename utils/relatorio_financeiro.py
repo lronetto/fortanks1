@@ -27,8 +27,13 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
         pd.DataFrame: DataFrame com os dados do relatório
     """
     # Buscar todas as notas fiscais no período
-    query = NotaFiscal.query.join(NotaFiscalItem)
-    
+    query = db.session.query(NotaFiscal,NotaFiscalItem,Tanque,Contrato,CentroCusto)
+    query = query.join(NotaFiscalItem,NotaFiscalItem.nf_id==NotaFiscal.id)
+    query = query.join(Tanque,Tanque.item_nf==NotaFiscalItem.codigo)
+    query = query.join(Contrato,Contrato.id==Tanque.contrato_id)
+    query = query.join(CentroCusto,CentroCusto.id==Contrato.centro_custo_id)
+    if centro_custo_ids:
+        query = query.filter(CentroCusto.id.in_(centro_custo_ids))
     if data_inicio:
         query = query.filter(NotaFiscal.data_emissao >= data_inicio)
     if data_fim:
@@ -44,45 +49,27 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
     dados_relatorio = []
     tinicial=time.time()
     for nf in notas_fiscais:
-        tq = db.session.query(Tanque,Contrato,CentroCusto,NotaFiscalItem,NotaFiscal).\
-            join(Contrato,Contrato.id==Tanque.contrato_id).\
-        join(CentroCusto,CentroCusto.id==Contrato.centro_custo_id).\
-        join(NotaFiscalItem,NotaFiscalItem.codigo==Tanque.item_nf).\
-        join(NotaFiscal,NotaFiscal.id==NotaFiscalItem.nf_id)
-        if centro_custo_ids:
-            tq = tq.filter(CentroCusto.id.in_(centro_custo_ids))
-        tq = tq.filter(NotaFiscal.id==nf.id,NotaFiscal.status_processamento=='importado').first()
-
-        tanque = None   
-        contrato = None
-        centro_custo = None
-        nota_fiscal_item = None
-        nota_fiscal = None
-        if tq:
-            tanque = tq[0]
-            contrato = tq[1]
-            centro_custo = tq[2]
-            nota_fiscal_item = tq[3]
-            nota_fiscal = tq[4]
-            
-            # Calcular data prevista
+        tanque = nf[2]
+        contrato = nf[3]
+        centro_custo = nf[4]
         data_prevista = None
         if tanque and contrato:
-            data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
+            data_prevista = nf[0].data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
         dados_analiticos = db.session.query(DadoAnalitico).\
             join(PlanoConta,PlanoConta.id==DadoAnalitico.plano_conta_id).\
-            filter(DadoAnalitico.documento.like("%"+nf.numero_nf.lstrip('0')+"%"),PlanoConta.codigo==118
+            filter(DadoAnalitico.documento.like("%"+nf[0].numero_nf.lstrip('0')+"%"),PlanoConta.codigo==118
             ).first()
         
         dados_relatorio.append({
-            'id': nf.id,
-            'Data': nf.data_emissao.strftime('%d/%m/%Y'),  # Mantém como datetime para ordenação
+            'id': nf[0].id,
+            'Data': nf[0].data_emissao.strftime('%d/%m/%Y'),  # Mantém como datetime para ordenação
             'Centro de Custo': dados_analiticos.centro_custo.codigo if dados_analiticos else centro_custo.codigo if centro_custo else 'Não definido',
-            'Nota Fiscal': nf.numero_nf,
-            'Valor': float(nf.valor_total),
+            'Nota Fiscal': nf[0].numero_nf,
+            'Valor': float(nf[0].valor_total),
+            'Quantidade': nf[1].quantidade,
             'Data Prevista': data_prevista.strftime('%d/%m/%Y') if tanque and contrato else 'Não definido',  # Mantém como datetime para ordenação
             'Pago': dados_analiticos.data_pagamento.strftime('%d/%m/%Y') if dados_analiticos else 'Não',
-            'Status': nf.status_processamento
+            'Status': nf[0].status_processamento
         })
     tfinal=time.time()
     print(f"Tempo de execução dados_relatorio: {tfinal-tinicial} segundos")
