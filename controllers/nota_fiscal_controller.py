@@ -23,7 +23,7 @@ from models.arquivei import Arquivei
 from scripts.processar_email1 import processar_emails
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
-from models.nota_fiscal import CNPJS
+from models.nota_fiscal import CNPJS,CNPJS_MATRIZ_FILIAIS,CNPJS_MATRIZ,CNPJS_FILIAIS
 from models.dados_analiticos import DadoAnalitico
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
@@ -126,10 +126,12 @@ def api_get_dados_notas_fiscais(request):
     data_emissao_inicio = request.args.get('data_emissao_inicio', '')
     data_emissao_fim = request.args.get('data_emissao_fim', '')
     if cnpj_emitente:
-        if cnpj_emitente == 'proprio':
-            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS))
-        elif cnpj_emitente == 'terceiros':
-            query = query.filter(~NotaFiscal.cnpj_emitente.in_(CNPJS))
+        if cnpj_emitente == 'Matriz':
+            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ))
+        elif cnpj_emitente == 'Filiais':
+            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_FILIAIS))
+        elif cnpj_emitente == 'Matriz_Filiais':
+            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
     if data_emissao_inicio:
         try:
             data_inicio = datetime.strptime(data_emissao_inicio, '%Y-%m-%d')
@@ -2022,16 +2024,17 @@ def tabela_notas_fiscais():
     inicio = time.time()
     print("tabela notas fiscais")
     page = request.args.get('page', 1, type=int)
-    per_page = 100
+    per_page = 50
     query = api_get_dados_notas_fiscais(request)
     print(f'query {time.time() - inicio}')
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     notas_fiscais_pagina = pagination.items
     notas_fiscais_pagina_upload = []
-    print(f'notas_fiscais_pagina {time.time() - inicio}')
+    print(f'notas_fiscais_pagina len:{len(notas_fiscais_pagina)} {time.time() - inicio}')
     for nota in notas_fiscais_pagina:
         nota.upload = None
         nota.pago = False
+        nota.local = ('Matriz' if nota.cnpj_emitente in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_emitente in CNPJS_FILIAIS else 'Terceiros')
         dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
                                                            DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
                                                            DadoAnalitico.valor == nota.valor_total).first()
@@ -2047,4 +2050,4 @@ def tabela_notas_fiscais():
         notas_fiscais_pagina_upload.append(nota)
 
     print(f'tabela notas fiscais {time.time() - inicio}')
-    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload)
+    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload,total_resultados=len(notas_fiscais_pagina_upload))

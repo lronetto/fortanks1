@@ -56,11 +56,12 @@
                     </select>
                 </div>
                 <div class="col-md-3">
-                    <label for="cnpj_emitente" class="form-label">CNPJ Emitente</label>
+                    <label for="cnpj_emitente" class="form-label">Fornecedor</label>
                     <select name="cnpj_emitente" id="cnpj_emitente" class="form-select">
-                        <option value="">Todos</option>
-                        <option value="proprio">Próprio</option>
-                        <option value="terceiros" selected>Terceiros</option>
+                        <option value="" {% if not request.args.get('cnpj_emitente') %}selected{% endif %}>Todos</option>
+                        <option value="Matriz" {% if request.args.get('cnpj_emitente') == 'Matriz' %}selected{% endif %}>Matriz</option>
+                        <option value="Filiais" {% if request.args.get('cnpj_emitente') == 'Filiais' %}selected{% endif %}>Filiais</option>
+                        <option value="Matriz_Filiais" {% if request.args.get('cnpj_emitente') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -123,6 +124,9 @@
                 </div>
             </form>
         </div>
+    </div>
+    <div class="card shadow mb-4">
+        Resultados: <span id="total_resultados">0</span>
     </div>
 
     <!-- Incluir template de mensagens flash -->
@@ -201,6 +205,7 @@ $(document).ready(function() {
         e.preventDefault();
         var notaId = $(this).data('id');
         abrirPdfNota(notaId);
+        console.log('visualizar pdf');
     });
 
     function abrirPdfNota(notaId) {
@@ -281,6 +286,7 @@ $(document).ready(function() {
             params = $('#filtrosNotasFiscais').serialize();
         }
         $.get(url + '?' + params, function(html) {
+            $('#total_resultados').html(html.total_resultados);
             $('#tabelaNotasFiscaisContainer').html(html);
         });
     }
@@ -289,6 +295,7 @@ $(document).ready(function() {
     // Submeter filtros via AJAX
     $('#filtrosNotasFiscais').on('submit', function(e) {
         e.preventDefault();
+        $('#tabelaNotasFiscaisContainer').html('Carregando...');
         carregarTabelaNotasFiscais($(this).serialize());
     });
     // Paginação via AJAX (delegação)

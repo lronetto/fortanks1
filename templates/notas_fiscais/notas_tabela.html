@@ -4,6 +4,7 @@
             <tr>
                 <th>Número NF</th>
                 <th>Data Emissão</th>
+                <th>Local</th>
                 <th>Fornecedor</th>
                 <th>Valor Total</th>
                 <th>Status</th>
@@ -16,6 +17,7 @@
             <tr>
                 <td>{{ nf.numero_nf }}</td>
                 <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
+                <td>{{ nf.local }}</td>
                 <td>
                     <a href="#" class="visualizar-pdf" data-id="{{ nf.id }}" title="Visualizar PDF">
                         {{ nf.nome_emitente }}
