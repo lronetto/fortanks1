@@ -23,7 +23,7 @@
                 <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
                 <td>{{ nf.local }}</td>
                 <td>
-                    <a href="#" class="visualizar-pdf" data-id="{{ nf.id }}" title="Visualizar PDF">
+                    <a href="javascript:void(0);" class="visualizar-docs" data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Visualizar PDF">
                         {{ nf.nome_emitente }}
                     </a>
                 </td>
@@ -92,7 +92,7 @@
                                 data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Excluir">
                             <i class="fas fa-trash"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-info visualizar-documentos" 
+                        <button type="button" class="btn btn-sm btn-info visualizar-docs" 
                                 data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Documentos">
                             <i class="fas fa-file-alt"></i>
                         </button>

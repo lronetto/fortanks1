@@ -166,6 +166,10 @@ class NotaFiscal(db.Model):
         return (itens_importados / total_itens) * 100
     
     def get_pdf(self):
+        if not self.upload:
+            if not db.session.query(Upload.id).filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first():
+                pdf_data = Arquivei(chave_acesso=self.chave_acesso)
+                self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
         return self.upload
     def get_chave_acesso(self):
         return self.chave_acesso

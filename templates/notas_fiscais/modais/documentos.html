@@ -81,60 +81,94 @@
         </div>
     </div>
 </div>
+
 {% block scripts %}
 <script>
-// Manipular clique no botão de visualizar documentos
-$('.visualizar-documentos').on('click', function() {
-    var notaId = $(this).data('id');
-    var numeroNF = $(this).data('numero');
-    $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNF}`);
-    $('#notaFiscalId').val(notaId);
-    carregarDocumentos(notaId);
-    $('#modalDocumentos').modal('show');
-});
+   
 
-// Manipular clique no botão de adicionar documento
-$('#btnAdicionarDocumento').on('click', function() {
-    $('#modalAdicionarDocumento').modal('show');
-});
-
-// Manipular clique no botão de salvar documento
-$('#btnSalvarDocumento').on('click', function() {
-    var formData = new FormData($('#formAdicionarDocumento')[0]);
+   
+document.addEventListener('DOMContentLoaded', function() {
+    $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-docs', function() {
+        console.log('visualizar documentos clicado');
+        const notaId = $(this).data('id');
+        const numeroNf = $(this).data('numero');
+        console.log('ID da nota:', notaId, 'Número:', numeroNf);
+        
+        // Abrir modal de documentos
+        $('#modalDocumentos').modal('show');
+        $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
+        $('#notaFiscalId').val(notaId);
+        
+        // Verificar se a função existe e chamar
+        if (typeof carregarDocumentos === 'function') {
+            carregarDocumentos(notaId);
+        } else {
+            console.error('Função carregarDocumentos não encontrada');
+            $('#listaDocumentos').html('<tr><td colspan="4" class="text-center text-danger">Erro: Função de carregamento não encontrada</td></tr>');
+        }
+    });
+   
+    // Manipular clique no botão de visualizar documentos
+    // Manipular clique no botão de visualizar documento
     
-    $.ajax({
-        url: '/notas-fiscais/api/documentos',
-        type: 'POST',
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: function(response) {
-            if (response.success) {
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Sucesso!',
-                    text: 'Documento adicionado com sucesso!'
-                });
-                $('#modalAdicionarDocumento').modal('hide');
-                carregarDocumentos($('#notaFiscalId').val());
-            } else {
+
+    $("#tabelaDocumentos").on('click', '.visualizar-pdf', function() {
+        console.log('visualizar pdf clicado');
+        const notaId = $(this).data('id');
+        abrirPdfNota(notaId);
+    });
+    document.querySelectorAll('.visualizar-pdf').forEach(cb => {
+        cb.addEventListener('click', function(e) {
+            e.preventDefault();
+            var notaId = $(this).data('id');
+            abrirPdfNota(notaId);
+            console.log('visualizar pdf');
+        });
+    });
+    // Manipular clique no botão de adicionar documento
+    $('#btnAdicionarDocumento').on('click', function() {
+        $('#modalAdicionarDocumento').modal('show');
+    });
+
+    // Manipular clique no botão de salvar documento
+    $('#btnSalvarDocumento').on('click', function() {
+        var formData = new FormData($('#formAdicionarDocumento')[0]);
+        
+        $.ajax({
+            url: '/notas-fiscais/api/documentos',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: 'Documento adicionado com sucesso!'
+                    });
+                    $('#modalAdicionarDocumento').modal('hide');
+                    carregarDocumentos($('#notaFiscalId').val());
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro!',
+                        text: response.message || 'Erro ao adicionar documento.'
+                    });
+                }
+            },
+            error: function() {
                 Swal.fire({
                     icon: 'error',
                     title: 'Erro!',
-                    text: response.message || 'Erro ao adicionar documento.'
+                    text: 'Erro ao adicionar documento.'
                 });
             }
-        },
-        error: function() {
-            Swal.fire({
-                icon: 'error',
-                title: 'Erro!',
-                text: 'Erro ao adicionar documento.'
-            });
-        }
+        });
     });
-});
 
+});
+  
 // Função para carregar documentos
 function carregarDocumentos(notaId) {
     $.get(`/notas-fiscais/api/documentos/${notaId}`, function(response) {
@@ -149,7 +183,7 @@ function carregarDocumentos(notaId) {
                         <td>${getTipoDocumento(doc.tipo)}</td>
                         <td>${new Date(doc.uploaded_at).toLocaleDateString()}</td>
                         <td>
-                            <button class="btn btn-sm btn-primary visualizar-doc" data-id="${doc.id}" title="Visualizar">
+                            <button class="btn btn-sm btn-primary visualizar-pdf" data-id="${doc.id}" title="Visualizar">
                                 <i class="fas fa-eye"></i>
                             </button>
                             <button class="btn btn-sm btn-danger excluir-doc" data-id="${doc.id}" title="Excluir">
@@ -166,6 +200,52 @@ function carregarDocumentos(notaId) {
     });
 }
 
+
+function abrirPdfNota(notaId) {
+    const iframe = document.getElementById('documentoViewer');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalVisualizarDocumento');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+
+    // Remove mensagens/elementos antigos
+    let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+
+    // Exibe loading
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'pdfLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+    iframe.parentNode.appendChild(loading);
+
+    fetch(`/notas-fiscais/pdf/${notaId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar PDF');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+            msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
+
 // Função para obter o nome do tipo de documento
 function getTipoDocumento(tipo) {
     const tipos = {
@@ -176,13 +256,7 @@ function getTipoDocumento(tipo) {
     return tipos[tipo] || 'Desconhecido';
 }
 
-// Manipular clique no botão de visualizar documento
-$(document).on('click', '.visualizar-doc', function() {
-    var docId = $(this).data('id');
-    const iframe = document.getElementById('documentoViewer');
-    iframe.src = `/notas-fiscais/api/documentos/${docId}/visualizar`;
-    $('#modalVisualizarDocumento').modal('show');
-});
+
 
 // Manipular clique no botão de excluir documento
 $(document).on('click', '.excluir-doc', function() {

@@ -138,29 +138,8 @@
     </div>
 </div>
 
-<!-- Modais -->
-{% include 'notas_fiscais/modais/visualizar_itens.html' %}
-{% include 'notas_fiscais/modais/importar_itens.html' %}
-{% include 'notas_fiscais/modais/selecionar_material.html' %}
-{% include 'notas_fiscais/modais/conversao_unidades.html' %}
-{% include 'notas_fiscais/modais/importar_arquivei.html' %}
-{% include 'notas_fiscais/modais/excluir_nota.html' %}
-{% include 'notas_fiscais/modais/importar_xml.html' %}
+<!-- Incluir Modais -->
 {% include 'notas_fiscais/modais/documentos.html' %}
-<!-- Modal para Visualizar PDF -->
-<div class="modal fade" id="modalVisualizarPDF" tabindex="-1" aria-labelledby="modalVisualizarPDFLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalVisualizarPDFLabel">Visualizar Nota Fiscal</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <iframe id="pdfViewer" style="width: 100%; height: 80vh; border: none;"></iframe>
-            </div>
-        </div>
-    </div>
-</div>
 
 {% endblock %}
 
@@ -194,62 +173,40 @@
 <!-- DataTables -->
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<!-- JavaScript específico das notas fiscais -->
 <!-- Script principal -->
-<script src="{{ url_for('static', filename='js/notas_fiscais/index.js') }}"></script>
 <script>
-$(document).ready(function() {
-    // Manipular clique no link de visualizar PDF
-    $('.visualizar-pdf').on('click', function(e) {
-        e.preventDefault();
-        var notaId = $(this).data('id');
-        abrirPdfNota(notaId);
-        console.log('visualizar pdf');
+document.addEventListener('DOMContentLoaded', function() {
+    // Usar delegação de eventos no container que já existe
+   
+
+    // Delegação para outros botões da tabela
+    $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-itens', function() {
+        console.log('visualizar itens clicado');
+        const notaId = $(this).data('id');
+        // carregarItensModal(notaId, 'visualizar');
     });
 
-    function abrirPdfNota(notaId) {
-        const iframe = document.getElementById('pdfViewer');
-        iframe.src = '';
-        const modalEl = document.getElementById('modalVisualizarPDF');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
+    $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
+        console.log('importar itens clicado');
+        const notaId = $(this).data('id');
+        // importarItensNota(notaId);
+    });
 
-        // Remove mensagens/elementos antigos
-        let oldMsg = modalEl.querySelector('.pdf-erro-msg');
-        if (oldMsg) oldMsg.remove();
-        let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
-        if (oldSpinner) oldSpinner.remove();
+    $("#tabelaNotasFiscaisContainer").on('click', '.vincular-material', function() {
+        console.log('vincular material clicado');
+        const notaId = $(this).data('id');
+        // abrirModalVincularMaterial(notaId);
+    });
 
-        // Exibe loading
-        iframe.style.display = 'none';
-        let loading = document.createElement('div');
-        loading.id = 'pdfLoadingSpinner';
-        loading.className = 'd-flex justify-content-center align-items-center';
-        loading.style.height = '100%';
-        loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
-        iframe.parentNode.appendChild(loading);
-
-        fetch(`/notas-fiscais/pdf/${notaId}`)
-            .then(response => {
-                if (!response.ok) throw new Error('Erro ao buscar PDF');
-                return response.blob();
-            })
-            .then(blob => {
-                const url = URL.createObjectURL(blob);
-                iframe.src = url;
-                iframe.onload = () => {
-                    iframe.style.display = '';
-                    if (loading) loading.remove();
-                };
-            })
-            .catch(() => {
-                if (loading) loading.remove();
-                iframe.style.display = 'none';
-                let msg = document.createElement('div');
-                msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
-                msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
-                iframe.parentNode.appendChild(msg);
-            });
-    }
+    $("#tabelaNotasFiscaisContainer").on('click', '.excluir-nota', function() {
+        console.log('excluir nota clicado');
+        const notaId = $(this).data('id');
+        const numeroNf = $(this).data('numero');
+        // confirmarExclusaoNota(notaId, numeroNf);
+    });
+    
+    // Manipular clique no link de visualizar PDF
 
     // Mostrar/ocultar filtros extras de CTE
     function toggleCteFilters() {
@@ -279,13 +236,16 @@ $(document).ready(function() {
     });
     function carregarTabelaNotasFiscais(params = null) {
         let url = '/notas-fiscais/tabela-notas-fiscais';
-        console.log(params);
+        console.log('Carregando tabela com parâmetros:', params);
         if (!params) {
             params = $('#filtrosNotasFiscais').serialize();
         }
         $.get(url + '?' + params, function(html) {
-            $('#total_resultados').html(html.total_resultados);
             $('#tabelaNotasFiscaisContainer').html(html);
+            console.log('Tabela carregada com sucesso');
+        }).fail(function(xhr, status, error) {
+            console.error('Erro ao carregar tabela:', error);
+            $('#tabelaNotasFiscaisContainer').html('<div class="alert alert-danger">Erro ao carregar dados: ' + error + '</div>');
         });
     }
     // Carregar tabela ao iniciar

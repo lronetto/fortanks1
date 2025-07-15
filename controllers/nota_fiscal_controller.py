@@ -611,25 +611,14 @@ def gerar_pdf(id):
     Gera um PDF da nota fiscal para download
     """
     try:
-        nota = NotaFiscal(id=id)
-        upload = Upload.query.filter(Upload.pai=='NotaFiscal', Upload.pai_id==id,Upload.tipo.in_([2,3])).first()    
+        upload = Upload.query.get_or_404(id)
         if upload:
             response = make_response(base64.b64decode(upload.blob))
             response.headers['Content-Type'] = 'application/pdf'
-            response.headers['Content-Disposition'] = f'inline; filename=nota_fiscal_{nota.numero_nf}.pdf'
+            response.headers['Content-Disposition'] = f'inline; filename=documento_{upload.id}.pdf'
             return response
         else:
-            
-            print(f'nota: {nota.get_chave_acesso()}')
-            pdf = nota.get_pdf()
-            print('pdf: ',pdf)
-            if pdf:
-                response = make_response(base64.b64decode(pdf.blob))
-                response.headers['Content-Type'] = 'application/pdf'
-                response.headers['Content-Disposition'] = f'inline; filename=nota_fiscal_{nota.numero_nf}.pdf'
-                return response
-            else:
-                return 'PDF não encontrado para esta nota.', 404
+            return 'PDF não encontrado para esta nota.', 404
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {str(e)}")
         flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
@@ -1759,6 +1748,12 @@ def api_listar_documentos(nota_id):
     try:
         documentos = db.session.query(Upload.id,Upload.filename,Upload.tipo,Upload.uploaded_at).filter_by(pai='NotaFiscal', pai_id=nota_id).all()
         resultado = []
+        if not documentos:
+            nota = NotaFiscal.query.get(nota_id)
+            if nota:
+                nota.get_pdf()
+                resultado = db.session.query(Upload.id,Upload.filename,Upload.tipo,Upload.uploaded_at).filter_by(pai='NotaFiscal', pai_id=nota_id).all()
+            return jsonify({'documentos': resultado, 'success': True})
         for doc in documentos:
             resultado.append({
                 'id': doc[0],
