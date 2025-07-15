@@ -300,7 +300,7 @@ def processar_emails():
                                 logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
                                 dec1 = None
                                 #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                                img = convert_from_bytes(payload,500)[0]
+                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
                                 #print(f"img: {img}")
                                 #logging.info(f"img1")
                                 decs = decode(img)
