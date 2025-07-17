@@ -375,6 +375,10 @@ def card_resumo_placas():
                     transportadas += 1
         em_estoque = concretadas - transportadas
         prontas_transportar = acabadas - transportadas
+        nfs_emitidas = NotaFiscalItem.query.filter_by(codigo=tanque.item_nf).all()
+        nfs_emitidas_total = 0
+        for nf in nfs_emitidas:
+            nfs_emitidas_total += nf.quantidade
         dados_especificos.append({
             'tanque': tanque.nome,
             'concretadas': concretadas,
@@ -382,7 +386,8 @@ def card_resumo_placas():
             'transportadas': transportadas,
             'total_pecas': total_pecas,
             'em_estoque': em_estoque,
-            'prontas_transportar': prontas_transportar
+            'prontas_transportar': prontas_transportar,
+            'nfs_emitidas': "{:,.0f}".format(nfs_emitidas_total)
         })
     print(dados_especificos)
     return dados_especificos

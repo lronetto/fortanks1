@@ -8,7 +8,8 @@ from sqlalchemy import Index, UniqueConstraint, text
 
 from .database import db
 
-PL_RECOP = [118,5]
+
+PL_RECOP = [118,181]
 PL_00=[9,10,11,12,13,14,15,16,17,18,19,20,21,23,25,26,27]
 PL_0201 = [33, 34, 35, 36, 37, 39, 40, 41, 120, 121, 124, 125, 163, 164, 165]
 PL_0202 = [44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,

@@ -49,6 +49,157 @@
 </div> 
 {% block scripts %}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-itens', function() {
+        console.log('visualizar itens clicado');
+        const notaId = $(this).data('id');
+        carregarItensModal(notaId);
+    });
+    function carregarItensModal(notaId) {
+        console.log(`Carregando itens para nota ID: ${notaId}`);
+        
+        // Mostrar carregamento
+        const corpoTabela = 'corpoTabelaItens'
+        document.getElementById(corpoTabela).innerHTML = '<tr><td colspan="7" class="text-center">Carregando itens...</td></tr>';
+        
+        // Abrir o modal
+        const modalId = 'modalVisualizarItens';
+        const modal = new bootstrap.Modal(document.getElementById(modalId));
+        modal.show();
+        const url = `/notas-fiscais/api/itens/${notaId}`;
+        fetch(url)
+            .then(response => {
+                console.log(`Resposta para ${url}:`, response.status);
+                if (!response.ok) {
+                    // Se esta URL falhou, tente a próxima
+                    throw new Error(`Erro de rede: ${response.status}`);
+                }
+                return response.json().catch(e => {
+                    console.error('Erro ao analisar JSON:', e);
+                    throw new Error('Resposta inválida do servidor');
+                });
+            })
+            .then(data => {
+                console.log('Dados recebidos:', data);
+                if (data.success) {
+                    preencherTabelaVisualizacao(data.itens);
+                    // Registrar URL bem-sucedida para uso futuro
+                    console.log(`URL bem-sucedida: ${url}`);
+                } else {
+                    document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="7" class="text-center text-danger">${data.message || 'Erro ao carregar itens.'}</td></tr>`;
+                }
+            })
+            .catch(error => {
+                console.warn(`Falha ao usar ${url}:`, error);
+                document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="7" class="text-center text-danger">${error.message || 'Erro ao carregar itens.'}</td></tr>`;
+            });
+    }
 
+    // Preenche a tabela de visualização de itens
+    function preencherTabelaVisualizacao(itens) {
+        if (!itens || itens.length === 0) {
+            document.getElementById('corpoTabelaItens').innerHTML = '<tr><td colspan="7" class="text-center">Nenhum item encontrado.</td></tr>';
+            return;
+        }
+        
+        // Armazenar todos os itens em uma variável global para uso no filtro
+        window.todosOsItensNota = itens;
+        
+        renderizarItensVisualizacao(itens);
+        
+        // Configurar eventos de filtro
+        configurarFiltroItens();
+    }
+    
+    // Função para renderizar os itens na tabela de visualização
+    function renderizarItensVisualizacao(itens) {
+        let html = '';
+        
+        itens.forEach(function(item) {
+            const valorUnitario = parseFloat(item.valor_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const valorTotal = parseFloat(item.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            let status = '';
+            if (item.importado_estoque) {
+                status = '<span class="badge bg-success">Importado</span>';
+            } else if (item.material_id) {
+                status = '<span class="badge bg-warning">Vinculado</span>';
+            } else {
+                status = '<span class="badge bg-danger">Pendente</span>';
+            }
+            
+            html += `
+                <tr>
+                    <td>${item.codigo || '-'}</td>
+                    <td>${item.cfop || '-'}</td>
+                    <td>${item.descricao}</td>
+                    <td>${item.quantidade}</td>
+                    <td>${item.unidade}</td>
+                    <td>R$ ${valorUnitario}</td>
+                    <td>R$ ${valorTotal}</td>
+                    <td>${status}</td>
+                </tr>
+            `;
+        });
+        
+        document.getElementById('corpoTabelaItens').innerHTML = html;
+    }
+    function configurarFiltroItens() {
+        const btnFiltrar = document.getElementById('btnFiltrarItens');
+        const btnLimpar = document.getElementById('btnLimparFiltroItens');
+        const inputFiltro = document.getElementById('filtroItensNota');
+        
+        // Evento de clique no botão de filtrar
+        if (btnFiltrar) {
+            btnFiltrar.addEventListener('click', function() {
+                aplicarFiltroItens();
+            });
+        }
+        
+        // Evento de clique no botão de limpar filtro
+        if (btnLimpar) {
+            btnLimpar.addEventListener('click', function() {
+                inputFiltro.value = '';
+                renderizarItensVisualizacao(window.todosOsItensNota);
+            });
+        }
+        
+        // Evento de pressionar Enter no campo de filtro
+        if (inputFiltro) {
+            inputFiltro.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    aplicarFiltroItens();
+                }
+            });
+        }
+    }
+    
+    // Aplicar filtro aos itens da nota
+    function aplicarFiltroItens() {
+        const filtro = document.getElementById('filtroItensNota').value.toLowerCase().trim();
+        
+        if (!filtro) {
+            renderizarItensVisualizacao(window.todosOsItensNota);
+            return;
+        }
+        
+        // Filtrar os itens pelo texto de busca
+        const itensFiltrados = window.todosOsItensNota.filter(function(item) {
+            // Buscar no código e na descrição do item
+            return (
+                (item.codigo && item.codigo.toLowerCase().includes(filtro)) || 
+                (item.descricao && item.descricao.toLowerCase().includes(filtro))
+            );
+        });
+        
+        if (itensFiltrados.length === 0) {
+            document.getElementById('corpoTabelaItens').innerHTML = 
+                `<tr><td colspan="7" class="text-center">Nenhum item encontrado com o termo "${filtro}".</td></tr>`;
+        } else {
+            renderizarItensVisualizacao(itensFiltrados);
+        }
+    }
+});
 </script>
 {% endblock %}

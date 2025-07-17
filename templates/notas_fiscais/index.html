@@ -140,7 +140,8 @@
 
 <!-- Incluir Modais -->
 {% include 'notas_fiscais/modais/documentos.html' %}
-
+{% include 'notas_fiscais/modais/importar_itens.html' %}
+{% include 'notas_fiscais/modais/visualizar_itens.html' %}
 {% endblock %}
 
 {% block extra_css %}
@@ -175,18 +176,14 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <!-- JavaScript específico das notas fiscais -->
 <!-- Script principal -->
+<script src="{{ url_for('static', filename='js/comum.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Usar delegação de eventos no container que já existe
    
 
     // Delegação para outros botões da tabela
-    $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-itens', function() {
-        console.log('visualizar itens clicado');
-        const notaId = $(this).data('id');
-        // carregarItensModal(notaId, 'visualizar');
-    });
-
+   
     $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
         console.log('importar itens clicado');
         const notaId = $(this).data('id');
