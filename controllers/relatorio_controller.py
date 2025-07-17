@@ -255,23 +255,8 @@ def relatorio_notas_exportar():
 def get_dataframe(dados_relatorio):
     df = pd.DataFrame(dados_relatorio)
      # Ordenar por data de emissão
-    df = df.sort_values('Data', ascending=False)
     
-    # Formatar datas para exibição
-    df['Data'] = pd.to_datetime(df['Data']).dt.strftime('%d/%m/%Y')
-    
-    # Função auxiliar para formatar datas com tratamento de NaT
-    def formatar_data(x):
-        if pd.isna(x) or x == 'Não':
-            return 'Não definido'
-        try:
-            return pd.to_datetime(x).strftime('%d/%m/%Y')
-        except:
-            return 'Não definido'
-    
-    # Aplicar formatação nas colunas de data
-    df['Data Prevista'] = df['Data Prevista'].apply(formatar_data)
-    df['Pago'] = df['Pago'].apply(formatar_data)
+   
     return df
 
 @relatorio_bp.route('/notas/exportar_pdf', methods=['GET'])
