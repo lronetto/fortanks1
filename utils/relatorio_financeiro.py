@@ -14,6 +14,7 @@ from models.nota_fiscal import CFOPS_VENDA,CFOPS_COMPRA
 from models.arquivei import Arquivei
 import time
 from dateutil.relativedelta import relativedelta
+from decimal import Decimal
 
 def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1), data_fim=datetime.now(),centro_custo_ids=None):
     """
@@ -65,7 +66,7 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
             'Data': nf[0].data_emissao.strftime('%d/%m/%Y'),  # Mantém como datetime para ordenação
             'Centro de Custo': dados_analiticos.centro_custo.codigo if dados_analiticos else centro_custo.codigo if centro_custo else 'Não definido',
             'Nota Fiscal': nf[0].numero_nf,
-            'Valor': float(nf[0].valor_total),
+            'Valor': Decimal(nf[0].valor_total),
             'Quantidade': nf[1].quantidade,
             'Data Prevista': data_prevista.strftime('%d/%m/%Y') if tanque and contrato else 'Não definido',  # Mantém como datetime para ordenação
             'Pago': dados_analiticos.data_pagamento.strftime('%d/%m/%Y') if dados_analiticos else 'Não',

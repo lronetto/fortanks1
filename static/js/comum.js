@@ -21,7 +21,7 @@ function carregarCentrosCusto(centroCustoId) {
                 let options = '<option value="">Selecione um centro de custo</option>';
                 
                 data.centros_custo.forEach(function(centro) {
-                    options += `<option value="${centro.id}">${centro.nome}</option>`;
+                    options += `<option value="${centro.id}">${centro.codigo} - ${centro.nome}</option>`;
                 });
                 
                 document.getElementById(centroCustoId).innerHTML = options;

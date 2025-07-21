@@ -191,7 +191,9 @@ def relatorio_notas_ajax():
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
     
     dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
-    return render_template('relatorios/relatorio_notas_tabela.html', relatorio=dados_relatorio)
+    total=sum([d['Valor'] for d in dados_relatorio])
+    print(f'total: {total}')
+    return render_template('relatorios/relatorio_notas_tabela.html', relatorio=dados_relatorio, total=total if total else 0)
 
 @relatorio_bp.route('/notas/exportar', methods=['GET'])
 def relatorio_notas_exportar():
@@ -255,9 +257,16 @@ def relatorio_notas_exportar():
 def get_dataframe(dados_relatorio):
     df = pd.DataFrame(dados_relatorio)
      # Ordenar por data de emissão
+    df['Valor'] = df['Valor'].apply(lambda x: f'R$ {x:,.2f}')
+    df['Quantidade']=df['Quantidade'].apply(lambda x: int(x))
+    df.rename(columns={'Data Prevista':'VENCIMENTO',
+                       'Data':'DATA EMISSÃO',
+                       'Nota Fiscal':'NF',
+                       'Quantidade':'QTDE DE PLACA',
+                       'Valor':'VALOR'},inplace=True)
+
     
-   
-    return df
+    return df[['DATA EMISSÃO','NF','QTDE DE PLACA','VALOR','VENCIMENTO']]
 
 @relatorio_bp.route('/notas/exportar_pdf', methods=['GET'])
 def relatorio_notas_exportar_pdf():
@@ -291,4 +300,28 @@ def relatorio_notas_exportar_pdf():
         mimetype='application/pdf',
         as_attachment=False,
         download_name='relatorio_notas.pdf'
+    )
+
+@relatorio_bp.route('/notas/exportar_excel', methods=['GET'])
+def relatorio_notas_exportar_excel():
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    centro_custo_ids = request.args.getlist('centro_custo')
+    data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
+    data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
+    centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+
+    dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
+
+    df = get_dataframe(dados_relatorio)
+    
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, sheet_name='Relatório Financeiro')
+    excel_buffer.seek(0)
+
+    return send_file(
+        excel_buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='relatorio_notas.xlsx'
     )

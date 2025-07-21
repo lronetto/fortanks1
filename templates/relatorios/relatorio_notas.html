@@ -29,10 +29,13 @@
             <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search"></i> Filtrar</button>
         </div>
         <div class="col-md-2 align-self-end">
-            <button type="button" id="btn-exportar-zip" class="btn btn-success w-100"><i class="fas fa-file-archive"></i> Exportar ZIP</button>
+            <button type="button" id="btn-exportar-zip" class="btn btn-info w-100"><i class="fas fa-file-archive"></i> Exportar ZIP</button>
         </div>
         <div class="col-md-2 align-self-end">
-            <button type="button" id="btn-exportar-pdf" class="btn btn-secondary w-100"><i class="fas fa-file-pdf"></i> Exportar PDF</button>
+            <button type="button" id="btn-exportar-pdf" class="btn btn-danger w-100"><i class="fas fa-file-pdf"></i> Exportar PDF</button>
+        </div>
+         <div class="col-md-2 align-self-end">
+            <button type="button" id="btn-exportar-excel" class="btn btn-success w-100"><i class="fas fa-file-excel"></i> Exportar Excel</button>
         </div>
     </form>
     <div id="relatorio-tabela">
@@ -97,6 +100,19 @@ $(document).ready(function() {
         let data_fim = $('#data_fim').val();
         let centro_custo = $('#centro_custo').val();
         let url = "{{ url_for('relatorio.relatorio_notas_exportar_pdf') }}?" +
+            $.param({
+                data_inicio: data_inicio,
+                data_fim: data_fim,
+                centro_custo: centro_custo
+            }, true);
+        window.open(url, '_blank');
+    });
+
+    $('#btn-exportar-excel').on('click', function() {
+        let data_inicio = $('#data_inicio').val();
+        let data_fim = $('#data_fim').val();
+        let centro_custo = $('#centro_custo').val();
+        let url = "{{ url_for('relatorio.relatorio_notas_exportar_excel') }}?" +
             $.param({
                 data_inicio: data_inicio,
                 data_fim: data_fim,

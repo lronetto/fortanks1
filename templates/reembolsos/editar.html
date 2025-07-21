@@ -1,0 +1,317 @@
+{% extends 'common/base.html' %}
+
+{% block title %}{{ 'Novo Reembolso' if modo == 'novo' else 'Editar Reembolso' }}{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">{{ 'Novo Reembolso' if modo == 'novo' else 'Editar Reembolso' }}</h3>
+                </div>
+                <div class="card-body">
+                    <form id="formReembolso" method="POST" enctype="multipart/form-data" action="">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="notas_selecionadas" id="notas_selecionadas" value='[]'>
+                        <input type="hidden" name="avulsos_data" id="avulsos_data" value='[]'>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="numero_relatorio">Número do Relatório</label>
+                                    <input type="text" class="form-control" name="numero_relatorio" id="numero_relatorio" value="">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Número NF</label>
+                                    <input type="text" class="form-control" id="filtroNumero">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Fornecedor</label>
+                                    <input type="text" class="form-control" id="filtroFornecedor">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Data Inicial</label>
+                                    <input type="date" class="form-control" id="filtroDataInicial">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Data Final</label>
+                                    <input type="date" class="form-control" id="filtroDataFinal">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Valor Mínimo</label>
+                                    <input type="number" step="0.01" class="form-control" id="filtroValorMinimo">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Valor Máximo</label>
+                                    <input type="number" step="0.01" class="form-control" id="filtroValorMaximo">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <label>Pagamento</label>
+                                    <select class="form-control" id="filtroPagamento">
+                                        <option value="">Todos</option>
+                                        <option value="0">Não Pago</option>
+                                        <option value="1">Pago</option>
+                                        <option value="2">Sem Envio</option>
+                                        <option value="3">Apenas reembolso</option>
+                                        <option value="4" selected>Selecionados</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <button type="button" class="btn btn-primary" onclick="filtrarNotas()">
+                                    <i class="fas fa-search"></i> Buscar Notas
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="table-responsive mb-3">
+    <div id="spinnerNotas" class="text-center my-3" style="display:none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+    </div>
+    <table class="table table-bordered" id="tabelaNotas">
+        <thead>
+            <tr>
+                <th width="50">
+                  <input type="checkbox" id="selecionarTodosNotas" onclick="selecionarTodosNotas(this)">
+                </th>
+                <th>Número NF</th>
+                <th>Fornecedor</th>
+                <th>Data Emissão</th>
+                <th>Valor</th>
+                <th>Pagamento</th>
+                <th>Descrição</th>
+                <th>Centro de Custo</th>
+                <th>Anexos</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+    </table>
+    <nav>
+        <ul class="pagination justify-content-center" id="paginacaoNotas"></ul>
+    </nav>
+</div>
+
+        </div>
+    </div>
+</div>
+
+<!-- Modal Avulso -->
+{% include 'reembolsos/modais/avulso.html' %}
+
+<!-- Modal de Documentos -->
+<div class="modal fade" id="modalDocumentos" tabindex="-1" aria-labelledby="modalDocumentosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDocumentosLabel">Documentos da Nota</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="notaIdDocumentos">
+                <div class="mb-3">
+                    <label for="anexos" class="form-label">Adicionar Documentos</label>
+                    <input type="file" class="form-control" id="anexos" multiple accept=".pdf,.jpg,.jpeg,.png">
+                    <div class="form-text">Formatos aceitos: PDF, JPG, PNG</div>
+                </div>
+                <div class="list-group" id="listaDocumentos">
+                    <!-- Lista de documentos será preenchida via JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" onclick="salvarDocumentos()">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal de Visualização de Documento -->
+<div class="modal fade" id="modalVisualizarDocumento" tabindex="-1" aria-labelledby="modalVisualizarDocumentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarDocumentoLabel">Visualizar Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" style="height:80vh;">
+                <iframe id="iframeDocumento" src="" style="width:100%;height:100%;border:none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let notasSelecionadas = {{ reembolso_ids|tojson }};
+let avulsos = [];
+let paginaNotas = 1;
+let totalPaginasNotas = 1;
+let notasPorPagina = 25;
+let reembolso_id = {{ reembolso_id }};
+window.centrosCusto = {{ centros_custo|tojson }};
+window.modo = '{{ modo }}';
+document.addEventListener('DOMContentLoaded', function() {
+
+    filtrarNotas();
+});
+function filtrarNotas(page = 1) {
+    paginaNotas = page;
+    const spinner = document.getElementById('spinnerNotas');
+    if (spinner) spinner.style.display = '';
+    const filtros = {
+        numero: document.getElementById('filtroNumero')?.value,
+        fornecedor: document.getElementById('filtroFornecedor')?.value,
+        data_inicial: document.getElementById('filtroDataInicial')?.value,
+        data_final: document.getElementById('filtroDataFinal')?.value,
+        valor_minimo: document.getElementById('filtroValorMinimo')?.value,
+        valor_maximo: document.getElementById('filtroValorMaximo')?.value,
+        valor_exato: document.getElementById('filtroValorExato')?.value,
+        pagamento: document.getElementById('filtroPagamento') ? document.getElementById('filtroPagamento').value : '',
+        page: paginaNotas,
+        per_page: notasPorPagina,
+        ids: notasSelecionadas,
+        notas_selecionadas: notasSelecionadas,
+        reembolso_id: reembolso_id
+    };
+    fetch('/reembolsos/buscar_notas', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
+        },
+        body: JSON.stringify(filtros)
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log(data);
+        const tbody = document.querySelector('#tabelaNotas tbody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        if (data.notas && Array.isArray(data.notas)) {
+            data.notas.forEach(nota => {
+                const checked = nota.selecionada ? 'checked' : '';
+                const notaSelecionada = notasSelecionadas.find(n => n.id === parseInt(nota.id)) || {};
+                const descricao = notaSelecionada.descricao || '';
+                const centro_custo_id = notaSelecionada.centro_custo_id || '';
+                let centroCustoOptions = '<option value="">Selecione...</option>';
+                if (window.centrosCusto) {
+                    window.centrosCusto.forEach(function(centro) {
+                        if (nota.centro_custo_id !='' && nota.centro_custo_id == centro.id) {
+                            centroCustoOptions += `<option value="${centro.id}" selected>${centro.codigo} - ${centro.nome}</option>`;
+                        } else {
+                            centroCustoOptions += `<option value="${centro.id}">${centro.codigo} - ${centro.nome}</option>`;
+                        }
+                    });
+                }
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked}></td>
+                    <td>${nota.numero_nf}</td>
+                    <td><a href="#" onclick="abrirPdfNota(${nota.id}); return false;">${nota.nome_emitente}</a></td>
+                    <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
+                    <td>${formatarMoeda(nota.valor_total)}</td>
+                    <td>${nota.pagamento ? '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>' : ''}
+                        ${nota.upload_reembolso > 0 ? '<span class="badge bg-info ms-1" title="Documentos anexados"><i class="fas fa-paperclip"></i></span>' : ''}</td>
+                    <td><input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}"></td>
+                    <td><select class="form-control nota-centro-custo" data-id="${nota.id}">${centroCustoOptions}</select></td>
+                    <td><button type="button" class="btn btn-primary btn-sm" onclick="abrirModalDocumentos(${nota.id})"><i class="fas fa-paperclip"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            totalPaginasNotas = data.pages;
+            renderPaginacaoNotas();
+            adicionarListenersNotas();
+        } else {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar notas</td></tr>';
+        }
+    })
+    .catch(error => {
+        const tbody = document.querySelector('#tabelaNotas tbody');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar notas</td></tr>';
+    })
+    .finally(() => {
+        if (spinner) spinner.style.display = 'none';
+    });
+}
+
+function renderPaginacaoNotas() {
+    const paginacao = document.getElementById('paginacaoNotas');
+    if (!paginacao) return;
+    paginacao.innerHTML = '';
+    if (totalPaginasNotas <= 1) return;
+    let html = '';
+    html += `<li class="page-item${paginaNotas === 1 ? ' disabled' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas - 1}); return false;">Anterior</a></li>`;
+    let start = Math.max(1, paginaNotas - 2);
+    let end = Math.min(totalPaginasNotas, paginaNotas + 2);
+    if (paginaNotas <= 3) { end = Math.min(5, totalPaginasNotas); }
+    if (paginaNotas > totalPaginasNotas - 2) { start = Math.max(1, totalPaginasNotas - 4); }
+    for (let i = start; i <= end; i++) {
+        html += `<li class="page-item${paginaNotas === i ? ' active' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${i}); return false;">${i}</a></li>`;
+    }
+    html += `<li class="page-item${paginaNotas === totalPaginasNotas ? ' disabled' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas + 1}); return false;">Próxima</a></li>`;
+    paginacao.innerHTML = html;
+}
+
+function adicionarListenersNotas() {
+    document.querySelectorAll('.nota-checkbox').forEach(cb => {
+        cb.addEventListener('change', function(e) {
+            const notaId = parseInt(this.value);
+            const tr = this.closest('tr');
+            const descricao = tr.querySelector('.nota-descricao').value;
+            const valor = parseFloat(tr.querySelector('td:nth-child(5)').textContent.replace(/[^\d,-]/g, '').replace(',', '.'));
+            const centro_custo_id = tr.querySelector('.nota-centro-custo').value;
+            let nota = { id: notaId, descricao, valor, centro_custo_id };
+            if (this.checked) {
+                if (!notasSelecionadas.find(n => n.id === notaId)) notasSelecionadas.push(nota);
+            } else {
+                notasSelecionadas = notasSelecionadas.filter(n => n.id !== notaId);
+            }
+            atualizarTotal();
+        });
+    });
+    document.querySelectorAll('.nota-descricao').forEach(input => {
+        input.addEventListener('input', function(e) {
+            const notaId = parseInt(this.dataset.id);
+            const nota = notasSelecionadas.find(n => n.id === notaId);
+            if (nota) nota.descricao = this.value;
+        });
+    });
+    document.querySelectorAll('.nota-centro-custo').forEach(select => {
+        select.addEventListener('change', function(e) {
+            const notaId = parseInt(this.dataset.id);
+            const nota = notasSelecionadas.find(n => n.id === notaId);
+            if (nota) nota.centro_custo_id = this.value;
+        });
+    });
+}
+
+</script>
+{% endblock %} 
