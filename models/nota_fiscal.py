@@ -24,12 +24,12 @@ load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
 ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 
-CNPJS = ['27126997000187','27126997000349','27126997000268']
 CNPJS_FILIAIS = ['27126997000349','27126997000268','27126997000220']
 CNPJS_MATRIZ = ['27126997000187']
 CNPJS_MATRIZ_FILIAIS = CNPJS_MATRIZ + CNPJS_FILIAIS
 CFOPS_COMPRA = [6101,5101,5405,6105,6401]
 CFOPS_VENDA = [6101,5101,6107]
+CFOPS_TRANSFERENCIA = [5949,6949]
 
 def get_xml_text(element, xpath, ns):
     """
@@ -278,7 +278,7 @@ class NotaFiscal(db.Model):
                 )
                 item_fiscal.save()
             self.vincular_automaticamente()
-            if not (self.cnpj_emitente in CNPJS):
+            if not (self.cnpj_emitente in CNPJS_MATRIZ_FILIAIS):
                 self.importar_itens_para_estoque()
             self.inserido = True
             return self
@@ -604,6 +604,10 @@ class NotaFiscalItem(db.Model):
     # Vinculação com material do sistema
     material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'), nullable=True)
     material = db.relationship('Material', backref='itens_nota_fiscal')
+
+    movimentacao_estoque_id = db.Column(db.Integer, nullable=True)
+    
+
     
     # Status de importação para estoque
     importado_estoque = db.Column(db.Boolean, default=False)
@@ -743,6 +747,7 @@ class NotaFiscalItem(db.Model):
             # Salvar movimentação (isso vai atualizar o estoque automaticamente)
             movimentacao.save()
             
+            
             # Garantir que o estoque seja atualizado corretamente
             
             
@@ -762,8 +767,7 @@ class NotaFiscalItem(db.Model):
             self.status_importacao = 'importado'
             self.ultima_tentativa_importacao = datetime.now()
             self.tentativas_importacao += 1
-            
-            
+            self.movimentacao_estoque_id = movimentacao.id
             self.save()
             
             # Verificar se o material é da categoria EPI

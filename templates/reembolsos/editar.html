@@ -86,15 +86,15 @@
                                 </button>
                             </div>
                         </div>
-                    </form>
+                    
                 </div>
             </div>
             <div class="table-responsive mb-3">
-    <div id="spinnerNotas" class="text-center my-3" style="display:none;">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Carregando...</span>
-        </div>
-    </div>
+                <div id="spinnerNotas" class="text-center my-3" style="display:none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
     <table class="table table-bordered" id="tabelaNotas">
         <thead>
             <tr>
@@ -123,6 +123,54 @@
     </div>
 </div>
 
+<!-- Botão Adicionar Avulso -->
+<div class="row mb-3">
+    <div class="col-12">
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalAvulso">
+            <i class="fas fa-plus"></i> Adicionar Documento Avulso
+        </button>
+    </div>
+</div>
+
+<!-- Lista de Avulsos -->
+<div class="table-responsive mb-3">
+    <table class="table table-bordered" id="tabelaAvulsos">
+        <thead>
+            <tr>
+                <th>Descrição</th>
+                <th>Valor</th>
+                <th>Anexos</th>
+                <th width="100">Ações</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<!-- Resumo -->
+<div class="row mb-3">
+    <div class="col-md-6 offset-md-6">
+        <table class="table">
+            <tr>
+                <th>Total:</th>
+                <td class="text-right" id="valorTotal">R$ 0,00</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<!-- Botões -->
+<div class="row">
+    <div class="col-12">
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-save"></i> Salvar Reembolso
+        </button>
+        <a href="{{ url_for('reembolso.index') }}" class="btn btn-secondary">
+            <i class="fas fa-times"></i> Cancelar
+        </a>
+    </div>
+</form>
+</div> 
 <!-- Modal Avulso -->
 {% include 'reembolsos/modais/avulso.html' %}
 
@@ -134,7 +182,12 @@
                 <h5 class="modal-title" id="modalDocumentosLabel">Documentos da Nota</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <div class="modal-body">
+            <div id="spinnerDocumentos" class="text-center my-3" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+            <div class="modal-body" id="bodyDocumentos">
                 <input type="hidden" id="notaIdDocumentos">
                 <div class="mb-3">
                     <label for="anexos" class="form-label">Adicionar Documentos</label>
@@ -170,22 +223,59 @@
 
 {% block scripts %}
 <script>
-let notasSelecionadas = {{ reembolso_ids|tojson }};
+let notasSelecionadas = {{ notas|tojson }};
+let reembolso_id = {{ reembolso_id }};
 let avulsos = [];
 let paginaNotas = 1;
 let totalPaginasNotas = 1;
 let notasPorPagina = 25;
-let reembolso_id = {{ reembolso_id }};
+
+let spinner,tbody,paginacao;
 window.centrosCusto = {{ centros_custo|tojson }};
 window.modo = '{{ modo }}';
 document.addEventListener('DOMContentLoaded', function() {
-
+    spinner = document.getElementById('spinnerNotas');
+    tbody = document.querySelector('#tabelaNotas tbody');
+    paginacao = document.getElementById('paginacaoNotas');
+    if (window.modo === 'editar') {
+        const filtroPagamento = document.getElementById('filtroPagamento');
+        if (filtroPagamento) filtroPagamento.value = 'selecionados';
+    }
+    const notasInput = document.getElementById('notas_selecionadas');
+    const avulsosInput = document.getElementById('avulsos_data');
+    try {
+        if (notasInput && notasInput.value && notasInput.value !== '[]') {
+            notasSelecionadas = JSON.parse(notasInput.value).map(n => ({...n, id: parseInt(n.id)}));
+        }
+        if (avulsosInput && avulsosInput.value && avulsosInput.value !== '[]') {
+            avulsos = JSON.parse(avulsosInput.value);
+            // atualizarTabelaAvulsos(); // Se necessário
+        }
+    } catch (e) { /* ignora erro de parse */ }
     filtrarNotas();
+    document.getElementById('formReembolso').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (notasSelecionadas.length === 0 && avulsos.length === 0) {
+            alert('Selecione pelo menos uma nota fiscal ou adicione um documento avulso.');
+            return;
+        }
+        document.getElementById('notas_selecionadas').value = JSON.stringify(notasSelecionadas);
+        document.getElementById('avulsos_data').value = JSON.stringify(avulsos);
+        console.log('notasSelecionadas',notasSelecionadas);
+        console.log('avulsos',avulsos);
+        this.submit();
+    });
 });
 function filtrarNotas(page = 1) {
     paginaNotas = page;
-    const spinner = document.getElementById('spinnerNotas');
+    
     if (spinner) spinner.style.display = '';
+    
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    if (!paginacao) return; 
+    paginacao.innerHTML = '';
     const filtros = {
         numero: document.getElementById('filtroNumero')?.value,
         fornecedor: document.getElementById('filtroFornecedor')?.value,
@@ -201,30 +291,33 @@ function filtrarNotas(page = 1) {
         notas_selecionadas: notasSelecionadas,
         reembolso_id: reembolso_id
     };
-    fetch('/reembolsos/buscar_notas', {
+    post = {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
         },
         body: JSON.stringify(filtros)
-    })
-    .then(response => response.json())
+    }
+    console.log('post',post);
+    fetch('/reembolsos/buscar_notas', post)
+    .then(
+        response => {
+            console.log('response:',response);
+            return response.json()
+        }
+    )
     .then(data => {
-        console.log(data);
-        const tbody = document.querySelector('#tabelaNotas tbody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
+        console.log('data',data);
         if (data.notas && Array.isArray(data.notas)) {
             data.notas.forEach(nota => {
                 const checked = nota.selecionada ? 'checked' : '';
-                const notaSelecionada = notasSelecionadas.find(n => n.id === parseInt(nota.id)) || {};
-                const descricao = notaSelecionada.descricao || '';
-                const centro_custo_id = notaSelecionada.centro_custo_id || '';
+                const descricao = nota.doc.descricao || '';
+                const centro_custo_id = nota.doc.cc || '';
                 let centroCustoOptions = '<option value="">Selecione...</option>';
                 if (window.centrosCusto) {
                     window.centrosCusto.forEach(function(centro) {
-                        if (nota.centro_custo_id !='' && nota.centro_custo_id == centro.id) {
+                        if (nota.doc.cc !='' && nota.doc.cc == centro.id) {
                             centroCustoOptions += `<option value="${centro.id}" selected>${centro.codigo} - ${centro.nome}</option>`;
                         } else {
                             centroCustoOptions += `<option value="${centro.id}">${centro.codigo} - ${centro.nome}</option>`;
@@ -235,12 +328,14 @@ function filtrarNotas(page = 1) {
                 tr.innerHTML = `
                     <td><input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked}></td>
                     <td>${nota.numero_nf}</td>
-                    <td><a href="#" onclick="abrirPdfNota(${nota.id}); return false;">${nota.nome_emitente}</a></td>
+                    <td><a href="#" onclick="abrirModalDocumentos(${nota.id}); return false;">${nota.nome_emitente}</a></td>
                     <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
                     <td>${formatarMoeda(nota.valor_total)}</td>
                     <td>${nota.pagamento ? '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>' : ''}
-                        ${nota.upload_reembolso > 0 ? '<span class="badge bg-info ms-1" title="Documentos anexados"><i class="fas fa-paperclip"></i></span>' : ''}</td>
-                    <td><input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}"></td>
+                        ${nota.upload_reembolso == 1 ? '<span class="badge bg-info ms-1" title="Documentos de reembolso"><i class="fas fa-paperclip" style="color:red"></i></span>' : ''}
+                        ${nota.upload_envio == 1 ? '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip" style="color:green"></i></span>' : ''}
+                        ${(nota.upload == 1 && nota.upload_reembolso == 0 && nota.upload_envio == 0) ? '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip"></i></span>' : ''}</td>
+                        <td><input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}"></td>
                     <td><select class="form-control nota-centro-custo" data-id="${nota.id}">${centroCustoOptions}</select></td>
                     <td><button type="button" class="btn btn-primary btn-sm" onclick="abrirModalDocumentos(${nota.id})"><i class="fas fa-paperclip"></i></button></td>
                 `;
@@ -263,9 +358,7 @@ function filtrarNotas(page = 1) {
 }
 
 function renderPaginacaoNotas() {
-    const paginacao = document.getElementById('paginacaoNotas');
-    if (!paginacao) return;
-    paginacao.innerHTML = '';
+   
     if (totalPaginasNotas <= 1) return;
     let html = '';
     html += `<li class="page-item${paginaNotas === 1 ? ' disabled' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas - 1}); return false;">Anterior</a></li>`;
@@ -279,10 +372,28 @@ function renderPaginacaoNotas() {
     html += `<li class="page-item${paginaNotas === totalPaginasNotas ? ' disabled' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas + 1}); return false;">Próxima</a></li>`;
     paginacao.innerHTML = html;
 }
-
+function selecionarTodosNotas(checkbox) {
+    const checkboxes = document.querySelectorAll('.nota-checkbox');
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+        const tr = cb.closest('tr');
+        const notaId = parseInt(cb.value);
+        const descricao = tr.querySelector('.nota-descricao').value;
+        const valor = parseFloat(tr.querySelector('td:nth-child(5)').textContent.replace(/[^0-9,-]/g, '').replace(',', '.'));
+        const centro_custo_id = tr.querySelector('.nota-centro-custo').value;
+        let nota = { id: notaId, descricao, valor, centro_custo_id };
+        if (checkbox.checked) {
+            if (!notasSelecionadas.find(n => n.id === notaId)) notasSelecionadas.push(nota);
+        } else {
+            notasSelecionadas = notasSelecionadas.filter(n => n.id !== notaId);
+        }
+    });
+    atualizarTotal();
+}
 function adicionarListenersNotas() {
     document.querySelectorAll('.nota-checkbox').forEach(cb => {
         cb.addEventListener('change', function(e) {
+            console.log('cb');
             const notaId = parseInt(this.value);
             const tr = this.closest('tr');
             const descricao = tr.querySelector('.nota-descricao').value;
@@ -312,6 +423,175 @@ function adicionarListenersNotas() {
         });
     });
 }
+function abrirPdfNota(notaId) {
+    const iframe = document.getElementById('iframeDocumento');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalVisualizarDocumento');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
 
-</script>
+    // Remove mensagens/elementos antigos
+    let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+
+    // Exibe loading
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'pdfLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+    iframe.parentNode.appendChild(loading);
+
+    fetch(`/notas-fiscais/pdf/${notaId}`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar PDF');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+            msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
+function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(valor);
+}
+
+function atualizarTotal() {
+    let total = 0;
+    notasSelecionadas.forEach(nota => {
+        total += parseFloat(nota.valor);
+    });
+    avulsos.forEach(avulso => {
+        total += parseFloat(avulso.valor);
+    });
+    const totalEl = document.getElementById('valorTotal');
+    if (totalEl) totalEl.textContent = formatarMoeda(total);
+}
+
+
+function abrirModalDocumentos(notaId) {
+    modalDocumentos = new bootstrap.Modal(document.getElementById('modalDocumentos'));
+    modalDocumentos.show();
+    spinnerDocumentos = document.getElementById('spinnerDocumentos');
+    bodyDocumentos = document.getElementById('bodyDocumentos');
+    spinnerDocumentos.style.display = '';
+    bodyDocumentos.style.display = 'none';
+    document.getElementById('notaIdDocumentos').value = notaId;
+    carregarDocumentos(notaId);
+}
+
+function carregarDocumentos(notaId) {
+    fetch(`/reembolsos/nota/${notaId}/documentos`)
+        .then(response => response.json())
+        .then(data => {
+            const lista = document.getElementById('listaDocumentos');
+            lista.innerHTML = '';
+            data.forEach(doc => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <div>
+                        <i class="fas fa-file me-2"></i>
+                        ${doc.filename}
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-info me-2" onclick="visualizarDocumento(${doc.id}, '${doc.mimetype}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-primary me-2" onclick="downloadDocumento(${doc.id})">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="excluirDocumento(${doc.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                `;
+                lista.appendChild(item);
+            });
+            spinnerDocumentos.style.display = 'none';
+            bodyDocumentos.style.display = '';
+        })
+        .catch(error => {
+            console.error('Erro ao carregar documentos:', error);
+            alert('Erro ao carregar documentos');
+        });
+}
+function visualizarDocumento(documentoId, mimetype) {
+    const iframe = document.getElementById('iframeDocumento');
+    iframe.src = '';
+    const modalEl = document.getElementById('modalVisualizarDocumento');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+    let oldMsg = modalEl.querySelector('.documento-erro-msg');
+    if (oldMsg) oldMsg.remove();
+    let oldSpinner = modalEl.querySelector('#documentoLoadingSpinner');
+    if (oldSpinner) oldSpinner.remove();
+    iframe.style.display = 'none';
+    let loading = document.createElement('div');
+    loading.id = 'documentoLoadingSpinner';
+    loading.className = 'd-flex justify-content-center align-items-center';
+    loading.style.height = '100%';
+    loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando documento...</span></div>';
+    iframe.parentNode.appendChild(loading);
+    fetch(`/reembolsos/documento/${documentoId}/download`)
+        .then(response => {
+            if (!response.ok) throw new Error('Erro ao buscar documento');
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            iframe.src = url;
+            iframe.onload = () => {
+                iframe.style.display = '';
+                if (loading) loading.remove();
+            };
+        })
+        .catch(() => {
+            if (loading) loading.remove();
+            iframe.style.display = 'none';
+            let msg = document.createElement('div');
+            msg.className = 'text-danger text-center mt-3 documento-erro-msg';
+            msg.innerText = 'Não foi possível carregar o documento.';
+            iframe.parentNode.appendChild(msg);
+        });
+}
+function downloadDocumento(documentoId) {
+    window.open(`/reembolsos/documento/${documentoId}/download`, '_blank');
+}
+function excluirDocumento(documentoId) {
+        if (confirm('Tem certeza que deseja excluir este documento?')) {
+            fetch(`/reembolsos/documento/${documentoId}/delete`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    carregarDocumentos(notaId);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao excluir documento:', error);
+                alert('Erro ao excluir documento');
+            });
+        }
+    }
+    </script>
 {% endblock %} 

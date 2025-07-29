@@ -37,3 +37,223 @@
         </div>
     </div>
 </div> 
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.closest('.btn-vincular-material')) {
+                const button = e.target.closest('.btn-vincular-material');
+                const itemId = button.getAttribute('data-item-id');
+                document.getElementById('item_id_para_vincular').value = itemId;
+                
+                const buscarMaterial = document.getElementById('buscarMaterial');
+                buscarMaterial.value = '';
+                buscarMaterial.focus();
+                
+                document.getElementById('corpoTabelaMateriais').innerHTML = '';
+                
+                // Abre o modal usando Bootstrap 5
+                const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
+                modal.show();
+            }
+        });
+            // Buscar materiais
+    let timeoutBusca;
+    const buscarMaterial = document.getElementById('buscarMaterial');
+    if (buscarMaterial) {
+        buscarMaterial.addEventListener('keyup', function() {
+            clearTimeout(timeoutBusca);
+            const termo = this.value;
+            
+            if (termo.length < 3) return;
+            
+            timeoutBusca = setTimeout(function() {
+                buscarMateriais(termo);
+            }, 500);
+        });
+    }
+
+    // Vincular material ao item
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.closest('.btn-selecionar-material')) {
+            const button = e.target.closest('.btn-selecionar-material');
+            const materialId = button.getAttribute('data-material-id');
+            const materialNome = button.getAttribute('data-material-nome');
+            const materialUnidade = button.getAttribute('data-material-unidade');
+            const itemId = document.getElementById('item_id_para_vincular').value;
+            
+            // Obter a unidade do item
+            const unidadeElemento = document.getElementById(`unidade_${itemId}`);
+            const itemUnidade = unidadeElemento ? unidadeElemento.textContent : '';
+            
+            // Vincular material ao item
+            document.getElementById(`material_id_${itemId}`).value = materialId;
+            
+            const materialNomeElemento = document.getElementById(`material_nome_${itemId}`);
+            if (materialNomeElemento) materialNomeElemento.textContent = materialNome;
+            
+            const btnVincular = document.getElementById(`btn_vincular_${itemId}`);
+            if (btnVincular) {
+                btnVincular.innerHTML = '<i class="fas fa-edit"></i>';
+                btnVincular.classList.remove('btn-primary');
+                btnVincular.classList.add('btn-warning');
+            }
+            
+            // Fechar modal de seleção
+            const modalSelecionar = bootstrap.Modal.getInstance(document.getElementById('modalSelecionarMaterial'));
+            if (modalSelecionar) modalSelecionar.hide();
+            
+            // Verificar se precisa de conversão de unidades
+            if (materialUnidade && itemUnidade && !compararUnidades(itemUnidade, materialUnidade)) {
+                abrirModalConversao(itemId, materialId, itemUnidade, materialUnidade);
+            }
+        }
+    });
+    function buscarMateriais(termo) {
+        const corpoTabela = document.getElementById('corpoTabelaMateriais');
+        if (!corpoTabela) return;
+
+        // Adiciona um feedback de carregamento
+        corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center">Buscando...</td></tr>';
+
+        fetch(`/notas-fiscais/api/materiais?termo=${encodeURIComponent(termo)}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro na requisição: ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                corpoTabela.innerHTML = ''; // Limpa a tabela
+                if (data.success && data.materiais.length > 0) {
+                    data.materiais.forEach(material => {
+                        const row = corpoTabela.insertRow();
+                        row.innerHTML = `
+                            <td>${material.codigo || ''}</td>
+                            <td>${material.nome || material.descricao || ''}</td>
+                            <td>${material.unidade || '-'}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary btn-selecionar-material"
+                                        data-material-id="${material.id}"
+                                        data-material-nome="${material.nome || material.descricao}"
+                                        data-material-unidade="${material.unidade || ''}">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </td>
+                        `;
+                    });
+                } else {
+                    corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center">Nenhum material encontrado.</td></tr>';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar materiais:', error);
+                corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Erro ao carregar materiais.</td></tr>';
+            });
+    }
+    function compararUnidades(unidadeNota, unidadeMaterial) {
+        fetch('/notas-fiscais/api/comparar_unidades', {
+            method: 'POST',
+            body: JSON.stringify({unidadeNota, unidadeMaterial})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                return true;
+            } else {
+                return false;
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao comparar unidades:', error);
+            return false;
+        });
+    }
+                
+
+    // ===== MODAL DE CONVERSÃO DE UNIDADES =====
+    // Abrir modal de conversão de unidades
+    function abrirModalConversao(itemId, materialId, unidadeNota, unidadeMaterial) {
+        document.getElementById('conversao_item_id').value = itemId;
+        document.getElementById('conversao_material_id').value = materialId;
+        
+        const unidadeNotaElemento = document.getElementById('unidadeNota');
+        if (unidadeNotaElemento) unidadeNotaElemento.textContent = unidadeNota;
+        
+        const unidadeMaterialElemento = document.getElementById('unidadeMaterial');
+        if (unidadeMaterialElemento) unidadeMaterialElemento.textContent = unidadeMaterial;
+        
+        const unidadeOrigemEx = document.getElementById('unidadeOrigemEx');
+        if (unidadeOrigemEx) unidadeOrigemEx.textContent = unidadeNota;
+        
+        const unidadeDestinoEx = document.getElementById('unidadeDestinoEx');
+        if (unidadeDestinoEx) unidadeDestinoEx.textContent = unidadeMaterial;
+        
+        const unidadeNovaDesc = document.getElementById('unidadeNovaDesc');
+        if (unidadeNovaDesc) unidadeNovaDesc.textContent = unidadeMaterial;
+        
+        // Carregar conversões existentes
+        carregarConversoesMaterial(materialId);
+        
+        // Abrir modal usando Bootstrap 5
+        const modal = new bootstrap.Modal(document.getElementById('modalConversaoUnidades'));
+        modal.show();
+    }
+
+    // Aplicar conversão de unidades
+    const btnAplicarConversao = document.getElementById('btnAplicarConversao');
+    if (btnAplicarConversao) {
+        btnAplicarConversao.addEventListener('click', function() {
+            const itemId = document.getElementById('conversao_item_id').value;
+            const materialId = document.getElementById('conversao_material_id').value;
+            const unidadeConversaoId = document.getElementById('unidade_conversao_id').value;
+            const fatorConversao = document.getElementById('fator_conversao').value;
+            
+            if (!unidadeConversaoId && (!fatorConversao || fatorConversao <= 0)) {
+                mostrarAlerta('Erro', 'Informe um fator de conversão válido ou selecione uma conversão existente.', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+            formData.append('item_id', itemId);
+            formData.append('material_id', materialId);
+            formData.append('unidade_conversao_id', unidadeConversaoId);
+            formData.append('fator_conversao', fatorConversao);
+            
+            fetch('/notas-fiscais/api/aplicar_conversao', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro de rede: ${response.status}`);
+                }
+                return response.json().catch(e => {
+                    console.error('Erro ao fazer parse do JSON:', e);
+                    throw new Error('Resposta inválida do servidor: não é um JSON válido');
+                });
+            })
+            .then(data => {
+                if (data.success) {
+                    const modalConversao = bootstrap.Modal.getInstance(document.getElementById('modalConversaoUnidades'));
+                    if (modalConversao) modalConversao.hide();
+                    mostrarAlerta('Sucesso', 'Conversão aplicada com sucesso.', 'success');
+                } else {
+                    mostrarAlerta('Erro', data.message, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao aplicar conversão:', error);
+                mostrarAlerta('Erro', `Ocorreu um erro ao aplicar a conversão: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                if (typeof Swal !== 'undefined') {
+                    Swal.close();
+                }
+            });
+        });
+    }
+    });
+</script>
+{% endblock %}

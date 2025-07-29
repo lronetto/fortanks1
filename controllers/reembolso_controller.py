@@ -1,7 +1,9 @@
+from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response, Response
 from markupsafe import Markup
 from flask_login import login_required, current_user
-from models.nota_fiscal import CFOPS_COMPRA
+from controllers.nota_fiscal_controller import nota_fiscal_busca
+from models.nota_fiscal import CFOPS_COMPRA,CNPJS_MATRIZ_FILIAIS,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
 from models import db, Reembolso, ReembolsoDocumento, ReembolsoAnexo, NotaFiscal,NotaFiscalItem ,CentroCusto
 from models.upload import Upload
@@ -143,136 +145,22 @@ def novo():
 
 @reembolso_bp.route('/buscar_notas', methods=['GET','POST'])
 @login_required
-def buscar_notas():
+def nota_fiscal_busca_reembolso():
     print('buscar_notas')
     tinicial = time.time()
     if request.method == 'POST':
         try:
             filtros = request.get_json()
-            if not filtros:
-                return jsonify({'error': 'Dados inválidos'}), 400
+            filtros['cnpj_emitente'] = CNPJS_MATRIZ_FILIAIS
+            filtros['cfop'] = CFOPS_TRANSFERENCIA
 
-            print('Filtros recebidos:', filtros)
-            
-            page = int(filtros.get('page', 1))
-            per_page = int(filtros.get('per_page', 10))
-            ids = filtros.get('ids', [])
-            pagamento_filtro = filtros.get('pagamento', '')
-            valor_minimo = filtros.get('valor_minimo')
-            valor_maximo = filtros.get('valor_maximo')
-            valor_exato = filtros.get('valor_exato')
-            notas_selecionadas = filtros.get('notas_selecionadas', [])
-            data_inicial = filtros.get('data_inicial')
-            data_final = filtros.get('data_final')
-            fornecedor = filtros.get('fornecedor')
-            numero = filtros.get('numero')
-            reembolso_id = filtros.get('reembolso_id')
-
-            tinicial = time.time()
-            
-            # Colunas virtuais usando funções de agregação para evitar duplicatas
-            tem_pagamento_column = func.max(case((DadoAnalitico.id != None, 1), else_=0)).label('tem_pagamento')
-            upload_envio_column = func.max(case((Upload.tipo != None, 1), else_=0)).label('upload_envio')
-            upload_reembolso_column = func.max(case((Upload.tipo == 3, 1), else_=0)).label('upload_reembolso')
-            centro_custo_column = func.max(ReembolsoDocumento.centro_custo_id).label('centro_custo_id')
-
-            # Construir query base com a nova coluna
-            query = db.session.query(
-                NotaFiscal,
-                tem_pagamento_column,
-                upload_envio_column,
-                upload_reembolso_column,
-                centro_custo_column
-            ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
-
-            # Condições do Join para encontrar a correspondência de pagamento
-            join_conditions_pagamento = and_(
-                NotaFiscal.valor_total == DadoAnalitico.valor,
-                DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
-            )
-            
-            # Condições do Join para uploads
-            join_conditions_upload = and_(
-                Upload.pai_id == NotaFiscal.id,
-                Upload.pai == 'NotaFiscal'
-            )
-
-            # Usar LEFT JOIN (outerjoin) para incluir todas as notas
-            query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
-            query = query.outerjoin(PlanoConta, DadoAnalitico.plano_conta_id == PlanoConta.id)
-            query = query.outerjoin(ReembolsoDocumento, ReembolsoDocumento.nota_fiscal_id == NotaFiscal.id)
-            query = query.outerjoin(Upload, join_conditions_upload)
-            
-            if data_inicial:
-                query = query.filter(NotaFiscal.data_emissao >= data_inicial)
-            if data_final:
-                query = query.filter(NotaFiscal.data_emissao <= data_final)
-            if fornecedor:
-                query = query.filter(NotaFiscal.nome_emitente.ilike(f'%{fornecedor}%'))
-            if numero:
-                query = query.filter(NotaFiscal.numero_nf.ilike(f'%{numero}%'))
-            query = query.filter(NotaFiscal.cnpj_emitente.notlike('%27126997000187%'))
-            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notlike('%5949%')))
-            
-            # Ajustar filtro de Plano de Conta para não excluir notas sem pagamento
-            query = query.filter(or_(
-                PlanoConta.id == None,
-                PlanoConta.codigo.notin_(PL_0202 + PL_0207 + PL_0209)
-            ))
-
-            # Usar a nova coluna para o filtro de pagamento
-            if pagamento_filtro == '0':  # Não Pago
-                query = query.filter(tem_pagamento_column == 0)
-            if pagamento_filtro == '1':  # Pago
-                query = query.filter(tem_pagamento_column == 1)
-            if pagamento_filtro == '2':  # Upload Reembolso
-                query = query.filter(upload_envio_column == 0)
-            if pagamento_filtro == '3':  # Upload Reembolso
-                query = query.filter(upload_reembolso_column == 1)
-            # Filtro especial para modo edição: mostrar apenas selecionados
-            if pagamento_filtro == '4':
-               query = query.filter(NotaFiscal.id.in_(notas_selecionadas))
-
-            # Agrupar por ID da nota fiscal para evitar duplicatas
-            query = query.group_by(NotaFiscal.id)
-
-            # Ordenar por data de emissão
-            query = query.order_by(NotaFiscal.data_emissao.desc())
-
-            tfinal = time.time()
-            print(f'Tempo de execução1: {tfinal - tinicial} segundos')
-            tinicial = time.time()
-            #print(f'query: {query}')
-            # Aplicar paginação
-            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-            notas = pagination.items
-
-            print('tempo de execução2: ',time.time()-tinicial)
-            tinicial = time.time()
-            # Processar notas para o JSON de resposta
-            notas_filtradas = []
-            for n in notas:
-                try:
-                    nota_fiscal_obj = n.NotaFiscal
-                    notas_filtradas.append({
-                        'id': nota_fiscal_obj.id,
-                        'selecionada': nota_fiscal_obj.id in notas_selecionadas,
-                        'upload': n.upload_envio,
-                        'numero_nf': nota_fiscal_obj.numero_nf,
-                        'nome_emitente': nota_fiscal_obj.nome_emitente,
-                        'data_emissao': nota_fiscal_obj.data_emissao.isoformat(),
-                        'valor_total': float(nota_fiscal_obj.valor_total),
-                        'pagamento': n.tem_pagamento,
-                        'upload_envio': n.upload_envio,
-                        'upload_reembolso': n.upload_reembolso,
-                        'chave_acesso': nota_fiscal_obj.chave_acesso,
-                        'centro_custo_id': n.centro_custo_id
-                    })
-                except Exception as e:
-                    print(f'Erro ao processar nota {n.NotaFiscal.id}: {str(e)}')
-                    continue
-
-                print('tempo de execução3: ',time.time()-tinicial)
+            notas_filtradas,pagination = nota_fiscal_busca(filtros)
+            print('tempo de execução3: ',time.time()-tinicial)
+           
+            #pagination = notas_filtradas.paginate(page=page, per_page=per_page, error_out=False)
+            #notas_filtradas = pagination.items
+            print(f'Total de notas encontradas: {pagination.total}')
+            print(f'Total de páginas: {pagination.pages}')
             # Se após filtrar por pagamento ficar com menos itens que a página atual,
             # precisamos buscar mais itens para preencher a página
            
@@ -282,11 +170,11 @@ def buscar_notas():
 
             return jsonify({
                 'notas': notas_filtradas,
-                'page': page,
+                'page': pagination.page,
                 'pages': pagination.pages,
                 'total': pagination.total,
-                'has_next': len(notas_filtradas) == per_page,
-                'has_prev': page > 1
+                'has_next': len(notas_filtradas) == pagination.per_page,
+                'has_prev': pagination.page > 1
             })
 
         except Exception as e:
@@ -406,9 +294,23 @@ def editar(reembolso_id):
     print(f'reembolso_id: {reembolso_id}')
     reembolso = Reembolso.query.get_or_404(reembolso_id)
     re = ReembolsoDocumento.query.filter_by(reembolso_id=reembolso_id).all()
-    reembolso_ids = [r.nota_fiscal_id for r in re if r.tipo == 'nota']
+    notas = []
+    for r in re:
+        if r.tipo == 'nota':
+            notas.append({
+                'id': r.nota_fiscal_id,
+                'descricao': r.descricao,
+                'valor': r.valor,
+                'centro_custo_id': r.centro_custo_id
+            })
+        else:
+            notas.append({
+                'id': r.id,
+            })
+
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
+
     if request.method == 'POST':
         try:
             # Atualizar campos principais
@@ -481,8 +383,7 @@ def editar(reembolso_id):
     # GET: Preencher formulário
     centros_custo = CentroCusto.query.filter_by(ativo=True).all()
     centros_custo = [{'id': c.id, 'codigo': c.codigo, 'nome': c.nome} for c in centros_custo]
-    print(f'reembolso_ids: {reembolso_ids}')
-    return render_template('reembolsos/editar.html', modo='editar',reembolso_id=reembolso_id,reembolso_ids=reembolso_ids,centros_custo=centros_custo)
+    return render_template('reembolsos/editar.html', modo='editar',reembolso_id=reembolso_id,notas=notas,centros_custo=centros_custo)
 
 def notas_json(reembolso):
     notas = []
@@ -491,7 +392,7 @@ def notas_json(reembolso):
             notas.append({
                 'id': doc.nota_fiscal.id,
                 'descricao': doc.descricao,
-                'valor': float(doc.valor),
+                'valor': Decimal(doc.valor),
                 'centro_custo_id': doc.centro_custo_id
             })
     return Markup(json.dumps(notas))

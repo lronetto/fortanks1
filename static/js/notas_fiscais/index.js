@@ -726,67 +726,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Carrega centros de custo
-    function carregarCentrosCusto() {
-        console.log('Carregando centros de custo');
-        
-        // Testar diferentes formatos de URL
-        const urls = [
-            '/notas-fiscais/api/centros-custo',
-            '/api/nota_fiscal/centros_custo',
-            '/api/notas-fiscais/centros-custo',
-            '/nota_fiscal/centros_custo'
-        ];
-        
-        // Tentar cada URL até uma funcionar
-        tentarURLs(urls, 0);
-        
-        function tentarURLs(urls, index) {
-            if (index >= urls.length) {
-                // Todos os formatos falharam
-                console.error('Não foi possível carregar centros de custo. Todas as URLs falharam.');
-                return;
-            }
-            
-            const url = urls[index];
-            console.log(`Tentando URL (${index+1}/${urls.length}): ${url}`);
-            
-            fetch(url)
-                .then(response => {
-                    console.log(`Resposta para ${url}:`, response.status);
-                    if (!response.ok) {
-                        // Se esta URL falhou, tente a próxima
-                        throw new Error(`Erro de rede: ${response.status}`);
-                    }
-                    return response.json().catch(e => {
-                        console.error('Erro ao analisar JSON:', e);
-                        throw new Error('Resposta inválida do servidor');
-                    });
-                })
-                .then(data => {
-                    console.log('Centros de custo recebidos:', data);
-                    if (data.success) {
-                        let options = '<option value="">Selecione um centro de custo</option>';
-                        
-                        data.centros_custo.forEach(function(centro) {
-                            options += `<option value="${centro.id}">${centro.nome}</option>`;
-                        });
-                        
-                        document.getElementById('centro_custo_id').innerHTML = options;
-                        
-                        // Registrar URL bem-sucedida para uso futuro
-                        console.log(`URL bem-sucedida: ${url}`);
-                    } else {
-                        console.error('Erro ao carregar centros de custo:', data.message);
-                    }
-                })
-                .catch(error => {
-                    console.warn(`Falha ao usar ${url}:`, error);
-                    // Tentar próxima URL
-                    tentarURLs(urls, index + 1);
-                });
-        }
-    }
-
+    
     // Busca materiais por termo
     function buscarMateriais(termo) {
         document.getElementById('corpoTabelaMateriais').innerHTML = '<tr><td colspan="4" class="text-center">Buscando materiais...</td></tr>';

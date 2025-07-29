@@ -191,13 +191,7 @@
         
         document.getElementById('corpoTabelaItensImportacao').innerHTML = html;
         
-        // Reconfigurar eventos para os botões de vinculação (já que recriamos os elementos)
-        document.querySelectorAll('.btn-vincular-material').forEach(function(button) {
-            button.addEventListener('click', function() {
-                const itemId = this.getAttribute('data-item-id');
-                abrirModalSelecaoMaterial(itemId);
-            });
-        });
+       
     }
     
     // Configurar eventos para o filtro de itens de importação

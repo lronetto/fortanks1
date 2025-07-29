@@ -142,6 +142,7 @@
 {% include 'notas_fiscais/modais/documentos.html' %}
 {% include 'notas_fiscais/modais/importar_itens.html' %}
 {% include 'notas_fiscais/modais/visualizar_itens.html' %}
+{% include 'notas_fiscais/modais/selecionar_material.html' %}
 {% endblock %}
 
 {% block extra_css %}
@@ -182,27 +183,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Usar delegação de eventos no container que já existe
    
 
-    // Delegação para outros botões da tabela
    
-    $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
-        console.log('importar itens clicado');
-        const notaId = $(this).data('id');
-        // importarItensNota(notaId);
-    });
-
-    $("#tabelaNotasFiscaisContainer").on('click', '.vincular-material', function() {
-        console.log('vincular material clicado');
-        const notaId = $(this).data('id');
-        // abrirModalVincularMaterial(notaId);
-    });
-
-    $("#tabelaNotasFiscaisContainer").on('click', '.excluir-nota', function() {
-        console.log('excluir nota clicado');
-        const notaId = $(this).data('id');
-        const numeroNf = $(this).data('numero');
-        // confirmarExclusaoNota(notaId, numeroNf);
-    });
-    
     // Manipular clique no link de visualizar PDF
 
     // Mostrar/ocultar filtros extras de CTE

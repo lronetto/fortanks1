@@ -23,13 +23,16 @@ from models.arquivei import Arquivei
 from scripts.processar_email1 import processar_emails
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
-from models.nota_fiscal import CNPJS,CNPJS_MATRIZ_FILIAIS,CNPJS_MATRIZ,CNPJS_FILIAIS
+from models.nota_fiscal import CNPJS_MATRIZ_FILIAIS,CNPJS_MATRIZ,CNPJS_FILIAIS
 from models.dados_analiticos import DadoAnalitico
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
 from scripts.importar_cte import extrair_dados_cte
 import pandas as pd
 import io
+from models.reembolso import ReembolsoDocumento
+from models.plano_conta import PlanoConta
+
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
 
@@ -72,7 +75,155 @@ def index():
     
     return render_template('notas_fiscais/index.html') # Passar novo filtro para o template
 
+def nota_fiscal_busca(filtros):
+    if not filtros:
+        return jsonify({'error': 'Dados inválidos'}), 400
 
+    print('Filtros recebidos:', filtros)
+    
+    page = int(filtros.get('page', 1))
+    per_page = int(filtros.get('per_page', 10))
+    ids = filtros.get('ids', [])
+    pagamento_filtro = filtros.get('pagamento', '')
+    valor_minimo = filtros.get('valor_minimo')
+    valor_maximo = filtros.get('valor_maximo')
+    valor_exato = filtros.get('valor_exato')
+    notas_selecionadas = filtros.get('notas_selecionadas', [])
+    data_inicial = filtros.get('data_inicial')
+    data_final = filtros.get('data_final')
+    fornecedor = filtros.get('fornecedor')
+    busca = filtros.get('busca','')
+    busca_prod = filtros.get('busca_prod','')
+    cnpj_emitente = filtros.get('cnpj_emitente','')
+    cnpj_destinatario = filtros.get('cnpj_destinatario','')
+    cfop = filtros.get('cfop','')
+    reembolso_id = filtros.get('reembolso_id','')
+    tinicial = time.time()
+    
+    # Colunas virtuais usando funções de agregação para evitar duplicatas
+    tem_pagamento_column = func.max(case((DadoAnalitico.id != None, 1), else_=0)).label('tem_pagamento')
+    upload_column = func.max(case((Upload.tipo != None, 1), else_=0)).label('upload')
+    upload_envio_column = func.max(case((Upload.tipo == 2, 1), else_=0)).label('upload_envio')
+    upload_reembolso_column = func.max(case((Upload.tipo == 3, 1), else_=0)).label('upload_reembolso')
+
+    query = db.session.query(
+        NotaFiscal,
+        tem_pagamento_column,
+        upload_column,
+        upload_envio_column,
+        upload_reembolso_column,
+        ReembolsoDocumento
+    ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
+
+    
+    #query = query.join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id)
+    # Condições do Join para encontrar a correspondência de pagamento
+    join_conditions_pagamento = and_(
+        NotaFiscal.valor_total == DadoAnalitico.valor,
+        DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
+    )
+    
+    # Condições do Join para uploads
+    join_conditions_upload = and_(
+        Upload.pai_id == NotaFiscal.id,
+        Upload.pai == 'NotaFiscal'
+    )
+
+    # Usar LEFT JOIN (outerjoin) para incluir todas as notas
+    query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
+    query = query.outerjoin(PlanoConta, DadoAnalitico.plano_conta_id == PlanoConta.id)
+    query = query.outerjoin(ReembolsoDocumento, ReembolsoDocumento.nota_fiscal_id == NotaFiscal.id)
+    query = query.outerjoin(Upload, join_conditions_upload)
+    
+    if valor_minimo:
+        query = query.filter(NotaFiscal.valor_total >= valor_minimo)
+    if valor_maximo:
+        query = query.filter(NotaFiscal.valor_total <= valor_maximo)
+    if valor_exato:
+        query = query.filter(NotaFiscal.valor_total == valor_exato)
+    if data_inicial:
+        query = query.filter(NotaFiscal.data_emissao >= data_inicial)
+    if data_final:
+        query = query.filter(NotaFiscal.data_emissao <= data_final)
+    if fornecedor:
+        query = query.filter(NotaFiscal.nome_emitente.ilike(f'%{fornecedor}%'))
+    if busca:
+        busca_like = f'%{busca}%'
+        query = query.filter(
+            or_(
+                NotaFiscal.numero_nf.ilike(busca_like),
+                NotaFiscal.nome_emitente.ilike(busca_like),
+                NotaFiscal.chave_acesso.ilike(busca_like)
+            )
+        )
+    if busca_prod:
+        busca_prod_like = f'%{busca_prod}%'
+        query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.descricao.ilike(busca_prod_like)))
+    if cnpj_emitente:
+        query = query.filter(NotaFiscal.cnpj_emitente.notin_(cnpj_emitente))
+    if cnpj_destinatario:
+        query = query.filter(NotaFiscal.cnpj_destinatario.notin_(cnpj_destinatario))
+    if cfop:
+        query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notin_(cfop)))
+    
+
+    # Usar a nova coluna para o filtro de pagamento
+    # Condições que atuam em colunas agregadas devem usar `having`
+    if pagamento_filtro == '0':  # Não Pago
+        query = query.having(tem_pagamento_column == 0)
+    if pagamento_filtro == '1':  # Pago
+        query = query.having(tem_pagamento_column == 1)
+    if pagamento_filtro == '2':  # Sem upload de envio
+        query = query.having(upload_envio_column == 0)
+    if pagamento_filtro == '3':  # Com upload de reembolso
+        query = query.having(upload_reembolso_column == 1)
+
+    # Este filtro atua sobre uma coluna normal, então continua usando `filter`
+    if pagamento_filtro == '4':
+        query = query.filter(NotaFiscal.id.in_(ids))
+
+    # Agrupar por ID da nota fiscal para evitar duplicatas (ESSENCIAL para o having funcionar)
+    query = query.group_by(NotaFiscal.id)
+
+    # Ordenar por data de emissão
+    query = query.order_by(NotaFiscal.data_emissao.desc())
+
+    tfinal = time.time()
+    print(f'Tempo de execução1: {tfinal - tinicial} segundos')
+    tinicial = time.time()
+    #print(f'query: {query}')
+    # Aplicar paginação
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    notas = pagination.items
+
+    print('tempo de execução2: ',time.time()-tinicial)
+    tinicial = time.time()
+    # Processar notas para o JSON de resposta
+    notas_filtradas = []
+    for n in notas:
+        try:
+            nota_fiscal_obj = n.NotaFiscal
+            notas_filtradas.append({
+                'doc': '' if n.ReembolsoDocumento is None else {
+                    'cc': n.ReembolsoDocumento.centro_custo_id,
+                    'descricao': n.ReembolsoDocumento.descricao
+                },
+                'id': nota_fiscal_obj.id,
+                'selecionada': nota_fiscal_obj.id in notas_selecionadas,
+                'numero_nf': nota_fiscal_obj.numero_nf,
+                'nome_emitente': nota_fiscal_obj.nome_emitente,
+                'data_emissao': nota_fiscal_obj.data_emissao.isoformat(),
+                'valor_total': float(nota_fiscal_obj.valor_total),
+                'pagamento': n.tem_pagamento,
+                'upload': n.upload,
+                'upload_envio': n.upload_envio,
+                'upload_reembolso': n.upload_reembolso,
+                'chave_acesso': nota_fiscal_obj.chave_acesso,
+            })
+        except Exception as e:
+            print(f'Erro ao processar nota {n.NotaFiscal.id}: {str(e)}')
+            continue
+    return notas_filtradas,pagination
 def api_get_dados_notas_fiscais(request):
     # Obter parâmetros de filtro
     args = request.args
@@ -1141,7 +1292,7 @@ def importar_todas_pendentes():
     try:
         # Buscar todas as notas fiscais
         notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada',
-                                                NotaFiscal.data_emissao<=datetime.now()-relativedelta(months=3))\
+                                                NotaFiscal.data_emissao>=datetime.now()-relativedelta(months=3))\
                                                 .all()
         
         itens_importados = 0
@@ -1150,9 +1301,10 @@ def importar_todas_pendentes():
         notas_canceladas = 0
         # Para cada nota fiscal
         total_notas = len(notas_fiscais)
+        print(f'total_notas: {total_notas}')
         for nota_fiscal in notas_fiscais:
             notas_processadas += 1
-            if(Arquivei(chave_acesso=nota_fiscal.chave_acesso,cancelamento=True).cancelada):
+            if False: #(Arquivei(chave_acesso=nota_fiscal.chave_acesso,cancelamento=True).cancelada):
                 nota_fiscal.status_processamento = 'cancelada'
                 nota_fiscal.save()
                 notas_canceladas+=1
