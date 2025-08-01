@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var historicoChart = null; 
 
     // Função para carregar e exibir histórico de preços
-    function carregarHistoricoPreco(tipoAgrupamento, itemId, itemCodigo, itemDescricao, itemNome) {
+    function carregarHistoricoPreco(tipoAgrupamento, itemId, itemCodigo, itemDescricao, itemNome, data_inicio, data_fim) {
         console.log('Função carregarHistoricoPreco iniciada.');
         console.log("Carregando histórico para:", tipoAgrupamento, itemId, itemCodigo, itemDescricao, itemNome);
 
@@ -460,9 +460,11 @@ document.addEventListener('DOMContentLoaded', function() {
         var params = {
              tipo: tipoAgrupamento,
              fornecedor: '{{ filtro_fornecedor }}',
-             data_inicio: '{{ filtro_data_inicio }}',
-             data_fim: '{{ filtro_data_fim }}'
+             data_inicio: data_inicio,
+             data_fim: data_fim
         };
+        console.log("data_inicio:", data_inicio);
+        console.log("data_fim:", data_fim);
         if (tipoAgrupamento === 'material') {
             params.material_id = itemId;
         } else { // item_nf
@@ -580,8 +582,10 @@ document.addEventListener('DOMContentLoaded', function() {
         var id = (tipo === 'material') ? $link.data('item-id') : null;
         var codigo = (tipo === 'item_nf') ? $link.data('item-codigo') : null;
         var descricao = (tipo === 'item_nf') ? $link.data('item-descricao') : null;
+        var data_inicio = $link.data('data-inicio');
+        var data_fim = $link.data('data-fim');
 
-        carregarHistoricoPreco(tipo, id, codigo, descricao, nome);
+        carregarHistoricoPreco(tipo, id, codigo, descricao, nome, data_inicio, data_fim);
     });
    
 

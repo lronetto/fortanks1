@@ -1,0 +1,46 @@
+<div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirmar Exclusão</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Tem certeza que deseja excluir o produto composto <strong id="nome-produto-excluir"></strong>?
+                <p class="text-danger mt-2">Esta ação não poderá ser desfeita!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger btn-send-excluir" data-id="" data-nome="">Excluir</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        $('.btn-send-excluir').on('click', function(e) {
+            e.preventDefault();
+            const produtoId = $(this).data('id');
+            const produtoNome = $(this).data('nome');
+            fetch(`/produto-composto/${produtoId}/deletar`,{
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }  
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                carregarProduto(0);
+            }).catch(error => {
+                console.error('Erro ao excluir produto composto:', error);
+            });
+            $('#deleteModal').modal('hide');
+        });
+    });
+</script>
+{% endblock %}

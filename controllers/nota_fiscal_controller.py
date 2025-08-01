@@ -715,6 +715,7 @@ def importar_arquivei():
     """
     Importa notas fiscais da API do Arquivei
     """
+    print(f'importando notas fiscais da API do Arquivei')
     if request.method == 'POST':
         try:
             # Verificar CSRF token
@@ -1667,6 +1668,18 @@ def api_historico_preco():
             NotaFiscalItem.material_id # Selecionar para referência
         ).join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
 
+        if data_inicio_str:
+            try:
+                data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
+                query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+            except ValueError:
+                return jsonify({"error": "Formato de data inválido para Data Início."}), 400
+        if data_fim_str:    
+            try:
+                data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
+                query = query.filter(NotaFiscal.data_emissao <= data_fim)
+            except ValueError:
+                return jsonify({"error": "Formato de data inválido para Data Fim."}), 400
         # Filtrar pelo item/material específico
         if tipo == 'material' and material_id:
             query = query.filter(NotaFiscalItem.material_id == material_id)

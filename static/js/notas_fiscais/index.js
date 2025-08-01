@@ -415,90 +415,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // ===== MODAL DE IMPORTAÇÃO VIA ARQUIVEI =====
-    // Inicialização do modal Arquivei
-    const modalImportarArquivei = document.getElementById('modalImportarArquivei');
-    if (modalImportarArquivei) {
-        modalImportarArquivei.addEventListener('show.bs.modal', function() {
-            // Define data atual como data final
-            const hoje = new Date();
-            const dataFinal = hoje.toISOString().split('T')[0];
-            document.getElementById('data_final').value = dataFinal;
-            
-            // Define data 30 dias atrás como data inicial
-            const dataInicial = new Date();
-            dataInicial.setDate(dataInicial.getDate() - 5);
-            document.getElementById('data_inicial').value = dataInicial.toISOString().split('T')[0];
-            
-            // Limpa CNPJ
-            document.getElementById('cnpj').value = '';
-        });
-    }
-
-    // Debug: Adicionar um evento de clique direto ao botão de importar Arquivei
-    const btnImportarArquivei = document.querySelector('[data-bs-target="#modalImportarArquivei"]');
-    if (btnImportarArquivei) {
-        btnImportarArquivei.addEventListener('click', function(e) {
-            console.log('Botão Importar Arquivei clicado');
-            try {
-                const modal = new bootstrap.Modal(document.getElementById('modalImportarArquivei'));
-                modal.show();
-            } catch (error) {
-                console.error('Erro ao abrir modal:', error);
-                alert('Erro ao abrir o modal. Verifique o console para mais informações.');
-            }
-        });
-    }
-
-    // Submissão do formulário de importação via Arquivei
-    const formImportarArquivei = document.getElementById('formImportarArquivei');
-    if (formImportarArquivei) {
-        formImportarArquivei.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            // Validações
-            const dataInicial = document.getElementById('data_inicial').value;
-            const dataFinal = document.getElementById('data_final').value;
-            const cnpj = document.getElementById('cnpj').value;
-            
-            if (!dataInicial || !dataFinal) {
-                mostrarAlerta('Erro', 'As datas inicial e final são obrigatórias.', 'error');
-                return false;
-            }
-            
-            if (new Date(dataFinal) < new Date(dataInicial)) {
-                mostrarAlerta('Erro', 'A data final não pode ser menor que a data inicial.', 'error');
-                return false;
-            }
-            
-            // Validar CNPJ (se preenchido)
-            if (cnpj && (!/^\d+$/.test(cnpj) || cnpj.length !== 14)) {
-                mostrarAlerta('Erro', 'O CNPJ deve conter apenas números e ter 14 dígitos.', 'error');
-                return false;
-            }
-            
-            // Confirmação antes de importar
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    title: 'Confirmar importação',
-                    text: 'Deseja importar as notas fiscais do Arquivei com os parâmetros informados?',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Sim, importar',
-                    cancelButtonText: 'Cancelar'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        importarArquivei();
-                    }
-                });
-            } else {
-                if (confirm('Deseja importar as notas fiscais do Arquivei com os parâmetros informados?')) {
-                    importarArquivei();
-                }
-            }
-        });
-    }
-
+    
     // ===== MODAL DE EXCLUSÃO DE NOTA FISCAL =====
     // Abrir modal de exclusão
     document.querySelectorAll('.excluir-nota').forEach(function(button) {
@@ -682,49 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     
 
-    // Função para importar via Arquivei
-    function importarArquivei() {
-        const formData = new FormData(document.getElementById('formImportarArquivei'));
-        
-        mostrarCarregando('Importando notas fiscais via Arquivei...');
-        
-        fetch('/notas-fiscais/importar-arquivei', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Erro de rede: ${response.status}`);
-            }
-            return response.json().catch(e => {
-                console.error('Erro ao fazer parse do JSON:', e);
-                throw new Error('Resposta inválida do servidor: não é um JSON válido');
-            });
-        })
-        .then(data => {
-            if (data.success) {
-                const modalArquivei = bootstrap.Modal.getInstance(document.getElementById('modalImportarArquivei'));
-                if (modalArquivei) modalArquivei.hide();
-                
-                mostrarAlerta('Sucesso', data.message, 'success', function() {
-                    // Recarregar a página após importação
-                    window.location.reload();
-                });
-            } else {
-                mostrarAlerta('Erro', data.message, 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Erro ao importar notas fiscais:', error);
-            mostrarAlerta('Erro', `Ocorreu um erro ao importar as notas fiscais: ${error.message}`, 'error');
-        })
-        .finally(() => {
-            if (typeof Swal !== 'undefined') {
-                Swal.close();
-            }
-        });
-    }
-
+    
     // Carrega centros de custo
     
     // Busca materiais por termo

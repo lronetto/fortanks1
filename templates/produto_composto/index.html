@@ -1,0 +1,280 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Produtos Compostos{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Produtos Compostos</h1>
+        <button class="btn btn-primary btn-icon-split btn-sm" id="btn-novo-produto">
+            <span class="icon text-white-50">
+                <i class="fas fa-plus"></i>
+            </span>
+            <span class="text">Novo Produto Composto</span>
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h6 class="m-0 font-weight-bold text-primary">Lista de Produtos</h6>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="filtro-nome" placeholder="Filtrar por nome...">
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" id="btn-limpar-filtro">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        Exibindo <span id="contador-produtos">0</span> de <span id="total-produtos">0</span> produtos
+                    </small>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabela-produtos-compostos" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;" class="order-id sortable" data-sort="id">
+                                ID <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="width: 10%;">Imagem</th>
+                            <th class="order-nome sortable" data-sort="nome">
+                                Nome <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="width: 15%;">Tempo Produção (h)</th>
+                            <th style="width: 10%;">Componentes</th>
+                            <th class="text-center" style="width: 15%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Container -->
+{% include 'produto_composto/modais/form.html' %}
+
+
+<!-- Modal de Exclusão (pode ser um só e genérico) -->
+{% include 'produto_composto/modais/delete.html' %}
+
+<!-- Modal de Duplicação -->
+{% include 'produto_composto/modais/duplicate.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let tbody,btnNovoProduto;
+    let produtosCompletos = []; // Array para armazenar todos os produtos
+    let produtosFiltrados = []; // Array para armazenar produtos filtrados
+    let timeoutFiltro = null; // Para debounce do filtro
+    let ordenacaoAtual = { campo: null, direcao: 'asc' }; // Para controlar ordenação
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        tbody = document.querySelector('#tabela-produtos-compostos tbody');
+        console.log('DOMContentLoaded');
+
+        btnNovoProduto = document.getElementById('btn-novo-produto');
+        btnNovoProduto.addEventListener('click', function(e) {
+            e.preventDefault();
+            $('#modal-produto-composto').modal('show');
+        });
+
+        // Event listeners para o filtro
+        const filtroNome = document.getElementById('filtro-nome');
+        const btnLimparFiltro = document.getElementById('btn-limpar-filtro');
+        
+        filtroNome.addEventListener('input', function() {
+            // Debounce para melhorar performance
+            clearTimeout(timeoutFiltro);
+            timeoutFiltro = setTimeout(() => {
+                filtrarProdutos(this.value);
+            }, 300);
+        });
+        
+        btnLimparFiltro.addEventListener('click', function() {
+            filtroNome.value = '';
+            filtrarProdutos('');
+        });
+
+        // Event listeners para ordenação
+        document.querySelectorAll('.sortable').forEach(th => {
+            th.addEventListener('click', function() {
+                const campo = this.dataset.sort;
+                ordenarPor(campo);
+            });
+        });
+
+        carregarProduto(0);
+
+    });
+    
+    function ordenarPor(campo) {
+        // Se clicar no mesmo campo, inverte a direção
+        if (ordenacaoAtual.campo === campo) {
+            ordenacaoAtual.direcao = ordenacaoAtual.direcao === 'asc' ? 'desc' : 'asc';
+        } else {
+            ordenacaoAtual.campo = campo;
+            ordenacaoAtual.direcao = 'asc';
+        }
+        
+        // Atualizar ícones de ordenação
+        document.querySelectorAll('.sortable i').forEach(icon => {
+            icon.className = 'fas fa-sort';
+        });
+        
+        const thAtual = document.querySelector(`[data-sort="${campo}"] i`);
+        if (ordenacaoAtual.direcao === 'asc') {
+            thAtual.className = 'fas fa-sort-up';
+        } else {
+            thAtual.className = 'fas fa-sort-down';
+        }
+        
+        // Aplicar ordenação
+        produtosFiltrados.sort((a, b) => {
+            let valorA, valorB;
+            
+            if (campo === 'id') {
+                valorA = parseInt(a[campo]);
+                valorB = parseInt(b[campo]);
+            } else {
+                valorA = a[campo] ? a[campo].toLowerCase() : '';
+                valorB = b[campo] ? b[campo].toLowerCase() : '';
+            }
+            
+            if (ordenacaoAtual.direcao === 'asc') {
+                return valorA > valorB ? 1 : -1;
+            } else {
+                return valorA < valorB ? 1 : -1;
+            }
+        });
+        
+        renderizarTabela();
+    }
+    
+    function filtrarProdutos(termo) {
+        if (!termo || termo.trim() === '') {
+            produtosFiltrados = [...produtosCompletos];
+        } else {
+            const termoLower = termo.toLowerCase();
+            produtosFiltrados = produtosCompletos.filter(produto => 
+                produto.nome.toLowerCase().includes(termoLower)
+            );
+        }
+        
+        // Manter ordenação atual após filtrar
+        if (ordenacaoAtual.campo) {
+            ordenarPor(ordenacaoAtual.campo);
+        } else {
+            renderizarTabela();
+        }
+    }
+    
+    function renderizarTabela() {
+        tbody.innerHTML = '';
+        produtosFiltrados.forEach(produto => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${produto.id}</td>
+                <td>
+                    <img src="/produto-composto/imagem/${produto.id}" 
+                         alt="${produto.nome}" 
+                         class="img-thumbnail" 
+                         style="width: 120px; height: 100px; object-fit: cover;">
+                </td>
+                <td class="nome">${produto.nome}</td>
+                <td class="tempo_producao">${produto.tempo_producao ? produto.tempo_producao : '-' }</td>
+                <td class="componentes">${produto.componentes}</td>
+                <td class="status">
+                    ${produto.status == 'Ativo' ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-secondary">Inativo</span>'}
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-info btn-circle btn-sm btn-editar" data-id="${produto.id}" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-warning btn-circle btn-sm btn-duplicar" data-id="${produto.id}" data-nome="${produto.nome}" title="Duplicar">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                    <button class="btn btn-danger btn-circle btn-sm btn-excluir" data-id="${produto.id}" data-nome="${produto.nome}" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // Atualizar contadores
+        document.getElementById('contador-produtos').textContent = produtosFiltrados.length;
+        document.getElementById('total-produtos').textContent = produtosCompletos.length;
+        
+        addEventos();
+    }
+    
+    function carregarProduto(id) {
+        console.log('carregando produto');
+        fetch(`/produto-composto/get_produto_composto/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log(data.produtos);
+            produtosCompletos = data.produtos;
+            produtosFiltrados = [...produtosCompletos];
+            renderizarTabela();
+        });
+    }
+    function addEventos() {
+        $('#tabela-produtos-compostos tbody').on('click', '.btn-duplicar', function(e) {
+            console.log('btn-duplicar');
+            e.preventDefault();
+            const produtoId = $(this).data('id');
+            const produtoNome = $(this).data('nome');
+            $('.btn-send-duplicar').data('id', produtoId);
+            $('.btn-send-duplicar').data('nome', produtoNome);
+            $('#nome-produto-duplicar').text(produtoNome);
+            $('#duplicateModal').modal('show');
+        });
+        $('#tabela-produtos-compostos tbody').on('click', '.btn-excluir', function(e) {
+            console.log('btn-excluir');
+            e.preventDefault();
+            const produtoId = $(this).data('id');
+            const produtoNome = $(this).data('nome');
+            $('.btn-send-excluir').data('id', produtoId);
+            $('.btn-send-excluir').data('nome', produtoNome);
+            $('#nome-produto-excluir').text(produtoNome);
+            $('#deleteModal').modal('show');
+        });
+       
+    }
+   
+</script>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.sortable:hover {
+    background-color: #f8f9fc;
+}
+
+.sortable i {
+    margin-left: 5px;
+    color: #858796;
+}
+</style>
+{% endblock %} 

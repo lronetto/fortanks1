@@ -1,0 +1,48 @@
+<div class="modal fade" id="duplicateModal" tabindex="-1" role="dialog" aria-labelledby="duplicateModalLabel" style="display: none;">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="duplicateModalLabel">Confirmar Duplicação</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                Tem certeza que deseja duplicar o produto composto <strong id="nome-produto-duplicar"></strong>?
+                <p class="text-info mt-2">Será criada uma cópia com o nome "(Cópia)" e todos os seus componentes.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning btn-send-duplicar" data-id="" data-nome="">Duplicar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        $('.btn-send-duplicar').on('click', function(e) {
+            e.preventDefault();
+            console.log('submit');
+            const produtoId = $(this).data('id');
+            const produtoNome = $(this).data('nome');
+            fetch(`/produto-composto/${produtoId}/duplicar`,{
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                carregarProduto(0);
+            }).catch(error => {
+                console.error('Erro ao duplicar produto composto:', error);
+            });
+            $('#duplicateModal').modal('hide')
+        });
+    });
+</script>
+{% endblock %}

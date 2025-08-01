@@ -24,7 +24,6 @@ from controllers.nota_fiscal_controller import nota_fiscal_bp
 from controllers.estoque_controller import estoque_bp
 from controllers.unidade_controller import unidade_bp
 from controllers.produto_composto_controller import produto_composto_bp
-from controllers.producao_peca_controller import producao_peca_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
 from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
@@ -193,7 +192,6 @@ app.register_blueprint(nota_fiscal_bp, url_prefix='/notas-fiscais')
 app.register_blueprint(estoque_bp, url_prefix='/estoque')
 app.register_blueprint(unidade_bp)
 app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
-app.register_blueprint(producao_peca_bp, url_prefix='/producao-peca')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(relatorio_usinagem_bp)
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
@@ -340,14 +338,8 @@ def handle_exception(e):
                                error_title=name,
                                error_message=description), code
 def processar_arquivei():
-    notas=Arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'))
-    if notas:
-        for nota in notas.xml_datas:
-            NotaFiscal(xml_data=nota)
-    notas=Arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='cte')
-    if notas:
-        for nota in notas.xml_datas:
-            NotaFiscal(xml_data=nota,tipo='cte')
+    NotaFiscal.importar_arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'))
+    NotaFiscal.importar_arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='cte')
 def job_email5min():
     with app.app_context():
         processar_emails()

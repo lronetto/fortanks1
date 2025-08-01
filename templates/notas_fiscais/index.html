@@ -5,13 +5,13 @@
 {% block content %}
 <div class="container-fluid">
     <!-- Cabeçalho -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 cabecalho">
         <div>
             <h1 class="h3 text-gray-800">Gestão de Notas Fiscais</h1>
             <p class="mb-0">Visualize e gerencie todas as notas fiscais do sistema.</p>
         </div>
         <div>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImportarArquivei">
+            <button type="button" class="btn btn-primary btn-importar-arquivei">
                 <i class="fas fa-cloud-download-alt"></i> Importar Arquivei
             </button>
             <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
@@ -143,6 +143,7 @@
 {% include 'notas_fiscais/modais/importar_itens.html' %}
 {% include 'notas_fiscais/modais/visualizar_itens.html' %}
 {% include 'notas_fiscais/modais/selecionar_material.html' %}
+{% include 'notas_fiscais/modais/importar_arquivei.html' %}
 {% endblock %}
 
 {% block extra_css %}

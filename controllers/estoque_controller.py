@@ -12,6 +12,8 @@ from sqlalchemy import or_, func
 from decimal import Decimal
 import logging
 
+from models.produto_composto import ProdutoComposto
+
 # Configuração do logger
 logger = logging.getLogger(__name__)
 
@@ -215,6 +217,54 @@ def editar(id):
             flash(f'Erro ao atualizar item: {str(e)}', 'danger')
     
     return render_template('estoque/form.html', form=form, title='Editar Item de Estoque')
+
+@estoque_bp.route('/api/listar', methods=['GET'])
+@login_required
+def api_listar():
+    """
+    API que retorna uma lista de itens de estoque (Materiais e Produtos Compostos) para uso em selects.
+    """
+    search_term = request.args.get('q', '')
+
+    # Query base no Estoque, carregando relacionamentos para evitar N+1 queries
+    query = Estoque.query.options(
+        db.joinedload(Estoque.material).joinedload(Material.unidade_obj),
+        db.joinedload(Estoque.produto_composto)
+    ).filter(
+        db.or_(Estoque.material_id.isnot(None), Estoque.ProdComp_id.isnot(None))
+    )
+
+    # Aplicar filtro de busca se houver
+    if search_term:
+        query = query.outerjoin(Material, Estoque.material_id == Material.id)\
+                     .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)\
+                     .filter(
+                        db.or_(
+                            Material.nome.ilike(f'%{search_term}%'),
+                            ProdutoComposto.nome.ilike(f'%{search_term}%')
+                        )
+                     )
+
+    itens_estoque = query.all()
+
+    resultado = []
+    for item in itens_estoque:
+        text = ""
+        # Verifica se o item de estoque é um material
+        if item.material:
+            unidade = f" ({item.material.unidade_obj.nome})" if item.material.unidade_obj else " (s/unid.)"
+            text = f"[M] {item.material.nome}{unidade}"
+            resultado.append({'id': item.id, 'text': text})
+        # Verifica se o item de estoque é um produto composto
+        elif item.produto_composto:
+            text = f"[P] {item.produto_composto.nome}"
+            resultado.append({'id': item.id, 'text': text})
+            
+    # Ordena a lista final pelo texto
+    resultado.sort(key=lambda x: x['text'])
+            
+    return jsonify({'results': resultado})
+
 
 @estoque_bp.route('/detalhes/<int:id>')
 @login_required

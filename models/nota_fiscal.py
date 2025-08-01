@@ -279,6 +279,7 @@ class NotaFiscal(db.Model):
                 item_fiscal.save()
             self.vincular_automaticamente()
             if not (self.cnpj_emitente in CNPJS_MATRIZ_FILIAIS):
+                print(f'importando itens para estoque')
                 self.importar_itens_para_estoque()
             self.inserido = True
             return self

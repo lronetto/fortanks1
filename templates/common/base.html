@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Sistema de Gestão - Pré-moldados{% endblock %}</title>
 
     <!-- Bootstrap CSS -->
@@ -206,8 +207,7 @@
                    }
    
                    // Auto-abrir o submenu de Cadastro Operacional se estiver em uma página relacionada
-                   if (window.location.pathname.includes('/produto-composto') ||
-                       window.location.pathname.includes('/producao-peca')) {
+                   if (window.location.pathname.includes('/produto-composto')) {
                        $('#cadastroOperacionalSubmenu').addClass('show');
                        $('#cadastroOperacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
@@ -634,15 +634,11 @@
                         </a>
                         <ul class="collapse list-unstyled" id="cadastroOperacionalSubmenu">
                             <li class="{{ is_active('produto-composto') }}">
-                                <a href="{{ url_for('produto_composto.listar') }}">
+                                <a href="{{ url_for('produto_composto.index') }}">
                                     <i class="fas fa-boxes"></i> Produtos Compostos
                                 </a>
                             </li>
-                            <li class="{{ is_active('producao-peca') }}">
-                                <a href="{{ url_for('producao_peca.listar') }}">
-                                    <i class="fas fa-industry"></i> Produção de Peças
-                                </a>
-                            </li>
+                            
                         </ul>
                     </li>
                     {% endif %}

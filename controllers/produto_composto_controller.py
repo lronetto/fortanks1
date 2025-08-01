@@ -1,104 +1,316 @@
 from datetime import datetime
-from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash
+from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file
+from io import BytesIO
 from werkzeug.exceptions import abort
-from models import db, ProdutoComposto, ComponenteProduto, Material,Peca
-from models.unidade import Unidade
-from models.conversao_unidade import ConversaoUnidade
+from models import db, ProdutoComposto, Estoque, Material, ProdutoCompostoItem
 from flask_login import login_required, current_user
 import logging
+import base64
+from PIL import Image
+import io
 
 logger = logging.getLogger(__name__)
 
-produto_composto_bp = Blueprint('produto_composto', __name__)
+produto_composto_bp = Blueprint('produto_composto', __name__, url_prefix='/produto-composto')
 
-@produto_composto_bp.route('/produto-composto')
+def comprimir_imagem_base64(imagem_base64, max_size=(400, 300), quality=70):
+    """
+    Comprime uma imagem em Base64, reduzindo seu tamanho de forma mais agressiva
+    """
+    try:
+        # Verificar se a string contém o formato data:image/...
+        if not imagem_base64 or not imagem_base64.startswith('data:image/'):
+            logger.error("Formato de imagem inválido")
+            return imagem_base64, "image/jpeg"
+        
+        # Decodificar Base64 para bytes
+        header, encoded = imagem_base64.split(',', 1)
+        mime_type = header.split(';')[0].split(':')[1]
+        
+        logger.info(f"Tipo MIME original: {mime_type}")
+        
+        # Decodificar para imagem
+        dados_imagem = base64.b64decode(encoded)
+        img = Image.open(io.BytesIO(dados_imagem))
+        
+        logger.info(f"Dimensões originais: {img.size}")
+        logger.info(f"Modo da imagem: {img.mode}")
+        
+        # Converter para RGB se necessário (PNG com transparência)
+        if img.mode in ('RGBA', 'LA', 'P'):
+            img = img.convert('RGB')
+            logger.info("Imagem convertida para RGB")
+        
+        # Redimensionar se necessário (tamanho menor)
+        img.thumbnail(max_size, Image.Resampling.LANCZOS)
+        logger.info(f"Dimensões após redimensionamento: {img.size}")
+        
+        # Comprimir e converter para Base64 (qualidade menor)
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=quality, optimize=True)
+        buffer.seek(0)
+        
+        # Converter de volta para Base64
+        dados_comprimidos = buffer.getvalue()
+        base64_comprimido = base64.b64encode(dados_comprimidos).decode('utf-8')
+        
+        logger.info(f"Tamanho dos dados comprimidos: {len(dados_comprimidos)} bytes")
+        
+        return f"data:image/jpeg;base64,{base64_comprimido}", "image/jpeg"
+        
+    except Exception as e:
+        logger.error(f"Erro ao comprimir imagem: {str(e)}")
+        # Se falhar, retorna a imagem original e um mime_type padrão
+        return imagem_base64, "image/jpeg"
+
+@produto_composto_bp.route('/get_componentes/<int:id>')
 @login_required
-def listar():
+def get_componentes(id):
+    """
+    Retorna os componentes de um produto composto a partir do ID
+    """
+    produto = ProdutoComposto.query.get_or_404(id)  
+    componentes = []
+    for componente in produto.componentes:
+        componentes.append({
+            'estoque_id': componente.estoque_id,
+            'quantidade': componente.quantidade,
+            'nome': componente.estoque.material.nome if componente.estoque.material_id else componente.estoque.produto_composto.nome
+        })
+    return jsonify({
+        'componentes': componentes
+    })
+
+@produto_composto_bp.route('/get_produto_composto/<int:id>')
+@login_required
+def get_produto_composto(id):
+    """
+    Retorna um produto composto a partir do ID
+    """
+    produtos = []
+    if id == 0 or not id:
+        produto = ProdutoComposto.query.all()
+       
+        for p in produto:
+            produtos.append({
+                'id': p.id,
+                'nome': p.nome,
+                'tempo_producao': float(p.tempo_producao) if p.tempo_producao else None,
+                'componentes': len(p.componentes),
+                'status': p.status
+            })
+    else:
+        produto = ProdutoComposto.query.get_or_404(id)
+        componentes = []
+        for p in produto.componentes:
+            componentes.append({
+                'estoque_id': p.estoque_id,
+                'quantidade': p.quantidade,
+                'nome': '[M] '+p.estoque.material.nome if p.estoque.material_id else '[P] '+p.estoque.produto_composto.nome
+            })
+        produtos.append({
+            'id': produto.id,
+            'nome': produto.nome,
+            'tempo_producao': float(produto.tempo_producao) if produto.tempo_producao else None,
+            'componentes': componentes,
+            'status': produto.status,
+            'descricao': produto.descricao,
+            'imagem': produto.imagem,
+            'imagem_mime_type': produto.imagem_mime_type
+        })
+
+    return jsonify({
+        'produtos': produtos
+    })
+
+@produto_composto_bp.route('/')
+@login_required
+def index():
     """
     Lista todos os produtos compostos cadastrados
     """
-    produtos = ProdutoComposto.query.order_by(ProdutoComposto.nome).all()
-    return render_template('produto_composto/listar.html', produtos=produtos)
+    produtos = ProdutoComposto.query.order_by(ProdutoComposto.id.desc()).all()
+    return render_template('produto_composto/index.html', produtos=produtos)
 
-@produto_composto_bp.route('/produto-composto/novo', methods=['GET', 'POST'])
+@produto_composto_bp.route('/imagem/<int:id>')
+def imagem_produto(id):
+    """
+    Serve a imagem de um produto a partir do banco de dados,
+    decodificando-a de Base64.
+    """
+    produto = ProdutoComposto.query.get_or_404(id)
+
+    if produto.imagem and produto.imagem_mime_type:
+        # Decodificar a string Base64 para binário
+        dados_imagem = base64.b64decode(produto.imagem)
+        return Response(dados_imagem, mimetype=produto.imagem_mime_type)
+    else:
+        # Servir uma imagem placeholder se não houver imagem
+        return send_file('static/img/logo.png', mimetype='image/png')
+
+@produto_composto_bp.route('/<int:id>/form', methods=['GET'])
+@produto_composto_bp.route('/form', methods=['GET'])
 @login_required
-def novo():
+def form(id=None):
     """
-    Adiciona um novo produto composto
+    Renderiza o formulário para novo ou edição de produto composto.
     """
-    if request.method == 'POST':
-        try:
-            # Obter dados do formulário
-            nome = request.form.get('nome')
-            codigo = request.form.get('codigo')
-            descricao = request.form.get('descricao')
-            tipo_peca = request.form.get('tipo_peca')
-            tempo_producao = request.form.get('tempo_producao')
+    produto = ProdutoComposto.query.get_or_404(id) if id else None
+    itens_estoque = Estoque.query.join(Material).order_by(Material.nome).all()
+    return render_template('produto_composto/modais/form.html', produto=produto, itens_estoque=itens_estoque)
+
+
+@produto_composto_bp.route('/salvar', methods=['POST'])
+@login_required
+def salvar():
+    """
+    Salva um novo produto composto ou atualiza um existente.
+    """
+    data = request.get_json()
+    produto_id = data.get('id')
+    
+    try:
+        if produto_id:
+            # Edição
+            produto = ProdutoComposto.query.get_or_404(produto_id)
+            produto.nome = data['nome']
+            produto.descricao = data.get('descricao')
+            produto.tempo_producao = data.get('tempo_producao') or None
+            produto.status = data.get('status', 'Ativo')
+
+            # Lógica para remover imagem
+            if data.get('remover_imagem'):
+                produto.imagem = None
+                produto.imagem_mime_type = None
             
-            # Criar novo produto composto
+            # Lógica para atualizar imagem
+            imagem_data = data.get('imagem')
+            logger.info(f"Dados de imagem recebidos: {imagem_data is not None}, Tipo: {type(imagem_data)}")
+            
+            if imagem_data:
+                logger.info(f"Processando imagem - Tamanho: {len(imagem_data)} caracteres")
+                # Comprimir a imagem antes de salvar
+                imagem_comprimida, mime_type = comprimir_imagem_base64(imagem_data)
+                header, encoded = imagem_comprimida.split(',', 1)
+                
+                # Validação simples
+                if not mime_type.startswith('image/'):
+                    return jsonify({'success': False, 'message': 'Formato de arquivo inválido. Apenas imagens são permitidas.'}), 400
+                
+                # Validar tamanho (Base64 é ~33% maior que o binário)
+                if len(encoded) * 0.75 > 2 * 1024 * 1024:
+                    return jsonify({'success': False, 'message': 'A imagem excede o tamanho máximo de 2MB.'}), 400
+
+                # Salvar a string Base64 diretamente, como no modelo Upload
+                produto.imagem = encoded
+                produto.imagem_mime_type = mime_type
+
+            # Atualizar componentes
+            componentes_data = data.get('componentes', [])
+            
+            # Mapear componentes atuais para fácil acesso
+            componentes_atuais = {str(comp.estoque_id): comp for comp in produto.componentes}
+            
+            # IDs dos componentes recebidos do formulário
+            componentes_recebidos_ids = {item['estoque_id'] for item in componentes_data}
+            
+            # Remover componentes que não estão mais na lista
+            for estoque_id, componente in list(componentes_atuais.items()):
+                if estoque_id not in componentes_recebidos_ids:
+                    produto.remover_item(int(estoque_id))
+            
+            # Adicionar ou atualizar componentes
+            for item in componentes_data:
+                estoque = Estoque.query.get_or_404(item['estoque_id'])
+                
+                # Log para debug dos valores de quantidade
+                logger.info(f"Adicionando componente - Estoque ID: {item['estoque_id']}, Quantidade: {item['quantidade']} (tipo: {type(item['quantidade'])})")
+                
+                produto.adicionar_item(
+                    estoque=estoque,
+                    quantidade=item['quantidade']
+                )
+        else:
+            # Criação
             produto = ProdutoComposto(
-                nome=nome,
-                codigo=codigo,
-                descricao=descricao,
-                tipo_peca=tipo_peca,
-                tempo_producao=tempo_producao if tempo_producao else None,
+                nome=data['nome'],
+                descricao=data.get('descricao'),
+                tempo_producao=data.get('tempo_producao') or None,
                 status='Ativo'
             )
             
-            produto.save()
-            flash('Produto composto criado com sucesso!', 'success')
-            return redirect(url_for('produto_composto.editar', id=produto.id))
+            # Log para debug - verificar se há dados muito longos
+            logger.info(f"Nome do produto: {len(data['nome'])} caracteres")
+            logger.info(f"Descrição: {len(data.get('descricao', ''))} caracteres")
             
-        except Exception as e:
-            logger.error(f"Erro ao criar produto composto: {str(e)}", exc_info=True)
-            db.session.rollback()
-            flash(f'Erro ao criar produto composto: {str(e)}', 'danger')
-    
-    # Buscar tipos de peças existentes
-    tipos_peca = db.session.query(Peca.tipo).distinct().all()
-    tipos_peca = [tipo[0] for tipo in tipos_peca]
-    
-    return render_template('produto_composto/form.html', produto=None, tipos_peca=tipos_peca)
+            db.session.add(produto)
 
-@produto_composto_bp.route('/produto-composto/<int:id>', methods=['GET', 'POST'])
-@login_required
-def editar(id):
-    """
-    Edita um produto composto existente
-    """
-    produto = ProdutoComposto.query.get_or_404(id)
-    
-    if request.method == 'POST':
-        try:
-            # Obter dados do formulário
-            produto.nome = request.form.get('nome')
-            produto.codigo = request.form.get('codigo')
-            produto.descricao = request.form.get('descricao')
-            produto.tipo_peca = request.form.get('tipo_peca')
-            produto.tempo_producao = request.form.get('tempo_producao')
-            produto.status = request.form.get('status', 'Ativo')
+            # Lógica para adicionar imagem na criação
+            imagem_data = data.get('imagem')
+            logger.info(f"Criação - Dados de imagem recebidos: {imagem_data is not None}, Tipo: {type(imagem_data)}")
             
-            produto.save()
-            flash('Produto composto atualizado com sucesso!', 'success')
-            
-        except Exception as e:
-            logger.error(f"Erro ao atualizar produto composto: {str(e)}", exc_info=True)
-            db.session.rollback()
-            flash(f'Erro ao atualizar produto composto: {str(e)}', 'danger')
-    
-    # Buscar tipos de peças existentes
-    tipos_peca = db.session.query(Peca.tipo).distinct().all()
-    tipos_peca = [tipo[0] for tipo in tipos_peca]
-    
-    # Buscar materiais para adicionar ao produto
-    materiais = Material.query.filter_by(ativo=True).order_by(Material.nome).all()
-    
-    return render_template('produto_composto/form.html', 
-                           produto=produto, 
-                           tipos_peca=tipos_peca,
-                           materiais=materiais)
+            if imagem_data:
+                logger.info(f"Criação - Processando imagem - Tamanho: {len(imagem_data)} caracteres")
+                # Log do tamanho original
+                original_size = len(imagem_data.split(',')[1]) if ',' in imagem_data else len(imagem_data)
+                logger.info(f"Tamanho original da imagem: {original_size} caracteres")
+                
+                # Comprimir a imagem antes de salvar
+                imagem_comprimida, mime_type = comprimir_imagem_base64(imagem_data)
+                header, encoded = imagem_comprimida.split(',', 1)
+                
+                # Log do tamanho comprimido
+                logger.info(f"Tamanho comprimido da imagem: {len(encoded)} caracteres")
+                logger.info(f"Redução: {((original_size - len(encoded)) / original_size * 100):.1f}%")
+                
+                # Verificação adicional: rejeitar se ainda for muito grande
+                if len(encoded) > 100000:  # Limite de 100KB em Base64
+                    return jsonify({'success': False, 'message': 'A imagem ainda é muito grande após a compressão. Tente uma imagem menor.'}), 400
+                
+                if not mime_type.startswith('image/'):
+                    return jsonify({'success': False, 'message': 'Formato de arquivo inválido.'}), 400
+                
+                if len(encoded) * 0.75 > 2 * 1024 * 1024:
+                     return jsonify({'success': False, 'message': 'A imagem excede o tamanho máximo de 2MB.'}), 400
 
-@produto_composto_bp.route('/produto-composto/<int:id>/deletar', methods=['POST'])
+                # Salvar a string Base64 diretamente, como no modelo Upload
+                produto.imagem = encoded
+                produto.imagem_mime_type = mime_type
+
+            # Flush para obter o ID do produto antes de adicionar componentes
+            db.session.flush()
+
+            # Adicionar componentes
+            componentes_data = data.get('componentes', [])
+            for item in componentes_data:
+                estoque = Estoque.query.get_or_404(item['estoque_id'])
+                
+                    
+                # Log para debug dos valores de quantidade
+                logger.info(f"Criando componente - Estoque ID: {item['estoque_id']}, Quantidade: {item['quantidade']} (tipo: {type(item['quantidade'])})")
+                
+                produto.adicionar_item(
+                    estoque=estoque,
+                    quantidade=item['quantidade']
+                )
+        estoque = Estoque.query.filter(Estoque.ProdComp_id == produto.id).first()
+        if not estoque:
+            estoque = Estoque(produto_composto=produto,
+                              quantidade=0,
+                              tipo_item='produto_composto')
+            db.session.add(estoque)
+            db.session.flush()
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Produto composto salvo com sucesso!'})
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao salvar produto composto: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Erro ao salvar produto composto: {str(e)}'}), 500
+
+
+@produto_composto_bp.route('/<int:id>/deletar', methods=['POST'])
 @login_required
 def deletar(id):
     """
@@ -108,124 +320,81 @@ def deletar(id):
     
     try:
         produto.delete()
-        flash('Produto composto removido com sucesso!', 'success')
-        return redirect(url_for('produto_composto.listar'))
+        return jsonify({'success': True, 'message': 'Produto composto removido com sucesso!'})
         
     except Exception as e:
         logger.error(f"Erro ao deletar produto composto: {str(e)}", exc_info=True)
         db.session.rollback()
-        flash(f'Erro ao deletar produto composto: {str(e)}', 'danger')
-        return redirect(url_for('produto_composto.editar', id=id))
+        return jsonify({'success': False, 'message': f'Erro ao deletar produto composto: {str(e)}'}), 500
 
-@produto_composto_bp.route('/produto-composto/<int:id>/adicionar-material', methods=['POST'])
+@produto_composto_bp.route('/<int:id>/duplicar', methods=['POST'])
 @login_required
-def adicionar_material(id):
+def duplicar(id):
     """
-    Adiciona um material ao produto composto
+    Duplica um produto composto existente
     """
-    produto = ProdutoComposto.query.get_or_404(id)
+    produto_original = ProdutoComposto.query.get_or_404(id)
     
     try:
-        # Obter dados do formulário
-        material_id = request.form.get('material_id')
-        quantidade = request.form.get('quantidade')
-        unidade = request.form.get('unidade')
-        observacao = request.form.get('observacao')
+        # Criar novo produto com dados do original
+        novo_produto = ProdutoComposto(
+            nome=f"{produto_original.nome} (Cópia)",
+            descricao=produto_original.descricao,
+            tempo_producao=produto_original.tempo_producao,
+            status='Ativo',
+            imagem=produto_original.imagem,
+            imagem_mime_type=produto_original.imagem_mime_type
+        )
         
-        # Buscar o material
-        material = Material.query.get_or_404(material_id)
+        db.session.add(novo_produto)
+        db.session.flush()  # Para obter o ID do novo produto
         
-        # Verificar se a unidade selecionada é diferente da unidade padrão do material
-        unidade_padrao = material.get_unidade_nome()
-        if unidade != unidade_padrao:
-            # Buscar a conversão
-            conversao = ConversaoUnidade.obter_por_unidades(unidade, unidade_padrao, material_id)
-            if not conversao:
-                # Tentar a conversão inversa
-                conversao = ConversaoUnidade.obter_por_unidades(unidade_padrao, unidade, material_id)
-                if conversao:
-                    # Converter a quantidade
-                    quantidade = float(quantidade) / conversao.fator
-                else:
-                    # Não foi encontrada conversão
-                    flash(f'Não foi possível converter de {unidade} para {unidade_padrao}', 'warning')
-            else:
-                # Converter a quantidade
-                quantidade = float(quantidade) * conversao.fator
-        print(f'quantidade: {quantidade}')
-        # Adicionar o material ao produto
-        componente = produto.adicionar_material(material, quantidade, unidade)
+        # Duplicar todos os componentes
+        for componente in produto_original.componentes:
+            novo_componente = ProdutoCompostoItem(
+                produto_id=novo_produto.id,
+                estoque_id=componente.estoque_id,
+                quantidade=componente.quantidade,
+                observacao=componente.observacao
+            )
+            db.session.add(novo_componente)
         
-        # Adicionar observação se fornecida
-        if observacao:
-            componente.observacao = observacao
-            db.session.add(componente)
         db.session.commit()
-            
-        flash('Material adicionado com sucesso!', 'success')
+        return jsonify({'success': True, 'message': 'Produto composto duplicado com sucesso!'})
         
     except Exception as e:
-        logger.error(f"Erro ao adicionar material ao produto: {str(e)}", exc_info=True)
         db.session.rollback()
-        flash(f'Erro ao adicionar material: {str(e)}', 'danger')
-        
-    return redirect(url_for('produto_composto.editar', id=id))
+        logger.error(f"Erro ao duplicar produto composto: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Erro ao duplicar produto composto: {str(e)}'}), 500
 
-@produto_composto_bp.route('/produto-composto/<int:id>/remover-material/<int:material_id>', methods=['POST'])
+@produto_composto_bp.route('/api/componentes/<int:id>')
 @login_required
-def remover_material(id, material_id):
+def api_componentes(id):
     """
-    Remove um material do produto composto
+    API que retorna os componentes de um produto composto
     """
     produto = ProdutoComposto.query.get_or_404(id)
     
-    try:
-        if produto.remover_material(material_id):
-            db.session.commit()
-            flash('Material removido com sucesso!', 'success')
-        else:
-            flash('Material não encontrado no produto!', 'warning')
-            
-    except Exception as e:
-        logger.error(f"Erro ao remover material do produto: {str(e)}", exc_info=True)
-        db.session.rollback()
-        flash(f'Erro ao remover material: {str(e)}', 'danger')
-        
-    return redirect(url_for('produto_composto.editar', id=id))
-
-@produto_composto_bp.route('/api/produto-composto/por-tipo/<tipo_peca>')
-@login_required
-def api_produto_por_tipo(tipo_peca):
-    """
-    API que retorna um produto composto por tipo de peça
-    """
-    produto = ProdutoComposto.get_by_tipo_peca(tipo_peca)
-    
-    if not produto:
-        return jsonify({'error': 'Produto não encontrado para este tipo de peça'}), 404
-        
     # Montar resposta com componentes
     componentes = []
     for componente in produto.componentes:
         componentes.append({
             'id': componente.id,
-            'material_id': componente.material_id,
-            'material_nome': componente.material.nome,
+            'estoque_id': componente.estoque_id,
+            'estoque_nome': componente.estoque.material.nome if componente.estoque.material_id else componente.estoque.produto_composto.nome,
             'quantidade': float(componente.quantidade),
-            'unidade': componente.unidade,
+            'unidade': componente.estoque.material.unidade_obj.sigla if (componente.estoque.material and componente.estoque.material.unidade_obj) else '',
             'observacao': componente.observacao
         })
         
     return jsonify({
         'id': produto.id,
         'nome': produto.nome,
-        'codigo': produto.codigo,
-        'tipo_peca': produto.tipo_peca,
         'tempo_producao': float(produto.tempo_producao) if produto.tempo_producao else None,
         'componentes': componentes
     })
 
-@produto_composto_bp.route('/api/produto-composto/<int:id>/verificar-estoque')
+@produto_composto_bp.route('/api/verificar-estoque/<int:id>')
 @login_required
 def api_verificar_estoque(id):
     """
@@ -240,10 +409,9 @@ def api_verificar_estoque(id):
     resultado = []
     for item in disponibilidade:
         resultado.append({
-            'material': item['material'].nome,
+            'estoque': item['estoque'].material.nome if item['estoque'].material_id else item['estoque'].produto_composto.nome,
             'quantidade_necessaria': float(item['quantidade_necessaria']),
             'quantidade_estoque': float(item['quantidade_estoque']),
-            'unidade': item['unidade'],
             'disponivel': item['disponivel']
         })
         
@@ -253,129 +421,3 @@ def api_verificar_estoque(id):
         'disponibilidade': resultado,
         'disponivel_total': all(item['disponivel'] for item in disponibilidade)
     })
-
-@produto_composto_bp.route('/api/produto-composto/material/<int:material_id>/unidades')
-@login_required
-def api_material_unidades(material_id):
-    """
-    API que retorna as unidades disponíveis para um material específico,
-    incluindo as conversões de unidade
-    """
-    material = Material.query.get_or_404(material_id)
-    
-    # Obter a unidade padrão do material
-    unidade_padrao = None
-    if material.unidade_id:
-        unidade_padrao = Unidade.query.get(material.unidade_id)
-    
-    # Se não tiver unidade_id, tenta usar o campo unidade (string)
-    unidade_padrao_str = material.unidade
-    if not unidade_padrao and unidade_padrao_str:
-        unidade_padrao = Unidade.query.filter(Unidade.nome.ilike(unidade_padrao_str)).first()
-    
-    # Obter todas as unidades para o dropdown
-    unidades = Unidade.query.filter_by(ativo=True).order_by(Unidade.nome).all()
-    
-    # Obter conversões de unidade para este material
-    conversoes = ConversaoUnidade.listar_para_material(material.id)
-    
-    # Preparar lista de unidades disponíveis
-    unidades_disponiveis = []
-    
-    # Adicionar unidade padrão (se existir)
-    if unidade_padrao:
-        unidades_disponiveis.append({
-            'id': unidade_padrao.id,
-            'nome': unidade_padrao.nome,
-            'descricao': unidade_padrao.descricao,
-            'padrao': True
-        })
-    elif unidade_padrao_str:
-        # Se não encontrou a unidade no banco mas tem a string
-        unidades_disponiveis.append({
-            'id': 0,
-            'nome': unidade_padrao_str,
-            'descricao': unidade_padrao_str,
-            'padrao': True
-        })
-    
-    # Adicionar as conversões
-    for conv in conversoes:
-        # Verificar se a unidade de entrada é a padrão do material
-        is_entrada_padrao = False
-        if unidade_padrao and conv.unidade_entrada == unidade_padrao.nome:
-            is_entrada_padrao = True
-        elif not unidade_padrao and conv.unidade_entrada == unidade_padrao_str:
-            is_entrada_padrao = True
-        
-        # Verificar se a unidade de saída é a padrão do material
-        is_saida_padrao = False
-        if unidade_padrao and conv.unidade_saida == unidade_padrao.nome:
-            is_saida_padrao = True
-        elif not unidade_padrao and conv.unidade_saida == unidade_padrao_str:
-            is_saida_padrao = True
-        
-        # Adicionar a unidade de entrada se não for a padrão
-        if not is_entrada_padrao:
-            # Buscar a unidade no banco se possível
-            unidade = Unidade.query.filter(Unidade.nome.ilike(conv.unidade_entrada)).first()
-            if unidade:
-                unidades_disponiveis.append({
-                    'id': unidade.id,
-                    'nome': unidade.nome,
-                    'descricao': unidade.descricao,
-                    'padrao': False,
-                    'fator_conversao': 1 / conv.fator if is_saida_padrao else None
-                })
-            else:
-                unidades_disponiveis.append({
-                    'id': 0,
-                    'nome': conv.unidade_entrada,
-                    'descricao': conv.unidade_entrada,
-                    'padrao': False,
-                    'fator_conversao': 1 / conv.fator if is_saida_padrao else None
-                })
-        
-        # Adicionar a unidade de saída se não for a padrão
-        if not is_saida_padrao:
-            # Buscar a unidade no banco se possível
-            unidade = Unidade.query.filter(Unidade.nome.ilike(conv.unidade_saida)).first()
-            if unidade:
-                unidades_disponiveis.append({
-                    'id': unidade.id,
-                    'nome': unidade.nome,
-                    'descricao': unidade.descricao,
-                    'padrao': False,
-                    'fator_conversao': conv.fator if is_entrada_padrao else None
-                })
-            else:
-                unidades_disponiveis.append({
-                    'id': 0,
-                    'nome': conv.unidade_saida,
-                    'descricao': conv.unidade_saida,
-                    'padrao': False,
-                    'fator_conversao': conv.fator if is_entrada_padrao else None
-                })
-    
-    # Adicionar todas as outras unidades do sistema
-    for unidade in unidades:
-        # Verificar se já foi adicionada
-        if not any(u['nome'].lower() == unidade.nome.lower() for u in unidades_disponiveis):
-            unidades_disponiveis.append({
-                'id': unidade.id,
-                'nome': unidade.nome,
-                'descricao': unidade.descricao,
-                'padrao': False
-            })
-    
-    # Ordenar: primeiro a unidade padrão, depois por nome
-    unidades_disponiveis.sort(key=lambda x: (not x['padrao'], x['nome']))
-    
-    return jsonify({
-        'material': {
-            'id': material.id,
-            'nome': material.nome,
-            'unidade_padrao': unidade_padrao.nome if unidade_padrao else unidade_padrao_str
-        },
-        'unidades': unidades_disponiveis
-    }) 
