@@ -177,7 +177,7 @@ def relatorio_notas():
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
-    dados_relatorio = dados_relatorio_financeiro(data_fim=data_fim_dt,data_inicio=data_inicio_dt,centro_custo_ids=centro_custo_ids_int)
+    dados_relatorio = dados_relatorio_financeiro(data_fim=data_fim_dt,data_inicio=data_inicio_dt,centro_custo_ids=centro_custo_ids_int,calcelada=True)
     return render_template('relatorios/relatorio_notas.html', relatorio=dados_relatorio, centros_custo=centros_custo)
 
 @relatorio_bp.route('/notas/ajax', methods=['GET'])
