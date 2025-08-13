@@ -547,24 +547,25 @@ class NotaFiscal(db.Model):
             # Para cada item sem material vinculado, tentar buscar um material
         itens_vinculados = 0
         for item in self.itens:
-           
-            # Buscar item com base em vinculações anteriores
-            item_anterior = item.buscar_material_vinculado_anteriormente()
-            
-            # Se encontrar, vincular
-            if item_anterior:
-                print(f'item_anterior: {item_anterior.unidade} {item.unidade}')
-                if comparar_unidades(item.unidade, item_anterior.unidade):
-                    print(f'fator_conversao: {item_anterior.fator_conversao_aplicado}')
-                    fator_conversao = item_anterior.fator_conversao_aplicado
-                    if fator_conversao:
-                        item.fator_conversao_aplicado = fator_conversao
-                        itens_vinculados += 1
-                        item.material_id = item_anterior.material_id
-                    else:
-                        item.fator_conversao_aplicado = fator_conversao
-                        itens_vinculados += 1
-                    item.save()
+            if not item.material_id:
+                # Buscar item com base em vinculações anteriores
+                item_anterior = item.buscar_material_vinculado_anteriormente()
+                
+                # Se encontrar, vincular
+                if item_anterior:
+                    print(f'item_anterior: {item_anterior.unidade} {item.unidade}')
+                    if comparar_unidades(item.unidade, item_anterior.unidade):
+                        print(f'fator_conversao: {item_anterior.fator_conversao_aplicado}')
+                        fator_conversao = item_anterior.fator_conversao_aplicado
+                        if fator_conversao:
+                            item.fator_conversao_aplicado = fator_conversao
+                            itens_vinculados += 1
+                            item.material_id = item_anterior.material_id
+                        else:
+                            item.fator_conversao_aplicado = fator_conversao
+                            itens_vinculados += 1
+                        item.save()
+        print(f'itens_vinculados: {itens_vinculados}')
         return itens_vinculados
     def importar_itens_para_estoque(self):
         for item in self.itens:

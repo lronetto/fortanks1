@@ -83,18 +83,20 @@
                             <td>{{ item.tipo_item|capitalize }}</td>
                             <td>
                                 {% if item.material %}
-                                    {{ item.material.codigo or "N/A" }}
-                                {% elif item.epi and item.epi.material %}
-                                    {{ item.epi.material.codigo or "N/A" }}
+                                    {{ item.material.id or "N/A" }}
+                                {% elif item.produto_composto %}
+                                    {{ item.produto_composto.id or "N/A" }}
+                                {% elif item.epi %}
+                                    {{ item.epi.id or "N/A" }}
                                 {% else %}
                                     N/A
                                 {% endif %}
                             </td>
                             <td>
-                                {% if item.material %}
+                                {% if item.tipo_item == "material" %}
                                     {{ item.material.nome }}
-                                {% elif item.epi and item.epi.material %}
-                                    {{ item.epi.material.nome }} - CA: {{ item.epi.ca_numero or "N/A" }}
+                                {% elif item.tipo_item == "produto_composto" %}
+                                    {{ item.produto_composto.nome }}                             
                                 {% else %}
                                     Item sem descrição
                                 {% endif %}

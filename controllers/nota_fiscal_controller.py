@@ -811,6 +811,7 @@ def importar_itens():
         
                 notas_fiscais = NotaFiscal.query.\
                     filter(NotaFiscal.cnpj_emitente==cnpj_emitente).all()
+                print(f'vinculando automaticamente notas fiscais: {len(notas_fiscais)}')
                 for nota_fiscal in notas_fiscais:
                     nota_fiscal.vincular_automaticamente()
                     nota_fiscal.importar_itens_para_estoque()

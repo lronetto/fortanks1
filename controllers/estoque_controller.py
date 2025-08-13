@@ -52,9 +52,11 @@ def index():
             or_(
                 Material.nome.ilike(termo),
                 Material.codigo.ilike(termo),
-                Estoque.localizacao.ilike(termo)
+                Estoque.localizacao.ilike(termo),
+                ProdutoComposto.nome.ilike(termo)
             )
         )
+    query = query.join(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id, isouter=True)
     
     # Filtrar por status
     if form_filtro.status_estoque.data and form_filtro.status_estoque.data != 'todos':

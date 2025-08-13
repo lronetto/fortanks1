@@ -4,7 +4,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalImportarItensLabel">Importar e Vincular Itens</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                <button type="button" class="btn-close"  aria-label="Fechar"></button>
             </div>
             <form id="formImportacao">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -93,6 +93,9 @@
         $('#modalImportarItens').on('click', '.btn-importar-itens', function(e) {
             e.preventDefault();
             importarItens();
+        });
+        $('#modalImportarItens .btn-close').on('click', function () {
+            fecharModal('#modalImportarItens');
         });
     });
     function carregarItensImportacao(notaId) {
