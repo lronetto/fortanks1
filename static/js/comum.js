@@ -36,4 +36,8 @@ function carregarCentrosCusto(centroCustoId) {
             console.warn(`Falha ao usar ${url}:`, error);
         });
 }
-
+function fecharModal(modalId) {
+    $(modalId).modal('hide');
+    $('.modal-backdrop').remove();
+    $('body').removeClass('modal-open');
+}

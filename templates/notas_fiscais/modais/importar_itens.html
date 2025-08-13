@@ -67,7 +67,7 @@
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                    <button type="submit" id="btnImportar" class="btn btn-primary">
+                    <button type="button" id="btnImportar" class="btn btn-primary btn-importar-itens">
                         <i class="fas fa-file-import"></i> Importar Selecionados
                     </button>
                 </div>
@@ -79,6 +79,7 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
          $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
+            console.log('importar itens');
             const notaId = $(this).data('id');
             modal=new bootstrap.Modal(document.getElementById('modalImportarItens'));
             modal.show();
@@ -88,6 +89,10 @@
             
             // Carrega itens da nota para importação
             carregarItensImportacao(notaId);
+        });
+        $('#modalImportarItens').on('click', '.btn-importar-itens', function(e) {
+            e.preventDefault();
+            importarItens();
         });
     });
     function carregarItensImportacao(notaId) {
@@ -181,7 +186,7 @@
                     <td>
                         <input type="hidden" id="material_id_${item.id}" value="${item.material_id || ''}">
                         <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
-                                data-item-id="${item.id}" id="btn_vincular_${item.id}">
+                                data-item-id="${item.id}" data-material-id="${item.material_id}" data-material-nome="${materialNome}" data-material-unidade="${item.unidade}">
                             ${btnIconVincular}
                         </button>
                     </td>
@@ -261,14 +266,26 @@
             });
         });
         
-        formData.append('itens', JSON.stringify(itensSelecionados));
-        formData.append('centro_custo_id', document.getElementById('centro_custo_id').value);
-        formData.append('observacao', document.getElementById('observacao').value);
+        console.log('itensSelecionados', itensSelecionados);
+        // formData.append('itens', JSON.stringify(itensSelecionados));
+        // formData.append('centro_custo_id', document.getElementById('centro_custo_id').value);
+        // formData.append('observacao', document.getElementById('observacao').value);
         mostrarCarregando('Importando itens para o estoque...');
         
         fetch('/notas-fiscais/api/importar_itens', {
             method: 'POST',
-            body: formData
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').val(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                itens: itensSelecionados.map(item => ({
+                    item_id: item.item_id,
+                    material_id: item.material_id
+                })),
+                centro_custo_id: document.getElementById('centro_custo_id').value,
+                observacao: document.getElementById('observacao').value
+            })
         })
         .then(response => {
             if (!response.ok) {

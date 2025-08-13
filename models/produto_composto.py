@@ -17,6 +17,7 @@ class ProdutoComposto(db.Model):
     descricao = db.Column(db.Text, nullable=True)
     tempo_producao = db.Column(db.Numeric(10, 2), nullable=True)  # Tempo estimado de produção em horas
     status = db.Column(db.String(20), default='Ativo')  # Ativo, Inativo
+   
     
     # Campos para armazenar a imagem
     imagem = db.Column(db.Text(length=4294967295), nullable=True)

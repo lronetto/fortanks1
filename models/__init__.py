@@ -33,7 +33,7 @@ from .departamento import Departamento
 
 # Importamos material e solicitacao explicitamente
 from .material import Material
-from .estoque import Estoque
+from .estoque import Estoque, MovimentacaoEstoque
 from .nota_fiscal import NotaFiscal, NotaFiscalItem
 
 # Importamos os novos modelos de usinagem de concreto
@@ -82,6 +82,6 @@ __all__ = [
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
     'TracoConcreto', 'ItemTracoConcreto', 'UsinagemConcreto', 'UsinagemEquipamento',
     'UsinagemMaterial', 'ConversaoUnidade', 'Unidade', 'RompimentoCorpoProva',
-    'Colaborador', 'ProdutoComposto', 'ProdutoCompostoItem', 'Estoque',
+    'Colaborador', 'ProdutoComposto', 'ProdutoCompostoItem', 'Estoque', 'MovimentacaoEstoque',
     'DadoAnalitico', 'configure_mappers', 'Reembolso', 'ReembolsoDocumento', 'ReembolsoAnexo',
 ] 

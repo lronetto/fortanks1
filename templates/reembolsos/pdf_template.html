@@ -18,8 +18,12 @@
         .dados { margin-bottom: 10px; }
         .dados strong { display: inline-block; width: 120px; }
         .relatorio-table { width: 100%; border: 1px solid #333; margin-top: 10px; }
-        .relatorio-table th, .relatorio-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 11px; }
+        .relatorio-table th, .relatorio-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 15px; text-align: top;}
         .relatorio-table th { background: #f0f0f0; }
+        .assinatura-table { width: 100%; border: 1px solid #333; margin-top: 10px; }
+        .assinatura-table td { height: 40px; }
+        .assinatura-table th, .assinatura-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 11px; }
+        .assinatura-table th { background: #f0f0f0; }
         .assinatura { margin-top: 40px; }
         .assinatura .linha { border-top: 1px solid #333; width: 250px; margin: 0 auto; text-align: center; padding-top: 4px; }
         .right { text-align: right; }
@@ -55,6 +59,9 @@
             <td colspan="2" class="left"><strong>Centro de Custo:</strong> {{ docs[0].centro_custo.codigo }} - {{ docs[0].centro_custo.nome }}</td>
         </tr>
         <tr>
+            <td colspan="2" class="left">Solicito o reembolso dos valores correspondentes às despesas relacionadas à Fortes e pagas por mim conforme descrição abaixo e comprovante(s) anexo(s)</td>
+        </tr>
+        <tr>
             <table class="relatorio-table">
                 <thead>
                     <tr>
@@ -72,7 +79,7 @@
                         <td style="width:40px;">{{ doc.ndocumento }}</td>
                         <td style="width:40px;">{{ doc.data_documento.strftime('%d/%m/%Y') }}</td>
                         <td>{{ doc.descricao.upper() }}</td>
-                        <td class="left" style="width:60px;">R$ {{ '%.2f'|format(doc.valor) }}</td>
+                        <td class="left" style="width:60px;">R$ {{ doc.valor }}</td>
                     </tr>
                     {% endfor %}
                     {% for i in range(15 - docs|length) %}
@@ -81,10 +88,36 @@
                     </tr>
                     {% endfor %}
                     <tr>
-                        <td colspan="4" class="right">Total do Centro de Custo:</td>
-                        <td>R$ {{ '%.2f'|format(docs|sum(attribute='valor')) }}</td>
+                        <td colspan="4" class="right">Total :</td>
+                        <td>R$ {{ valor_total }}</td>
                     </tr>
                 </tbody>
+            </table>
+        </tr>
+        <tr>
+            <table class="assinatura-table">
+                <tr>
+                    <td colspan="4" class="right">Assinatura do Solicitante</td>
+                    <td>Adm/Apontador</td>
+                    <td>Gestor da U.N.:</td>
+                    <td>Gerente na U.N.:</td>
+                    <td>Diretor:</td>
+                </tr>
+                <tr>
+                    <td colspan="5" class="right">NOME DO FAVORECIDO: {{ reembolso.usuario.nome }}</td>
+                </tr>
+                <tr>
+                    <td>BANCO:</td>
+                    <td>AGENCIA:</td>
+                    <td>OPERACAO:</td>
+                    <td>CONTA:</td>
+                </tr>
+                <tr>
+                    <td>BANCO:WEF</td>
+                    <td>AGENCIA:WE</td>
+                    <td>OPERACAOSDF:</td>
+                    <td>CONTA:34</td>
+                </tr>
             </table>
         </tr>
     </table>

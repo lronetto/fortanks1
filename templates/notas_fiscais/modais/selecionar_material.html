@@ -40,23 +40,19 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        document.addEventListener('click', function(e) {
-            if (e.target && e.target.closest('.btn-vincular-material')) {
-                const button = e.target.closest('.btn-vincular-material');
-                const itemId = button.getAttribute('data-item-id');
-                document.getElementById('item_id_para_vincular').value = itemId;
-                
-                const buscarMaterial = document.getElementById('buscarMaterial');
-                buscarMaterial.value = '';
-                buscarMaterial.focus();
-                
-                document.getElementById('corpoTabelaMateriais').innerHTML = '';
-                
-                // Abre o modal usando Bootstrap 5
-                const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
-                modal.show();
-            }
+        $('#tabelaItensImportacao tbody').on('click', '.btn-vincular-material', function(e) {
+            e.preventDefault();
+            const id = $(this).data('item-id');
+            console.log('vincular material id', id);
+            document.getElementById('item_id_para_vincular').value = id;
+            const buscarMaterial = document.getElementById('buscarMaterial');
+            buscarMaterial.value = '';
+            buscarMaterial.focus();
+            document.getElementById('corpoTabelaMateriais').innerHTML = '';
+            const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
+            modal.show();
         });
+        
             // Buscar materiais
     let timeoutBusca;
     const buscarMaterial = document.getElementById('buscarMaterial');
@@ -74,12 +70,12 @@
     }
 
     // Vincular material ao item
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', async function(e) {
         if (e.target && e.target.closest('.btn-selecionar-material')) {
             const button = e.target.closest('.btn-selecionar-material');
-            const materialId = button.getAttribute('data-material-id');
-            const materialNome = button.getAttribute('data-material-nome');
-            const materialUnidade = button.getAttribute('data-material-unidade');
+            const materialId = button.dataset.materialId;
+            const materialNome = button.dataset.materialNome;
+            const materialUnidade = button.dataset.materialUnidade;
             const itemId = document.getElementById('item_id_para_vincular').value;
             
             // Obter a unidade do item
@@ -103,8 +99,16 @@
             const modalSelecionar = bootstrap.Modal.getInstance(document.getElementById('modalSelecionarMaterial'));
             if (modalSelecionar) modalSelecionar.hide();
             
+            // Esperar o resultado da comparação antes de continuar
+            const iguais = await compararUnidades(itemUnidade, materialUnidade);
+            console.log('materialUnidade', materialUnidade);
+            console.log('itemUnidade', itemUnidade);
+            console.log('compararUnidades (iguais?)', iguais);
+            console.log('itemId', itemId);
+            console.log('materialId', materialId);
+            
             // Verificar se precisa de conversão de unidades
-            if (materialUnidade && itemUnidade && !compararUnidades(itemUnidade, materialUnidade)) {
+            if (materialUnidade && itemUnidade && !iguais) {
                 abrirModalConversao(itemId, materialId, itemUnidade, materialUnidade);
             }
         }
@@ -151,23 +155,22 @@
                 corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Erro ao carregar materiais.</td></tr>';
             });
     }
-    function compararUnidades(unidadeNota, unidadeMaterial) {
-        fetch('/notas-fiscais/api/comparar_unidades', {
-            method: 'POST',
-            body: JSON.stringify({unidadeNota, unidadeMaterial})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                return true;
-            } else {
-                return false;
-            }
-        })
-        .catch(error => {
+    async function compararUnidades(unidadeNota, unidadeMaterial) {
+        try {
+            const response = await fetch('/notas-fiscais/api/comparar-unidades', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': $('input[name="csrf_token"]').val(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({unidadeNota, unidadeMaterial})
+            });
+            const data = await response.json();
+            return data.success;
+        } catch (error) {
             console.error('Erro ao comparar unidades:', error);
             return false;
-        });
+        }
     }
                 
 
@@ -213,17 +216,18 @@
                 mostrarAlerta('Erro', 'Informe um fator de conversão válido ou selecione uma conversão existente.', 'error');
                 return;
             }
-            
-            const formData = new FormData();
-            formData.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
-            formData.append('item_id', itemId);
-            formData.append('material_id', materialId);
-            formData.append('unidade_conversao_id', unidadeConversaoId);
-            formData.append('fator_conversao', fatorConversao);
-            
             fetch('/notas-fiscais/api/aplicar_conversao', {
                 method: 'POST',
-                body: formData
+                headers: {
+                    'X-CSRFToken': $('input[name="csrf_token"]').val(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    item_id: itemId,
+                    material_id: materialId,
+                    unidade_conversao_id: unidadeConversaoId,
+                    fator_conversao: fatorConversao
+                })
             })
             .then(response => {
                 if (!response.ok) {

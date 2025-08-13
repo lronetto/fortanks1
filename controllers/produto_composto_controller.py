@@ -1,8 +1,8 @@
 from datetime import datetime
-from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file
+from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file, current_app
 from io import BytesIO
 from werkzeug.exceptions import abort
-from models import db, ProdutoComposto, Estoque, Material, ProdutoCompostoItem
+from models import db, ProdutoComposto, Estoque, Material, ProdutoCompostoItem, MovimentacaoEstoque
 from flask_login import login_required, current_user
 import logging
 import base64
@@ -69,17 +69,27 @@ def get_componentes(id):
     """
     Retorna os componentes de um produto composto a partir do ID
     """
-    produto = ProdutoComposto.query.get_or_404(id)  
-    componentes = []
-    for componente in produto.componentes:
-        componentes.append({
-            'estoque_id': componente.estoque_id,
-            'quantidade': componente.quantidade,
-            'nome': componente.estoque.material.nome if componente.estoque.material_id else componente.estoque.produto_composto.nome
+    try:
+        produto = ProdutoComposto.query.join(ProdutoCompostoItem).join(Estoque).filter(ProdutoComposto.id == id).first()  
+        componentes = []
+        for componente in produto.componentes:
+            estoque = componente.estoque
+            componentes.append({
+                'estoque_id': componente.estoque_id,
+                'quantidade': componente.quantidade,
+                'nome': componente.estoque.material.nome if componente.estoque.material_id else componente.estoque.produto_composto.nome,
+                'estoque': componente.estoque.quantidade if componente.estoque else 0,
+                'capacidade': format(componente.estoque.quantidade / componente.quantidade, '.2f') if componente.quantidade >0 and componente.estoque.quantidade >0 else 0
+            })
+        quantidade_maxima = min(componente['capacidade'] for componente in componentes)
+        return jsonify({
+            'success': True,
+            'componentes': componentes,
+            'quantidade_maxima': quantidade_maxima
         })
-    return jsonify({
-        'componentes': componentes
-    })
+    except Exception as e:
+        logger.error(f"Erro ao obter componentes: {str(e)}")
+        return jsonify({'success': False, 'message': f'Erro ao obter componentes: {str(e)}'}), 500
 
 @produto_composto_bp.route('/get_produto_composto/<int:id>')
 @login_required
@@ -92,17 +102,20 @@ def get_produto_composto(id):
         produto = ProdutoComposto.query.all()
        
         for p in produto:
+            estoque = Estoque.query.filter(Estoque.ProdComp_id == p.id).first()
             produtos.append({
                 'id': p.id,
                 'nome': p.nome,
                 'tempo_producao': float(p.tempo_producao) if p.tempo_producao else None,
                 'componentes': len(p.componentes),
+                'estoque': estoque.quantidade if estoque else 0,
                 'status': p.status
             })
     else:
         produto = ProdutoComposto.query.get_or_404(id)
         componentes = []
         for p in produto.componentes:
+            estoque = Estoque.query.filter(Estoque.ProdComp_id == p.estoque_id).first()
             componentes.append({
                 'estoque_id': p.estoque_id,
                 'quantidade': p.quantidade,
@@ -113,6 +126,7 @@ def get_produto_composto(id):
             'nome': produto.nome,
             'tempo_producao': float(produto.tempo_producao) if produto.tempo_producao else None,
             'componentes': componentes,
+            'estoque': estoque.quantidade if estoque else 0,
             'status': produto.status,
             'descricao': produto.descricao,
             'imagem': produto.imagem,
@@ -182,28 +196,30 @@ def salvar():
             if data.get('remover_imagem'):
                 produto.imagem = None
                 produto.imagem_mime_type = None
-            
-            # Lógica para atualizar imagem
-            imagem_data = data.get('imagem')
-            logger.info(f"Dados de imagem recebidos: {imagem_data is not None}, Tipo: {type(imagem_data)}")
-            
-            if imagem_data:
-                logger.info(f"Processando imagem - Tamanho: {len(imagem_data)} caracteres")
-                # Comprimir a imagem antes de salvar
-                imagem_comprimida, mime_type = comprimir_imagem_base64(imagem_data)
-                header, encoded = imagem_comprimida.split(',', 1)
-                
-                # Validação simples
-                if not mime_type.startswith('image/'):
-                    return jsonify({'success': False, 'message': 'Formato de arquivo inválido. Apenas imagens são permitidas.'}), 400
-                
-                # Validar tamanho (Base64 é ~33% maior que o binário)
-                if len(encoded) * 0.75 > 2 * 1024 * 1024:
-                    return jsonify({'success': False, 'message': 'A imagem excede o tamanho máximo de 2MB.'}), 400
 
-                # Salvar a string Base64 diretamente, como no modelo Upload
-                produto.imagem = encoded
-                produto.imagem_mime_type = mime_type
+            if not (produto.imagem == data.get('imagem') and produto.imagem_mime_type == data.get('imagem_mime_type')):
+                
+                # Lógica para atualizar imagem
+                imagem_data = data.get('imagem')
+                logger.info(f"Dados de imagem recebidos: {imagem_data is not None}, Tipo: {type(imagem_data)}")
+                
+                if imagem_data:
+                    logger.info(f"Processando imagem - Tamanho: {len(imagem_data)} caracteres")
+                    # Comprimir a imagem antes de salvar
+                    imagem_comprimida, mime_type = comprimir_imagem_base64(imagem_data)
+                    header, encoded = imagem_comprimida.split(',', 1)
+                    
+                    # Validação simples
+                    if not mime_type.startswith('image/'):
+                        return jsonify({'success': False, 'message': 'Formato de arquivo inválido. Apenas imagens são permitidas.'}), 400
+                    
+                    # Validar tamanho (Base64 é ~33% maior que o binário)
+                    if len(encoded) * 0.75 > 2 * 1024 * 1024:
+                        return jsonify({'success': False, 'message': 'A imagem excede o tamanho máximo de 2MB.'}), 400
+
+                    # Salvar a string Base64 diretamente, como no modelo Upload
+                    produto.imagem = encoded
+                    produto.imagem_mime_type = mime_type
 
             # Atualizar componentes
             componentes_data = data.get('componentes', [])
@@ -333,6 +349,7 @@ def duplicar(id):
     """
     Duplica um produto composto existente
     """
+    print('duplicar produto composto id', id)
     produto_original = ProdutoComposto.query.get_or_404(id)
     
     try:
@@ -361,11 +378,63 @@ def duplicar(id):
         
         db.session.commit()
         return jsonify({'success': True, 'message': 'Produto composto duplicado com sucesso!'})
-        
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao duplicar produto composto: {str(e)}", exc_info=True)
-        return jsonify({'success': False, 'message': f'Erro ao duplicar produto composto: {str(e)}'}), 500
+        return jsonify({'success': False, 'message': f'Erro ao duplicar produto composto: {e}'}), 500
+
+@produto_composto_bp.route('/produzir', methods=['POST'])
+@login_required
+def produzir():
+    try:
+        data = request.form
+        produto_id = int(data.get('produto_id'))
+        quantidade = int(data.get('quantidade'))
+
+        if not produto_id or not quantidade or quantidade <= 0:
+            return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
+
+        produto = ProdutoComposto.query.get(produto_id)
+        if not produto:
+            return jsonify({'success': False, 'message': 'Produto não encontrado.'}), 404
+
+        # Lógica para baixar o estoque dos componentes
+        for componente in produto.componentes:
+            material = componente.material
+            quantidade_necessaria = componente.quantidade * quantidade
+            
+            if material.estoque_atual < quantidade_necessaria:
+                return jsonify({
+                    'success': False, 
+                    'message': f'Estoque insuficiente para o material {material.nome}. Necessário: {quantidade_necessaria}, Disponível: {material.estoque_atual}'
+                }), 400
+
+            material.estoque_atual -= quantidade_necessaria
+            
+            # Registrar movimentação de saída
+            movimentacao = MovimentacaoEstoque(
+                material_id=material.id,
+                quantidade=-quantidade_necessaria,
+                tipo='saida_producao',
+                observacao=f'Produção do produto {produto.nome} (ID: {produto.id})',
+                usuario_id=current_user.id
+            )
+            db.session.add(movimentacao)
+
+        # Aumentar o estoque do produto acabado
+        produto.estoque += quantidade
+        db.session.commit()
+
+        return jsonify({
+            'success': True, 
+            'message': 'Produção registrada com sucesso!',
+            'produto_id': produto.id,
+            'novo_estoque': produto.estoque
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao registrar produção: {e}")
+        return jsonify({'success': False, 'message': 'Erro interno no servidor.'}), 500
 
 @produto_composto_bp.route('/api/componentes/<int:id>')
 @login_required

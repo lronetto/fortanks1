@@ -708,7 +708,7 @@ def api_buscar():
     
     return jsonify(resultado)
 
-
+    
 @nota_fiscal_bp.route('/importar-arquivei', methods=['POST'])
 @login_required
 def importar_arquivei():
@@ -787,7 +787,8 @@ def importar_itens():
        # try:
            # print(f"Request form: {request.form}")
             # Processar os itens selecionados
-            itens = json.loads(request.form.get('itens'))
+            data = request.get_json()
+            itens = data.get('itens')
             print(f"Itens: {itens}")
             # Importar os itens para o estoque
             for item in itens:

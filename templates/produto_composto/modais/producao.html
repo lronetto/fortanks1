@@ -1,0 +1,159 @@
+<!-- Modal Produção -->
+<div class="modal fade" id="producaoModal" tabindex="-1" role="dialog" aria-labelledby="producaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="producaoModalLabel">Registrar Produção</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="form-producao">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <p>Produto: <strong id="nome-produto-producao"></strong></p>
+                    <p>Estoque Atual: <strong id="estoque-atual-producao"></strong></p>
+                    <p>Quantidade Máxima: <strong id="quantidade-maxima-producao"></strong></p>
+                    <input type="hidden" name="produto_id" id="produto_id_producao">
+                    <div class="tabela-produtos-compostos">
+                        <table class="table table-bordered" id="tabela-componentes-producao">
+                            <thead>
+                                <tr>
+                                    <th>Componente</th>
+                                    <th>Quantidade</th>
+                                    <th>Estoque</th>
+                                    <th>Capacidade</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="quantidade_produzir">Quantidade a Produzir</label>
+                        <input type="number" class="form-control" id="quantidade_produzir" name="quantidade" min="1" step="1" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-send-producao">Confirmar Produção</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div> 
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const produtoId = $('.btn-produzir').data('id');
+       
+        $('#tabela-produtos-compostos tbody').on('click', '.btn-produzir', function(e) {
+            e.preventDefault();
+            const produtoId = $(this).data('id');
+            const produtoNome = $(this).data('nome');
+            const produtoEstoque = $(this).data('estoque');
+
+            $('#produto_id_producao').val(produtoId);
+            $('#nome-produto-producao').text(produtoNome);
+            $('#estoque-atual-producao').text(produtoEstoque);
+            carregarComponentes(produtoId);
+            $('#producaoModal').modal('show');
+        });
+        $('#producaoModal [data-dismiss="modal"]').on('click', function() {
+            fecharModal('#producaoModal');
+        });
+        //carregarComponentes(produtoId);
+        
+    });
+    function carregarComponentes(id) {
+            fetch(`/produto-composto/get_componentes/${id}`,{
+                headers: {
+                    'X-CSRFToken': $('input[name="csrf_token"]').val()
+                }
+            })
+
+            .then(response => response.json())
+            .then(data => {
+                console.log(data); 
+                const tbody = document.querySelector('#tabela-componentes-producao tbody');
+                tbody.innerHTML = '';
+                if(data.success){
+                data.componentes.forEach(componente => {
+                    tbody.innerHTML += ` 
+                        <tr>
+                            <td>${componente.nome}</td>
+                            <td>${componente.quantidade}</td>
+                            <td>${componente.estoque}</td>
+                            <td>${componente.capacidade}</td>
+                        </tr>
+                    `;
+                    });
+                    $('#quantidade-maxima-producao').text(data.quantidade_maxima);
+                }else{
+                    tbody.innerHTML = `<tr><td colspan="4">Não há componentes para produzir</td></tr>`;
+                }
+
+            });
+        }
+     document.getElementById('form-producao').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const form = e.target;
+        const formData = new FormData(form);
+        const btn = form.querySelector('.btn-send-producao');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processando...';
+
+        fetch('/produto-composto/produzir', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': formData.get('csrf_token')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Fechar o modal
+                $('#producaoModal').modal('hide');
+                
+                // Mostrar alerta de sucesso
+                // (Você pode usar uma biblioteca como Toastr.js ou SweetAlert2 para isso)
+                alert(data.message); 
+
+                // Atualizar a tabela
+                const produtoId = data.produto_id;
+                const novoEstoque = data.novo_estoque;
+
+                // Atualizar dados no array local
+                const indexCompleto = produtosCompletos.findIndex(p => p.id == produtoId);
+                if (indexCompleto > -1) {
+                    produtosCompletos[indexCompleto].estoque = novoEstoque;
+                }
+                const indexFiltrado = produtosFiltrados.findIndex(p => p.id == produtoId);
+                if (indexFiltrado > -1) {
+                    produtosFiltrados[indexFiltrado].estoque = novoEstoque;
+                }
+
+                // Re-renderizar a tabela para refletir a mudança
+                renderizarTabela();
+
+            } else {
+                alert('Erro: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Ocorreu um erro de comunicação com o servidor.');
+        })
+        .finally(() => {
+            // Resetar o formulário e o botão
+            form.reset();
+            btn.disabled = false;
+            btn.innerHTML = 'Confirmar Produção';
+        });
+    });
+</script>
+{% endblock %}

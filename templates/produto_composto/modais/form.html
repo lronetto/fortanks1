@@ -111,7 +111,19 @@
         $('#modal-produto-composto').on('click', '#btn-adicionar-item', function() {
             adicionarComponenteTabela();
         });
-        
+        $('.container-fluid').on('click', '#btn-novo-produto', function(e) {
+            e.preventDefault();
+            $('#produto_id').val('');
+            $('#nome').val('');
+            $('#tempo_producao').val('');
+            $('#status').val('Ativo');
+            $('#descricao').val('');
+            $('#image-preview').attr('src', '/static/img/logo.png');
+            $('#remover_imagem_hidden').val('0');
+            $('#tabela-componentes tbody').empty();
+            inicializarSelect2();
+            $('#modal-produto-composto').modal('show');
+        });
         $('#tabela-produtos-compostos tbody').on('click', '.btn-editar', function(e) {
             console.log('btn-editar');
             e.preventDefault();
@@ -345,12 +357,6 @@
             // Limpa os campos
             select.val(null).trigger('change');
             $('#quantidade-item').val('');
-        }
-
-        function fecharModal(modalId) {
-            $(modalId).modal('hide');
-            $('.modal-backdrop').remove();
-            $('body').removeClass('modal-open');
         }
 
         function salvarProduto() {

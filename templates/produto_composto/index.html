@@ -52,8 +52,7 @@
                             <th class="order-nome sortable" data-sort="nome">
                                 Nome <i class="fas fa-sort"></i>
                             </th>
-                            <th style="width: 15%;">Tempo Produção (h)</th>
-                            <th style="width: 10%;">Componentes</th>
+                            <th style="width: 10%;">Estoque</th>
                             <th class="text-center" style="width: 15%;">Ações</th>
                         </tr>
                     </thead>
@@ -75,6 +74,9 @@
 <!-- Modal de Duplicação -->
 {% include 'produto_composto/modais/duplicate.html' %}
 
+<!-- Modal de Produção -->
+{% include 'produto_composto/modais/producao.html' %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -88,12 +90,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         tbody = document.querySelector('#tabela-produtos-compostos tbody');
         console.log('DOMContentLoaded');
-
-        btnNovoProduto = document.getElementById('btn-novo-produto');
-        btnNovoProduto.addEventListener('click', function(e) {
-            e.preventDefault();
-            $('#modal-produto-composto').modal('show');
-        });
 
         // Event listeners para o filtro
         const filtroNome = document.getElementById('filtro-nome');
@@ -198,12 +194,11 @@
                          style="width: 120px; height: 100px; object-fit: cover;">
                 </td>
                 <td class="nome">${produto.nome}</td>
-                <td class="tempo_producao">${produto.tempo_producao ? produto.tempo_producao : '-' }</td>
-                <td class="componentes">${produto.componentes}</td>
-                <td class="status">
-                    ${produto.status == 'Ativo' ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-secondary">Inativo</span>'}
-                </td>
+                <td class="estoque">${produto.estoque}</td>
                 <td class="text-center">
+                    <button class="btn btn-success btn-circle btn-sm btn-produzir" data-id="${produto.id}" data-nome="${produto.nome}" data-estoque="${produto.estoque}" title="Produzir">
+                        <i class="fas fa-industry"></i>
+                    </button>
                     <button class="btn btn-info btn-circle btn-sm btn-editar" data-id="${produto.id}" title="Editar">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -237,6 +232,8 @@
         });
     }
     function addEventos() {
+        
+
         $('#tabela-produtos-compostos tbody').on('click', '.btn-duplicar', function(e) {
             console.log('btn-duplicar');
             e.preventDefault();
@@ -259,6 +256,8 @@
         });
        
     }
+
+   
    
 </script>
 

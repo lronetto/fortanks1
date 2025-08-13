@@ -225,7 +225,8 @@ def exportar_pdf(id):
     filter(ReembolsoDocumento.reembolso_id==id)\
     .join(CentroCusto, ReembolsoDocumento.centro_custo_id==CentroCusto.id)\
     .group_by(ReembolsoDocumento.centro_custo_id)\
-            .order_by(CentroCusto.nome).all()
+            .order_by(CentroCusto.nome).\
+                filter(CentroCusto.codigo.like('0015-00')).all()
     
     for cc in CCs:
         docs = ReembolsoDocumento.query.\
@@ -236,7 +237,7 @@ def exportar_pdf(id):
         # Calcula o número de dias desde 1900
         dias = dias_desde_1900(reembolso.data.date())
         nrel = valor_total+dias
-        html = render_template('reembolsos/pdf_template.html', docs=docs, reembolso=reembolso, nrel=nrel)
+        html = render_template('reembolsos/pdf_template.html', docs=docs, reembolso=reembolso, nrel=nrel, valor_total=valor_total)
         pdf_bytes = HTML(string=html, base_url=request.base_url).write_pdf()
         pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
 
