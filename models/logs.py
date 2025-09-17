@@ -5,6 +5,7 @@ import os
 import base64
 from flask import jsonify
 from datetime import datetime, timedelta
+import logging
 
 class Logs(db.Model):
     __tablename__ = 'logs'
@@ -17,7 +18,7 @@ class Logs(db.Model):
         db.session.add(self)
         db.session.commit()
     def __init__(self, local, data, texto):
-        print(f'local: {local} data: {data} texto: {texto}')
+        logging.info(f'local: {local} data: {data} texto: {texto}')
         self.local = local
         self.data = data
         self.texto = texto

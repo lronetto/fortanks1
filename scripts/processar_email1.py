@@ -166,7 +166,7 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
     - Protocolo 264231708.pdf (Protocolo)
     """
     try:
-        print(f"Processando arquivo: {nome_arquivo}")
+        logging.info(f"Processando arquivo: {nome_arquivo}")
         numero_nf = None
         fornecedor = None
         # Remove a extensão .pdf
@@ -226,7 +226,7 @@ def processar_emails():
         logging.error('Credenciais IMAP não configuradas corretamente.')
         return
 
-    print('processar_emails')
+    logging.info('processar_emails')
     with Imbox(env['IMAP_HOST'], env['IMAP_USER'], env['IMAP_PASS']) as imap:
         emails = imap.messages(unread=True,sent_from='leandro.netto@fortanks.ind.br',
                                raw='has:attachment')
