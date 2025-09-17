@@ -22,5 +22,8 @@ class Logs(db.Model):
         self.local = local
         self.data = data
         self.texto = texto
-        self.save()
+        try:
+            self.save()
+        except Exception as e:
+            logging.error(f'Erro ao salvar log: {e}')
     
