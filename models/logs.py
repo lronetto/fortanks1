@@ -17,6 +17,7 @@ class Logs(db.Model):
         db.session.add(self)
         db.session.commit()
     def __init__(self, local, data, texto):
+        print(f'local: {local} data: {data} texto: {texto}')
         self.local = local
         self.data = data
         self.texto = texto
