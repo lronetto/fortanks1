@@ -42,7 +42,7 @@ class Upload(db.Model):
                 self.blob = base64.b64encode(blob).decode('utf-8')
             else:
                 self.blob = blob
-            up = Upload.query.filter_by(pai=pai, pai_id=pai_id, tipo=tipo).first()
+            up = Upload.query.filter_by(filename=filename).first()
             if not up:
                 self.save()
             else:
