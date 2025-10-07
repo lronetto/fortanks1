@@ -19,6 +19,7 @@ import logging
 from models.upload import Upload
 from models.arquivei import Arquivei
 from models.logs import Logs
+import xmltodict
 logger = logging.getLogger(__name__)
 load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
@@ -174,6 +175,10 @@ class NotaFiscal(db.Model):
     def get_chave_acesso(self):
         return self.chave_acesso
     
+    def get_xml_json(self):
+        dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))
+        return dictvar
+
     def importar_arquivei(data_inicial,data_final,tipo='nfe'):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
         total = len(notas.xml_datas)
@@ -274,7 +279,9 @@ class NotaFiscal(db.Model):
                     valor_total=item_nf.get('valor_total'),
                     ncm=item_nf.get('ncm'),
                     cfop=item_nf.get('cfop'),
-                    unidade=item_nf.get('unidade')
+                    unidade=item_nf.get('unidade'),
+                    dados_adicionais=json.dumps(item_nf.get('dados_adicionais'), ensure_ascii=False)
+
                 )
                 item_fiscal.save()
             self.vincular_automaticamente()
@@ -485,6 +492,8 @@ class NotaFiscal(db.Model):
                 try:
                     num_item = item.attrib.get('nItem', '0')
                     prod = item.find('.//nfe:prod', ns) or item.find('.//prod', ns)
+
+                    infAdProd = item.find('.//nfe:infAdProd', ns) or item.find('.//infAdProd', ns)
                     
                     if not prod:
                         logger.warning(f"Produto não encontrado para o item {num_item}")
@@ -509,8 +518,11 @@ class NotaFiscal(db.Model):
                         'valor_total': Decimal(valor_total_item_text),
                         'ncm': ncm,
                         'cfop': cfop,
-                        'unidade': unidade
-                    }
+                        'unidade': unidade,
+                        'dados_adicionais':{
+                            'infAdProd': infAdProd
+                            }
+                        }
                     
                     nfe_data['itens'].append(item_data)
                 except Exception as e:
