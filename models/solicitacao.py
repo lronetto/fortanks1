@@ -76,7 +76,7 @@ class ItemSolicitacao(db.Model):
     """
     Modelo para representar itens de uma solicitação de materiais
     """
-    __tablename__ = 'itens_solicitacao'
+    __tablename__ = 'solicitacoes_itens'
     
     id = db.Column(db.Integer, primary_key=True)
     solicitacao_id = db.Column(db.Integer, db.ForeignKey('solicitacoes.id', ondelete='CASCADE'), nullable=False)
