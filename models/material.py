@@ -17,7 +17,8 @@ class Material(db.Model):
     plano_conta = db.Column(db.String(30), nullable=True)
     plano_conta_id = db.Column(db.Integer, db.ForeignKey('planos_conta.id'), nullable=True)
     plano_conta_obj = relationship('PlanoConta', back_populates='materiais',foreign_keys=[plano_conta_id])
-  
+    ncm = db.Column(db.String(15), nullable=True)
+    mascara = db.Column(db.String(20), nullable=True)
     
     # Referência à tabela de unidades
     unidade_id = db.Column(db.Integer, db.ForeignKey('unidades.id'), nullable=True)
@@ -27,7 +28,7 @@ class Material(db.Model):
 
     #unidade = db.relationship('Unidade', back_populates='materiais', foreign_keys=[unidade_id])
     # Relacionamento com ItemSolicitacao - use backref para simplificar
-    itens_solicitacao = db.relationship('ItemSolicitacao', back_populates='material')
+    solicitacoes_itens = db.relationship('ItemSolicitacao', back_populates='material')
     # Renomeado para evitar conflito com o campo string 'unidade' e para maior clareza
     unidade_obj = db.relationship('Unidade', back_populates='materiais', foreign_keys=[unidade_id])
     
