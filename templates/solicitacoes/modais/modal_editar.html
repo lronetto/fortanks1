@@ -190,9 +190,9 @@ document.addEventListener('DOMContentLoaded', function() {
         itens.forEach((item, index) => {
             const tr = $('<tr>');
             console.log('teste5');
-            tr.append(`<td>${item.material_nome}</td>`);
+            tr.append(`<td>${item.material.nome}</td>`);
             tr.append(`<td>${item.quantidade}</td>`);
-            tr.append(`<td>${item.unidade_nome}</td>`);
+            tr.append(`<td>${item.material.unidade_obj.nome}</td>`);
             
             const tdObs = $('<td>');
             const inputObs = $('<input>')
