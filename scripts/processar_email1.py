@@ -299,8 +299,8 @@ def processar_emails():
                                     continue
                                 logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
                                 dec1 = None
+                                img = convert_from_bytes(payload,500)[0]
                                 #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
                                 #print(f"img: {img}")
                                 #logging.info(f"img1")
                                 decs = decode(img)
@@ -310,7 +310,7 @@ def processar_emails():
                                     tiponf = None
                                     if dec:
                                         dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-                                        tiponf = int(dec1[20:22])
+                                        tiponf = dec1[20:22]
                                     else:
                                         log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
                                         #log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
