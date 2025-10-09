@@ -25,7 +25,7 @@ class Solicitacao(db.Model):
     solicitante = db.relationship('Usuario', foreign_keys=[solicitante_id], backref='solicitacoes')
     aprovador = db.relationship('Usuario', foreign_keys=[aprovador_id])
     centro_custo = db.relationship('CentroCusto', backref='solicitacoes')
-    itens = db.relationship('ItemSolicitacao', backref='solicitacao', cascade='all, delete-orphan')
+    itens = db.relationship('ItemSolicitacao', backref='solicitacoes_itens', cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -86,7 +86,7 @@ class ItemSolicitacao(db.Model):
     observacoes = db.Column(db.Text, nullable=True)
     
     # Relacionamento com material
-    material = db.relationship('Material', back_populates='itens_solicitacao')
+    material = db.relationship('Material', back_populates='solicitacoes_itens')
     
     def to_dict(self):
         return {
