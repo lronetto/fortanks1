@@ -461,7 +461,7 @@ $(document).ready(function() {
             method: 'GET',
             dataType: 'json',
             success: function(data) {
-                console.log("Status dos dados:", data);
+                //console.log("Status dos dados:", data);
                 
                 // Preencher dados
                 $('#total-registros').text(data.total_registros);
@@ -568,6 +568,7 @@ $(document).ready(function() {
                 cc_id: cc_id
             },
             success: function(response) {
+                console.log("Resposta da API:", response);
                 // Verificar status da resposta
                 if (response.status === 'success') {
                     // Atualizar cards com informações financeiras

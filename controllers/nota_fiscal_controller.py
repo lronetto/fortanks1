@@ -47,6 +47,13 @@ def verificar_permissao():
     #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
     #     return redirect(url_for('dashboard.index'))
 
+@nota_fiscal_bp.route('/teste2')
+@login_required
+def teste2():
+    print('teste2')
+    processar_emails()
+    return redirect(url_for('nota_fiscal.index'))
+
 @nota_fiscal_bp.route('/teste1')
 @login_required
 def teste1():
@@ -61,8 +68,8 @@ def teste1():
 @login_required
 def teste():
     print('teste')
-    processar_emails()
-           
+    nota = NotaFiscal.query.get(33894)
+    nota.analizar_xml_json()
     return redirect(url_for('nota_fiscal.index'))
 @nota_fiscal_bp.route('/')
 @login_required
@@ -89,7 +96,8 @@ def nota_fiscal_busca(filtros):
     valor_maximo = filtros.get('valor_maximo')
     valor_exato = filtros.get('valor_exato')
     notas_selecionadas = filtros.get('notas_selecionadas', [])
-    data_inicial = filtros.get('data_inicial')
+    from dateutil.relativedelta import relativedelta
+    data_inicial = filtros.get('data_inicial') if filtros.get('data_inicial') else datetime.now() - relativedelta(months=12)
     data_final = filtros.get('data_final')
     fornecedor = filtros.get('fornecedor')
     busca = filtros.get('busca','')
@@ -196,7 +204,7 @@ def nota_fiscal_busca(filtros):
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     notas = pagination.items
 
-    print('tempo de execução2: ',time.time()-tinicial)
+    print('tempo de execução2: qtd='+str(pagination.total)+', tempo='+str(time.time()-tinicial))
     tinicial = time.time()
     # Processar notas para o JSON de resposta
     notas_filtradas = []
@@ -239,6 +247,9 @@ def api_get_dados_notas_fiscais(request):
     destino = args.get('destino', '')  # Novo filtro para destino
     remetente = args.get('remetente', '')  # Novo filtro para remetente
     status_upload = args.get('status_upload', '')  # Novo filtro de status upload
+    # Novos filtros de CNPJ direto (valor exato)
+    cnpj_emitente_val = args.get('cnpj_emitente_val', '').strip()
+    cnpj_destinatario_val = args.get('cnpj_destinatario_val', '').strip()
     
     # Instanciar formulário de importação para o modal
     import_form = NotaFiscalImportForm()
@@ -283,6 +294,11 @@ def api_get_dados_notas_fiscais(request):
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_FILIAIS))
         elif cnpj_emitente == 'Matriz_Filiais':
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
+    # Aplicar filtros por CNPJ exato se informados
+    if cnpj_emitente_val:
+        query = query.filter(NotaFiscal.cnpj_emitente == cnpj_emitente_val)
+    if cnpj_destinatario_val:
+        query = query.filter(NotaFiscal.cnpj_destinatario == cnpj_destinatario_val)
     if data_emissao_inicio:
         try:
             data_inicio = datetime.strptime(data_emissao_inicio, '%Y-%m-%d')
@@ -776,6 +792,16 @@ def gerar_pdf(id):
         flash(f'Erro ao gerar PDF: {str(e)}', 'danger')
         return redirect(url_for('nota_fiscal.index'))
    
+@nota_fiscal_bp.route('/xml/<int:id>', methods=['GET'])
+@login_required
+def gerar_xml(id):
+    """
+    Gera um XML da nota fiscal para download
+    """
+    nota = NotaFiscal.query.get_or_404(id)
+    return jsonify({'xml': base64.b64decode(nota.xml_data).decode('utf-8')})
+   
+
 
 @nota_fiscal_bp.route('/api/importar_itens', methods=['GET', 'POST'])
 @login_required
@@ -965,7 +991,8 @@ def api_vincular_material(item_id):
         # Atualizar o item da nota fiscal
         item.material_id = material_id
         item.save()
-
+        material.ncm = item.ncm
+        material.save()
         cnpj_emitente = NotaFiscal.query.\
             join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
             filter(NotaFiscalItem.id==item_id).first().cnpj_emitente
@@ -1237,10 +1264,14 @@ def api_unidades():
 def api_aplicar_conversao():
     """API para aplicar conversão de unidades ao vincular material a item de nota fiscal"""
     try:
+        data = request.get_json()
+        logger.info(f'API para aplicar conversão de unidades ao vincular material a item de nota fiscal')
+        logger.info(f'request.form: {data}')
+        
         # Obter dados do formulário
-        item_id = request.form.get('item_id')
-        material_id = request.form.get('material_id')
-        fator_conversao = request.form.get('fator_conversao')
+        item_id = data.get('item_id')
+        material_id = data.get('material_id')
+        fator_conversao = data.get('fator_conversao')
         unidade_conversao_id = request.form.get('unidade_conversao_id')
         
         if not item_id or not material_id or not fator_conversao:
@@ -1915,12 +1946,17 @@ def api_listar_documentos(nota_id):
     try:
         documentos = db.session.query(Upload.id,Upload.filename,Upload.tipo,Upload.uploaded_at).filter_by(pai='NotaFiscal', pai_id=nota_id).all()
         resultado = []
+        nota = NotaFiscal.query.get(nota_id)
+        if nota:
+            resultado.append({
+                'id': nota.id,
+                'filename': f'nf {nota.numero_nf}.xml',
+                'tipo': 10,
+                'uploaded_at': nota.data_importacao.isoformat()
+            })
         if not documentos:
-            nota = NotaFiscal.query.get(nota_id)
-            if nota:
                 nota.get_pdf()
-                resultado = db.session.query(Upload.id,Upload.filename,Upload.tipo,Upload.uploaded_at).filter_by(pai='NotaFiscal', pai_id=nota_id).all()
-            return jsonify({'documentos': resultado, 'success': True})
+                
         for doc in documentos:
             resultado.append({
                 'id': doc[0],
@@ -2014,6 +2050,8 @@ def exportar_excel():
     item_nome = request.args.get('item_nome', '')
     status_importacao = request.args.get('status_importacao', '')
     cnpj_emitente = request.args.get('cnpj_emitente', '')
+    cnpj_emitente_val = request.args.get('cnpj_emitente_val', '').strip()
+    cnpj_destinatario_val = request.args.get('cnpj_destinatario_val', '').strip()
     status_pagamento = request.args.get('status_pagamento', '')
     data_emissao_inicio = request.args.get('data_emissao_inicio', '')
     data_emissao_fim = request.args.get('data_emissao_fim', '')
@@ -2043,6 +2081,11 @@ def exportar_excel():
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS))
         elif cnpj_emitente == 'terceiros':
             query = query.filter(~NotaFiscal.cnpj_emitente.in_(CNPJS))
+    # Novos filtros diretos de CNPJ
+    if cnpj_emitente_val:
+        query = query.filter(NotaFiscal.cnpj_emitente == cnpj_emitente_val)
+    if cnpj_destinatario_val:
+        query = query.filter(NotaFiscal.cnpj_destinatario == cnpj_destinatario_val)
     if data_emissao_inicio:
         data_inicio = datetime.strptime(data_emissao_inicio, '%Y-%m-%d')
         query = query.filter(NotaFiscal.data_emissao >= data_inicio)

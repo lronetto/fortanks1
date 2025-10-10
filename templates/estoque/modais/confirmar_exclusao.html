@@ -1,0 +1,82 @@
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="modalConfirmarExclusao" tabindex="-1" aria-labelledby="modalConfirmarExclusaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalConfirmarExclusaoLabel"><i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-trash-alt fa-3x text-danger mb-3"></i>
+                    <h5>Você tem certeza?</h5>
+                    <p class="text-muted">Tem certeza que deseja excluir este item do estoque?</p>
+                    <p class="text-muted"><strong>Esta ação não pode ser desfeita.</strong></p>
+                    
+                    <!-- Informações do item que será excluído -->
+                    <div class="alert alert-warning mt-3">
+                        <strong>Item:</strong> <span id="item-exclusao-nome">-</span><br>
+                        <strong>Código:</strong> <span id="item-exclusao-codigo">-</span><br>
+                        <strong>Quantidade:</strong> <span id="item-exclusao-quantidade">-</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <form id="form-exclusao" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Confirmar Exclusão
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para confirmar exclusão
+    function confirmarExclusao(url, itemData) {
+        // Definir a ação do formulário
+        document.getElementById('form-exclusao').action = url;
+        
+        // Preencher informações do item
+        if (itemData) {
+            document.getElementById('item-exclusao-nome').textContent = itemData.nome || '-';
+            document.getElementById('item-exclusao-codigo').textContent = itemData.codigo || '-';
+            document.getElementById('item-exclusao-quantidade').textContent = itemData.quantidade || '-';
+        }
+        
+        // Mostrar o modal
+        const modal = new bootstrap.Modal(document.getElementById('modalConfirmarExclusao'));
+        modal.show();
+    }
+
+    // Adicionar evento para os botões de exclusão
+    const deleteButtons = document.querySelectorAll('.btn-excluir-item');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.getAttribute('data-url');
+            const itemData = {
+                nome: this.getAttribute('data-nome') || '',
+                codigo: this.getAttribute('data-codigo') || '',
+                quantidade: this.getAttribute('data-quantidade') || ''
+            };
+            
+            confirmarExclusao(url, itemData);
+        });
+    });
+
+    // Função global para compatibilidade com código existente
+    window.confirmarExclusao = function(url) {
+        confirmarExclusao(url, null);
+    };
+});
+</script>
+{% endblock %}

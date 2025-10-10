@@ -4,7 +4,7 @@ from wtforms.validators import DataRequired, Optional, NumberRange
 
 class EstoqueForm(FlaskForm):
     material_id = SelectField('Material', coerce=int, validators=[DataRequired()])
-    quantidade = FloatField('Quantidade', validators=[DataRequired(), NumberRange(min=0)])
+    quantidade = FloatField('Quantidade', validators=[Optional(), NumberRange(min=0)])
     quantidade_minima = FloatField('Quantidade Mínima', validators=[Optional(), NumberRange(min=0)])
     quantidade_maxima = FloatField('Quantidade Máxima', validators=[Optional(), NumberRange(min=0)])
     lote = StringField('Lote')

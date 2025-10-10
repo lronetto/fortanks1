@@ -177,7 +177,7 @@ def relatorio_notas():
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
-    dados_relatorio = dados_relatorio_financeiro(data_fim=data_fim_dt,data_inicio=data_inicio_dt,centro_custo_ids=centro_custo_ids_int,calcelada=True)
+    dados_relatorio = dados_relatorio_financeiro(data_fim=data_fim_dt,data_inicio=data_inicio_dt,centro_custo_ids=centro_custo_ids_int,cancelada=True)
     return render_template('relatorios/relatorio_notas.html', relatorio=dados_relatorio, centros_custo=centros_custo)
 
 @relatorio_bp.route('/notas/ajax', methods=['GET'])
@@ -191,9 +191,102 @@ def relatorio_notas_ajax():
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
     
     dados_relatorio = dados_relatorio_financeiro(data_inicio=data_inicio_dt, data_fim=data_fim_dt, centro_custo_ids=centro_custo_ids_int if centro_custo_ids_int else None)
-    total=sum([d['Valor'] for d in dados_relatorio])
-    print(f'total: {total}')
-    return render_template('relatorios/relatorio_notas_tabela.html', relatorio=dados_relatorio, total=total if total else 0)
+    
+    # Calcular totais por categoria
+    total_valor = sum([d['Valor'] if d['Status'] != 'cancelada' else 0 for d in dados_relatorio])
+    total_quantidade = sum([d['Quantidade'] if d['Status'] != 'cancelada' else 0 for d in dados_relatorio])
+    
+    # Calcular quantidade total de placas dos contratos (material)
+    query_placas = db.session.query(
+        func.sum((Tanque.placas_normais + Tanque.placas_fecho) * Tanque.quantidade)
+    ).join(Contrato, Contrato.id == Tanque.contrato_id)
+    
+    if centro_custo_ids_int:
+        query_placas = query_placas.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))
+    
+    total_placas_contratos = query_placas.scalar() or 0
+    
+    # Calcular valores faturados (emitidos)
+    valor_faturado = sum([d['Valor'] if d['Status'] != 'cancelada' else 0 for d in dados_relatorio])
+    
+    # Calcular valores recebidos (pagos)
+    valor_recebido = sum([d['Valor'] for d in dados_relatorio if d['Pago'] != 'Não' and d['Pago'] != 'Não definido' and d['Status'] != 'cancelada'])
+    
+    # Calcular quantidades de placas recebidas (pagos)
+    quantidade_recebida = sum([d['Quantidade'] for d in dados_relatorio if d['Pago'] != 'Não' and d['Pago'] != 'Não definido' and d['Status'] != 'cancelada'])
+    
+    # Calcular valores a faturar (emitidos mas não pagos)
+    valor_a_faturar = valor_faturado - valor_recebido
+    
+    # Calcular quantidades a faturar (emitidas mas não pagas)
+    quantidade_a_faturar = total_quantidade - quantidade_recebida
+    
+    # Buscar valores dos contratos separados por material e serviço
+    query_contratos_total = db.session.query(func.sum(Contrato.valor_total))
+    query_contratos_mat = db.session.query(func.sum(Contrato.valor_mat))
+    query_contratos_ser = db.session.query(func.sum(Contrato.valor_ser))
+    
+    if centro_custo_ids_int:
+        query_contratos_total = query_contratos_total.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))
+        query_contratos_mat = query_contratos_mat.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))
+        query_contratos_ser = query_contratos_ser.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))
+    
+    valor_total_contratos = query_contratos_total.scalar() or 0
+    valor_total_material = query_contratos_mat.scalar() or 0
+    valor_total_servico = query_contratos_ser.scalar() or 0
+    
+    # As notas fiscais são sempre de material, então:
+    # Material: valor das notas fiscais
+    # Serviço: valor total de serviço dos contratos (não tem notas fiscais)
+    valor_material_faturado = valor_faturado  # NFE são sempre material
+    valor_servico_faturado = 0  # Serviços não têm notas fiscais
+    
+    # Calcular valores ainda não faturados
+    valor_material_nao_faturado = valor_total_material - valor_material_faturado
+    valor_servico_nao_faturado = valor_total_servico - valor_servico_faturado
+    
+    # Calcular quantidades de placas não faturadas
+    quantidade_material_nao_faturada = total_placas_contratos - total_quantidade
+    
+    # Calcular percentuais para material
+    percentual_material_faturado = (valor_material_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
+    percentual_material_recebido = (valor_recebido / valor_total_material * 100) if valor_total_material > 0 else 0
+    percentual_material_a_faturar = (valor_a_faturar / valor_total_material * 100) if valor_total_material > 0 else 0
+    percentual_material_nao_faturado = (valor_material_nao_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
+    
+    # Calcular percentuais para serviço (sempre 0% faturado pois não há NFE)
+    percentual_servico_faturado = 0
+    percentual_servico_recebido = 0
+    percentual_servico_a_faturar = 0
+    percentual_servico_nao_faturado = 100 if valor_total_servico > 0 else 0
+    
+    print(f'total: {total_valor}')
+    return render_template('relatorios/relatorio_notas_tabela.html', 
+                         relatorio=dados_relatorio, 
+                         total_valor=total_valor if total_valor else 0, 
+                         total_quantidade=total_quantidade if total_quantidade else 0,
+                         total_placas_contratos=total_placas_contratos,
+                         quantidade_recebida=quantidade_recebida,
+                         quantidade_a_faturar=quantidade_a_faturar,
+                         quantidade_material_nao_faturada=quantidade_material_nao_faturada,
+                         valor_faturado=valor_faturado,
+                         valor_recebido=valor_recebido,
+                         valor_a_faturar=valor_a_faturar,
+                         valor_total_contratos=valor_total_contratos,
+                         valor_total_material=valor_total_material,
+                         valor_total_servico=valor_total_servico,
+                         valor_material_faturado=valor_material_faturado,
+                         valor_servico_faturado=valor_servico_faturado,
+                         valor_material_nao_faturado=valor_material_nao_faturado,
+                         valor_servico_nao_faturado=valor_servico_nao_faturado,
+                         percentual_material_faturado=percentual_material_faturado,
+                         percentual_material_recebido=percentual_material_recebido,
+                         percentual_material_a_faturar=percentual_material_a_faturar,
+                         percentual_material_nao_faturado=percentual_material_nao_faturado,
+                         percentual_servico_faturado=percentual_servico_faturado,
+                         percentual_servico_recebido=percentual_servico_recebido,
+                         percentual_servico_a_faturar=percentual_servico_a_faturar,
+                         percentual_servico_nao_faturado=percentual_servico_nao_faturado)
 
 @relatorio_bp.route('/notas/exportar', methods=['GET'])
 def relatorio_notas_exportar():
@@ -257,16 +350,18 @@ def relatorio_notas_exportar():
 def get_dataframe(dados_relatorio):
     df = pd.DataFrame(dados_relatorio)
      # Ordenar por data de emissão
-    df['Valor'] = df['Valor'].apply(lambda x: f'R$ {x:,.2f}')
+    df['Valor'] = df['Valor'].apply(lambda x: 'R$ ' + '{:,.2f}'.format(x).replace(',', 'X').replace('.', ',').replace('X', '.'))
     df['Quantidade']=df['Quantidade'].apply(lambda x: int(x))
     df.rename(columns={'Data Prevista':'VENCIMENTO',
                        'Data':'DATA EMISSÃO',
                        'Nota Fiscal':'NF',
                        'Quantidade':'QTDE DE PLACA',
-                       'Valor':'VALOR'},inplace=True)
+                       'Valor':'VALOR',
+                       'Status':'STATUS',
+                       'Pago':'PAGO'},inplace=True)
 
     
-    return df[['DATA EMISSÃO','NF','QTDE DE PLACA','VALOR','VENCIMENTO']]
+    return df[['DATA EMISSÃO','NF','QTDE DE PLACA','VALOR','STATUS','VENCIMENTO','PAGO']]
 
 @relatorio_bp.route('/notas/exportar_pdf', methods=['GET'])
 def relatorio_notas_exportar_pdf():

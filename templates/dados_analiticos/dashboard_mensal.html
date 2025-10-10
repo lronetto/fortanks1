@@ -617,13 +617,14 @@
         const tableBody = $('#monthly-summary-table-body');
         
         // LOG: Verificar se elementos foram encontrados
-        console.log(`[Tabela Resumo] Encontrado thead: ${tableHead.length}, tbody: ${tableBody.length}`); 
+        
+        //console.log(`[Tabela Resumo] Encontrado thead: ${tableHead.length}, tbody: ${tableBody.length}`); 
         
         tableHead.empty(); 
         tableBody.empty(); 
 
         // LOG: Verificar dados de entrada
-        console.log("[Tabela Resumo] Dados recebidos para tabela:", data);
+        //console.log("[Tabela Resumo] Dados recebidos para tabela:", data);
         if (!data || (!data.labels_meses && !data.labels_anos_meses)) {
             console.warn("[Tabela Resumo] Dados insuficientes (faltam labels), retornando cedo."); // LOG SAÍDA PREMATURA
             tableHead.append('<tr><th>Métrica</th><th>Erro</th></tr>');
@@ -876,6 +877,7 @@
 
         
         function criarGraficoTopCC(data) {
+            console.log("Resposta da APIsdfsADFD:", data);
              if (!data || !data.valores_cc || !data.labels_cc) {
                  $('#grafico-top-cc').html('<div class="no-data-message">Dados insuficientes para gerar o gráfico de Top CC.</div>');
                  return;

@@ -1,6 +1,21 @@
 from datetime import datetime
 from models.database import db
 
+class DadosBancarios(db.Model):
+    __tablename__ = 'dados_bancarios'
+    id = db.Column(db.Integer, primary_key=True)
+    colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'), nullable=False)
+    pix = db.Column(db.String(100), nullable=False)
+    banco = db.Column(db.String(100), nullable=False)
+    agencia = db.Column(db.String(100), nullable=False)
+    conta = db.Column(db.String(100), nullable=False)
+    criado_em = db.Column(db.DateTime, default=datetime.now)
+    atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    colaborador = db.relationship('Colaborador', back_populates='dados_bancarios')
+
+    def __repr__(self):
+        return f'<DadosBancarios {self.id}>'
 class Colaborador(db.Model):
     __tablename__ = 'colaboradores'
     
@@ -23,6 +38,7 @@ class Colaborador(db.Model):
   
 
     usuario = db.relationship('Usuario', back_populates='colaborador')
+    dados_bancarios = db.relationship('DadosBancarios', back_populates='colaborador', uselist=False)
     # Controle de auditoria
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

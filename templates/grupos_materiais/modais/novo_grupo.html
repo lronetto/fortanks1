@@ -1,0 +1,174 @@
+<!-- Modal de Novo Grupo de Materiais -->
+<div class="modal fade" id="modalNovoGrupo" tabindex="-1" aria-labelledby="modalNovoGrupoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNovoGrupoLabel"><i class="fas fa-layer-group"></i> Novo Grupo de Materiais</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" id="form-novo-grupo" action="{{ url_for('grupo_material.novo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="nome" class="form-label">Nome do Grupo *</label>
+                                <input type="text" class="form-control" id="nome" name="nome" required>
+                                <small class="form-text text-muted">Nome identificador do grupo</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="codigo" class="form-label">Código</label>
+                                <input type="text" class="form-control" id="codigo" name="codigo" maxlength="20">
+                                <small class="form-text text-muted">Código único (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="descricao" class="form-label">Descrição</label>
+                                <textarea class="form-control" id="descricao" name="descricao" rows="3" maxlength="500"></textarea>
+                                <small class="form-text text-muted">Descrição detalhada do grupo (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="cor" class="form-label">Cor</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="cor_picker" value="#007bff">
+                                    <input type="text" class="form-control" id="cor" name="cor" placeholder="#007bff" maxlength="7">
+                                </div>
+                                <small class="form-text text-muted">Cor para identificação visual (opcional)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="icone" class="form-label">Ícone</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="icone" name="icone" placeholder="fas fa-boxes" maxlength="50">
+                                    <button type="button" class="btn btn-outline-secondary" id="btn-preview-icone">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Classe do ícone FontAwesome (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="ativo" name="ativo" checked>
+                                <label class="form-check-label" for="ativo">
+                                    Grupo ativo
+                                </label>
+                                <small class="form-text text-muted d-block">Grupos inativos não aparecem nas opções de inventário</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        Após criar o grupo, você poderá adicionar materiais a ele através da página de detalhes.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-grupo">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sincronizar cor do picker com o campo de texto
+    $('#cor_picker').on('change', function() {
+        $('#cor').val($(this).val());
+    });
+    
+    $('#cor').on('input', function() {
+        const cor = $(this).val();
+        if (cor.match(/^#[0-9A-F]{6}$/i)) {
+            $('#cor_picker').val(cor);
+        }
+    });
+    
+    // Preview do ícone
+    $('#btn-preview-icone').on('click', function() {
+        const icone = $('#icone').val();
+        if (icone) {
+            $(this).html(`<i class="${icone}"></i>`);
+        } else {
+            $(this).html('<i class="fas fa-eye"></i>');
+        }
+    });
+    
+    // Salvar novo grupo
+    $('#btn-salvar-grupo').click(function() {
+        // Validar formulário
+        const nome = $('#nome').val().trim();
+        if (!nome) {
+            alert('O nome do grupo é obrigatório.');
+            $('#nome').focus();
+            return;
+        }
+        
+        // Preparar dados
+        const dados = {
+            nome: nome,
+            descricao: $('#descricao').val(),
+            codigo: $('#codigo').val(),
+            cor: $('#cor').val(),
+            icone: $('#icone').val(),
+            ativo: $('#ativo').is(':checked')
+        };
+        
+        // Enviar formulário via AJAX
+        $.ajax({
+            url: "{{ url_for('grupo_material.novo') }}",
+            type: "POST",
+            data: JSON.stringify(dados),
+            contentType: "application/json",
+            dataType: "json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    $('#modalNovoGrupo').modal('hide');
+                    // Recarregar lista se a função estiver disponível
+                    if (typeof carregarGrupos === 'function') {
+                        carregarGrupos();
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert(response.message || 'Erro ao criar grupo.');
+                }
+            },
+            error: function(xhr, status, error) {
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    alert(xhr.responseJSON.message);
+                } else {
+                    alert("Erro ao criar grupo: " + error);
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

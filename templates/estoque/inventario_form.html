@@ -38,28 +38,46 @@
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        {{ form.tipo_item.label }}
-                                        {{ form.tipo_item(class="form-control") }}
-                                        {% if form.tipo_item.errors %}
-                                            <div class="invalid-feedback d-block">
-                                                {% for error in form.tipo_item.errors %}
-                                                    {{ error }}
-                                                {% endfor %}
-                                            </div>
-                                        {% endif %}
+                                        <label for="tipo_item" class="form-label">Tipo de Item</label>
+                                        <select class="form-control" id="tipo_item" name="tipo_item">
+                                            <option value="">Selecione...</option>
+                                            <option value="material">Material</option>
+                                            <option value="epi">EPI</option>
+                                            <option value="produto_composto">Produto Composto</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
-                                        {{ form.localizacao.label }}
-                                        {{ form.localizacao(class="form-control") }}
-                                        {% if form.localizacao.errors %}
-                                            <div class="invalid-feedback d-block">
-                                                {% for error in form.localizacao.errors %}
-                                                    {{ error }}
-                                                {% endfor %}
-                                            </div>
-                                        {% endif %}
+                                        <label for="localizacao" class="form-label">Localização</label>
+                                        <select class="form-control" id="localizacao" name="localizacao">
+                                            <option value="">Todas as localizações</option>
+                                            {% for localizacao in localizacoes %}
+                                                <option value="{{ localizacao }}">{{ localizacao }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="categoria" class="form-label">Categoria</label>
+                                        <select class="form-control" id="categoria" name="categoria">
+                                            <option value="">Todas as categorias</option>
+                                            {% for categoria in categorias %}
+                                                <option value="{{ categoria }}">{{ categoria }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="grupo_material" class="form-label">Grupo de Material</label>
+                                        <select class="form-control" id="grupo_material" name="grupo_material">
+                                            <option value="">Todos os grupos</option>
+                                            <!-- Grupos serão carregados via AJAX -->
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -113,9 +131,31 @@
             
             if (tipoInventario === 'Parcial') {
                 $('#filtrosParciais').show();
+                carregarGruposMateriais();
             } else {
                 $('#filtrosParciais').hide();
             }
+        }
+        
+        // Carregar grupos de materiais
+        function carregarGruposMateriais() {
+            $.ajax({
+                url: "{{ url_for('grupo_material.api_listar_json') }}",
+                method: 'GET',
+                success: function(response) {
+                    if (response.success) {
+                        const select = $('#grupo_material');
+                        select.empty().append('<option value="">Todos os grupos</option>');
+                        
+                        response.grupos.forEach(function(grupo) {
+                            select.append(`<option value="${grupo.id}">${grupo.nome}</option>`);
+                        });
+                    }
+                },
+                error: function() {
+                    console.log('Erro ao carregar grupos de materiais');
+                }
+            });
         }
         
         // Inicializar
@@ -123,6 +163,25 @@
         
         // Aplicar evento de mudança
         $('#tipoInventario').change(toggleFiltrosParciais);
+        
+        // Validação do formulário
+        $('form').submit(function(e) {
+            const tipoInventario = $('#tipoInventario').val();
+            
+            if (tipoInventario === 'Parcial') {
+                // Verificar se pelo menos um filtro foi selecionado
+                const tipoItem = $('#tipo_item').val();
+                const categoria = $('#categoria').val();
+                const localizacao = $('#localizacao').val();
+                const grupoMaterial = $('#grupo_material').val();
+                
+                if (!tipoItem && !categoria && !localizacao && !grupoMaterial) {
+                    e.preventDefault();
+                    alert('Para inventário parcial, selecione pelo menos um filtro (tipo de item, categoria, localização ou grupo de material).');
+                    return false;
+                }
+            }
+        });
     });
 </script>
 {% endblock %} 

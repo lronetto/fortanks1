@@ -54,8 +54,37 @@
             <form method="POST" action="{{ url_for('material.confirmar_importacao') }}" class="mb-4" id="colunasForm">
                 <input type="hidden" name="temp_file" id="temp_file" value="{{ temp_file }}">
                 <input type="hidden" name="planilha" value="{{ planilha_atual }}">
-
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row mb-4">
+                    <div class="col-md-4 mb-3">
+                        <label for="col_id" class="form-label">ID</label>
+                        <select class="form-select" id="col_id" name="col_id">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label for="col_mascara" class="form-label">Máscara</label>
+                        <select class="form-select" id="col_mascara" name="col_mascara">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="col_ncm" class="form-label">NCM</label>
+                        <select class="form-select" id="col_ncm" name="col_ncm">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <div class="col-md-4 mb-3">
                         <label for="col_nome" class="form-label">Nome <span class="text-danger">*</span></label>
                         <select class="form-select" id="col_nome" name="col_nome" required>

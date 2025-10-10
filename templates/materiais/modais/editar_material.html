@@ -30,6 +30,7 @@
                                 <option value="Insumo">Insumo</option>
                                 <option value="Ferramenta">Ferramenta</option>
                                 <option value="Equipamento">Equipamento</option>
+                                <option value="Imobilizado">Imobilizado</option>
                                 <option value="Material de Escritório">Material de Escritório</option>
                                 <option value="Serviço">Serviço</option>
                                 <option value="EPI">EPI</option>
@@ -37,7 +38,12 @@
                             </select>
                         </div>
                     </div>
-
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_mascara" class="form-label">Máscara</label>
+                            <input type="text" class="form-control" id="edit_mascara" name="edit_mascara">
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="col-md-8 mb-3">
                             <label for="edit_nome" class="form-label">Nome</label>
@@ -121,6 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_codigo_erp').value = material.codigo_erp || '';
             document.getElementById('edit_nome').value = material.nome || '';
             document.getElementById('edit_descricao').value = material.descricao || '';
+            document.getElementById('edit_mascara').value = material.mascara || '';
             const categoriaSelect = document.getElementById('edit_categoria');
             if (categoriaSelect) {
                 categoriaSelect.value = material.categoria || '';
@@ -153,7 +160,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         descricao: this.dataset.descricao || '',
                         categoria: this.dataset.categoria || '',
                         plano_conta: this.dataset.planoConta || '',
-                        unidade: this.dataset.unidade || ''
+                        unidade: this.dataset.unidade || '',
+                        mascara: this.dataset.mascara || ''
                     };
                     preencherModal(material);
                     return;
@@ -197,6 +205,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const unidadeSelect = document.getElementById('edit_unidade');
                 const unidadeTexto = document.getElementById('unidade_edit');
                 const categoriaSelect = document.getElementById('edit_categoria');
+                const mascara = document.getElementById('edit_mascara');
                 if (!categoriaSelect.value) {
                     alert('A categoria é obrigatória. Por favor, selecione uma categoria para o material.');
                     categoriaSelect.focus();

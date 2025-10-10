@@ -1,6 +1,8 @@
-from wtforms import SelectField
+from wtforms import SelectField, StringField, TextAreaField, BooleanField, HiddenField
+from wtforms.validators import DataRequired, Length, Optional
 from wtforms.widgets import Select as SelectWidget
 from flask import url_for
+from flask_wtf import FlaskForm
 
 class Select2Widget(SelectWidget):
     """
@@ -43,3 +45,34 @@ class Select2Field(SelectField):
         if self.endpoint:  # Se tem endpoint, significa que os dados vêm via AJAX
             return True
         return super(Select2Field, self).pre_validate(form)
+
+class FormGrupoMaterial(FlaskForm):
+    """
+    Formulário para grupos de materiais
+    """
+    nome = StringField('Nome do Grupo', validators=[
+        DataRequired(message='Nome é obrigatório'),
+        Length(min=2, max=100, message='Nome deve ter entre 2 e 100 caracteres')
+    ])
+    
+    descricao = TextAreaField('Descrição', validators=[
+        Optional(),
+        Length(max=500, message='Descrição deve ter no máximo 500 caracteres')
+    ])
+    
+    codigo = StringField('Código', validators=[
+        Optional(),
+        Length(max=20, message='Código deve ter no máximo 20 caracteres')
+    ])
+    
+    cor = StringField('Cor', validators=[
+        Optional(),
+        Length(max=7, message='Código de cor inválido')
+    ])
+    
+    icone = StringField('Ícone', validators=[
+        Optional(),
+        Length(max=50, message='Nome do ícone deve ter no máximo 50 caracteres')
+    ])
+    
+    ativo = BooleanField('Ativo', default=True)

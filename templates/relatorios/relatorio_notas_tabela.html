@@ -1,4 +1,34 @@
 {% if relatorio and relatorio|length > 0 %}
+{% macro format_brl(value) %}
+    {{ '{:,.2f}'.format(value).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+{% endmacro %}
+
+<!-- Dados para os cards (ocultos) -->
+<div id="cards-data" 
+     data-total-material="{{ valor_total_material or 0 }}"
+     data-total-placas-material="{{ total_placas_contratos or 0 }}"
+     data-quantidade-material-recebido="{{ quantidade_recebida or 0 }}"
+     data-quantidade-material-a-faturar="{{ quantidade_a_faturar or 0 }}"
+     data-quantidade-material-nao-faturar="{{ quantidade_material_nao_faturada or 0 }}"
+     data-total-servico="{{ valor_total_servico or 0 }}"
+     data-material-faturado="{{ valor_material_faturado or 0 }}"
+     data-servico-faturado="{{ valor_servico_faturado or 0 }}"
+     data-material-recebido="{{ valor_recebido or 0 }}"
+     data-servico-recebido="0"
+     data-material-a-faturar="{{ valor_a_faturar or 0 }}"
+     data-servico-a-faturar="0"
+     data-material-nao-faturado="{{ valor_material_nao_faturado or 0 }}"
+     data-servico-nao-faturado="{{ valor_servico_nao_faturado or 0 }}"
+     data-percentual-material-faturado="{{ percentual_material_faturado or 0 }}"
+     data-percentual-servico-faturado="{{ percentual_servico_faturado or 0 }}"
+     data-percentual-material-recebido="{{ percentual_material_recebido or 0 }}"
+     data-percentual-servico-recebido="{{ percentual_servico_recebido or 0 }}"
+     data-percentual-material-a-faturar="{{ percentual_material_a_faturar or 0 }}"
+     data-percentual-servico-a-faturar="{{ percentual_servico_a_faturar or 0 }}"
+     data-percentual-material-nao-faturado="{{ percentual_material_nao_faturado or 0 }}"
+     data-percentual-servico-nao-faturado="{{ percentual_servico_nao_faturado or 0 }}"
+     style="display: none;">
+</div>
 <div class="table-responsive">
     <table class="table table-bordered table-hover align-middle">
         <thead class="table-light">
@@ -6,10 +36,75 @@
                 <th>Data Emissão</th>
                 <th>Centro de Custo</th>
                 <th>Nº Nota Fiscal</th>
+                <th>Quantidade (Placas)</th>
                 <th>Valor (R$)</th>
                 <th>Data Prevista Vencimento</th>
                 <th>Pago em</th>
                 <th>Status</th>
+            </tr>
+            <tr class="table-dark">
+                <th colspan="3" class="text-end">Total Contratos</th>
+                <th colspan="1"></th>
+                <th colspan="1">R$ {{ format_brl(valor_total_contratos or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">100.0%</th>
+            </tr>
+            <tr class="table-info">
+                <th colspan="3" class="text-end">Material (NFE)</th>
+                <th colspan="1">{{ '%.0f'|format(total_placas_contratos or 0) }}</th>
+                <th colspan="1">R$ {{ format_brl(valor_total_material or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">100.0%</th>
+            </tr>
+            <tr class="table-primary">
+                <th colspan="3" class="text-end">Material Faturado</th>
+                <th colspan="1">{{ '%.0f'|format(total_quantidade) }}</th>
+                <th colspan="1">R$ {{ format_brl(valor_material_faturado or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">{{ '%.1f'|format(percentual_material_faturado or 0) }}%</th>
+            </tr>
+            <tr class="table-success">
+                <th colspan="3" class="text-end">Material Recebido</th>
+                <th colspan="1">{{ '%.0f'|format(quantidade_recebida or 0) }}</th>
+                <th colspan="1">R$ {{ format_brl(valor_recebido or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">{{ '%.1f'|format(percentual_material_recebido or 0) }}%</th>
+            </tr>
+            <tr class="table-warning">
+                <th colspan="3" class="text-end">Material A Faturar</th>
+                <th colspan="1">{{ '%.0f'|format(quantidade_a_faturar or 0) }}</th>
+                <th colspan="1">R$ {{ format_brl(valor_a_faturar or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">{{ '%.1f'|format(percentual_material_a_faturar or 0) }}%</th>
+            </tr>
+            <tr class="table-warning">
+                <th colspan="3" class="text-end">Material Não Faturado</th>
+                <th colspan="1"></th>
+                <th colspan="1">R$ {{ format_brl(valor_material_nao_faturado or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">{{ '%.1f'|format(percentual_material_nao_faturado or 0) }}%</th>
+            </tr>
+            <tr class="table-secondary">
+                <th colspan="3" class="text-end">Serviço (Sem NFE)</th>
+                <th colspan="1"></th>
+                <th colspan="1">R$ {{ format_brl(valor_total_servico or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">100.0%</th>
+            </tr>
+            <tr class="table-danger">
+                <th colspan="3" class="text-end">Serviço Não Faturado</th>
+                <th colspan="1"></th>
+                <th colspan="1">R$ {{ format_brl(valor_servico_nao_faturado or 0) }}</th>
+                <th colspan="1"></th>
+                <th colspan="1"></th>
+                <th colspan="1">{{ '%.1f'|format(percentual_servico_nao_faturado or 0) }}%</th>
             </tr>
         </thead>
         <tbody>
@@ -18,7 +113,8 @@
                 <td>{{ item['Data'] }}</td>
                 <td>{{ item['Centro de Custo'] }}</td>
                 <td>{{ item['Nota Fiscal'] }}</td>
-                <td>R$ {{ '%.2f'|format(item['Valor']) }}</td>
+                <td>{{ item['Quantidade'] }}</td>
+                <td>R$ {{ format_brl(item['Valor']) }}</td>
                 <td>{{ item['Data Prevista'] }}</td>
                 <td>
                     {% if item['Pago'] != 'Não definido' %}
@@ -37,12 +133,7 @@
             </tr>
             {% endfor %}
         </tbody>
-        <tfoot>
-            <tr class="table-secondary">
-                <th colspan="3" class="text-end">Total</th>
-                <th colspan="4">R$ {{ '%.2f'|format(total) }}</th>
-            </tr>
-        </tfoot>
+        
     </table>
 </div>
 {% else %}

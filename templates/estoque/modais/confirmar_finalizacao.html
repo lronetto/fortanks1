@@ -1,0 +1,144 @@
+<!-- Modal de Confirmação de Finalização -->
+<div class="modal fade" id="modalConfirmarFinalizacao" tabindex="-1" aria-labelledby="modalConfirmarFinalizacaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalConfirmarFinalizacaoLabel"><i class="fas fa-check-double"></i> Confirmar Finalização</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-clipboard-check fa-3x text-success mb-3"></i>
+                    <h5>Finalizar Inventário</h5>
+                    <p class="text-muted">Tem certeza que deseja finalizar este inventário?</p>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>ATENÇÃO:</strong> Ao finalizar o inventário, as quantidades em estoque serão ajustadas conforme a contagem realizada.
+                    </div>
+                    
+                    <!-- Informações do inventário -->
+                    <div class="alert alert-info">
+                        <strong>Inventário:</strong> <span id="finalizacao-inventario-id">-</span><br>
+                        <strong>Tipo:</strong> <span id="finalizacao-tipo">-</span><br>
+                        <strong>Itens Contados:</strong> <span id="finalizacao-itens-contados">-</span> de <span id="finalizacao-total-itens">-</span>
+                    </div>
+                    
+                    <!-- Alerta para itens não contados -->
+                    <div id="alerta-itens-nao-contados" class="alert alert-danger d-none">
+                        <i class="fas fa-exclamation-circle"></i> 
+                        <strong>Atenção:</strong> Existem itens não contados. Finalize a contagem antes de encerrar o inventário.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <form id="form-finalizacao" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success" id="btn-confirmar-finalizacao">
+                        <i class="fas fa-check-double"></i> Confirmar Finalização
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para confirmar finalização
+    function confirmarFinalizacao(url, inventarioData) {
+        // Definir a ação do formulário
+        document.getElementById('form-finalizacao').action = url;
+        
+        // Preencher informações do inventário
+        if (inventarioData) {
+            document.getElementById('finalizacao-inventario-id').textContent = inventarioData.id || '-';
+            document.getElementById('finalizacao-tipo').textContent = inventarioData.tipo || '-';
+            document.getElementById('finalizacao-itens-contados').textContent = inventarioData.itens_contados || '0';
+            document.getElementById('finalizacao-total-itens').textContent = inventarioData.total_itens || '0';
+        }
+        
+        // Verificar se há itens não contados
+        verificarItensNaoContados(url, inventarioData);
+        
+        // Mostrar o modal
+        const modal = new bootstrap.Modal(document.getElementById('modalConfirmarFinalizacao'));
+        modal.show();
+    }
+
+    // Função para verificar itens não contados
+    function verificarItensNaoContados(url, inventarioData) {
+        const alertaItensNaoContados = document.getElementById('alerta-itens-nao-contados');
+        const btnConfirmar = document.getElementById('btn-confirmar-finalizacao');
+        
+        // Se temos dados do inventário, verificar diretamente
+        if (inventarioData) {
+            const itensContados = parseInt(inventarioData.itens_contados) || 0;
+            const totalItens = parseInt(inventarioData.total_itens) || 0;
+            const itensNaoContados = totalItens - itensContados;
+            
+            if (itensNaoContados > 0) {
+                alertaItensNaoContados.classList.remove('d-none');
+                alertaItensNaoContados.innerHTML = `
+                    <i class="fas fa-exclamation-circle"></i> 
+                    <strong>Atenção:</strong> Existem ${itensNaoContados} itens não contados. Finalize a contagem antes de encerrar o inventário.
+                `;
+                btnConfirmar.disabled = true;
+            } else {
+                alertaItensNaoContados.classList.add('d-none');
+                btnConfirmar.disabled = false;
+            }
+        } else {
+            // Se não temos dados, fazer requisição AJAX
+            const inventarioId = url.match(/\/finalizar_inventario\/(\d+)/);
+            if (inventarioId) {
+                $.get(`/estoque/verificar_itens_nao_contados/${inventarioId[1]}`, function(data) {
+                    if (data.itens_nao_contados > 0) {
+                        alertaItensNaoContados.classList.remove('d-none');
+                        alertaItensNaoContados.innerHTML = `
+                            <i class="fas fa-exclamation-circle"></i> 
+                            <strong>Atenção:</strong> Existem ${data.itens_nao_contados} itens não contados. Finalize a contagem antes de encerrar o inventário.
+                        `;
+                        btnConfirmar.disabled = true;
+                    } else {
+                        alertaItensNaoContados.classList.add('d-none');
+                        btnConfirmar.disabled = false;
+                    }
+                }).fail(function() {
+                    // Em caso de erro, permitir finalização
+                    alertaItensNaoContados.classList.add('d-none');
+                    btnConfirmar.disabled = false;
+                });
+            }
+        }
+    }
+
+    // Adicionar evento para os botões de finalização
+    const finalizarButtons = document.querySelectorAll('.btn-finalizar-inventario');
+    finalizarButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.getAttribute('data-url');
+            const inventarioData = {
+                id: this.getAttribute('data-id'),
+                tipo: this.getAttribute('data-tipo'),
+                itens_contados: this.getAttribute('data-itens-contados'),
+                total_itens: this.getAttribute('data-total-itens')
+            };
+            
+            confirmarFinalizacao(url, inventarioData);
+        });
+    });
+
+    // Função global para compatibilidade com código existente
+    window.confirmarFinalizacao = function(url) {
+        confirmarFinalizacao(url, null);
+    };
+});
+</script>
+{% endblock %}

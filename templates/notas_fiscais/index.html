@@ -112,6 +112,14 @@
                         <option value="4" {% if status_upload == '4' %}selected{% endif %}>Nenhum</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label for="cnpj_emitente_val" class="form-label">CNPJ Emitente</label>
+                    <input type="text" name="cnpj_emitente_val" id="cnpj_emitente_val" class="form-control" placeholder="Digite o CNPJ do emitente" value="{{ request.args.get('cnpj_emitente_val', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="cnpj_destinatario_val" class="form-label">CNPJ Destinatário</label>
+                    <input type="text" name="cnpj_destinatario_val" id="cnpj_destinatario_val" class="form-control" placeholder="Digite o CNPJ do destinatário" value="{{ request.args.get('cnpj_destinatario_val', '') }}">
+                </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="btn-group">
                         <button type="submit" class="btn btn-primary">
@@ -143,7 +151,9 @@
 {% include 'notas_fiscais/modais/importar_itens.html' %}
 {% include 'notas_fiscais/modais/visualizar_itens.html' %}
 {% include 'notas_fiscais/modais/selecionar_material.html' %}
+{% include 'notas_fiscais/modais/conversao_unidades.html' %}
 {% include 'notas_fiscais/modais/importar_arquivei.html' %}
+{% include 'notas_fiscais/modais/importar_xml.html' %}
 {% endblock %}
 
 {% block extra_css %}
@@ -181,12 +191,6 @@
 <script src="{{ url_for('static', filename='js/comum.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Usar delegação de eventos no container que já existe
-   
-
-   
-    // Manipular clique no link de visualizar PDF
-
     // Mostrar/ocultar filtros extras de CTE
     function toggleCteFilters() {
         var tipo = $('#tipo_nfe').val();
@@ -205,12 +209,14 @@ document.addEventListener('DOMContentLoaded', function() {
         item_nome = $('#item_nome').val();
         status_importacao = $('#status_importacao').val();
         cnpj_emitente = $('#cnpj_emitente').val();
+        cnpj_emitente_val = $('#cnpj_emitente_val').val();
+        cnpj_destinatario_val = $('#cnpj_destinatario_val').val();
         status_pagamento = $('#status_pagamento').val();
         data_emissao_inicio = $('#data_emissao_inicio').val();
         data_emissao_fim = $('#data_emissao_fim').val();
         tipo_nfe = $('#tipo_nfe').val();
         status_upload = $('#status_upload').val();
-        url = "exportar-excel?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
+        url = "exportar-excel?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&cnpj_emitente_val=" + cnpj_emitente_val + "&cnpj_destinatario_val=" + cnpj_destinatario_val + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
         window.location.href = url;
     });
     function carregarTabelaNotasFiscais(params = null) {

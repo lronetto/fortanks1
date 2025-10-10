@@ -1,0 +1,286 @@
+<!-- Modal de Visualização de Inventário -->
+<div class="modal fade" id="modalVisualizarInventario" tabindex="-1" aria-labelledby="modalVisualizarInventarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarInventarioLabel"><i class="fas fa-eye"></i> Detalhes do Inventário</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Informações Básicas</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>ID:</strong></td>
+                                <td id="view_inventario_id">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Tipo:</strong></td>
+                                <td id="view_tipo_inventario">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Status:</strong></td>
+                                <td id="view_status">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Data de Início:</strong></td>
+                                <td id="view_data_inicio">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Data de Finalização:</strong></td>
+                                <td id="view_data_fim">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Responsável:</strong></td>
+                                <td id="view_responsavel">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Estatísticas</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Total de Itens:</strong></td>
+                                <td id="view_total_itens">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Itens Contados:</strong></td>
+                                <td id="view_itens_contados">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Progresso:</strong></td>
+                                <td id="view_progresso">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Diferenças Encontradas:</strong></td>
+                                <td id="view_diferencas">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6 class="text-primary">Observações</h6>
+                        <div id="view_observacoes" class="alert alert-light">
+                            -
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Barra de Progresso -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6 class="text-primary">Progresso da Contagem</h6>
+                        <div class="progress" style="height: 25px;">
+                            <div id="progress-bar-inventario" class="progress-bar" role="progressbar" style="width: 0%">
+                                <span id="progress-text-inventario">0%</span>
+                            </div>
+                        </div>
+                        <small class="text-muted">Baseado na quantidade de itens contados em relação ao total</small>
+                    </div>
+                </div>
+
+                <!-- Tabela de Itens (se disponível) -->
+                <div class="row mt-4" id="tabela-itens-container" style="display: none;">
+                    <div class="col-md-12">
+                        <h6 class="text-primary">Itens do Inventário</h6>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm" id="tabela-itens">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nome</th>
+                                        <th>Tipo</th>
+                                        <th>Quantidade Sistema</th>
+                                        <th>Quantidade Contada</th>
+                                        <th>Diferença</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-itens">
+                                    <!-- Itens carregados via AJAX -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" id="btn-continuar-inventario" style="display: none;">
+                    <i class="fas fa-clipboard-check"></i> Continuar Contagem
+                </button>
+                <button type="button" class="btn btn-success" id="btn-finalizar-inventario" style="display: none;">
+                    <i class="fas fa-check-double"></i> Finalizar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para preencher o modal de visualização
+    function preencherModalVisualizacao(inventario) {
+        if (!inventario) {
+            console.error('Dados do inventário não encontrados!');
+            return;
+        }
+        
+        try {
+            // Informações básicas
+            document.getElementById('view_inventario_id').textContent = inventario.id || '-';
+            document.getElementById('view_tipo_inventario').textContent = inventario.tipo_inventario || '-';
+            document.getElementById('view_status').innerHTML = inventario.status_badge || '-';
+            document.getElementById('view_data_inicio').textContent = inventario.data_inicio || '-';
+            document.getElementById('view_data_fim').textContent = inventario.data_fim || '-';
+            document.getElementById('view_responsavel').textContent = inventario.responsavel || '-';
+            
+            // Estatísticas
+            document.getElementById('view_total_itens').textContent = inventario.total_itens || '0';
+            document.getElementById('view_itens_contados').textContent = inventario.itens_contados || '0';
+            document.getElementById('view_progresso').textContent = inventario.progresso_texto || '0%';
+            document.getElementById('view_diferencas').textContent = inventario.diferencas || '0';
+            
+            // Observações
+            const observacoes = document.getElementById('view_observacoes');
+            if (inventario.observacoes && inventario.observacoes.trim() !== '') {
+                observacoes.textContent = inventario.observacoes;
+                observacoes.className = 'alert alert-light';
+            } else {
+                observacoes.textContent = 'Nenhuma observação registrada';
+                observacoes.className = 'alert alert-secondary';
+            }
+            
+            // Atualizar barra de progresso
+            atualizarBarraProgressoInventario(inventario.itens_contados, inventario.total_itens);
+            
+            // Mostrar/ocultar botões baseado no status
+            const btnContinuar = document.getElementById('btn-continuar-inventario');
+            const btnFinalizar = document.getElementById('btn-finalizar-inventario');
+            
+            if (inventario.status === 'Em andamento') {
+                btnContinuar.style.display = 'inline-block';
+                btnFinalizar.style.display = 'inline-block';
+                
+                // Configurar eventos dos botões
+                btnContinuar.onclick = function() {
+                    window.location.href = inventario.url_contagem;
+                };
+                
+                btnFinalizar.onclick = function() {
+                    confirmarFinalizacao(inventario.url_finalizar);
+                };
+            } else {
+                btnContinuar.style.display = 'none';
+                btnFinalizar.style.display = 'none';
+            }
+            
+            // Carregar itens se disponível
+            if (inventario.itens && inventario.itens.length > 0) {
+                carregarItensInventario(inventario.itens);
+                document.getElementById('tabela-itens-container').style.display = 'block';
+            }
+            
+        } catch (error) {
+            console.error('Erro ao preencher o modal de visualização:', error);
+        }
+    }
+
+    // Função para atualizar a barra de progresso
+    function atualizarBarraProgressoInventario(contados, total) {
+        const progressBar = document.getElementById('progress-bar-inventario');
+        const progressText = document.getElementById('progress-text-inventario');
+        
+        if (!total || total === 0) {
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+            progressBar.className = 'progress-bar bg-secondary';
+            return;
+        }
+        
+        const percentual = (contados / total) * 100;
+        progressBar.style.width = percentual + '%';
+        progressText.textContent = Math.round(percentual) + '%';
+        
+        // Definir cor baseada no progresso
+        if (percentual === 100) {
+            progressBar.className = 'progress-bar bg-success';
+        } else if (percentual >= 50) {
+            progressBar.className = 'progress-bar bg-info';
+        } else {
+            progressBar.className = 'progress-bar bg-warning';
+        }
+    }
+
+    // Função para carregar itens do inventário
+    function carregarItensInventario(itens) {
+        const tbody = document.getElementById('tbody-itens');
+        tbody.innerHTML = '';
+        
+        itens.forEach(function(item) {
+            const row = `
+                <tr>
+                    <td>${item.codigo || 'N/A'}</td>
+                    <td>${item.nome}</td>
+                    <td>${item.tipo}</td>
+                    <td class="text-right">${item.quantidade_sistema}</td>
+                    <td class="text-right">${item.quantidade_contada || '-'}</td>
+                    <td class="text-right">
+                        ${item.diferenca ? 
+                            `<span class="badge ${item.diferenca > 0 ? 'bg-success' : 'bg-danger'}">${item.diferenca > 0 ? '+' : ''}${item.diferenca}</span>` : 
+                            '-'
+                        }
+                    </td>
+                    <td>
+                        ${item.status_badge || '<span class="badge bg-secondary">Pendente</span>'}
+                    </td>
+                </tr>
+            `;
+            tbody.innerHTML += row;
+        });
+    }
+
+    // Adicionar evento para o botão de visualizar
+    const viewButtons = document.querySelectorAll('.btn-visualizar-inventario');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            try {
+                const inventario = {
+                    id: this.dataset.id,
+                    tipo_inventario: this.dataset.tipoInventario || '',
+                    status: this.dataset.status || '',
+                    status_badge: this.dataset.statusBadge || '',
+                    data_inicio: this.dataset.dataInicio || '',
+                    data_fim: this.dataset.dataFim || '',
+                    responsavel: this.dataset.responsavel || '',
+                    total_itens: this.dataset.totalItens || '0',
+                    itens_contados: this.dataset.itensContados || '0',
+                    progresso_texto: this.dataset.progressoTexto || '0%',
+                    diferencas: this.dataset.diferencas || '0',
+                    observacoes: this.dataset.observacoes || '',
+                    url_contagem: this.dataset.urlContagem || '',
+                    url_finalizar: this.dataset.urlFinalizar || '',
+                    itens: this.dataset.itens ? JSON.parse(this.dataset.itens) : []
+                };
+                
+                preencherModalVisualizacao(inventario);
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+
+    // Função para confirmar finalização
+    function confirmarFinalizacao(url) {
+        if (confirm('Tem certeza que deseja finalizar este inventário? As quantidades em estoque serão ajustadas conforme a contagem realizada.')) {
+            // Aqui você pode implementar a lógica de finalização via AJAX
+            window.location.href = url;
+        }
+    }
+});
+</script>
+{% endblock %}

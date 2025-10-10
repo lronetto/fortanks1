@@ -1,0 +1,163 @@
+<!-- Modal de Novo Item de Estoque -->
+<div class="modal fade" id="modalNovoItem" tabindex="-1" aria-labelledby="modalNovoItemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNovoItemLabel"><i class="fas fa-plus-circle"></i> Novo Item de Estoque</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" id="form-novo-item" action="{{ url_for('estoque.novo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="tipo_item" class="form-label">Tipo de Item</label>
+                                <select class="form-select" id="tipo_item" name="tipo_item" required>
+                                    <option value="">Selecione o tipo</option>
+                                    <option value="material">Material</option>
+                                    <option value="produto_composto">Produto Composto</option>
+                                    <option value="epi">EPI</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="material_id" class="form-label">Material</label>
+                                <select class="form-control select2" id="material_id" name="material_id" required>
+                                    <option value="0">Selecione um material</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="quantidade" class="form-label">Quantidade Inicial</label>
+                                <input type="number" class="form-control" id="quantidade" name="quantidade" value="0" step="0.01" min="0" required>
+                                <small class="form-text text-muted">Quantidade inicial do item no estoque</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="quantidade_minima" class="form-label">Quantidade Mínima</label>
+                                <input type="number" class="form-control" id="quantidade_minima" name="quantidade_minima" value="0" step="0.01" min="0">
+                                <small class="form-text text-muted">Quando abaixo deste valor, o estoque será marcado como crítico</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="quantidade_maxima" class="form-label">Quantidade Máxima</label>
+                                <input type="number" class="form-control" id="quantidade_maxima" name="quantidade_maxima" value="0" step="0.01" min="0">
+                                <small class="form-text text-muted">Quando acima deste valor, o estoque será marcado como em excesso</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="lote" class="form-label">Lote</label>
+                                <input type="text" class="form-control" id="lote" name="lote" placeholder="Número do lote, se aplicável">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="data_validade" class="form-label">Data de Validade</label>
+                                <input type="date" class="form-control" id="data_validade" name="data_validade">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="localizacao" class="form-label">Localização</label>
+                                <input type="text" class="form-control" id="localizacao" name="localizacao" placeholder="Localização do item no estoque">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-item">
+                    <i class="fas fa-save"></i> Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para carregar as opções dos selects via Ajax
+    function carregarOpcoesSelects() {
+        // Inicializar selects com Select2
+        $('#material_id').select2({
+            theme: 'bootstrap4',
+            dropdownParent: $('#modalNovoItem'),
+            width: '100%'
+        });
+        
+        // Carregar materiais
+        $.getJSON("{{ url_for('material.listar_json') }}", function(data) {
+            let materialSelect = $('#material_id');
+            materialSelect.empty();
+            materialSelect.append('<option value="0">Selecione um material</option>');
+            
+            $.each(data, function(index, item) {
+                materialSelect.append('<option value="' + item.id + '">' + item.codigo + ' - ' + item.nome + '</option>');
+            });
+            
+            materialSelect.trigger('change');
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("Erro ao carregar materiais:", textStatus, errorThrown);
+        });
+    }
+
+    // Salvar novo item
+    $('#btn-salvar-item').click(function() {
+        // Validar formulário
+        let valid = true;
+        
+        if ($('#material_id').val() == '0') {
+            alert('Selecione um material para este item de estoque.');
+            valid = false;
+        }
+        
+        if (valid) {
+            // Enviar formulário via Ajax
+            $.ajax({
+                url: "{{ url_for('estoque.novo') }}",
+                type: "POST",
+                data: $('#form-novo-item').serialize(),
+                dataType: "json",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert(response.message);
+                        window.location.href = response.redirect;
+                    } else {
+                        alert(response.message + ' ' + response.errors);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert("Erro ao salvar item: " + error);
+                }
+            });
+        }
+    });
+
+    // Carregar opções quando o modal for aberto
+    $('#modalNovoItem').on('show.bs.modal', function() {
+        carregarOpcoesSelects();
+    });
+});
+</script>
+{% endblock %}

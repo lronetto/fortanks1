@@ -1,0 +1,633 @@
+{% extends "common/base.html" %}
+
+{% block title %}Materiais do Grupo - {{ grupo.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                {% if grupo.icone %}
+                    <i class="{{ grupo.icone }}" {% if grupo.cor %}style="color: {{ grupo.cor }}"{% endif %}></i>
+                {% endif %}
+                Materiais do Grupo: {{ grupo.nome }}
+            </h1>
+            <p class="mb-0 text-muted">{{ grupo.descricao or 'Sem descrição' }}</p>
+        </div>
+        <div>
+            <a href="{{ url_for('grupo_material.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar aos Grupos
+            </a>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalAdicionarMaterial">
+                <i class="fas fa-plus"></i> Adicionar Material
+            </button>
+        </div>
+    </div>
+
+    <!-- Informações do Grupo -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Informações do Grupo</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Código:</strong> {{ grupo.codigo or '-' }}
+                </div>
+                <div class="col-md-3">
+                    <strong>Status:</strong> 
+                    {% if grupo.ativo %}
+                        <span class="badge badge-success">Ativo</span>
+                    {% else %}
+                        <span class="badge badge-secondary">Inativo</span>
+                    {% endif %}
+                </div>
+                <div class="col-md-3">
+                    <strong>Total de Materiais:</strong> 
+                    <span class="badge badge-info">{{ materiais|length }}</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Criado em:</strong> {{ grupo.criado_em.strftime('%d/%m/%Y') }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('grupo_material.materiais', id=grupo.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="search" class="form-label">Buscar Material</label>
+                        <input type="text" class="form-control" id="search" name="search" 
+                               placeholder="Nome, código ou descrição..." value="{{ search }}">
+                    </div>
+                    <div class="col-md-2 mb-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                    <div class="col-md-2 mb-3 d-flex align-items-end">
+                        <a href="{{ url_for('grupo_material.materiais', id=grupo.id) }}" class="btn btn-secondary w-100">
+                            <i class="fas fa-times"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Materiais -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Materiais do Grupo</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Nome</th>
+                            <th>Categoria</th>
+                            <th>Unidade</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for material in materiais %}
+                        <tr>
+                            <td>{{ material.codigo or '-' }}</td>
+                            <td>{{ material.nome }}</td>
+                            <td>{{ material.categoria or '-' }}</td>
+                            <td>{{ material.get_unidade_nome() or '-' }}</td>
+                            <td>
+                                {% if material.ativo %}
+                                    <span class="badge badge-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge badge-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-danger btn-sm btn-remover-material" 
+                                        data-material-id="{{ material.id }}"
+                                        data-material-nome="{{ material.nome }}"
+                                        title="Remover do Grupo">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center">
+                                {% if search %}
+                                    Nenhum material encontrado para "{{ search }}"
+                                {% else %}
+                                    Nenhum material encontrado
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Material -->
+<div class="modal fade" id="modalAdicionarMaterial" tabindex="-1" aria-labelledby="modalAdicionarMaterialLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalAdicionarMaterialLabel"><i class="fas fa-plus"></i> Adicionar Material ao Grupo</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtros de busca -->
+                <div class="mb-3">
+                    <label for="busca_material" class="form-label">Buscar Material</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="busca_material" placeholder="Digite o nome ou código do material...">
+                        <button class="btn btn-primary" type="button" id="btn-buscar-material">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtros adicionais -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="filtro_status" class="form-label">Status</label>
+                        <select class="form-select" id="filtro_status">
+                            <option value="">Todos</option>
+                            <option value="ativo">Apenas Ativos</option>
+                            <option value="inativo">Apenas Inativos</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="filtro_categoria" class="form-label">Categoria</label>
+                        <select class="form-select" id="filtro_categoria">
+                            <option value="">Todas</option>
+                            <option value="Construção">Construção</option>
+                            <option value="Ferramentas">Ferramentas</option>
+                            <option value="Equipamentos">Equipamentos</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Materiais já no grupo -->
+                <div class="mb-3">
+                    <h6 class="text-muted">
+                        <i class="fas fa-info-circle"></i> 
+                        Materiais já no grupo ({{ materiais|length }})
+                    </h6>
+                    <div class="alert alert-info py-2">
+                        <small>
+                            {% if materiais %}
+                                {% for material in materiais %}
+                                    <span class="badge bg-secondary me-1 mb-1">{{ material.nome }}</span>
+                                {% endfor %}
+                            {% else %}
+                                Nenhum material adicionado ainda
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+                
+                <!-- Resultados da busca -->
+                <div id="resultados-busca" class="d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Materiais Disponíveis:</h6>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-selecionar-todos">
+                                <i class="fas fa-check-square"></i> Selecionar Todos
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-desmarcar-todos">
+                                <i class="fas fa-square"></i> Desmarcar Todos
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th width="50">
+                                        <input type="checkbox" id="checkbox-todos" class="form-check-input">
+                                    </th>
+                                    <th>Código</th>
+                                    <th>Nome</th>
+                                    <th>Categoria</th>
+                                    <th>Unidade</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultados-materiais">
+                                <!-- Resultados carregados via AJAX -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Materiais selecionados -->
+                <div id="materiais-selecionados" class="d-none">
+                    <h6 class="text-success">
+                        <i class="fas fa-check-circle"></i> 
+                        Materiais Selecionados: <span id="contador-selecionados">0</span>
+                    </h6>
+                    <div id="lista-selecionados" class="mb-3">
+                        <!-- Lista de materiais selecionados -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btn-adicionar-selecionados" disabled>
+                    <i class="fas fa-plus"></i> Adicionar Selecionados (<span id="contador-footer">0</span>)
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Remoção -->
+<div class="modal fade" id="modalConfirmarRemocao" tabindex="-1" aria-labelledby="modalConfirmarRemocaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title" id="modalConfirmarRemocaoLabel"><i class="fas fa-exclamation-triangle"></i> Confirmar Remoção</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-times-circle fa-3x text-warning mb-3"></i>
+                    <h5>Remover Material do Grupo</h5>
+                    <p class="text-muted">Tem certeza que deseja remover este material do grupo?</p>
+                    
+                    <div class="alert alert-info">
+                        <strong>Material:</strong> <span id="material-remocao-nome">-</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btn-confirmar-remocao">
+                    <i class="fas fa-times"></i> Confirmar Remoção
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Certifique-se de que jQuery e Bootstrap estejam disponíveis -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Inicializar DataTable se necessário
+    if ($.fn.DataTable) {
+        $('#dataTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
+            },
+            "pageLength": 25,
+            "responsive": true,
+            "order": [[1, "asc"]]
+        });
+    }
+    
+    // Inicializar tooltips
+    $('[data-bs-toggle="tooltip"]').tooltip();
+    
+    // Variáveis globais para controle de seleção
+    let materiaisSelecionados = [];
+    let todosMateriais = [];
+
+    // Carregar materiais automaticamente quando o modal abrir
+    $('#modalAdicionarMaterial').on('show.bs.modal', function() {
+        // Limpar seleções anteriores
+        materiaisSelecionados = [];
+        atualizarInterface();
+        
+        // Carregar alguns materiais automaticamente
+        carregarMateriaisIniciais();
+    });
+
+    // Função para carregar materiais iniciais
+    function carregarMateriaisIniciais() {
+        $.ajax({
+            url: "{{ url_for('grupo_material.api_buscar_materiais') }}",
+            data: { 
+                search: '',
+                grupo_id: "{{ grupo.id }}",
+                status: 'ativo'
+            },
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.materiais.length > 0) {
+                    todosMateriais = response.materiais;
+                    $('#resultados-busca').removeClass('d-none');
+                    $('#resultados-materiais').empty();
+                    
+                    response.materiais.slice(0, 20).forEach(function(material) { // Limitar a 20 para performance
+                        const statusClass = material.ativo ? 'badge-success' : 'badge-secondary';
+                        const statusText = material.ativo ? 'Ativo' : 'Inativo';
+                        
+                        const row = `
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input material-checkbox" 
+                                           data-material-id="${material.id}" 
+                                           data-material-nome="${material.nome}"
+                                           data-material-codigo="${material.codigo || 'N/A'}">
+                                </td>
+                                <td>${material.codigo || 'N/A'}</td>
+                                <td>${material.nome}</td>
+                                <td>${material.categoria || 'N/A'}</td>
+                                <td>${material.unidade || 'N/A'}</td>
+                                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                            </tr>
+                        `;
+                        $('#resultados-materiais').append(row);
+                    });
+                }
+            },
+            error: function() {
+                console.log('Erro ao carregar materiais iniciais');
+            }
+        });
+    }
+
+    // Buscar materiais
+    $('#btn-buscar-material').click(function() {
+        console.log('Buscando materiais');
+        const termo = $('#busca_material').val().trim();
+        const status = $('#filtro_status').val();
+        const categoria = $('#filtro_categoria').val();
+        
+        if (termo.length < 2) {
+            alert('Digite pelo menos 2 caracteres para buscar');
+            return;
+        }
+        
+        $.ajax({
+            url: "{{ url_for('grupo_material.api_buscar_materiais') }}",
+            data: { 
+                search: termo,
+                grupo_id: "{{ grupo.id }}",
+                status: status,
+                categoria: categoria
+            },
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    todosMateriais = response.materiais;
+                    materiaisSelecionados = [];
+                    atualizarInterface();
+                    
+                    $('#resultados-busca').removeClass('d-none');
+                    $('#resultados-materiais').empty();
+                    
+                    if (response.materiais.length === 0) {
+                        $('#resultados-materiais').html('<tr><td colspan="6" class="text-center">Nenhum material encontrado</td></tr>');
+                        return;
+                    }
+                    
+                    response.materiais.forEach(function(material) {
+                        const statusClass = material.ativo ? 'badge-success' : 'badge-secondary';
+                        const statusText = material.ativo ? 'Ativo' : 'Inativo';
+                        
+                        const row = `
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input material-checkbox" 
+                                           data-material-id="${material.id}" 
+                                           data-material-nome="${material.nome}"
+                                           data-material-codigo="${material.codigo || 'N/A'}">
+                                </td>
+                                <td>${material.codigo || 'N/A'}</td>
+                                <td>${material.nome}</td>
+                                <td>${material.categoria || 'N/A'}</td>
+                                <td>${material.unidade || 'N/A'}</td>
+                                <td><span class="badge ${statusClass}">${statusText}</span></td>
+                            </tr>
+                        `;
+                        $('#resultados-materiais').append(row);
+                    });
+                } else {
+                    alert('Erro ao buscar materiais: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('Erro ao buscar materiais. Tente novamente.');
+            }
+        });
+    });
+
+    // Função para atualizar interface
+    function atualizarInterface() {
+        const total = materiaisSelecionados.length;
+        $('#contador-selecionados').text(total);
+        $('#contador-footer').text(total);
+        
+        if (total > 0) {
+            $('#materiais-selecionados').removeClass('d-none');
+            $('#btn-adicionar-selecionados').prop('disabled', false);
+            
+            // Atualizar lista de selecionados
+            let lista = '';
+            materiaisSelecionados.forEach(function(material) {
+                lista += `<span class="badge bg-success me-1 mb-1">${material.nome} <i class="fas fa-times ms-1" onclick="removerSelecionado(${material.id})"></i></span>`;
+            });
+            $('#lista-selecionados').html(lista);
+        } else {
+            $('#materiais-selecionados').addClass('d-none');
+            $('#btn-adicionar-selecionados').prop('disabled', true);
+        }
+    }
+
+    // Função para remover material selecionado
+    window.removerSelecionado = function(materialId) {
+        materiaisSelecionados = materiaisSelecionados.filter(m => m.id !== materialId);
+        $(`.material-checkbox[data-material-id="${materialId}"]`).prop('checked', false);
+        atualizarInterface();
+    };
+
+    // Controle de checkboxes individuais
+    $(document).on('change', '.material-checkbox', function() {
+        const materialId = parseInt($(this).data('material-id'));
+        const materialNome = $(this).data('material-nome');
+        const materialCodigo = $(this).data('material-codigo');
+        
+        if ($(this).is(':checked')) {
+            // Adicionar à seleção
+            if (!materiaisSelecionados.find(m => m.id === materialId)) {
+                materiaisSelecionados.push({
+                    id: materialId,
+                    nome: materialNome,
+                    codigo: materialCodigo
+                });
+            }
+        } else {
+            // Remover da seleção
+            materiaisSelecionados = materiaisSelecionados.filter(m => m.id !== materialId);
+        }
+        
+        atualizarInterface();
+    });
+
+    // Checkbox "Selecionar Todos"
+    $('#checkbox-todos').change(function() {
+        const isChecked = $(this).is(':checked');
+        $('.material-checkbox').prop('checked', isChecked).trigger('change');
+    });
+
+    // Botão "Selecionar Todos"
+    $('#btn-selecionar-todos').click(function() {
+        $('.material-checkbox').prop('checked', true).trigger('change');
+        $('#checkbox-todos').prop('checked', true);
+    });
+
+    // Botão "Desmarcar Todos"
+    $('#btn-desmarcar-todos').click(function() {
+        $('.material-checkbox').prop('checked', false).trigger('change');
+        $('#checkbox-todos').prop('checked', false);
+    });
+
+    // Adicionar materiais selecionados
+    $('#btn-adicionar-selecionados').click(function() {
+        if (materiaisSelecionados.length === 0) {
+            alert('Selecione pelo menos um material para adicionar.');
+            return;
+        }
+
+        const confirmacao = confirm(`Deseja adicionar ${materiaisSelecionados.length} material(is) ao grupo?`);
+        if (!confirmacao) return;
+
+        // Adicionar materiais um por um
+        let adicionados = 0;
+        let erros = 0;
+
+        function adicionarProximo(index) {
+            if (index >= materiaisSelecionados.length) {
+                // Finalizar
+                if (adicionados > 0) {
+                    alert(`${adicionados} material(is) adicionado(s) com sucesso!`);
+                    location.reload();
+                }
+                if (erros > 0) {
+                    alert(`${erros} material(is) não puderam ser adicionados.`);
+                }
+                return;
+            }
+
+            const material = materiaisSelecionados[index];
+            $.ajax({
+                url: "{{ url_for('grupo_material.adicionar_material', id=grupo.id) }}",
+                type: "POST",
+                data: JSON.stringify({ material_id: material.id }),
+                contentType: "application/json",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+                },
+                success: function(response) {
+                    if (response.success) {
+                        adicionados++;
+                    } else {
+                        erros++;
+                        console.error('Erro ao adicionar material:', response.message);
+                    }
+                    adicionarProximo(index + 1);
+                },
+                error: function() {
+                    erros++;
+                    adicionarProximo(index + 1);
+                }
+            });
+        }
+
+        adicionarProximo(0);
+    });
+    
+    // Adicionar material ao grupo (método antigo - mantido para compatibilidade)
+    $(document).on('click', '.btn-adicionar-material', function() {
+        const materialId = $(this).data('material-id');
+        const materialNome = $(this).data('material-nome');
+        
+        console.log('Adicionando material:', materialId, materialNome);
+        
+        $.ajax({
+            url: "{{ url_for('grupo_material.adicionar_material', id=grupo.id) }}",
+            type: "POST",
+            data: JSON.stringify({ material_id: materialId }),
+            contentType: "application/json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                console.log('Resposta da adição:', response);
+                if (response.success) {
+                    alert(response.message);
+                    location.reload();
+                } else {
+                    alert(response.message);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro na requisição:', xhr.responseText);
+                alert('Erro ao adicionar material ao grupo.');
+            }
+        });
+    });
+    
+    // Remover material do grupo
+    $('.btn-remover-material').click(function() {
+        const materialId = $(this).data('material-id');
+        const materialNome = $(this).data('material-nome');
+        
+        $('#material-remocao-nome').text(materialNome);
+        $('#btn-confirmar-remocao').data('material-id', materialId);
+        $('#modalConfirmarRemocao').modal('show');
+    });
+    
+    // Confirmar remoção
+    $('#btn-confirmar-remocao').click(function() {
+        const materialId = $(this).data('material-id');
+        
+        $.ajax({
+            url: "{{ url_for('grupo_material.remover_material', id=grupo.id) }}",
+            type: "POST",
+            data: JSON.stringify({ material_id: materialId }),
+            contentType: "application/json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    location.reload();
+                } else {
+                    alert(response.message);
+                }
+            },
+            error: function() {
+                alert('Erro ao remover material do grupo.');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

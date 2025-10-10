@@ -107,24 +107,19 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#listaDocumentos').html('<tr><td colspan="4" class="text-center text-danger">Erro: Função de carregamento não encontrada</td></tr>');
         }
     });
-   
-    // Manipular clique no botão de visualizar documentos
-    // Manipular clique no botão de visualizar documento
-    
 
     $("#tabelaDocumentos").on('click', '.visualizar-pdf', function() {
         console.log('visualizar pdf clicado');
         const notaId = $(this).data('id');
+        console.log('ID da nota:', notaId);
         abrirPdfNota(notaId);
     });
-    document.querySelectorAll('.visualizar-pdf').forEach(cb => {
-        cb.addEventListener('click', function(e) {
-            e.preventDefault();
-            var notaId = $(this).data('id');
-            abrirPdfNota(notaId);
-            console.log('visualizar pdf');
-        });
+    $("#tabelaDocumentos").on('click', '.download-xml', function() {
+        console.log('download xml clicado');
+        const notaId = $(this).data('id');
+        downloadXmlNota(notaId);
     });
+    
     // Manipular clique no botão de adicionar documento
     $('#btnAdicionarDocumento').on('click', function() {
         $('#modalAdicionarDocumento').modal('show');
@@ -168,13 +163,23 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
 });
-  
+function downloadXmlNota(notaId) {
+    $.get(`/notas-fiscais/xml/${notaId}`, function(response) {
+        var url = URL.createObjectURL(new Blob([response.xml], { type: 'application/xml' }));
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = `nf ${notaId}.xml`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+}
+       
 // Função para carregar documentos
 function carregarDocumentos(notaId) {
     $.get(`/notas-fiscais/api/documentos/${notaId}`, function(response) {
         var tbody = $('#listaDocumentos');
         tbody.empty();
-        
+        console.log('Documentos:', response);
         if (response.documentos && response.documentos.length > 0) {
             response.documentos.forEach(function(doc) {
                 var row = `
@@ -189,6 +194,10 @@ function carregarDocumentos(notaId) {
                             <button class="btn btn-sm btn-danger excluir-doc" data-id="${doc.id}" title="Excluir">
                                 <i class="fas fa-trash"></i>
                             </button>
+                            ${doc.tipo === 10 ? `
+                            <button class="btn btn-sm btn-primary download-xml" data-id="${doc.id}" title="Download xml">
+                                <i class="fas fa-download"></i>
+                            </button>` : ''}
                         </td>
                     </tr>
                 `;

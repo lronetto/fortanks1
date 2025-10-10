@@ -33,6 +33,7 @@ from .departamento import Departamento
 
 # Importamos material e solicitacao explicitamente
 from .material import Material
+from .grupo_material import GrupoMaterial
 from .estoque import Estoque, MovimentacaoEstoque
 from .nota_fiscal import NotaFiscal, NotaFiscalItem
 
@@ -76,7 +77,7 @@ except Exception as e:
 # Exportar modelos relevantes
 __all__ = [
     'db', 'Usuario', 'CentroCusto', 'PlanoConta', 'Contrato',
-    'Material', 'ItemSolicitacao', 'Solicitacao','Cargo','Departamento','Colaborador',
+    'Material', 'ItemSolicitacao', 'Solicitacao','Cargo','Departamento','Colaborador','DadosBancarios',
     'NotaFiscal', 'NotaFiscalItem', 'Cliente', 'Endereco', 'Tanque', 'Peca',
     'Concretagem', 'ConcretagemPeca', 'ConcretagemTanque', 'Equipamento', 'Manutencao', 
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',

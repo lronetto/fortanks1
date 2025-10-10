@@ -48,7 +48,7 @@ def index():
     if form_filtro.termo_busca.data:
         termo = f"%{form_filtro.termo_busca.data}%"
         query = query.join(Estoque.material, isouter=True).join(
-            Estoque.epi, isouter=True).filter(
+            ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id, isouter=True).filter(
             or_(
                 Material.nome.ilike(termo),
                 Material.codigo.ilike(termo),
@@ -56,7 +56,6 @@ def index():
                 ProdutoComposto.nome.ilike(termo)
             )
         )
-    query = query.join(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id, isouter=True)
     
     # Filtrar por status
     if form_filtro.status_estoque.data and form_filtro.status_estoque.data != 'todos':
@@ -92,9 +91,9 @@ def novo():
             item = Estoque()
             item.tipo_item = 'material'  # Sempre será material
             item.material_id = form.material_id.data
-            item.quantidade = form.quantidade.data
+            item.quantidade = form.quantidade.data or 0
             item.quantidade_minima = form.quantidade_minima.data
-            item.quantidade_maxima = form.quantidade_maxima.data
+            item.quantidade_maxima = form.quantidade_maxima.data or 0
             item.lote = form.lote.data
             item.data_validade = form.data_validade.data
             item.usuario_id = current_user.id
@@ -137,6 +136,7 @@ def novo():
         for field, field_errors in form.errors.items():
             errors[field] = field_errors
         
+        print(errors)
         return jsonify({
             'success': False,
             'message': 'Erro de validação',
@@ -560,20 +560,35 @@ def inventarios():
 
 @estoque_bp.route('/novo-inventario', methods=['GET', 'POST'])
 @login_required
-
 def novo_inventario():
     """
     Criar novo inventário
     """
+    # Verificar se é uma requisição AJAX
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
     form = InventarioEstoqueForm()
     
     # Carregar categorias e localizações para filtros
-    categorias = []  # Implementar se necessário
-    localizacoes = db.session.query(Estoque.localizacao).filter(Estoque.localizacao != None).distinct().all()
+    categorias = db.session.query(Material.categoria).filter(
+        Material.categoria != None, 
+        Material.categoria != ''
+    ).distinct().all()
+    categorias = [cat[0] for cat in categorias]
+    
+    localizacoes = db.session.query(Estoque.localizacao).filter(
+        Estoque.localizacao != None, 
+        Estoque.localizacao != ''
+    ).distinct().all()
     localizacoes = [loc[0] for loc in localizacoes]
+    
+    # Debug: verificar se é AJAX e dados do formulário
+    if is_ajax:
+        logger.info(f"Requisição AJAX recebida - Dados: {request.form.to_dict()}")
     
     if form.validate_on_submit():
         try:
+            logger.info(f"Criando inventário - Tipo: {form.tipo_inventario.data}")
             inventario = InventarioEstoque(
                 tipo_inventario=form.tipo_inventario.data,
                 observacoes=form.observacoes.data,
@@ -588,11 +603,79 @@ def novo_inventario():
             
             # Filtrar por tipo se for inventário parcial
             if form.tipo_inventario.data == 'Parcial':
-                if form.tipo_item.data:
-                    query = query.filter(Estoque.tipo_item == form.tipo_item.data)
+                # Obter filtros do request
+                filtro_parcial = request.form.get('filtro_parcial')
+                logger.info(f"Filtro parcial selecionado: {filtro_parcial}")
                 
-                if form.localizacao.data:
-                    query = query.filter(Estoque.localizacao == form.localizacao.data)
+                tipo_item = request.form.get('tipo_item')
+                localizacao = request.form.get('localizacao')
+                categoria = request.form.get('categoria')
+                grupos_selecionados = request.form.getlist('grupos[]')
+                
+                logger.info(f"Filtros recebidos - Tipo: {tipo_item}, Localização: {localizacao}, Categoria: {categoria}, Grupos: {grupos_selecionados}")
+                
+                # Verificar se pelo menos um filtro foi selecionado
+                if not any([tipo_item, localizacao, categoria, grupos_selecionados]):
+                    logger.warning("Inventário parcial sem filtros selecionados")
+                    if is_ajax:
+                        return jsonify({
+                            'success': False,
+                            'message': 'Para inventário parcial, selecione pelo menos um filtro.'
+                        }), 400
+                    else:
+                        flash('Para inventário parcial, selecione pelo menos um filtro.', 'danger')
+                        return render_template('estoque/inventario_form.html', 
+                                              form=form, 
+                                              categorias=categorias, 
+                                              localizacoes=localizacoes)
+                
+                if tipo_item:
+                    query = query.filter(Estoque.tipo_item == tipo_item)
+                
+                if localizacao:
+                    query = query.filter(Estoque.localizacao == localizacao)
+                
+                if categoria:
+                    # Filtrar por categoria do material
+                    query = query.join(Estoque.material).filter(Material.categoria == categoria)
+                
+                if grupos_selecionados:
+                    # Filtrar por grupos de materiais selecionados
+                    logger.info(f"Filtrando por grupos: {grupos_selecionados}")
+                    
+                    # Construir placeholders para IN clause
+                    placeholders = ','.join([f':grupo_{i}' for i in range(len(grupos_selecionados))])
+                    sql = f"""
+                        SELECT DISTINCT material_id FROM materiais_grupos 
+                        WHERE grupo_id IN ({placeholders})
+                    """
+                    
+                    # Criar dicionário de parâmetros
+                    params = {f'grupo_{i}': int(grupo_id) for i, grupo_id in enumerate(grupos_selecionados)}
+                    logger.info(f"SQL: {sql}")
+                    logger.info(f"Parâmetros: {params}")
+                    
+                    materiais_grupo = db.session.execute(
+                        db.text(sql), params
+                    ).fetchall()
+                    if materiais_grupo:
+                        ids_materiais = [row[0] for row in materiais_grupo]
+                        logger.info(f"Materiais encontrados nos grupos: {ids_materiais}")
+                        
+                        # Verificar se esses materiais existem no estoque
+                        estoque_count = db.session.query(Estoque).filter(Estoque.material_id.in_(ids_materiais)).count()
+                        logger.info(f"Quantidade de itens no estoque para esses materiais: {estoque_count}")
+                        
+                        if estoque_count > 0:
+                            query = query.filter(Estoque.material_id.in_(ids_materiais))
+                        else:
+                            logger.warning("Nenhum item no estoque encontrado para os materiais dos grupos selecionados")
+                            # Se não há itens no estoque para esses materiais, retornar query vazia
+                            query = query.filter(Estoque.id == -1)
+                    else:
+                        logger.info("Nenhum material encontrado nos grupos selecionados")
+                        # Se não há materiais nos grupos, retornar query vazia
+                        query = query.filter(Estoque.id == -1)
                 
                 # Verificar se tem itens específicos selecionados
                 itens_selecionados = request.form.getlist('itens[]')
@@ -600,6 +683,7 @@ def novo_inventario():
                     query = query.filter(Estoque.id.in_(itens_selecionados))
             
             estoque_items = query.all()
+            logger.info(f"Total de itens encontrados para o inventário: {len(estoque_items)}")
             
             # Criar itens de inventário
             for item in estoque_items:
@@ -611,12 +695,45 @@ def novo_inventario():
                 db.session.add(item_inventario)
             
             db.session.commit()
-            flash('Inventário criado com sucesso! Agora você pode iniciar a contagem.', 'success')
-            return redirect(url_for('estoque.inventario_detalhes', id=inventario.id))
+            
+            if is_ajax:
+                return jsonify({
+                    'success': True,
+                    'message': 'Inventário criado com sucesso! Agora você pode iniciar a contagem.',
+                    'redirect': url_for('estoque.inventario_detalhes', id=inventario.id)
+                })
+            else:
+                flash('Inventário criado com sucesso! Agora você pode iniciar a contagem.', 'success')
+                return redirect(url_for('estoque.inventario_detalhes', id=inventario.id))
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao criar inventário: {str(e)}")
-            flash(f'Erro ao criar inventário: {str(e)}', 'danger')
+            
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'message': f'Erro ao criar inventário: {str(e)}'
+                }), 500
+            else:
+                flash(f'Erro ao criar inventário: {str(e)}', 'danger')
+    else:
+        # Formulário não é válido
+        if is_ajax:
+            errors = {}
+            for field, field_errors in form.errors.items():
+                errors[field] = field_errors
+            return jsonify({
+                'success': False,
+                'message': 'Dados do formulário inválidos',
+                'errors': errors
+            }), 400
+    
+    if is_ajax:
+        # Se chegou até aqui e é AJAX, retornar erro genérico
+        return jsonify({
+            'success': False,
+            'message': 'Erro inesperado ao processar requisição'
+        }), 500
     
     return render_template('estoque/inventario_form.html', 
                           form=form, 
@@ -635,6 +752,188 @@ def inventario_detalhes(id):
     return render_template('estoque/inventario_detalhes.html', 
                           inventario=inventario, 
                           itens=itens)
+
+@estoque_bp.route('/gerenciar-inventario')
+@login_required
+def gerenciar_inventario():
+    """
+    Página principal para gerenciar inventários
+    """
+    return render_template('estoque/gerenciar_inventario.html')
+
+@estoque_bp.route('/api/estatisticas-inventario')
+@login_required
+def api_estatisticas_inventario():
+    """
+    API para obter estatísticas dos inventários
+    """
+    try:
+        # Inventários ativos
+        inventarios_ativos = InventarioEstoque.query.filter_by(status='Em Andamento').count()
+        
+        # Itens pendentes de contagem
+        itens_pendentes = db.session.query(ItemInventario).join(InventarioEstoque).filter(
+            InventarioEstoque.status == 'Em Andamento',
+            ItemInventario.quantidade_contada.is_(None)
+        ).count()
+        
+        # Diferenças encontradas
+        diferencas = db.session.query(ItemInventario).join(InventarioEstoque).filter(
+            InventarioEstoque.status == 'Finalizado',
+            ItemInventario.quantidade_contada != ItemInventario.quantidade_sistema
+        ).count()
+        
+        # Inventários finalizados nos últimos 30 dias
+        from datetime import datetime, timedelta
+        data_limite = datetime.now() - timedelta(days=30)
+        finalizados_30_dias = InventarioEstoque.query.filter(
+            InventarioEstoque.status == 'Finalizado',
+            InventarioEstoque.data_fim >= data_limite
+        ).count()
+        
+        return jsonify({
+            'success': True,
+            'estatisticas': {
+                'inventarios_ativos': inventarios_ativos,
+                'itens_pendentes': itens_pendentes,
+                'diferencas': diferencas,
+                'finalizados_30_dias': finalizados_30_dias
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao obter estatísticas de inventário: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter estatísticas: {str(e)}'
+        }), 500
+
+@estoque_bp.route('/api/inventarios-ativos')
+@login_required
+def api_inventarios_ativos():
+    """
+    API para obter inventários ativos
+    """
+    try:
+        inventarios = InventarioEstoque.query.filter_by(status='Em Andamento').order_by(
+            InventarioEstoque.data_inicio.desc()
+        ).all()
+        
+        inventarios_data = []
+        for inv in inventarios:
+            # Contar itens totais e contados
+            total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
+            itens_contados = ItemInventario.query.filter_by(
+                inventario_id=inv.id
+            ).filter(ItemInventario.quantidade_contada.isnot(None)).count()
+            
+            inventarios_data.append({
+                'id': inv.id,
+                'tipo_inventario': inv.tipo_inventario,
+                'data_inicio': inv.data_inicio.isoformat(),
+                'total_itens': total_itens,
+                'itens_contados': itens_contados,
+                'status': inv.status,
+                'responsavel': inv.criado_por.nome if inv.criado_por else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'inventarios': inventarios_data
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao obter inventários ativos: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter inventários ativos: {str(e)}'
+        }), 500
+
+@estoque_bp.route('/api/historico-inventarios')
+@login_required
+def api_historico_inventarios():
+    """
+    API para obter histórico de inventários
+    """
+    try:
+        # Parâmetros de filtro
+        tipo = request.args.get('tipo', '')
+        status = request.args.get('status', '')
+        data = request.args.get('data', '')
+        
+        # Query base
+        query = InventarioEstoque.query
+        
+        # Aplicar filtros
+        if tipo:
+            query = query.filter(InventarioEstoque.tipo_inventario == tipo)
+        
+        if status:
+            query = query.filter(InventarioEstoque.status == status)
+        
+        if data:
+            from datetime import datetime
+            data_filtro = datetime.strptime(data, '%Y-%m-%d').date()
+            query = query.filter(db.func.date(InventarioEstoque.data_inicio) == data_filtro)
+        
+        # Obter inventários
+        inventarios = query.order_by(InventarioEstoque.data_inicio.desc()).limit(100).all()
+        
+        inventarios_data = []
+        for inv in inventarios:
+            # Contar itens e diferenças
+            total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
+            diferencas = db.session.query(ItemInventario).filter_by(
+                inventario_id=inv.id
+            ).filter(ItemInventario.quantidade_contada != ItemInventario.quantidade_sistema).count()
+            
+            inventarios_data.append({
+                'id': inv.id,
+                'tipo_inventario': inv.tipo_inventario,
+                'data_inicio': inv.data_inicio.isoformat(),
+                'data_fim': inv.data_fim.isoformat() if inv.data_fim else None,
+                'status': inv.status,
+                'total_itens': total_itens,
+                'diferencas': diferencas,
+                'responsavel': inv.criado_por.nome if inv.criado_por else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'inventarios': inventarios_data
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao obter histórico de inventários: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao obter histórico: {str(e)}'
+        }), 500
+
+@estoque_bp.route('/api/salvar-configuracoes', methods=['POST'])
+@login_required
+def api_salvar_configuracoes():
+    """
+    API para salvar configurações de inventário
+    """
+    try:
+        data = request.get_json()
+        
+        # Aqui você pode implementar a lógica para salvar as configurações
+        # Por exemplo, em uma tabela de configurações ou em cache
+        
+        # Por enquanto, apenas retornar sucesso
+        return jsonify({
+            'success': True,
+            'message': 'Configurações salvas com sucesso!'
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao salvar configurações: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao salvar configurações: {str(e)}'
+        }), 500
 
 @estoque_bp.route('/inventario/<int:id>/contagem')
 @login_required

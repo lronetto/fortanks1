@@ -1,0 +1,831 @@
+{% extends "common/base.html" %}
+
+{% block title %}Gerenciar Inventário{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Cabeçalho Principal -->
+    <div class="d-sm-flex justify-content-between mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-clipboard-list text-primary"></i> Gerenciar Inventário
+            </h1>
+            <p class="mb-0 text-muted">Controle completo de inventários, grupos de materiais e estoque</p>
+        </div>
+        <div>
+            <a href="{{ url_for('estoque.index') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
+            </a>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoInventario">
+                <i class="fas fa-plus"></i> Novo Inventário
+            </button>
+        </div>
+    </div>
+
+    <!-- Dashboard de Estatísticas -->
+    <div class="row mb-4">
+        <!-- Card: Inventários Ativos -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Inventários Ativos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-inventarios-ativos">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clipboard-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Itens Pendentes -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Itens Pendentes
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-itens-pendentes">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Diferenças Encontradas -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Diferenças
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-diferencas">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Inventários Finalizados -->
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Finalizados (30 dias)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-finalizados">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navegação por Abas -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <ul class="nav nav-tabs card-header-tabs" id="inventarioTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="inventarios-ativos-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#inventarios-ativos" type="button" role="tab">
+                                <i class="fas fa-clipboard-list"></i> Inventários Ativos
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="historico-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#historico" type="button" role="tab">
+                                <i class="fas fa-history"></i> Histórico
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="relatorios-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#relatorios" type="button" role="tab">
+                                <i class="fas fa-chart-bar"></i> Relatórios
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="grupos-materiais-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#grupos-materiais" type="button" role="tab">
+                                <i class="fas fa-layer-group"></i> Grupos de Materiais
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="configuracoes-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#configuracoes" type="button" role="tab">
+                                <i class="fas fa-cog"></i> Configurações
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content" id="inventarioTabsContent">
+                        
+                        <!-- Aba: Inventários Ativos -->
+                        <div class="tab-pane fade show active" id="inventarios-ativos" role="tabpanel">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0">Inventários em Andamento</h5>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="atualizarInventariosAtivos()">
+                                        <i class="fas fa-sync-alt"></i> Atualizar
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-bordered" id="tabelaInventariosAtivos">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Tipo</th>
+                                            <th>Data Início</th>
+                                            <th>Progresso</th>
+                                            <th>Responsável</th>
+                                            <th>Status</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dados carregados via AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Aba: Histórico -->
+                        <div class="tab-pane fade" id="historico" role="tabpanel">
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="filtro-tipo" class="form-label">Tipo de Inventário</label>
+                                    <select class="form-control" id="filtro-tipo">
+                                        <option value="">Todos</option>
+                                        <option value="Geral">Geral</option>
+                                        <option value="Parcial">Parcial</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="filtro-status" class="form-label">Status</label>
+                                    <select class="form-control" id="filtro-status">
+                                        <option value="">Todos</option>
+                                        <option value="Em Andamento">Em Andamento</option>
+                                        <option value="Finalizado">Finalizado</option>
+                                        <option value="Cancelado">Cancelado</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="filtro-data" class="form-label">Período</label>
+                                    <input type="date" class="form-control" id="filtro-data">
+                                </div>
+                            </div>
+                            
+                            <div class="table-responsive">
+                                <table class="table table-bordered" id="tabelaHistorico">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Tipo</th>
+                                            <th>Data Início</th>
+                                            <th>Data Fim</th>
+                                            <th>Status</th>
+                                            <th>Responsável</th>
+                                            <th>Itens</th>
+                                            <th>Diferenças</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dados carregados via AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Aba: Relatórios -->
+                        <div class="tab-pane fade" id="relatorios" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Relatórios Disponíveis</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="list-group">
+                                                <a href="#" class="list-group-item list-group-item-action" onclick="gerarRelatorio('inventarios-por-periodo')">
+                                                    <i class="fas fa-calendar-alt text-primary"></i>
+                                                    <strong>Inventários por Período</strong>
+                                                    <small class="d-block text-muted">Relatório de inventários realizados em um período específico</small>
+                                                </a>
+                                                <a href="#" class="list-group-item list-group-item-action" onclick="gerarRelatorio('diferencas-encontradas')">
+                                                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                                                    <strong>Diferenças Encontradas</strong>
+                                                    <small class="d-block text-muted">Relatório de todas as diferenças encontradas nos inventários</small>
+                                                </a>
+                                                <a href="#" class="list-group-item list-group-item-action" onclick="gerarRelatorio('produtividade-inventario')">
+                                                    <i class="fas fa-chart-line text-success"></i>
+                                                    <strong>Produtividade de Inventário</strong>
+                                                    <small class="d-block text-muted">Análise de produtividade e tempo médio de inventários</small>
+                                                </a>
+                                                <a href="#" class="list-group-item list-group-item-action" onclick="gerarRelatorio('itens-mais-contados')">
+                                                    <i class="fas fa-boxes text-info"></i>
+                                                    <strong>Itens Mais Contados</strong>
+                                                    <small class="d-block text-muted">Ranking dos itens que mais aparecem em inventários</small>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Gráficos e Estatísticas</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="graficoInventarios" width="400" height="200"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Aba: Grupos de Materiais -->
+                        <div class="tab-pane fade" id="grupos-materiais" role="tabpanel">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="mb-0">Grupos de Materiais</h5>
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo">
+                                        <i class="fas fa-plus"></i> Novo Grupo
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="atualizarGrupos()">
+                                        <i class="fas fa-sync-alt"></i> Atualizar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Filtros para Grupos -->
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <label for="filtro-grupo-search" class="form-label">Buscar</label>
+                                    <input type="text" class="form-control" id="filtro-grupo-search" placeholder="Nome, código ou descrição...">
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="filtro-grupo-status" class="form-label">Status</label>
+                                    <select class="form-control" id="filtro-grupo-status">
+                                        <option value="">Todos</option>
+                                        <option value="ativo">Ativo</option>
+                                        <option value="inativo">Inativo</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary w-100" onclick="filtrarGrupos()">
+                                        <i class="fas fa-search"></i> Filtrar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tabela de Grupos -->
+                            <div class="table-responsive">
+                                <table class="table table-bordered" id="tabelaGrupos">
+                                    <thead>
+                                        <tr>
+                                            <th>Nome</th>
+                                            <th>Código</th>
+                                            <th>Descrição</th>
+                                            <th>Materiais</th>
+                                            <th>Status</th>
+                                            <th>Criado em</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dados carregados via AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Paginação para Grupos -->
+                            <div class="d-flex justify-content-between align-items-center mt-3">
+                                <div id="info-paginacao-grupos">
+                                    <!-- Informações de paginação -->
+                                </div>
+                                <nav aria-label="Navegação de página">
+                                    <ul class="pagination" id="paginacao-grupos">
+                                        <!-- Paginação carregada via AJAX -->
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+
+                        <!-- Aba: Configurações -->
+                        <div class="tab-pane fade" id="configuracoes" role="tabpanel">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Configurações Gerais</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <form id="form-configuracoes">
+                                                <div class="form-group mb-3">
+                                                    <label for="tempo-limite-inventario" class="form-label">Tempo Limite para Inventário (dias)</label>
+                                                    <input type="number" class="form-control" id="tempo-limite-inventario" value="7" min="1" max="30">
+                                                    <small class="form-text text-muted">Tempo máximo para finalizar um inventário</small>
+                                                </div>
+                                                
+                                                <div class="form-group mb-3">
+                                                    <label for="notificacao-diferencas" class="form-label">Notificar sobre Diferenças</label>
+                                                    <div class="form-check">
+                                                        <input type="checkbox" class="form-check-input" id="notificacao-diferencas" checked>
+                                                        <label class="form-check-label" for="notificacao-diferencas">
+                                                            Enviar notificação quando houver diferenças significativas
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="form-group mb-3">
+                                                    <label for="auto-finalizar" class="form-label">Auto-finalizar Inventários</label>
+                                                    <div class="form-check">
+                                                        <input type="checkbox" class="form-check-input" id="auto-finalizar">
+                                                        <label class="form-check-label" for="auto-finalizar">
+                                                            Finalizar automaticamente inventários com 100% de contagem
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <button type="button" class="btn btn-primary" onclick="salvarConfiguracoes()">
+                                                    <i class="fas fa-save"></i> Salvar Configurações
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Ações em Massa</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="d-grid gap-2">
+                                                <button type="button" class="btn btn-warning" onclick="cancelarInventariosAntigos()">
+                                                    <i class="fas fa-ban"></i> Cancelar Inventários Antigos
+                                                </button>
+                                                <button type="button" class="btn btn-info" onclick="exportarDadosInventario()">
+                                                    <i class="fas fa-download"></i> Exportar Dados
+                                                </button>
+                                                <button type="button" class="btn btn-secondary" onclick="limparHistoricoAntigo()">
+                                                    <i class="fas fa-trash"></i> Limpar Histórico Antigo
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir Modais -->
+{% include 'estoque/modais/novo_inventario.html' %}
+{% include 'estoque/modais/visualizar_inventario.html' %}
+{% include 'estoque/modais/confirmar_finalizacao.html' %}
+{% include 'estoque/modais/confirmar_cancelamento.html' %}
+
+<!-- Incluir Modais de Grupos de Materiais -->
+{% include 'grupos_materiais/modais/novo_grupo.html' %}
+{% include 'grupos_materiais/modais/editar_grupo.html' %}
+{% include 'grupos_materiais/modais/visualizar_grupo.html' %}
+{% include 'grupos_materiais/modais/confirmar_exclusao.html' %}
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js para gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Inicializar tooltips
+    $('[data-bs-toggle="tooltip"]').tooltip();
+    
+    // Carregar dados iniciais
+    carregarEstatisticas();
+    carregarInventariosAtivos();
+    carregarHistorico();
+    
+    // Configurar atualização automática a cada 30 segundos
+    setInterval(function() {
+        if ($('#inventarios-ativos-tab').hasClass('active')) {
+            carregarInventariosAtivos();
+        }
+        carregarEstatisticas();
+    }, 30000);
+    
+    // Event listeners para filtros
+    $('#filtro-tipo, #filtro-status, #filtro-data').change(function() {
+        carregarHistorico();
+    });
+});
+
+// Função para carregar estatísticas do dashboard
+function carregarEstatisticas() {
+    $.ajax({
+        url: "{{ url_for('estoque.api_estatisticas_inventario') }}",
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                $('#total-inventarios-ativos').text(response.estatisticas.inventarios_ativos || 0);
+                $('#total-itens-pendentes').text(response.estatisticas.itens_pendentes || 0);
+                $('#total-diferencas').text(response.estatisticas.diferencas || 0);
+                $('#total-finalizados').text(response.estatisticas.finalizados_30_dias || 0);
+            }
+        },
+        error: function() {
+            console.error('Erro ao carregar estatísticas');
+        }
+    });
+}
+
+// Função para carregar inventários ativos
+function carregarInventariosAtivos() {
+    $.ajax({
+        url: "{{ url_for('estoque.api_inventarios_ativos') }}",
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const tbody = $('#tabelaInventariosAtivos tbody');
+                tbody.empty();
+                
+                if (response.inventarios.length === 0) {
+                    tbody.append('<tr><td colspan="7" class="text-center">Nenhum inventário ativo</td></tr>');
+                    return;
+                }
+                
+                response.inventarios.forEach(function(inv) {
+                    const progresso = Math.round((inv.itens_contados / inv.total_itens) * 100) || 0;
+                    const row = `
+                        <tr>
+                            <td>${inv.id}</td>
+                            <td><span class="badge badge-info">${inv.tipo_inventario}</span></td>
+                            <td>${new Date(inv.data_inicio).toLocaleDateString('pt-BR')}</td>
+                            <td>
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar" role="progressbar" style="width: ${progresso}%">
+                                        ${progresso}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td>${inv.responsavel || '-'}</td>
+                            <td><span class="badge badge-warning">${inv.status}</span></td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-primary" onclick="visualizarInventario(${inv.id})">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <a href="/estoque/inventario/${inv.id}/contagem" class="btn btn-sm btn-success">
+                                        <i class="fas fa-play"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            }
+        },
+        error: function() {
+            console.error('Erro ao carregar inventários ativos');
+        }
+    });
+}
+
+// Função para carregar histórico
+function carregarHistorico() {
+    const filtros = {
+        tipo: $('#filtro-tipo').val(),
+        status: $('#filtro-status').val(),
+        data: $('#filtro-data').val()
+    };
+    
+    $.ajax({
+        url: "{{ url_for('estoque.api_historico_inventarios') }}",
+        method: 'GET',
+        data: filtros,
+        success: function(response) {
+            if (response.success) {
+                const tbody = $('#tabelaHistorico tbody');
+                tbody.empty();
+                
+                if (response.inventarios.length === 0) {
+                    tbody.append('<tr><td colspan="9" class="text-center">Nenhum inventário encontrado</td></tr>');
+                    return;
+                }
+                
+                response.inventarios.forEach(function(inv) {
+                    const dataFim = inv.data_fim ? new Date(inv.data_fim).toLocaleDateString('pt-BR') : '-';
+                    const statusClass = inv.status === 'Finalizado' ? 'badge-success' : 
+                                      inv.status === 'Cancelado' ? 'badge-danger' : 'badge-warning';
+                    
+                    const row = `
+                        <tr>
+                            <td>${inv.id}</td>
+                            <td><span class="badge badge-info">${inv.tipo_inventario}</span></td>
+                            <td>${new Date(inv.data_inicio).toLocaleDateString('pt-BR')}</td>
+                            <td>${dataFim}</td>
+                            <td><span class="badge ${statusClass}">${inv.status}</span></td>
+                            <td>${inv.responsavel || '-'}</td>
+                            <td>${inv.total_itens || 0}</td>
+                            <td>${inv.diferencas || 0}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-primary" onclick="visualizarInventario(${inv.id})">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    ${inv.status === 'Finalizado' ? 
+                                        `<button class="btn btn-sm btn-info" onclick="gerarRelatorioInventario(${inv.id})">
+                                            <i class="fas fa-file-pdf"></i>
+                                        </button>` : ''
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            }
+        },
+        error: function() {
+            console.error('Erro ao carregar histórico');
+        }
+    });
+}
+
+// Função para atualizar inventários ativos
+function atualizarInventariosAtivos() {
+    carregarInventariosAtivos();
+    carregarEstatisticas();
+}
+
+// Função para visualizar inventário
+function visualizarInventario(id) {
+    // Implementar abertura do modal de visualização
+    console.log('Visualizar inventário:', id);
+}
+
+// Função para gerar relatório
+function gerarRelatorio(tipo) {
+    console.log('Gerar relatório:', tipo);
+    // Implementar geração de relatórios
+}
+
+// Função para salvar configurações
+function salvarConfiguracoes() {
+    const configuracoes = {
+        tempo_limite: $('#tempo-limite-inventario').val(),
+        notificacao_diferencas: $('#notificacao-diferencas').is(':checked'),
+        auto_finalizar: $('#auto-finalizar').is(':checked')
+    };
+    
+    $.ajax({
+        url: "{{ url_for('estoque.api_salvar_configuracoes') }}",
+        method: 'POST',
+        data: JSON.stringify(configuracoes),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                alert('Configurações salvas com sucesso!');
+            } else {
+                alert('Erro ao salvar configurações: ' + response.message);
+            }
+        },
+        error: function() {
+            alert('Erro ao salvar configurações');
+        }
+    });
+}
+
+// Funções para ações em massa
+function cancelarInventariosAntigos() {
+    if (confirm('Tem certeza que deseja cancelar todos os inventários antigos?')) {
+        // Implementar cancelamento em massa
+        console.log('Cancelar inventários antigos');
+    }
+}
+
+function exportarDadosInventario() {
+    // Implementar exportação de dados
+    console.log('Exportar dados do inventário');
+}
+
+function limparHistoricoAntigo() {
+    if (confirm('Tem certeza que deseja limpar o histórico antigo? Esta ação não pode ser desfeita.')) {
+        // Implementar limpeza do histórico
+        console.log('Limpar histórico antigo');
+    }
+}
+
+// Inicializar gráfico
+function inicializarGrafico() {
+    const ctx = document.getElementById('graficoInventarios').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'],
+            datasets: [{
+                label: 'Inventários Realizados',
+                data: [12, 19, 3, 5, 2, 3],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// Inicializar gráfico quando a aba de relatórios for ativada
+$('#relatorios-tab').on('shown.bs.tab', function() {
+    setTimeout(inicializarGrafico, 100);
+});
+
+// ===== FUNÇÕES PARA GRUPOS DE MATERIAIS =====
+
+// Carregar grupos de materiais
+function carregarGrupos(pagina = 1) {
+    const filtros = {
+        search: $('#filtro-grupo-search').val(),
+        status: $('#filtro-grupo-status').val(),
+        page: pagina
+    };
+    
+    $.ajax({
+        url: "{{ url_for('grupo_material.index') }}",
+        method: 'GET',
+        data: filtros,
+        success: function(response) {
+            // Como a resposta é HTML, precisamos extrair os dados da tabela
+            // Por enquanto, vamos usar a API JSON
+            carregarGruposViaAPI(pagina, filtros);
+        },
+        error: function() {
+            console.error('Erro ao carregar grupos');
+        }
+    });
+}
+
+// Carregar grupos via API JSON
+function carregarGruposViaAPI(pagina = 1, filtros = {}) {
+    const params = {
+        search: $('#filtro-grupo-search').val() || '',
+        status: $('#filtro-grupo-status').val() || ''
+    };
+    
+    $.ajax({
+        url: "{{ url_for('grupo_material.api_listar_json') }}",
+        method: 'GET',
+        data: params,
+        success: function(response) {
+            console.log('Resposta da API de grupos:', response);
+            if (response.success) {
+                const tbody = $('#tabelaGrupos tbody');
+                tbody.empty();
+                
+                if (response.grupos.length === 0) {
+                    tbody.append('<tr><td colspan="7" class="text-center">Nenhum grupo encontrado</td></tr>');
+                    return;
+                }
+                
+                response.grupos.forEach(function(grupo) {
+                    const statusClass = grupo.ativo ? 'badge-success' : 'badge-secondary';
+                    const statusText = grupo.ativo ? 'Ativo' : 'Inativo';
+                    const dataCriacao = new Date(grupo.criado_em).toLocaleDateString('pt-BR');
+                    
+                    const row = `
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    ${grupo.icone ? `<i class="${grupo.icone} me-2" style="color: ${grupo.cor || '#007bff'}"></i>` : ''}
+                                    <strong>${grupo.nome}</strong>
+                                </div>
+                            </td>
+                            <td>${grupo.codigo || '-'}</td>
+                            <td>${grupo.descricao || '-'}</td>
+                            <td class="text-center">
+                                <span class="badge badge-info">${grupo.total_materiais}</span>
+                            </td>
+                            <td>
+                                <span class="badge ${statusClass}">${statusText}</span>
+                            </td>
+                            <td>${dataCriacao}</td>
+                            <td class="text-center">
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-info btn-sm btn-visualizar-grupo" 
+                                            data-id="${grupo.id}"
+                                            data-nome="${grupo.nome}"
+                                            data-codigo="${grupo.codigo || ''}"
+                                            data-descricao="${grupo.descricao || ''}"
+                                            data-cor="${grupo.cor || ''}"
+                                            data-icone="${grupo.icone || ''}"
+                                            data-ativo="${grupo.ativo}"
+                                            data-total-materiais="${grupo.total_materiais}"
+                                            data-criado-em="${dataCriacao}"
+                                            data-criado-por="${grupo.criado_por || 'Sistema'}"
+                                            data-bs-toggle="modal" data-bs-target="#modalVisualizarGrupo"
+                                            title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm btn-editar-grupo" 
+                                            data-id="${grupo.id}"
+                                            data-nome="${grupo.nome}"
+                                            data-codigo="${grupo.codigo || ''}"
+                                            data-descricao="${grupo.descricao || ''}"
+                                            data-cor="${grupo.cor || ''}"
+                                            data-icone="${grupo.icone || ''}"
+                                            data-ativo="${grupo.ativo}"
+                                            data-bs-toggle="modal" data-bs-target="#modalEditarGrupo"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <a href="/grupos-materiais/${grupo.id}/materiais" 
+                                       class="btn btn-warning btn-sm" title="Materiais">
+                                        <i class="fas fa-boxes"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-danger btn-sm btn-excluir-grupo" 
+                                            data-url="/grupos-materiais/${grupo.id}/excluir"
+                                            data-nome="${grupo.nome}"
+                                            data-total-materiais="${grupo.total_materiais}"
+                                            title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+                
+                // Atualizar informações de paginação
+                $('#info-paginacao-grupos').text(`Mostrando ${response.grupos.length} grupos`);
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar grupos via API:', xhr.responseText);
+            const tbody = $('#tabelaGrupos tbody');
+            tbody.empty();
+            tbody.append('<tr><td colspan="7" class="text-center text-danger">Erro ao carregar grupos</td></tr>');
+        }
+    });
+}
+
+// Filtrar grupos
+function filtrarGrupos() {
+    carregarGrupos(1);
+}
+
+// Atualizar grupos
+function atualizarGrupos() {
+    carregarGrupos(1);
+}
+
+// Carregar grupos quando a aba for ativada
+$('#grupos-materiais-tab').on('shown.bs.tab', function() {
+    carregarGrupos();
+});
+</script>
+{% endblock %}

@@ -16,7 +16,7 @@ import time
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 
-def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1), data_fim=datetime.now(),centro_custo_ids=None,calcelada=False):
+def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1), data_fim=datetime.now(),centro_custo_ids=None,cancelada=False):
     """
     Gera um relatório financeiro com dados de notas fiscais e centros de custo.
     
@@ -40,7 +40,7 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
     if data_fim:
         query = query.filter(NotaFiscal.data_emissao <= data_fim)
     tinicial=time.time()
-    if calcelada:
+    if cancelada:
          query = query.filter(NotaFiscal.status_processamento!='cancelada')
        
     notas_fiscais = query.filter(NotaFiscal.cnpj_emitente.like('%27126997000187%'),\

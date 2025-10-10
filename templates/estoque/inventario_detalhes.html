@@ -118,11 +118,11 @@
                     {% if inventario.status == 'Em andamento' %}
                         <div class="progress mb-4">
                             <div class="progress-bar bg-info" role="progressbar" 
-                                 style="width: {{ (itens_contados / inventario.itens|length * 100)|int }}%" 
+                                 style="width: {{ (itens_contados / inventario.itens|length * 100)|int if inventario.itens|length > 0 else 0 }}%" 
                                  aria-valuenow="{{ itens_contados }}" 
                                  aria-valuemin="0" 
                                  aria-valuemax="{{ inventario.itens|length }}">
-                                {{ (itens_contados / inventario.itens|length * 100)|int }}%
+                                {{ (itens_contados / inventario.itens|length * 100)|int if inventario.itens|length > 0 else 0 }}%
                             </div>
                         </div>
                     {% endif %}

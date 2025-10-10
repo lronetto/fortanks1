@@ -1,6 +1,7 @@
 from datetime import datetime
 from models.database import db
 
+
 class Tanque(db.Model):
     """
     Modelo para representar tanques de projetos
@@ -27,6 +28,7 @@ class Tanque(db.Model):
     # Quantidades de placas
     placas_normais = db.Column(db.Integer, default=0)
     placas_fecho = db.Column(db.Integer, default=0)
+    valorUnitario = db.Column(db.Float, nullable=True, default=0)
     
     # Chave estrangeira para contrato
     contrato_id = db.Column(db.Integer, db.ForeignKey('contratos.id'), nullable=True)

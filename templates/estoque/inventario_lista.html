@@ -6,9 +6,9 @@
 <div class="container-fluid py-4">
     <div class="d-sm-flex justify-content-between">
         <h1 class="h3 mb-0 text-gray-800">Inventários</h1>
-        <a href="{{ url_for('estoque.novo_inventario') }}" class="btn btn-primary btn-sm mb-3">
+        <button type="button" class="btn btn-primary btn-sm mb-3" data-bs-toggle="modal" data-bs-target="#modalNovoInventario">
             <i class="fas fa-plus"></i> Novo Inventário
-        </a>
+        </button>
     </div>
 
     <!-- Filtros -->
@@ -127,22 +127,48 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <a href="{{ url_for('estoque.inventario_detalhes', id=inventario.id) }}" class="btn btn-info btn-sm" title="Visualizar Detalhes">
+                                <button type="button" class="btn btn-info btn-sm btn-visualizar-inventario" 
+                                        data-id="{{ inventario.id }}"
+                                        data-tipo-inventario="{{ inventario.tipo_inventario }}"
+                                        data-status="{{ inventario.status }}"
+                                        data-status-badge="{% if inventario.status == 'Em andamento' %}<span class='badge badge-info'>Em andamento</span>{% elif inventario.status == 'Concluído' %}<span class='badge badge-success'>Concluído</span>{% else %}<span class='badge badge-secondary'>Cancelado</span>{% endif %}"
+                                        data-data-inicio="{{ inventario.data_inicio.strftime('%d/%m/%Y %H:%M') }}"
+                                        data-data-fim="{{ inventario.data_fim.strftime('%d/%m/%Y %H:%M') if inventario.data_fim else '-' }}"
+                                        data-responsavel="{{ inventario.criado_por.nome if inventario.criado_por else 'Sistema' }}"
+                                        data-total-itens="{{ inventario.itens|length }}"
+                                        data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|list|length }}"
+                                        data-progresso-texto="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
+                                        data-diferencas="0"
+                                        data-observacoes="{{ inventario.observacoes or '' }}"
+                                        data-url-contagem="{{ url_for('estoque.inventario_contagem', id=inventario.id) }}"
+                                        data-url-finalizar="{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}"
+                                        data-bs-toggle="modal" data-bs-target="#modalVisualizarInventario"
+                                        title="Visualizar Detalhes">
                                     <i class="fas fa-eye"></i>
-                                </a>
+                                </button>
                                 
                                 {% if inventario.status == 'Em andamento' %}
                                     <a href="{{ url_for('estoque.inventario_contagem', id=inventario.id) }}" class="btn btn-primary btn-sm" title="Continuar Contagem">
                                         <i class="fas fa-clipboard-check"></i>
                                     </a>
                                     
-                                    <button type="button" class="btn btn-success btn-sm" title="Finalizar Inventário"
-                                            onclick="confirmarFinalizacao('{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}')">
+                                    <button type="button" class="btn btn-success btn-sm btn-finalizar-inventario" 
+                                            data-url="{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}"
+                                            data-id="{{ inventario.id }}"
+                                            data-tipo="{{ inventario.tipo_inventario }}"
+                                            data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|list|length }}"
+                                            data-total-itens="{{ inventario.itens|length }}"
+                                            title="Finalizar Inventário">
                                         <i class="fas fa-check-double"></i>
                                     </button>
                                     
-                                    <button type="button" class="btn btn-danger btn-sm" title="Cancelar Inventário"
-                                            onclick="confirmarCancelamento('{{ url_for('estoque.cancelar_inventario', id=inventario.id) }}')">
+                                    <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
+                                            data-url="{{ url_for('estoque.cancelar_inventario', id=inventario.id) }}"
+                                            data-id="{{ inventario.id }}"
+                                            data-tipo="{{ inventario.tipo_inventario }}"
+                                            data-status="{{ inventario.status }}"
+                                            data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
+                                            title="Cancelar Inventário">
                                         <i class="fas fa-times"></i>
                                     </button>
                                 {% endif %}
@@ -200,102 +226,37 @@
     </div>
 </div>
 
-<!-- Modal de Confirmação de Finalização -->
-<div class="modal fade" id="confirmacaoFinalizacaoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoFinalizacaoModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="confirmacaoFinalizacaoModalLabel">Confirmar Finalização</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i> ATENÇÃO: Ao finalizar o inventário, as quantidades em estoque serão ajustadas conforme a contagem realizada.
-                </div>
-                <p>Tem certeza que deseja finalizar este inventário?</p>
-                <p id="alertaItensNaoContados" class="alert alert-danger d-none">
-                    <i class="fas fa-exclamation-circle"></i> Existem itens não contados. Finalize a contagem antes de encerrar o inventário.
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                <form id="formFinalizacao" method="POST" action="">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-success">Confirmar Finalização</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal de Confirmação de Cancelamento -->
-<div class="modal fade" id="confirmacaoCancelamentoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoCancelamentoModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="confirmacaoCancelamentoModalLabel">Confirmar Cancelamento</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>Tem certeza que deseja cancelar este inventário? Esta ação não pode ser desfeita.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Voltar</button>
-                <form id="formCancelamento" method="POST" action="">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" class="btn btn-danger">Confirmar Cancelamento</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Incluir Modais -->
+{% include 'estoque/modais/novo_inventario.html' %}
+{% include 'estoque/modais/visualizar_inventario.html' %}
+{% include 'estoque/modais/confirmar_finalizacao.html' %}
+{% include 'estoque/modais/confirmar_cancelamento.html' %}
 {% endblock %}
 
 {% block scripts %}
+<!-- Certifique-se de que jQuery e Bootstrap estejam disponíveis -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
-    $(document).ready(function() {
-        // DataTable
+$(document).ready(function() {
+    // Inicializar DataTable se necessário
+    if ($.fn.DataTable) {
         $('#dataTable').DataTable({
-            "order": [[0, "desc"]],
             "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.10.22/i18n/Portuguese-Brasil.json"
+                "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
             },
             "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, -1], [10, 25, 50, "Todos"]],
+            "responsive": true,
+            "order": [[0, "desc"]],
             "paging": false,
             "searching": false,
             "info": false
         });
-        
-        // Confirmar finalização
-        window.confirmarFinalizacao = function(url) {
-            $('#formFinalizacao').attr('action', url);
-            $('#confirmacaoFinalizacaoModal').modal('show');
-            
-            // Aqui você pode consultar via AJAX se existem itens não contados
-            // e exibir o alerta conforme necessário
-            $.get(url.replace('finalizar_inventario', 'verificar_itens_nao_contados'), function(data) {
-                if (data.itens_nao_contados > 0) {
-                    $('#alertaItensNaoContados').removeClass('d-none').text(
-                        'Existem ' + data.itens_nao_contados + ' itens não contados. Finalize a contagem antes de encerrar o inventário.'
-                    );
-                    $('#formFinalizacao button[type="submit"]').prop('disabled', true);
-                } else {
-                    $('#alertaItensNaoContados').addClass('d-none');
-                    $('#formFinalizacao button[type="submit"]').prop('disabled', false);
-                }
-            });
-        };
-        
-        // Confirmar cancelamento
-        window.confirmarCancelamento = function(url) {
-            $('#formCancelamento').attr('action', url);
-            $('#confirmacaoCancelamentoModal').modal('show');
-        };
-    });
+    }
+    
+    // Inicializar tooltips
+    $('[data-bs-toggle="tooltip"]').tooltip();
+});
 </script>
 {% endblock %} 

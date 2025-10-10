@@ -1,0 +1,142 @@
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="modalConfirmarExclusao" tabindex="-1" aria-labelledby="modalConfirmarExclusaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalConfirmarExclusaoLabel"><i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-trash-alt fa-3x text-danger mb-3"></i>
+                    <h5>Você tem certeza?</h5>
+                    <p class="text-muted">Tem certeza que deseja excluir este grupo de materiais?</p>
+                    <p class="text-muted"><strong>Esta ação não pode ser desfeita.</strong></p>
+                    
+                    <!-- Informações do grupo que será excluído -->
+                    <div class="alert alert-warning mt-3">
+                        <strong>Grupo:</strong> <span id="grupo-exclusao-nome">-</span><br>
+                        <strong>Código:</strong> <span id="grupo-exclusao-codigo">-</span><br>
+                        <strong>Materiais:</strong> <span id="grupo-exclusao-materiais">-</span>
+                    </div>
+                    
+                    <!-- Alerta se houver materiais associados -->
+                    <div id="alerta-materiais-associados" class="alert alert-danger d-none">
+                        <i class="fas fa-exclamation-circle"></i> 
+                        <strong>Atenção:</strong> Este grupo possui materiais associados. 
+                        Remova todos os materiais antes de excluir o grupo.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <form id="form-exclusao" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger" id="btn-confirmar-exclusao">
+                        <i class="fas fa-trash"></i> Confirmar Exclusão
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para confirmar exclusão
+    function confirmarExclusao(url, grupoData) {
+        // Definir a ação do formulário
+        document.getElementById('form-exclusao').action = url;
+        
+        // Preencher informações do grupo
+        if (grupoData) {
+            document.getElementById('grupo-exclusao-nome').textContent = grupoData.nome || '-';
+            document.getElementById('grupo-exclusao-codigo').textContent = grupoData.codigo || '-';
+            document.getElementById('grupo-exclusao-materiais').textContent = grupoData.total_materiais || '0';
+            
+            // Verificar se há materiais associados
+            const totalMateriais = parseInt(grupoData.total_materiais) || 0;
+            const alertaMateriais = document.getElementById('alerta-materiais-associados');
+            const btnConfirmar = document.getElementById('btn-confirmar-exclusao');
+            
+            if (totalMateriais > 0) {
+                alertaMateriais.classList.remove('d-none');
+                btnConfirmar.disabled = true;
+                btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Não é possível excluir';
+            } else {
+                alertaMateriais.classList.add('d-none');
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-trash"></i> Confirmar Exclusão';
+            }
+        }
+        
+        // Mostrar o modal
+        const modal = new bootstrap.Modal(document.getElementById('modalConfirmarExclusao'));
+        modal.show();
+    }
+
+    // Adicionar evento para os botões de exclusão
+    const deleteButtons = document.querySelectorAll('.btn-excluir-grupo');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const url = this.getAttribute('data-url');
+            const grupoData = {
+                nome: this.getAttribute('data-nome') || '',
+                codigo: this.getAttribute('data-codigo') || '',
+                total_materiais: this.getAttribute('data-total-materiais') || '0'
+            };
+            
+            confirmarExclusao(url, grupoData);
+        });
+    });
+
+    // Função global para compatibilidade com código existente
+    window.confirmarExclusao = function(url) {
+        confirmarExclusao(url, null);
+    };
+
+    // Função para processar exclusão via AJAX
+    $('#form-exclusao').on('submit', function(e) {
+        e.preventDefault();
+        
+        const url = $(this).attr('action');
+        
+        $.ajax({
+            url: url,
+            type: "POST",
+            dataType: "json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    $('#modalConfirmarExclusao').modal('hide');
+                    // Recarregar lista se a função estiver disponível
+                    if (typeof carregarGrupos === 'function') {
+                        carregarGrupos();
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert(response.message || 'Erro ao excluir grupo.');
+                }
+            },
+            error: function(xhr, status, error) {
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    alert(xhr.responseJSON.message);
+                } else {
+                    alert("Erro ao excluir grupo: " + error);
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

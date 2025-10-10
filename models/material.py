@@ -32,6 +32,9 @@ class Material(db.Model):
     # Renomeado para evitar conflito com o campo string 'unidade' e para maior clareza
     unidade_obj = db.relationship('Unidade', back_populates='materiais', foreign_keys=[unidade_id])
     
+    # Relacionamento com grupos de materiais
+    grupos = db.relationship('GrupoMaterial', secondary='materiais_grupos', back_populates='materiais')
+    
     def to_dict(self):
         return {
             'id': self.id,

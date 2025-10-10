@@ -28,6 +28,7 @@ from controllers.dados_analiticos_controller import dados_analiticos_bp
 from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
+from controllers.grupo_material_controller import grupo_material_bp
 from models.usuario import Usuario
 from models.arquivei import Arquivei
 from models.nota_fiscal import NotaFiscal
@@ -190,6 +191,7 @@ app.register_blueprint(cargo_bp, url_prefix='/cargos')
 app.register_blueprint(departamento_bp, url_prefix='/departamentos')
 app.register_blueprint(nota_fiscal_bp, url_prefix='/notas-fiscais')
 app.register_blueprint(estoque_bp, url_prefix='/estoque')
+app.register_blueprint(grupo_material_bp, url_prefix='/grupos-materiais')
 app.register_blueprint(unidade_bp)
 app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
@@ -445,7 +447,7 @@ def gerenciar_scheduler():
         logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
 
 # Gerenciar o scheduler
-gerenciar_scheduler()
+#gerenciar_scheduler()
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():

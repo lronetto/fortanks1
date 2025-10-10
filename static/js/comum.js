@@ -41,3 +41,20 @@ function fecharModal(modalId) {
     $('.modal-backdrop').remove();
     $('body').removeClass('modal-open');
 }
+async function compararUnidades(unidadeNota, unidadeMaterial) {
+    try {
+        const response = await fetch('/notas-fiscais/api/comparar-unidades', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').val(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({unidadeNota, unidadeMaterial})
+        });
+        const data = await response.json();
+        return data.success;
+    } catch (error) {
+        console.error('Erro ao comparar unidades:', error);
+        return false;
+    }
+}

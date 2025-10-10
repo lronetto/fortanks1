@@ -311,9 +311,10 @@ function filtrarNotas(page = 1) {
         console.log('data',data);
         if (data.notas && Array.isArray(data.notas)) {
             data.notas.forEach(nota => {
-                const checked = nota.selecionada ? 'checked' : '';
+               
                 const descricao = nota.doc.descricao || '';
                 const centro_custo_id = nota.doc.cc || '';
+                const checked = centro_custo_id ? 'checked' : '';
                 let centroCustoOptions = '<option value="">Selecione...</option>';
                 if (window.centrosCusto) {
                     window.centrosCusto.forEach(function(centro) {

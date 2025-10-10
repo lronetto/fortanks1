@@ -219,14 +219,15 @@ def dias_desde_1900(data):
 
 @reembolso_bp.route('/exportar_pdf/<int:id>')
 def exportar_pdf(id):
-    reembolso = Reembolso.query.get_or_404(id)
+    reembolso = Reembolso.query.join(Usuario, Reembolso.usuario_id==Usuario.id).get_or_404(id)
     pdf_writer = PdfWriter()
     CCs = ReembolsoDocumento.query.\
     filter(ReembolsoDocumento.reembolso_id==id)\
     .join(CentroCusto, ReembolsoDocumento.centro_custo_id==CentroCusto.id)\
     .group_by(ReembolsoDocumento.centro_custo_id)\
             .order_by(CentroCusto.nome).\
-                filter(CentroCusto.codigo.like('0015-00')).all()
+            filter(CentroCusto.codigo.like('0014-00')).all()
+            
     
     for cc in CCs:
         docs = ReembolsoDocumento.query.\
@@ -313,6 +314,7 @@ def editar(reembolso_id):
         abort(403)
 
     if request.method == 'POST':
+        print(f'salvar editar reembolso')
         try:
             # Atualizar campos principais
             reembolso.numero_relatorio = request.form.get('numero_relatorio')

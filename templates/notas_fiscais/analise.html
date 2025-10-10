@@ -460,11 +460,11 @@ document.addEventListener('DOMContentLoaded', function() {
         var params = {
              tipo: tipoAgrupamento,
              fornecedor: '{{ filtro_fornecedor }}',
-             data_inicio: data_inicio,
-             data_fim: data_fim
+             data_inicio: '{{ filtro_data_inicio }}',
+             data_fim: '{{ filtro_data_fim }}'
         };
-        console.log("data_inicio:", data_inicio);
-        console.log("data_fim:", data_fim);
+        console.log("data_inicio:", '{{ filtro_data_inicio }}');
+        console.log("data_fim:", '{{ filtro_data_fim }}');
         if (tipoAgrupamento === 'material') {
             params.material_id = itemId;
         } else { // item_nf

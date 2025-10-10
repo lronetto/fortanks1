@@ -1,0 +1,208 @@
+<!-- Modal de Visualização de Item de Estoque -->
+<div class="modal fade" id="modalVisualizarItem" tabindex="-1" aria-labelledby="modalVisualizarItemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarItemLabel"><i class="fas fa-eye"></i> Detalhes do Item de Estoque</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Informações Básicas</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Tipo:</strong></td>
+                                <td id="view_tipo_item">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Código:</strong></td>
+                                <td id="view_codigo">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Nome:</strong></td>
+                                <td id="view_nome">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Localização:</strong></td>
+                                <td id="view_localizacao">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Controle de Estoque</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Quantidade Atual:</strong></td>
+                                <td id="view_quantidade">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Quantidade Mínima:</strong></td>
+                                <td id="view_quantidade_minima">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Quantidade Máxima:</strong></td>
+                                <td id="view_quantidade_maxima">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Status:</strong></td>
+                                <td id="view_status">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Informações do Lote</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Lote:</strong></td>
+                                <td id="view_lote">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Data de Validade:</strong></td>
+                                <td id="view_data_validade">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Histórico</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Data de Criação:</strong></td>
+                                <td id="view_data_criacao">-</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Última Atualização:</strong></td>
+                                <td id="view_data_atualizacao">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Gráfico de Status do Estoque -->
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6 class="text-primary">Status do Estoque</h6>
+                        <div class="progress" style="height: 25px;">
+                            <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%">
+                                <span id="progress-text">0%</span>
+                            </div>
+                        </div>
+                        <small class="text-muted">Baseado na quantidade atual em relação aos limites mínimo e máximo</small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" id="btn-editar-apos-visualizar">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para preencher o modal de visualização
+    function preencherModalVisualizacao(item) {
+        if (!item) {
+            console.error('Dados do item não encontrados!');
+            return;
+        }
+        
+        try {
+            // Informações básicas
+            document.getElementById('view_tipo_item').textContent = item.tipo_item || '-';
+            document.getElementById('view_codigo').textContent = item.codigo || '-';
+            document.getElementById('view_nome').textContent = item.nome || '-';
+            document.getElementById('view_localizacao').textContent = item.localizacao || 'Não especificado';
+            
+            // Controle de estoque
+            document.getElementById('view_quantidade').textContent = item.quantidade || '0';
+            document.getElementById('view_quantidade_minima').textContent = item.quantidade_minima || '0';
+            document.getElementById('view_quantidade_maxima').textContent = item.quantidade_maxima || '0';
+            document.getElementById('view_status').innerHTML = item.status_badge || '-';
+            
+            // Informações do lote
+            document.getElementById('view_lote').textContent = item.lote || '-';
+            document.getElementById('view_data_validade').textContent = item.data_validade || '-';
+            
+            // Histórico
+            document.getElementById('view_data_criacao').textContent = item.data_criacao || '-';
+            document.getElementById('view_data_atualizacao').textContent = item.data_atualizacao || '-';
+            
+            // Atualizar barra de progresso
+            atualizarBarraProgresso(item.quantidade, item.quantidade_minima, item.quantidade_maxima);
+            
+        } catch (error) {
+            console.error('Erro ao preencher o modal de visualização:', error);
+        }
+    }
+
+    // Função para atualizar a barra de progresso
+    function atualizarBarraProgresso(quantidade, minima, maxima) {
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        
+        if (!quantidade || !maxima) {
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+            progressBar.className = 'progress-bar bg-secondary';
+            return;
+        }
+        
+        const percentual = (quantidade / maxima) * 100;
+        progressBar.style.width = percentual + '%';
+        progressText.textContent = Math.round(percentual) + '%';
+        
+        // Definir cor baseada no status
+        if (quantidade <= minima) {
+            progressBar.className = 'progress-bar bg-danger';
+        } else if (quantidade >= maxima) {
+            progressBar.className = 'progress-bar bg-info';
+        } else {
+            progressBar.className = 'progress-bar bg-success';
+        }
+    }
+
+    // Adicionar evento para o botão de visualizar
+    const viewButtons = document.querySelectorAll('.btn-visualizar-item');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            try {
+                const item = {
+                    id: this.dataset.id,
+                    tipo_item: this.dataset.tipoItem || '',
+                    codigo: this.dataset.codigo || '',
+                    nome: this.dataset.nome || '',
+                    localizacao: this.dataset.localizacao || '',
+                    quantidade: this.dataset.quantidade || '',
+                    quantidade_minima: this.dataset.quantidadeMinima || '',
+                    quantidade_maxima: this.dataset.quantidadeMaxima || '',
+                    status_badge: this.dataset.statusBadge || '',
+                    lote: this.dataset.lote || '',
+                    data_validade: this.dataset.dataValidade || '',
+                    data_criacao: this.dataset.dataCriacao || '',
+                    data_atualizacao: this.dataset.dataAtualizacao || ''
+                };
+                
+                preencherModalVisualizacao(item);
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+
+    // Botão para editar após visualizar
+    $('#btn-editar-apos-visualizar').click(function() {
+        $('#modalVisualizarItem').modal('hide');
+        // Aqui você pode implementar a lógica para abrir o modal de edição
+        // com os dados já carregados
+    });
+});
+</script>
+{% endblock %}

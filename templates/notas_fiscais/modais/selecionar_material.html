@@ -7,6 +7,13 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="NomeMaterial">Nome Item Material Nota Fiscal</label>
+                        <div id="NomeMaterial"></div>
+                    </div>
+                    
+                </div>
                 <div class="form-group mb-3">
                     <label for="buscarMaterial">Buscar material</label>
                     <input type="text" class="form-control" id="buscarMaterial" 
@@ -14,7 +21,7 @@
                 </div>
                 
                 <input type="hidden" id="item_id_para_vincular">
-                
+                <input type="hidden" id="quantidade_para_vincular">
                 <div class="table-responsive">
                     <table class="table table-bordered" id="tabelaMateriais">
                         <thead>
@@ -42,9 +49,16 @@
     document.addEventListener('DOMContentLoaded', function() {
         $('#tabelaItensImportacao tbody').on('click', '.btn-vincular-material', function(e) {
             e.preventDefault();
+            console.log('vincular material clicado');
             const id = $(this).data('item-id');
+            const quantidade = $(this).data('quantidade');
+            const nomeMaterial = $(this).data('material-nome');
+            const unidadeMaterial = $(this).data('material-unidade');
+            const descricaoMaterial = $(this).data('item-descricao');
+            document.getElementById('NomeMaterial').textContent = descricaoMaterial;
             console.log('vincular material id', id);
             document.getElementById('item_id_para_vincular').value = id;
+            document.getElementById('quantidade_para_vincular').value = quantidade;
             const buscarMaterial = document.getElementById('buscarMaterial');
             buscarMaterial.value = '';
             buscarMaterial.focus();
@@ -52,6 +66,7 @@
             const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
             modal.show();
         });
+    
         
             // Buscar materiais
     let timeoutBusca;
@@ -76,6 +91,7 @@
             const materialId = button.dataset.materialId;
             const materialNome = button.dataset.materialNome;
             const materialUnidade = button.dataset.materialUnidade;
+          
             const itemId = document.getElementById('item_id_para_vincular').value;
             
             // Obter a unidade do item
@@ -106,6 +122,7 @@
             console.log('compararUnidades (iguais?)', iguais);
             console.log('itemId', itemId);
             console.log('materialId', materialId);
+
             
             // Verificar se precisa de conversão de unidades
             if (materialUnidade && itemUnidade && !iguais) {
@@ -155,109 +172,15 @@
                 corpoTabela.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Erro ao carregar materiais.</td></tr>';
             });
     }
-    async function compararUnidades(unidadeNota, unidadeMaterial) {
-        try {
-            const response = await fetch('/notas-fiscais/api/comparar-unidades', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': $('input[name="csrf_token"]').val(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({unidadeNota, unidadeMaterial})
-            });
-            const data = await response.json();
-            return data.success;
-        } catch (error) {
-            console.error('Erro ao comparar unidades:', error);
-            return false;
-        }
-    }
+   
                 
 
     // ===== MODAL DE CONVERSÃO DE UNIDADES =====
     // Abrir modal de conversão de unidades
-    function abrirModalConversao(itemId, materialId, unidadeNota, unidadeMaterial) {
-        document.getElementById('conversao_item_id').value = itemId;
-        document.getElementById('conversao_material_id').value = materialId;
-        
-        const unidadeNotaElemento = document.getElementById('unidadeNota');
-        if (unidadeNotaElemento) unidadeNotaElemento.textContent = unidadeNota;
-        
-        const unidadeMaterialElemento = document.getElementById('unidadeMaterial');
-        if (unidadeMaterialElemento) unidadeMaterialElemento.textContent = unidadeMaterial;
-        
-        const unidadeOrigemEx = document.getElementById('unidadeOrigemEx');
-        if (unidadeOrigemEx) unidadeOrigemEx.textContent = unidadeNota;
-        
-        const unidadeDestinoEx = document.getElementById('unidadeDestinoEx');
-        if (unidadeDestinoEx) unidadeDestinoEx.textContent = unidadeMaterial;
-        
-        const unidadeNovaDesc = document.getElementById('unidadeNovaDesc');
-        if (unidadeNovaDesc) unidadeNovaDesc.textContent = unidadeMaterial;
-        
-        // Carregar conversões existentes
-        carregarConversoesMaterial(materialId);
-        
-        // Abrir modal usando Bootstrap 5
-        const modal = new bootstrap.Modal(document.getElementById('modalConversaoUnidades'));
-        modal.show();
-    }
+    
 
     // Aplicar conversão de unidades
-    const btnAplicarConversao = document.getElementById('btnAplicarConversao');
-    if (btnAplicarConversao) {
-        btnAplicarConversao.addEventListener('click', function() {
-            const itemId = document.getElementById('conversao_item_id').value;
-            const materialId = document.getElementById('conversao_material_id').value;
-            const unidadeConversaoId = document.getElementById('unidade_conversao_id').value;
-            const fatorConversao = document.getElementById('fator_conversao').value;
-            
-            if (!unidadeConversaoId && (!fatorConversao || fatorConversao <= 0)) {
-                mostrarAlerta('Erro', 'Informe um fator de conversão válido ou selecione uma conversão existente.', 'error');
-                return;
-            }
-            fetch('/notas-fiscais/api/aplicar_conversao', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': $('input[name="csrf_token"]').val(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    item_id: itemId,
-                    material_id: materialId,
-                    unidade_conversao_id: unidadeConversaoId,
-                    fator_conversao: fatorConversao
-                })
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Erro de rede: ${response.status}`);
-                }
-                return response.json().catch(e => {
-                    console.error('Erro ao fazer parse do JSON:', e);
-                    throw new Error('Resposta inválida do servidor: não é um JSON válido');
-                });
-            })
-            .then(data => {
-                if (data.success) {
-                    const modalConversao = bootstrap.Modal.getInstance(document.getElementById('modalConversaoUnidades'));
-                    if (modalConversao) modalConversao.hide();
-                    mostrarAlerta('Sucesso', 'Conversão aplicada com sucesso.', 'success');
-                } else {
-                    mostrarAlerta('Erro', data.message, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao aplicar conversão:', error);
-                mostrarAlerta('Erro', `Ocorreu um erro ao aplicar a conversão: ${error.message}`, 'error');
-            })
-            .finally(() => {
-                if (typeof Swal !== 'undefined') {
-                    Swal.close();
-                }
-            });
-        });
-    }
+    
     });
 </script>
 {% endblock %}

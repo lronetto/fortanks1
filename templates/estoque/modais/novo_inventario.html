@@ -1,0 +1,375 @@
+<!-- Modal de Novo Inventário -->
+<div class="modal fade" id="modalNovoInventario" tabindex="-1" aria-labelledby="modalNovoInventarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNovoInventarioLabel"><i class="fas fa-clipboard-check"></i> Novo Inventário</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" id="form-novo-inventario" action="{{ url_for('estoque.novo_inventario') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="tipo_inventario" class="form-label">Tipo de Inventário</label>
+                                <select name="tipo_inventario" id="tipo_inventario" class="form-select" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="Geral">Inventário Geral</option>
+                                    <option value="Parcial">Inventário Parcial</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    <ul class="mt-2">
+                                        <li><strong>Inventário Geral:</strong> Abrange todos os itens em estoque</li>
+                                        <li><strong>Inventário Parcial:</strong> Permite selecionar categorias, localizações ou itens específicos</li>
+                                    </ul>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Opções para inventário parcial -->
+                    <div id="opcoesParcial" class="d-none">
+                        <div class="form-group mb-3">
+                            <label class="form-label">Filtrar por:</label>
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" id="filtroGrupo" name="filtro_parcial" value="grupo" class="form-check-input">
+                                        <label class="form-check-label" for="filtroGrupo">Grupo de Materiais</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" id="filtroCategoria" name="filtro_parcial" value="categoria" class="form-check-input">
+                                        <label class="form-check-label" for="filtroCategoria">Categoria</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" id="filtroLocalizacao" name="filtro_parcial" value="localizacao" class="form-check-input">
+                                        <label class="form-check-label" for="filtroLocalizacao">Localização</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-check">
+                                        <input type="radio" id="filtroItens" name="filtro_parcial" value="itens" class="form-check-input">
+                                        <label class="form-check-label" for="filtroItens">Itens Específicos</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Opções de grupos -->
+                        <div id="opcoesGrupo" class="form-group mb-3 d-none">
+                            <label for="grupos" class="form-label">Selecione os grupos:</label>
+                            <select name="grupos[]" id="grupos" class="form-select" multiple>
+                                <!-- Grupos carregados via AJAX -->
+                            </select>
+                            <small class="form-text text-muted">Use Ctrl+Click para selecionar múltiplos grupos</small>
+                        </div>
+                        
+                        <!-- Opções de categorias -->
+                        <div id="opcoesCategoria" class="form-group mb-3 d-none">
+                            <label for="categorias" class="form-label">Selecione as categorias:</label>
+                            <select name="categorias[]" id="categorias" class="form-select" multiple>
+                                {% for categoria in categorias %}
+                                <option value="{{ categoria.id }}">{{ categoria.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Use Ctrl+Click para selecionar múltiplas categorias</small>
+                        </div>
+                        
+                        <!-- Opções de localização -->
+                        <div id="opcoesLocalizacao" class="form-group mb-3 d-none">
+                            <label for="localizacoes" class="form-label">Selecione as localizações:</label>
+                            <select name="localizacoes[]" id="localizacoes" class="form-select" multiple>
+                                {% for localizacao in localizacoes %}
+                                <option value="{{ localizacao }}">{{ localizacao }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Use Ctrl+Click para selecionar múltiplas localizações</small>
+                        </div>
+                        
+                        <!-- Opções de itens específicos -->
+                        <div id="opcoesItens" class="form-group mb-3 d-none">
+                            <label for="busca_item" class="form-label">Buscar item:</label>
+                            <div class="input-group mb-3">
+                                <input type="text" id="busca_item" class="form-control" placeholder="Digite o nome ou código do item...">
+                                <button class="btn btn-primary" type="button" id="btnBuscarItem">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                            
+                            <div class="table-responsive mt-3 d-none" id="resultadosBusca">
+                                <table class="table table-bordered table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Selecionar</th>
+                                            <th>Código</th>
+                                            <th>Nome</th>
+                                            <th>Tipo</th>
+                                            <th>Localização</th>
+                                            <th>Quantidade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="resultadosItens">
+                                        <!-- Resultados carregados via AJAX -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div id="itensSelecionados" class="mt-3">
+                                <h6 class="font-weight-bold">Itens Selecionados:</h6>
+                                <ul id="listaItensSelecionados" class="list-group">
+                                    <!-- Lista de itens selecionados -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="observacoes" class="form-label">Observações:</label>
+                        <textarea name="observacoes" id="observacoes" class="form-control" rows="3" placeholder="Observações sobre o inventário..."></textarea>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Ao iniciar o inventário, todos os itens selecionados serão disponibilizados para contagem. 
+                        A quantidade atual no sistema será registrada como referência.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-iniciar-inventario">
+                    <i class="fas fa-clipboard-check"></i> Iniciar Inventário
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Controla exibição das opções para inventário parcial
+    $('#tipo_inventario').change(function() {
+        if ($(this).val() === 'Parcial') {
+            $('#opcoesParcial').removeClass('d-none');
+        } else {
+            $('#opcoesParcial').addClass('d-none');
+            $('input[name="filtro_parcial"]').prop('checked', false);
+            $('#opcoesGrupo, #opcoesCategoria, #opcoesLocalizacao, #opcoesItens').addClass('d-none');
+        }
+    });
+    
+    // Controla exibição das opções de filtro
+    $('input[name="filtro_parcial"]').change(function() {
+        $('#opcoesGrupo, #opcoesCategoria, #opcoesLocalizacao, #opcoesItens').addClass('d-none');
+        
+        if ($(this).val() === 'grupo') {
+            $('#opcoesGrupo').removeClass('d-none');
+            carregarGrupos();
+        } else if ($(this).val() === 'categoria') {
+            $('#opcoesCategoria').removeClass('d-none');
+        } else if ($(this).val() === 'localizacao') {
+            $('#opcoesLocalizacao').removeClass('d-none');
+        } else if ($(this).val() === 'itens') {
+            $('#opcoesItens').removeClass('d-none');
+        }
+    });
+    
+    // Função para carregar grupos via AJAX
+    function carregarGrupos() {
+        $.ajax({
+            url: "{{ url_for('grupo_material.api_listar_json') }}",
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#grupos');
+                    select.empty();
+                    
+                    response.grupos.forEach(function(grupo) {
+                        const option = $('<option></option>')
+                            .attr('value', grupo.id)
+                            .text(grupo.nome);
+                        
+                        // Adicionar ícone se disponível
+                        if (grupo.icone) {
+                            option.prepend(`<i class="${grupo.icone}"></i> `);
+                        }
+                        
+                        select.append(option);
+                    });
+                }
+            },
+            error: function() {
+                console.error('Erro ao carregar grupos');
+            }
+        });
+    }
+    
+    // Busca de itens
+    $('#btnBuscarItem').click(function() {
+        const termo = $('#busca_item').val();
+        if (termo.length < 3) {
+            alert('Digite pelo menos 3 caracteres para buscar');
+            return;
+        }
+        
+        $.ajax({
+            url: "{{ url_for('estoque.api_buscar_itens') }}",
+            data: { termo: termo },
+            method: 'GET',
+            success: function(response) {
+                $('#resultadosBusca').removeClass('d-none');
+                $('#resultadosItens').empty();
+                
+                if (response.itens.length === 0) {
+                    $('#resultadosItens').html('<tr><td colspan="6" class="text-center">Nenhum item encontrado</td></tr>');
+                    return;
+                }
+                
+                response.itens.forEach(function(item) {
+                    const row = `
+                        <tr>
+                            <td class="text-center">
+                                <div class="form-check">
+                                    <input type="checkbox" class="form-check-input checkbox-item" 
+                                           id="item_${item.id}" value="${item.id}" data-nome="${item.nome}"
+                                           data-codigo="${item.codigo}" data-tipo="${item.tipo}">
+                                    <label class="form-check-label" for="item_${item.id}"></label>
+                                </div>
+                            </td>
+                            <td>${item.codigo || 'N/A'}</td>
+                            <td>${item.nome}</td>
+                            <td>${item.tipo}</td>
+                            <td>${item.localizacao || 'Não especificado'}</td>
+                            <td>${item.quantidade} ${item.unidade || ''}</td>
+                        </tr>
+                    `;
+                    $('#resultadosItens').append(row);
+                });
+                
+                // Atualiza checkbox para itens já selecionados
+                $('.checkbox-item').each(function() {
+                    const itemId = $(this).val();
+                    if ($(`#listaItensSelecionados li[data-id="${itemId}"]`).length > 0) {
+                        $(this).prop('checked', true);
+                    }
+                });
+                
+                // Evento para seleção de itens
+                $('.checkbox-item').change(function() {
+                    const itemId = $(this).val();
+                    const itemNome = $(this).data('nome');
+                    const itemCodigo = $(this).data('codigo') || 'N/A';
+                    const itemTipo = $(this).data('tipo');
+                    
+                    if ($(this).is(':checked')) {
+                        // Adiciona à lista de selecionados
+                        const itemElement = `
+                            <li class="list-group-item d-flex justify-content-between align-items-center" data-id="${itemId}">
+                                <span>
+                                    <strong>${itemCodigo}</strong> - ${itemNome} <small class="text-muted">(${itemTipo})</small>
+                                </span>
+                                <button type="button" class="btn btn-sm btn-danger btn-remover-item" data-id="${itemId}">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                                <input type="hidden" name="itens[]" value="${itemId}">
+                            </li>
+                        `;
+                        $('#listaItensSelecionados').append(itemElement);
+                    } else {
+                        // Remove da lista de selecionados
+                        $(`#listaItensSelecionados li[data-id="${itemId}"]`).remove();
+                    }
+                });
+            },
+            error: function() {
+                alert('Erro ao buscar itens. Tente novamente.');
+            }
+        });
+    });
+    
+    // Evento delegado para remover itens da lista
+    $('#listaItensSelecionados').on('click', '.btn-remover-item', function() {
+        const itemId = $(this).data('id');
+        $(`#listaItensSelecionados li[data-id="${itemId}"]`).remove();
+        $(`#item_${itemId}`).prop('checked', false);
+    });
+    
+    // Iniciar inventário
+    $('#btn-iniciar-inventario').click(function() {
+        // Validação do formulário
+        if ($('#tipo_inventario').val() === '') {
+            alert('Selecione um tipo de inventário');
+            return;
+        }
+        
+            if ($('#tipo_inventario').val() === 'Parcial') {
+                const filtro = $('input[name="filtro_parcial"]:checked').val();
+                
+                if (!filtro) {
+                    alert('Selecione um filtro para o inventário parcial');
+                    return;
+                }
+                
+                if (filtro === 'grupo' && $('#grupos').val().length === 0) {
+                    alert('Selecione pelo menos um grupo');
+                    return;
+                }
+                
+                if (filtro === 'categoria' && $('#categorias').val().length === 0) {
+                    alert('Selecione pelo menos uma categoria');
+                    return;
+                }
+                
+                if (filtro === 'localizacao' && $('#localizacoes').val().length === 0) {
+                    alert('Selecione pelo menos uma localização');
+                    return;
+                }
+                
+                if (filtro === 'itens' && $('#listaItensSelecionados li').length === 0) {
+                    alert('Selecione pelo menos um item');
+                    return;
+                }
+            }
+        
+        // Enviar formulário via AJAX
+        $.ajax({
+            url: "{{ url_for('estoque.novo_inventario') }}",
+            type: "POST",
+            data: $('#form-novo-inventario').serialize(),
+            dataType: "json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    window.location.href = response.redirect;
+                } else {
+                    alert(response.message || 'Erro ao criar inventário.');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro na requisição:', xhr.responseText);
+                let errorMessage = "Erro ao criar inventário: " + error;
+                
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMessage = xhr.responseJSON.message;
+                } else if (xhr.responseText) {
+                    // Se a resposta não é JSON, pode ser uma página de erro HTML
+                    errorMessage = "Erro no servidor. Verifique os logs para mais detalhes.";
+                }
+                
+                alert(errorMessage);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

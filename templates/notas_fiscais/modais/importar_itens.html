@@ -66,7 +66,7 @@
                 </div>
                 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary btn-close">Fechar</button>
                     <button type="button" id="btnImportar" class="btn btn-primary btn-importar-itens">
                         <i class="fas fa-file-import"></i> Importar Selecionados
                     </button>
@@ -78,7 +78,7 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-         $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
+        $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
             console.log('importar itens');
             const notaId = $(this).data('id');
             modal=new bootstrap.Modal(document.getElementById('modalImportarItens'));
@@ -177,19 +177,24 @@
             const btnIconVincular = item.material_id ? '<i class="fas fa-edit"></i>' : '<i class="fas fa-link"></i>';
             
             html += `
-                <tr>
+                <tr id="item_${item.id}">
                     <td>
                         <input type="checkbox" class="item-checkbox" value="${item.id}" id="check_${item.id}">
                     </td>
                     <td>${item.codigo || '-'}</td>
                     <td>${item.descricao}</td>
-                    <td>${item.quantidade} <span id="unidade_${item.id}">${item.unidade}</span></td>
+                    <td id="quantidade">${item.quantidade} <span id="unidade_${item.id}">${item.unidade}</span></td>
                     <td>R$ ${valorUnitario}</td>
                     <td id="material_nome_${item.id}">${materialNome}</td>
                     <td>
                         <input type="hidden" id="material_id_${item.id}" value="${item.material_id || ''}">
                         <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
-                                data-item-id="${item.id}" data-material-id="${item.material_id}" data-material-nome="${materialNome}" data-material-unidade="${item.unidade}">
+                                data-item-id="${item.id}" 
+                                data-item-descricao="${item.descricao}"
+                                data-material-id="${item.material_id}" 
+                                data-material-nome="${materialNome}" 
+                                data-material-unidade="${item.unidade}"
+                                data-quantidade="${item.quantidade}">
                             ${btnIconVincular}
                         </button>
                     </td>

@@ -1,0 +1,211 @@
+<!-- Modal de Edição de Item de Estoque -->
+<div class="modal fade" id="modalEditarItem" tabindex="-1" aria-labelledby="modalEditarItemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarItemLabel"><i class="fas fa-edit"></i> Editar Item de Estoque</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-item" method="POST">
+                    <input type="hidden" id="edit_item_id" name="item_id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_tipo_item" class="form-label">Tipo de Item</label>
+                                <select class="form-select" id="edit_tipo_item" name="tipo_item" required>
+                                    <option value="">Selecione o tipo</option>
+                                    <option value="material">Material</option>
+                                    <option value="produto_composto">Produto Composto</option>
+                                    <option value="epi">EPI</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_material_id" class="form-label">Material</label>
+                                <select class="form-control select2" id="edit_material_id" name="material_id" required>
+                                    <option value="0">Selecione um material</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="edit_quantidade" class="form-label">Quantidade Atual</label>
+                                <input type="number" class="form-control" id="edit_quantidade" name="quantidade" step="0.01" min="0" required>
+                                <small class="form-text text-muted">Quantidade atual do item no estoque</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="edit_quantidade_minima" class="form-label">Quantidade Mínima</label>
+                                <input type="number" class="form-control" id="edit_quantidade_minima" name="quantidade_minima" step="0.01" min="0">
+                                <small class="form-text text-muted">Quando abaixo deste valor, o estoque será marcado como crítico</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="edit_quantidade_maxima" class="form-label">Quantidade Máxima</label>
+                                <input type="number" class="form-control" id="edit_quantidade_maxima" name="quantidade_maxima" step="0.01" min="0">
+                                <small class="form-text text-muted">Quando acima deste valor, o estoque será marcado como em excesso</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_lote" class="form-label">Lote</label>
+                                <input type="text" class="form-control" id="edit_lote" name="lote" placeholder="Número do lote, se aplicável">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_data_validade" class="form-label">Data de Validade</label>
+                                <input type="date" class="form-control" id="edit_data_validade" name="data_validade">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="edit_localizacao" class="form-label">Localização</label>
+                                <input type="text" class="form-control" id="edit_localizacao" name="localizacao" placeholder="Localização do item no estoque">
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <div id="modal-mensagens"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-edicao-item">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para carregar as opções dos selects via Ajax
+    function carregarOpcoesSelects() {
+        // Inicializar selects com Select2
+        $('#edit_material_id').select2({
+            theme: 'bootstrap4',
+            dropdownParent: $('#modalEditarItem'),
+            width: '100%'
+        });
+        
+        // Carregar materiais
+        $.getJSON("{{ url_for('material.listar_json') }}", function(data) {
+            let materialSelect = $('#edit_material_id');
+            materialSelect.empty();
+            materialSelect.append('<option value="0">Selecione um material</option>');
+            
+            $.each(data, function(index, item) {
+                materialSelect.append('<option value="' + item.id + '">' + item.codigo + ' - ' + item.nome + '</option>');
+            });
+            
+            materialSelect.trigger('change');
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("Erro ao carregar materiais:", textStatus, errorThrown);
+        });
+    }
+
+    // Preencher o modal com os dados do item
+    function preencherModal(item) {
+        if (!item) {
+            console.error('Dados do item não encontrados!');
+            return;
+        }
+        
+        try {
+            document.getElementById('edit_item_id').value = item.id || '';
+            document.getElementById('edit_tipo_item').value = item.tipo_item || '';
+            document.getElementById('edit_quantidade').value = item.quantidade || '';
+            document.getElementById('edit_quantidade_minima').value = item.quantidade_minima || '';
+            document.getElementById('edit_quantidade_maxima').value = item.quantidade_maxima || '';
+            document.getElementById('edit_lote').value = item.lote || '';
+            document.getElementById('edit_data_validade').value = item.data_validade || '';
+            document.getElementById('edit_localizacao').value = item.localizacao || '';
+            
+            // Definir o material selecionado
+            if (item.material_id) {
+                $('#edit_material_id').val(item.material_id).trigger('change');
+            }
+        } catch (error) {
+            console.error('Erro ao preencher o modal:', error);
+        }
+    }
+
+    // Adicionar evento para o botão de editar
+    const editButtons = document.querySelectorAll('.btn-editar-item');
+    editButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            try {
+                const itemId = this.getAttribute('data-id');
+                const item = {
+                    id: this.dataset.id,
+                    tipo_item: this.dataset.tipoItem || '',
+                    material_id: this.dataset.materialId || '',
+                    quantidade: this.dataset.quantidade || '',
+                    quantidade_minima: this.dataset.quantidadeMinima || '',
+                    quantidade_maxima: this.dataset.quantidadeMaxima || '',
+                    lote: this.dataset.lote || '',
+                    data_validade: this.dataset.dataValidade || '',
+                    localizacao: this.dataset.localizacao || ''
+                };
+                
+                preencherModal(item);
+                carregarOpcoesSelects();
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+
+    // Salvar edição
+    $('#btn-salvar-edicao-item').click(function() {
+        const itemId = document.getElementById('edit_item_id').value;
+        const form = document.getElementById('form-editar-item');
+        const formData = new FormData(form);
+        
+        $.ajax({
+            url: `/estoque/editar-ajax/${itemId}`,
+            type: "POST",
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    window.location.reload();
+                } else {
+                    alert(response.message || 'Erro ao salvar o item.');
+                }
+            },
+            error: function(xhr, status, error) {
+                alert("Erro ao salvar item: " + error);
+            }
+        });
+    });
+
+    // Carregar opções quando o modal for aberto
+    $('#modalEditarItem').on('show.bs.modal', function() {
+        carregarOpcoesSelects();
+    });
+});
+</script>
+{% endblock %}

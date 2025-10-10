@@ -858,12 +858,12 @@ def api_dashboard_data():
                 if cc_id and cc_id.strip():
                     pc_query = pc_query.filter(DadoAnalitico.centro_custo_id == cc_id)
                 
-                pc_resultados = pc_query.group_by(PlanoConta.descricao).order_by(func.sum(DadoAnalitico.valor).desc()).limit(10).all()
+                pc_resultados = pc_query.group_by(PlanoConta.descricao).join(PlanoConta, PlanoConta.id == DadoAnalitico.plano_conta_id).order_by(func.sum(DadoAnalitico.valor).desc()).limit(10).all()
                 logger.info(f"API Dashboard - Planos de conta encontrados: {len(pc_resultados)}")
                 
                 # Transformar em listas para o gráfico
                 labels_pc = [pc.descricao for pc in pc_resultados if pc.descricao]
-                valores_pc = [float(pc.total or 0) for pc in pc_resultados if pc.descricao]
+                valores_pc = [float(pc.total or 0) for pc in pc_resultados if pc.descricao and pc.plano_conta.codigo.in_(PL_CUSTO)]
             except Exception as e:
                 logger.error(f"Erro ao calcular top 10 planos de conta: {str(e)}", exc_info=True)
                 # Manter valores padrão inicializados
@@ -1518,7 +1518,7 @@ def _calcular_dados_dashboard_mensal(ano: Optional[str], mes: Optional[str], cc_
         if cc_ids:
             query_cc = query_cc.filter(DadoAnalitico.centro_custo_id.in_(cc_ids))
             
-        query_cc = query_cc.group_by(CentroCusto.nome).order_by(func.sum(DadoAnalitico.valor).desc())
+        query_cc = query_cc.group_by(DadoAnalitico.centro_custo_id).order_by(func.sum(DadoAnalitico.valor).desc())
         # Limita o top N apenas se não houver filtro de CC específico
         if not cc_ids: 
              query_cc = query_cc.limit(10) 

@@ -1,0 +1,207 @@
+<!-- Modal de Edição de Grupo de Materiais -->
+<div class="modal fade" id="modalEditarGrupo" tabindex="-1" aria-labelledby="modalEditarGrupoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarGrupoLabel"><i class="fas fa-edit"></i> Editar Grupo de Materiais</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-grupo" method="POST">
+                    <input type="hidden" id="edit_grupo_id" name="grupo_id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="edit_nome" class="form-label">Nome do Grupo *</label>
+                                <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                                <small class="form-text text-muted">Nome identificador do grupo</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="edit_codigo" class="form-label">Código</label>
+                                <input type="text" class="form-control" id="edit_codigo" name="codigo" maxlength="20">
+                                <small class="form-text text-muted">Código único (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="edit_descricao" class="form-label">Descrição</label>
+                                <textarea class="form-control" id="edit_descricao" name="descricao" rows="3" maxlength="500"></textarea>
+                                <small class="form-text text-muted">Descrição detalhada do grupo (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_cor" class="form-label">Cor</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="edit_cor_picker" value="#007bff">
+                                    <input type="text" class="form-control" id="edit_cor" name="cor" placeholder="#007bff" maxlength="7">
+                                </div>
+                                <small class="form-text text-muted">Cor para identificação visual (opcional)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="edit_icone" class="form-label">Ícone</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="edit_icone" name="icone" placeholder="fas fa-boxes" maxlength="50">
+                                    <button type="button" class="btn btn-outline-secondary" id="btn-preview-icone-edit">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Classe do ícone FontAwesome (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="edit_ativo" name="ativo">
+                                <label class="form-check-label" for="edit_ativo">
+                                    Grupo ativo
+                                </label>
+                                <small class="form-text text-muted d-block">Grupos inativos não aparecem nas opções de inventário</small>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <div id="modal-mensagens"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-edicao-grupo">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Sincronizar cor do picker com o campo de texto
+    $('#edit_cor_picker').on('change', function() {
+        $('#edit_cor').val($(this).val());
+    });
+    
+    $('#edit_cor').on('input', function() {
+        const cor = $(this).val();
+        if (cor.match(/^#[0-9A-F]{6}$/i)) {
+            $('#edit_cor_picker').val(cor);
+        }
+    });
+    
+    // Preview do ícone
+    $('#btn-preview-icone-edit').on('click', function() {
+        const icone = $('#edit_icone').val();
+        if (icone) {
+            $(this).html(`<i class="${icone}"></i>`);
+        } else {
+            $(this).html('<i class="fas fa-eye"></i>');
+        }
+    });
+
+    // Preencher o modal com os dados do grupo
+    function preencherModal(grupo) {
+        if (!grupo) {
+            console.error('Dados do grupo não encontrados!');
+            return;
+        }
+        
+        try {
+            document.getElementById('edit_grupo_id').value = grupo.id || '';
+            document.getElementById('edit_nome').value = grupo.nome || '';
+            document.getElementById('edit_codigo').value = grupo.codigo || '';
+            document.getElementById('edit_descricao').value = grupo.descricao || '';
+            document.getElementById('edit_cor').value = grupo.cor || '#007bff';
+            document.getElementById('edit_cor_picker').value = grupo.cor || '#007bff';
+            document.getElementById('edit_icone').value = grupo.icone || '';
+            document.getElementById('edit_ativo').checked = grupo.ativo === 'true' || grupo.ativo === true;
+        } catch (error) {
+            console.error('Erro ao preencher o modal:', error);
+        }
+    }
+
+    // Adicionar evento para o botão de editar
+    const editButtons = document.querySelectorAll('.btn-editar-grupo');
+    editButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            try {
+                const grupo = {
+                    id: this.dataset.id,
+                    nome: this.dataset.nome,
+                    codigo: this.dataset.codigo,
+                    descricao: this.dataset.descricao,
+                    cor: this.dataset.cor,
+                    icone: this.dataset.icone,
+                    ativo: this.dataset.ativo
+                };
+                
+                preencherModal(grupo);
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+
+    // Salvar edição
+    $('#btn-salvar-edicao-grupo').click(function() {
+        const grupoId = document.getElementById('edit_grupo_id').value;
+        
+        // Preparar dados
+        const dados = {
+            nome: $('#edit_nome').val(),
+            descricao: $('#edit_descricao').val(),
+            codigo: $('#edit_codigo').val(),
+            cor: $('#edit_cor').val(),
+            icone: $('#edit_icone').val(),
+            ativo: $('#edit_ativo').is(':checked')
+        };
+        
+        $.ajax({
+            url: `/grupos-materiais/${grupoId}/editar`,
+            type: "POST",
+            data: JSON.stringify(dados),
+            contentType: "application/json",
+            dataType: "json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    $('#modalEditarGrupo').modal('hide');
+                    // Recarregar lista se a função estiver disponível
+                    if (typeof carregarGrupos === 'function') {
+                        carregarGrupos();
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert(response.message || 'Erro ao salvar o grupo.');
+                }
+            },
+            error: function(xhr, status, error) {
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    alert(xhr.responseJSON.message);
+                } else {
+                    alert("Erro ao salvar grupo: " + error);
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

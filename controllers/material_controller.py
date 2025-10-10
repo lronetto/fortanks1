@@ -118,6 +118,7 @@ def novo():
             plano_conta = request.form.get('plano_conta')
             codigo_erp = request.form.get('codigo_erp')
             unidade = request.form.get('unidade')
+            mascara = request.form.get('mascara')
             print(f'request.form: {request.form}')
             
             # Verificar o campo alternativo de unidade
@@ -153,7 +154,8 @@ def novo():
                 categoria=categoria,
                 plano_conta=plano_conta,
                 codigo_erp=codigo_erp,
-                unidade_id=unidade  # Novo campo com relacionamento
+                unidade_id=unidade,
+                mascara=mascara  # Novo campo com relacionamento
             )
             
             # Definir usuário que criou
@@ -209,7 +211,8 @@ def editar(id):
                 'plano_conta': material.plano_conta or '',
                 'codigo_erp': material.codigo_erp or '',
                 'unidade': material.unidade or '',
-                'unidade_id': material.unidade_id or 0
+                'unidade_id': material.unidade_id or 0,
+                'mascara': material.mascara or ''
             })
         
         # Para requisições POST
@@ -224,7 +227,7 @@ def editar(id):
             plano_conta = request.form.get('plano_conta', '')
             codigo_erp = request.form.get('codigo_erp', '')
             unidade = request.form.get('unidade', '')
-            
+            mascara = request.form.get('mascara', '')
             
             # Validar campos obrigatórios
             if not nome or not categoria:
@@ -270,7 +273,7 @@ def editar(id):
             material.plano_conta = plano_conta
             material.codigo_erp = codigo_erp
             material.unidade_id = unidade
-            
+            material.mascara = mascara
             try:
                 # Salvar no banco
                 db.session.add(material)
@@ -286,7 +289,8 @@ def editar(id):
                             'nome': material.nome,
                             'codigo': material.codigo,
                             'categoria': material.categoria,
-                            'unidade': material.unidade
+                            'unidade': material.unidade,
+                            'mascara': material.mascara
                         }
                     })
                 else:
@@ -518,6 +522,9 @@ def confirmar_importacao():
     # Obter os dados do formulário
     temp_file = request.form.get('temp_file')
     planilha = request.form.get('planilha')
+    col_id = request.form.get('col_id')
+    col_mascara = request.form.get('col_mascara')
+    col_ncm = request.form.get('col_ncm')
     col_nome = request.form.get('col_nome')
     col_descricao = request.form.get('col_descricao')
     col_codigo = request.form.get('col_codigo')
@@ -529,7 +536,7 @@ def confirmar_importacao():
     opcao_atualizacao = request.form.get('opcao_atualizacao', 'pular')
     
     print(f"DEBUG - Parâmetros recebidos: arquivo={temp_file}, planilha={planilha}")
-    print(f"DEBUG - Colunas mapeadas: nome={col_nome}, descricao={col_descricao}, codigo={col_codigo}, codigo_erp={col_codigo_erp}, plano_conta={col_plano_conta}, pc={col_pc}, unidade={col_unidade}, categoria={col_categoria}")
+    print(f"DEBUG - Colunas mapeadas: nome={col_nome}, descricao={col_descricao}, codigo={col_codigo}, codigo_erp={col_codigo_erp}, plano_conta={col_plano_conta}, pc={col_pc}, unidade={col_unidade}, categoria={col_categoria}, mascara={col_mascara}, ncm={col_ncm}, id={col_id}")
     print(f"DEBUG - Opção de atualização: {opcao_atualizacao}")
     
     # Validar dados obrigatórios
@@ -565,6 +572,7 @@ def confirmar_importacao():
         # Validar se as colunas mapeadas existem na planilha
         colunas_planilha = df.columns.tolist()
         for col, nome in [
+            (col_id, 'ID'),
             (col_nome, 'Nome'),
             (col_codigo, 'Código'),
             (col_codigo_erp, 'Código ERP'),
@@ -572,7 +580,9 @@ def confirmar_importacao():
             (col_descricao, 'Descrição'),
             (col_pc, 'PC'),
             (col_unidade, 'Unidade'),
-            (col_categoria, 'Categoria')
+            (col_categoria, 'Categoria'),
+            (col_mascara, 'Máscara'),
+            (col_ncm, 'NCM')
         ]:
             if col and col not in colunas_planilha:
                 logger.error(f"Coluna {nome} ({col}) não encontrada na planilha")
@@ -583,6 +593,7 @@ def confirmar_importacao():
         for index, row in df.iterrows():
             try:
                 # Obter dados da linha
+                id = str(row[col_id]).strip() if col_id and not pd.isna(row[col_id]) else ""
                 nome = str(row[col_nome]).strip() if not pd.isna(row[col_nome]) else ""
                 codigo = str(row[col_codigo]).strip() if col_codigo and not pd.isna(row[col_codigo]) else ""
                 codigo_erp = str(row[col_codigo_erp]).strip() if col_codigo_erp and not pd.isna(row[col_codigo_erp]) else ""
@@ -590,7 +601,8 @@ def confirmar_importacao():
                 descricao = str(row[col_descricao]).strip() if col_descricao and not pd.isna(row[col_descricao]) else ""
                 unidade = str(row[col_unidade]).strip() if col_unidade and not pd.isna(row[col_unidade]) else ""
                 categoria = str(row[col_categoria]).strip() if not pd.isna(row[col_categoria]) else ""
-                
+                mascara = str(row[col_mascara]).strip() if col_mascara and not pd.isna(row[col_mascara]) else ""
+                ncm = str(row[col_ncm]).strip() if col_ncm and not pd.isna(row[col_ncm]) else ""
                 # Validar dados obrigatórios
                 if not nome or not categoria:
                     erros += 1
@@ -602,8 +614,8 @@ def confirmar_importacao():
                 
                 # Verificar se o material já existe pelo código ou nome
                 material_existente = None
-                if codigo:
-                    material_existente = Material.query.filter_by(codigo=codigo).first()
+                if id:
+                    material_existente = Material.query.filter_by(id=id).first()
                 
                 if not material_existente and nome:
                     material_existente = Material.query.filter_by(nome=nome).first()
@@ -617,6 +629,10 @@ def confirmar_importacao():
                         # Atualizar material existente
                         material_existente.nome = nome
                         material_existente.codigo = codigo
+                        if mascara:
+                            material_existente.mascara = mascara
+                        if ncm:
+                            material_existente.ncm = ncm
                         if codigo_erp:
                             material_existente.codigo_erp = codigo_erp
                         if plano_conta:
@@ -639,7 +655,9 @@ def confirmar_importacao():
                         plano_conta=plano_conta if plano_conta else None,
                         descricao=descricao if descricao else None,
                         unidade=unidade if unidade else None,
-                        categoria=categoria
+                        categoria=categoria,
+                        mascara=mascara if mascara else None,
+                        ncm=ncm if ncm else None
                     )
                     db.session.add(novo_material)
                     inseridos += 1
@@ -709,27 +727,34 @@ def download_modelo():
         
         # Criar DataFrame com as colunas do modelo
         df_principal = pd.DataFrame(columns=[
+            'ID',
             'Nome',
             'Categoria',
             'Código ERP',
             'Plano de Conta',
-            'Unidade'
+            'Unidade',
+            'Máscara',
+            'NCM'
         ])
         
         # Adicionar algumas linhas de exemplo na planilha principal
         df_principal.loc[0] = [
+            '1',
             'Cimento Portland CP-II',
             'Matéria-prima',
             'ERP001',
             'Material Direto',
-            'sc'
+            'sc',
+            '1234567890'
         ]
         df_principal.loc[1] = [
+            '2',
             'Areia Média',
             'Matéria-prima',
             'ERP002',
             'Material Direto',
-            'm³'
+            'm³',
+            '1234567890'
         ]
         
         # Criar uma segunda planilha para instruções
@@ -775,7 +800,7 @@ def listar_json():
             'id': material.id,
             'codigo': material.codigo or '',
             'nome': material.nome or '',
-            'unidade': material.unidade or ''
+            'unidade': material.unidade_obj.nome or ''
         })
     
     return jsonify(resultado)
@@ -830,6 +855,7 @@ def api_materiais():
             'descricao': m.descricao,
             'categoria': m.categoria,
             'plano_conta': m.plano_conta,
+            'mascara': m.mascara,
             'unidade': m.unidade,
             'criado_em': m.criado_em.strftime('%d/%m/%Y %H:%M') if m.criado_em else None
         })
@@ -862,6 +888,7 @@ def editar_material_ajax(id):
             plano_conta = data.get('edit_plano_conta', '')
             codigo_erp = data.get('edit_codigo_erp', '')
             unidade = data.get('edit_unidade', '')
+            mascara = data.get('edit_mascara', '')
             print(f'form_data: {data}')
             
             # Verificar o campo alternativo de unidade
@@ -894,7 +921,7 @@ def editar_material_ajax(id):
                 material.plano_conta = plano_conta
                 material.codigo_erp = codigo_erp
                 material.unidade_id = unidade
-                
+                material.mascara = mascara
                
                     
                 # Atualizar data e usuário
@@ -929,7 +956,8 @@ def editar_material_ajax(id):
             'categoria': material.categoria,
             'plano_conta': material.plano_conta or '',
             'codigo_erp': material.codigo_erp or '',
-            'unidade': material.unidade or ''
+            'unidade': material.unidade_obj.nome or '',
+            'mascara': material.mascara or ''
         })
             
     except Exception as e:
@@ -964,7 +992,8 @@ def obter_material(id):
                 'descricao': material.descricao or '',
                 'categoria': material.categoria or '',
                 'plano_conta': material.plano_conta or '',
-                'unidade': material.unidade or ''
+                'unidade': material.unidade or '',
+                'mascara': material.mascara or ''
             }
         })
         response.headers['Content-Type'] = 'application/json'
@@ -1003,7 +1032,8 @@ def obter_material_ajax(id):
                 'descricao': material.descricao or '',
                 'categoria': material.categoria or '',
                 'plano_conta': material.plano_conta or '',
-                'unidade': material.unidade or ''
+                'unidade': material.unidade or '',
+                'mascara': material.mascara or ''
             }
         })
         response.headers['Content-Type'] = 'application/json; charset=utf-8'
@@ -1073,13 +1103,16 @@ def exportar_excel():
         dados_exportacao = []
         for mat in materiais:
             dados_exportacao.append({
-                'Código': mat.codigo,
+                'ID': mat.id,
+                'Máscara': mat.mascara,
+                'Código SOX': mat.codigo,
                 'Nome': mat.nome,
                 'Descrição': mat.descricao,
                 'Categoria': mat.categoria,
                 'Unidade': mat.unidade_obj.nome,
+                'NCM': mat.ncm,
                 'Plano de Conta': mat.plano_conta,
-                'Código ERP': mat.codigo_erp,
+                'Código Alterdata': mat.codigo_erp,
                 'Data Criação': mat.data_criacao.strftime('%Y-%m-%d %H:%M:%S') if mat.data_criacao else '',
                 #'Data Atualização': mat.data_atualizacao.strftime('%Y-%m-%d %H:%M:%S') if mat.data_atualizacao else ''
                 # Adicione mais campos se necessário

@@ -80,6 +80,7 @@
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>Máscara</th>
                             <th>Código SOX</th>
                             <th>Nome</th>
                             <th>Categoria</th>
@@ -93,6 +94,7 @@
                         {% for material in materiais %}
                         <tr>
                             <td>{{ material.id }}</td>
+                            <td>{{ material.mascara or '-' }}</td>
                             <td>{{ material.codigo or '-' }}</td>
                             <td>{{ material.nome }}</td>
                             <td>{{ material.categoria }}</td>
@@ -121,6 +123,7 @@
                                     data-plano-conta="{{ material.plano_conta or '' }}"
                                     data-descricao="{{ material.descricao or '' }}"
                                     data-unidade="{{ material.unidade_obj.id or '' }}"
+                                    data-mascara="{{ material.mascara or '' }}"
                                     data-bs-toggle="modal"
                                     data-bs-target="#modalEditarMaterial"
                                     title="Editar">

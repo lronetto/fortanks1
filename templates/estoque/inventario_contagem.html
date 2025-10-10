@@ -37,11 +37,11 @@
                     {% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}
                     <div class="progress mb-2">
                         <div class="progress-bar bg-info" role="progressbar" 
-                             style="width: {{ (itens_contados / total_itens * 100)|int }}%" 
+                             style="width: {{ (itens_contados / total_itens * 100)|int if total_itens > 0 else 0 }}%" 
                              aria-valuenow="{{ itens_contados }}" 
                              aria-valuemin="0" 
                              aria-valuemax="{{ total_itens }}">
-                            {{ (itens_contados / total_itens * 100)|int }}%
+                            {{ (itens_contados / total_itens * 100)|int if total_itens > 0 else 0 }}%
                         </div>
                     </div>
                     <p class="text-right"><small>{{ itens_contados }}/{{ total_itens }} itens contados</small></p>
