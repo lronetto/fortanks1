@@ -32,12 +32,12 @@ from models.usinagem_concreto import UsinagemConcreto
 colaborador_bp = Blueprint('colaborador', __name__)
 
 # Middleware para verificar se o usuário tem permissão
-@colaborador_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_admin:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+#@colaborador_bp.before_request
+#@login_required
+#def verificar_permissao():
+#    if not current_user.is_admin:
+#        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
+#        return redirect(url_for('dashboard.index'))
 
 @colaborador_bp.route('/')
 @login_required
