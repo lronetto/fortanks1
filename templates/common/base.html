@@ -470,17 +470,20 @@
                         <i class="fas fa-edit"></i> Cadastros
                     </a>
                     <ul class="collapse list-unstyled" id="cadastrosSubmenu">
+                        {% if current_user.colaborador.departamento_id in [4,5,7] %}
+                        <li class="{{ is_active('colaborador') }}">
+                            <a href="{{ url_for('colaborador.index') }}">
+                                <i class="fas fa-user-tie"></i> Colaboradores
+                            </a>
+                        </li>
+                        {% endif %}
                         {% if current_user.colaborador.departamento_id in [4] %}
                         <li class="{{ is_active('usuario') }}">
                             <a href="{{ url_for('usuario.index') }}">
                                 <i class="fas fa-users"></i> Usuários
                             </a>
                         </li>
-                        <li class="{{ is_active('colaborador') }}">
-                            <a href="{{ url_for('colaborador.index') }}">
-                                <i class="fas fa-user-tie"></i> Colaboradores
-                            </a>
-                        </li>
+                       
                         <li class="{{ is_active('cargo') }}">
                             <a href="{{ url_for('cargo.index') }}">
                                 <i class="fas fa-id-badge"></i> Cargos

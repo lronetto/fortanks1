@@ -70,8 +70,17 @@ class Usuario(db.Model, UserMixin):
         """Verifica se o usuário é gerente ou superior"""
         return self.cargo in ['gerente', 'diretor', 'admin','']
     
-    def is_permissao(self,modulo):
+    def is_permissao(self, modulo, acao='visualizar'):
         """Verifica se o usuário tem permissão para o módulo informado"""
+        try:
+            from models.permissoes import Permissao
+            return Permissao.verificar_permissao_completa(self, modulo, acao)
+        except Exception:
+            # Fallback para o sistema antigo se houver erro
+            return self._verificar_permissao_antiga(modulo)
+    
+    def _verificar_permissao_antiga(self, modulo):
+        """Sistema antigo de permissões (fallback)"""
         Tecnico = self.is_cargo('TÉCNICO DE EDIFICAÇÕES')
         Gestor = self.is_cargo('GESTOR DE DESENVOLVIMENTO') or \
                 self.is_cargo('GESTOR DE FABRICA') or \
@@ -79,6 +88,7 @@ class Usuario(db.Model, UserMixin):
         Usina = self.is_cargo('OPERADOR CENTRAL DE CONCRETO')
         Administrativo = self.is_cargo('ASSISTENTE ADMINISTRATIVO')
         Admin = self.is_departamento('ADMINISTRATIVO')
+        
         if modulo == 'CARGO':
             if Gestor or Administrativo:
                 return True
