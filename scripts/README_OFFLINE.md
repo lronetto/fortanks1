@@ -220,3 +220,4 @@ Em caso de problemas:
 3. Considere migração completa se sincronização falhar
 4. Mantenha backups das configurações originais
 
+

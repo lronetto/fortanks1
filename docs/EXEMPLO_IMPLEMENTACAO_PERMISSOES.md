@@ -221,3 +221,4 @@ def index():
 5. **Escalabilidade**: Fácil adição de novos módulos e permissões
 6. **Manutenibilidade**: Código mais limpo e organizado
 
+

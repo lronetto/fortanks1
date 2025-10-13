@@ -29,7 +29,6 @@ from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
 from controllers.grupo_material_controller import grupo_material_bp
-from controllers.permissoes_controller import permissoes_bp
 from models.usuario import Usuario
 from models.arquivei import Arquivei
 from models.nota_fiscal import NotaFiscal
@@ -201,7 +200,6 @@ app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
 app.register_blueprint(upload_bp, url_prefix='/uploads')
-app.register_blueprint(permissoes_bp, url_prefix='/permissoes')
 logger.info("Blueprints registrados com sucesso!")
 
 # Registrar comandos CLI
@@ -238,16 +236,10 @@ def utility_processor():
             return value
         return f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
 
-    # Importar funções de permissão
-    from utils.permissoes import verificar_permissao_template, obter_modulos_permitidos, verificar_permissao_menu
-
     return dict(
         get_current_year=get_current_year,
         is_active=is_active,
-        formatcnpj=formatcnpj,
-        verificar_permissao=verificar_permissao_template,
-        obter_modulos_permitidos=obter_modulos_permitidos,
-        verificar_permissao_menu=verificar_permissao_menu
+        formatcnpj=formatcnpj
     )
 
 

@@ -88,3 +88,4 @@ python scripts/configurar_modo_offline.py
 
 **🎉 Sistema pronto para funcionamento offline!**
 
+

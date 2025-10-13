@@ -171,3 +171,4 @@ GET /permissoes/api/modulos-usuario
 
 O sistema registra tentativas de acesso negado nos logs da aplicação, facilitando a auditoria de segurança.
 
+

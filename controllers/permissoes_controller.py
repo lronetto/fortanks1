@@ -283,3 +283,4 @@ def api_modulos_usuario():
         logger.error(f"Erro ao buscar módulos do usuário: {str(e)}")
         return jsonify({'error': 'Erro interno do servidor'}), 500
 
+
