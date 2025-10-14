@@ -176,9 +176,10 @@ function downloadXmlNota(notaId) {
        
 // Função para carregar documentos
 function carregarDocumentos(notaId) {
+    var tbody = $('#listaDocumentos');
+    tbody.empty();
     $.get(`/notas-fiscais/api/documentos/${notaId}`, function(response) {
-        var tbody = $('#listaDocumentos');
-        tbody.empty();
+        
         console.log('Documentos:', response);
         if (response.documentos && response.documentos.length > 0) {
             response.documentos.forEach(function(doc) {
