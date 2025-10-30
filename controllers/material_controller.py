@@ -9,6 +9,7 @@ import tempfile
 import openpyxl
 from io import BytesIO
 import logging
+import json
 from sqlalchemy import or_
 
 from models.database import db
@@ -16,6 +17,7 @@ from models.material import Material
 from models.plano_conta import PlanoConta
 from models.conversao_unidade import ConversaoUnidade
 from models.unidade import Unidade
+from models.nota_fiscal import NotaFiscalItem
 
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
@@ -1088,6 +1090,7 @@ def diagnostico_material(id):
     except Exception as e:
         return f"Erro no diagnóstico: {str(e)}" 
 
+
 # Rota para exportar materiais para Excel
 @material_bp.route('/exportar-excel')
 @login_required
@@ -1102,6 +1105,51 @@ def exportar_excel():
         # Preparar os dados para o DataFrame
         dados_exportacao = []
         for mat in materiais:
+            itens = NotaFiscalItem.query.filter_by(material_id=mat.id).all()
+            
+            # Verificar se todos os NCMs são iguais e agrupar por NCM
+            if len(itens) == 0:
+                ncm_iguais = 'N/A'
+                ncms_validos = set()
+                itens_por_ncm_json = '[]'
+            else:
+                # Coletar todos os NCMs únicos (filtrando valores None e strings vazias)
+                ncms_unicos = set(item.ncm.strip() if item.ncm and item.ncm.strip() else None for item in itens)
+                # Remover None do set se houver NCMs válidos
+                ncms_validos = {ncm for ncm in ncms_unicos if ncm is not None}
+                if len(ncms_validos) == 1:
+                    ncm_unico = list(ncms_validos)[0]
+                else:
+                    ncm_unico = None
+                # Se todos são None/vazios ou se há apenas um NCM único válido, são iguais
+                ncm_iguais = 'Sim' if len(ncms_validos) <= 1 else 'Não'
+                
+                # Agrupar itens por NCM e criar JSON com informações da nota fiscal
+                itens_por_ncm = {}
+                for item in itens:
+                    ncm_item = item.ncm.strip() if item.ncm and item.ncm.strip() else None
+                    if ncm_item:
+                        if ncm_item not in itens_por_ncm:
+                            itens_por_ncm[ncm_item] = []
+                        
+                        # Coletar informações da nota fiscal
+                        if item.nota_fiscal:
+                            itens_por_ncm[ncm_item].append({
+                                'numero_nf': item.nota_fiscal.numero_nf,
+                                'fornecedor': item.nota_fiscal.nome_emitente,
+                                'nome_item': item.descricao
+                            })
+                        else:
+                            # Caso não tenha nota fiscal vinculada
+                            itens_por_ncm[ncm_item].append({
+                                'numero_nf': None,
+                                'fornecedor': None,
+                                'nome_item': item.descricao
+                            })
+                
+                # Converter para JSON string
+                itens_por_ncm_json = json.dumps(itens_por_ncm, ensure_ascii=False)
+            
             dados_exportacao.append({
                 'ID': mat.id,
                 'Máscara': mat.mascara,
@@ -1114,6 +1162,12 @@ def exportar_excel():
                 'Plano de Conta': mat.plano_conta,
                 'Código Alterdata': mat.codigo_erp,
                 'Data Criação': mat.data_criacao.strftime('%Y-%m-%d %H:%M:%S') if mat.data_criacao else '',
+                'Quantidade Importada': len(itens),
+                'ncms' : [item.ncm+',' if i < len(itens)-1 else item.ncm for i,item in enumerate(itens)],
+                'ncn iguais' : ncm_iguais,
+                'ncm unicos' : len(ncms_validos),
+                'ncms unico' : ncm_unico,
+                'itens_por_ncm' : itens_por_ncm_json
                 #'Data Atualização': mat.data_atualizacao.strftime('%Y-%m-%d %H:%M:%S') if mat.data_atualizacao else ''
                 # Adicione mais campos se necessário
             })

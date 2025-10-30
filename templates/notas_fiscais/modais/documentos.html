@@ -178,10 +178,12 @@ function downloadXmlNota(notaId) {
 function carregarDocumentos(notaId) {
     var tbody = $('#listaDocumentos');
     tbody.empty();
+    tbody.append('<tr><td colspan="4" class="text-center">Carregando documentos...</td></tr>');
     $.get(`/notas-fiscais/api/documentos/${notaId}`, function(response) {
         
         console.log('Documentos:', response);
         if (response.documentos && response.documentos.length > 0) {
+            tbody.empty();
             response.documentos.forEach(function(doc) {
                 var row = `
                     <tr>
@@ -205,8 +207,11 @@ function carregarDocumentos(notaId) {
                 tbody.append(row);
             });
         } else {
+            tbody.empty();
             tbody.append('<tr><td colspan="4" class="text-center">Nenhum documento encontrado.</td></tr>');
         }
+    }).fail(function() {
+        tbody.append('<tr><td colspan="4" class="text-center">Erro ao carregar documentos.</td></tr>');
     });
 }
 

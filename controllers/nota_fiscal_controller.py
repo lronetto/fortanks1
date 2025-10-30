@@ -2239,7 +2239,8 @@ def tabela_notas_fiscais():
     for nota in notas_fiscais_pagina:
         nota.upload = None
         nota.pago = False
-        nota.local = ('Matriz' if nota.cnpj_emitente in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_emitente in CNPJS_FILIAIS else 'Terceiros')
+        nota.emitente = ('Matriz' if nota.cnpj_emitente in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_emitente in CNPJS_FILIAIS else 'Terceiros')
+        nota.destinatario = ('Matriz' if nota.cnpj_destinatario in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_destinatario in CNPJS_FILIAIS else 'Terceiros')
         dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
                                                            DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
                                                            DadoAnalitico.valor == nota.valor_total).first()

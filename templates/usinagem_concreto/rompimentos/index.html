@@ -85,7 +85,7 @@
                 <h5 class="modal-title" id="modalNovoRompimentoLabel">Novo Rompimento de Corpo de Prova</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <form action="{{ url_for('usinagem_concreto.novo_rompimento') }}" method="POST">
+            <form action="{{ url_for('usinagem_concreto.criar_rompimento') }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="mb-3">

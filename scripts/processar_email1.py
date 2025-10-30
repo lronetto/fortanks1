@@ -89,7 +89,7 @@ IMAP_FOLDER = 'Inbox'
 ASSUNTO_PADRAO_NFE = 'Envio de Nota Fiscal Eletrônica'
 ASSUNTO_PADRAO_CTE = 'Envio de Nota Fiscal Eletrônica - DUA'
 ASSUNTO_PADRAO_DUA = 'CTE, NF Fortanks e DUA'
-ASSUNTO_PADRAO_PROTOCOLO = ["ENC: NF´S PROTOCOLOS","ENC: NF PROTOCOLO","NF PROTOCOLO"]
+ASSUNTO_PADRAO_PROTOCOLO = ["ENC: NF´S PROTOCOLOS","ENC: NF PROTOCOLO","NF PROTOCOLO","Protocolo"]
 ASSUNTO_PADRAO_REEMBOLSO = ['REEMBOLSO','REEBOLSO']
 EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
 IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
@@ -251,7 +251,15 @@ def processar_emails():
                 protocolo = any(p in msg.subject for p in ASSUNTO_PADRAO_PROTOCOLO)
                 reembolso = any(p in msg.subject for p in ASSUNTO_PADRAO_REEMBOLSO)
                 
-                tipo = 2 if protocolo else 3 if reembolso else 1 if nfe else 0
+                
+                if protocolo:
+                    tipo = 2
+                elif reembolso:
+                    tipo = 3
+                elif nfe:
+                    tipo = 1
+                else:
+                    tipo = 0
 
                 log_email = {
                     'subject': msg.subject,

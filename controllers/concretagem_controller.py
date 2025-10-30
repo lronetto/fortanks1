@@ -12,6 +12,7 @@ from sqlalchemy.orm import joinedload
 # Definir o blueprint
 concretagem = Blueprint('concretagem', __name__, url_prefix='/concretagens')
 
+
 @concretagem.route('/')
 @login_required
 def index():

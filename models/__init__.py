@@ -24,6 +24,7 @@ from .cliente import Cliente
 from .endereco import Endereco
 from .tanque import Tanque
 from .peca import Peca
+from .tipo_peca import TipoPeca
 from .concretagem import Concretagem, ConcretagemPeca, ConcretagemTanque
 from .equipamento import Equipamento, Manutencao, ChecklistModelo, ChecklistItem, ChecklistEquipamento, ChecklistResposta
 from .colaborador import Colaborador
@@ -78,7 +79,7 @@ except Exception as e:
 __all__ = [
     'db', 'Usuario', 'CentroCusto', 'PlanoConta', 'Contrato',
     'Material', 'ItemSolicitacao', 'Solicitacao','Cargo','Departamento','Colaborador','DadosBancarios',
-    'NotaFiscal', 'NotaFiscalItem', 'Cliente', 'Endereco', 'Tanque', 'Peca',
+    'NotaFiscal', 'NotaFiscalItem', 'Cliente', 'Endereco', 'Tanque', 'Peca', 'TipoPeca',
     'Concretagem', 'ConcretagemPeca', 'ConcretagemTanque', 'Equipamento', 'Manutencao', 
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
     'TracoConcreto', 'ItemTracoConcreto', 'UsinagemConcreto', 'UsinagemEquipamento',
