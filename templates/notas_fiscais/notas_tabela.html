@@ -55,15 +55,17 @@
                         {# Verificar se tem documentos anexados #}
                         {% if nf.uploads['total'] > 0 %}
                             {% if nf.uploads['protocolo'] %}
-                                <span class="badge bg-info ms-1" title="Documentos anexados">
+                                <span class="badge bg-info ms-1" title="protocolo">
                                     <i class="fas fa-paperclip" style="color: green;"></i>
                                 </span>
-                            {% elif nf.uploads['arquivei'] %}
-                                <span class="badge bg-info ms-1" title="Documentos anexados">
+                            {% endif %}
+                            {% if nf.uploads['arquivei'] %}
+                                <span class="badge bg-info ms-1" title="arquivei">
                                     <i class="fas fa-paperclip"></i>
                                 </span>
-                            {% elif nf.uploads['reembolso'] %}
-                                <span class="badge bg-info ms-1" title="Documentos anexados">
+                            {% endif %}
+                            {% if nf.uploads['reembolso'] %}
+                                <span class="badge bg-info ms-1" title="reembolso">
                                     <i class="fas fa-paperclip" style="color: red;"></i>
                                 </span>
                             {% endif %}

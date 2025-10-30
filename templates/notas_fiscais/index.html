@@ -26,6 +26,9 @@
             <button type="button" class="btn btn-success" id="btnExportarExcel">
                 <i class="fas fa-file-excel"></i> Exportar Excel
             </button>
+            <button type="button" class="btn btn-success" id="btnExportarZip">
+                <i class="fas fa-file-zip"></i> Exportar Zip
+            </button>
         </div>
     </div>
 
@@ -217,6 +220,21 @@ document.addEventListener('DOMContentLoaded', function() {
         tipo_nfe = $('#tipo_nfe').val();
         status_upload = $('#status_upload').val();
         url = "exportar-excel?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&cnpj_emitente_val=" + cnpj_emitente_val + "&cnpj_destinatario_val=" + cnpj_destinatario_val + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
+        window.location.href = url;
+    });
+    $('#btnExportarZip').on('click', function() {
+        busca = $('#busca').val();
+        item_nome = $('#item_nome').val();
+        status_importacao = $('#status_importacao').val();
+        cnpj_emitente = $('#cnpj_emitente').val();
+        cnpj_emitente_val = $('#cnpj_emitente_val').val();
+        cnpj_destinatario_val = $('#cnpj_destinatario_val').val();
+        status_pagamento = $('#status_pagamento').val();
+        data_emissao_inicio = $('#data_emissao_inicio').val();
+        data_emissao_fim = $('#data_emissao_fim').val();
+        tipo_nfe = $('#tipo_nfe').val();
+        status_upload = $('#status_upload').val();
+        url = "exportar-zip?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&cnpj_emitente_val=" + cnpj_emitente_val + "&cnpj_destinatario_val=" + cnpj_destinatario_val + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
         window.location.href = url;
     });
     function carregarTabelaNotasFiscais(params = null) {

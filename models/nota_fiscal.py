@@ -300,19 +300,47 @@ class NotaFiscal(db.Model):
         ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
 
         # Caminhos principais
-        infCte = root.find('.//cte:infCte', ns)
-        emit = infCte.find('.//cte:emit', ns)
-        dest = infCte.find('.//cte:dest', ns)
-        rem = infCte.find('.//cte:rem', ns)
-        ide = infCte.find('.//cte:ide', ns)
-        vPrest = infCte.find('.//cte:vPrest', ns)
-        compl = infCte.find('.//cte:compl', ns)
-
-        infModal = infCte.find('.//cte:infModal', ns)
+        infCte = root.find('.//cte:infCte', ns) or root.find('.//infCte', ns)
+        emit = infCte.find('.//cte:emit', ns) or infCte.find('.//emit', ns)
+        dest = infCte.find('.//cte:dest', ns) or infCte.find('.//dest', ns)
+        rem = infCte.find('.//cte:rem', ns) or infCte.find('.//rem', ns)
+        ide = infCte.find('.//cte:ide', ns) or infCte.find('.//ide', ns)
+        vPrest = infCte.find('.//cte:vPrest', ns) or infCte.find('.//vPrest', ns)
+        compl = infCte.find('.//cte:compl', ns) or infCte.find('.//compl', ns)
+        imp = infCte.find('.//cte:imp', ns) or infCte.find('.//imp', ns)
+        impostos = {}
+        if imp is not None:
+            ICMSa = imp.find('.//cte:ICMS', ns) or imp.find('.//ICMS', ns) or imp.find('.//ICMS00', ns) or imp.find('.//ICMS', ns)
+            if ICMSa is not None:
+                ICMSOutraUF = ICMSa.find('.//cte:ICMSOutraUF', ns)
+                if ICMSOutraUF is not None:
+                    CSTv = ICMSOutraUF.findtext('.//cte:CST', default='0', namespaces=ns)
+                    vBCOutraUF = ICMSOutraUF.findtext('.//cte:vBCOutraUF', default='0', namespaces=ns)
+                    pICMSOutraUF = ICMSOutraUF.findtext('.//cte:pICMSOutraUF', default='0', namespaces=ns)
+                    vICMSOutraUF = ICMSOutraUF.findtext('.//cte:vICMSOutraUF', default='0', namespaces=ns)
+                    impostos = {
+                        'CST': CSTv,
+                        'vBC': vBCOutraUF,
+                        'pICMS': pICMSOutraUF,
+                        'vICMS': vICMSOutraUF
+                    }
+                ICMS00 = ICMSa.find('.//cte:ICMS00', ns) or ICMSa.find('.//ICMS00', ns)
+                if ICMS00 is not None:
+                    CSTv = ICMS00.findtext('.//cte:CST', default='0', namespaces=ns)
+                    vBC = ICMS00.findtext('.//cte:vBC', default='0', namespaces=ns)
+                    pICMS = ICMS00.findtext('.//cte:pICMS', default='0', namespaces=ns)
+                    vICMS = ICMS00.findtext('.//cte:vICMS', default='0', namespaces=ns)
+                    impostos = {
+                        'CST': CSTv,
+                        'vBC': vBC,
+                        'pICMS': pICMS,
+                        'vICMS': vICMS
+                    }
+        infModal = infCte.find('.//cte:infModal', ns) or infCte.find('.//infModal', ns)
         rodo = infModal.find('.//cte:rodo', ns) if infModal is not None else None
 
         # Chave de acesso
-        chave_acesso = infCte.attrib.get('Id', '')
+        chave_acesso = infCte.attrib.get('Id', '') or infCte.attrib.get('id', '')
         if chave_acesso.startswith('CTe'):
             chave_acesso = chave_acesso[3:]
 
@@ -390,9 +418,11 @@ class NotaFiscal(db.Model):
             'nome_destinatario': nome_destinatario,
             'valor_total': valor_total,
             'data_emissao': data_emissao,
-            'dados_adicionais': dados_adicionais
+            'dados_adicionais': dados_adicionais,
+            'impostos': impostos,
+            'tipo': 2
         }
-        return dados_nf     
+        return chave_acesso, dados_nf     
     def extrair_dados_xml_nfe(self):
         """
         Extrai os dados de uma nota fiscal a partir do XML
@@ -429,6 +459,19 @@ class NotaFiscal(db.Model):
             total = inf_nfe.find('.//nfe:total/nfe:ICMSTot', ns) or inf_nfe.find('.//total/ICMSTot', ns)
             itens = inf_nfe.findall('.//nfe:det', ns) or inf_nfe.findall('.//det', ns)
             cobr = inf_nfe.find('.//nfe:cobr', ns) or inf_nfe.find('.//cobr', ns)
+            total = inf_nfe.find('.//nfe:total', ns) or inf_nfe.find('.//total', ns)
+            ICMSTot = total.find('.//nfe:ICMSTot', ns) or total.find('.//ICMSTot', ns)
+            vIPI = ICMSTot.findtext('.//nfe:vIPI', default='0', namespaces=ns) or ICMSTot.findtext('.//vIPI', default='0', namespaces=ns)
+            vPIS = ICMSTot.findtext('.//nfe:vPIS', default='0', namespaces=ns) or ICMSTot.findtext('.//vPIS', default='0', namespaces=ns)
+            vCOFINS = ICMSTot.findtext('.//nfe:vCOFINS', default='0', namespaces=ns) or ICMSTot.findtext('.//vCOFINS', default='0', namespaces=ns)
+            vICMS = ICMSTot.findtext('.//nfe:vICMS', default='0', namespaces=ns) or ICMSTot.findtext('.//vICMS', default='0', namespaces=ns)
+
+            impostos = {
+                'vIPI': vIPI,
+                'vPIS': vPIS,
+                'vCOFINS': vCOFINS,
+                'vICMS': vICMS,
+            }
             if cobr:
                 fatura = cobr.find('.//nfe:fat', ns) or cobr.find('.//fat', ns)
                 dup = fatura.find('.//nfe:dup', ns) or fatura.find('.//dup', ns)
@@ -484,7 +527,7 @@ class NotaFiscal(db.Model):
                 'valor_total': valor_total,
                 'itens': [],
                 'dados_adicionais': {},
-                
+                'impostos': impostos
             }
             
             # Extrair dados dos itens
@@ -590,6 +633,7 @@ class NotaFiscal(db.Model):
             'data_emissao': self.data_emissao,
             'valor_total': self.valor_total,
         }
+
 class NotaFiscalItem(db.Model):
     """
     Modelo para representar itens de Nota Fiscal

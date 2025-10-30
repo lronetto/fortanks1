@@ -17,9 +17,6 @@ class TipoPeca(db.Model):
     data_cadastro = db.Column(db.DateTime, default=datetime.now)
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
-    # Relacionamento com peças
-    pecas = db.relationship('Peca', backref='tipo_peca', lazy=True)
-    
     def get_abertura(self):
         """
         Retorna o campo abertura como dicionário Python

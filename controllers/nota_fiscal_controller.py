@@ -3,6 +3,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import logging
+from pandas.io.common import zipfile
 import requests
 import base64
 import xml.etree.ElementTree as ET
@@ -252,7 +253,6 @@ def api_get_dados_notas_fiscais(request):
     cnpj_destinatario_val = args.get('cnpj_destinatario_val', '').strip()
     
     # Instanciar formulário de importação para o modal
-    import_form = NotaFiscalImportForm()
     
     # Construir query base
     query = NotaFiscal.query
@@ -2223,6 +2223,51 @@ def analise_transferencias_ajax():
         filtro_cnpj_destinatario=cnpjs_destinatario
     )
 
+@nota_fiscal_bp.route('/exportar-zip', methods=['GET'])
+@login_required
+def exportar_zip():
+    print('exportar zip')
+    query = api_get_dados_notas_fiscais(request)
+    notas = query.all()
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        excel_data = []
+        for nota in notas:
+            if nota.tipo < 2:
+                chave_acesso, dados_nota = nota.extrair_dados_xml_nfe()
+                tipo = 'NFe'
+            elif nota.tipo == 2:
+                chave_acesso, dados_nota = nota.extrair_dados_xml_cte()
+                tipo = 'CTe'
+            xml_bytes = base64.b64decode(nota.xml_data)
+            data_emissao = nota.data_emissao.strftime('%d_%m_%Y') if nota.data_emissao else ''
+            zipf.writestr(f'{tipo} {data_emissao}_{nota.nome_emitente}_{nota.numero_nf}.xml', xml_bytes)
+            
+            excel_data.append({
+                'Data': nota.data_emissao.strftime('%d/%m/%Y') if nota.data_emissao else '',
+                'Fornecedor': nota.nome_emitente,
+                'Número': nota.numero_nf,
+                'Tipo': 'NFe' if nota.tipo in [0,1] else ('CTE' if nota.tipo == 2 else 'NFSe'),
+                'CST': dados_nota['impostos']['CST'] if 'CST' in dados_nota['impostos'] else '',
+                'vIPI': dados_nota['impostos']['vIPI'] if 'vIPI' in dados_nota['impostos'] else '',
+                'vPIS': dados_nota['impostos']['vPIS'] if 'vPIS' in dados_nota['impostos'] else '',
+                'vCOFINS': dados_nota['impostos']['vCOFINS'] if 'vCOFINS' in dados_nota['impostos'] else '',
+                'vICMS': dados_nota['impostos']['vICMS'] if 'vICMS' in dados_nota['impostos'] else '',
+                'Valor': float(nota.valor_total) if nota.valor_total is not None else 0.0,
+                'Chave de Acesso': nota.chave_acesso,
+                'tipo': dados_nota['tipo'],
+                'cnpj_emitente': nota.cnpj_emitente,
+                'cnpj_destinatario': nota.cnpj_destinatario,
+                })
+        df = pd.DataFrame(excel_data)
+        excel_buffer = io.BytesIO()
+        df.to_excel(excel_buffer, index=False, sheet_name='Notas Fiscais')
+        excel_buffer.seek(0)
+        zipf.writestr('notas_fiscais.xlsx', excel_buffer.read())
+
+    zip_buffer.seek(0)
+    return send_file(zip_buffer, download_name='notas_fiscais.zip', as_attachment=True, mimetype='application/zip')
+    return render_template('notas_fiscais/exportar_zip.html')
 @nota_fiscal_bp.route('/tabela-notas-fiscais')
 @login_required
 def tabela_notas_fiscais():
@@ -2249,10 +2294,10 @@ def tabela_notas_fiscais():
         nota.uploads = {'arquivei':False,'protocolo':False,'reembolso':False,'total':0}
         uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter(Upload.pai_id==nota.id, Upload.pai=='NotaFiscal').all()
         if uploads:
-            nota.uploads = {'arquivei':any(u[2] == 1 for u in uploads),
-                            'protocolo': any(u[2] == 2 for u in uploads),
-                            'reembolso': any(u[2] == 3 for u in uploads),
-                            'total': len(uploads)}
+            nota.uploads['arquivei'] = any(u[2] == 1 for u in uploads)
+            nota.uploads['protocolo'] = any(u[2] == 2 for u in uploads)
+            nota.uploads['reembolso'] = any(u[2] == 3 for u in uploads)
+            nota.uploads['total'] = len(uploads)
         notas_fiscais_pagina_upload.append(nota)
 
     print(f'tabela notas fiscais {time.time() - inicio}')
