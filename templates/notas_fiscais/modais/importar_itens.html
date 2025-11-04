@@ -148,13 +148,8 @@
         }
         
         // Armazenar todos os itens em uma variável global para uso no filtro
-        window.todosOsItensImportacao = itens.filter(function(item) {
-            return !item.importado_estoque; // Filtrar para excluir itens já importados
-        });
-        
+        window.todosOsItensImportacao = itens; // Filtrar para excluir itens já importados
         renderizarItensImportacao(window.todosOsItensImportacao);
-        
-        // Configurar eventos de filtro
         configurarFiltroItensImportacao();
     }
     
@@ -186,7 +181,11 @@
                     <td id="quantidade">${item.quantidade} <span id="unidade_${item.id}">${item.unidade}</span></td>
                     <td>R$ ${valorUnitario}</td>
                     <td id="material_nome_${item.id}">${materialNome}</td>
-                    <td>
+                    <td>`
+            if(item.importado_estoque) {
+                html += '<span class="badge bg-success">Importado</span>';
+            } else {
+                html += `
                         <input type="hidden" id="material_id_${item.id}" value="${item.material_id || ''}">
                         <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
                                 data-item-id="${item.id}" 
@@ -197,6 +196,9 @@
                                 data-quantidade="${item.quantidade}">
                             ${btnIconVincular}
                         </button>
+                    `;
+            }
+            html += `
                     </td>
                 </tr>
             `;

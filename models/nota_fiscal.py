@@ -25,7 +25,7 @@ load_dotenv()
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
 ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 
-CNPJS_FILIAIS = ['27126997000349','27126997000268','27126997000220']
+CNPJS_FILIAIS = ['27126997000349','27126997000268','27126997000420']
 CNPJS_MATRIZ = ['27126997000187']
 CNPJS_MATRIZ_FILIAIS = CNPJS_MATRIZ + CNPJS_FILIAIS
 CFOPS_COMPRA = [6101,5101,5405,6105,6401]
@@ -681,7 +681,6 @@ class NotaFiscalItem(db.Model):
     
     # Chave estrangeira
     nf_id = db.Column(db.Integer, db.ForeignKey('nf_notas.id', ondelete='CASCADE'), nullable=False)
-    
     # Datas de controle
     data_criacao = db.Column(db.DateTime, default=datetime.now)
     data_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -713,8 +712,9 @@ class NotaFiscalItem(db.Model):
         try:
             # Prioridade 1: Buscar a primeira vinculacao
             if self.codigo:
-                item_anterior = NotaFiscalItem.query.filter(
+                item_anterior = NotaFiscalItem.query.join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).filter(
                     NotaFiscalItem.codigo == self.codigo,
+                    NotaFiscalItem.nota_fiscal.has(NotaFiscal.cnpj_emitente == self.nota_fiscal.cnpj_emitente),
                     NotaFiscalItem.material_id.isnot(None),
                     NotaFiscalItem.importado_estoque == True
                 ).order_by(NotaFiscalItem.data_importacao_estoque.asc()).first()

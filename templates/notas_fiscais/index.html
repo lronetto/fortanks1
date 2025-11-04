@@ -49,6 +49,27 @@
                     <input type="text" name="item_nome" id="item_nome" class="form-control"
                            placeholder="Filtrar por nome de item" value="{{ request.args.get('item_nome', '') }}">
                 </div>
+                
+                <div class="col-md-3">
+                    <label for="emitente" class="form-label">Emitente</label>
+                    <select name="emitente" id="emitente" class="form-select">
+                        <option value="" {% if not request.args.get('emitente') %}selected{% endif %}>Todos</option>
+                        <option value="Terceiros" {% if request.args.get('emitente') == 'terceiros' %}selected{% endif %}>Terceiros</option>
+                        <option value="Matriz" {% if request.args.get('emitente') == 'Matriz' %}selected{% endif %}>Matriz</option>
+                        <option value="Filiais" {% if request.args.get('emitente') == 'Filiais' %}selected{% endif %}>Filiais</option>
+                        <option value="Matriz_Filiais" {% if request.args.get('emitente') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="destinatario" class="form-label">Destinatário</label>
+                    <select name="destinatario" id="destinatario" class="form-select">
+                        <option value="" {% if not request.args.get('destinatario') %}selected{% endif %}>Todos</option>
+                        <option value="Terceiros" {% if request.args.get('destinatario') == 'terceiros' %}selected{% endif %}>Terceiros</option>
+                        <option value="Matriz" {% if request.args.get('destinatario') == 'Matriz' %}selected{% endif %}>Matriz</option>
+                        <option value="Filiais" {% if request.args.get('destinatario') == 'Filiais' %}selected{% endif %}>Filiais</option>
+                        <option value="Matriz_Filiais" {% if request.args.get('destinatario') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
+                    </select>
+                </div>
                 <div class="col-md-3">
                     <label for="status_importacao" class="form-label">Status de Importação</label>
                     <select name="status_importacao" id="status_importacao" class="form-select">
@@ -58,21 +79,24 @@
                         <option value="pendentes" {% if status_importacao == 'pendentes' %}selected{% endif %}>Pendentes</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label for="cnpj_emitente" class="form-label">Fornecedor</label>
-                    <select name="cnpj_emitente" id="cnpj_emitente" class="form-select">
-                        <option value="" {% if not request.args.get('cnpj_emitente') %}selected{% endif %}>Todos</option>
-                        <option value="Matriz" {% if request.args.get('cnpj_emitente') == 'Matriz' %}selected{% endif %}>Matriz</option>
-                        <option value="Filiais" {% if request.args.get('cnpj_emitente') == 'Filiais' %}selected{% endif %}>Filiais</option>
-                        <option value="Matriz_Filiais" {% if request.args.get('cnpj_emitente') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
-                    </select>
-                </div>
+                
                 <div class="col-md-3">
                     <label for="status_pagamento" class="form-label">Status de Pagamento</label>
                     <select name="status_pagamento" id="status_pagamento" class="form-select">
                         <option value="">Todos</option>
                         <option value="pago" {% if request.args.get('status_pagamento') == 'pago' %}selected{% endif %}>Pago</option>
                         <option value="nao_pago" {% if request.args.get('status_pagamento') == 'nao_pago' %}selected{% endif %}>Não Pago</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_upload" class="form-label">Status Upload</label>
+                    <select name="status_upload" id="status_upload" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if status_upload == '1' %}selected{% endif %}>Arquivei</option>
+                        <option value="2" {% if status_upload == '2' %}selected{% endif %}>Protocolo</option>
+                        <option value="3" {% if status_upload == '3' %}selected{% endif %}>Reembolso</option>
+                        <option value="4" {% if status_upload == '4' %}selected{% endif %}>Sem Protocolo</option>
+                        <option value="5" {% if status_upload == '5' %}selected{% endif %}>Nenhum</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -105,23 +129,14 @@
                     <label for="remetente" class="form-label">Remetente</label>
                     <input type="text" name="remetente" id="remetente" class="form-control" placeholder="Nome do remetente" value="{{ remetente|default('') }}">
                 </div>
+                
                 <div class="col-md-3">
-                    <label for="status_upload" class="form-label">Status Upload</label>
-                    <select name="status_upload" id="status_upload" class="form-select">
-                        <option value="">Todos</option>
-                        <option value="1" {% if status_upload == '1' %}selected{% endif %}>Arquivei</option>
-                        <option value="2" {% if status_upload == '2' %}selected{% endif %}>Protocolo</option>
-                        <option value="3" {% if status_upload == '3' %}selected{% endif %}>Reembolso</option>
-                        <option value="4" {% if status_upload == '4' %}selected{% endif %}>Nenhum</option>
-                    </select>
+                    <label for="cnpj_emitente" class="form-label">CNPJ Emitente</label>
+                    <input type="text" name="cnpj_emitente" id="cnpj_emitente" class="form-control" placeholder="Digite o CNPJ do emitente" value="{{ request.args.get('cnpj_emitente', '') }}">
                 </div>
                 <div class="col-md-3">
-                    <label for="cnpj_emitente_val" class="form-label">CNPJ Emitente</label>
-                    <input type="text" name="cnpj_emitente_val" id="cnpj_emitente_val" class="form-control" placeholder="Digite o CNPJ do emitente" value="{{ request.args.get('cnpj_emitente_val', '') }}">
-                </div>
-                <div class="col-md-3">
-                    <label for="cnpj_destinatario_val" class="form-label">CNPJ Destinatário</label>
-                    <input type="text" name="cnpj_destinatario_val" id="cnpj_destinatario_val" class="form-control" placeholder="Digite o CNPJ do destinatário" value="{{ request.args.get('cnpj_destinatario_val', '') }}">
+                    <label for="cnpj_destinatario" class="form-label">CNPJ Destinatário</label>
+                    <input type="text" name="cnpj_destinatario" id="cnpj_destinatario" class="form-control" placeholder="Digite o CNPJ do destinatário" value="{{ request.args.get('cnpj_destinatario', '') }}">
                 </div>
                 <div class="col-md-3 d-flex align-items-end">
                     <div class="btn-group">
@@ -157,6 +172,7 @@
 {% include 'notas_fiscais/modais/conversao_unidades.html' %}
 {% include 'notas_fiscais/modais/importar_arquivei.html' %}
 {% include 'notas_fiscais/modais/importar_xml.html' %}
+{% include 'notas_fiscais/modais/exportar_zip.html' %}
 {% endblock %}
 
 {% block extra_css %}
@@ -208,34 +224,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Exportar para Excel
     $('#btnExportarExcel').on('click', function() {
-        busca = $('#busca').val();
-        item_nome = $('#item_nome').val();
-        status_importacao = $('#status_importacao').val();
-        cnpj_emitente = $('#cnpj_emitente').val();
-        cnpj_emitente_val = $('#cnpj_emitente_val').val();
-        cnpj_destinatario_val = $('#cnpj_destinatario_val').val();
-        status_pagamento = $('#status_pagamento').val();
-        data_emissao_inicio = $('#data_emissao_inicio').val();
-        data_emissao_fim = $('#data_emissao_fim').val();
-        tipo_nfe = $('#tipo_nfe').val();
-        status_upload = $('#status_upload').val();
-        url = "exportar-excel?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&cnpj_emitente_val=" + cnpj_emitente_val + "&cnpj_destinatario_val=" + cnpj_destinatario_val + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
+        params = $('#filtrosNotasFiscais').serialize();
+        url = "exportar-excel?" + params;
         window.location.href = url;
     });
     $('#btnExportarZip').on('click', function() {
-        busca = $('#busca').val();
-        item_nome = $('#item_nome').val();
-        status_importacao = $('#status_importacao').val();
-        cnpj_emitente = $('#cnpj_emitente').val();
-        cnpj_emitente_val = $('#cnpj_emitente_val').val();
-        cnpj_destinatario_val = $('#cnpj_destinatario_val').val();
-        status_pagamento = $('#status_pagamento').val();
-        data_emissao_inicio = $('#data_emissao_inicio').val();
-        data_emissao_fim = $('#data_emissao_fim').val();
-        tipo_nfe = $('#tipo_nfe').val();
-        status_upload = $('#status_upload').val();
-        url = "exportar-zip?busca=" + busca + "&item_nome=" + item_nome + "&status_importacao=" + status_importacao + "&cnpj_emitente=" + cnpj_emitente + "&cnpj_emitente_val=" + cnpj_emitente_val + "&cnpj_destinatario_val=" + cnpj_destinatario_val + "&status_pagamento=" + status_pagamento + "&data_emissao_inicio=" + data_emissao_inicio + "&data_emissao_fim=" + data_emissao_fim + "&tipo_nfe=" + tipo_nfe + "&status_upload=" + status_upload;
-        window.location.href = url;
+        // Abrir modal ao invés de redirecionar
+        var modal = new bootstrap.Modal(document.getElementById('modalExportarZip'));
+        modal.show();
     });
     function carregarTabelaNotasFiscais(params = null) {
         let url = '/notas-fiscais/tabela-notas-fiscais';

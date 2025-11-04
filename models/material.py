@@ -1,6 +1,7 @@
 from datetime import datetime
 from models.database import db
 from sqlalchemy.orm import relationship
+from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 
 class Material(db.Model):
     """
@@ -92,3 +93,11 @@ class Material(db.Model):
             
         # Verifica se tem conversões específicas para este material
         return len(getattr(self, 'conversoes_unidade', [])) > 0
+    def get_valor_unitario(self):
+        """
+        Retorna o valor unitário do material
+        """
+        item_nf = NotaFiscalItem.query.filter_by(material_id=self.id).join(NotaFiscal).order_by(NotaFiscal.data_emissao.desc()).first()
+        if item_nf:
+            return item_nf.valor_unitario/item_nf.fator_conversao_aplicado
+        return 0

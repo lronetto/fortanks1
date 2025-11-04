@@ -1,0 +1,154 @@
+<!-- Modal para Exportar ZIP -->
+<div class="modal fade" id="modalExportarZip" tabindex="-1" aria-labelledby="modalExportarZipLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExportarZipLabel">
+                    <i class="fas fa-file-zip"></i> Exportar PDFs em ZIP
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="loadingEstatisticas" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2">Carregando estatísticas...</p>
+                </div>
+                
+                <div id="conteudoEstatisticas" style="display: none;">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        As estatísticas são baseadas nos filtros aplicados na página.
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card text-center border-primary">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary">
+                                        <i class="fas fa-file-pdf"></i> PDFs Originais
+                                    </h5>
+                                    <h2 class="text-primary" id="totalPdfsOriginais">0</h2>
+                                    <p class="text-muted mb-0">Do Arquivei</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-center border-success">
+                                <div class="card-body">
+                                    <h5 class="card-title text-success">
+                                        <i class="fas fa-file-pdf"></i> PDFs de Protocolo
+                                    </h5>
+                                    <h2 class="text-success" id="totalPdfsProtocolo">0</h2>
+                                    <p class="text-muted mb-0">Com Protocolo</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-center border-warning">
+                                <div class="card-body">
+                                    <h5 class="card-title text-warning">
+                                        <i class="fas fa-file-pdf"></i> Sem Protocolo
+                                    </h5>
+                                    <h2 class="text-warning" id="totalSemProtocolo">0</h2>
+                                    <p class="text-muted mb-0">PDFs Originais</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning" id="alertaSemPdfs" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        Não foram encontrados PDFs originais sem protocolo para download.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnDownloadPdfsSemProtocolo" style="display: none;">
+                    <i class="fas fa-download"></i> Baixar PDFs Originais sem Protocolo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    let filtrosAtuais = '';
+    
+    // Quando o modal é aberto, carregar estatísticas
+    $('#modalExportarZip').on('show.bs.modal', function() {
+        // Obter filtros atuais
+        filtrosAtuais = $('#filtrosNotasFiscais').serialize();
+        
+        // Mostrar loading e esconder conteúdo
+        $('#loadingEstatisticas').show();
+        $('#conteudoEstatisticas').hide();
+        $('#btnDownloadPdfsSemProtocolo').hide();
+        $('#alertaSemPdfs').hide();
+        
+        // Carregar estatísticas
+        carregarEstatisticasPdfs();
+    });
+    
+    function carregarEstatisticasPdfs() {
+        $.ajax({
+            url: '/notas-fiscais/estatisticas-pdfs',
+            method: 'GET',
+            data: filtrosAtuais,
+            success: function(response) {
+                // Atualizar estatísticas
+                $('#totalPdfsOriginais').text(response.total_pdfs_originais || 0);
+                $('#totalPdfsProtocolo').text(response.total_pdfs_protocolo || 0);
+                $('#totalSemProtocolo').text(response.total_sem_protocolo || 0);
+                
+                // Mostrar/ocultar botão de download
+                if (response.total_sem_protocolo > 0) {
+                    $('#btnDownloadPdfsSemProtocolo').show();
+                    $('#alertaSemPdfs').hide();
+                } else {
+                    $('#btnDownloadPdfsSemProtocolo').hide();
+                    $('#alertaSemPdfs').show();
+                }
+                
+                // Mostrar conteúdo
+                $('#loadingEstatisticas').hide();
+                $('#conteudoEstatisticas').show();
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao carregar estatísticas:', error);
+                $('#loadingEstatisticas').html(
+                    '<div class="alert alert-danger">' +
+                    '<i class="fas fa-exclamation-circle"></i> ' +
+                    'Erro ao carregar estatísticas. Por favor, tente novamente.' +
+                    '</div>'
+                );
+            }
+        });
+    }
+    
+    // Botão de download
+    $('#btnDownloadPdfsSemProtocolo').on('click', function() {
+        const btn = $(this);
+        const originalHtml = btn.html();
+        
+        // Desabilitar botão e mostrar loading
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Gerando ZIP...');
+        
+        // Fazer download
+        window.location.href = '/notas-fiscais/download-pdfs-sem-protocolo?' + filtrosAtuais;
+        
+        // Reabilitar botão após 3 segundos (tempo estimado para iniciar download)
+        setTimeout(function() {
+            btn.prop('disabled', false);
+            btn.html(originalHtml);
+        }, 3000);
+    });
+});
+</script>
+

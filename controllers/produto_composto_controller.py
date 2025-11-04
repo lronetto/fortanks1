@@ -63,9 +63,9 @@ def comprimir_imagem_base64(imagem_base64, max_size=(400, 300), quality=70):
         # Se falhar, retorna a imagem original e um mime_type padrão
         return imagem_base64, "image/jpeg"
 
-@produto_composto_bp.route('/get_componentes/<int:id>')
+@produto_composto_bp.route('/get_componentes/<int:id>/<int:quantidade>')
 @login_required
-def get_componentes(id):
+def get_componentes(id,quantidade):
     """
     Retorna os componentes de um produto composto a partir do ID
     """
@@ -74,18 +74,26 @@ def get_componentes(id):
         componentes = []
         for componente in produto.componentes:
             estoque = componente.estoque
+            capacidade = 0;
+            if componente.quantidade >0 and componente.estoque.quantidade >0:
+                capacidade = componente.estoque.quantidade / componente.quantidade
             componentes.append({
                 'estoque_id': componente.estoque_id,
-                'quantidade': componente.quantidade,
+                'quantidade': format(float(componente.quantidade), '.2f'),
+                'quantidade_total': format(float(componente.quantidade * quantidade), '.2f'),
                 'nome': componente.estoque.material.nome if componente.estoque.material_id else componente.estoque.produto_composto.nome,
-                'estoque': componente.estoque.quantidade if componente.estoque else 0,
-                'capacidade': format(componente.estoque.quantidade / componente.quantidade, '.2f') if componente.quantidade >0 and componente.estoque.quantidade >0 else 0
+                'estoque': format(float(componente.estoque.quantidade if componente.estoque else 0), '.2f'),
+                'capacidade': format(float(capacidade), '.2f'),
+                'valor_unitario': format(float(componente.get_valor_total()), '.2f'),
+                'valor_total': format(float(componente.get_valor_total()*quantidade), '.2f')
             })
         quantidade_maxima = min(componente['capacidade'] for componente in componentes)
         return jsonify({
             'success': True,
             'componentes': componentes,
-            'quantidade_maxima': quantidade_maxima
+            'quantidade_maxima': quantidade_maxima,
+            'valor_unitario': format(float(produto.get_valor_total()), '.2f'),
+            'valor_total': format(float(produto.get_valor_total()*quantidade), '.2f')
         })
     except Exception as e:
         logger.error(f"Erro ao obter componentes: {str(e)}")

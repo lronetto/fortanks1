@@ -136,8 +136,11 @@ class ProdutoComposto(db.Model):
     
     def __repr__(self):
         return f'<ProdutoComposto {self.id} - {self.nome}>'
-
-
+    
+    def get_valor_total(self):
+        """Retorna o valor unitário do produto composto"""
+        return sum(componente.get_valor_total() for componente in self.componentes)
+   
 class ProdutoCompostoItem(db.Model):
     """
     Modelo para representar componentes de um produto composto
@@ -159,6 +162,12 @@ class ProdutoCompostoItem(db.Model):
     def __repr__(self):
         return f'<ComponenteProduto {self.id} - Produto: {self.produto_id}, Material: {self.material.nome}, Quantidade: {self.quantidade} {self.unidade}>'
 
+    def get_valor_unitario(self):
+        """Retorna o valor unitário do item"""
+        return self.estoque.get_valor_unitario()
+    def get_valor_total(self):
+        """Retorna o valor total do item"""
+        return self.get_valor_unitario() * self.quantidade
     def salvar(self):
         """Salva o item no banco de dados"""
         db.session.add(self)

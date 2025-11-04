@@ -2,7 +2,7 @@ from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response, Response
 from markupsafe import Markup
 from flask_login import login_required, current_user
-from controllers.nota_fiscal_controller import nota_fiscal_busca
+from controllers.nota_fiscal_controller import api_get_dados_notas_fiscais
 from models.nota_fiscal import CFOPS_COMPRA,CNPJS_MATRIZ_FILIAIS,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
 from models import db, Reembolso, ReembolsoDocumento, ReembolsoAnexo, NotaFiscal,NotaFiscalItem ,CentroCusto

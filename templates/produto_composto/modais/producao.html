@@ -1,6 +1,60 @@
 <!-- Modal Produção -->
+<style>
+    #producaoModal .modal-dialog {
+        max-width: 80%;
+        margin: 1rem auto;
+    }
+    
+    #producaoModal .modal-body {
+        overflow: visible;
+    }
+    
+    #tabela-componentes-producao {
+        margin-bottom: 0;   
+    }
+    
+    #tabela-componentes-producao thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 10;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    #tabela-componentes-producao tbody td {
+        white-space: nowrap;
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    #tabela-componentes-producao thead th {
+        white-space: nowrap;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .tabela-produtos-compostos {
+        max-height: 50vh;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+    
+    @media (max-width: 768px) {
+        #producaoModal .modal-dialog {
+            max-width: 100%;
+            margin: 0.5rem;
+        }
+        
+        .tabela-produtos-compostos {
+            max-height: 40vh;
+        }
+    }
+</style>
 <div class="modal fade" id="producaoModal" tabindex="-1" role="dialog" aria-labelledby="producaoModalLabel" aria-hidden="true">
-    <div class="modal-dialog" role="document">
+    <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="producaoModalLabel">Registrar Produção</h5>
@@ -11,18 +65,23 @@
             <form id="form-producao">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
-                    <p>Produto: <strong id="nome-produto-producao"></strong></p>
-                    <p>Estoque Atual: <strong id="estoque-atual-producao"></strong></p>
-                    <p>Quantidade Máxima: <strong id="quantidade-maxima-producao"></strong></p>
+                    <div class="mb-3">
+                        <p class="mb-1">Produto: <strong id="nome-produto-producao"></strong></p>
+                        <p class="mb-1">Estoque Atual: <strong id="estoque-atual-producao"></strong></p>
+                        <p class="mb-1">Quantidade Máxima: <strong id="quantidade-maxima-producao"></strong></p>
+                    </div>
                     <input type="hidden" name="produto_id" id="produto_id_producao">
-                    <div class="tabela-produtos-compostos">
-                        <table class="table table-bordered" id="tabela-componentes-producao">
-                            <thead>
+                    <div class="tabela-produtos-compostos table-responsive">
+                        <table class="table table-bordered table-sm" id="tabela-componentes-producao">
+                            <thead class="thead-light">
                                 <tr>
                                     <th>Componente</th>
-                                    <th>Quantidade</th>
+                                    <th>Quantidade p/ unidade</th>
+                                    <th>Quantidade Total</th>
                                     <th>Estoque</th>
-                                    <th>Capacidade</th>
+                                    <th>Disponível</th>
+                                    <th>Valor Unitário</th>
+                                    <th>Valor Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -31,7 +90,13 @@
                         </table>
                     </div>
                     
-                    <div class="form-group">
+                    <div class="mt-2 text-center">
+                        <button type="button" class="btn btn-success btn-sm" id="btn-exportar-excel" title="Exportar para Excel" disabled>
+                            <i class="fas fa-file-excel"></i> Exportar para Excel
+                        </button>
+                    </div>
+                    
+                    <div class="form-group mt-3">
                         <label for="quantidade_produzir">Quantidade a Produzir</label>
                         <input type="number" class="form-control" id="quantidade_produzir" name="quantidade" min="1" step="1" required>
                     </div>
@@ -43,8 +108,9 @@
             </form>
         </div>
     </div>
-</div> 
+</div>
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const produtoId = $('.btn-produzir').data('id');
@@ -64,11 +130,17 @@
         $('#producaoModal [data-dismiss="modal"]').on('click', function() {
             fecharModal('#producaoModal');
         });
+        $('#quantidade_produzir').on('change', function() {
+            const quantidade = $(this).val() || 1;
+            const produtoId = $('#produto_id_producao').val();
+            if (produtoId) {
+                carregarComponentes(produtoId, quantidade);
+            }
+        });
         //carregarComponentes(produtoId);
-        
     });
-    function carregarComponentes(id) {
-            fetch(`/produto-composto/get_componentes/${id}`,{
+    function carregarComponentes(id,quantidade=1) {
+            fetch(`/produto-composto/get_componentes/${id}/${quantidade}`,{
                 headers: {
                     'X-CSRFToken': $('input[name="csrf_token"]').val()
                 }
@@ -78,23 +150,40 @@
             .then(data => {
                 console.log(data); 
                 const tbody = document.querySelector('#tabela-componentes-producao tbody');
+                const btnExportar = document.getElementById('btn-exportar-excel');
                 tbody.innerHTML = '';
+                // Desabilitar botão enquanto carrega
+                if (btnExportar) btnExportar.disabled = true;
+                
                 if(data.success){
                 data.componentes.forEach(componente => {
                     tbody.innerHTML += ` 
                         <tr>
                             <td>${componente.nome}</td>
-                            <td>${componente.quantidade}</td>
-                            <td>${componente.estoque}</td>
-                            <td>${componente.capacidade}</td>
+                            <td>${componente.quantidade.replace('.', ',')}</td>
+                            <td>${componente.quantidade_total.replace('.', ',')}</td>
+                            <td>${componente.estoque.replace('.', ',')}</td>
+                            <td>${componente.capacidade.replace('.', ',')}</td>
+                            <td>${formatarMoeda(componente.valor_unitario)}</td>
+                            <td>${formatarMoeda(componente.valor_total)}</td>
+                            
                         </tr>
                     `;
                     });
-                    $('#quantidade-maxima-producao').text(data.quantidade_maxima);
-                }else{
-                    tbody.innerHTML = `<tr><td colspan="4">Não há componentes para produzir</td></tr>`;
+                    tbody.innerHTML += `
+                        <tr>
+                            <td colspan="5">Total:</td>
+                            <td>${formatarMoeda(data.valor_unitario)}</td>
+                            <td>${formatarMoeda(data.valor_total)}</td>
+                        </tr>
+                    `;
+                    
+                    // Habilitar botão de exportar
+                    if (btnExportar) btnExportar.disabled = false;
+                } else {
+                    // Desabilitar botão se não houver dados
+                    if (btnExportar) btnExportar.disabled = true;
                 }
-
             });
         }
      document.getElementById('form-producao').addEventListener('submit', function(e) {
@@ -155,5 +244,108 @@
             btn.innerHTML = 'Confirmar Produção';
         });
     });
+    
+    // Função para exportar tabela para Excel
+    const btnExportarExcel = document.getElementById('btn-exportar-excel');
+    if (btnExportarExcel) {
+        btnExportarExcel.addEventListener('click', function() {
+            exportarParaExcel();
+        });
+    }
+    
+    function exportarParaExcel() {
+        const table = document.getElementById('tabela-componentes-producao');
+        const produtoNome = document.getElementById('nome-produto-producao').textContent || 'Producao';
+        const quantidade = document.getElementById('quantidade_produzir').value || '1';
+        
+        // Verificar se a tabela tem dados
+        const tbody = table.querySelector('tbody');
+        if (!tbody || tbody.rows.length === 0) {
+            alert('Não há dados para exportar. Carregue os componentes primeiro.');
+            return;
+        }
+        
+        // Criar workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Preparar dados para exportação
+        const dados = [];
+        
+        // Adicionar informações do produto
+        dados.push(['Produto:', produtoNome]);
+        dados.push(['Quantidade a Produzir:', quantidade]);
+        dados.push(['Estoque Atual:', document.getElementById('estoque-atual-producao').textContent || '']);
+        dados.push(['Quantidade Máxima:', document.getElementById('quantidade-maxima-producao').textContent || '']);
+        dados.push([]); // Linha em branco
+        
+        // Adicionar cabeçalhos
+        const headers = [];
+        table.querySelectorAll('thead th').forEach(th => {
+            headers.push(th.textContent.trim());
+        });
+        dados.push(headers);
+        
+        // Adicionar linhas da tabela
+        tbody.querySelectorAll('tr').forEach(tr => {
+            const row = [];
+            let colIndex = 0;
+            tr.querySelectorAll('td').forEach(td => {
+                let valor = td.textContent.trim();
+                
+                // Identificar se é coluna de valor (penúltima ou última coluna)
+                const isValorUnitario = colIndex === headers.length - 2;
+                const isValorTotal = colIndex === headers.length - 1;
+                
+                if (isValorUnitario || isValorTotal) {
+                    // Remover formatação de moeda (R$, espaços) e converter para número
+                    valor = valor.replace(/[R$\s]/g, '');
+                    // Remover pontos de milhar e converter vírgula decimal para ponto
+                    valor = valor.replace(/\./g, '').replace(',', '.');
+                    // Converter para número se possível
+                    const numValor = parseFloat(valor);
+                    valor = isNaN(numValor) ? valor : numValor;
+                } else {
+                    // Para outras colunas, converter vírgula para ponto se for número
+                    const numValor = parseFloat(valor.replace(',', '.'));
+                    if (!isNaN(numValor)) {
+                        valor = numValor;
+                    }
+                }
+                
+                row.push(valor);
+                colIndex++;
+            });
+            dados.push(row);
+        });
+        
+        // Criar worksheet
+        const ws = XLSX.utils.aoa_to_sheet(dados);
+        
+        // Ajustar largura das colunas
+        const colWidths = [];
+        for (let i = 0; i < headers.length; i++) {
+            let maxLength = headers[i].length;
+            dados.forEach((row, idx) => {
+                if (row[i] && idx > 4) { // Pular as linhas de informações iniciais
+                    const cellValue = String(row[i] || '');
+                    if (cellValue.length > maxLength) {
+                        maxLength = cellValue.length;
+                    }
+                }
+            });
+            colWidths.push({ wch: Math.min(maxLength + 2, 50) });
+        }
+        ws['!cols'] = colWidths;
+        
+        // Adicionar worksheet ao workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Componentes');
+        
+        // Gerar nome do arquivo
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+        const nomeArquivo = `producao_${produtoNome.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.xlsx`;
+        
+        // Exportar arquivo
+        XLSX.writeFile(wb, nomeArquivo);
+    }
 </script>
 {% endblock %}

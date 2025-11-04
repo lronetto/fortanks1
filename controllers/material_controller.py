@@ -1196,4 +1196,135 @@ def exportar_excel():
     except Exception as e:
         logger.error(f"Erro ao exportar materiais para Excel: {e}")
         flash('Ocorreu um erro ao gerar o arquivo Excel.', 'danger')
+        return redirect(url_for('material.index'))
+
+@material_bp.route('/exportar-mega')
+@login_required
+def exportar_mega():
+    """
+    Exporta materiais para o Mega, usando o template CADASTRO DE INSUMOS.xlsx
+    e adicionando dados do banco a partir da linha 7.
+    """
+    try:
+        # Caminho para o arquivo template (na raiz do projeto)
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        template_path = os.path.join(base_path, 'CADASTRO DE INSUMOS.xlsx')
+        
+        if not os.path.exists(template_path):
+            logger.error(f"Template não encontrado: {template_path}")
+            flash('Arquivo template não encontrado. Entre em contato com o administrador.', 'danger')
+            return redirect(url_for('material.index'))
+        
+        # Carregar o workbook template
+        wb = openpyxl.load_workbook(template_path)
+        ws = wb.active
+        
+        # Buscar todos os materiais do banco de dados
+        materiais = Material.query.filter_by(ativo=True).order_by(Material.nome).all()
+        
+        # Linha inicial para inserção de dados (linha 7)
+        linha_inicial = 7
+        linha_atual = linha_inicial
+        
+        # Mapear campos do Material para as colunas do Excel
+        # Coluna 1: GRU_IN_CODIGO - Código do grupo (usar código do material ou ID)
+        # Coluna 2: PRO_ST_DESCRICAO - Descrição do item (nome do material)
+        # Coluna 3: PRO_ST_DEFITEM - Definição do item (categoria ou padrão)
+        # Coluna 4: PRO_BO_GENERICO - Item genérico (S/N, padrão 'N')
+        # Coluna 5: UNIP_ST_UNIDADE - Unidade de processo (unidade do material)
+        # Coluna 6: PRO_CH_DEFFISCALITEM - Definição fiscal (NCM)
+        # Coluna 7: PRO_ST_ORIGEM - Origem (padrão 'Comprado')
+        # Coluna 8: UNI_ST_UNIDADE - Unidade de estoque (unidade do material)
+        # Coluna 9: PRO_IN_GERASOLICITACAO - Gera solicitação (EM/NC, padrão 'EM')
+        # Coluna 10: PRO_IN_QTDECOMPRAR - Qtde a comprar (EM/NC, padrão 'NC')
+        # Coluna 11: PRO_ST_ALTERNATIVO - Código alternativo (código ERP)
+        # Coluna 12: PRO_ST_DESCRICAOPDV - Descrição abreviada (pode ser vazio)
+        # Coluna 13: PRO_ST_DESCRICAONFE - Descrição NF-e (nome ou descrição)
+        # Coluna 14: PRO_ST_NARRATIVA - Narrativa (descrição do material)
+        # Coluna 15: PRO_BO_TOTALIZADOC - Totaliza documentos (S/N, padrão 'S')
+        # Coluna 16: PRO_RE_PELIQUIDO - Peso líquido (vazio)
+        # Coluna 17: PRO_RE_PEBRUTO - Peso bruto (vazio)
+        # Coluna 18: PRO_ST_UTILIZACAO - Utilização (vazio)
+        # Coluna 19: PRO_CH_REALIZADOORC - Controle de orçamento (vazio)
+        
+        for material in materiais:
+            # Coluna 1: Código do grupo (usar código ou ID)
+            codigo_grupo = material.codigo if material.codigo else str(material.id)
+            ws.cell(row=linha_atual, column=1, value=codigo_grupo)
+            
+            # Coluna 2: Descrição do item (nome)
+            ws.cell(row=linha_atual, column=2, value=material.nome or '')
+            
+            # Coluna 3: Definição do item (categoria ou padrão)
+            # Se não houver categoria específica, usar um padrão
+            def_item = 'MT'
+            ws.cell(row=linha_atual, column=3, value=def_item)
+            
+            # Coluna 4: Item genérico (padrão 'N')
+            ws.cell(row=linha_atual, column=4, value='N')
+            
+            # Coluna 5: Unidade de processo
+            unidade = material.unidade_obj.nome if material.unidade_obj else 'UN'
+            ws.cell(row=linha_atual, column=5, value=unidade)
+            
+            # Coluna 6: Definição fiscal (NCM)
+            def_fiscal = "07" if (material.categoria == 'EPI' or 
+                                  material.categoria == 'Insumo' or
+                                material.categoria == 'EPP') else "08"
+            ws.cell(row=linha_atual, column=6, value=def_fiscal)
+            
+            # Coluna 7: Origem (padrão 'Comprado')
+            ws.cell(row=linha_atual, column=7, value='Comprado')
+            
+            # Coluna 8: Unidade de estoque
+            ws.cell(row=linha_atual, column=8, value=unidade)
+            
+            # Coluna 9: Gera solicitação (padrão 'EM')
+            ws.cell(row=linha_atual, column=9, value='EM')
+            
+            # Coluna 10: Qtde a comprar (padrão 'NC')
+            ws.cell(row=linha_atual, column=10, value='NC')
+            
+            # Coluna 11: Código alternativo (código ERP)
+            codigo_alternativo = material.id
+            if codigo_alternativo:
+                ws.cell(row=linha_atual, column=11, value=codigo_alternativo)
+            
+            # Coluna 12: Descrição abreviada (vazio por padrão)
+            # ws.cell(row=linha_atual, column=12, value=None)  # Não precisa definir se vazio
+            
+            # Coluna 13: Descrição NF-e (usar nome ou descrição)
+            ws.cell(row=linha_atual, column=13, value="")
+            
+            # Coluna 14: Narrativa (descrição do material)
+            if material.descricao:
+                ws.cell(row=linha_atual, column=14, value=material.descricao)
+            
+            # Coluna 15: Totaliza documentos (padrão 'S')
+            ws.cell(row=linha_atual, column=15, value='S')
+            
+            # Colunas 16-19 ficam vazias por padrão
+            
+            linha_atual += 1
+        
+        # Criar arquivo em memória
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # Nome do arquivo
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"CADASTRO_DE_INSUMOS_{timestamp}.xlsx"
+        
+        # Enviar o arquivo para download
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar materiais para Mega: {e}", exc_info=True)
+        flash(f'Ocorreu um erro ao gerar o arquivo Excel para o Mega: {str(e)}', 'danger')
         return redirect(url_for('material.index')) 

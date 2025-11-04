@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 import logging
-from pandas.io.common import zipfile
+import zipfile
 import requests
 import base64
 import xml.etree.ElementTree as ET
@@ -239,7 +239,8 @@ def api_get_dados_notas_fiscais(request):
     busca = args.get('busca', '')
     item_nome = args.get('item_nome', '')
     status_importacao = args.get('status_importacao', '')
-    cnpj_emitente = args.get('cnpj_emitente', '')
+    emitente = args.get('emitente', '')
+    destinatario = args.get('destinatario', '')
     status_pagamento = args.get('status_pagamento', '')
     data_emissao_inicio = args.get('data_emissao_inicio', '')
     data_emissao_fim = args.get('data_emissao_fim', '')
@@ -249,8 +250,8 @@ def api_get_dados_notas_fiscais(request):
     remetente = args.get('remetente', '')  # Novo filtro para remetente
     status_upload = args.get('status_upload', '')  # Novo filtro de status upload
     # Novos filtros de CNPJ direto (valor exato)
-    cnpj_emitente_val = args.get('cnpj_emitente_val', '').strip()
-    cnpj_destinatario_val = args.get('cnpj_destinatario_val', '').strip()
+    cnpj_emitente = args.get('cnpj_emitente', '').strip()
+    cnpj_destinatario = args.get('cnpj_destinatario', '').strip()
     
     # Instanciar formulário de importação para o modal
     
@@ -287,18 +288,29 @@ def api_get_dados_notas_fiscais(request):
     # Filtro por data de emissão
     data_emissao_inicio = request.args.get('data_emissao_inicio', '')
     data_emissao_fim = request.args.get('data_emissao_fim', '')
-    if cnpj_emitente:
-        if cnpj_emitente == 'Matriz':
+    if emitente:
+        if emitente == 'Terceiros':
+            query = query.filter(~NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
+        elif emitente == 'Matriz':
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ))
-        elif cnpj_emitente == 'Filiais':
+        elif emitente == 'Filiais':
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_FILIAIS))
-        elif cnpj_emitente == 'Matriz_Filiais':
+        elif emitente == 'Matriz_Filiais':
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
+    if destinatario:
+        if destinatario == 'Terceiros':
+            query = query.filter(~NotaFiscal.cnpj_destinatario.in_(CNPJS_MATRIZ_FILIAIS))
+        if destinatario == 'Matriz':
+            query = query.filter(NotaFiscal.cnpj_destinatario.in_(CNPJS_MATRIZ))
+        elif destinatario == 'Filiais':
+            query = query.filter(NotaFiscal.cnpj_destinatario.in_(CNPJS_FILIAIS))
+        elif destinatario == 'Matriz_Filiais':
+            query = query.filter(NotaFiscal.cnpj_destinatario.in_(CNPJS_MATRIZ_FILIAIS))
     # Aplicar filtros por CNPJ exato se informados
-    if cnpj_emitente_val:
-        query = query.filter(NotaFiscal.cnpj_emitente == cnpj_emitente_val)
-    if cnpj_destinatario_val:
-        query = query.filter(NotaFiscal.cnpj_destinatario == cnpj_destinatario_val)
+    if cnpj_emitente:
+        query = query.filter(NotaFiscal.cnpj_emitente == cnpj_emitente)
+    if cnpj_destinatario:
+        query = query.filter(NotaFiscal.cnpj_destinatario == cnpj_destinatario)
     if data_emissao_inicio:
         try:
             data_inicio = datetime.strptime(data_emissao_inicio, '%Y-%m-%d')
@@ -335,23 +347,30 @@ def api_get_dados_notas_fiscais(request):
                 )
     # Filtro de status de upload
     if status_upload:
+        
         if status_upload == '1':
-            # Notas com upload tipo 2 (scan)
+            # Notas com upload tipo arquivei
             query = query.filter(
                 db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 1).exists()
             )
         elif status_upload == '2':
-            # Notas com upload tipo 1 (padrão)
+            # Notas com upload tipo protocolo
             query = query.filter(
                 db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 2).exists()
             )
+            # Notas com upload tipo 3 (reembolso)
         elif status_upload == '3':
            query = query.filter(
                 db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 3).exists()
             )
         elif status_upload == '4':
+            # Notas SEM upload tipo protocolo (tipo 2)
+            query = query.filter(
+                ~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id, Upload.tipo == 2).exists()
+            )
+        
+        elif status_upload == '5':
             query = query.filter(~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id).exists())
-    
     # Ordenar antes de paginar
     query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
     
@@ -689,40 +708,7 @@ def excluir_item(id):
     
     return redirect(url_for('nota_fiscal.listar_itens', nf_id=nf_id))
 
-@nota_fiscal_bp.route('/api/buscar', methods=['GET'])
-@login_required
-def api_buscar():
-    """
-    API para buscar notas fiscais por número, chave ou CNPJ
-    """
-    termo = request.args.get('termo', '')
-    
-    if not termo:
-        return jsonify([])
-    
-    # Busca por número, chave de acesso ou CNPJ emitente/destinatário
-    notas = NotaFiscal.query.filter(
-        (NotaFiscal.numero_nf.like(f'%{termo}%')) |
-        (NotaFiscal.chave_acesso.like(f'%{termo}%')) |
-        (NotaFiscal.cnpj_emitente.like(f'%{termo}%')) |
-        (NotaFiscal.cnpj_destinatario.like(f'%{termo}%')) |
-        (NotaFiscal.nome_emitente.like(f'%{termo}%')) |
-        (NotaFiscal.nome_destinatario.like(f'%{termo}%'))
-    ).limit(10).all()
-    
-    resultado = []
-    for nota in notas:
-        resultado.append({
-            'id': nota.id,
-            'numero_nf': nota.numero_nf,
-            'chave_acesso': nota.chave_acesso,
-            'data_emissao': nota.data_emissao.strftime('%d/%m/%Y'),
-            'valor_total': float(nota.valor_total),
-            'cnpj_emitente': nota.cnpj_emitente,
-            'nome_emitente': nota.nome_emitente
-        })
-    
-    return jsonify(resultado)
+ 
 
     
 @nota_fiscal_bp.route('/importar-arquivei', methods=['POST'])
@@ -2267,7 +2253,110 @@ def exportar_zip():
 
     zip_buffer.seek(0)
     return send_file(zip_buffer, download_name='notas_fiscais.zip', as_attachment=True, mimetype='application/zip')
-    return render_template('notas_fiscais/exportar_zip.html')
+
+@nota_fiscal_bp.route('/estatisticas-pdfs', methods=['GET'])
+@login_required
+def estatisticas_pdfs():
+    """Retorna estatísticas de PDFs das notas fiscais com os filtros aplicados"""
+    try:
+        # Obter query com filtros aplicados
+        query = api_get_dados_notas_fiscais(request)
+
+        query = query.outerjoin(Upload,and_(Upload.pai=="NotaFiscal",Upload.pai_id==NotaFiscal.id))
+        notas = query.all()
+        
+
+        # Contadores
+        total_pdfs_originais = 0
+        total_pdfs_protocolo = 0
+        total_sem_protocolo = 0
+        
+        # Iterar sobre as notas para contar PDFs
+        for nota in notas:
+            
+            if nota.upload:
+                if nota.upload.tipo == 1:
+                    total_pdfs_originais += 1
+                elif nota.upload.tipo == 2:
+                    total_pdfs_protocolo += 1
+                elif nota.upload.tipo == 3:
+                    total_pdfs_reembolso += 1
+                elif nota.upload.tipo == 4:
+                    total_sem_protocolo += 1
+            
+        
+        return jsonify({
+            'total_pdfs_originais': total_pdfs_originais,
+            'total_pdfs_protocolo': total_pdfs_protocolo,
+            'total_sem_protocolo': total_sem_protocolo,
+            'total_notas': len(notas)
+        })
+    except Exception as e:
+        logger.error(f'Erro ao obter estatísticas de PDFs: {str(e)}')
+        return jsonify({'error': 'Erro ao obter estatísticas'}), 500
+
+@nota_fiscal_bp.route('/download-pdfs-sem-protocolo', methods=['GET'])
+@login_required
+def download_pdfs_sem_protocolo():
+    """Faz download de um ZIP com os PDFs originais que não têm protocolo"""
+    try:
+        # Obter query com filtros aplicados
+        query = api_get_dados_notas_fiscais(request)
+        notas = query.all()
+        
+        # Criar buffer para o ZIP
+        zip_buffer = io.BytesIO()
+        
+        pdfs_adicionados = 0
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for nota in notas:
+                # Buscar PDF original (tipo 1)
+                upload_original = db.session.query(Upload).filter(
+                    Upload.pai == 'NotaFiscal',
+                    Upload.pai_id == nota.id,
+                    Upload.tipo == 1
+                ).first()
+                
+                # Verificar se não tem protocolo (tipo 2)
+                tem_protocolo = db.session.query(Upload.id).filter(
+                    Upload.pai == 'NotaFiscal',
+                    Upload.pai_id == nota.id,
+                    Upload.tipo == 2
+                ).first() is not None
+                
+                # Se tem PDF original mas não tem protocolo, adicionar ao ZIP
+                if upload_original and not tem_protocolo:
+                    try:
+                        # Decodificar o blob base64
+                        pdf_bytes = base64.b64decode(upload_original.blob)
+                        
+                        # Criar nome do arquivo
+                        data_emissao = nota.data_emissao.strftime('%Y%m%d') if nota.data_emissao else 'semdata'
+                        nome_arquivo = f'{nota.numero_nf}_{data_emissao}_{nota.chave_acesso}.pdf'
+                        
+                        # Adicionar ao ZIP
+                        zipf.writestr(nome_arquivo, pdf_bytes)
+                        pdfs_adicionados += 1
+                    except Exception as e:
+                        logger.error(f'Erro ao processar PDF da nota {nota.id}: {str(e)}')
+                        continue
+        
+        if pdfs_adicionados == 0:
+            flash('Nenhum PDF original sem protocolo foi encontrado com os filtros aplicados.', 'warning')
+            return redirect(url_for('nota_fiscal.index'))
+        
+        zip_buffer.seek(0)
+        return send_file(
+            zip_buffer,
+            download_name=f'pdfs_sem_protocolo_{datetime.now().strftime("%Y%m%d_%H%M%S")}.zip',
+            as_attachment=True,
+            mimetype='application/zip'
+        )
+    except Exception as e:
+        logger.error(f'Erro ao gerar ZIP de PDFs: {str(e)}')
+        flash('Erro ao gerar arquivo ZIP. Por favor, tente novamente.', 'danger')
+        return redirect(url_for('nota_fiscal.index'))
+
 @nota_fiscal_bp.route('/tabela-notas-fiscais')
 @login_required
 def tabela_notas_fiscais():

@@ -32,6 +32,9 @@
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Lista de Materiais</h6>
             <div>
+                <a href="{{ url_for('material.exportar_mega') }}" class="btn btn-warning btn-sm me-2" target="_blank">
+                    <i class="fas fa-cloud-download-alt"></i> Exportar para Mega
+                </a>
                 <a href="{{ url_for('material.exportar_excel', search=search_term, category=category_filter) }}" class="btn btn-info btn-sm me-2" target="_blank">
                     <i class="fas fa-file-excel"></i> Exportar Excel (Filtrado)
                 </a>

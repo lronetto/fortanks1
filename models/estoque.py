@@ -84,6 +84,13 @@ class Estoque(db.Model):
         else:
             return "Válido"
     
+    def get_valor_unitario(self):
+        """Retorna o valor unitário do item"""
+        if self.material:
+            return self.material.get_valor_unitario()
+        elif self.produto_composto:
+            return self.produto_composto.get_valor_total()
+        return 0
     def get_estoque_atual(self):
         movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id = self.id).order_by(MovimentacaoEstoque.data_movimento.desc()).all()
         saldo_anterior = 0
