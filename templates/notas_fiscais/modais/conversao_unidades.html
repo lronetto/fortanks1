@@ -69,47 +69,34 @@
                 mostrarAlerta('Erro', 'Informe um fator de conversão válido ou selecione uma conversão existente.', 'error');
                 return;
             }
-            fetch('/notas-fiscais/api/aplicar_conversao', {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': $('input[name="csrf_token"]').val(),
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    item_id: itemId,
-                    material_id: materialId,
-                    unidade_conversao_id: unidadeConversaoId,
-                    fator_conversao: fatorConversao
-                })
-            })
-            .then(response => {
-                //console.log('response', response);
-                if (!response.ok) {
-                    throw new Error(`Erro de rede: ${response.status}`);
+            // Salvar o fator de conversão no campo hidden da tabela
+            const campoFatorConversao = document.getElementById(`fator_conversao_${itemId}`);
+            if (campoFatorConversao) {
+                campoFatorConversao.value = fatorConversao;
+            }
+            
+            // Atualizar a visualização do fator de conversão na tabela
+            const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
+            if (linhaItem) {
+                // A coluna "Fator de Conversão" é a 7ª coluna (índice 6)
+                const celulaFatorConversao = linhaItem.cells[6];
+                if (celulaFatorConversao && fatorConversao) {
+                    // Formatar o fator de conversão com 4 casas decimais
+                    const fatorNum = parseFloat(fatorConversao);
+                    if (!isNaN(fatorNum) && fatorNum > 0) {
+                        const fatorFormatado = fatorNum.toLocaleString('pt-BR', {
+                            minimumFractionDigits: 4,
+                            maximumFractionDigits: 4
+                        });
+                        celulaFatorConversao.textContent = fatorFormatado;
+                    }
                 }
-                return response.json().catch(e => {
-                    console.error('Erro ao fazer parse do JSON:', e);
-                    throw new Error('Resposta inválida do servidor: não é um JSON válido');
-                });
-            })
-            .then(data => {
-                if (data.success) {
-                    const modalConversao = bootstrap.Modal.getInstance(document.getElementById('modalConversaoUnidades'));
-                    if (modalConversao) modalConversao.hide();
-                    mostrarAlerta('Sucesso', 'Conversão aplicada com sucesso.', 'success');
-                } else {
-                    mostrarAlerta('Erro', data.message, 'error');
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao aplicar conversão:', error);
-                mostrarAlerta('Erro', `Ocorreu um erro ao aplicar a conversão: ${error.message}`, 'error');
-            })
-            .finally(() => {
-                if (typeof Swal !== 'undefined') {
-                    Swal.close();
-                }
-            });
+            }
+            
+            // Fechar o modal
+            const modalConversao = bootstrap.Modal.getInstance(document.getElementById('modalConversaoUnidades'));
+            if (modalConversao) modalConversao.hide();
+            mostrarAlerta('Sucesso', 'Fator de conversão definido. O fator será aplicado durante a importação.', 'success');
         });
     
     

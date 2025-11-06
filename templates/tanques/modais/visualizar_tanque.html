@@ -1,0 +1,201 @@
+<!-- Modal de Visualização de Tanque -->
+<div class="modal fade" id="modalVisualizarTanque" tabindex="-1" aria-labelledby="modalVisualizarTanqueLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarTanqueLabel"><i class="fas fa-eye"></i> Detalhes do Tanque</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <h4 class="font-weight-bold" id="view_nome">-</h4>
+                    <div class="text-muted mb-2">
+                        <span class="badge bg-info" id="view_sistema">-</span>
+                        <span class="badge ms-2" id="view_cobertura">-</span>
+                        <span class="badge bg-dark ms-2" id="view_tipo_tanque">-</span>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">UN</label>
+                        <p id="view_un" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Dimensões</label>
+                        <p id="view_dimensoes" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Altura Total</label>
+                        <p id="view_altura_total" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Altura Útil</label>
+                        <p id="view_altura_util" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Quantidade</label>
+                        <p id="view_quantidade" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Quantidade de Bainhas</label>
+                        <p id="view_quantidade_bainhas" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Contrato</label>
+                        <p id="view_contrato" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold mb-2">Quantidades de Placas</h6>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Placas Normais (PN)</label>
+                        <p id="view_placas_normais" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Placas Fecho (PF)</label>
+                        <p id="view_placas_fecho" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <h6 class="font-weight-bold mb-2">Cálculos</h6>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Área da Base</label>
+                        <p id="view_area_base" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Volume Útil</label>
+                        <p id="view_volume_util" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold">Volume Total</label>
+                        <p id="view_volume_total" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Data de Cadastro</label>
+                        <p id="view_data_cadastro" class="border-bottom pb-2">-</p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Última Atualização</label>
+                        <p id="view_ultima_atualizacao" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para preencher o modal de visualização
+    function preencherModalVisualizacao(tanque) {
+        if (!tanque) {
+            console.error('Dados do tanque não encontrados!');
+            return;
+        }
+        
+        document.getElementById('view_nome').textContent = tanque.nome || '-';
+        document.getElementById('view_sistema').textContent = tanque.sistema || '-';
+        document.getElementById('view_un').textContent = tanque.un || '-';
+        document.getElementById('view_dimensoes').textContent = tanque.dimensoes || '-';
+        document.getElementById('view_altura_total').textContent = tanque.altura_total ? tanque.altura_total + ' m' : '-';
+        document.getElementById('view_altura_util').textContent = tanque.altura_util ? tanque.altura_util + ' m' : '-';
+        document.getElementById('view_quantidade').textContent = tanque.quantidade ? tanque.quantidade + (tanque.quantidade > 1 ? ' unidades' : ' unidade') : '-';
+        document.getElementById('view_quantidade_bainhas').textContent = tanque.quantidade_bainhas || 0;
+        document.getElementById('view_placas_normais').textContent = tanque.placas_normais !== null && tanque.placas_normais !== undefined ? tanque.placas_normais : 'N/A';
+        document.getElementById('view_placas_fecho').textContent = tanque.placas_fecho !== null && tanque.placas_fecho !== undefined ? tanque.placas_fecho : 'N/A';
+        document.getElementById('view_data_cadastro').textContent = tanque.data_cadastro || '-';
+        document.getElementById('view_ultima_atualizacao').textContent = tanque.ultima_atualizacao || '-';
+        
+        // Cobertura
+        const coberturaBadge = document.getElementById('view_cobertura');
+        if (tanque.cobertura) {
+            coberturaBadge.textContent = 'Com Cobertura';
+            coberturaBadge.className = 'badge bg-success ms-2';
+        } else {
+            coberturaBadge.textContent = 'Sem Cobertura';
+            coberturaBadge.className = 'badge bg-danger ms-2';
+        }
+        
+        // Tipo de tanque
+        const tipoTanque = tanque.sistema ? (tanque.sistema.startsWith('SC') ? 'Circular' : tanque.sistema.startsWith('SR') ? 'Retangular' : 'Desconhecido') : '-';
+        document.getElementById('view_tipo_tanque').textContent = tipoTanque;
+        
+        // Contrato (precisa buscar do backend ou passar via data-attribute)
+        document.getElementById('view_contrato').textContent = tanque.contrato_nome || '-';
+        
+        // Cálculos (retornados da API)
+        document.getElementById('view_area_base').textContent = tanque.area_base !== null && tanque.area_base !== undefined ? tanque.area_base.toFixed(2) + ' m²' : 'N/A';
+        document.getElementById('view_volume_util').textContent = tanque.volume_util !== null && tanque.volume_util !== undefined ? tanque.volume_util.toFixed(2) + ' m³' : 'N/A';
+        document.getElementById('view_volume_total').textContent = tanque.volume_total !== null && tanque.volume_total !== undefined ? tanque.volume_total.toFixed(2) + ' m³' : 'N/A';
+    }
+
+    // Modal de Visualização
+    const modalVisualizacao = new bootstrap.Modal(document.getElementById('modalVisualizarTanque'));
+    
+    // Event listener para botões de visualização
+    document.querySelectorAll('.btn-visualizar-tanque').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            try {
+                const tanqueId = this.getAttribute('data-id');
+                const url = `/api/tanques/${tanqueId}`;
+                
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.tanque) {
+                        // Buscar nome do contrato se necessário
+                        if (data.tanque.contrato_id) {
+                            // Pode buscar via API ou usar data-attribute
+                            const contratoNome = this.getAttribute('data-contrato-nome') || '-';
+                            data.tanque.contrato_nome = contratoNome;
+                        }
+                        preencherModalVisualizacao(data.tanque);
+                        modalVisualizacao.show();
+                    } else {
+                        alert('Erro ao carregar os dados do tanque: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao carregar os dados do tanque: ' + error.message);
+                });
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+

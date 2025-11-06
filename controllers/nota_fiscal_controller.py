@@ -803,30 +803,27 @@ def importar_itens():
             itens = data.get('itens')
             print(f"Itens: {itens}")
             # Importar os itens para o estoque
-            for item in itens:
+            for item_data in itens:
                 
-                item_id = item.get('item_id')
-                material_id = item.get('material_id')
+                item_id = item_data.get('item_id')
+                material_id = item_data.get('material_id')
+                fator_conversao = item_data.get('fator_conversao')
                 print(f"Item ID: {item_id}")
                 print(f"Material ID: {material_id}")
+                print(f"Fator Conversão: {fator_conversao}")
                 item1 = NotaFiscalItem.query.get_or_404(item_id)
                 print(f"Item: {item1}")
                 item1.material_id = material_id
                 material = Material.query.get_or_404(material_id)
-                if comparar_unidades(item1.unidade, material.unidade_obj.nome):
-                    item1.fator_conversao_aplicado = 1
-                item1.save()
-                db.session.refresh(item1)
-                cnpj_emitente = NotaFiscal.query.\
-                    join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
-                    filter(NotaFiscalItem.id==item_id).first().cnpj_emitente
-        
-                notas_fiscais = NotaFiscal.query.\
-                    filter(NotaFiscal.cnpj_emitente==cnpj_emitente).all()
-                print(f'vinculando automaticamente notas fiscais: {len(notas_fiscais)}')
-                for nota_fiscal in notas_fiscais:
-                    nota_fiscal.vincular_automaticamente()
-                    nota_fiscal.importar_itens_para_estoque()
+                
+                # Aplicar fator de conversão se fornecido, senão verificar se as unidades são iguais
+                if not fator_conversao or fator_conversao== None :
+                    if comparar_unidades(item1.unidade, material.unidade_obj.nome):
+                        fator_conversao = 1
+                    else:
+                        fator_conversao = None
+                item1.vincular(fator_conversao,material_id)
+                item1.vincular_e_importar_estoque_todos()
                 
             return jsonify({'success': True, 'message': f'Item {item_id} importado com sucesso!'})
        # except Exception as e:
@@ -1608,7 +1605,7 @@ def analise():
 
     # --- Agrupamento e Ordenação (Condicional) --- 
     if agrupar_por == 'material':
-        query = query.group_by(Material.id, Material.nome, Material.unidade)
+        query = query.group_by(Material.id, Material.nome, Material.unidade_id)
         query = query.order_by(sqlfunc.sum(NotaFiscalItem.valor_total).desc()) # Ordenar por valor total
     else: # agrupar_por == 'item_nf'
         query = query.group_by(NotaFiscalItem.codigo, NotaFiscalItem.descricao)
@@ -1672,7 +1669,7 @@ def api_historico_preco():
             material_obj = Material.query.get(material_id)
             if not material_obj:
                  return jsonify({"error": "Material não encontrado."}), 404
-            unidade_referencia = material_obj.unidade.nome
+            unidade_referencia = material_obj.unidade_obj.nome
             logger.debug(f"Buscando histórico para Material ID: {material_id}, Unidade Padrão: {unidade_referencia}")
 
         # Query base para buscar itens individuais e dados da NF
@@ -1681,9 +1678,11 @@ def api_historico_preco():
             NotaFiscalItem.valor_unitario,
             NotaFiscalItem.valor_total, # Necessário para recalcular valor unitário
             NotaFiscalItem.unidade.label('unidade_item_nf'), # Renomear para clareza
+            NotaFiscalItem.fator_conversao_aplicado,
             NotaFiscal.data_emissao,
             NotaFiscal.numero_nf,
             NotaFiscal.nome_emitente,
+            NotaFiscal.id.label('nota_id'), # ID da nota fiscal para visualizar documentos
             NotaFiscalItem.material_id # Selecionar para referência
         ).join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
 
@@ -1729,40 +1728,32 @@ def api_historico_preco():
             conversao_aplicada = False
 
             # Tentar conversão apenas se agrupando por material e unidade de referência conhecida
-            if tipo == 'material' and unidade_referencia and item.unidade_item_nf and item.unidade_item_nf != unidade_referencia:
+            if tipo == 'material' and item.fator_conversao_aplicado is not None:
                 logger.debug(f"Tentando conversão: De {item.unidade_item_nf} para {unidade_referencia} para Material {material_id}")
-                conversao = ConversaoUnidade.query.filter_by(
-                    material_id=material_id, 
-                    unidade_entrada=item.unidade_item_nf, 
-                    unidade_saida=unidade_referencia
-                ).first()
-                
-                if conversao:
-                    try:
-                        fator = conversao.fator_conversao
-                        logger.debug(f"Conversão encontrada: Fator {fator}")
-                        if fator is not None and fator > 0 and item.quantidade is not None and item.valor_total is not None:
-                            quantidade_conv = Decimal(item.quantidade) * Decimal(fator)
-                            if quantidade_conv > 0:
-                                valor_unitario_conv = Decimal(item.valor_total) / quantidade_conv
-                                
-                                quantidade_final = quantidade_conv
-                                valor_unitario_final = valor_unitario_conv
-                                unidade_final = unidade_referencia
-                                conversao_aplicada = True
-                                logger.debug(f"  Convertido: Qtd={quantidade_final}, VU={valor_unitario_final}, Unid={unidade_final}")
-                            else:
-                                logger.warning("  Quantidade convertida resultou em zero ou negativa. Usando valores originais.")
+               
+                try:
+                    fator = Decimal(item.fator_conversao_aplicado)
+                    logger.debug(f"Conversão encontrada: Fator {fator}")
+                    if fator is not None and fator > 0 and item.quantidade is not None and item.valor_total is not None:
+                        quantidade_conv = Decimal(item.quantidade) * Decimal(fator)
+                        if quantidade_conv > 0:
+                            valor_unitario_conv = Decimal(item.valor_total) / quantidade_conv
+                            
+                            quantidade_final = quantidade_conv
+                            valor_unitario_final = valor_unitario_conv
+                            unidade_final = unidade_referencia
+                            conversao_aplicada = True
+                            logger.debug(f"  Convertido: Qtd={quantidade_final}, VU={valor_unitario_final}, Unid={unidade_final}")
                         else:
-                             logger.warning("  Fator de conversão inválido ou quantidade/valor total nulos. Usando valores originais.")
-                             unidade_final = f"{item.unidade_item_nf} (Conv. Inválida)"
+                            logger.warning("  Quantidade convertida resultou em zero ou negativa. Usando valores originais.")
+                    else:
+                            logger.warning("  Fator de conversão inválido ou quantidade/valor total nulos. Usando valores originais.")
+                            unidade_final = f"{item.unidade_item_nf} (Conv. Inválida)"
 
-                    except Exception as e_conv:
-                         logger.error(f"  Erro durante cálculo da conversão: {e_conv}")
-                         unidade_final = f"{item.unidade_item_nf} (Erro Conv.)"
-                else:
-                    logger.warning(f"  Conversão de {item.unidade_item_nf} para {unidade_referencia} não encontrada para Material {material_id}. Usando valores originais.")
-                    unidade_final = f"{item.unidade_item_nf} (N/C)" # N/C = Não Convertido / Não Cadastrado
+                except Exception as e_conv:
+                        logger.error(f"  Erro durante cálculo da conversão: {e_conv}")
+                        unidade_final = f"{item.unidade_item_nf} (Erro Conv.)"
+                
             
             # Adicionar ao resultado formatado
             historico_formatado.append({
@@ -1772,6 +1763,7 @@ def api_historico_preco():
                 "data_emissao": item.data_emissao.strftime('%Y-%m-%d') if item.data_emissao else None,
                 "numero_nf": item.numero_nf,
                 "nome_emitente": item.nome_emitente,
+                "nota_id": item.nota_id, # ID da nota fiscal para visualizar documentos
                 "conversao_aplicada": conversao_aplicada # Flag para info
             })
         
@@ -2254,42 +2246,87 @@ def exportar_zip():
     zip_buffer.seek(0)
     return send_file(zip_buffer, download_name='notas_fiscais.zip', as_attachment=True, mimetype='application/zip')
 
+@nota_fiscal_bp.route('/total-notas', methods=['GET'])
+@login_required
+def total_notas():
+    """Retorna o total de notas fiscais com os filtros aplicados"""
+    try:
+        # Obter query com filtros aplicados
+        query = api_get_dados_notas_fiscais(request)
+        
+        # Contar total de notas
+        total = query.count()
+        
+        return jsonify({
+            'total_notas': total
+        })
+    except Exception as e:
+        logger.error(f'Erro ao obter total de notas: {str(e)}')
+        return jsonify({'error': 'Erro ao obter total de notas', 'total_notas': 0}), 500
+
 @nota_fiscal_bp.route('/estatisticas-pdfs', methods=['GET'])
 @login_required
 def estatisticas_pdfs():
     """Retorna estatísticas de PDFs das notas fiscais com os filtros aplicados"""
     try:
+        inicio = time.time()
         # Obter query com filtros aplicados
         query = api_get_dados_notas_fiscais(request)
-
-        query = query.outerjoin(Upload,and_(Upload.pai=="NotaFiscal",Upload.pai_id==NotaFiscal.id))
-        notas = query.all()
         
-
-        # Contadores
-        total_pdfs_originais = 0
-        total_pdfs_protocolo = 0
-        total_sem_protocolo = 0
+        # Obter apenas os IDs das notas filtradas
+        nota_ids = [nf.id for nf in query.with_entities(NotaFiscal.id).all()]
+        print(f'query ids: {time.time() - inicio}')
         
-        # Iterar sobre as notas para contar PDFs
-        for nota in notas:
-            
-            if nota.upload:
-                if nota.upload.tipo == 1:
-                    total_pdfs_originais += 1
-                elif nota.upload.tipo == 2:
-                    total_pdfs_protocolo += 1
-                elif nota.upload.tipo == 3:
-                    total_pdfs_reembolso += 1
-                elif nota.upload.tipo == 4:
-                    total_sem_protocolo += 1
-            
+        if not nota_ids:
+            return jsonify({
+                'total_pdfs_originais': 0,
+                'total_pdfs_protocolo': 0,
+                'total_sem_protocolo': 0,
+                'total_pdfs_reembolso': 0,
+                'total_notas': 0,
+                'notas_sem_original_ids': []
+            })
+        
+        # Contar todos os tipos de PDFs em uma única query usando CASE WHEN
+        stats = db.session.query(
+            func.sum(case((Upload.tipo == 1, 1), else_=0)).label('total_pdfs_originais'),
+            func.sum(case((Upload.tipo == 2, 1), else_=0)).label('total_pdfs_protocolo'),
+            func.sum(case((Upload.tipo == 3, 1), else_=0)).label('total_pdfs_reembolso'),
+            func.count(func.distinct(case((Upload.tipo == 2, Upload.pai_id), else_=None))).label('notas_com_protocolo')
+        ).filter(
+            Upload.pai == 'NotaFiscal',
+            Upload.pai_id.in_(nota_ids)
+        ).first()
+        
+        total_pdfs_originais = stats.total_pdfs_originais or 0
+        total_pdfs_protocolo = stats.total_pdfs_protocolo or 0
+        total_pdfs_reembolso = stats.total_pdfs_reembolso or 0
+        notas_com_protocolo = stats.notas_com_protocolo or 0
+        total_notas = len(nota_ids)
+        total_sem_protocolo = total_notas - notas_com_protocolo
+        
+        # Buscar IDs das notas sem PDFs originais usando NOT EXISTS
+        notas_sem_original = db.session.query(NotaFiscal.id).filter(
+            NotaFiscal.id.in_(nota_ids),
+            ~db.session.query(Upload.id).filter(
+                Upload.pai == 'NotaFiscal',
+                Upload.pai_id == NotaFiscal.id,
+                Upload.tipo == 1
+            ).exists()
+        ).all()
+        
+        # Converter para lista de IDs
+        notas_sem_original_ids = [row[0] for row in notas_sem_original]
+        
+        print(f'query estatisticas: {time.time() - inicio}')
         
         return jsonify({
             'total_pdfs_originais': total_pdfs_originais,
             'total_pdfs_protocolo': total_pdfs_protocolo,
             'total_sem_protocolo': total_sem_protocolo,
-            'total_notas': len(notas)
+            'total_pdfs_reembolso': total_pdfs_reembolso,
+            'total_notas': total_notas,
+            'notas_sem_original_ids': notas_sem_original_ids
         })
     except Exception as e:
         logger.error(f'Erro ao obter estatísticas de PDFs: {str(e)}')
@@ -2298,7 +2335,7 @@ def estatisticas_pdfs():
 @nota_fiscal_bp.route('/download-pdfs-sem-protocolo', methods=['GET'])
 @login_required
 def download_pdfs_sem_protocolo():
-    """Faz download de um ZIP com os PDFs originais que não têm protocolo"""
+    """Faz download de um ZIP com os PDFs originais que não têm protocolo, baixando do Arquivei se necessário"""
     try:
         # Obter query com filtros aplicados
         query = api_get_dados_notas_fiscais(request)
@@ -2308,42 +2345,105 @@ def download_pdfs_sem_protocolo():
         zip_buffer = io.BytesIO()
         
         pdfs_adicionados = 0
+        pdfs_baixados = 0
+        erros = []
+        
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for nota in notas:
-                # Buscar PDF original (tipo 1)
-                upload_original = db.session.query(Upload).filter(
-                    Upload.pai == 'NotaFiscal',
-                    Upload.pai_id == nota.id,
-                    Upload.tipo == 1
-                ).first()
-                
-                # Verificar se não tem protocolo (tipo 2)
-                tem_protocolo = db.session.query(Upload.id).filter(
-                    Upload.pai == 'NotaFiscal',
-                    Upload.pai_id == nota.id,
-                    Upload.tipo == 2
-                ).first() is not None
-                
-                # Se tem PDF original mas não tem protocolo, adicionar ao ZIP
-                if upload_original and not tem_protocolo:
-                    try:
-                        # Decodificar o blob base64
-                        pdf_bytes = base64.b64decode(upload_original.blob)
+                try:
+                    # Verificar se não tem protocolo (tipo 2)
+                    tem_protocolo = db.session.query(Upload.id).filter(
+                        Upload.pai == 'NotaFiscal',
+                        Upload.pai_id == nota.id,
+                        Upload.tipo == 2
+                    ).first() is not None
+                    
+                    # Se tem protocolo, pular esta nota
+                    if tem_protocolo:
+                        continue
+                    
+                    # Buscar PDF original (tipo 1) no banco
+                    upload_original = db.session.query(Upload).filter(
+                        Upload.pai == 'NotaFiscal',
+                        Upload.pai_id == nota.id,
+                        Upload.tipo == 1
+                    ).first()
+                    
+                    pdf_bytes = None
+                    
+                    # Se não tem PDF original no banco, baixar do Arquivei
+                    if not upload_original:
+                        if not nota.chave_acesso:
+                            logger.warning(f'Nota {nota.id} não tem chave de acesso para baixar PDF')
+                            erros.append(f'Nota {nota.numero_nf}: sem chave de acesso')
+                            continue
                         
-                        # Criar nome do arquivo
+                        try:
+                            # Baixar PDF do Arquivei (detecta automaticamente se é NFe ou CTE pela chave de acesso)
+                            arquivei = Arquivei(chave_acesso=nota.chave_acesso)
+                            
+                            if arquivei.pdf:
+                                # Decodificar o PDF base64
+                                pdf_bytes = base64.b64decode(arquivei.pdf)
+                                
+                                # Salvar no banco de dados
+                                filename = f'{nota.chave_acesso}.pdf'
+                                upload_original = Upload(
+                                    pai='NotaFiscal',
+                                    pai_id=nota.id,
+                                    tipo=1,
+                                    filename=filename,
+                                    mimetype='application/pdf',
+                                    blob=arquivei.pdf  # Já está em base64
+                                )
+                                db.session.add(upload_original)
+                                db.session.commit()
+                                
+                                pdfs_baixados += 1
+                                logger.info(f'PDF baixado e salvo no banco para nota {nota.id} - {nota.chave_acesso}')
+                            else:
+                                logger.warning(f'PDF não encontrado no Arquivei para nota {nota.id} - {nota.chave_acesso}')
+                                erros.append(f'Nota {nota.numero_nf}: PDF não encontrado no Arquivei')
+                                continue
+                        except Exception as e:
+                            logger.error(f'Erro ao baixar PDF do Arquivei para nota {nota.id}: {str(e)}')
+                            erros.append(f'Nota {nota.numero_nf}: Erro ao baixar PDF - {str(e)}')
+                            db.session.rollback()
+                            continue
+                    else:
+                        # Se já tem PDF no banco, decodificar
+                        try:
+                            pdf_bytes = base64.b64decode(upload_original.blob)
+                        except Exception as e:
+                            logger.error(f'Erro ao decodificar PDF da nota {nota.id}: {str(e)}')
+                            erros.append(f'Nota {nota.numero_nf}: Erro ao decodificar PDF')
+                            continue
+                    
+                    # Adicionar ao ZIP
+                    if pdf_bytes:
                         data_emissao = nota.data_emissao.strftime('%Y%m%d') if nota.data_emissao else 'semdata'
                         nome_arquivo = f'{nota.numero_nf}_{data_emissao}_{nota.chave_acesso}.pdf'
-                        
-                        # Adicionar ao ZIP
                         zipf.writestr(nome_arquivo, pdf_bytes)
                         pdfs_adicionados += 1
-                    except Exception as e:
-                        logger.error(f'Erro ao processar PDF da nota {nota.id}: {str(e)}')
-                        continue
+                        
+                except Exception as e:
+                    logger.error(f'Erro ao processar PDF da nota {nota.id}: {str(e)}')
+                    erros.append(f'Nota {nota.numero_nf}: {str(e)}')
+                    continue
         
         if pdfs_adicionados == 0:
-            flash('Nenhum PDF original sem protocolo foi encontrado com os filtros aplicados.', 'warning')
+            mensagem = 'Nenhum PDF original sem protocolo foi encontrado com os filtros aplicados.'
+            if erros:
+                mensagem += f' Erros: {", ".join(erros[:5])}'  # Mostrar até 5 erros
+            flash(mensagem, 'warning')
             return redirect(url_for('nota_fiscal.index'))
+        
+        mensagem_sucesso = f'{pdfs_adicionados} PDF(s) adicionado(s) ao ZIP.'
+        if pdfs_baixados > 0:
+            mensagem_sucesso += f' {pdfs_baixados} PDF(s) baixado(s) do Arquivei e salvos no banco.'
+        if erros:
+            mensagem_sucesso += f' {len(erros)} erro(s) durante o processamento.'
+        flash(mensagem_sucesso, 'success')
         
         zip_buffer.seek(0)
         return send_file(

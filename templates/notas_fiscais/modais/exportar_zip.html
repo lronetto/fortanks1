@@ -22,6 +22,21 @@
                         As estatísticas são baseadas nos filtros aplicados na página.
                     </div>
                     
+                    <!-- Card de Total de Notas -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="card text-center border-info">
+                                <div class="card-body">
+                                    <h5 class="card-title text-info">
+                                        <i class="fas fa-file-invoice"></i> Total de Notas Fiscais
+                                    </h5>
+                                    <h2 class="text-info" id="totalNotasFiscaisModal">0</h2>
+                                    <p class="text-muted mb-0">Notas filtradas</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="row mb-4">
                         <div class="col-md-4">
                             <div class="card text-center border-primary">
@@ -101,10 +116,13 @@ $(document).ready(function() {
             method: 'GET',
             data: filtrosAtuais,
             success: function(response) {
-                // Atualizar estatísticas
+                // Atualizar estatísticas de PDFs
                 $('#totalPdfsOriginais').text(response.total_pdfs_originais || 0);
                 $('#totalPdfsProtocolo').text(response.total_pdfs_protocolo || 0);
                 $('#totalSemProtocolo').text(response.total_sem_protocolo || 0);
+                
+                // Atualizar total de notas
+                $('#totalNotasFiscaisModal').text(response.total_notas || 0);
                 
                 // Mostrar/ocultar botão de download
                 if (response.total_sem_protocolo > 0) {

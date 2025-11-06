@@ -736,6 +736,35 @@ class NotaFiscalItem(db.Model):
             return None
         except Exception as e:
             return None
+    def vincular(self,fator_conversao_aplicado,material):
+        self.fator_conversao_aplicado = fator_conversao_aplicado
+        self.material_id = material
+        self.save()
+    def vincular_todos(self):
+        inicio = datetime.now()
+        itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
+                                            NotaFiscalItem.descricao==self.descricao,
+                                            NotaFiscalItem.unidade==self.unidade,
+                                            NotaFiscalItem.material_id.is_(None)).all()
+        print(f'itens a ser vinculados: {len(itens)}')
+        for item in itens:
+            item.vincular(self.fator_conversao_aplicado,self.material_id)
+            item.save()
+        fim = datetime.now()
+        print(f'tempo de execucao vincular_todos: {fim - inicio}')
+    def vincular_e_importar_estoque_todos(self):
+        inicio = datetime.now()
+        itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
+                                            NotaFiscalItem.descricao==self.descricao,
+                                            NotaFiscalItem.unidade==self.unidade,
+                                            NotaFiscalItem.material_id.is_(None)).all()
+        print(f'itens a ser vinculados e importado estoque: {len(itens)}')
+        for item in itens:
+            item.vincular(self.fator_conversao_aplicado,self.material_id)
+            item.save()
+            item.importar_para_estoque()
+        fim = datetime.now()
+        print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')
     def importar_para_estoque(self,usuario_id=None,centro_custo_id=None,observacao=None):
         """
         Importa o item da nota fiscal para o estoque
@@ -748,6 +777,7 @@ class NotaFiscalItem(db.Model):
         Returns:
             tuple: (bool, str) - (Sucesso, Mensagem)
         """
+        inicio = datetime.now()
         from models.estoque import Estoque, MovimentacaoEstoque
         
         # Verificar se o item já foi importado
@@ -827,7 +857,8 @@ class NotaFiscalItem(db.Model):
             self.tentativas_importacao += 1
             self.movimentacao_estoque_id = movimentacao.id
             self.save()
-            
+            fim = datetime.now()
+            print(f'tempo de execucao importar_para_estoque: {fim - inicio}')
             # Verificar se o material é da categoria EPI
             # Se for, criar automaticamente um registro de EPI para este material
             from models.epi import EPI

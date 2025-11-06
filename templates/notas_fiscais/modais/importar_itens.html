@@ -52,9 +52,12 @@
                                     </th>
                                     <th>Código</th>
                                     <th>Descrição</th>
+                                    <th>Unidade</th>
                                     <th>Quantidade</th>
                                     <th>Valor Unit.</th>
+                                    <th>Fator de Conversão</th>
                                     <th>Material Vinculado</th>
+                                    <th>Unidade do Material</th>
                                     <th width="120">Ações</th>
                                 </tr>
                             </thead>
@@ -96,6 +99,13 @@
         });
         $('#modalImportarItens .btn-close').on('click', function () {
             fecharModal('#modalImportarItens');
+        });
+
+        $('#selecionarTodos').on('change', function() {
+            const checkboxes = document.querySelectorAll('.item-checkbox');
+            checkboxes.forEach(function(checkbox) {
+                checkbox.checked = this.checked;
+            });
         });
     });
     function carregarItensImportacao(notaId) {
@@ -178,15 +188,19 @@
                     </td>
                     <td>${item.codigo || '-'}</td>
                     <td>${item.descricao}</td>
-                    <td id="quantidade">${item.quantidade} <span id="unidade_${item.id}">${item.unidade}</span></td>
+                    <td>${item.unidade}</td>
+                    <td id="quantidade">${item.quantidade}</td>
                     <td>R$ ${valorUnitario}</td>
+                    <td>${item.fator_conversao_aplicado || '-'}</td>
                     <td id="material_nome_${item.id}">${materialNome}</td>
+                    <td>${item.unidade_material || '-'}</td>
                     <td>`
             if(item.importado_estoque) {
                 html += '<span class="badge bg-success">Importado</span>';
             } else {
                 html += `
                         <input type="hidden" id="material_id_${item.id}" value="${item.material_id || ''}">
+                        <input type="hidden" id="fator_conversao_${item.id}" value="${item.fator_conversao_aplicado || ''}">
                         <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
                                 data-item-id="${item.id}" 
                                 data-item-descricao="${item.descricao}"
@@ -270,9 +284,12 @@
         document.querySelectorAll('.item-checkbox:checked').forEach(function(checkbox) {
             const itemId = checkbox.value;
             const materialId = document.getElementById(`material_id_${itemId}`).value;
+            const fatorConversaoElement = document.getElementById(`fator_conversao_${itemId}`);
+            const fatorConversao = fatorConversaoElement ? fatorConversaoElement.value : null;
             itensSelecionados.push({
                 item_id: itemId,
-                material_id: materialId
+                material_id: materialId,
+                fator_conversao: fatorConversao || null
             });
         });
         
@@ -291,7 +308,8 @@
             body: JSON.stringify({
                 itens: itensSelecionados.map(item => ({
                     item_id: item.item_id,
-                    material_id: item.material_id
+                    material_id: item.material_id,
+                    fator_conversao: item.fator_conversao
                 })),
                 centro_custo_id: document.getElementById('centro_custo_id').value,
                 observacao: document.getElementById('observacao').value

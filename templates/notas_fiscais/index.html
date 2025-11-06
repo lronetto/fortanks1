@@ -192,6 +192,12 @@
 .modal-backdrop {
     z-index: 1040 !important;
 }
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+.text-gray-300 {
+    color: #dddfeb !important;
+}
 </style>
 {% endblock %}
 
@@ -247,20 +253,39 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#tabelaNotasFiscaisContainer').html('<div class="alert alert-danger">Erro ao carregar dados: ' + error + '</div>');
         });
     }
-    // Carregar tabela ao iniciar
+    
+    function carregarTotalNotas(params = null) {
+        let url = '/notas-fiscais/total-notas';
+        if (!params) {
+            params = $('#filtrosNotasFiscais').serialize();
+        }
+        $.get(url + '?' + params, function(response) {
+            $('#totalNotasFiscais').text(response.total_notas || 0);
+        }).fail(function(xhr, status, error) {
+            console.error('Erro ao carregar total de notas:', error);
+            $('#totalNotasFiscais').text('0');
+        });
+    }
+    // Carregar tabela e total ao iniciar
     carregarTabelaNotasFiscais();
+    carregarTotalNotas();
+    
     // Submeter filtros via AJAX
     $('#filtrosNotasFiscais').on('submit', function(e) {
         e.preventDefault();
         $('#tabelaNotasFiscaisContainer').html('Carregando...');
-        carregarTabelaNotasFiscais($(this).serialize());
+        let params = $(this).serialize();
+        carregarTabelaNotasFiscais(params);
+        carregarTotalNotas(params);
     });
+    
     // Paginação via AJAX (delegação)
     $('#tabelaNotasFiscaisContainer').on('click', '.pagination a', function(e) {
         e.preventDefault();
         let url = $(this).attr('href');
         let params = url.split('?')[1];
         carregarTabelaNotasFiscais(params);
+        // Não atualizar total na paginação, pois o total não muda
     });
 });
 </script>

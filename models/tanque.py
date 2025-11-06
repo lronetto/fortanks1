@@ -25,6 +25,7 @@ class Tanque(db.Model):
     cobertura = db.Column(db.Boolean, default=False)
     ncabospn = db.Column(db.Integer, nullable=False, default=0)
     ncabospf = db.Column(db.Integer, nullable=False, default=0)
+    quantidade_bainhas = db.Column(db.Integer, nullable=True, default=0)
     # Quantidades de placas
     placas_normais = db.Column(db.Integer, default=0)
     placas_fecho = db.Column(db.Integer, default=0)
@@ -115,6 +116,7 @@ class Tanque(db.Model):
             'cobertura': self.cobertura,
             'ncabospn': self.ncabospn,
             'ncabospf': self.ncabospf,
+            'quantidade_bainhas': self.quantidade_bainhas,
             'placas_normais': self.placas_normais,
             'placas_fecho': self.placas_fecho,
             'contrato_id': self.contrato_id,

@@ -21,14 +21,16 @@ def index():
     """
     Lista todos os tanques
     """
-    tanques = Tanque.query.all()
+    tanques = Tanque.query.order_by(Tanque.contrato_id, Tanque.nome).all()
     tanques_com_pecas = []
     for tanque in tanques:
         pecas = Peca.query.filter_by(tanque_id=tanque.id).count()
         tanque.pecas_cadastradas = pecas
         tanques_com_pecas.append(tanque)
     tanques = tanques_com_pecas
-    return render_template('tanques/index.html', tanques=tanques)
+    contratos = Contrato.query.all()
+    sistemas = ['SC-10', 'SC-14', 'SR-06']
+    return render_template('tanques/index.html', tanques=tanques, contratos=contratos, sistemas=sistemas)
 
 @tanque_bp.route('/contrato/<int:contrato_id>')
 def listar_por_contrato(contrato_id):
@@ -63,6 +65,7 @@ def novo():
         quantidade = request.form.get('quantidade', 1)
         cobertura = True if request.form.get('cobertura') == 'on' else False
         contrato_id = request.form.get('contrato_id')
+        quantidade_bainhas = request.form.get('quantidade_bainhas')
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
         
@@ -118,6 +121,12 @@ def novo():
             else:
                 placas_fecho = None
             
+            # Converter quantidade de bainhas se fornecida
+            if quantidade_bainhas:
+                quantidade_bainhas = int(quantidade_bainhas)
+            else:
+                quantidade_bainhas = 0
+            
             # Criar novo tanque
             novo_tanque = Tanque(
                 # Definir o UN com base no método gerar_un
@@ -132,6 +141,7 @@ def novo():
                 altura_util=altura_util,
                 quantidade=quantidade,
                 cobertura=cobertura,
+                quantidade_bainhas=quantidade_bainhas,
                 placas_normais=placas_normais,
                 placas_fecho=placas_fecho,
                 contrato_id=contrato_id
@@ -142,6 +152,14 @@ def novo():
             
             flash('Tanque cadastrado com sucesso!', 'success')
             
+            # Verificar se é requisição AJAX
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': True,
+                    'message': 'Tanque cadastrado com sucesso!',
+                    'tanque_id': novo_tanque.id
+                })
+            
             # Redirecionar para a página de contrato se veio de lá
             if contrato_selecionado:
                 return redirect(url_for('tanque.listar_por_contrato', contrato_id=contrato_id))
@@ -149,7 +167,15 @@ def novo():
                 return redirect(url_for('tanque.index'))
             
         except Exception as e:
-            flash(f'Erro ao cadastrar tanque: {str(e)}', 'danger')
+            error_msg = f'Erro ao cadastrar tanque: {str(e)}'
+            flash(error_msg, 'danger')
+            
+            # Verificar se é requisição AJAX
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'error': error_msg
+                }), 400
     
     return render_template('tanques/novo.html', 
                           contratos=contratos, 
@@ -174,6 +200,7 @@ def editar(id):
         quantidade = request.form.get('quantidade', 1)
         cobertura = True if request.form.get('cobertura') == 'on' else False
         contrato_id = request.form.get('contrato_id')
+        quantidade_bainhas = request.form.get('quantidade_bainhas')
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
         
@@ -229,6 +256,12 @@ def editar(id):
             else:
                 placas_fecho = None
             
+            # Converter quantidade de bainhas se fornecida
+            if quantidade_bainhas:
+                quantidade_bainhas = int(quantidade_bainhas)
+            else:
+                quantidade_bainhas = 0
+            
             # Atualizar o tanque
             tanque.nome = nome
             tanque.sistema = sistema
@@ -240,6 +273,7 @@ def editar(id):
             tanque.altura_util = altura_util
             tanque.quantidade = quantidade
             tanque.cobertura = cobertura
+            tanque.quantidade_bainhas = quantidade_bainhas
             tanque.placas_normais = placas_normais
             tanque.placas_fecho = placas_fecho
             tanque.contrato_id = contrato_id
@@ -248,11 +282,28 @@ def editar(id):
             db.session.commit()
             
             flash('Tanque atualizado com sucesso!', 'success')
+            
+            # Verificar se é requisição AJAX
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': True,
+                    'message': 'Tanque atualizado com sucesso!',
+                    'tanque_id': tanque.id
+                })
+            
             return redirect(url_for('tanque.visualizar', id=tanque.id))
             
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao atualizar tanque: {str(e)}', 'danger')
+            error_msg = f'Erro ao atualizar tanque: {str(e)}'
+            flash(error_msg, 'danger')
+            
+            # Verificar se é requisição AJAX
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'error': error_msg
+                }), 400
     
     return render_template('tanques/editar.html', 
                          tanque=tanque, 

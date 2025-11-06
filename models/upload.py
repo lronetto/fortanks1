@@ -21,16 +21,14 @@ class Upload(db.Model):
     
     def __init__(self, pai=None, pai_id=None, tipo=None, filename=None, mimetype=None, blob=None):
 
-        if not blob:
-            #print('pai: ',pai)
-            #print('pai_id: ',pai_id)
-            #print('tipo: ',tipo)
-            up = Upload.query.filter(Upload.pai==pai, Upload.pai_id==pai_id, Upload.tipo==tipo, Upload.filename==filename, Upload.mimetype==mimetype).first()
-            print('up: ',up)
-            if up:
-                for key, value in up.__dict__.items():
-                    setattr(self, key, value)
-                #print('upload: ',self)
+        #print('pai: ',pai)
+        #print('pai_id: ',pai_id)
+        #print('tipo: ',tipo)
+        up = Upload.query.filter(Upload.pai==pai, Upload.pai_id==pai_id, Upload.tipo==tipo, Upload.filename==filename, Upload.mimetype==mimetype).first()
+        print('up: ',up)
+        if up:
+            return False
+            #print('upload: ',self)
         else:
             self.pai = pai
             self.pai_id = pai_id
@@ -48,7 +46,8 @@ class Upload(db.Model):
             else:
                 self.id = up.id
                 self.uploaded_at = up.uploaded_at
-                return self
+            self.save()
+            return True
     def to_dict(self):
         return {
             'id': self.id,

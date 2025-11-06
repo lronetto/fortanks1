@@ -1,0 +1,188 @@
+<!-- Modal de Novo Tanque -->
+<div class="modal fade" id="modalNovoTanque" tabindex="-1" aria-labelledby="modalNovoTanqueLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalNovoTanqueLabel"><i class="fas fa-plus-circle"></i> Novo Tanque</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('tanque.novo') }}" id="form-novo-tanque">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="novo_contrato_id" class="form-label">Contrato *</label>
+                            <select class="form-select" id="novo_contrato_id" name="contrato_id" required>
+                                <option value="" selected disabled>Selecione um contrato</option>
+                                {% for contrato in contratos %}
+                                <option value="{{ contrato.id }}">{{ contrato.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_nome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="novo_nome" name="nome" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_sistema" class="form-label">Sistema *</label>
+                            <select class="form-select" id="novo_sistema" name="sistema" required>
+                                <option value="" selected disabled>Selecione o sistema</option>
+                                {% for sistema in sistemas %}
+                                <option value="{{ sistema }}">{{ sistema }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">SC = Circular | SR = Retangular</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_dimensoes" class="form-label">Dimensões *</label>
+                            <input type="text" class="form-control" id="novo_dimensoes" name="dimensoes"
+                                placeholder="Ex: 5,0m (diâmetro) ou 4,0m x 5,0m (comp. x larg.)" required>
+                            <small class="form-text text-muted" id="novo_dimensoes-help">
+                                Informe o diâmetro para tanques circulares ou comprimento x largura para retangulares
+                            </small>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="novo_altura_total" class="form-label">Altura Total (m) *</label>
+                            <input type="number" class="form-control" id="novo_altura_total" name="altura_total" step="0.01"
+                                min="0" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="novo_altura_util" class="form-label">Altura Útil (m) *</label>
+                            <input type="number" class="form-control" id="novo_altura_util" name="altura_util" step="0.01"
+                                min="0" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="novo_quantidade" class="form-label">Quantidade *</label>
+                            <input type="number" class="form-control" id="novo_quantidade" name="quantidade" min="1" value="1"
+                                required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="novo_quantidade_bainhas" class="form-label">Quantidade de Bainhas</label>
+                            <input type="number" class="form-control" id="novo_quantidade_bainhas" name="quantidade_bainhas" min="0" value="0">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="novo_cobertura" name="cobertura">
+                                <label class="form-check-label" for="novo_cobertura">
+                                    Possui Cobertura
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <h6 class="font-weight-bold mb-2">Quantidades de Placas</h6>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_placas_normais" class="form-label">Placas Normais (PN)</label>
+                            <input type="number" class="form-control" id="novo_placas_normais" name="placas_normais" min="0">
+                            <small class="form-text text-muted">Quantidade de placas normais</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_placas_fecho" class="form-label">Placas Fecho (PF)</label>
+                            <input type="number" class="form-control" id="novo_placas_fecho" name="placas_fecho" min="0">
+                            <small class="form-text text-muted">Quantidade de placas de fecho</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Atualizar o texto de ajuda das dimensões baseado no sistema
+    document.getElementById('novo_sistema').addEventListener('change', function () {
+        const sistema = this.value;
+        const helpText = document.getElementById('novo_dimensoes-help');
+        const dimensoesInput = document.getElementById('novo_dimensoes');
+
+        if (sistema.startsWith('SC')) {
+            helpText.textContent = 'Informe o diâmetro para o tanque circular (ex: 5,0m)';
+            dimensoesInput.placeholder = 'Ex: 5,0m (diâmetro)';
+        } else if (sistema.startsWith('SR')) {
+            helpText.textContent = 'Informe o comprimento x largura para o tanque retangular (ex: 4,0m x 5,0m)';
+            dimensoesInput.placeholder = 'Ex: 4,0m x 5,0m (comp. x larg.)';
+        }
+    });
+
+    // Validação e submit do formulário
+    document.getElementById('form-novo-tanque').addEventListener('submit', function (e) {
+        e.preventDefault();
+        
+        const nome = document.getElementById('novo_nome').value.trim();
+        const sistema = document.getElementById('novo_sistema').value;
+        const dimensoes = document.getElementById('novo_dimensoes').value.trim();
+        const altura_total = document.getElementById('novo_altura_total').value;
+        const altura_util = document.getElementById('novo_altura_util').value;
+        const contrato_id = document.getElementById('novo_contrato_id').value;
+
+        if (!nome || !sistema || !dimensoes || !altura_total || !altura_util || !contrato_id) {
+            alert('Todos os campos obrigatórios devem ser preenchidos!');
+            return false;
+        }
+
+        // Validação de altura útil x total
+        if (parseFloat(altura_util) > parseFloat(altura_total)) {
+            alert('A altura útil não pode ser maior que a altura total!');
+            return false;
+        }
+
+        // Enviar via AJAX
+        const form = document.getElementById('form-novo-tanque');
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.reload();
+            } else {
+                return response.json();
+            }
+        })
+        .then(data => {
+            if (data && data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalNovoTanque'));
+                if (modal) modal.hide();
+                window.location.reload();
+            } else if (data && !data.success) {
+                alert(data.error || 'Erro ao salvar o tanque.');
+            } else {
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao salvar o tanque. Verifique o console para mais detalhes.');
+        });
+    });
+});
+</script>
+{% endblock %}
+

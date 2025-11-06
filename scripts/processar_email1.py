@@ -331,14 +331,13 @@ def processar_emails():
                                     if nota:
                                         log_email['codigo_barras']['qtd_Identificados'] += 1
                                         #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
-                                        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf')
-                                        if up.id:
-                                            logging.info(f"upload ja existe {nota.numero_nf}")
-                                            log_email['codigo_barras']['qtd_Upload_Existente'] += 1
-                                        else:
-                                            Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf',payload)
+                                        if up:
                                             log_email['codigo_barras']['qtd_Upload_Realizado'] += 1
                                             logging.info(f"upload realizado {nota.numero_nf}")
+                                        else:
+                                            logging.info(f"upload ja existe {nota.numero_nf}")
+                                            log_email['codigo_barras']['qtd_Upload_Existente'] += 1
                                         continue
                                     else:
                                         logging.info(f"tentando cte")

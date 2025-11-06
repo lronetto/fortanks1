@@ -346,8 +346,13 @@ def obter_tanque(tanque_id):
                 'altura_util': tanque.altura_util,
                 'quantidade': tanque.quantidade,
                 'cobertura': tanque.cobertura,
+                'quantidade_bainhas': tanque.quantidade_bainhas or 0,
                 'placas_normais': tanque.placas_normais,
                 'placas_fecho': tanque.placas_fecho,
+                'contrato_id': tanque.contrato_id,
+                'area_base': tanque.area_base,
+                'volume_util': tanque.volume_util,
+                'volume_total': tanque.volume_total,
                 'data_cadastro': tanque.data_cadastro.strftime('%d/%m/%Y %H:%M') if tanque.data_cadastro else None,
                 'ultima_atualizacao': tanque.ultima_atualizacao.strftime('%d/%m/%Y %H:%M') if tanque.ultima_atualizacao else None
             }

@@ -1,0 +1,268 @@
+<!-- Modal de Edição de Tanque -->
+<div class="modal fade" id="modalEditarTanque" tabindex="-1" aria-labelledby="modalEditarTanqueLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarTanqueLabel"><i class="fas fa-edit"></i> Editar Tanque</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="form-editar-tanque" method="POST">
+                    <input type="hidden" id="edit_id" name="tanque_id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="edit_contrato_id" class="form-label">Contrato *</label>
+                            <select class="form-select" id="edit_contrato_id" name="contrato_id" required>
+                                <option value="" disabled>Selecione um contrato</option>
+                                {% for contrato in contratos %}
+                                <option value="{{ contrato.id }}">{{ contrato.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_nome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="edit_nome" name="nome" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_sistema" class="form-label">Sistema *</label>
+                            <select class="form-select" id="edit_sistema" name="sistema" required>
+                                <option value="" disabled>Selecione o sistema</option>
+                                {% for sistema in sistemas %}
+                                <option value="{{ sistema }}">{{ sistema }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">SC = Circular | SR = Retangular</small>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="edit_dimensoes" class="form-label">Dimensões *</label>
+                            <input type="text" class="form-control" id="edit_dimensoes" name="dimensoes" required>
+                            <small class="form-text text-muted" id="edit_dimensoes-help">
+                                Informe o diâmetro para tanques circulares ou comprimento x largura para retangulares
+                            </small>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="edit_altura_total" class="form-label">Altura Total (m) *</label>
+                            <input type="number" class="form-control" id="edit_altura_total" name="altura_total" step="0.01"
+                                min="0" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="edit_altura_util" class="form-label">Altura Útil (m) *</label>
+                            <input type="number" class="form-control" id="edit_altura_util" name="altura_util" step="0.01"
+                                min="0" required>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="edit_quantidade" class="form-label">Quantidade *</label>
+                            <input type="number" class="form-control" id="edit_quantidade" name="quantidade" min="1" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="edit_quantidade_bainhas" class="form-label">Quantidade de Bainhas</label>
+                            <input type="number" class="form-control" id="edit_quantidade_bainhas" name="quantidade_bainhas" min="0" value="0">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="edit_cobertura" name="cobertura">
+                                <label class="form-check-label" for="edit_cobertura">
+                                    Possui Cobertura
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <h6 class="font-weight-bold mb-2">Quantidades de Placas</h6>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_placas_normais" class="form-label">Placas Normais (PN)</label>
+                            <input type="number" class="form-control" id="edit_placas_normais" name="placas_normais" min="0">
+                            <small class="form-text text-muted">Quantidade de placas normais</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="edit_placas_fecho" class="form-label">Placas Fecho (PF)</label>
+                            <input type="number" class="form-control" id="edit_placas_fecho" name="placas_fecho" min="0">
+                            <small class="form-text text-muted">Quantidade de placas de fecho</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <div id="modal-mensagens"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-edicao">
+                    <i class="fas fa-save"></i> Salvar Alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para preencher o modal com os dados do tanque
+    function preencherModal(tanque) {
+        if (!tanque) {
+            console.error('Dados do tanque não encontrados!');
+            return;
+        }
+        try {
+            document.getElementById('edit_id').value = tanque.id || '';
+            document.getElementById('edit_nome').value = tanque.nome || '';
+            document.getElementById('edit_dimensoes').value = tanque.dimensoes || '';
+            document.getElementById('edit_altura_total').value = tanque.altura_total || '';
+            document.getElementById('edit_altura_util').value = tanque.altura_util || '';
+            document.getElementById('edit_quantidade').value = tanque.quantidade || 1;
+            document.getElementById('edit_quantidade_bainhas').value = tanque.quantidade_bainhas || 0;
+            document.getElementById('edit_placas_normais').value = tanque.placas_normais || '';
+            document.getElementById('edit_placas_fecho').value = tanque.placas_fecho || '';
+            document.getElementById('edit_cobertura').checked = tanque.cobertura || false;
+            
+            const sistemaSelect = document.getElementById('edit_sistema');
+            if (sistemaSelect) {
+                sistemaSelect.value = tanque.sistema || '';
+            }
+            
+            const contratoSelect = document.getElementById('edit_contrato_id');
+            if (contratoSelect && tanque.contrato_id) {
+                contratoSelect.value = tanque.contrato_id;
+            }
+            
+            atualizarDimensoesHelp();
+        } catch (error) {
+            console.error('Erro ao preencher o modal:', error);
+        }
+    }
+    
+    // Atualizar o texto de ajuda das dimensões baseado no sistema
+    function atualizarDimensoesHelp() {
+        const sistema = document.getElementById('edit_sistema').value;
+        const helpText = document.getElementById('edit_dimensoes-help');
+        const dimensoesInput = document.getElementById('edit_dimensoes');
+
+        if (sistema.startsWith('SC')) {
+            helpText.textContent = 'Informe o diâmetro para o tanque circular (ex: 5,0m)';
+            dimensoesInput.placeholder = 'Ex: 5,0m (diâmetro)';
+        } else if (sistema.startsWith('SR')) {
+            helpText.textContent = 'Informe o comprimento x largura para o tanque retangular (ex: 4,0m x 5,0m)';
+            dimensoesInput.placeholder = 'Ex: 4,0m x 5,0m (comp. x larg.)';
+        }
+    }
+    
+    document.getElementById('edit_sistema').addEventListener('change', atualizarDimensoesHelp);
+
+    // Adicionar evento para o botão de editar
+    const editButtons = document.querySelectorAll('.btn-editar-tanque');
+    editButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            try {
+                const tanqueId = this.getAttribute('data-id');
+                const url = `/api/tanques/${tanqueId}`;
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.tanque) {
+                        preencherModal(data.tanque);
+                        const modal = new bootstrap.Modal(document.getElementById('modalEditarTanque'));
+                        modal.show();
+                    } else {
+                        alert('Erro ao carregar os dados do tanque: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao carregar os dados do tanque: ' + error.message);
+                });
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação');
+            }
+        });
+    });
+
+    // Adicionar evento para o botão de salvar edição
+    const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
+    if (btnSalvarEdicao) {
+        btnSalvarEdicao.addEventListener('click', function() {
+            try {
+                const tanqueId = document.getElementById('edit_id').value;
+                const nome = document.getElementById('edit_nome').value.trim();
+                const sistema = document.getElementById('edit_sistema').value;
+                const dimensoes = document.getElementById('edit_dimensoes').value.trim();
+                const altura_total = document.getElementById('edit_altura_total').value;
+                const altura_util = document.getElementById('edit_altura_util').value;
+                const contrato_id = document.getElementById('edit_contrato_id').value;
+
+                if (!nome || !sistema || !dimensoes || !altura_total || !altura_util || !contrato_id) {
+                    alert('Todos os campos obrigatórios devem ser preenchidos!');
+                    return;
+                }
+
+                if (parseFloat(altura_util) > parseFloat(altura_total)) {
+                    alert('A altura útil não pode ser maior que a altura total!');
+                    return;
+                }
+
+                const form = document.getElementById('form-editar-tanque');
+                const formData = new FormData(form);
+                const url = `/tanques/editar/${tanqueId}`;
+                
+                fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.reload();
+                    } else {
+                        return response.text();
+                    }
+                })
+                .then(data => {
+                    if (data) {
+                        try {
+                            const resposta = JSON.parse(data);
+                            if (resposta.success) {
+                                window.location.reload();
+                            } else {
+                                alert(resposta.message || resposta.error || 'Erro ao salvar o tanque.');
+                            }
+                        } catch (e) {
+                            window.location.reload();
+                        }
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao salvar o tanque: ' + error.message);
+                });
+            } catch (error) {
+                alert('Ocorreu um erro ao processar sua solicitação: ' + error.message);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+
