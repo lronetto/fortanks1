@@ -79,6 +79,18 @@
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
+                                <label for="localizacao">Localização</label>
+                                <select name="localizacao" id="localizacao" class="form-control">
+                                    {% for loc_value, loc_label in localizacoes %}
+                                    <option value="{{ loc_value }}" {% if localizacao == loc_value %}selected{% endif %}>
+                                        {{ loc_label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
                                 <label for="observacao">Observação</label>
                                 <input type="text" name="observacao" id="observacao" class="form-control" value="{{ observacao or '' }}" placeholder="Buscar na observação...">
                             </div>
@@ -207,7 +219,7 @@
                 <nav aria-label="Navegação de páginas">
                     <ul class="pagination">
                         <li class="page-item {% if movimentacoes.page == 1 %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.prev_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, observacao=observacao) }}" aria-label="Anterior">
+                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.prev_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, localizacao=localizacao, observacao=observacao) }}" aria-label="Anterior">
                                 <span aria-hidden="true">&laquo;</span>
                                 <span class="sr-only">Anterior</span>
                             </a>
@@ -221,7 +233,7 @@
                             </li>
                             {% else %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=page_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, observacao=observacao) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=page_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, localizacao=localizacao, observacao=observacao) }}">{{ page_num }}</a>
                             </li>
                             {% endif %}
                         {% else %}
@@ -232,7 +244,7 @@
                         {% endfor %}
                         
                         <li class="page-item {% if movimentacoes.page == movimentacoes.pages %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.next_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, observacao=observacao) }}" aria-label="Próximo">
+                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.next_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, localizacao=localizacao, observacao=observacao) }}" aria-label="Próximo">
                                 <span aria-hidden="true">&raquo;</span>
                                 <span class="sr-only">Próximo</span>
                             </a>

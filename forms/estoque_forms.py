@@ -44,4 +44,5 @@ class FiltroEstoqueForm(FlaskForm):
         ('esgotado', 'Esgotado'),
         ('excesso', 'Excesso')
     ])
+    localizacao = SelectField('Localização', choices=[], validators=[Optional()])
     termo_busca = StringField('Buscar') 

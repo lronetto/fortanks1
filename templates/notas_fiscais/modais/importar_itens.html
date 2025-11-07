@@ -193,7 +193,7 @@
                     <td>R$ ${valorUnitario}</td>
                     <td>${item.fator_conversao_aplicado || '-'}</td>
                     <td id="material_nome_${item.id}">${materialNome}</td>
-                    <td>${item.unidade_material || '-'}</td>
+                    <td>${item.material_unidade || '-'}</td>
                     <td>`
             if(item.importado_estoque) {
                 html += '<span class="badge bg-success">Importado</span>';
@@ -331,7 +331,9 @@
                 
                 mostrarAlerta('Sucesso', data.message, 'success', function() {
                     // Recarregar a página após importação
-                    window.location.reload();
+                    params = $('#filtrosNotasFiscais').serialize();
+                    carregarTabelaNotasFiscais(params);
+                    carregarTotalNotas(params);
                 });
             } else {
                 mostrarAlerta('Erro', data.message, 'error');
@@ -342,9 +344,7 @@
             mostrarAlerta('Erro', `Ocorreu um erro ao importar os itens: ${error.message}`, 'error');
         })
         .finally(() => {
-            if (typeof Swal !== 'undefined') {
-                Swal.close();
-            }
+            fecharModal('#modalImportarItens');
         });
     }
 </script>

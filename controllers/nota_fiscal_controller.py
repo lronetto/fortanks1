@@ -1080,11 +1080,13 @@ def api_itens(nf_id):
                 'valor_unitario': float(item.valor_unitario),
                 'valor_total': float(item.valor_total),
                 'material_id': material_id,
+                'material_unidade': Material.query.get(material_id).unidade_obj.nome if material_id else None,
                 'material_nome': Material.query.get(material_id).nome if material_id else None,
                 'importado_estoque': item.importado_estoque,
                 'data_importacao_estoque': item.data_importacao_estoque.isoformat() if item.data_importacao_estoque else None,
                 'vinculacao_automatica': vinculacao_automatica,
-                'importacao_automatica': importacao_automatica
+                'importacao_automatica': importacao_automatica,
+                'fator_conversao_aplicado': item.fator_conversao_aplicado
             })
         
         # Se houve importações automáticas, adicionar um flash message

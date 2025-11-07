@@ -128,6 +128,30 @@
             if (materialUnidade && itemUnidade && !iguais) {
                 abrirModalConversao(itemId, materialId, itemUnidade, materialUnidade);
             }
+            else {
+
+
+                const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
+                if (linhaItem) {
+                    const campoFatorConversao = document.getElementById(`fator_conversao_${itemId}`);
+                    if (campoFatorConversao) {
+                        campoFatorConversao.value = 1;
+                    }
+                    // A coluna "Fator de Conversão" é a 7ª coluna (índice 6)
+                    const celulaFatorConversao = linhaItem.cells[6];
+                    if (celulaFatorConversao && fatorConversao) {
+                        // Formatar o fator de conversão com 4 casas decimais
+                        const fatorNum = parseFloat(fatorConversao);
+                        if (!isNaN(fatorNum) && fatorNum > 0) {
+                            const fatorFormatado = fatorNum.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 4,
+                                maximumFractionDigits: 4
+                            });
+                            celulaFatorConversao.textContent = fatorFormatado;
+                        }
+                    }
+                }
+            }
         }
     });
     function buscarMateriais(termo) {

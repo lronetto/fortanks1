@@ -1101,7 +1101,7 @@ def exportar_excel():
     try:
         # Buscar todos os materiais (sem paginação para exportação completa)
         materiais = Material.query.all()
-
+        ncm_unico = None
         # Preparar os dados para o DataFrame
         dados_exportacao = []
         for mat in materiais:

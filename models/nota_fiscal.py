@@ -285,9 +285,12 @@ class NotaFiscal(db.Model):
                 )
                 item_fiscal.save()
             self.vincular_automaticamente()
+            db.session.refresh(self)
             if not (self.cnpj_emitente in CNPJS_MATRIZ_FILIAIS):
                 print(f'importando itens para estoque')
                 self.importar_itens_para_estoque()
+            elseif (self)
+
             self.inserido = True
             return self
 
@@ -745,7 +748,7 @@ class NotaFiscalItem(db.Model):
         itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
                                             NotaFiscalItem.descricao==self.descricao,
                                             NotaFiscalItem.unidade==self.unidade,
-                                            NotaFiscalItem.material_id.is_(None)).all()
+                                            NotaFiscalItem.material_id==None).all()
         print(f'itens a ser vinculados: {len(itens)}')
         for item in itens:
             item.vincular(self.fator_conversao_aplicado,self.material_id)
@@ -757,15 +760,42 @@ class NotaFiscalItem(db.Model):
         itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
                                             NotaFiscalItem.descricao==self.descricao,
                                             NotaFiscalItem.unidade==self.unidade,
-                                            NotaFiscalItem.material_id.is_(None)).all()
+                                            NotaFiscalItem.material_id==None).all()
+        self.importar_para_estoque()
         print(f'itens a ser vinculados e importado estoque: {len(itens)}')
         for item in itens:
             item.vincular(self.fator_conversao_aplicado,self.material_id)
             item.save()
-            item.importar_para_estoque()
+            nota=self.nota_fiscal
+            if nota.tipo == 1:
+                if nota.cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and nota.cnpj_destinatario in CNPJS_MATRIZ:
+                    local = "Estoque Matriz"
+                    tipo_movimento = 'entrada'
+                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
+                elif nota.cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and nota.cnpj_destinatario in CNPJS_FILIAIS:
+                    local = "Estoque Filial " + nota.cnpj_destinatario
+                    tipo_movimento = 'entrada'
+                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
+                elif nota.cnpj_emitente in CNPJS_MATRIZ and nota.cnpj_destinatario in CNPJS_FILIAIS:
+                    local = "Estoque Matriz"
+                    tipo_movimento = 'saida'
+                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
+                    local = "Estoque Filial " + nota.cnpj_destinatario
+                    tipo_movimento = 'entrada'
+                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
+                elif nota.cnpj_emitente in CNPJS_FILIAIS and nota.cnpj_destinatario in CNPJS_MATRIZ:
+                    local = "Estoque Filial" + nota.cnpj_destinatario
+                    tipo_movimento = 'saida'
+                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
+                    local = "Estoque Matriz"
+                    tipo_movimento = 'entrada'
+                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
+            
+            return
+            
         fim = datetime.now()
         print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')
-    def importar_para_estoque(self,usuario_id=None,centro_custo_id=None,observacao=None):
+    def importar_para_estoque(self,usuario_id=None,centro_custo_id=None,observacao=None,local='Estoque Matriz',tipo_movimento='entrada'):
         """
         Importa o item da nota fiscal para o estoque
         
@@ -790,16 +820,18 @@ class NotaFiscalItem(db.Model):
         
         try:
             # Buscar estoque existente para o material
-            estoque = Estoque.query.filter_by(material_id=self.material_id).first()
+            estoque = Estoque.query.filter_by(material_id=self.material_id,localizacao=local).first()
             
             # Se não existe estoque para este material, criar um novo
             if not estoque:
                 print(f"Criando novo estoque para o material {self.material_id}")
+
+
                 estoque = Estoque(
                     material_id=self.material_id,
                     tipo_item='material',
                     quantidade=0,
-                    localizacao='Estoque principal',
+                    localizacao=local,
                     centro_custo_id=centro_custo_id,
                     usuario_id=usuario_id
                 )
@@ -822,7 +854,7 @@ class NotaFiscalItem(db.Model):
             # Criar e salvar a movimentação
             movimentacao = MovimentacaoEstoque(
                 estoque_id=estoque.id,
-                tipo_movimento='entrada',
+                tipo_movimento=tipo_movimento,
                 quantidade=self.quantidade,
                 data_movimento=self.nota_fiscal.data_emissao,
                 nota_fiscal_item_id=self.id,

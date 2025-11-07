@@ -39,13 +39,17 @@
             <form method="GET" action="{{ url_for('estoque.index') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row">
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-2 mb-3">
                         {{ form_filtro.tipo_item.label }}
                         {{ form_filtro.tipo_item(class="form-control") }}
                     </div>
-                    <div class="col-md-3 mb-3">
+                    <div class="col-md-2 mb-3">
                         {{ form_filtro.status_estoque.label }}
                         {{ form_filtro.status_estoque(class="form-control") }}
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        {{ form_filtro.localizacao.label }}
+                        {{ form_filtro.localizacao(class="form-control") }}
                     </div>
                     <div class="col-md-4 mb-3">
                         {{ form_filtro.termo_busca.label }}
@@ -187,7 +191,7 @@
                             {% if page %}
                                 {% if page != items.page %}
                                     <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('estoque.index', page=page, tipo_item=form_filtro.tipo_item.data, status_estoque=form_filtro.status_estoque.data, termo_busca=form_filtro.termo_busca.data) }}">{{ page }}</a>
+                                        <a class="page-link" href="{{ url_for('estoque.index', page=page, tipo_item=form_filtro.tipo_item.data, status_estoque=form_filtro.status_estoque.data, localizacao=form_filtro.localizacao.data, termo_busca=form_filtro.termo_busca.data) }}">{{ page }}</a>
                                     </li>
                                 {% else %}
                                     <li class="page-item active">

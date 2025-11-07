@@ -44,6 +44,18 @@
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
+                                <label for="localizacao">Localização</label>
+                                <select name="localizacao" id="localizacao" class="form-control">
+                                    {% for loc_value, loc_label in localizacoes %}
+                                    <option value="{{ loc_value }}" {% if localizacao == loc_value %}selected{% endif %}>
+                                        {{ loc_label }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-group">
                                 <label for="data_inicio">Data de Início</label>
                                 <input type="date" name="data_inicio" id="data_inicio" class="form-control" value="{{ request.args.get('data_inicio', '') }}">
                             </div>

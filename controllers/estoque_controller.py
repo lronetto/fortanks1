@@ -35,8 +35,17 @@ def index():
         form_filtro.tipo_item.data = request.args.get('tipo_item')
     if request.args.get('status_estoque'):
         form_filtro.status_estoque.data = request.args.get('status_estoque')
+    if request.args.get('localizacao'):
+        form_filtro.localizacao.data = request.args.get('localizacao')
     if request.args.get('termo_busca'):
         form_filtro.termo_busca.data = request.args.get('termo_busca')
+    
+    # Obter lista de localizações únicas para o filtro
+    localizacoes = db.session.query(Estoque.localizacao).filter(
+        Estoque.localizacao != None,
+        Estoque.localizacao != ''
+    ).distinct().order_by(Estoque.localizacao).all()
+    form_filtro.localizacao.choices = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
     
     # Consulta base
     query = Estoque.query
@@ -44,6 +53,9 @@ def index():
     # Aplicar filtros
     if form_filtro.tipo_item.data and form_filtro.tipo_item.data != 'todos':
         query = query.filter(Estoque.tipo_item == form_filtro.tipo_item.data)
+    
+    if form_filtro.localizacao.data:
+        query = query.filter(Estoque.localizacao == form_filtro.localizacao.data)
     
     if form_filtro.termo_busca.data:
         termo = f"%{form_filtro.termo_busca.data}%"
@@ -312,10 +324,11 @@ def movimentacoes():
     data_inicio = request.args.get('data_inicio', None)
     data_fim = request.args.get('data_fim', None)
     material_id = request.args.get('material_id', None, type=int)
+    localizacao = request.args.get('localizacao', None)
     observacao = request.args.get('observacao', None)
     
     # Consulta base
-    query = MovimentacaoEstoque.query
+    query = MovimentacaoEstoque.query.join(Estoque)
     
     # Aplicar filtros
     if estoque_id:
@@ -323,7 +336,11 @@ def movimentacoes():
     
     # Filtro por material
     if material_id:
-        query = query.join(Estoque).filter(Estoque.material_id == material_id)
+        query = query.filter(Estoque.material_id == material_id)
+    
+    # Filtro por localização
+    if localizacao:
+        query = query.filter(Estoque.localizacao == localizacao)
     
     if tipo:
         query = query.filter(MovimentacaoEstoque.tipo_movimento == tipo)
@@ -355,15 +372,24 @@ def movimentacoes():
     # Obter todos os materiais para o filtro
     materiais = Material.query.filter_by(ativo=True).order_by(Material.nome).all()
     
+    # Obter lista de localizações únicas para o filtro
+    localizacoes = db.session.query(Estoque.localizacao).filter(
+        Estoque.localizacao != None,
+        Estoque.localizacao != ''
+    ).distinct().order_by(Estoque.localizacao).all()
+    localizacoes_list = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
+    
     return render_template('estoque/movimentacoes.html', 
                           movimentacoes=movimentacoes, 
                           itens_estoque=itens_estoque,
                           materiais=materiais,
+                          localizacoes=localizacoes_list,
                           estoque_id=estoque_id, 
                           tipo=tipo, 
                           data_inicio=data_inicio, 
                           data_fim=data_fim,
                           material_id=material_id,
+                          localizacao=localizacao,
                           observacao=observacao)
 
 @estoque_bp.route('/nova-movimentacao', methods=['GET', 'POST'])
@@ -532,6 +558,7 @@ def inventarios():
     page = request.args.get('page', 1, type=int)
     tipo = request.args.get('tipo', None)
     status = request.args.get('status', None)
+    localizacao = request.args.get('localizacao', None)
     
     # Consulta base
     query = InventarioEstoque.query
@@ -543,8 +570,29 @@ def inventarios():
     if status:
         query = query.filter(InventarioEstoque.status == status)
     
+    # Filtro por localização - filtrar inventários que têm itens com a localização especificada
+    if localizacao:
+        # Encontrar IDs de inventários que têm itens com a localização especificada
+        inventarios_ids = db.session.query(ItemInventario.inventario_id).join(
+            Estoque, ItemInventario.estoque_id == Estoque.id
+        ).filter(Estoque.localizacao == localizacao).distinct().all()
+        
+        if inventarios_ids:
+            inventarios_ids_list = [row[0] for row in inventarios_ids]
+            query = query.filter(InventarioEstoque.id.in_(inventarios_ids_list))
+        else:
+            # Se não há inventários com essa localização, retornar query vazia
+            query = query.filter(InventarioEstoque.id == -1)
+    
     # Obter resultados
     inventarios = query.order_by(InventarioEstoque.id.desc()).all()
+    
+    # Obter lista de localizações únicas para o filtro
+    localizacoes = db.session.query(Estoque.localizacao).filter(
+        Estoque.localizacao != None,
+        Estoque.localizacao != ''
+    ).distinct().order_by(Estoque.localizacao).all()
+    localizacoes_list = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
     
     # Paginação manual se necessário
     pagination = {
@@ -556,6 +604,8 @@ def inventarios():
     return render_template('estoque/inventario_lista.html', 
                           inventarios=inventarios, 
                           pagination=pagination,
+                          localizacoes=localizacoes_list,
+                          localizacao=localizacao,
                           request=request)
 
 @estoque_bp.route('/novo-inventario', methods=['GET', 'POST'])
