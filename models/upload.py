@@ -12,7 +12,7 @@ class Upload(db.Model):
     tipo = db.Column(db.Integer, nullable=True)
     filename = db.Column(db.String(255), nullable=False)
     mimetype = db.Column(db.String(100), nullable=False)
-    blob = db.Column(Text(length=4294967295), nullable=False)  # LONGTEXT
+    blob = db.Column(Text(length=4294967295), nullable=True)  # LONGTEXT
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     data = db.Column(db.String(255), nullable=True)
 
