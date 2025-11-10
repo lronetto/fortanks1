@@ -47,8 +47,11 @@ def novo():
             notas_selecionadas = json.loads(request.form.get('notas_selecionadas', '[]'))
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
             
-            print(notas_selecionadas)
-            print(avulsos_data)
+            print("--------------------------------")
+            print("request.form: ",request.form)
+            #print("notas_selecionadas: ",notas_selecionadas)
+            #print("avulsos_data: ",avulsos_data)
+            print("--------------------------------")
             # Validar centro de custo
             
             
@@ -101,11 +104,14 @@ def novo():
                         break
                     file = request.files[file_key]
                     if file and file.filename:
+                        # Ler arquivo e converter para base64
+                        file_content = file.read()
+                        file_base64 = base64.b64encode(file_content).decode('utf-8')
                         anexo = ReembolsoAnexo(
                             documento=doc,
                             filename=file.filename,
                             mimetype=file.content_type,
-                            blob=file.read()
+                            blob=file_base64
                         )
                         db.session.add(anexo)
             
@@ -132,14 +138,11 @@ def novo():
     # GET: Exibir formulário
     centros_custo_objs = CentroCusto.query.filter_by(ativo=True).order_by(CentroCusto.codigo.desc()).all()
     centros_custo = [{'id': c.id, 'codigo': c.codigo, 'nome': c.nome} for c in centros_custo_objs]
-    form = ReembolsoForm()
-    form.centro_custo_id.choices = [(c['id'], f"{c['codigo']} - {c['nome']}") for c in centros_custo]
+    #form = ReembolsoForm()
+    #form.centro_custo_id.choices = [(c['id'], f"{c['codigo']} - {c['nome']}") for c in centros_custo]
     return render_template(
-        'reembolsos/form.html',
-        form=form,
+        'reembolsos/editar.html',
         modo='novo',
-        notas_json='[]',
-        avulsos_json='[]',
         centros_custo=centros_custo
     )
 
@@ -150,23 +153,132 @@ def nota_fiscal_busca_reembolso():
     tinicial = time.time()
     if request.method == 'POST':
         try:
-            filtros = request.get_json()
-            filtros['cnpj_emitente'] = CNPJS_MATRIZ_FILIAIS
-            filtros['cfop'] = CFOPS_TRANSFERENCIA
-
-            notas_filtradas,pagination = nota_fiscal_busca(filtros)
+            # Obter filtros do JSON do body
+            filtros = request.get_json() if request.is_json else {}
+            
+            # Obter parâmetros de paginação
+            page = filtros.get('page', request.args.get('page', 1, type=int))
+            per_page = filtros.get('per_page', request.args.get('per_page', 25, type=int))
+            
+            # Filtro de pagamento
+            pagamento_filtro = filtros.get('pagamento', '')
+            notas_selecionadas = filtros.get('notas_selecionadas', [])
+            ids = filtros.get('ids', [])
+            
+            # Adicionar joins para informações de pagamento e reembolso
+            tem_pagamento_column = func.max(case((DadoAnalitico.id != None, 1), else_=0)).label('tem_pagamento')
+            upload_column = func.max(case((Upload.id != None, 1), else_=0)).label('upload')
+            upload_envio_column = func.max(case((Upload.tipo == 2, 1), else_=0)).label('upload_envio')
+            upload_reembolso_column = func.max(case((Upload.tipo == 3, 1), else_=0)).label('upload_reembolso')
+            
+            # Criar query com joins (similar ao que api_get_dados_notas_fiscais faz, mas com joins necessários)
+            join_conditions_pagamento = and_(
+                NotaFiscal.valor_total == DadoAnalitico.valor,
+                DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
+            )
+            join_conditions_upload = and_(
+                Upload.pai_id == NotaFiscal.id,
+                Upload.pai == 'NotaFiscal'
+            )
+            
+            query = db.session.query(
+                NotaFiscal,
+                tem_pagamento_column,
+                upload_column,
+                upload_envio_column,
+                upload_reembolso_column,
+                ReembolsoDocumento
+            ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
+            
+            # Aplicar filtros (usando a mesma lógica de api_get_dados_notas_fiscais)
+            if filtros.get('numero'):
+                busca_like = f"%{filtros.get('numero')}%"
+                query = query.filter(
+                    or_(
+                        NotaFiscal.numero_nf.ilike(busca_like),
+                        NotaFiscal.nome_emitente.ilike(busca_like),
+                        NotaFiscal.chave_acesso.ilike(busca_like)
+                    )
+                )
+            if filtros.get('fornecedor'):
+                query = query.filter(NotaFiscal.nome_emitente.ilike(f"%{filtros.get('fornecedor')}%"))
+            if filtros.get('data_inicial') or filtros.get('data_ini'):
+                data_ini = filtros.get('data_inicial') or filtros.get('data_ini')
+                try:
+                    data_inicio = datetime.strptime(data_ini, '%Y-%m-%d')
+                    query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+                except:
+                    pass
+            if filtros.get('data_final') or filtros.get('data_fim'):
+                data_fim = filtros.get('data_final') or filtros.get('data_fim')
+                try:
+                    data_final = datetime.strptime(data_fim, '%Y-%m-%d')
+                    query = query.filter(NotaFiscal.data_emissao <= data_final)
+                except:
+                    pass
+            if filtros.get('valor_minimo'):
+                query = query.filter(NotaFiscal.valor_total >= float(filtros.get('valor_minimo')))
+            if filtros.get('valor_maximo'):
+                query = query.filter(NotaFiscal.valor_total <= float(filtros.get('valor_maximo')))
+            if filtros.get('valor_exato'):
+                query = query.filter(NotaFiscal.valor_total == float(filtros.get('valor_exato')))
+            
+            # Filtros de CNPJ e CFOP
+            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
+            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(CFOPS_TRANSFERENCIA)))
+            
+            # Joins
+            query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
+            query = query.outerjoin(ReembolsoDocumento, ReembolsoDocumento.nota_fiscal_id == NotaFiscal.id)
+            query = query.outerjoin(Upload, join_conditions_upload)
+            
+            # Filtros de pagamento
+            if pagamento_filtro == '0':  # Não Pago
+                query = query.having(tem_pagamento_column == 0)
+            elif pagamento_filtro == '1':  # Pago
+                query = query.having(tem_pagamento_column == 1)
+            elif pagamento_filtro == '2':  # Sem upload de envio
+                query = query.having(upload_envio_column == 0)
+            elif pagamento_filtro == '3':  # Com upload de reembolso
+                query = query.having(upload_reembolso_column == 1)
+            elif pagamento_filtro == '4':  # Selecionados
+                query = query.filter(NotaFiscal.id.in_(ids))
+            
+            # Agrupar e ordenar
+            query = query.group_by(NotaFiscal.id)
+            query = query.order_by(NotaFiscal.data_emissao.desc())
+            
+            # Aplicar paginação
+            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+            notas = pagination.items
+            
+            # Processar notas para o JSON de resposta
+            notas_filtradas = []
+            for n in notas:
+                try:
+                    nota_fiscal_obj = n.NotaFiscal
+                    notas_filtradas.append({
+                        'doc': '' if n.ReembolsoDocumento is None else {
+                            'cc': n.ReembolsoDocumento.centro_custo_id,
+                            'descricao': n.ReembolsoDocumento.descricao
+                        },
+                        'id': nota_fiscal_obj.id,
+                        'selecionada': nota_fiscal_obj.id in notas_selecionadas,
+                        'numero_nf': nota_fiscal_obj.numero_nf,
+                        'nome_emitente': nota_fiscal_obj.nome_emitente,
+                        'data_emissao': nota_fiscal_obj.data_emissao.isoformat() if nota_fiscal_obj.data_emissao else '',
+                        'valor_total': float(nota_fiscal_obj.valor_total) if nota_fiscal_obj.valor_total else 0.0,
+                        'pagamento': n.tem_pagamento if hasattr(n, 'tem_pagamento') else 0,
+                        'upload': n.upload if hasattr(n, 'upload') else 0,
+                        'upload_envio': n.upload_envio if hasattr(n, 'upload_envio') else 0,
+                        'upload_reembolso': n.upload_reembolso if hasattr(n, 'upload_reembolso') else 0,
+                        'chave_acesso': nota_fiscal_obj.chave_acesso or '',
+                    })
+                except Exception as e:
+                    print(f'Erro ao processar nota: {str(e)}')
+                    continue
+            
             print('tempo de execução3: ',time.time()-tinicial)
-           
-            #pagination = notas_filtradas.paginate(page=page, per_page=per_page, error_out=False)
-            #notas_filtradas = pagination.items
-            print(f'Total de notas encontradas: {pagination.total}')
-            print(f'Total de páginas: {pagination.pages}')
-            # Se após filtrar por pagamento ficar com menos itens que a página atual,
-            # precisamos buscar mais itens para preencher a página
-           
-
-            print(f'Total de notas encontradas: {pagination.total}')
-            print(f'Total de páginas: {pagination.pages}')
 
             return jsonify({
                 'notas': notas_filtradas,
@@ -179,6 +291,8 @@ def nota_fiscal_busca_reembolso():
 
         except Exception as e:
             print(f'Erro ao buscar notas: {str(e)}')
+            import traceback
+            traceback.print_exc()
             return jsonify({'error': str(e)}), 400
     return jsonify({'error': 'Método não permitido'}), 405
 
@@ -263,7 +377,15 @@ def exportar_pdf(id):
                     if anexo.mimetype == 'application/pdf':
                         try:
                             # Converte o blob base64 para bytes
-                            pdf_bytes = base64.b64decode(anexo.blob)
+                            # Tenta decodificar base64, se falhar assume que já está em bytes
+                            try:
+                                pdf_bytes = base64.b64decode(anexo.blob)
+                            except:
+                                # Se não for base64, assume que já está em bytes (compatibilidade com dados antigos)
+                                if isinstance(anexo.blob, str):
+                                    pdf_bytes = anexo.blob.encode('latin-1')
+                                else:
+                                    pdf_bytes = anexo.blob
                             # Adiciona o PDF ao final
                             pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
                         except Exception as e:
@@ -288,7 +410,19 @@ def download_anexo(anexo_id):
     reembolso = anexo.documento.reembolso
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
-    return send_file(BytesIO(anexo.blob), download_name=anexo.filename, mimetype=anexo.mimetype, as_attachment=True)
+    
+    # Converter base64 para bytes
+    try:
+        # Tenta decodificar base64
+        file_content = base64.b64decode(anexo.blob)
+    except:
+        # Se não for base64, assume que já está em bytes (compatibilidade com dados antigos)
+        if isinstance(anexo.blob, str):
+            file_content = anexo.blob.encode('latin-1')
+        else:
+            file_content = anexo.blob
+    
+    return send_file(BytesIO(file_content), download_name=anexo.filename, mimetype=anexo.mimetype, as_attachment=True)
 
 @reembolso_bp.route('/<int:reembolso_id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -321,13 +455,25 @@ def editar(reembolso_id):
             notas_selecionadas = json.loads(request.form.get('notas_selecionadas', '[]'))
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
 
-            # Limpar docs antigos
+            # Coletar IDs de documentos avulsos que serão mantidos (editados)
+            avulsos_ids_manter = []
+            for avulso_data in avulsos_data:
+                avulso_id = avulso_data.get('id')
+                # Se tem ID e não é timestamp (IDs de timestamp são muito grandes)
+                if avulso_id and isinstance(avulso_id, int) and avulso_id < 1000000000000:
+                    avulsos_ids_manter.append(avulso_id)
+            
+            # Limpar apenas docs que não estão sendo editados
             for doc in list(reembolso.documentos):
-                # Remove anexos se for avulso
-                if doc.tipo == 'avulso':
+                # Se for avulso e não está na lista de manter, deletar
+                if doc.tipo == 'avulso' and doc.id not in avulsos_ids_manter:
+                    # Remove anexos se for avulso
                     for anexo in list(doc.anexos):
                         db.session.delete(anexo)
-                db.session.delete(doc)
+                    db.session.delete(doc)
+                # Se for nota, deletar (será recriado)
+                elif doc.tipo == 'nota':
+                    db.session.delete(doc)
             db.session.flush()
 
             valor_total = 0
@@ -349,30 +495,73 @@ def editar(reembolso_id):
                 valor_total += float(nota.valor_total)
             # Adicionar documentos avulsos
             for idx, avulso_data in enumerate(avulsos_data):
-                doc = ReembolsoDocumento(
-                    reembolso=reembolso,
-                    tipo='avulso',
-                    descricao=avulso_data['descricao'],
-                    valor=avulso_data['valor'],
-                    fornecedor=avulso_data.get('fornecedor', ''),
-                    ndocumento=avulso_data.get('ndocumento', ''),
-                    data_documento=datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d'),
-                    centro_custo_id=avulso_data.get('centro_custo_id')
-                )
-                db.session.add(doc)
+                # Verificar se é um documento existente (tem ID numérico, não timestamp)
+                avulso_id = avulso_data.get('id')
+                doc_existente = None
+                anexos_existentes_ids = []
+                
+                # Se tem ID e não é um timestamp (IDs de timestamp são muito grandes)
+                if avulso_id and isinstance(avulso_id, int) and avulso_id < 1000000000000:
+                    # Buscar documento existente
+                    doc_existente = ReembolsoDocumento.query.filter_by(
+                        id=avulso_id,
+                        reembolso_id=reembolso_id,
+                        tipo='avulso'
+                    ).first()
+                    
+                    if doc_existente:
+                        # Coletar IDs dos anexos que devem ser preservados
+                        anexos_removidos = avulso_data.get('anexos_removidos', [])
+                        anexos_existentes = [a for a in doc_existente.anexos if a.id not in anexos_removidos]
+                        anexos_existentes_ids = [a.id for a in anexos_existentes]
+                
+                # Criar ou atualizar documento
+                if doc_existente:
+                    # Atualizar documento existente
+                    doc = doc_existente
+                    doc.descricao = avulso_data['descricao']
+                    doc.valor = avulso_data['valor']
+                    doc.fornecedor = avulso_data.get('fornecedor', '')
+                    doc.ndocumento = avulso_data.get('ndocumento', '')
+                    doc.data_documento = datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d')
+                    doc.centro_custo_id = avulso_data.get('centro_custo_id')
+                    
+                    # Remover anexos marcados para remoção
+                    anexos_removidos = avulso_data.get('anexos_removidos', [])
+                    for anexo in list(doc.anexos):
+                        if anexo.id in anexos_removidos:
+                            db.session.delete(anexo)
+                else:
+                    # Criar novo documento
+                    doc = ReembolsoDocumento(
+                        reembolso=reembolso,
+                        tipo='avulso',
+                        descricao=avulso_data['descricao'],
+                        valor=avulso_data['valor'],
+                        fornecedor=avulso_data.get('fornecedor', ''),
+                        ndocumento=avulso_data.get('ndocumento', ''),
+                        data_documento=datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d'),
+                        centro_custo_id=avulso_data.get('centro_custo_id')
+                    )
+                    db.session.add(doc)
+                
                 valor_total += float(avulso_data['valor'])
-                # Processar anexos do avulso
+                
+                # Processar novos anexos do avulso
                 for file_idx in range(100):
                     file_key = f'avulso_{idx}_anexo_{file_idx}'
                     if file_key not in request.files:
                         break
                     file = request.files[file_key]
                     if file and file.filename:
+                        # Ler arquivo e converter para base64
+                        file_content = file.read()
+                        file_base64 = base64.b64encode(file_content).decode('utf-8')
                         anexo = ReembolsoAnexo(
                             documento=doc,
                             filename=file.filename,
                             mimetype=file.content_type,
-                            blob=file.read()
+                            blob=file_base64
                         )
                         db.session.add(anexo)
             reembolso.valor_total = valor_total
@@ -386,7 +575,33 @@ def editar(reembolso_id):
     # GET: Preencher formulário
     centros_custo = CentroCusto.query.filter_by(ativo=True).all()
     centros_custo = [{'id': c.id, 'codigo': c.codigo, 'nome': c.nome} for c in centros_custo]
-    return render_template('reembolsos/editar.html', modo='editar',reembolso_id=reembolso_id,notas=notas,centros_custo=centros_custo)
+    
+    # Carregar documentos avulsos do reembolso
+    avulsos = []
+    for doc in reembolso.documentos:
+        if doc.tipo == 'avulso':
+            avulsos.append({
+                'id': doc.id,
+                'fornecedor': doc.fornecedor or '',
+                'ndocumento': doc.ndocumento or '',
+                'data_documento': doc.data_documento.strftime('%Y-%m-%d') if doc.data_documento else datetime.now().strftime('%Y-%m-%d'),
+                'descricao': doc.descricao,
+                'valor': float(doc.valor),
+                'centro_custo_id': doc.centro_custo_id,
+                'anexos_count': len(doc.anexos),
+                'anexos': [
+                    {'id': anexo.id, 'filename': anexo.filename}
+                    for anexo in doc.anexos
+                ]
+            })
+    
+    return render_template('reembolsos/editar.html', 
+                         modo='editar',
+                         reembolso_id=reembolso_id,
+                         reembolso=reembolso,
+                         notas=notas,
+                         centros_custo=centros_custo,
+                         avulsos=avulsos)
 
 def notas_json(reembolso):
     notas = []

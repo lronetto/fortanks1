@@ -1,5 +1,6 @@
 from datetime import datetime
 from models.database import db
+from sqlalchemy import Text
 
 class Reembolso(db.Model):
     __tablename__ = 'reembolsos'
@@ -67,7 +68,7 @@ class ReembolsoAnexo(db.Model):
     documento_id = db.Column(db.Integer, db.ForeignKey('reembolso_documentos.id'), nullable=False)
     filename = db.Column(db.String(255), nullable=False)
     mimetype = db.Column(db.String(100), nullable=False)
-    blob = db.Column(db.LargeBinary, nullable=False)
+    blob = db.Column(Text(length=4294967295), nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     def __repr__(self):

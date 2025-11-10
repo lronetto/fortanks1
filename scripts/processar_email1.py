@@ -268,7 +268,10 @@ def processar_emails():
                     'arquivos': [],
                     'codigo_barras': {
                         'qtd_Identificados': 0,
-                        'qtd_Nao_Identificados': 0,
+                        'Nao_Identificados': {
+                            'qtd': 0,
+                            'filenames':{}
+                        },
                         'qtd_Nao_Identificados_DB': 0,
                         'qtd_Identificados_arquivei': 0,
                         'qtd_Identificados_arquivei_DB': 0,
@@ -320,7 +323,8 @@ def processar_emails():
                                         dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
                                         tiponf = dec1[20:22]
                                     else:
-                                        log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
+                                        log_email['codigo_barras']['Nao_Identificados']['qtd'] += 1
+                                        log_email['codigo_barras']['Nao_Identificados']['filenames'].append(filename)
                                         #log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
                                 else:
                                     log_email['codigo_barras']['qtd_Nao_Identificados'] += 1

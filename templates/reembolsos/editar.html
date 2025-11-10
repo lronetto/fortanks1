@@ -12,15 +12,15 @@
                     <h3 class="card-title">{{ 'Novo Reembolso' if modo == 'novo' else 'Editar Reembolso' }}</h3>
                 </div>
                 <div class="card-body">
-                    <form id="formReembolso" method="POST" enctype="multipart/form-data" action="">
+                    <form id="formReembolso" method="POST" enctype="multipart/form-data" action="{% if modo == 'novo' %}{{ url_for('reembolso.novo') }}{% else %}{{ url_for('reembolso.editar', reembolso_id=reembolso_id) }}{% endif %}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="notas_selecionadas" id="notas_selecionadas" value='[]'>
-                        <input type="hidden" name="avulsos_data" id="avulsos_data" value='[]'>
+                        <input type="hidden" name="notas_selecionadas" id="notas_selecionadas" value='{{ notas|tojson if notas else "[]" }}'>
+                        <input type="hidden" name="avulsos_data" id="avulsos_data" value='{{ avulsos|tojson if avulsos else "[]" }}'>
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label for="numero_relatorio">Número do Relatório</label>
-                                    <input type="text" class="form-control" name="numero_relatorio" id="numero_relatorio" value="">
+                                    <input type="text" class="form-control" name="numero_relatorio" id="numero_relatorio" value="{% if modo == 'editar' and reembolso %}{{ reembolso.numero_relatorio }}{% endif %}">
                                 </div>
                             </div>
                         </div>
@@ -223,15 +223,15 @@
 
 {% block scripts %}
 <script>
-let notasSelecionadas = {{ notas|tojson }};
-let reembolso_id = {{ reembolso_id }};
+let notasSelecionadas = {{ notas|tojson if notas else '[]' }};
+let reembolso_id = {{ reembolso_id if reembolso_id else '0' }};
 let avulsos = [];
 let paginaNotas = 1;
 let totalPaginasNotas = 1;
 let notasPorPagina = 25;
 
 let spinner,tbody,paginacao;
-window.centrosCusto = {{ centros_custo|tojson }};
+window.centrosCusto = {{ centros_custo|tojson if centros_custo else '[]' }};
 window.modo = '{{ modo }}';
 document.addEventListener('DOMContentLoaded', function() {
     spinner = document.getElementById('spinnerNotas');
@@ -249,7 +249,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (avulsosInput && avulsosInput.value && avulsosInput.value !== '[]') {
             avulsos = JSON.parse(avulsosInput.value);
-            // atualizarTabelaAvulsos(); // Se necessário
+            // Atualizar tabela de avulsos se a função existir
+            if (typeof atualizarTabelaAvulsos === 'function') {
+                atualizarTabelaAvulsos();
+            }
         }
     } catch (e) { /* ignora erro de parse */ }
     filtrarNotas();
@@ -259,11 +262,120 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Selecione pelo menos uma nota fiscal ou adicione um documento avulso.');
             return;
         }
+        
+        // Atualizar campos hidden com os dados
         document.getElementById('notas_selecionadas').value = JSON.stringify(notasSelecionadas);
         document.getElementById('avulsos_data').value = JSON.stringify(avulsos);
-        console.log('notasSelecionadas',notasSelecionadas);
-        console.log('avulsos',avulsos);
-        this.submit();
+        
+        // Verificar se há avulsos com anexos
+        const temAnexos = avulsos.some(av => av.anexos_files && av.anexos_files.length > 0);
+        
+        if (temAnexos) {
+            // Usar FormData para enviar arquivos
+            const formData = new FormData(this);
+            
+            // Garantir que os dados JSON estejam corretos
+            formData.set('notas_selecionadas', JSON.stringify(notasSelecionadas));
+            formData.set('avulsos_data', JSON.stringify(avulsos));
+            
+            // Adicionar anexos dos avulsos
+            avulsos.forEach((avulso, idx) => {
+                if (avulso.anexos_files && avulso.anexos_files.length > 0) {
+                    avulso.anexos_files.forEach((file, fileIdx) => {
+                        formData.append(`avulso_${idx}_anexo_${fileIdx}`, file);
+                    });
+                }
+            });
+            
+            // Enviar via fetch (não incluir headers, FormData já inclui o CSRF token)
+            const formAction = this.action || window.location.pathname;
+            console.log('Enviando formulário para:', formAction);
+            console.log('Dados:', {
+                notas: notasSelecionadas.length,
+                avulsos: avulsos.length,
+                temAnexos: temAnexos
+            });
+            
+            fetch(formAction, {
+                method: 'POST',
+                body: formData,
+                redirect: 'manual' // Controlar redirect manualmente
+            })
+            .then(response => {
+                console.log('Resposta recebida:', response.status, response.type);
+                
+                // Se houver redirect (status 302, 301, etc)
+                if (response.status >= 300 && response.status < 400) {
+                    const redirectUrl = response.headers.get('Location') || '/reembolsos/';
+                    console.log('Redirecionando para:', redirectUrl);
+                    window.location.href = redirectUrl;
+                    return;
+                }
+                
+                // Verificar se a resposta é JSON
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    return response.json().then(data => {
+                        console.log('Resposta JSON:', data);
+                        if (data && data.success === false) {
+                            alert(data.message || 'Erro ao salvar reembolso');
+                        } else if (data && data.success) {
+                            window.location.href = data.redirect || '/reembolsos/';
+                        } else {
+                            // Se não houver redirect explícito, redirecionar para a lista
+                            window.location.href = '/reembolsos/';
+                        }
+                    });
+                } else if (response.ok) {
+                    // Se a resposta for OK (200), assumir sucesso e redirecionar
+                    console.log('Resposta OK, redirecionando...');
+                    window.location.href = '/reembolsos/';
+                } else {
+                    // Se houver erro, mostrar mensagem
+                    console.error('Erro na resposta:', response.status, response.statusText);
+                    alert('Erro ao salvar reembolso. Status: ' + response.status);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao enviar formulário:', error);
+                alert('Erro ao salvar reembolso: ' + error.message);
+            });
+        } else {
+            // Sem anexos, usar submit normal
+            console.log('notasSelecionadas',notasSelecionadas);
+            console.log('avulsos',avulsos);
+            this.submit();
+        }
+    });
+    let docIndex = 0;
+    $('#btnAddDocumentoAvulso').on('click', function(e) {
+        e.preventDefault();
+        docIndex++;
+        const docHtml = `
+        <div class="card mb-2 p-2 documento-avulso-item">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label">Descrição</label>
+                    <input type="text" name="documentos_avulsos-${docIndex}-descricao" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Valor</label>
+                    <input type="number" step="0.01" min="0" name="documentos_avulsos-${docIndex}-valor" class="form-control" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Anexos</label>
+                    <input type="file" name="documentos_avulsos-${docIndex}-anexos" class="form-control" multiple accept=".pdf,image/*">
+                </div>
+                <div class="col-md-1 text-end">
+                    <button type="button" class="btn btn-danger btn-sm btnRemoveDocumentoAvulso"><i class="fas fa-trash"></i></button>
+                </div>
+            </div>
+        </div>`;
+        $('#documentosAvulsosContainer').append(docHtml);
+    });
+    // Remover documento avulso
+    $('#documentosAvulsosContainer').on('click', '.btnRemoveDocumentoAvulso', function() {
+        $(this).closest('.documento-avulso-item').remove();
     });
 });
 function filtrarNotas(page = 1) {

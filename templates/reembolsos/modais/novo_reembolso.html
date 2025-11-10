@@ -77,6 +77,21 @@
 {% block scripts %}
 <script>
 $(document).ready(function() {
+
+  // Buscar fornecedores ao abrir o modal
+  $('#modalNovoReembolso').on('show.bs.modal', function () {
+    fetch('/reembolsos/fornecedores_avulsos')
+      .then(r => r.json())
+      .then(lista => {
+        const datalist = document.getElementById('datalistFornecedores');
+        datalist.innerHTML = '';
+        lista.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f;
+          datalist.appendChild(opt);
+        });
+      });
+  });
     // --- Select2 para busca de notas fiscais com filtros separados ---
     $('#notas_fiscais').select2({
         theme: 'bootstrap4',

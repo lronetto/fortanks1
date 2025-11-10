@@ -1,0 +1,317 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Logs do Sistema{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">Logs do Sistema</h1>
+    <p class="mb-4">Visualização dos logs registrados no sistema.</p>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('admin.logs') }}" class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="local">Local</label>
+                    <input type="text" class="form-control" id="local" name="local" 
+                           value="{{ request.args.get('local', '') }}" 
+                           placeholder="Filtrar por local">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="data_inicial">Data Inicial</label>
+                    <input type="date" class="form-control" id="data_inicial" name="data_inicial" 
+                           value="{{ request.args.get('data_inicial', '') }}">
+                </div>
+                <div class="col-md-3 mb-3">
+                    <label for="data_final">Data Final</label>
+                    <input type="date" class="form-control" id="data_final" name="data_final" 
+                           value="{{ request.args.get('data_final', '') }}">
+                </div>
+                <div class="col-md-2 mb-3 align-self-end">
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Logs -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Logs</h6>
+            <span class="badge bg-primary">Total: {{ pagination.total if pagination else logs|length }}</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabelaLogs">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Local</th>
+                            <th>Data</th>
+                            <th width="150">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if logs %}
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.id }}</td>
+                                <td>{{ log.local }}</td>
+                                <td>{{ log.data.strftime('%d/%m/%Y %H:%M:%S') if log.data else '-' }}</td>
+                                <td>
+                                    <button type="button" class="btn btn-info btn-sm btn-visualizar-log" 
+                                            data-id="{{ log.id }}"
+                                            data-local="{{ log.local }}"
+                                            data-data="{{ log.data.strftime('%d/%m/%Y %H:%M:%S') if log.data else '-' }}"
+                                            data-texto="{{ log.texto|e }}">
+                                        <i class="fas fa-eye"></i> Visualizar
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center">Nenhum log encontrado.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if pagination and pagination.pages > 1 %}
+            <nav aria-label="Paginação de logs">
+                <ul class="pagination justify-content-center">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.logs', page=pagination.prev_num, local=request.args.get('local', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
+                            Anterior
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Anterior</span>
+                    </li>
+                    {% endif %}
+
+                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            {% if page_num == pagination.page %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('admin.logs', page=page_num, local=request.args.get('local', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
+                                    {{ page_num }}
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                            <li class="page-item disabled">
+                                <span class="page-link">...</span>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.logs', page=pagination.next_num, local=request.args.get('local', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
+                            Próxima
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Próxima</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Visualização de Log -->
+<div class="modal fade" id="modalVisualizarLog" tabindex="-1" aria-labelledby="modalVisualizarLogLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarLogLabel">
+                    <i class="fas fa-file-alt"></i> Detalhes do Log
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <h6 class="text-primary">Informações Básicas</h6>
+                        <table class="table table-sm table-bordered">
+                            <tr>
+                                <td class="fw-bold" style="width: 30%;">ID:</td>
+                                <td id="view_log_id">-</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Local:</td>
+                                <td id="view_log_local">-</td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Data:</td>
+                                <td id="view_log_data">-</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6 class="text-primary">Conteúdo (JSON)</h6>
+                        <div class="position-relative">
+                            <pre id="view_log_texto" class="bg-light p-3 border rounded" style="max-height: 500px; overflow-y: auto; overflow-x: auto; font-size: 0.85em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"></pre>
+                            <button type="button" class="btn btn-sm btn-secondary position-absolute top-0 end-0 m-2" 
+                                    id="btn-copiar-json" title="Copiar JSON">
+                                <i class="fas fa-copy"></i> Copiar
+                            </button>
+                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            O conteúdo será formatado automaticamente se for um JSON válido.
+                        </small>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Função para formatar JSON
+    function formatarJSON(texto) {
+        try {
+            // Tentar fazer parse do JSON
+            const jsonObj = JSON.parse(texto);
+            // Retornar JSON formatado com indentação
+            return JSON.stringify(jsonObj, null, 2);
+        } catch (e) {
+            // Se não for JSON válido, retornar o texto original
+            return texto;
+        }
+    }
+
+    // Função para escapar HTML
+    function escapeHtml(text) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+    }
+
+    // Função para destacar sintaxe JSON
+    function destacarJSON(jsonString) {
+        // Primeiro, escapar HTML
+        let escaped = escapeHtml(jsonString);
+        
+        // Destacar chaves (keys)
+        escaped = escaped.replace(/"([^"]+)":/g, '<span class="text-danger fw-bold">"$1"</span>:');
+        
+        // Destacar valores string
+        escaped = escaped.replace(/: "([^"]*)"/g, ': <span class="text-success">"$1"</span>');
+        
+        // Destacar booleanos
+        escaped = escaped.replace(/\b(true|false)\b/g, '<span class="text-info fw-bold">$1</span>');
+        
+        // Destacar null
+        escaped = escaped.replace(/\bnull\b/g, '<span class="text-muted fw-bold">null</span>');
+        
+        // Destacar números
+        escaped = escaped.replace(/: (-?\d+\.?\d*)/g, ': <span class="text-warning fw-bold">$1</span>');
+        
+        return escaped;
+    }
+
+
+    // Variável para armazenar o texto original (sem formatação HTML)
+    let textoOriginalJSON = '';
+
+    // Adicionar evento para os botões de visualizar
+    const viewButtons = document.querySelectorAll('.btn-visualizar-log');
+    viewButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const logId = this.dataset.id;
+            const logLocal = this.dataset.local;
+            const logData = this.dataset.data;
+            const logTexto = this.dataset.texto;
+
+            // Preencher informações básicas
+            document.getElementById('view_log_id').textContent = logId;
+            document.getElementById('view_log_local').textContent = logLocal;
+            document.getElementById('view_log_data').textContent = logData;
+
+            // Formatar e exibir JSON
+            const textoFormatado = formatarJSON(logTexto);
+            textoOriginalJSON = textoFormatado; // Armazenar para cópia
+            const textoDestacado = destacarJSON(textoFormatado);
+            document.getElementById('view_log_texto').innerHTML = textoDestacado;
+
+            // Mostrar modal
+            const modal = new bootstrap.Modal(document.getElementById('modalVisualizarLog'));
+            modal.show();
+        });
+    });
+
+    // Botão para copiar JSON
+    document.getElementById('btn-copiar-json').addEventListener('click', function() {
+        // Usar o texto original armazenado (sem formatação HTML)
+        const texto = textoOriginalJSON || document.getElementById('view_log_texto').textContent;
+        
+        // Copiar para clipboard
+        navigator.clipboard.writeText(texto).then(function() {
+            // Feedback visual
+            const btn = document.getElementById('btn-copiar-json');
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+            btn.classList.remove('btn-secondary');
+            btn.classList.add('btn-success');
+            
+            setTimeout(function() {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+            }, 2000);
+        }).catch(function(err) {
+            console.error('Erro ao copiar:', err);
+            alert('Erro ao copiar para a área de transferência');
+        });
+    });
+
+    // Inicializar DataTable se houver muitos registros
+    {% if logs and logs|length > 10 %}
+    $(document).ready(function() {
+        $('#tabelaLogs').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
+            },
+            "pageLength": 25,
+            "order": [[2, "desc"]] // Ordenar por data (mais recente primeiro)
+        });
+    });
+    {% endif %}
+});
+</script>
+{% endblock %}
+

@@ -200,29 +200,33 @@ class NotaFiscal(db.Model):
         Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log))
         
     def processar_cte(self):
-        dados = self.extrair_dados_xml_cte()
+        chave_acesso, dados = self.extrair_dados_xml_cte()
         #print(f'dados: {dados}')
         # Verifica se já existe
-        existente = NotaFiscal.query.filter_by(chave_acesso=dados.get('chave_acesso')).first()
+        existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
             
             existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             existente.save()
             existente.inserido = False
             return existente
-        self.tipo = 2
-        self.numero_nf = dados.get('numero_cte')
-        self.chave_acesso = dados.get('chave_acesso')
-        self.data_emissao = dados.get('data_emissao')
-        self.valor_total = dados.get('valor_total')
-        self.cnpj_emitente = dados.get('cnpj_emitente')
-        self.nome_emitente = dados.get('nome_emitente')
-        self.cnpj_destinatario = dados.get('cnpj_destinatario')
-        self.nome_destinatario = dados.get('nome_destinatario')
-        self.status_processamento = 'importado'
-        self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
-        self.save()
-        self.inserido = True
+        try:
+            self.tipo = 2
+            self.numero_nf = dados.get('numero_cte')
+            self.chave_acesso = dados.get('chave_acesso')
+            self.data_emissao = dados.get('data_emissao')
+            self.valor_total = dados.get('valor_total')
+            self.cnpj_emitente = dados.get('cnpj_emitente')
+            self.nome_emitente = dados.get('nome_emitente')
+            self.cnpj_destinatario = dados.get('cnpj_destinatario')
+            self.nome_destinatario = dados.get('nome_destinatario')
+            self.status_processamento = 'importado'
+            self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+            self.save()
+            self.inserido = True
+        except Exception as e:
+            logger.error(f"Erro ao processar CT-e: {str(e)}")
+            return False
         return self
     def processar_nf(self):
         """
@@ -289,7 +293,7 @@ class NotaFiscal(db.Model):
             if not (self.cnpj_emitente in CNPJS_MATRIZ_FILIAIS):
                 print(f'importando itens para estoque')
                 self.importar_itens_para_estoque()
-            elseif (self)
+            
 
             self.inserido = True
             return self
@@ -623,6 +627,11 @@ class NotaFiscal(db.Model):
                             item.fator_conversao_aplicado = fator_conversao
                             itens_vinculados += 1
                         item.save()
+        log={
+            "itens": len(self.itens),
+            "itens_vinculados": itens_vinculados
+        }
+        Logs("vinculacao_automatica",datetime.now(),json.dumps(log))
         print(f'itens_vinculados: {itens_vinculados}')
         return itens_vinculados
     def importar_itens_para_estoque(self):

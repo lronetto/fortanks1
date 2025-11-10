@@ -11,6 +11,7 @@ from models.material import Material
 from models.plano_conta import PlanoConta
 from models.cliente import Cliente
 from models.endereco import Endereco
+from models.logs import Logs
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -61,8 +62,48 @@ def logs():
     """
     Página de logs do sistema
     """
-    # Aqui você pode implementar a lógica para exibir logs do sistema
-    return render_template('admin/logs.html')
+    # Parâmetros de paginação
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    
+    # Parâmetros de filtro
+    local_filtro = request.args.get('local', '').strip()
+    data_inicial = request.args.get('data_inicial', '')
+    data_final = request.args.get('data_final', '')
+    
+    # Construir query base
+    query = Logs.query
+    
+    # Aplicar filtros
+    if local_filtro:
+        query = query.filter(Logs.local.ilike(f'%{local_filtro}%'))
+    
+    if data_inicial:
+        try:
+            data_inicial_obj = datetime.strptime(data_inicial, '%Y-%m-%d')
+            query = query.filter(Logs.data >= data_inicial_obj)
+        except ValueError:
+            pass
+    
+    if data_final:
+        try:
+            data_final_obj = datetime.strptime(data_final, '%Y-%m-%d')
+            # Adicionar 23:59:59 para incluir o dia inteiro
+            data_final_obj = data_final_obj.replace(hour=23, minute=59, second=59)
+            query = query.filter(Logs.data <= data_final_obj)
+        except ValueError:
+            pass
+    
+    # Ordenar por data (mais recente primeiro)
+    query = query.order_by(Logs.data.desc())
+    
+    # Aplicar paginação
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    logs = pagination.items
+    
+    return render_template('admin/logs.html', 
+                         logs=logs, 
+                         pagination=pagination)
 
 @admin_bp.route('/backup')
 def backup():

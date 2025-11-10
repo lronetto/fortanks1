@@ -1,14 +1,14 @@
-<div class="modal fade" id="modalAvulso" tabindex="-1" role="dialog" aria-labelledby="modalAvulsoLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+<div class="modal fade" id="modalAvulso" tabindex="-1" aria-labelledby="modalAvulsoLabel" aria-hidden="true">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="modalAvulsoLabel">Adicionar Documento Avulso</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
         <form id="formAvulso">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" id="avulsoEditIndex" value="">
           <div class="form-group">
             <label for="avulsoFornecedor">Fornecedor</label>
             <input type="text" class="form-control" id="avulsoFornecedor" list="datalistFornecedores" autocomplete="off">
@@ -27,7 +27,7 @@
             <select class="form-control" id="avulsoCentroCusto" name="centro_custo_id">
               <option value="">Selecione...</option>
               {% for centro in centros_custo %}
-              <option value="{{ centro.id }}">{{ centro.nome }}</option>
+              <option value="{{ centro.id }}">{{ centro.codigo }} - {{ centro.nome }}</option>
               {% endfor %}
             </select>
           </div>
@@ -39,15 +39,23 @@
             <label for="avulsoValor">Valor</label>
             <input type="number" class="form-control" id="avulsoValor" step="0.01" min="0" required>
           </div>
+          
+          <!-- Seção de Anexos Existentes -->
+          <div class="form-group" id="anexosExistentesContainer" style="display: none;">
+            <label>Anexos Existentes</label>
+            <div id="listaAnexosExistentes" class="list-group mb-2"></div>
+          </div>
+          
+          <!-- Seção para Adicionar Novos Anexos -->
           <div class="form-group">
-            <label for="avulsoAnexos">Anexos</label>
+            <label for="avulsoAnexos">Adicionar Novos Anexos</label>
             <input type="file" class="form-control" id="avulsoAnexos" name="anexos" multiple accept=".pdf,.jpg,.jpeg,.png">
             <small class="form-text text-muted">Você pode selecionar múltiplos arquivos (PDF, JPG, PNG)</small>
           </div>
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-primary" id="btnSalvarAvulso">Salvar</button>
       </div>
     </div>
@@ -55,18 +63,316 @@
 </div>
 
 <script>
-// Buscar fornecedores ao abrir o modal
-$('#modalAvulso').on('show.bs.modal', function () {
-  fetch('/reembolsos/fornecedores_avulsos')
-    .then(r => r.json())
-    .then(lista => {
-      const datalist = document.getElementById('datalistFornecedores');
-      datalist.innerHTML = '';
-      lista.forEach(f => {
-        const opt = document.createElement('option');
-        opt.value = f;
-        datalist.appendChild(opt);
-      });
+// Variável para controlar se está editando
+let editandoAvulsoIndex = null;
+
+// Aguardar DOM estar pronto
+document.addEventListener('DOMContentLoaded', function() {
+  // Buscar fornecedores ao abrir o modal
+  const modalElement = document.getElementById('modalAvulso');
+  if (modalElement) {
+    modalElement.addEventListener('show.bs.modal', function () {
+      fetch('/reembolsos/fornecedores_avulsos')
+        .then(r => r.json())
+        .then(lista => {
+          const datalist = document.getElementById('datalistFornecedores');
+          if (datalist) {
+            datalist.innerHTML = '';
+            lista.forEach(f => {
+              const opt = document.createElement('option');
+              opt.value = f;
+              datalist.appendChild(opt);
+            });
+          }
+        });
+      
+      // Se não estiver editando, limpar formulário
+      if (editandoAvulsoIndex === null) {
+        const form = document.getElementById('formAvulso');
+        if (form) form.reset();
+        const editIndexEl = document.getElementById('avulsoEditIndex');
+        if (editIndexEl) editIndexEl.value = '';
+        const anexosContainer = document.getElementById('anexosExistentesContainer');
+        if (anexosContainer) anexosContainer.style.display = 'none';
+        const listaAnexos = document.getElementById('listaAnexosExistentes');
+        if (listaAnexos) listaAnexos.innerHTML = '';
+        const label = document.getElementById('modalAvulsoLabel');
+        if (label) label.textContent = 'Adicionar Documento Avulso';
+      }
     });
+    
+    // Limpar estado de edição ao fechar o modal
+    modalElement.addEventListener('hidden.bs.modal', function () {
+      editandoAvulsoIndex = null;
+      const editIndexEl = document.getElementById('avulsoEditIndex');
+      if (editIndexEl) editIndexEl.value = '';
+      const anexosContainer = document.getElementById('anexosExistentesContainer');
+      if (anexosContainer) anexosContainer.style.display = 'none';
+      const listaAnexos = document.getElementById('listaAnexosExistentes');
+      if (listaAnexos) listaAnexos.innerHTML = '';
+      const label = document.getElementById('modalAvulsoLabel');
+      if (label) label.textContent = 'Adicionar Documento Avulso';
+    });
+  }
+  
+  // Função para salvar documento avulso
+  const btnSalvar = document.getElementById('btnSalvarAvulso');
+  if (btnSalvar) {
+    btnSalvar.addEventListener('click', function() {
+      const form = document.getElementById('formAvulso');
+      if (!form) return;
+      
+      // Validar campos obrigatórios
+      const fornecedor = document.getElementById('avulsoFornecedor').value.trim();
+      const descricao = document.getElementById('avulsoDescricao').value.trim();
+      const valor = parseFloat(document.getElementById('avulsoValor').value);
+      const dataDoc = document.getElementById('avulsoDataDoc').value;
+      const centroCusto = document.getElementById('avulsoCentroCusto').value;
+      const editIndex = document.getElementById('avulsoEditIndex').value;
+      
+      if (!descricao) {
+        alert('Por favor, preencha a descrição.');
+        return;
+      }
+      
+      if (!valor || valor <= 0) {
+        alert('Por favor, informe um valor válido.');
+        return;
+      }
+      
+      // Criar objeto do documento avulso
+      const avulso = {
+        id: editIndex !== '' ? avulsos[parseInt(editIndex)].id : Date.now(), // Manter ID original se editando
+        fornecedor: fornecedor || '',
+        ndocumento: document.getElementById('avulsoNumeroDoc').value.trim(),
+        data_documento: dataDoc || new Date().toISOString().split('T')[0],
+        descricao: descricao,
+        valor: valor,
+        centro_custo_id: centroCusto || null,
+        anexos: editIndex !== '' ? (avulsos[parseInt(editIndex)].anexos || []) : [], // Manter anexos existentes se editando
+        anexos_removidos: editIndex !== '' ? (avulsos[parseInt(editIndex)].anexos_removidos || []) : [] // Manter lista de removidos
+      };
+      
+      // Processar novos anexos se houver
+      const anexosInput = document.getElementById('avulsoAnexos');
+      const avulsoIndex = editIndex !== '' ? parseInt(editIndex) : (typeof avulsos !== 'undefined' ? avulsos.length : 0);
+      
+      if (anexosInput && anexosInput.files && anexosInput.files.length > 0) {
+        // Armazenar referência aos arquivos para envio posterior
+        if (!avulso.anexos_files) avulso.anexos_files = [];
+        
+        // Adicionar novos arquivos
+        const novosArquivos = Array.from(anexosInput.files);
+        avulso.anexos_files = novosArquivos;
+        avulso.anexos_count = (avulso.anexos ? avulso.anexos.length : 0) + novosArquivos.length;
+        avulso.anexos_index = avulsoIndex;
+      } else if (editIndex !== '' && avulsos[parseInt(editIndex)]) {
+        // Se editando e não há novos arquivos, manter contador dos existentes
+        avulso.anexos_count = avulso.anexos ? avulso.anexos.length : 0;
+      } else {
+        avulso.anexos_count = 0;
+      }
+      
+      // Adicionar ao array de avulsos (se não existir globalmente, criar)
+      if (typeof avulsos === 'undefined') {
+        window.avulsos = [];
+      }
+      
+      if (editIndex !== '') {
+        // Atualizar avulso existente
+        avulsos[parseInt(editIndex)] = avulso;
+      } else {
+        // Adicionar novo avulso
+        avulsos.push(avulso);
+      }
+      
+      // Atualizar tabela de avulsos
+      atualizarTabelaAvulsos();
+      
+      // Atualizar total
+      atualizarTotal();
+      
+      // Limpar formulário e fechar modal
+      form.reset();
+      editandoAvulsoIndex = null;
+      const editIndexEl = document.getElementById('avulsoEditIndex');
+      if (editIndexEl) editIndexEl.value = '';
+      const anexosContainer = document.getElementById('anexosExistentesContainer');
+      if (anexosContainer) anexosContainer.style.display = 'none';
+      const listaAnexos = document.getElementById('listaAnexosExistentes');
+      if (listaAnexos) listaAnexos.innerHTML = '';
+      const label = document.getElementById('modalAvulsoLabel');
+      if (label) label.textContent = 'Adicionar Documento Avulso';
+      
+      // Fechar modal usando Bootstrap 5
+      const modalEl = document.getElementById('modalAvulso');
+      if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) {
+          modal.hide();
+        } else {
+          // Se não existe instância, criar e fechar
+          const newModal = new bootstrap.Modal(modalEl);
+          newModal.hide();
+        }
+      }
+    });
+  }
 });
+
+// Função para atualizar a tabela de avulsos
+function atualizarTabelaAvulsos() {
+  const tbody = document.querySelector('#tabelaAvulsos tbody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  if (typeof avulsos === 'undefined' || !avulsos || avulsos.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="4" class="text-center text-muted">Nenhum documento avulso adicionado</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  
+  avulsos.forEach((avulso, index) => {
+    const tr = document.createElement('tr');
+    const anexosCount = avulso.anexos_count || (avulso.anexos ? avulso.anexos.length : 0);
+    const anexosInfo = anexosCount > 0 ? `${anexosCount} arquivo(s)` : 'Sem anexos';
+    tr.innerHTML = `
+      <td>${avulso.descricao || ''}</td>
+      <td>${formatarMoeda(avulso.valor || 0)}</td>
+      <td>${anexosInfo}</td>
+      <td>
+        <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${index})" title="Editar">
+          <i class="fas fa-edit"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${index})" title="Remover">
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// Função para editar avulso
+function editarAvulso(index) {
+  if (typeof avulsos === 'undefined' || !avulsos[index]) {
+    alert('Documento avulso não encontrado.');
+    return;
+  }
+  
+  const avulso = avulsos[index];
+  editandoAvulsoIndex = index;
+  
+  // Preencher formulário com dados do avulso
+  document.getElementById('avulsoFornecedor').value = avulso.fornecedor || '';
+  document.getElementById('avulsoNumeroDoc').value = avulso.ndocumento || '';
+  document.getElementById('avulsoDataDoc').value = avulso.data_documento || '';
+  document.getElementById('avulsoCentroCusto').value = avulso.centro_custo_id || '';
+  document.getElementById('avulsoDescricao').value = avulso.descricao || '';
+  document.getElementById('avulsoValor').value = avulso.valor || 0;
+  document.getElementById('avulsoEditIndex').value = index;
+  document.getElementById('avulsoAnexos').value = ''; // Limpar input de arquivos
+  
+  // Atualizar título do modal
+  document.getElementById('modalAvulsoLabel').textContent = 'Editar Documento Avulso';
+  
+  // Carregar anexos existentes
+  carregarAnexosExistentes(avulso);
+  
+  // Abrir modal usando Bootstrap 5
+  const modalElement = document.getElementById('modalAvulso');
+  if (modalElement) {
+    const modal = bootstrap.Modal.getInstance(modalElement) || new bootstrap.Modal(modalElement);
+    modal.show();
+  }
+}
+
+// Função para carregar anexos existentes
+function carregarAnexosExistentes(avulso) {
+  const container = document.getElementById('anexosExistentesContainer');
+  const lista = document.getElementById('listaAnexosExistentes');
+  
+  if (!avulso.anexos || avulso.anexos.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  lista.innerHTML = '';
+  
+  const currentEditIndex = editandoAvulsoIndex !== null ? editandoAvulsoIndex : document.getElementById('avulsoEditIndex').value;
+  
+  avulso.anexos.forEach((anexo, anexoIndex) => {
+    const item = document.createElement('div');
+    item.className = 'list-group-item d-flex justify-content-between align-items-center';
+    item.innerHTML = `
+      <div>
+        <i class="fas fa-file me-2"></i>
+        <a href="/reembolsos/anexo/${anexo.id}/download" target="_blank">${anexo.filename || 'Anexo'}</a>
+      </div>
+      <div>
+        <button type="button" class="btn btn-sm btn-info mr-1" onclick="visualizarAnexo(${anexo.id}, '${anexo.filename || ''}')" title="Visualizar">
+          <i class="fas fa-eye"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removerAnexoExistente(${currentEditIndex}, ${anexoIndex})" title="Remover">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    `;
+    lista.appendChild(item);
+  });
+}
+
+// Função para visualizar anexo
+function visualizarAnexo(anexoId, filename) {
+  // Abrir anexo em nova aba
+  window.open(`/reembolsos/anexo/${anexoId}/download`, '_blank');
+}
+
+// Função para remover anexo existente
+function removerAnexoExistente(avulsoIndex, anexoIndex) {
+  if (!confirm('Tem certeza que deseja remover este anexo?')) {
+    return;
+  }
+  
+  if (typeof avulsos !== 'undefined' && avulsos[avulsoIndex] && avulsos[avulsoIndex].anexos) {
+    // Marcar anexo para remoção (não remover do array ainda, será processado no submit)
+    if (!avulsos[avulsoIndex].anexos_removidos) {
+      avulsos[avulsoIndex].anexos_removidos = [];
+    }
+    avulsos[avulsoIndex].anexos_removidos.push(avulsos[avulsoIndex].anexos[anexoIndex].id);
+    
+    // Remover do array de anexos
+    avulsos[avulsoIndex].anexos.splice(anexoIndex, 1);
+    
+    // Atualizar contador
+    avulsos[avulsoIndex].anexos_count = avulsos[avulsoIndex].anexos.length;
+    
+    // Recarregar lista de anexos
+    carregarAnexosExistentes(avulsos[avulsoIndex]);
+  }
+}
+
+// Função para remover avulso
+function removerAvulso(index) {
+  if (confirm('Tem certeza que deseja remover este documento avulso?')) {
+    if (typeof avulsos !== 'undefined' && avulsos[index]) {
+      avulsos.splice(index, 1);
+      atualizarTabelaAvulsos();
+      atualizarTotal();
+    }
+  }
+}
+
+// Função auxiliar para formatar moeda (se não existir globalmente)
+if (typeof formatarMoeda === 'undefined') {
+  function formatarMoeda(valor) {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor);
+  }
+}
 </script> 

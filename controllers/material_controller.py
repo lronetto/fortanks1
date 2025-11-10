@@ -1249,7 +1249,7 @@ def exportar_mega():
         
         for material in materiais:
             # Coluna 1: Código do grupo (usar código ou ID)
-            codigo_grupo = material.codigo if material.codigo else str(material.id)
+            codigo_grupo = material.mascara if material.mascara else ''
             ws.cell(row=linha_atual, column=1, value=codigo_grupo)
             
             # Coluna 2: Descrição do item (nome)
