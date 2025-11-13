@@ -327,7 +327,7 @@ def processar_emails():
                                         log_email['codigo_barras']['Nao_Identificados']['filenames'].append(filename)
                                         #log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
                                 else:
-                                    log_email['codigo_barras']['qtd_Nao_Identificados'] += 1
+                                    log_email['codigo_barras']['Nao_Identificados']['qtd'] += 1
                                 if dec1:
                                     logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
                                     nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
@@ -360,7 +360,7 @@ def processar_emails():
                                                     if up.id:
                                                         logging.info(f"upload ja existe {nota.numero_nf}")
                                         else:
-                                            log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
+                                            log_email['codigo_barras']['Nao_Identificados_DB'] += 1
                                             logging.info(f"codBarras nao identificado {dec1}")
                                             #log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
                                 else:
