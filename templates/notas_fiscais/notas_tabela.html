@@ -25,9 +25,11 @@
                 <td>{{ nf.emitente }}</td>
                 <td>{{ nf.destinatario }}</td>
                 <td>
-                    <a href="javascript:void(0);" class="visualizar-docs" data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Visualizar PDF">
-                        {{ nf.nome_emitente }}
-                    </a>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="javascript:void(0);" class="visualizar-docs" data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Visualizar Documentos">
+                            {{ nf.nome_emitente }}
+                        </a>
+                    </div>
                 </td>
                 <td>R$ {{ "%.2f"|format(nf.valor_total) if nf.valor_total is not none else '0.00' }}</td>
                 <td>

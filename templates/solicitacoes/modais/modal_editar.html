@@ -144,10 +144,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     function carregarDadosSolicitacao(id) {
-        console.log(id);
         const modal = $('#editarModal');
         const form = modal.find('form');
         const spinner = modal.find('.spinner-border').parent();
+        
+        // Limpar itens anteriores
+        itensSolicitacoes = [];
         
         // Mostrar spinner e esconder formulário
         spinner.show();
@@ -155,16 +157,26 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Carregar dados via AJAX
         $.get('/solicitacoes/'+id+'/dados', function(data) {
-            console.log(data);
             // Preencher dados do formulário
             $('#editar_data_necessidade').val(data.data_necessidade);
             $('#editar_centro_custo_id').val(data.centro_custo_id);
-            $('#editar_observacoes').val(data.observacoes);
-            console.log('teste1');
-            // Limpar e preencher itens
-            itensSolicitacoes = data.itens;
-            atualizarTabelaItensEdicao(data.itens);
-            console.log('teste2');
+            $('#editar_observacoes').val(data.observacoes || '');
+            
+            // Limpar e preencher itens (normalizar estrutura)
+            itensSolicitacoes = data.itens.map(item => ({
+                material_id: item.material_id,
+                material: {
+                    nome: item.material?.nome || '',
+                    unidade_obj: {
+                        nome: item.material?.unidade_obj?.nome || ''
+                    }
+                },
+                quantidade: item.quantidade,
+                unidade_id: item.unidade_id,
+                observacoes: item.observacoes || ''
+            }));
+            
+            atualizarTabelaItensEdicao(itensSolicitacoes);
             
             // Esconder spinner e mostrar formulário
             spinner.hide();
@@ -181,18 +193,22 @@ document.addEventListener('DOMContentLoaded', function() {
     function atualizarTabelaItensEdicao(itens) {
         const tabela = $(`#tabelaItensEdicao tbody`);
         tabela.empty();
-        console.log('teste3');
+        
         if (!itens || itens.length === 0) {
             tabela.append('<tr><td colspan="5" class="text-center">Nenhum item adicionado.</td></tr>');
             return;
         }
-        console.log('teste4');
+        
         itens.forEach((item, index) => {
             const tr = $('<tr>');
-            console.log('teste5');
-            tr.append(`<td>${item.material.nome}</td>`);
+            
+            // Normalizar estrutura de dados - suporta tanto itens do servidor quanto itens adicionados manualmente
+            const materialNome = item.material?.nome || item.material_nome || '';
+            const unidadeNome = item.material?.unidade_obj?.nome || item.unidade_nome || '';
+            
+            tr.append(`<td>${materialNome}</td>`);
             tr.append(`<td>${item.quantidade}</td>`);
-            tr.append(`<td>${item.material.unidade_obj.nome}</td>`);
+            tr.append(`<td>${unidadeNome}</td>`);
             
             const tdObs = $('<td>');
             const inputObs = $('<input>')
@@ -246,7 +262,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const quantidade = $('#editar_quantidade').val();
         const unidade_id = $('#editar_unidade').data('unidade_id');
         const unidade_nome = $('#editar_unidade').val();
-        const id = $("#btnEditar").data('id');
         
         if (!materialSelect.val() || !quantidade) {
             alert('Selecione um material e informe a quantidade.');
@@ -254,17 +269,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         const materialNome = materialSelect.find('option:selected').text();
+        const materialId = materialSelect.val();
         
         if (!itensSolicitacoes) {
             itensSolicitacoes = [];
         }
         
+        // Verificar se o material já foi adicionado
+        const materialJaExiste = itensSolicitacoes.some(item => {
+            const itemMaterialId = item.material_id || item.material?.id;
+            return itemMaterialId == materialId;
+        });
+        
+        if (materialJaExiste) {
+            alert('Este material já foi adicionado à solicitação.');
+            return;
+        }
+        
+        // Adicionar item com estrutura normalizada (compatível com itens do servidor)
         itensSolicitacoes.push({
-            material_id: materialSelect.val(),
-            material_nome: materialNome,
-            quantidade: quantidade,
+            material_id: materialId,
+            material: {
+                nome: materialNome,
+                unidade_obj: {
+                    nome: unidade_nome
+                }
+            },
+            quantidade: parseFloat(quantidade),
             unidade_id: unidade_id,
-            unidade_nome: unidade_nome,
             observacoes: ''
         });
         
@@ -274,6 +306,7 @@ document.addEventListener('DOMContentLoaded', function() {
         materialSelect.val('').trigger('change');
         $('#editar_quantidade').val('');
         $('#editar_unidade').val('');
+        $('#editar_unidade').data('unidade_id', '');
     });
 
     // Salvar edição de solicitação
@@ -291,10 +324,15 @@ document.addEventListener('DOMContentLoaded', function() {
         form.find('input[name^="editar_material_id"], input[name^="editar_quantidade"], input[name^="editar_unidade"], input[name^="editar_observacoes_item"]').remove();
         
         itensSolicitacoes.forEach((item, index) => {
-            form.append(`<input type="hidden" name="editar_material_id[]" value="${item.material_id}">`);
-            form.append(`<input type="hidden" name="editar_quantidade[]" value="${item.quantidade}">`);
-            form.append(`<input type="hidden" name="editar_unidade[]" value="${item.unidade_id}">`);
-            form.append(`<input type="hidden" name="editar_observacoes_item[]" value="${item.observacoes || ''}">`);
+            const materialId = item.material_id || item.material?.id || '';
+            const quantidade = item.quantidade || '';
+            const unidadeId = item.unidade_id || '';
+            const observacoes = (item.observacoes || '').replace(/"/g, '&quot;');
+            
+            form.append(`<input type="hidden" name="editar_material_id[]" value="${materialId}">`);
+            form.append(`<input type="hidden" name="editar_quantidade[]" value="${quantidade}">`);
+            form.append(`<input type="hidden" name="editar_unidade[]" value="${unidadeId}">`);
+            form.append(`<input type="hidden" name="editar_observacoes_item[]" value="${observacoes}">`);
         });
         
         // Submeter o formulário

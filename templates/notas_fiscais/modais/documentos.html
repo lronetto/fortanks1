@@ -119,6 +119,25 @@ document.addEventListener('DOMContentLoaded', function() {
         const notaId = $(this).data('id');
         downloadXmlNota(notaId);
     });
+    $("#tabelaDocumentos").on('click', '.download', function() {
+        console.log('download clicado');
+        const docId = $(this).data('id');
+        const tipo = $(this).data('tipo');
+        if (tipo === 10) {
+            $(this).attr('title', 'Download xml');
+            downloadXmlNota(docId);
+        } else {
+            $(this).attr('title', 'Download pdf');
+            downloadPdfNota(docId);
+        }
+    });
+    // Manipular clique no botão de download PDF da tabela de notas fiscais
+    $("#tabelaNotasFiscaisContainer").on('click', '.download-pdf-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNf = $(this).data('numero');
+        console.log('Download PDF clicado para nota:', notaId, 'Número:', numeroNf);
+        downloadPdfNota(notaId, numeroNf);
+    });
     
     // Manipular clique no botão de adicionar documento
     $('#btnAdicionarDocumento').on('click', function() {
@@ -173,6 +192,13 @@ function downloadXmlNota(notaId) {
         URL.revokeObjectURL(url);
     });
 }
+
+// Função para fazer download do PDF da nota fiscal
+function downloadPdfNota(notaId) {
+    window.location.href = `/notas-fiscais/api/documentos/${notaId}/download`;
+}
+
+
        
 // Função para carregar documentos
 function carregarDocumentos(notaId) {
@@ -197,10 +223,9 @@ function carregarDocumentos(notaId) {
                             <button class="btn btn-sm btn-danger excluir-doc" data-id="${doc.id}" title="Excluir">
                                 <i class="fas fa-trash"></i>
                             </button>
-                            ${doc.tipo === 10 ? `
-                            <button class="btn btn-sm btn-primary download-xml" data-id="${doc.id}" title="Download xml">
+                            <button class="btn btn-sm btn-primary download" data-id="${doc.id}" data-tipo="${doc.tipo}" title="Download">
                                 <i class="fas fa-download"></i>
-                            </button>` : ''}
+                            </button>
                         </td>
                     </tr>
                 `;

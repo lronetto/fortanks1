@@ -22,6 +22,7 @@ import re
 import unicodedata
 import json
 from datetime import datetime
+import imaplib
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -86,14 +87,26 @@ def get_CC(nnf):
 
 # Constantes que não dependem de variáveis de ambiente
 IMAP_FOLDER = 'Inbox'
-ASSUNTO_PADRAO_NFE = 'Envio de Nota Fiscal Eletrônica'
-ASSUNTO_PADRAO_CTE = 'Envio de Nota Fiscal Eletrônica - DUA'
-ASSUNTO_PADRAO_DUA = 'CTE, NF Fortanks e DUA'
+ASSUNTO_PADRAO_NFE = ['Envio de Nota Fiscal Eletrônica']
+ASSUNTO_PADRAO_CTE = ['Envio de Nota Fiscal Eletrônica - DUA']
+ASSUNTO_PADRAO_DUA = ['CTE, NF Fortanks e DUA']
 ASSUNTO_PADRAO_PROTOCOLO = ["ENC: NF´S PROTOCOLOS","ENC: NF PROTOCOLO","NF PROTOCOLO","Protocolo"]
 ASSUNTO_PADRAO_REEMBOLSO = ['REEMBOLSO','REEBOLSO']
 EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
 IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
 NUMBER_WHATSAPP = '5527996440664-1630085280@g.us'
+
+# Configurações para otimização de quota IMAP
+MAX_EMAILS_POR_EXECUCAO = int(os.getenv('MAX_EMAILS_POR_EXECUCAO', '10'))  # Limite de emails por execução
+DELAY_ENTRE_EMAILS = float(os.getenv('DELAY_ENTRE_EMAILS', '0.5'))  # Delay em segundos entre emails
+MARCAR_LIDOS_EM_LOTE = os.getenv('MARCAR_LIDOS_EM_LOTE', 'true').lower() == 'true'  # Marcar emails como lidos em lote
+TAMANHO_LOTE_MARCAR_LIDOS = int(os.getenv('TAMANHO_LOTE_MARCAR_LIDOS', '10'))  # Quantidade de emails para marcar em lote
+
+# Configurações para otimização de anexos
+MAX_ANEXOS_POR_EMAIL = int(os.getenv('MAX_ANEXOS_POR_EMAIL', '50'))  # Limite de anexos processados por email
+TAMANHO_MAX_ANEXO_MB = float(os.getenv('TAMANHO_MAX_ANEXO_MB', '10.0'))  # Tamanho máximo de anexo em MB
+PROCESSAR_APENAS_PDF_XML = os.getenv('PROCESSAR_APENAS_PDF_XML', 'true').lower() == 'true'  # Processar apenas PDF e XML
+PRIORIZAR_XML = os.getenv('PRIORIZAR_XML', 'true').lower() == 'true'  # Processar XML antes de PDF
 
 def normalizar_texto(texto):
     """
@@ -227,201 +240,398 @@ def processar_emails():
         return
 
     logging.info('processar_emails')
-    with Imbox(env['IMAP_HOST'], env['IMAP_USER'], env['IMAP_PASS']) as imap:
-        emails = imap.messages(unread=True,sent_from='leandro.netto@fortanks.ind.br',
-                               raw='has:attachment')
-        log = {}
-        log['total'] = len(emails)
-        log['email'] = []
-        #log['email'].append({
-        #    'subject': msg.subject,
-        #    'anexos': len(msg.attachments)
-        #    'tipo': tipo
-        #    'data': datetime.now()
-        #    'email': msg.subject
-        #})
-        if len(emails) > 0:
-            for uid, msg in emails:
-                logging.info(f'Processando e-mail: {msg.subject}')
-                protocolo = False
-                reembolso = False
+    quota_exceeded = False
+    try:
+        with Imbox(env['IMAP_HOST'], env['IMAP_USER'], env['IMAP_PASS']) as imap:
+            emails = imap.messages(unread=True,sent_from='leandro.netto@fortanks.ind.br',
+                                   raw='has:attachment')
+            print(f"emails: {len(emails)}")
+            
+            log_email = {
+                'qtd email': len(emails),
+                'processados': 0,
+                'email': []
+            }
+            
+            # Limita a quantidade de emails processados por execução
+            emails_lista = list(emails)
+            total_emails = len(emails_lista)
+            emails_para_processar = emails_lista[:MAX_EMAILS_POR_EXECUCAO]
+            
+            if total_emails > MAX_EMAILS_POR_EXECUCAO:
+                logging.info(f'Total de emails: {total_emails}. Processando apenas {MAX_EMAILS_POR_EXECUCAO} por execução para evitar exceder quota.')
+            
+            # Lista para armazenar UIDs dos emails processados (para marcar como lidos em lote)
+            uids_processados = []
+            
+            if len(emails_para_processar) > 0:
+                for idx, (uid, msg) in enumerate(emails_para_processar):
+                    # Verifica se já excedeu a quota antes de processar
+                    if quota_exceeded:
+                        logging.warning('Quota de comandos IMAP excedida. Interrompendo processamento.')
+                        break
+                    log_email['processados'] += 1
+                    logging.info(f'Processando e-mail: {msg.subject}')
+                    protocolo = False
+                    reembolso = False
+                    nfe = False
 
-                nfe = False
-                nfe = any(p in msg.subject for p in ASSUNTO_PADRAO_NFE)
-                protocolo = any(p in msg.subject for p in ASSUNTO_PADRAO_PROTOCOLO)
-                reembolso = any(p in msg.subject for p in ASSUNTO_PADRAO_REEMBOLSO)
-                
-                
-                if protocolo:
-                    tipo = 2
-                elif reembolso:
-                    tipo = 3
-                elif nfe:
-                    tipo = 1
-                else:
-                    tipo = 0
+                    nfe = any(p in msg.subject for p in ASSUNTO_PADRAO_NFE)
+                    protocolo = any(p in msg.subject for p in ASSUNTO_PADRAO_PROTOCOLO)
+                    reembolso = any(p in msg.subject for p in ASSUNTO_PADRAO_REEMBOLSO)
+                    
+                    
+                    if protocolo:
+                        tipo = 2
+                    elif reembolso:
+                        tipo = 3
+                    elif nfe:
+                        tipo = 1
+                    else:
+                        tipo = 0
 
-                log_email = {
-                    'subject': msg.subject,
-                    'anexos': len(msg.attachments),
-                    'tipo': tipo,
-                    'arquivos': [],
-                    'codigo_barras': {
-                        'qtd_Identificados': 0,
-                        'Nao_Identificados': {
-                            'qtd': 0,
-                            'filenames':{}
+                    logging.info(f"tipo: {tipo}")
+                    
+                    #arquivo = {
+                    #    'filename': filename,
+                    #    'tipo': tipo,
+                    #    'chave_acesso': chave_acesso,
+                    #    'codigo_barra: true/false,
+                    #    'numero_nf': numero_nf,
+                    #    'fornecedor': fornecedor
+                    #}
+                    log_email['email'].append({
+                        'subject': msg.subject,
+                        'anexos_total': len(msg.attachments),
+                        'anexos_processados': 0,
+                        'anexos_existentes': {
+                            'files': [],
+                            'qtd': 0
                         },
-                        'qtd_Nao_Identificados_DB': 0,
-                        'qtd_Identificados_arquivei': 0,
-                        'qtd_Identificados_arquivei_DB': 0,
-                        'qtd_Upload_Existente': 0,
-                        'qtd_Upload_Realizado': 0
-                    }
-                }
-                #arquivo = {
-                #    'filename': filename,
-                #    'tipo': tipo,
-                #    'chave_acesso': chave_acesso,
-                #    'codigo_barra: true/false,
-                #    'numero_nf': numero_nf,
-                #    'fornecedor': fornecedor
-                #}
-                if tipo > 0:
-                    total = 0
-                    ignorado = 0
-                    if len(msg.attachments) > 0:
-                        anexos_ordenados = sorted(
-                            msg.attachments,
-                            key=lambda att: (0 if att["filename"].lower().endswith('.xml') else
-                                             1 if att["filename"].lower().endswith('.pdf') else 2)
-                        )
-                        for att in anexos_ordenados:
-                            filename = att["filename"]
-                            payload = att["content"].getvalue()
-                            if filename.lower().endswith('.pdf'):
-                                total += 1
-                                
+                        'tipo': tipo,
+                        'anexos': []
+                    })
+                    if tipo > 0:
+                        total = 0
+                        ignorado = 0
+                        anexos_processados = 0
+                        
+                        if len(msg.attachments) > 0:
+                            # Filtra anexos por tipo se configurado
+                            anexos_filtrados = msg.attachments
+                            if PROCESSAR_APENAS_PDF_XML:
+                                anexos_filtrados = [
+                                    att for att in msg.attachments 
+                                    if att["filename"].lower().endswith(('.pdf', '.xml'))
+                                ]
+                                if len(anexos_filtrados) < len(msg.attachments):
+                                    logging.info(f'Filtrados {len(msg.attachments) - len(anexos_filtrados)} anexos não-PDF/XML de {len(msg.attachments)} totais')
                             
-                                # Ignora arquivos que contenham 'protocolo' no nome
-                                if 'protocolo' in filename.lower():
-                                    logging.info(f"Ignorando arquivo de protocolo: {filename}")
-                                    ignorado += 1
+                            # Ordena anexos (XML primeiro se priorizado, depois PDF, depois outros)
+                            if PRIORIZAR_XML:
+                                anexos_ordenados = sorted(
+                                    anexos_filtrados,
+                                    key=lambda att: (
+                                        0 if att["filename"].lower().endswith('.xml') else
+                                        1 if att["filename"].lower().endswith('.pdf') else 2
+                                    )
+                                )
+                            else:
+                                anexos_ordenados = sorted(
+                                    anexos_filtrados,
+                                    key=lambda att: (0 if att["filename"].lower().endswith('.pdf') else
+                                                     1 if att["filename"].lower().endswith('.xml') else 2)
+                                )
+                            
+                            # Limita quantidade de anexos processados
+                            total_anexos = len(anexos_ordenados)
+                            if total_anexos > MAX_ANEXOS_POR_EMAIL:
+                                logging.warning(f'Email tem {total_anexos} anexos. Processando apenas os primeiros {MAX_ANEXOS_POR_EMAIL} para otimização.')
+                                anexos_ordenados = anexos_ordenados[:MAX_ANEXOS_POR_EMAIL]
+                            
+                            for att in anexos_ordenados:
+                                # Verifica se já processou o limite de anexos
+                                if anexos_processados >= MAX_ANEXOS_POR_EMAIL:
+                                    logging.warning(f'Limite de {MAX_ANEXOS_POR_EMAIL} anexos por email atingido. Pulando anexos restantes.')
+                                    break
+                                
+                                filename = att["filename"]
+                                
+                                if Upload.query.filter(Upload.filename==filename).first():
+                                    logging.info(f"arquivo {filename} ja existe no db")
+                                    log_email['email'][len(log_email['email'])-1]['anexos_existentes']['files'].append(filename)
+                                    log_email['email'][len(log_email['email'])-1]['anexos_existentes']['qtd'] += 1
                                     continue
-                                logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
-                                dec1 = None
-                                #img = convert_from_bytes(payload,500)[0]
-                                img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
-                                #print(f"img: {img}")
-                                #logging.info(f"img1")
-                                decs = decode(img)
-                                dec1 = None
-                                if decs:
-                                    dec = [dec for dec in decs if dec.type == 'CODE128']
-                                    tiponf = None
-                                    if dec:
-                                        dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-                                        tiponf = dec1[20:22]
-                                    else:
-                                        log_email['codigo_barras']['Nao_Identificados']['qtd'] += 1
-                                        log_email['codigo_barras']['Nao_Identificados']['filenames'].append(filename)
-                                        #log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
-                                else:
-                                    log_email['codigo_barras']['Nao_Identificados']['qtd'] += 1
-                                if dec1:
-                                    logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
-                                    nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
+                                # Verifica tamanho do anexo antes de processar
+                                try:
+                                    payload = att["content"].getvalue()
+                                    tamanho_mb = len(payload) / (1024 * 1024)  # Converte bytes para MB
                                     
-                                    if nota:
-                                        log_email['codigo_barras']['qtd_Identificados'] += 1
-                                        #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
-                                        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf',payload)
-                                        if up:
-                                            log_email['codigo_barras']['qtd_Upload_Realizado'] += 1
-                                            logging.info(f"upload realizado {nota.numero_nf}")
-                                        else:
-                                            logging.info(f"upload ja existe {nota.numero_nf}")
-                                            log_email['codigo_barras']['qtd_Upload_Existente'] += 1
+                                    if tamanho_mb > TAMANHO_MAX_ANEXO_MB:
+                                        logging.warning(f'Anexo {filename} muito grande ({tamanho_mb:.2f} MB). Limite: {TAMANHO_MAX_ANEXO_MB} MB. Pulando.')
+                                        ignorado += 1
                                         continue
-                                    else:
-                                        logging.info(f"tentando cte")
-                                        log_email['codigo_barras']['qtd_Nao_Identificados_DB'] += 1
-                                        tiponfc = ('nfe' if tiponf == 55 else 'cte' if tiponf == 57 else None)
-                                        if tiponfc:
-                                            arquivei = Arquivei(chave_acesso=dec1,tipo=tiponfc)
-                                            if arquivei.xml_data:
-                                                log_email['codigo_barras']['qtd_Identificados_arquivei'] += 1
-                                                logging.info(f"achado arquivei")
-                                                nota = NotaFiscal(xml_data=arquivei.xml_data,tipo=tiponfc)
-                                                if nota:
-                                                    log_email['codigo_barras']['qtd_Identificados_arquivei_DB'] += 1
-                                                    logging.info(f"fazendo o upload da nota: {nota}")
-                                                    up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
-                                                    if up.id:
-                                                        logging.info(f"upload ja existe {nota.numero_nf}")
-                                        else:
-                                            log_email['codigo_barras']['Nao_Identificados_DB'] += 1
-                                            logging.info(f"codBarras nao identificado {dec1}")
-                                            #log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
-                                else:
-                                    logging.info(f"tentando pelo numero e fornecedor {filename}")
-                                    numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
-                                    if not numero_nf or not fornecedor:
-                                        logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {filename}")
-                                        continue
+                                except Exception as e:
+                                    logging.error(f'Erro ao verificar tamanho do anexo {filename}: {e}')
+                                    continue
                                 
+                                anexo={
+                                    'filename': filename,
+                                    'tamanho_mb': round(tamanho_mb, 2),
+                                    'codbarras': {
+                                        'qtd': 0,
+                                        'codigos': []
+                                    },
+                                    'db':[],
+                                    'upload': False,
+                                    'nao_identificados':0
+                                }
+                                
+                                anexos_processados += 1
+
+                                if filename.lower().endswith('.pdf'):
+                                    total += 1
                                     
-                                    # Primeiro busca todas as notas com o número correspondente
-                                    numero_nf = int(numero_nf.strip())
-                                    notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
-                                    
-                                    # Depois procura a que tem o nome do emitente normalizado correspondente
-                                    nota = None 
-                                    fornecedor_normalizado = normalizar_texto(fornecedor)
-                                    if not notas:
-                                        logging.info(f"numero nf {numero_nf} nao encontrado no db")
-                                        up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf')
-                                        if up.id:
-                                            logging.info(f"upload ja existe sem nota {numero_nf}")
-                                        else:
-                                            Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', payload)
-                                            logging.info(f"upload realizado sem nota {numero_nf}")
-                                    else:
-                                        for n in notas:
-                                            emitente_normalizado = normalizar_texto(n.nome_emitente)
-                                            # Verifica se o nome do fornecedor está contido no nome do emitente
-                                            if fornecedor_normalizado in emitente_normalizado:
-                                                nota = n
-                                                break
-                                        
+                                
+                                    # Ignora arquivos que contenham 'protocolo' no nome
+                                    if 'protocolo' in filename.lower():
+                                        logging.info(f"Ignorando arquivo de protocolo: {filename}")
+                                        ignorado += 1
+                                        continue
+                                    logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
+                                    dec1 = None
+                                    img = convert_from_bytes(payload,500)[0]
+                                    #img = convert_from_bytes(payload,500,poppler_path='/usr/bin/')[0]
+                                    #print(f"img: {img}")
+                                    #logging.info(f"img1")
+                                    decs = decode(img)
+                                    dec1 = None
+                                    anexo['codbarras'] = {
+                                        'qtd': len(decs),
+                                        'codigos': []
+                                    }
+
+                                    if decs:
+                                        dec = [dec for dec in decs if dec.type == 'CODE128']
+                                        tiponf = None
+                                        if dec:
+                                            dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
+                                            tiponf = dec1[20:22]
+                            
+                                        for dec in decs:
+                                            anexo['codbarras']['codigos'].append({
+                                                'decodificado': dec.data.decode('utf-8'),
+                                                'tiponf': dec.type
+                                            })
+                                            #log_email['codigo_barras']['codigos_nao_identificados'].append(decs)
+                                    if dec1:
+                                        logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
+                                        nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==dec1).first()
+                                        anexo['db'].append({
+                                            'chave_acesso': dec1,
+                                            'nota': nota.id if nota else None
+                                        })
                                         if nota:
-                                            logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
-                                            try:
-                                                up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
-                                                if up.id:
-                                                    logging.info(f"upload ja existe {numero_nf}")
-                                                else:
-                                                    Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
-                                                    logging.info(f"upload realizado {numero_nf}")
-                                            except Exception as e:
-                                                logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
-                                        else:
-                                            logging.info(f"fornecedor nao encontrado {numero_nf}")
-                                            up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf')
-                                            if not up.id:
-                                                logging.info(f"upload realizado sem nota {numero_nf}")
-                                                Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                            #verifica se existe nos uploads se nao existir insere
+                                            #logging.info(f"Nota: {nota.id} {nota.numero_nf}")
+                                            up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf',payload)
+                                            if up:
+                                                anexo['upload'] = True
+                                                logging.info(f"upload realizado {nota.numero_nf}")
                                             else:
+                                                logging.info(f"upload ja existe {nota.numero_nf}")
+                                                
+                                            continue
+                                        else:
+                                            tiponfc = ('nfe' if tiponf == 55 else 'cte' if tiponf == 57 else None)
+                                            if tiponfc:
+                                                arquivei = Arquivei(chave_acesso=dec1,tipo=tiponfc)
+                                                if arquivei.xml_data:
+                                                    logging.info(f"achado arquivei")
+                                                    nota = NotaFiscal(xml_data=arquivei.xml_data,tipo=tiponfc)
+                                                    if nota:
+                                                        logging.info(f"fazendo o upload da nota: {nota}")
+                                                        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+                                                        if up.id:
+                                                            logging.info(f"upload ja existe {nota.numero_nf}")
+                                            else:
+                                                logging.info(f"codBarras nao identificado {dec1}")
+                                                anexo['nao_identificados']+=1
+                                                #log_email['codigo_barras']['codigos_nao_identificados'].append(dec1)
+                                    else:
+                                        logging.info(f"tentando pelo numero e fornecedor {filename}")
+                                        numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
+                                        if not numero_nf or not fornecedor:
+                                            logging.error(f"Não foi possível extrair número da NF ou fornecedor do arquivo: {filename}")
+                                            continue
+                                        
+                                        
+                                        # Primeiro busca todas as notas com o número correspondente
+                                        numero_nf = int(numero_nf.strip())
+                                        notas = NotaFiscal.query.filter(NotaFiscal.numero_nf==numero_nf).all()
+                                        
+                                        # Depois procura a que tem o nome do emitente normalizado correspondente
+                                        nota = None 
+                                        fornecedor_normalizado = normalizar_texto(fornecedor)
+                                        if not notas:
+                                            logging.info(f"numero nf {numero_nf} nao encontrado no db")
+                                            up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf')
+                                            if up.id:
                                                 logging.info(f"upload ja existe sem nota {numero_nf}")
+                                            else:
+                                                Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', payload)
+                                                logging.info(f"upload realizado sem nota {numero_nf}")
+                                        else:
+                                            for n in notas:
+                                                emitente_normalizado = normalizar_texto(n.nome_emitente)
+                                                # Verifica se o nome do fornecedor está contido no nome do emitente
+                                                if fornecedor_normalizado in emitente_normalizado:
+                                                    nota = n
+                                                    break
+                                            
+                                            if nota:
+                                                logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
+                                                try:
+                                                    up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
+                                                    if up.id:
+                                                        logging.info(f"upload ja existe {numero_nf}")
+                                                    else:
+                                                        Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                                        logging.info(f"upload realizado {numero_nf}")
+                                                except Exception as e:
+                                                    logging.error(f"Erro ao fazer upload do PDF protocolo para NF {numero_nf}: {e}")
+                                            else:
+                                                logging.info(f"fornecedor nao encontrado {numero_nf}")
+                                                up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf')
+                                                if not up.id:
+                                                    logging.info(f"upload realizado sem nota {numero_nf}")
+                                                    Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                                                else:
+                                                    logging.info(f"upload ja existe sem nota {numero_nf}")
+                            
+                                # Marcar o email como lido
                         
-                        # Marcar o email como lido
-                
-                            if filename.lower().endswith('.xml'):
+                                if filename.lower().endswith('.xml'):
+                                    
+                                    nf=NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'))
+                                    if nf.inserido:
+                                        try:
+                                            Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                                        except Exception as e:
+                                            logging.error(f"Erro ao processar arquivo xml {filename}: {e}")
+                                            continue
+                                    else:
+                                        logging.info(f"nota fiscal nao inserida {filename}")
+                                        continue
                                 
-                                nf=NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'))
-                                if nf.inserido:
-                                    Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                                log_email['email'][len(log_email['email'])-1]['anexos'].append(anexo)
+                            
+                            # Log de resumo de anexos proxcessados
+                            if len(msg.attachments) > 0:
+                                logging.info(f'Email processado: {anexos_processados} anexos processados de {len(msg.attachments)} totais (ignorados: {ignorado})')
+                                # Atualiza log_email com estatísticas
+                                log_email['email'][len(log_email['email'])-1]['anexos_processados'] = anexos_processados
+                                log_email['email'][len(log_email['email'])-1]['anexos_ignorados'] = ignorado
+         
+                    # Adiciona o UID à lista de processados (para marcar como lido em lote)
+                    uids_processados.append(uid)
+                    
+                    # Se está marcando em lote, só marca quando atingir o tamanho do lote ou for o último email
+                    if MARCAR_LIDOS_EM_LOTE:
+                        deve_marcar_lote = (
+                            len(uids_processados) >= TAMANHO_LOTE_MARCAR_LIDOS or 
+                            idx == len(emails_para_processar) - 1
+                        )
                         
-                imap.mark_seen(uid)
-                logging.info(f'Email {msg.subject} processado com sucesso')
-                Logs(local='processar_email',data=datetime.now(),texto=json.dumps(log_email))
+                        if deve_marcar_lote and not quota_exceeded:
+                            # Marca todos os UIDs do lote individualmente (mais compatível com diferentes servidores IMAP)
+                            try:
+                                marcados = 0
+                                for uid_lote in uids_processados:
+                                    try:
+                                        imap.mark_seen(uid_lote)
+                                        marcados += 1
+                                    except Exception as e_uid:
+                                        logging.warning(f'Erro ao marcar UID {uid_lote} como lido: {e_uid}')
+                                if marcados > 0:
+                                    logging.info(f'{marcados} de {len(uids_processados)} emails marcados como lidos em lote')
+                                uids_processados = []  # Limpa a lista após marcar
+                            except imaplib.IMAP4.abort as e:
+                                error_msg = str(e)
+                                if 'OVERQUOTA' in error_msg:
+                                    quota_exceeded = True
+                                    logging.error(f'Quota de comandos IMAP excedida ao marcar emails como lidos: {error_msg}')
+                                    logging.warning(f'{len(uids_processados)} emails foram processados mas não foram marcados como lidos devido à quota excedida')
+                                    uids_processados = []
+                                else:
+                                    logging.error(f'Erro IMAP ao marcar emails como lidos: {error_msg}')
+                                    uids_processados = []
+                            except Exception as e:
+                                logging.error(f'Erro não tratado ao marcar emails como lidos: {e}')
+                                uids_processados = []
+                    else:
+                        # Marca individualmente (comportamento antigo)
+                        try:
+                            imap.mark_seen(uid)
+                            logging.info(f'Email {msg.subject} processado com sucesso')
+                        except imaplib.IMAP4.abort as e:
+                            error_msg = str(e)
+                            if 'OVERQUOTA' in error_msg:
+                                quota_exceeded = True
+                                logging.error(f'Quota de comandos IMAP excedida ao marcar email como lido: {error_msg}')
+                                logging.warning(f'Email {msg.subject} foi processado mas não foi marcado como lido devido à quota excedida')
+                            else:
+                                logging.error(f'Erro IMAP ao marcar email como lido: {error_msg}')
+                                raise
+                        except Exception as e:
+                            logging.error(f'Erro não tratado ao marcar email como lido: {e}')
+                            raise
+                    
+                    # Adiciona delay entre processamento de emails para reduzir carga no servidor
+                    if DELAY_ENTRE_EMAILS > 0 and idx < len(emails_para_processar) - 1:
+                        time.sleep(DELAY_ENTRE_EMAILS)
+                    
+                    # Salva o log apenas se não excedeu a quota (e apenas no final do lote ou último email)
+                    if not quota_exceeded and (not MARCAR_LIDOS_EM_LOTE or len(uids_processados) == 0 or idx == len(emails_para_processar) - 1):
+                        try:
+                            Logs(local='processar_email',data=datetime.now(),texto=json.dumps(log_email))
+                        except Exception as e:
+                            logging.error(f'Erro ao salvar log: {e}')
+                    
+                    # Se excedeu a quota, interrompe o processamento
+                    if quota_exceeded:
+                        logging.warning('Interrompendo processamento devido à quota excedida')
+                        break
+                
+                # Marca qualquer email restante que não foi marcado em lote
+                if MARCAR_LIDOS_EM_LOTE and len(uids_processados) > 0 and not quota_exceeded:
+                    try:
+                        # Marca os emails restantes individualmente (mais compatível com diferentes servidores IMAP)
+                        marcados = 0
+                        for uid_lote in uids_processados:
+                            try:
+                                imap.mark_seen(uid_lote)
+                                marcados += 1
+                            except Exception as e_uid:
+                                logging.warning(f'Erro ao marcar UID {uid_lote} como lido: {e_uid}')
+                        if marcados > 0:
+                            logging.info(f'{marcados} de {len(uids_processados)} emails restantes marcados como lidos')
+                    except imaplib.IMAP4.abort as e:
+                        error_msg = str(e)
+                        if 'OVERQUOTA' in error_msg:
+                            logging.error(f'Quota de comandos IMAP excedida ao marcar emails restantes: {error_msg}')
+                        else:
+                            logging.error(f'Erro IMAP ao marcar emails restantes: {error_msg}')
+                    except Exception as e:
+                        logging.error(f'Erro ao marcar emails restantes: {e}')
+    except imaplib.IMAP4.abort as e:
+        error_msg = str(e)
+        if 'OVERQUOTA' in error_msg:
+            logging.error(f'Quota de comandos IMAP excedida durante operação: {error_msg}')
+            logging.warning('Processamento interrompido. Aguarde alguns minutos antes de tentar novamente.')
+        else:
+            logging.error(f'Erro IMAP não tratado: {error_msg}')
+            raise
+    except Exception as e:
+        logging.error(f'Erro não tratado: {e}')
+        raise

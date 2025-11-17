@@ -3,6 +3,13 @@ from models.database import db
 import base64
 from sqlalchemy import Text
 
+#tipo
+#0 - nao definido
+#1 - arquivei
+#2 - protocolo
+#3 - reembolso
+#4 - avulso
+
 
 class Upload(db.Model):
     __tablename__ = 'Uploads'

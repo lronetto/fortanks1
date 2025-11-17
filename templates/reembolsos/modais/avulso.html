@@ -221,39 +221,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // Função para atualizar a tabela de avulsos
-function atualizarTabelaAvulsos() {
-  const tbody = document.querySelector('#tabelaAvulsos tbody');
-  if (!tbody) return;
-  
-  tbody.innerHTML = '';
-  
-  if (typeof avulsos === 'undefined' || !avulsos || avulsos.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td colspan="4" class="text-center text-muted">Nenhum documento avulso adicionado</td>';
-    tbody.appendChild(tr);
-    return;
-  }
-  
-  avulsos.forEach((avulso, index) => {
-    const tr = document.createElement('tr');
-    const anexosCount = avulso.anexos_count || (avulso.anexos ? avulso.anexos.length : 0);
-    const anexosInfo = anexosCount > 0 ? `${anexosCount} arquivo(s)` : 'Sem anexos';
-    tr.innerHTML = `
-      <td>${avulso.descricao || ''}</td>
-      <td>${formatarMoeda(avulso.valor || 0)}</td>
-      <td>${anexosInfo}</td>
-      <td>
-        <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${index})" title="Editar">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${index})" title="Remover">
-          <i class="fas fa-trash"></i>
-        </button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
 
 // Função para editar avulso
 function editarAvulso(index) {
@@ -329,6 +296,27 @@ function carregarAnexosExistentes(avulso) {
 function visualizarAnexo(anexoId, filename) {
   // Abrir anexo em nova aba
   window.open(`/reembolsos/anexo/${anexoId}/download`, '_blank');
+}
+
+// Função para visualizar anexos de um avulso
+function visualizarAnexosAvulso(index) {
+  if (typeof avulsos === 'undefined' || !avulsos[index]) {
+    alert('Documento avulso não encontrado.');
+    return;
+  }
+  
+  const avulso = avulsos[index];
+  const anexos = avulso.anexos || [];
+  
+  if (anexos.length === 0) {
+    alert('Este documento não possui anexos.');
+    return;
+  }
+  
+  // Abrir primeiro anexo
+  if (anexos[0].id) {
+    window.open(`/reembolsos/anexo/${anexos[0].id}/download`, '_blank');
+  }
 }
 
 // Função para remover anexo existente

@@ -5,8 +5,9 @@ from flask_login import login_required, current_user
 from controllers.nota_fiscal_controller import api_get_dados_notas_fiscais
 from models.nota_fiscal import CFOPS_COMPRA,CNPJS_MATRIZ_FILIAIS,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
-from models import db, Reembolso, ReembolsoDocumento, ReembolsoAnexo, NotaFiscal,NotaFiscalItem ,CentroCusto
+from models import db, Reembolso, ReembolsoDocumento, ReembolsoAnexo, NotaFiscal,NotaFiscalItem ,CentroCusto,Usuario
 from models.upload import Upload
+from models.reembolso import ReembolsoAnexo
 from forms.reembolso_forms import ReembolsoForm, DocumentoAvulsoForm
 from sqlalchemy import or_, and_, cast, Date, case, func
 from io import BytesIO
@@ -40,7 +41,7 @@ def index():
 
 @reembolso_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
-def novo():
+def novo(): 
     if request.method == 'POST':
         try:
             # Obter dados do formulário
@@ -48,9 +49,18 @@ def novo():
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
             
             print("--------------------------------")
-            print("request.form: ",request.form)
-            #print("notas_selecionadas: ",notas_selecionadas)
-            #print("avulsos_data: ",avulsos_data)
+            print("request.form keys: ", list(request.form.keys()))
+            print("request.files keys: ", list(request.files.keys()))
+            print("request.files count: ", len(request.files))
+            if request.files:
+                print("request.files items:")
+                for key, file in request.files.items():
+                    if hasattr(file, 'filename') and file.filename:
+                        print(f"  {key}: {file.filename} ({file.content_length if hasattr(file, 'content_length') else 'unknown'} bytes)")
+                    else:
+                        print(f"  {key}: {type(file)}")
+            print("notas_selecionadas: ", notas_selecionadas)
+            print("avulsos_data: ", avulsos_data)
             print("--------------------------------")
             # Validar centro de custo
             
@@ -95,25 +105,36 @@ def novo():
                     centro_custo_id=avulso_data.get('centro_custo_id')
                 )
                 db.session.add(doc)
+                db.session.flush()  # Flush para obter o ID do documento antes de criar anexos
                 valor_total += float(avulso_data['valor'])
                 
-                # Processar anexos do avulso
-                for file_idx in range(100):  # Limite arbitrário de 100 anexos por avulso
-                    file_key = f'avulso_{idx}_anexo_{file_idx}'
-                    if file_key not in request.files:
-                        break
-                    file = request.files[file_key]
-                    if file and file.filename:
-                        # Ler arquivo e converter para base64
-                        file_content = file.read()
-                        file_base64 = base64.b64encode(file_content).decode('utf-8')
-                        anexo = ReembolsoAnexo(
-                            documento=doc,
-                            filename=file.filename,
-                            mimetype=file.content_type,
-                            blob=file_base64
-                        )
-                        db.session.add(anexo)
+                # Processar anexos do avulso usando modelo Upload
+                # Buscar todos os arquivos que começam com o padrão do avulso
+                anexos_processados = 0
+                for file_key in request.files.keys():
+                    if file_key.startswith(f'avulso_{idx}_anexo_'):
+                        file = request.files[file_key]
+                        if file and file.filename:
+                            print(f'Processando anexo: {file_key}, filename: {file.filename}, doc.id: {doc.id}')
+                            # Ler arquivo
+                            file_content = file.read()
+                            # Criar Upload manualmente (sem usar __init__ que faz commit)
+                            upload = Upload()
+                            upload.pai = 'ReembolsoDocumento'
+                            upload.pai_id = doc.id
+                            upload.tipo = 4
+                            upload.filename = file.filename
+                            upload.mimetype = file.content_type or 'application/octet-stream'
+                            upload.uploaded_at = datetime.utcnow()  # Definir data explicitamente
+                            # Converter para base64
+                            if isinstance(file_content, bytes):
+                                upload.blob = base64.b64encode(file_content).decode('utf-8')
+                            else:
+                                upload.blob = file_content
+                            db.session.add(upload)
+                            anexos_processados += 1
+                            print(f'Upload criado: id={upload.id if hasattr(upload, "id") else "pendente"}, filename={upload.filename}, tamanho blob: {len(upload.blob) if upload.blob else 0}')
+                print(f'Total de anexos processados para avulso {idx}: {anexos_processados}')
             
             # Atualizar valor total do reembolso
             reembolso.valor_total = valor_total
@@ -320,8 +341,9 @@ def pdf_template(reembolso_id):
         print(f'Documento: {doc.tipo} - {doc.ndocumento}')
         if doc.tipo == 'nota' and doc.nota_fiscal:
             print(f'Uploads da nota: {len(doc.nota_fiscal.uploads)}')
-        else:
-            print(f'Anexos do documento: {len(doc.anexos)}')
+        elif doc.tipo == 'avulso':
+            anexos_count = len(Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all())
+            print(f'Anexos do documento avulso: {anexos_count}')
     
     html = render_template('reembolsos/pdf_template.html', reembolso=reembolso)
     return reembolso,html
@@ -333,7 +355,9 @@ def dias_desde_1900(data):
 
 @reembolso_bp.route('/exportar_pdf/<int:id>')
 def exportar_pdf(id):
-    reembolso = Reembolso.query.join(Usuario, Reembolso.usuario_id==Usuario.id).get_or_404(id)
+    reembolso = Reembolso.query.join(Usuario, Reembolso.usuario_id==Usuario.id).filter(Reembolso.id==id).first()
+    if not reembolso:
+        abort(404)
     pdf_writer = PdfWriter()
     CCs = ReembolsoDocumento.query.\
     filter(ReembolsoDocumento.reembolso_id==id)\
@@ -359,8 +383,7 @@ def exportar_pdf(id):
         for doc in docs:
             if doc.tipo == 'nota' and doc.nota_fiscal:
                 doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).all()
-            elif doc.tipo == 'avulso':
-                doc.anexos = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=3).all()
+            
         
             if doc.tipo == 'nota' and doc.nota_fiscal and doc.nota_fiscal.uploads:
                 for upload in doc.nota_fiscal.uploads:
@@ -372,8 +395,10 @@ def exportar_pdf(id):
                             pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
                         except Exception as e:
                             print(f"Erro ao processar PDF da nota fiscal {doc.ndocumento}: {str(e)}")
-            elif doc.tipo == 'avulso' and doc.anexos:
-                for anexo in doc.anexos:
+            elif doc.tipo == 'avulso':
+                # Buscar anexos usando modelo Upload
+                anexos = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
+                for anexo in anexos:
                     if anexo.mimetype == 'application/pdf':
                         try:
                             # Converte o blob base64 para bytes
@@ -406,23 +431,26 @@ def exportar_pdf(id):
 @reembolso_bp.route('/anexo/<int:anexo_id>/download')
 @login_required
 def download_anexo(anexo_id):
-    anexo = ReembolsoAnexo.query.get_or_404(anexo_id)
-    reembolso = anexo.documento.reembolso
+    # Buscar upload usando modelo Upload
+    upload = Upload.query.get_or_404(anexo_id)
+    
+    # Verificar se é um anexo de reembolso (tipo=4)
+    if upload.tipo != 4 or upload.pai != 'ReembolsoDocumento':
+        abort(404)
+    
+    # Buscar documento e reembolso
+    doc = ReembolsoDocumento.query.get_or_404(upload.pai_id)
+    reembolso = doc.reembolso
+    
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
     
-    # Converter base64 para bytes
-    try:
-        # Tenta decodificar base64
-        file_content = base64.b64decode(anexo.blob)
-    except:
-        # Se não for base64, assume que já está em bytes (compatibilidade com dados antigos)
-        if isinstance(anexo.blob, str):
-            file_content = anexo.blob.encode('latin-1')
-        else:
-            file_content = anexo.blob
+    # Obter conteúdo do arquivo (Upload já decodifica base64)
+    file_content = upload.get_blob()
+    if not file_content:
+        abort(404)
     
-    return send_file(BytesIO(file_content), download_name=anexo.filename, mimetype=anexo.mimetype, as_attachment=True)
+    return send_file(BytesIO(file_content), download_name=upload.filename, mimetype=upload.mimetype, as_attachment=True)
 
 @reembolso_bp.route('/<int:reembolso_id>/editar', methods=['GET', 'POST'])
 @login_required
@@ -449,12 +477,27 @@ def editar(reembolso_id):
 
     if request.method == 'POST':
         print(f'salvar editar reembolso')
+        print(f'request.form: {request.form}')
+        
+        # Log detalhado dos arquivos recebidos
+        print("=" * 50)
+        print("ARQUIVOS RECEBIDOS NO BACKEND (EDICÃO):")
+        print(f"Total de arquivos: {len(request.files)}")
+        print("Chaves dos arquivos:", list(request.files.keys()))
+        for key, file in request.files.items():
+            if hasattr(file, 'filename') and file.filename:
+                print(f"  {key}: {file.filename} (tipo: {file.content_type})")
+            else:
+                print(f"  {key}: {type(file)} (sem filename)")
+        print("=" * 50)
+        
         try:
             # Atualizar campos principais
             reembolso.numero_relatorio = request.form.get('numero_relatorio')
             notas_selecionadas = json.loads(request.form.get('notas_selecionadas', '[]'))
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
-
+            print(f'notas_selecionadas: {notas_selecionadas}')
+            print(f'avulsos_data: {avulsos_data}')
             # Coletar IDs de documentos avulsos que serão mantidos (editados)
             avulsos_ids_manter = []
             for avulso_data in avulsos_data:
@@ -479,22 +522,32 @@ def editar(reembolso_id):
             valor_total = 0
             # Adicionar notas fiscais
             for nota_data in notas_selecionadas:
-                nota = NotaFiscal.query.get_or_404(nota_data['id'])
+                nota_id = nota_data.get('id')
+                if not nota_id:
+                    print(f'Aviso: Nota fiscal sem ID, pulando...')
+                    continue
+                    
+                nota = NotaFiscal.query.get(nota_id)
+                if not nota:
+                    print(f'Erro: Nota fiscal {nota_id} não encontrada, pulando...')
+                    continue
+                    
                 doc = ReembolsoDocumento(
                     reembolso=reembolso,
                     tipo='nota',
                     nota_fiscal_id=nota.id,
-                    descricao=nota_data['descricao'],
+                    descricao=nota_data.get('descricao', ''),
                     valor=nota.valor_total,
                     fornecedor=nota.nome_emitente,
                     ndocumento=nota.numero_nf,
                     data_documento=nota.data_emissao,
-                    centro_custo_id=nota_data['centro_custo_id']
+                    centro_custo_id=nota_data.get('centro_custo_id')
                 )
                 db.session.add(doc)
                 valor_total += float(nota.valor_total)
             # Adicionar documentos avulsos
             for idx, avulso_data in enumerate(avulsos_data):
+                print(f'Processando avulso {idx}: id={avulso_data.get("id")}, descricao={avulso_data.get("descricao")}')
                 # Verificar se é um documento existente (tem ID numérico, não timestamp)
                 avulso_id = avulso_data.get('id')
                 doc_existente = None
@@ -508,12 +561,19 @@ def editar(reembolso_id):
                         reembolso_id=reembolso_id,
                         tipo='avulso'
                     ).first()
+                    print(f'Documento existente encontrado: {doc_existente.id if doc_existente else "não encontrado"}')
                     
                     if doc_existente:
-                        # Coletar IDs dos anexos que devem ser preservados
+                        # Coletar IDs dos anexos que devem ser preservados (usando modelo Upload)
                         anexos_removidos = avulso_data.get('anexos_removidos', [])
-                        anexos_existentes = [a for a in doc_existente.anexos if a.id not in anexos_removidos]
-                        anexos_existentes_ids = [a.id for a in anexos_existentes]
+                        uploads_existentes = Upload.query.filter_by(
+                            pai_id=doc_existente.id,
+                            pai='ReembolsoDocumento',
+                            tipo=4
+                        ).all()
+                        anexos_existentes = [u for u in uploads_existentes if u.id not in anexos_removidos]
+                        anexos_existentes_ids = [u.id for u in anexos_existentes]
+                        print(f'Anexos existentes: {len(uploads_existentes)}, removidos: {len(anexos_removidos)}, preservados: {len(anexos_existentes)}')
                 
                 # Criar ou atualizar documento
                 if doc_existente:
@@ -526,11 +586,19 @@ def editar(reembolso_id):
                     doc.data_documento = datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d')
                     doc.centro_custo_id = avulso_data.get('centro_custo_id')
                     
-                    # Remover anexos marcados para remoção
+                    # Remover anexos marcados para remoção (usando modelo Upload)
                     anexos_removidos = avulso_data.get('anexos_removidos', [])
-                    for anexo in list(doc.anexos):
-                        if anexo.id in anexos_removidos:
-                            db.session.delete(anexo)
+                    if anexos_removidos:
+                        # Buscar uploads do documento
+                        uploads = Upload.query.filter_by(
+                            pai='ReembolsoDocumento',
+                            pai_id=doc.id,
+                            tipo=4
+                        ).all()
+                        for upload in uploads:
+                            if upload.id in anexos_removidos:
+                                print(f'Removendo anexo: {upload.id} - {upload.filename}')
+                                db.session.delete(upload)
                 else:
                     # Criar novo documento
                     doc = ReembolsoDocumento(
@@ -544,31 +612,80 @@ def editar(reembolso_id):
                         centro_custo_id=avulso_data.get('centro_custo_id')
                     )
                     db.session.add(doc)
+                    db.session.flush()  # Flush para obter o ID do documento antes de criar anexos
+                    print(f'Novo documento criado: id={doc.id}')
                 
                 valor_total += float(avulso_data['valor'])
                 
-                # Processar novos anexos do avulso
-                for file_idx in range(100):
-                    file_key = f'avulso_{idx}_anexo_{file_idx}'
-                    if file_key not in request.files:
-                        break
-                    file = request.files[file_key]
-                    if file and file.filename:
-                        # Ler arquivo e converter para base64
-                        file_content = file.read()
-                        file_base64 = base64.b64encode(file_content).decode('utf-8')
-                        anexo = ReembolsoAnexo(
-                            documento=doc,
-                            filename=file.filename,
-                            mimetype=file.content_type,
-                            blob=file_base64
-                        )
-                        db.session.add(anexo)
+                # Processar novos anexos do avulso usando modelo Upload
+                # Buscar todos os arquivos que começam com o padrão do avulso
+                print(f'Buscando arquivos para avulso {idx} (padrão: avulso_{idx}_anexo_)')
+                print(f'Total de arquivos em request.files: {len(request.files)}')
+                print(f'Arquivos disponíveis: {list(request.files.keys())}')
+                anexos_processados = 0
+                arquivos_encontrados = []
+                for file_key in request.files.keys():
+                    print(f'Verificando arquivo: {file_key}, começa com avulso_{idx}_anexo_? {file_key.startswith(f"avulso_{idx}_anexo_")}')
+                    if file_key.startswith(f'avulso_{idx}_anexo_'):
+                        arquivos_encontrados.append(file_key)
+                        file = request.files[file_key]
+                        print(f'Arquivo encontrado: {file_key}, filename: {file.filename if hasattr(file, "filename") else "N/A"}, type: {type(file)}')
+                        if file and hasattr(file, 'filename') and file.filename:
+                            print(f'Processando anexo (editar): {file_key}, filename: {file.filename}, doc.id: {doc.id}')
+                            # Ler arquivo
+                            file_content = file.read()
+                            # Criar Upload usando o __init__ que faz save automático
+                            # O __init__ retorna True se criou ou False se já existe
+                            try:
+                                upload_instance = Upload(
+                                    pai='ReembolsoDocumento',
+                                    pai_id=doc.id,
+                                    tipo=4,
+                                    filename=file.filename,
+                                    mimetype=file.content_type or 'application/octet-stream',
+                                    blob=file_content  # Passar bytes, o __init__ converte para base64
+                                )
+                                
+                                # O __init__ retorna True/False, mas o objeto self foi modificado
+                                # Buscar o upload criado ou existente
+                                upload = Upload.query.filter_by(
+                                    pai='ReembolsoDocumento',
+                                    pai_id=doc.id,
+                                    tipo=4,
+                                    filename=file.filename,
+                                    mimetype=file.content_type or 'application/octet-stream'
+                                ).first()
+                                
+                                if upload:
+                                    anexos_processados += 1
+                                    print(f'✓ Upload criado/encontrado (editar): id={upload.id}, filename={upload.filename}, tamanho blob: {len(upload.blob) if upload.blob else 0}')
+                                else:
+                                    print(f'✗ ERRO: Upload não foi encontrado após criação')
+                                    raise Exception('Upload não foi encontrado após criação')
+                            except Exception as e:
+                                print(f'✗ ERRO ao criar upload: {str(e)}')
+                                import traceback
+                                traceback.print_exc()
+                                # Não fazer rollback aqui, deixar o rollback geral tratar
+                                raise
+                print(f'Arquivos encontrados para avulso {idx}: {arquivos_encontrados}')
+                print(f'Total de anexos processados para avulso {idx} (editar): {anexos_processados}')
             reembolso.valor_total = valor_total
+            
+            # Verificar se há uploads pendentes antes do commit
+            uploads_pendentes = [obj for obj in db.session.new if isinstance(obj, Upload)]
+            print(f'Uploads pendentes antes do commit: {len(uploads_pendentes)}')
+            for up in uploads_pendentes:
+                print(f'  - Upload pendente: id={up.id if hasattr(up, "id") else "None"}, filename={up.filename}, pai_id={up.pai_id}')
+            
             db.session.commit()
+            print('✓ Commit realizado com sucesso!')
             flash('Reembolso atualizado com sucesso!', 'success')
             return redirect(url_for('reembolso.index'))
         except Exception as e:
+            print(f'✗ ERRO ao salvar reembolso: {str(e)}')
+            import traceback
+            traceback.print_exc()
             db.session.rollback()
             flash(f'Erro ao atualizar reembolso: {str(e)}', 'danger')
             return redirect(url_for('reembolso.editar', reembolso_id=reembolso_id))
@@ -588,10 +705,10 @@ def editar(reembolso_id):
                 'descricao': doc.descricao,
                 'valor': float(doc.valor),
                 'centro_custo_id': doc.centro_custo_id,
-                'anexos_count': len(doc.anexos),
+                'anexos_count': len(Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()),
                 'anexos': [
-                    {'id': anexo.id, 'filename': anexo.filename}
-                    for anexo in doc.anexos
+                    {'id': upload.id, 'filename': upload.filename}
+                    for upload in Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
                 ]
             })
     
@@ -619,14 +736,16 @@ def avulsos_json(reembolso):
     avulsos = []
     for doc in reembolso.documentos:
         if doc.tipo == 'avulso':
+            # Buscar anexos usando modelo Upload
+            uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
             avulsos.append({
                 'id': doc.id,
                 'descricao': doc.descricao,
                 'valor': float(doc.valor),
                 'centro_custo_id': doc.centro_custo_id,
                 'anexos': [
-                    {'id': anexo.id, 'filename': anexo.filename}
-                    for anexo in doc.anexos
+                    {'id': upload.id, 'filename': upload.filename}
+                    for upload in uploads
                 ]
             })
     return Markup(json.dumps(avulsos))
@@ -658,11 +777,12 @@ def apagar(reembolso_id):
         flash('Você não tem permissão para apagar este reembolso.', 'danger')
         return redirect(url_for('reembolso.index'))
     try:
-        # Remover anexos dos documentos avulsos
+        # Remover anexos dos documentos avulsos (usando modelo Upload)
         for doc in list(reembolso.documentos):
             if doc.tipo == 'avulso':
-                for anexo in list(doc.anexos):
-                    db.session.delete(anexo)
+                uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
+                for upload in uploads:
+                    db.session.delete(upload)
             db.session.delete(doc)
         db.session.delete(reembolso)
         db.session.commit()

@@ -98,17 +98,14 @@
     <table class="table table-bordered" id="tabelaNotas">
         <thead>
             <tr>
-                <th width="50">
-                  <input type="checkbox" id="selecionarTodosNotas" onclick="selecionarTodosNotas(this)">
-                </th>
-                <th>Número NF</th>
+                <th>Data</th>
                 <th>Fornecedor</th>
-                <th>Data Emissão</th>
+                <th>Número</th>
                 <th>Valor</th>
                 <th>Pagamento</th>
                 <th>Descrição</th>
                 <th>Centro de Custo</th>
-                <th>Anexos</th>
+                <th width="100">Ações</th>
             </tr>
         </thead>
         <tbody>
@@ -137,9 +134,13 @@
     <table class="table table-bordered" id="tabelaAvulsos">
         <thead>
             <tr>
-                <th>Descrição</th>
+                <th>Data</th>
+                <th>Fornecedor</th>
+                <th>Número</th>
                 <th>Valor</th>
-                <th>Anexos</th>
+                <th>Pagamento</th>
+                <th>Descrição</th>
+                <th>Centro de Custo</th>
                 <th width="100">Ações</th>
             </tr>
         </thead>
@@ -263,29 +264,66 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Atualizar campos hidden com os dados
-        document.getElementById('notas_selecionadas').value = JSON.stringify(notasSelecionadas);
-        document.getElementById('avulsos_data').value = JSON.stringify(avulsos);
-        
-        // Verificar se há avulsos com anexos
+        // Verificar se há avulsos com anexos ANTES de serializar
         const temAnexos = avulsos.some(av => av.anexos_files && av.anexos_files.length > 0);
+        
+        // Preparar dados dos avulsos sem os arquivos (para JSON)
+        const avulsosParaJSON = avulsos.map(av => {
+            const avCopy = {...av};
+            // Remover anexos_files do JSON (serão enviados separadamente no FormData)
+            delete avCopy.anexos_files;
+            return avCopy;
+        });
+        
+        // Atualizar campos hidden com os dados (sem arquivos)
+        document.getElementById('notas_selecionadas').value = JSON.stringify(notasSelecionadas);
+        document.getElementById('avulsos_data').value = JSON.stringify(avulsosParaJSON);
         
         if (temAnexos) {
             // Usar FormData para enviar arquivos
             const formData = new FormData(this);
             
-            // Garantir que os dados JSON estejam corretos
+            // Garantir que os dados JSON estejam corretos (sem arquivos)
             formData.set('notas_selecionadas', JSON.stringify(notasSelecionadas));
-            formData.set('avulsos_data', JSON.stringify(avulsos));
+            formData.set('avulsos_data', JSON.stringify(avulsosParaJSON));
             
-            // Adicionar anexos dos avulsos
+            // Adicionar anexos dos avulsos (usando os arquivos originais, não serializados)
+            let totalAnexos = 0;
+            console.log('Verificando avulsos para anexos:', avulsos.map((av, i) => ({
+                idx: i,
+                id: av.id,
+                descricao: av.descricao,
+                tem_anexos_files: !!av.anexos_files,
+                qtd_anexos: av.anexos_files ? av.anexos_files.length : 0
+            })));
+            
             avulsos.forEach((avulso, idx) => {
                 if (avulso.anexos_files && avulso.anexos_files.length > 0) {
+                    console.log(`Avulso ${idx} tem ${avulso.anexos_files.length} arquivo(s):`, avulso.anexos_files.map(f => f.name));
                     avulso.anexos_files.forEach((file, fileIdx) => {
-                        formData.append(`avulso_${idx}_anexo_${fileIdx}`, file);
+                        if (file instanceof File) {
+                            formData.append(`avulso_${idx}_anexo_${fileIdx}`, file);
+                            totalAnexos++;
+                            console.log(`✓ Adicionado ao FormData: avulso_${idx}_anexo_${fileIdx} = ${file.name} (${file.size} bytes)`);
+                        } else {
+                            console.warn(`✗ Arquivo no índice ${fileIdx} do avulso ${idx} não é uma instância de File:`, typeof file, file);
+                        }
                     });
+                } else {
+                    console.log(`Avulso ${idx} não tem anexos_files ou está vazio`);
                 }
             });
+            console.log('Total de anexos adicionados ao FormData:', totalAnexos);
+            
+            // Debug: listar todas as chaves do FormData
+            console.log('Chaves no FormData:');
+            for (let pair of formData.entries()) {
+                if (pair[1] instanceof File) {
+                    console.log(`  ${pair[0]}: File(${pair[1].name}, ${pair[1].size} bytes)`);
+                } else {
+                    console.log(`  ${pair[0]}: ${typeof pair[1]}`);
+                }
+            }
             
             // Enviar via fetch (não incluir headers, FormData já inclui o CSRF token)
             const formAction = this.action || window.location.pathname;
@@ -299,16 +337,23 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch(formAction, {
                 method: 'POST',
                 body: formData,
-                redirect: 'manual' // Controlar redirect manualmente
+                redirect: 'follow',
+                credentials: 'same-origin' // Incluir cookies e credenciais
             })
             .then(response => {
-                console.log('Resposta recebida:', response.status, response.type);
+                console.log('Resposta recebida:', response.status, response.type, response.redirected, response.url);
                 
-                // Se houver redirect (status 302, 301, etc)
-                if (response.status >= 300 && response.status < 400) {
-                    const redirectUrl = response.headers.get('Location') || '/reembolsos/';
-                    console.log('Redirecionando para:', redirectUrl);
-                    window.location.href = redirectUrl;
+                // Tratar status 0 (opaqueredirect) - geralmente significa que houve redirect
+                if (response.status === 0 || response.type === 'opaqueredirect') {
+                    console.log('Redirect detectado (status 0), redirecionando para lista...');
+                    window.location.href = '/reembolsos/';
+                    return;
+                }
+                
+                // Se o fetch seguiu um redirect, usar a URL final
+                if (response.redirected && response.url) {
+                    console.log('Redirect seguido, redirecionando para:', response.url);
+                    window.location.href = response.url;
                     return;
                 }
                 
@@ -326,19 +371,41 @@ document.addEventListener('DOMContentLoaded', function() {
                             window.location.href = '/reembolsos/';
                         }
                     });
-                } else if (response.ok) {
-                    // Se a resposta for OK (200), assumir sucesso e redirecionar
+                } else if (response.ok || response.status === 200) {
+                    // Se a resposta for OK, assumir sucesso e redirecionar
                     console.log('Resposta OK, redirecionando...');
-                    window.location.href = '/reembolsos/';
+                    // Se temos uma URL na resposta, usar ela, senão usar a padrão
+                    if (response.url && response.url !== formAction) {
+                        window.location.href = response.url;
+                    } else {
+                        window.location.href = '/reembolsos/';
+                    }
                 } else {
                     // Se houver erro, mostrar mensagem
                     console.error('Erro na resposta:', response.status, response.statusText);
-                    alert('Erro ao salvar reembolso. Status: ' + response.status);
+                    // Tentar ler o texto da resposta para ver o erro
+                    return response.text().then(text => {
+                        console.error('Resposta de erro:', text);
+                        alert('Erro ao salvar reembolso. Status: ' + response.status);
+                    }).catch(() => {
+                        // Se não conseguir ler o texto, apenas mostrar o status
+                        alert('Erro ao salvar reembolso. Status: ' + response.status);
+                    });
                 }
             })
             .catch(error => {
                 console.error('Erro ao enviar formulário:', error);
-                alert('Erro ao salvar reembolso: ' + error.message);
+                // Se for erro de rede ou CORS, pode ser que o redirect tenha funcionado
+                // Tentar redirecionar para a lista de reembolsos
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError') {
+                    console.log('Possível redirect ou erro de rede, redirecionando para lista...');
+                    // Aguardar um pouco e redirecionar (pode ser que o servidor tenha processado)
+                    setTimeout(() => {
+                        window.location.href = '/reembolsos/';
+                    }, 1000);
+                } else {
+                    alert('Erro ao salvar reembolso: ' + error.message);
+                }
             });
         } else {
             // Sem anexos, usar submit normal
@@ -378,6 +445,62 @@ document.addEventListener('DOMContentLoaded', function() {
         $(this).closest('.documento-avulso-item').remove();
     });
 });
+function atualizarTabelaAvulsos() {
+  const tbody = document.querySelector('#tabelaAvulsos tbody');
+  if (!tbody) return;
+  
+  tbody.innerHTML = '';
+  
+  if (typeof avulsos === 'undefined' || !avulsos || avulsos.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="8" class="text-center text-muted">Nenhum documento avulso adicionado</td>';
+    tbody.appendChild(tr);
+    return;
+  }
+  
+  avulsos.forEach((avulso, index) => {
+    const tr = document.createElement('tr');
+    const dataDoc = avulso.data_documento ? new Date(avulso.data_documento).toLocaleDateString() : '';
+    const fornecedor = avulso.fornecedor || '';
+    const numero = avulso.ndocumento || '';
+    const valor = formatarMoeda(avulso.valor || 0);
+    const pagamento = ''; // Em branco para avulsos
+    const descricao = avulso.descricao || '';
+    
+    // Buscar nome do centro de custo
+    let centroCustoNome = '';
+    if (avulso.centro_custo_id && window.centrosCusto) {
+      const centro = window.centrosCusto.find(c => c.id == avulso.centro_custo_id);
+      if (centro) {
+        centroCustoNome = `${centro.codigo} - ${centro.nome}`;
+      }
+    }
+    
+    const anexosCount = avulso.anexos_count || (avulso.anexos ? avulso.anexos.length : 0);
+    const anexosInfo = anexosCount > 0 ? `${anexosCount} arquivo(s)` : 'Sem anexos';
+    
+    tr.innerHTML = `
+      <td>${dataDoc}</td>
+      <td>${fornecedor}</td>
+      <td>${numero}</td>
+      <td>${valor}</td>
+      <td>${pagamento}</td>
+      <td>${descricao}</td>
+      <td>${centroCustoNome}</td>
+      <td>
+        <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${index})" title="Editar">
+          <i class="fas fa-edit"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${index})" title="Remover">
+          <i class="fas fa-trash"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+
 function filtrarNotas(page = 1) {
     paginaNotas = page;
     
@@ -439,18 +562,22 @@ function filtrarNotas(page = 1) {
                 }
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td><input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked}></td>
-                    <td>${nota.numero_nf}</td>
-                    <td><a href="#" onclick="abrirModalDocumentos(${nota.id}); return false;">${nota.nome_emitente}</a></td>
                     <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
+                    <td><a href="#" onclick="abrirModalDocumentos(${nota.id}); return false;">${nota.nome_emitente}</a></td>
+                    <td>${nota.numero_nf}</td>
                     <td>${formatarMoeda(nota.valor_total)}</td>
                     <td>${nota.pagamento ? '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>' : ''}
                         ${nota.upload_reembolso == 1 ? '<span class="badge bg-info ms-1" title="Documentos de reembolso"><i class="fas fa-paperclip" style="color:red"></i></span>' : ''}
                         ${nota.upload_envio == 1 ? '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip" style="color:green"></i></span>' : ''}
                         ${(nota.upload == 1 && nota.upload_reembolso == 0 && nota.upload_envio == 0) ? '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip"></i></span>' : ''}</td>
-                        <td><input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}"></td>
+                    <td><input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}"></td>
                     <td><select class="form-control nota-centro-custo" data-id="${nota.id}">${centroCustoOptions}</select></td>
-                    <td><button type="button" class="btn btn-primary btn-sm" onclick="abrirModalDocumentos(${nota.id})"><i class="fas fa-paperclip"></i></button></td>
+                    <td>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="abrirModalDocumentos(${nota.id})" title="Ver Anexos">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked} style="margin-left: 5px;" title="Selecionar">
+                    </td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -492,7 +619,7 @@ function selecionarTodosNotas(checkbox) {
         const tr = cb.closest('tr');
         const notaId = parseInt(cb.value);
         const descricao = tr.querySelector('.nota-descricao').value;
-        const valor = parseFloat(tr.querySelector('td:nth-child(5)').textContent.replace(/[^0-9,-]/g, '').replace(',', '.'));
+        const valor = parseFloat(tr.querySelector('td:nth-child(4)').textContent.replace(/[^0-9,-]/g, '').replace(',', '.'));
         const centro_custo_id = tr.querySelector('.nota-centro-custo').value;
         let nota = { id: notaId, descricao, valor, centro_custo_id };
         if (checkbox.checked) {
@@ -510,7 +637,7 @@ function adicionarListenersNotas() {
             const notaId = parseInt(this.value);
             const tr = this.closest('tr');
             const descricao = tr.querySelector('.nota-descricao').value;
-            const valor = parseFloat(tr.querySelector('td:nth-child(5)').textContent.replace(/[^\d,-]/g, '').replace(',', '.'));
+            const valor = parseFloat(tr.querySelector('td:nth-child(4)').textContent.replace(/[^\d,-]/g, '').replace(',', '.'));
             const centro_custo_id = tr.querySelector('.nota-centro-custo').value;
             let nota = { id: notaId, descricao, valor, centro_custo_id };
             if (this.checked) {

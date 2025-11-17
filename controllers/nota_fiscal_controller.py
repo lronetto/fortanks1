@@ -2019,6 +2019,22 @@ def api_visualizar_documento(doc_id):
         logger.error(f'Erro ao visualizar documento: {str(e)}')
         return jsonify({'error': f'Erro ao visualizar documento: {str(e)}'}), 500
 
+@nota_fiscal_bp.route('/api/documentos/<int:doc_id>/download')
+@login_required
+def api_download_documento(doc_id):
+    """
+    API para fazer download de um documento
+    """
+    try:
+        documento = Upload.query.filter(Upload.id==doc_id).first()
+        response = make_response(base64.b64decode(documento.blob))
+        response.headers['Content-Type'] = documento.mimetype
+        response.headers['Content-Disposition'] = f'attachment; filename={documento.filename}'
+        return response
+    except Exception as e:
+        logger.error(f'Erro ao fazer download do documento: {str(e)}')
+        return jsonify({'error': f'Erro ao fazer download do documento: {str(e)}'}), 500
+
 @nota_fiscal_bp.route('/exportar-excel')
 @login_required
 def exportar_excel():

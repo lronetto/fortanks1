@@ -83,12 +83,19 @@ class NotaFiscal(db.Model):
     pdf = None
     inserido = False
     
-    def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False,tipo='nfe'):
+    def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False,tipo=None):
         self.xml_data = xml_data
         self.chave_acesso = chave_acesso
         self.id = id
         self.upload = None
         self.cancelada = cancelada
+        if xml_data and tipo is None:
+            self.tipo = self.extrair_tipo_nota(xml_data)
+            if self.tipo is 'nfe':
+                self.processar_nf()
+            elif self.tipo is 'cte':
+                self.processar_cte()
+            
         if xml_data and tipo == 'nfe':
             print(f'NotaFiscal xml')
             self.processar_nf()
@@ -120,7 +127,22 @@ class NotaFiscal(db.Model):
                     self.upload = upload
                 print('self.upload: ',self.upload)
 
+    def extrair_tipo_nota(self, xml_data):
+        """
+        Extrai o tipo de nota fiscal do XML
+        """
+        root = ET.fromstring(base64.b64decode(xml_data).decode('utf-8'))
+        ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
+        ns1 = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
+        infCte = root.find('.//cte:infCte', ns) or root.find('.//infCte', ns)
+        infNFe = root.find('.//nfe:infNFe', ns1) or root.find('.//infNFe', ns)
+        if infNFe:
+            return 'nfe'
 
+        if infCte:
+            return 'cte'
+        else:
+            return None
     def save(self):
         """
         Salva a nota fiscal no banco de dados
