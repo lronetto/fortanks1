@@ -65,7 +65,8 @@
     #dataTable tbody td:nth-child(8),
     #dataTable tbody td:nth-child(9),
     #dataTable tbody td:nth-child(10),
-    #dataTable tbody td:nth-child(11) {
+    #dataTable tbody td:nth-child(11),
+    #dataTable tbody td:nth-child(12) {
         text-align: center;
         white-space: nowrap;
     }
@@ -109,6 +110,7 @@
                             <th>Placas Normais</th>
                             <th>Placas de Fecho</th>
                             <th>Bainhas </th>
+                            <th>Item NF</th>
                             <th class="text-center">Ações</th>
                         </tr>
                     </thead>
@@ -131,6 +133,7 @@
                             <td>{{ tanque.placas_normais or '-' }}</td>
                             <td>{{ tanque.placas_fecho or '-' }}</td>
                             <td>{{ tanque.quantidade_bainhas or '-' }}</td>
+                            <td>{{ tanque.item_nf or '-' }}</td>
                             <td class="text-center">
                                 <button class="btn btn-info btn-sm btn-visualizar-tanque" 
                                     data-id="{{ tanque.id }}" 
@@ -529,7 +532,8 @@
                     { width: "100px", targets: 8 }, // Placas Normais
                     { width: "110px", targets: 9 }, // Placas de Fecho
                     { width: "80px", targets: 10 },  // Bainhas
-                    { width: "120px", targets: 11 }  // Ações
+                    { width: "80px", targets: 11 },  // Item NF
+                    { width: "120px", targets: 12 }  // Ações
                 ]
             });
         } else {

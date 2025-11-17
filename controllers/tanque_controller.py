@@ -203,6 +203,7 @@ def editar(id):
         quantidade_bainhas = request.form.get('quantidade_bainhas')
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
+        item_nf = request.form.get('item_nf')
         
         # Extrair valores numéricos das dimensões
         diametro = None
@@ -262,6 +263,12 @@ def editar(id):
             else:
                 quantidade_bainhas = 0
             
+            # Converter item_nf se fornecida
+            if item_nf:
+                item_nf = int(item_nf)
+            else:
+                item_nf = None
+            
             # Atualizar o tanque
             tanque.nome = nome
             tanque.sistema = sistema
@@ -277,6 +284,7 @@ def editar(id):
             tanque.placas_normais = placas_normais
             tanque.placas_fecho = placas_fecho
             tanque.contrato_id = contrato_id
+            tanque.item_nf = item_nf
             
             # Salvar as alterações
             db.session.commit()
