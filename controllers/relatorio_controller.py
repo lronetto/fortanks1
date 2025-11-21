@@ -219,7 +219,7 @@ def relatorio_notas_ajax():
     valor_a_faturar = valor_faturado - valor_recebido
     
     # Calcular quantidades a faturar (emitidas mas não pagas)
-    quantidade_a_faturar = total_quantidade - quantidade_recebida
+    quantidade_a_faturar = total_placas_contratos - total_quantidade
     
     # Buscar valores dos contratos separados por material e serviço
     query_contratos_total = db.session.query(func.sum(Contrato.valor_total))
