@@ -25,6 +25,7 @@ class Material(db.Model):
     unidade_id = db.Column(db.Integer, db.ForeignKey('unidades.id'), nullable=True)
     
     categoria = db.Column(db.String(50), nullable=True)  # Adicionando campo categoria
+    formula_calculo = db.Column(db.String(500), nullable=True)  # Fórmula universal para cálculo de quantidade
     criado_em = db.Column(db.DateTime, default=datetime.now)
 
     #unidade = db.relationship('Unidade', back_populates='materiais', foreign_keys=[unidade_id])
@@ -101,3 +102,42 @@ class Material(db.Model):
         if item_nf:
             return item_nf.valor_unitario/item_nf.fator_conversao_aplicado
         return 0
+    
+    def calcular_quantidade(self, quantidade_total, placas_normais, placas_fecho, quantidade_bainhas, altura_total=None, sistema=None):
+        """
+        Calcula a quantidade do material baseado na fórmula universal de cálculo
+        A fórmula é universal (cadastrada no material), mas usa os dados específicos do tanque
+        
+        Variáveis disponíveis na fórmula:
+        - quantidade_total: quantidade de tanques
+        - placas_normais: quantidade de placas normais
+        - placas_fecho: quantidade de placas de fecho
+        - quantidade_bainhas: quantidade de bainhas
+        - altura_total: altura total do tanque
+        - sistema: sistema do tanque (SC-10, SC-14, SR-06)
+        """
+        if not self.formula_calculo:
+            return 1.0
+        
+        try:
+            # Criar um contexto seguro para eval
+            contexto = {
+                'quantidade_total': float(quantidade_total or 1),
+                'placas_normais': float(placas_normais or 0),
+                'placas_fecho': float(placas_fecho or 0),
+                'quantidade_bainhas': float(quantidade_bainhas or 0),
+                'altura_total': float(altura_total or 0),
+                'sistema': sistema or '',
+            }
+            
+            # Substituir variáveis na fórmula por valores seguros
+            formula = self.formula_calculo.strip()
+            
+            # Avaliar a fórmula de forma segura
+            resultado = eval(formula, {"__builtins__": {}}, contexto)
+            
+            return float(resultado) if resultado else 1.0
+        except Exception as e:
+            # Em caso de erro, retornar 1.0 como padrão
+            print(f"Erro ao calcular fórmula para material {self.id}: {str(e)}")
+            return 1.0

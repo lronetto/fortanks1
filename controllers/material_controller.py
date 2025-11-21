@@ -121,6 +121,7 @@ def novo():
             codigo_erp = request.form.get('codigo_erp')
             unidade = request.form.get('unidade')
             mascara = request.form.get('mascara')
+            formula_calculo = request.form.get('formula_calculo', '').strip()
             print(f'request.form: {request.form}')
             
             # Verificar o campo alternativo de unidade
@@ -157,7 +158,8 @@ def novo():
                 plano_conta=plano_conta,
                 codigo_erp=codigo_erp,
                 unidade_id=unidade,
-                mascara=mascara  # Novo campo com relacionamento
+                mascara=mascara,  # Novo campo com relacionamento
+                formula_calculo=formula_calculo if formula_calculo else None
             )
             
             # Definir usuário que criou
@@ -214,7 +216,8 @@ def editar(id):
                 'codigo_erp': material.codigo_erp or '',
                 'unidade': material.unidade or '',
                 'unidade_id': material.unidade_id or 0,
-                'mascara': material.mascara or ''
+                'mascara': material.mascara or '',
+                'formula_calculo': material.formula_calculo or ''
             })
         
         # Para requisições POST
@@ -230,6 +233,7 @@ def editar(id):
             codigo_erp = request.form.get('codigo_erp', '')
             unidade = request.form.get('unidade', '')
             mascara = request.form.get('mascara', '')
+            formula_calculo = request.form.get('formula_calculo', '').strip()
             
             # Validar campos obrigatórios
             if not nome or not categoria:
@@ -276,6 +280,7 @@ def editar(id):
             material.codigo_erp = codigo_erp
             material.unidade_id = unidade
             material.mascara = mascara
+            material.formula_calculo = formula_calculo if formula_calculo else None
             try:
                 # Salvar no banco
                 db.session.add(material)
@@ -891,6 +896,7 @@ def editar_material_ajax(id):
             codigo_erp = data.get('edit_codigo_erp', '')
             unidade = data.get('edit_unidade', '')
             mascara = data.get('edit_mascara', '')
+            formula_calculo = data.get('edit_formula_calculo', '').strip()
             print(f'form_data: {data}')
             
             # Verificar o campo alternativo de unidade
@@ -924,6 +930,7 @@ def editar_material_ajax(id):
                 material.codigo_erp = codigo_erp
                 material.unidade_id = unidade
                 material.mascara = mascara
+                material.formula_calculo = formula_calculo if formula_calculo else None
                
                     
                 # Atualizar data e usuário
@@ -959,7 +966,8 @@ def editar_material_ajax(id):
             'plano_conta': material.plano_conta or '',
             'codigo_erp': material.codigo_erp or '',
             'unidade': material.unidade_obj.nome or '',
-            'mascara': material.mascara or ''
+            'mascara': material.mascara or '',
+            'formula_calculo': material.formula_calculo or ''
         })
             
     except Exception as e:
@@ -995,7 +1003,8 @@ def obter_material(id):
                 'categoria': material.categoria or '',
                 'plano_conta': material.plano_conta or '',
                 'unidade': material.unidade or '',
-                'mascara': material.mascara or ''
+                'mascara': material.mascara or '',
+                'formula_calculo': material.formula_calculo or ''
             }
         })
         response.headers['Content-Type'] = 'application/json'
@@ -1035,7 +1044,8 @@ def obter_material_ajax(id):
                 'categoria': material.categoria or '',
                 'plano_conta': material.plano_conta or '',
                 'unidade': material.unidade or '',
-                'mascara': material.mascara or ''
+                'mascara': material.mascara or '',
+                'formula_calculo': material.formula_calculo or ''
             }
         })
         response.headers['Content-Type'] = 'application/json; charset=utf-8'

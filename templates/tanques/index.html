@@ -72,15 +72,25 @@
     }
     
     /* Ajuste para ID */
-    #dataTable tbody td:first-child {
+    #dataTable tbody td:nth-child(2) {
         text-align: center;
         font-weight: 600;
         width: 50px;
+    }
+    
+    /* Ajuste para checkbox */
+    #dataTable thead th:first-child,
+    #dataTable tbody td:first-child {
+        text-align: center;
+        width: 40px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
+<!-- Campo global para CSRF token -->
+<input type="hidden" id="csrf_token_global" value="{{ csrf_token() }}">
+
 <div class="container-fluid">
     <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-water"></i> Gerenciamento de Tanques</h1>
     <p class="mb-4">Gerenciamento de tanques para projetos</p>
@@ -89,6 +99,9 @@
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Lista de Tanques</h6>
             <div>
+                <button type="button" class="btn btn-success btn-sm" id="btnGerarRelatorio" style="display: none;">
+                    <i class="fas fa-file-alt"></i> Gerar Relatório de Materiais
+                </button>
                 <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoTanque">
                     <i class="fas fa-plus"></i> Novo Tanque
                 </button>
@@ -99,6 +112,9 @@
                 <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
+                            <th style="width: 40px;">
+                                <input type="checkbox" id="selectAll" title="Selecionar todos">
+                            </th>
                             <th>ID</th>
                             <th>Contrato</th>
                             <th>Nome</th>
@@ -117,6 +133,16 @@
                     <tbody>
                         {% for tanque in tanques %}
                         <tr>
+                            <td>
+                                <input type="checkbox" class="tanque-checkbox" value="{{ tanque.id }}" 
+                                       data-tanque-id="{{ tanque.id }}"
+                                       data-quantidade="{{ tanque.quantidade }}"
+                                       data-placas-normais="{{ tanque.placas_normais or 0 }}"
+                                       data-placas-fecho="{{ tanque.placas_fecho or 0 }}"
+                                       data-bainhas="{{ tanque.quantidade_bainhas or 0 }}"
+                                       data-altura-total="{{ tanque.altura_total }}"
+                                       data-sistema="{{ tanque.sistema }}">
+                            </td>
                             <td>{{ tanque.id }}</td>
                             <td>
                                 <a href="{{ url_for('contrato.visualizar', id=tanque.contrato_id) }}" 
@@ -508,7 +534,101 @@
         }
     }
 
+    // Função para atualizar visibilidade do botão de relatório
+    function atualizarBotaoRelatorio() {
+        const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
+        const btnRelatorio = document.getElementById('btnGerarRelatorio');
+        if (checkboxes.length > 0) {
+            btnRelatorio.style.display = 'inline-block';
+        } else {
+            btnRelatorio.style.display = 'none';
+        }
+    }
+
+    // Selecionar/Deselecionar todos
+    function setupSelectAll() {
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.tanque-checkbox');
+        
+        if (selectAll) {
+            selectAll.addEventListener('change', function() {
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = selectAll.checked;
+                });
+                atualizarBotaoRelatorio();
+            });
+        }
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                atualizarBotaoRelatorio();
+                // Atualizar estado do "selecionar todos"
+                const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                const someChecked = Array.from(checkboxes).some(cb => cb.checked);
+                if (selectAll) {
+                    selectAll.checked = allChecked;
+                    selectAll.indeterminate = someChecked && !allChecked;
+                }
+            });
+        });
+    }
+
+    // Função para obter o token CSRF
+    function getCSRFToken() {
+        const tokenGlobal = document.getElementById('csrf_token_global');
+        if (tokenGlobal) {
+            return tokenGlobal.value;
+        }
+        const tokenField = document.querySelector('input[name="csrf_token"]');
+        if (tokenField) {
+            return tokenField.value;
+        }
+        return '';
+    }
+
+    // Gerar relatório
+    function gerarRelatorio() {
+        const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
+        if (checkboxes.length === 0) {
+            alert('Por favor, selecione pelo menos um tanque para gerar o relatório.');
+            return;
+        }
+        
+        const tanquesIds = Array.from(checkboxes).map(cb => cb.value);
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{{ url_for("tanque.relatorio_materiais") }}';
+        
+        // Adicionar CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrf_token';
+        csrfInput.value = getCSRFToken();
+        form.appendChild(csrfInput);
+        
+        // Adicionar IDs dos tanques selecionados
+        tanquesIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'tanque_ids';
+            input.value = id;
+            form.appendChild(input);
+        });
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
+        // Configurar seleção de tanques
+        setupSelectAll();
+        
+        // Botão de gerar relatório
+        const btnGerarRelatorio = document.getElementById('btnGerarRelatorio');
+        if (btnGerarRelatorio) {
+            btnGerarRelatorio.addEventListener('click', gerarRelatorio);
+        }
+        
         // Inicializa o DataTables com configurações para português
         if (typeof $.fn.DataTable !== 'undefined') {
             $('#dataTable').DataTable({
@@ -521,19 +641,20 @@
                 scrollX: true,
                 autoWidth: false,
                 columnDefs: [
-                    { width: "50px", targets: 0 },  // ID
-                    { width: "200px", targets: 1 }, // Contrato
-                    { width: "120px", targets: 2 }, // Nome
-                    { width: "80px", targets: 3 },  // Sistema
-                    { width: "120px", targets: 4 }, // Dimensões
-                    { width: "90px", targets: 5 },  // Altura Total
-                    { width: "90px", targets: 6 },  // Altura Útil
-                    { width: "80px", targets: 7 },  // Quantidade
-                    { width: "100px", targets: 8 }, // Placas Normais
-                    { width: "110px", targets: 9 }, // Placas de Fecho
-                    { width: "80px", targets: 10 },  // Bainhas
-                    { width: "80px", targets: 11 },  // Item NF
-                    { width: "120px", targets: 12 }  // Ações
+                    { width: "40px", targets: 0 },  // Checkbox
+                    { width: "50px", targets: 1 },  // ID
+                    { width: "200px", targets: 2 }, // Contrato
+                    { width: "120px", targets: 3 }, // Nome
+                    { width: "80px", targets: 4 },  // Sistema
+                    { width: "120px", targets: 5 }, // Dimensões
+                    { width: "90px", targets: 6 },  // Altura Total
+                    { width: "90px", targets: 7 },  // Altura Útil
+                    { width: "80px", targets: 8 },  // Quantidade
+                    { width: "100px", targets: 9 }, // Placas Normais
+                    { width: "110px", targets: 10 }, // Placas de Fecho
+                    { width: "80px", targets: 11 },  // Bainhas
+                    { width: "80px", targets: 12 },  // Item NF
+                    { width: "120px", targets: 13 }  // Ações
                 ]
             });
         } else {

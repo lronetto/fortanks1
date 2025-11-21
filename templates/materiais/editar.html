@@ -25,7 +25,8 @@
                 data-codigo="{{ material.codigo or '' }}" data-codigo_erp="{{ material.codigo_erp or '' }}"
                 data-categoria="{{ material.categoria }}" data-nome="{{ material.nome }}"
                 data-unidade="{{ material.unidade or '' }}" data-plano_conta="{{ material.plano_conta or '' }}"
-                data-descricao="{{ material.descricao or '' }}" data-pc="{{ material.pc or '' }}">
+                data-descricao="{{ material.descricao or '' }}" data-pc="{{ material.pc or '' }}"
+                data-formula_calculo="{{ material.formula_calculo or '' }}">
 
                 <div class="row">
                     <div class="col-md-4 mb-3">
@@ -123,6 +124,23 @@
                 </div>
 
                 <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <label for="formula_calculo" class="form-label">Fórmula Universal de Cálculo para Tanques</label>
+                        <input type="text" class="form-control" id="formula_calculo" name="formula_calculo" 
+                               value="{{ material.formula_calculo or '' }}" 
+                               placeholder="Ex: quantidade_total * placas_normais * quantidade_bainhas">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Fórmula universal que será aplicada a todos os tanques que usarem este material.
+                            <br>Variáveis disponíveis: <code>quantidade_total</code>, <code>placas_normais</code>, <code>placas_fecho</code>, 
+                            <code>quantidade_bainhas</code>, <code>altura_total</code>, <code>sistema</code>
+                            <br>Exemplos: 
+                            <code>quantidade_total * placas_normais * quantidade_bainhas</code> (Material 311) ou 
+                            <code>quantidade_total * placas_fecho * quantidade_bainhas * 2</code> (Material 313)
+                        </small>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-md-6">
                         <div class="alert alert-secondary">
                             <i class="fas fa-user me-2"></i>
@@ -210,6 +228,7 @@
         $('#plano_conta').trigger('change');
         document.getElementById('descricao').value = form.getAttribute('data-descricao');
         document.getElementById('pc').value = form.getAttribute('data-pc');
+        document.getElementById('formula_calculo').value = form.getAttribute('data-formula_calculo') || '';
     });
 </script>
 {% endblock %}

@@ -78,6 +78,22 @@
                             <textarea class="form-control" id="edit_descricao" name="edit_descricao" rows="3"></textarea>
                         </div>
                     </div>
+
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label for="edit_formula_calculo" class="form-label">Fórmula Universal de Cálculo para Tanques</label>
+                            <input type="text" class="form-control" id="edit_formula_calculo" name="edit_formula_calculo" 
+                                   placeholder="Ex: quantidade_total * placas_normais * quantidade_bainhas">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle"></i> Fórmula universal que será aplicada a todos os tanques que usarem este material.
+                                <br>Variáveis disponíveis: <code>quantidade_total</code>, <code>placas_normais</code>, <code>placas_fecho</code>, 
+                                <code>quantidade_bainhas</code>, <code>altura_total</code>, <code>sistema</code>
+                                <br>Exemplos: 
+                                <code>quantidade_total * placas_normais * quantidade_bainhas</code> (Material 311) ou 
+                                <code>quantidade_total * placas_fecho * quantidade_bainhas * 2</code> (Material 313)
+                            </small>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -128,6 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_nome').value = material.nome || '';
             document.getElementById('edit_descricao').value = material.descricao || '';
             document.getElementById('edit_mascara').value = material.mascara || '';
+            document.getElementById('edit_formula_calculo').value = material.formula_calculo || '';
             const categoriaSelect = document.getElementById('edit_categoria');
             if (categoriaSelect) {
                 categoriaSelect.value = material.categoria || '';
@@ -161,7 +178,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         categoria: this.dataset.categoria || '',
                         plano_conta: this.dataset.planoConta || '',
                         unidade: this.dataset.unidade || '',
-                        mascara: this.dataset.mascara || ''
+                        mascara: this.dataset.mascara || '',
+                        formula_calculo: this.dataset.formulaCalculo || ''
                     };
                     preencherModal(material);
                     return;
@@ -184,6 +202,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     if (data.success) {
                         preencherModal(data.material);
+                    } else if (data.id) {
+                        // Se retornar diretamente os dados (sem success)
+                        preencherModal(data);
                     } else {
                         alert('Erro ao carregar os dados do material: ' + (data.error || 'Erro desconhecido'));
                     }

@@ -947,6 +947,7 @@ def api_vincular_material(item_id):
     """
     API para vincular um material do sistema a um item de nota fiscal
     """
+    print(f'vinculando material ao item: {item_id}')
     try:
         # Obter o item da nota fiscal
         item = NotaFiscalItem.query.get_or_404(item_id)
@@ -976,12 +977,11 @@ def api_vincular_material(item_id):
         item.save()
         material.ncm = item.ncm
         material.save()
-        cnpj_emitente = NotaFiscal.query.\
-            join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
-            filter(NotaFiscalItem.id==item_id).first().cnpj_emitente
+        cnpj_emitente = item.nota_fiscal.cnpj_emitente
         
         notas_fiscais = NotaFiscal.query.\
             filter(NotaFiscal.cnpj_emitente==cnpj_emitente).all()
+        print(f'notas_fiscais: {len(notas_fiscais)}')
         for nota_fiscal in notas_fiscais:
             nota_fiscal.vincular_automaticamente()
             nota_fiscal.importar_itens_para_estoque(usuario_id=current_user.id)
@@ -996,6 +996,127 @@ def api_vincular_material(item_id):
         return jsonify({
             'success': False,
             'message': f'Erro ao vincular material: {str(e)}'
+        }), 500
+
+@nota_fiscal_bp.route('/api/desvincular-material/<int:item_id>', methods=['POST'])
+@login_required
+def api_desvincular_material(item_id):
+    """
+    API para desvincular um material de um item de nota fiscal
+    Também exclui a movimentação de estoque gerada e procura outros itens iguais para fazer o mesmo
+    """
+    try:
+        from models.estoque import MovimentacaoEstoque
+        
+        # Obter o item da nota fiscal
+        item = NotaFiscalItem.query.get_or_404(item_id)
+        
+        # Verificar se há material vinculado
+        if not item.material_id:
+            return jsonify({
+                'success': False,
+                'message': 'Item não possui material vinculado'
+            }), 400
+        
+        # Armazenar informações antes de desvincular (para buscar itens iguais)
+        material_id = item.material_id
+        material_nome = item.material.nome if item.material else 'Material'
+        codigo_item = item.codigo
+        descricao_item = item.descricao
+        
+        # Set para armazenar IDs de itens já encontrados (evitar duplicatas)
+        ids_itens_encontrados = {item_id}
+        itens_iguais = []
+        
+        # Buscar outros itens iguais (mesmo código ou descrição e mesmo material_id)
+        # Buscar por código se existir
+        if codigo_item:
+            itens_por_codigo = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo_item,
+                NotaFiscalItem.material_id == material_id,
+                NotaFiscalItem.id != item_id
+            ).all()
+            for item_encontrado in itens_por_codigo:
+                if item_encontrado.id not in ids_itens_encontrados:
+                    itens_iguais.append(item_encontrado)
+                    ids_itens_encontrados.add(item_encontrado.id)
+        
+        # Buscar por descrição (evitar duplicatas)
+        if descricao_item:
+            itens_por_descricao = NotaFiscalItem.query.filter(
+                NotaFiscalItem.descricao == descricao_item,
+                NotaFiscalItem.material_id == material_id,
+                NotaFiscalItem.id != item_id
+            ).all()
+            # Adicionar apenas itens que não estão na lista de código
+            for item_desc in itens_por_descricao:
+                if item_desc.id not in ids_itens_encontrados:
+                    itens_iguais.append(item_desc)
+                    ids_itens_encontrados.add(item_desc.id)
+        
+        # Processar o item atual e os itens iguais
+        todos_itens = [item] + itens_iguais
+        itens_processados = []
+        
+        for item_processar in todos_itens:
+            # Excluir movimentação de estoque se existir
+            if item_processar.movimentacao_estoque_id:
+                movimentacao = MovimentacaoEstoque.query.get(item_processar.movimentacao_estoque_id)
+                if movimentacao:
+                    try:
+                        # Reverter a movimentação no estoque manualmente (sem commit)
+                        if movimentacao.estoque:
+                            if movimentacao.tipo_movimento == 'entrada':
+                                movimentacao.estoque.quantidade -= movimentacao.quantidade
+                            elif movimentacao.tipo_movimento == 'saida':
+                                movimentacao.estoque.quantidade += movimentacao.quantidade
+                            
+                            # Garante que a quantidade nunca será negativa
+                            if movimentacao.estoque.quantidade < 0:
+                                movimentacao.estoque.quantidade = 0
+                            
+                            db.session.add(movimentacao.estoque)
+                        
+                        # Marcar movimentação para exclusão
+                        db.session.delete(movimentacao)
+                        logger.info(f'Movimentação {movimentacao.id} marcada para exclusão e estoque revertido')
+                    except Exception as e:
+                        logger.error(f'Erro ao processar movimentação {item_processar.movimentacao_estoque_id}: {str(e)}')
+                        raise
+            
+            # Desvincular o material
+            item_processar.material_id = None
+            item_processar.fator_conversao_aplicado = None
+            item_processar.movimentacao_estoque_id = None
+            item_processar.importado_estoque = False
+            item_processar.data_importacao_estoque = None
+            item_processar.usuario_importacao_id = None
+            item_processar.status_importacao = 'Pendente'
+            db.session.add(item_processar)
+            itens_processados.append(item_processar.id)
+        
+        # Fazer commit de todas as alterações de uma vez
+        db.session.commit()
+        
+        # Montar mensagem de sucesso
+        total_itens = len(itens_processados)
+        if total_itens == 1:
+            mensagem = f'Material {material_nome} desvinculado com sucesso do item'
+        else:
+            mensagem = f'Material {material_nome} desvinculado de {total_itens} item(ns) e movimentações de estoque excluídas'
+            
+        return jsonify({
+            'success': True,
+            'message': mensagem,
+            'itens_processados': total_itens
+        })
+    
+    except Exception as e:
+        logger.error(f'Erro ao desvincular material: {str(e)}')
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao desvincular material: {str(e)}'
         }), 500
 
 @nota_fiscal_bp.route('/api/reimportar_notas')

@@ -788,10 +788,14 @@ class NotaFiscalItem(db.Model):
         print(f'tempo de execucao vincular_todos: {fim - inicio}')
     def vincular_e_importar_estoque_todos(self):
         inicio = datetime.now()
-        itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
-                                            NotaFiscalItem.descricao==self.descricao,
-                                            NotaFiscalItem.unidade==self.unidade,
-                                            NotaFiscalItem.material_id==None).all()
+        itens = NotaFiscalItem.query.\
+            join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).filter(
+                            NotaFiscalItem.codigo.like(f'%{self.codigo}%'),
+                            NotaFiscalItem.descricao.like(f'%{self.descricao}%'),
+                            NotaFiscalItem.nota_fiscal.has(NotaFiscal.cnpj_emitente == self.nota_fiscal.cnpj_emitente),
+                            NotaFiscalItem.unidade.like(f'%{self.unidade}%'),
+                            NotaFiscalItem.material_id==None).all()
+        print(f'itens: {len(itens)}')
         self.importar_para_estoque()
         print(f'itens a ser vinculados e importado estoque: {len(itens)}')
         for item in itens:

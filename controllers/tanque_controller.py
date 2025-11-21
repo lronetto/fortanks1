@@ -6,6 +6,8 @@ from models.database import db
 from models.tanque import Tanque
 from models.contrato import Contrato
 from models.peca import Peca
+from models.material import Material
+from models.material_tanque import MaterialTanque
 tanque_bp = Blueprint('tanque', __name__)
 
 # Middleware para verificar se o usuário tem permissão
@@ -346,4 +348,210 @@ def excluir(id):
     if referrer and f'/contrato/{contrato_id}' in referrer:
         return redirect(url_for('tanque.listar_por_contrato', contrato_id=contrato_id))
     else:
-        return redirect(url_for('tanque.index')) 
+        return redirect(url_for('tanque.index'))
+
+@tanque_bp.route('/relatorio-materiais', methods=['GET', 'POST'])
+def relatorio_materiais():
+    """
+    Gera relatório de materiais básicos necessários para os tanques selecionados
+    """
+    if request.method == 'GET':
+        # Se for GET, redireciona para a página de tanques
+        return redirect(url_for('tanque.index'))
+    
+    # Obter IDs dos tanques selecionados
+    tanque_ids = request.form.getlist('tanque_ids')
+    
+    if not tanque_ids:
+        flash('Por favor, selecione pelo menos um tanque para gerar o relatório.', 'warning')
+        return redirect(url_for('tanque.index'))
+    
+    # Converter para inteiros
+    try:
+        tanque_ids = [int(id) for id in tanque_ids]
+    except ValueError:
+        flash('IDs de tanques inválidos.', 'danger')
+        return redirect(url_for('tanque.index'))
+    
+    # Buscar os tanques selecionados
+    tanques = Tanque.query.filter(Tanque.id.in_(tanque_ids)).all()
+    
+    if not tanques:
+        flash('Nenhum tanque encontrado com os IDs fornecidos.', 'warning')
+        return redirect(url_for('tanque.index'))
+    
+    # Buscar todos os materiais cadastrados
+    materiais = Material.query.filter_by(ativo=True).order_by(Material.nome).all()
+    
+    # Buscar materiais com fórmula válida
+    materiais_com_formula = [m for m in materiais if m.formula_calculo and m.formula_calculo.strip()]
+    
+    # Buscar relacionamentos existentes entre materiais e tanques
+    materiais_tanques = MaterialTanque.query.filter(
+        MaterialTanque.tanque_id.in_(tanque_ids)
+    ).all()
+    
+    # Criar um dicionário para agrupar materiais por tanque
+    materiais_por_tanque = {}
+    for mt in materiais_tanques:
+        if mt.tanque_id not in materiais_por_tanque:
+            materiais_por_tanque[mt.tanque_id] = []
+        materiais_por_tanque[mt.tanque_id].append(mt)
+    
+    # Preparar dados para o relatório
+    dados_relatorio = []
+    for tanque in tanques:
+        dados_tanque = {
+            'tanque': tanque,
+            'materiais': materiais_por_tanque.get(tanque.id, []),
+            'dados_basicos': {
+                'quantidade_total': tanque.quantidade,
+                'placas_normais': tanque.placas_normais or 0,
+                'placas_fecho': tanque.placas_fecho or 0,
+                'quantidade_bainhas': tanque.quantidade_bainhas or 0,
+                'altura_total': tanque.altura_total,
+                'sistema': tanque.sistema
+            }
+        }
+        dados_relatorio.append(dados_tanque)
+    
+    # Preparar tabela de materiais com fórmula para todos os tanques
+    tabela_materiais = []
+    totais_por_tanque = {tanque.id: 0 for tanque in tanques}
+    total_geral_tabela = 0
+    
+    for material in materiais_com_formula:
+        linha_material = {
+            'material': material,
+            'quantidades_por_tanque': {},
+            'total_geral': 0
+        }
+        
+        # Calcular quantidade para cada tanque
+        for tanque in tanques:
+            quantidade = material.calcular_quantidade(
+                tanque.quantidade,
+                tanque.placas_normais or 0,
+                tanque.placas_fecho or 0,
+                tanque.quantidade_bainhas or 0,
+                tanque.altura_total,
+                tanque.sistema
+            )
+            linha_material['quantidades_por_tanque'][tanque.id] = quantidade
+            linha_material['total_geral'] += quantidade
+            totais_por_tanque[tanque.id] += quantidade
+        
+        total_geral_tabela += linha_material['total_geral']
+        tabela_materiais.append(linha_material)
+    
+    # Calcular totais gerais
+    totais_gerais = {
+        'total_tanques': len(tanques),
+        'total_quantidade': sum(t.quantidade for t in tanques),
+        'total_placas_normais': sum((t.placas_normais or 0) * t.quantidade for t in tanques),
+        'total_placas_fecho': sum((t.placas_fecho or 0) * t.quantidade for t in tanques),
+        'total_bainhas': sum((t.quantidade_bainhas or 0) * t.quantidade for t in tanques)
+    }
+    
+    return render_template('tanques/relatorio_materiais.html',
+                         tanques=tanques,
+                         dados_relatorio=dados_relatorio,
+                         materiais=materiais,
+                         materiais_com_formula=materiais_com_formula,
+                         tabela_materiais=tabela_materiais,
+                         totais_por_tanque=totais_por_tanque,
+                         total_geral_tabela=total_geral_tabela,
+                         totais_gerais=totais_gerais,
+                         data_geracao=datetime.now())
+
+@tanque_bp.route('/adicionar-material-tanque', methods=['POST'])
+def adicionar_material_tanque():
+    """
+    Adiciona um material relacionado a um tanque com os dados básicos do tanque
+    """
+    try:
+        # Obter dados do formulário
+        material_id = request.form.get('material_id')
+        tanque_id = request.form.get('tanque_id')
+        quantidade_material = request.form.get('quantidade_material', 1.0)
+        observacoes = request.form.get('observacoes')
+        
+        # Dados básicos do tanque
+        quantidade_total = request.form.get('quantidade_total', 1)
+        placas_normais = request.form.get('placas_normais', 0)
+        placas_fecho = request.form.get('placas_fecho', 0)
+        quantidade_bainhas = request.form.get('quantidade_bainhas', 0)
+        altura_total = request.form.get('altura_total', 0)
+        sistema = request.form.get('sistema', '')
+        
+        # Validações
+        if not material_id or not tanque_id:
+            flash('Material e tanque são obrigatórios.', 'danger')
+            return redirect(request.referrer or url_for('tanque.index'))
+        
+        # Verificar se o material existe
+        material = Material.query.get(material_id)
+        if not material:
+            flash('Material não encontrado.', 'danger')
+            return redirect(request.referrer or url_for('tanque.index'))
+        
+        # Verificar se o tanque existe
+        tanque = Tanque.query.get(tanque_id)
+        if not tanque:
+            flash('Tanque não encontrado.', 'danger')
+            return redirect(request.referrer or url_for('tanque.index'))
+        
+        # Verificar se já existe relacionamento
+        material_tanque_existente = MaterialTanque.query.filter_by(
+            material_id=material_id,
+            tanque_id=tanque_id
+        ).first()
+        
+        if material_tanque_existente:
+            flash('Este material já está relacionado a este tanque.', 'warning')
+            return redirect(request.referrer or url_for('tanque.index'))
+        
+        # Converter valores
+        try:
+            quantidade_total = int(quantidade_total)
+            placas_normais = int(placas_normais) if placas_normais else 0
+            placas_fecho = int(placas_fecho) if placas_fecho else 0
+            quantidade_bainhas = int(quantidade_bainhas) if quantidade_bainhas else 0
+            altura_total = float(altura_total)
+            # Se o material tiver fórmula universal, calcular automaticamente
+            if material.formula_calculo:
+                quantidade_material = material.calcular_quantidade(
+                    quantidade_total, placas_normais, placas_fecho, 
+                    quantidade_bainhas, altura_total, sistema
+                )
+            else:
+                quantidade_material = float(quantidade_material) if quantidade_material else 1.0
+        except ValueError as e:
+            flash(f'Erro ao converter valores numéricos: {str(e)}', 'danger')
+            return redirect(request.referrer or url_for('tanque.index'))
+        
+        # Criar novo relacionamento (calcular_automatico=True se material tiver fórmula universal)
+        material_tanque = MaterialTanque(
+            material_id=material_id,
+            tanque_id=tanque_id,
+            quantidade_total=quantidade_total,
+            placas_normais=placas_normais,
+            placas_fecho=placas_fecho,
+            quantidade_bainhas=quantidade_bainhas,
+            altura_total=altura_total,
+            sistema=sistema,
+            quantidade_material=quantidade_material,
+            observacoes=observacoes,
+            calcular_automatico=bool(material.formula_calculo),  # Calcular automaticamente se material tiver fórmula
+            material_obj=material  # Passar o objeto material para evitar query extra
+        )
+        
+        material_tanque.save()
+        
+        flash(f'Material "{material.nome}" adicionado ao tanque "{tanque.nome}" com sucesso!', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao adicionar material ao tanque: {str(e)}', 'danger')
+    
+    return redirect(request.referrer or url_for('tanque.index')) 

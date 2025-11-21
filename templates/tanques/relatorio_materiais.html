@@ -1,0 +1,510 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Relatório de Materiais por Tanque - Sistema de Gestão{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card {
+        margin-bottom: 1.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 2px solid #dee2e6;
+        font-weight: 600;
+    }
+    
+    .table-responsive {
+        border-radius: 0.25rem;
+    }
+    
+    .badge-custom {
+        font-size: 0.9rem;
+        padding: 0.5rem 0.75rem;
+    }
+    
+    .totais-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .totais-card .card-body {
+        color: white;
+    }
+    
+    .totais-card h5 {
+        color: white;
+    }
+    
+    .btn-adicionar-material {
+        margin-top: 1rem;
+    }
+    
+    .material-item {
+        border-left: 3px solid #007bff;
+        padding-left: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .sistema-badge {
+        font-size: 0.85rem;
+    }
+    
+    /* Estilos para tabela de materiais */
+    .table-materiais {
+        font-size: 0.9rem;
+    }
+    
+    .table-materiais th {
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+    
+    .table-materiais td {
+        vertical-align: middle;
+    }
+    
+    .table-materiais code {
+        font-size: 0.85rem;
+        background-color: #f8f9fa;
+        padding: 0.2rem 0.4rem;
+        border-radius: 0.25rem;
+    }
+    
+    .table-materiais tfoot th {
+        background-color: #6c757d !important;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">
+            <i class="fas fa-file-alt"></i> Relatório de Materiais por Tanque
+        </h1>
+        <div>
+            <button type="button" class="btn btn-secondary" onclick="window.print()">
+                <i class="fas fa-print"></i> Imprimir
+            </button>
+            <a href="{{ url_for('tanque.index') }}" class="btn btn-primary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <!-- Card de Totais Gerais -->
+    <div class="card totais-card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-calculator"></i> Totais Gerais</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <h6>Total de Tanques</h6>
+                    <h3>{{ totais_gerais.total_tanques }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <h6>Quantidade Total</h6>
+                    <h3>{{ totais_gerais.total_quantidade }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <h6>Placas Normais (PN)</h6>
+                    <h3>{{ totais_gerais.total_placas_normais }}</h3>
+                </div>
+                <div class="col-md-3">
+                    <h6>Placas de Fecho (PF)</h6>
+                    <h3>{{ totais_gerais.total_placas_fecho }}</h3>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-3">
+                    <h6>Total de Bainhas</h6>
+                    <h3>{{ totais_gerais.total_bainhas }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Materiais com Fórmula -->
+    {% if tabela_materiais and tabela_materiais|length > 0 %}
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-table"></i> Materiais com Fórmula de Cálculo</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover table-sm table-materiais">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 50px;">ID</th>
+                            <th>Material</th>
+                            <th style="min-width: 200px;">Fórmula</th>
+                            {% if tanques|length > 1 %}
+                                {% for tanque in tanques %}
+                                <th class="text-center" style="min-width: 120px;">
+                                    {{ tanque.nome }}<br>
+                                    <small class="text-muted">({{ tanque.sistema }})</small>
+                                </th>
+                                {% endfor %}
+                            {% else %}
+                                <th class="text-center" style="min-width: 120px;">
+                                    {{ tanques[0].nome }}<br>
+                                    <small class="text-muted">({{ tanques[0].sistema }})</small>
+                                </th>
+                            {% endif %}
+                            <th class="text-center bg-primary text-white" style="min-width: 120px;">
+                                <strong>Total Geral</strong>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for linha in tabela_materiais %}
+                        <tr>
+                            <td class="text-center">{{ linha.material.id }}</td>
+                            <td>
+                                <strong>{{ linha.material.nome }}</strong>
+                                {% if linha.material.codigo %}
+                                <br><small class="text-muted">Código: {{ linha.material.codigo }}</small>
+                                {% endif %}
+                                {% if linha.material.unidade_obj %}
+                                <br><small class="text-muted">Unidade: {{ linha.material.unidade_obj.nome }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code class="text-primary">{{ linha.material.formula_calculo }}</code>
+                            </td>
+                            {% if tanques|length > 1 %}
+                                {% for tanque in tanques %}
+                                <td class="text-center">
+                                    <strong>{{ '{:,.2f}'.format(linha.quantidades_por_tanque[tanque.id]) }}</strong>
+                                </td>
+                                {% endfor %}
+                            {% else %}
+                                <td class="text-center">
+                                    <strong>{{ '{:,.2f}'.format(linha.quantidades_por_tanque[tanques[0].id]) }}</strong>
+                                </td>
+                            {% endif %}
+                            <td class="text-center bg-light">
+                                <strong class="text-primary">{{ '{:,.2f}'.format(linha.total_geral) }}</strong>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if tabela_materiais|length > 0 %}
+                    <tfoot class="table-secondary">
+                        <tr>
+                            <th colspan="3" class="text-end"><strong>Totais:</strong></th>
+                            {% if tanques|length > 1 %}
+                                {% for tanque in tanques %}
+                                <th class="text-center">
+                                    <strong>{{ '{:,.2f}'.format(totais_por_tanque[tanque.id]) }}</strong>
+                                </th>
+                                {% endfor %}
+                            {% else %}
+                                <th class="text-center">
+                                    <strong>{{ '{:,.2f}'.format(totais_por_tanque[tanques[0].id]) }}</strong>
+                                </th>
+                            {% endif %}
+                            <th class="text-center bg-primary text-white">
+                                <strong>{{ '{:,.2f}'.format(total_geral_tabela) }}</strong>
+                            </th>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Nenhum material com fórmula de cálculo cadastrada encontrado.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Lista de Tanques -->
+    {% for dados in dados_relatorio %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-water"></i> {{ dados.tanque.nome }}
+                <span class="badge bg-primary sistema-badge ms-2">{{ dados.tanque.sistema }}</span>
+            </h5>
+            <div>
+                <span class="badge bg-info">ID: {{ dados.tanque.id }}</span>
+                {% if dados.tanque.contrato %}
+                <span class="badge bg-secondary">{{ dados.tanque.contrato.nome }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Dados Básicos do Tanque -->
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <h6 class="text-primary"><i class="fas fa-info-circle"></i> Dados Básicos do Tanque</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Quantidade Total</th>
+                                    <th>Placas Normais (PN)</th>
+                                    <th>Placas de Fecho (PF)</th>
+                                    <th>Bainhas</th>
+                                    <th>Altura Total (m)</th>
+                                    <th>Sistema</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>{{ dados.dados_basicos.quantidade_total }}</strong></td>
+                                    <td><strong>{{ dados.dados_basicos.placas_normais }}</strong></td>
+                                    <td><strong>{{ dados.dados_basicos.placas_fecho }}</strong></td>
+                                    <td><strong>{{ dados.dados_basicos.quantidade_bainhas }}</strong></td>
+                                    <td><strong>{{ dados.dados_basicos.altura_total }}</strong></td>
+                                    <td><strong>{{ dados.dados_basicos.sistema }}</strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Materiais Relacionados -->
+            <div class="row">
+                <div class="col-md-12">
+                    <h6 class="text-success"><i class="fas fa-boxes"></i> Materiais Relacionados</h6>
+                    {% if dados.materiais %}
+                    <div class="list-group">
+                        {% for material_tanque in dados.materiais %}
+                        <div class="list-group-item material-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ material_tanque.material.nome }}</h6>
+                                    <p class="mb-1">
+                                        <small class="text-muted">
+                                            Quantidade: <strong>{{ material_tanque.quantidade_material }}</strong>
+                                            {% if material_tanque.material.unidade_obj %}
+                                            {{ material_tanque.material.unidade_obj.nome }}
+                                            {% endif %}
+                                            {% if material_tanque.material.formula_calculo %}
+                                            <span class="badge bg-info ms-2">
+                                                <i class="fas fa-calculator"></i> Fórmula: {{ material_tanque.material.formula_calculo }}
+                                            </span>
+                                            {% endif %}
+                                        </small>
+                                    </p>
+                                    {% if material_tanque.observacoes %}
+                                    <p class="mb-0"><small>{{ material_tanque.observacoes }}</small></p>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <span class="badge bg-primary">Material ID: {{ material_tanque.material.id }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Nenhum material relacionado a este tanque ainda.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Formulário para Adicionar Material -->
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <button type="button" class="btn btn-sm btn-outline-primary btn-adicionar-material" 
+                            data-bs-toggle="collapse" 
+                            data-bs-target="#formMaterial{{ dados.tanque.id }}">
+                        <i class="fas fa-plus"></i> Adicionar Material
+                    </button>
+                    <div class="collapse mt-2" id="formMaterial{{ dados.tanque.id }}">
+                        <div class="card card-body">
+                            <form method="POST" action="{{ url_for('tanque.adicionar_material_tanque') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="tanque_id" value="{{ dados.tanque.id }}">
+                                <input type="hidden" name="quantidade_total" value="{{ dados.dados_basicos.quantidade_total }}">
+                                <input type="hidden" name="placas_normais" value="{{ dados.dados_basicos.placas_normais }}">
+                                <input type="hidden" name="placas_fecho" value="{{ dados.dados_basicos.placas_fecho }}">
+                                <input type="hidden" name="quantidade_bainhas" value="{{ dados.dados_basicos.quantidade_bainhas }}">
+                                <input type="hidden" name="altura_total" value="{{ dados.dados_basicos.altura_total }}">
+                                <input type="hidden" name="sistema" value="{{ dados.dados_basicos.sistema }}">
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="material_id{{ dados.tanque.id }}" class="form-label">Material</label>
+                                        <select class="form-select material-select" 
+                                                id="material_id{{ dados.tanque.id }}" 
+                                                name="material_id" 
+                                                data-tanque-id="{{ dados.tanque.id }}"
+                                                required>
+                                            <option value="">Selecione um material</option>
+                                            {% for material in materiais %}
+                                            <option value="{{ material.id }}" 
+                                                    data-material-nome="{{ material.nome }}">
+                                                {{ material.nome }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="quantidade_material{{ dados.tanque.id }}" class="form-label">Quantidade</label>
+                                        <input type="number" class="form-control" 
+                                               id="quantidade_material{{ dados.tanque.id }}" 
+                                               name="quantidade_material" 
+                                               step="0.01" 
+                                               min="0.01" 
+                                               value="1.0" 
+                                               required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label for="formula_calculo{{ dados.tanque.id }}" class="form-label">Fórmula de Cálculo (opcional)</label>
+                                        <input type="text" class="form-control" 
+                                               id="formula_calculo{{ dados.tanque.id }}" 
+                                               name="formula_calculo" 
+                                               placeholder="Ex: quantidade_total * placas_normais * quantidade_bainhas">
+                                        <small class="form-text text-muted">
+                                            <i class="fas fa-info-circle"></i> Fórmula para calcular quantidade automaticamente baseado nos dados do tanque.
+                                            <br>Variáveis disponíveis: <code>quantidade_total</code>, <code>placas_normais</code>, <code>placas_fecho</code>, 
+                                            <code>quantidade_bainhas</code>, <code>altura_total</code>, <code>sistema</code>
+                                            <br>Exemplos: 
+                                            <code>quantidade_total * placas_normais * quantidade_bainhas</code> (Material 311) ou 
+                                            <code>quantidade_total * placas_fecho * quantidade_bainhas * 2</code> (Material 313)
+                                            <br>Se preenchida, a quantidade será calculada automaticamente ao salvar.
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-10 mb-3">
+                                        <label for="observacoes{{ dados.tanque.id }}" class="form-label">Observações (opcional)</label>
+                                        <textarea class="form-control" 
+                                                  id="observacoes{{ dados.tanque.id }}" 
+                                                  name="observacoes" 
+                                                  rows="2"></textarea>
+                                    </div>
+                                    <div class="col-md-2 mb-3 d-flex align-items-end">
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="fas fa-save"></i> Salvar
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Informações do Relatório -->
+    <div class="card">
+        <div class="card-body">
+            <small class="text-muted">
+                <i class="fas fa-calendar"></i> Relatório gerado em: {{ data_geracao.strftime('%d/%m/%Y %H:%M:%S') }}
+            </small>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Dados dos tanques para cálculo
+    const dadosTanques = {
+        {% for dados in dados_relatorio %}
+        {{ dados.tanque.id }}: {
+            quantidade_total: {{ dados.dados_basicos.quantidade_total }},
+            placas_normais: {{ dados.dados_basicos.placas_normais }},
+            placas_fecho: {{ dados.dados_basicos.placas_fecho }},
+            quantidade_bainhas: {{ dados.dados_basicos.quantidade_bainhas }},
+            altura_total: {{ dados.dados_basicos.altura_total }},
+            sistema: '{{ dados.dados_basicos.sistema }}'
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    };
+
+    // Função para calcular quantidade baseada na fórmula universal do material
+    function calcularQuantidadeMaterial(tanqueId, formula) {
+        if (!formula || !formula.trim() || !dadosTanques[tanqueId]) {
+            return null;
+        }
+
+        const dados = dadosTanques[tanqueId];
+        
+        try {
+            // Criar contexto seguro para eval
+            const contexto = {
+                quantidade_total: parseFloat(dados.quantidade_total || 1),
+                placas_normais: parseFloat(dados.placas_normais || 0),
+                placas_fecho: parseFloat(dados.placas_fecho || 0),
+                quantidade_bainhas: parseFloat(dados.quantidade_bainhas || 0),
+                altura_total: parseFloat(dados.altura_total || 0),
+                sistema: dados.sistema || ''
+            };
+            
+            // Avaliar a fórmula
+            const resultado = eval(formula, {"__builtins__": {}}, contexto);
+            return parseFloat(resultado) || 1.0;
+        } catch (e) {
+            console.error('Erro ao calcular fórmula:', e);
+            return null;
+        }
+    }
+
+    // Event listeners para os selects de material
+    document.querySelectorAll('.material-select').forEach(select => {
+        const tanqueId = select.getAttribute('data-tanque-id');
+        const quantidadeInput = document.getElementById('quantidade_material' + tanqueId);
+        const formulaInfo = document.getElementById('formula_info' + tanqueId);
+        const formulaText = document.getElementById('formula_text' + tanqueId);
+        const calcBadge = document.getElementById('calc_badge' + tanqueId);
+
+        select.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const formula = selectedOption.getAttribute('data-formula');
+            
+            if (formula && formula.trim()) {
+                // Material tem fórmula universal - calcular automaticamente
+                const quantidade = calcularQuantidadeMaterial(tanqueId, formula);
+                if (quantidade !== null) {
+                    quantidadeInput.value = quantidade.toFixed(2);
+                    quantidadeInput.classList.add('bg-light');
+                    calcBadge.style.display = 'inline-block';
+                    formulaText.textContent = 'Fórmula universal: ' + formula;
+                    formulaInfo.style.display = 'block';
+                }
+            } else {
+                // Material não tem fórmula - permitir edição manual
+                quantidadeInput.value = '1.0';
+                quantidadeInput.classList.remove('bg-light');
+                calcBadge.style.display = 'none';
+                formulaInfo.style.display = 'none';
+            }
+        });
+    });
+
+    // Auto-fechar formulários após submit bem-sucedido
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function(e) {
+            // Não prevenir o submit padrão, apenas adicionar feedback visual
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            }
+        });
+    });
+</script>
+{% endblock %}
+

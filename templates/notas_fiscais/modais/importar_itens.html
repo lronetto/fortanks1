@@ -107,6 +107,12 @@
                 checkbox.checked = this.checked;
             });
         });
+
+        // Evento para desvincular material
+        $(document).on('click', '.btn-desvincular-material', function() {
+            const itemId = $(this).data('item-id');
+            desvincularMaterial(itemId);
+        });
     });
     function carregarItensImportacao(notaId) {
         console.log(`Carregando itens para nota ID: ${notaId}`);
@@ -201,17 +207,26 @@
                 html += `
                         <input type="hidden" id="material_id_${item.id}" value="${item.material_id || ''}">
                         <input type="hidden" id="fator_conversao_${item.id}" value="${item.fator_conversao_aplicado || ''}">
-                        <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
-                                data-item-id="${item.id}" 
-                                data-item-descricao="${item.descricao}"
-                                data-material-id="${item.material_id}" 
-                                data-material-nome="${materialNome}" 
-                                data-material-unidade="${item.unidade}"
-                                data-quantidade="${item.quantidade}">
-                            ${btnIconVincular}
-                        </button>
-                    `;
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
+                                    data-item-id="${item.id}" 
+                                    data-item-descricao="${item.descricao}"
+                                    data-material-id="${item.material_id}" 
+                                    data-material-nome="${materialNome}" 
+                                    data-material-unidade="${item.unidade}"
+                                    data-quantidade="${item.quantidade}">
+                                ${btnIconVincular}
+                            </button>`;
+                }
+            if(item.material_id) {
+                html += `
+                        <button type="button" class="btn btn-sm btn-danger btn-desvincular-material" 
+                                data-item-id="${item.id}"
+                                title="Desvincular material">
+                            <i class="fas fa-unlink"></i>
+                        </button>`;
             }
+            html += `</div>`;
             html += `
                     </td>
                 </tr>
@@ -345,6 +360,52 @@
         })
         .finally(() => {
             fecharModal('#modalImportarItens');
+        });
+    }
+
+    // Função para desvincular material do item
+    function desvincularMaterial(itemId) {
+        if (!confirm('Tem certeza que deseja desvincular o material deste item?')) {
+            return;
+        }
+
+        mostrarCarregando('Desvinculando material...');
+
+        fetch(`/notas-fiscais/api/desvincular-material/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').val(),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                mostrarAlerta('Sucesso', data.message, 'success', function() {
+                    // Recarregar os itens da nota para atualizar a interface
+                    const notaId = document.getElementById('importacao_nf_id').value;
+                    carregarItensImportacao(notaId);
+                });
+            } else {
+                mostrarAlerta('Erro', data.message, 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao desvincular material:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao desvincular o material: ${error.message}`, 'error');
+        })
+        .finally(() => {
+            if (typeof Swal !== 'undefined') {
+                Swal.close();
+            }
         });
     }
 </script>
