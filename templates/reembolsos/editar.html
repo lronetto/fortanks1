@@ -74,6 +74,7 @@
                                         <option value="2">Sem Envio</option>
                                         <option value="3">Apenas reembolso</option>
                                         <option value="4" selected>Selecionados</option>
+                                        <option value="5">Reembolso e nao pago</option>
                                     </select>
                                 </div>
                             </div>
@@ -241,22 +242,24 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.modo === 'editar') {
         const filtroPagamento = document.getElementById('filtroPagamento');
         if (filtroPagamento) filtroPagamento.value = 'selecionados';
-    }
-    const notasInput = document.getElementById('notas_selecionadas');
-    const avulsosInput = document.getElementById('avulsos_data');
-    console.log('avulsosInput',avulsosInput.value);
-    try {
-        if (notasInput && notasInput.value && notasInput.value !== '[]') {
-            notasSelecionadas = JSON.parse(notasInput.value).map(n => ({...n, id: parseInt(n.id)}));
-        }
-        if (avulsosInput && avulsosInput.value && avulsosInput.value !== '[]') {
-            avulsos = JSON.parse(avulsosInput.value);
-            // Atualizar tabela de avulsos se a função existir
-            if (typeof atualizarTabelaAvulsos === 'function') {
-                atualizarTabelaAvulsos();
+        
+        const notasInput = document.getElementById('notas_selecionadas');
+        const avulsosInput = document.getElementById('avulsos_data');
+        console.log('avulsosInput',avulsosInput.value);
+        try {
+            if (notasInput && notasInput.value && notasInput.value !== '[]') {
+                notasSelecionadas = JSON.parse(notasInput.value).map(n => ({...n, id: parseInt(n.id)}));
             }
-        }
-    } catch (e) { /* ignora erro de parse */ }
+            if (avulsosInput && avulsosInput.value && avulsosInput.value !== '[]') {
+                avulsos = JSON.parse(avulsosInput.value);
+                // Atualizar tabela de avulsos se a função existir
+                if (typeof atualizarTabelaAvulsos === 'function') {
+                    atualizarTabelaAvulsos();
+                }
+            }
+        } catch (e) { /* ignora erro de parse */ }
+    }
+
     filtrarNotas();
     document.getElementById('formReembolso').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -459,7 +462,18 @@ function atualizarTabelaAvulsos() {
     return;
   }
   
-  avulsos.forEach((avulso, index) => {
+  // Criar cópia do array com índices originais e ordenar por data do documento (mais recente primeiro)
+  const avulsosOrdenados = avulsos.map((avulso, indexOriginal) => ({
+    ...avulso,
+    indexOriginal: indexOriginal
+  })).sort((a, b) => {
+    const dataA = a.data_documento ? new Date(a.data_documento).getTime() : 0;
+    const dataB = b.data_documento ? new Date(b.data_documento).getTime() : 0;
+    return dataB - dataA; // Ordena do mais recente para o mais antigo
+  });
+  
+  avulsosOrdenados.forEach((avulso) => {
+    const index = avulso.indexOriginal; // Usar o índice original para editar/remover
     const tr = document.createElement('tr');
     const dataDoc = avulso.data_documento ? new Date(avulso.data_documento).toLocaleDateString() : '';
     const fornecedor = avulso.fornecedor || '';

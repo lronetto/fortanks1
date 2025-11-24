@@ -202,7 +202,7 @@ def nota_fiscal_busca_reembolso():
         try:
             # Obter filtros do JSON do body
             filtros = request.get_json() if request.is_json else {}
-            
+            print(f'filtros: {filtros}')
             # Obter parâmetros de paginação
             page = filtros.get('page', request.args.get('page', 1, type=int))
             per_page = filtros.get('per_page', request.args.get('per_page', 25, type=int))
@@ -271,8 +271,8 @@ def nota_fiscal_busca_reembolso():
                 query = query.filter(NotaFiscal.valor_total == float(filtros.get('valor_exato')))
             
             # Filtros de CNPJ e CFOP
-            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
-            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(CFOPS_TRANSFERENCIA)))
+            query = query.filter(NotaFiscal.cnpj_emitente.notin_(CNPJS_MATRIZ_FILIAIS))
+            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notin_(CFOPS_TRANSFERENCIA)))
             
             # Joins
             query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
@@ -290,7 +290,8 @@ def nota_fiscal_busca_reembolso():
                 query = query.having(upload_reembolso_column == 1)
             elif pagamento_filtro == '4':  # Selecionados
                 query = query.filter(NotaFiscal.id.in_(ids))
-            
+            elif pagamento_filtro == '5':  # Reembolso e nao pago
+                query = query.having(upload_reembolso_column == 1, tem_pagamento_column == 0)
             # Agrupar e ordenar
             query = query.group_by(NotaFiscal.id)
             query = query.order_by(NotaFiscal.data_emissao.desc())
@@ -326,6 +327,8 @@ def nota_fiscal_busca_reembolso():
                     continue
             
             print('tempo de execução3: ',time.time()-tinicial)
+            print(f'notas_filtradas: {len(notas_filtradas)}')
+            print(f'pagination: {pagination.page} {pagination.pages} {pagination.total} {pagination.per_page}')
 
             return jsonify({
                 'notas': notas_filtradas,
@@ -389,8 +392,7 @@ def exportar_pdf(id):
     filter(ReembolsoDocumento.reembolso_id==id)\
     .join(CentroCusto, ReembolsoDocumento.centro_custo_id==CentroCusto.id)\
     .group_by(ReembolsoDocumento.centro_custo_id)\
-            .order_by(CentroCusto.nome).\
-            filter(CentroCusto.codigo.like('0014-00')).all()
+            .order_by(CentroCusto.nome).all()
             
     
     for cc in CCs:
