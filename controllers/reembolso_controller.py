@@ -27,6 +27,32 @@ import dotenv
 import os
 dotenv.load_dotenv()
 
+def parse_data_documento(data_str):
+    """
+    Faz o parse de uma string de data, suportando múltiplos formatos.
+    Tenta primeiro formato ISO datetime completo, depois formato de data simples.
+    Se falhar, retorna a data atual.
+    """
+    if not data_str:
+        return datetime.now()
+    
+    # Tentar formato ISO datetime completo (ex: '2024-01-01T00:00:00')
+    formatos = [
+        '%Y-%m-%dT%H:%M:%S',      # ISO datetime completo
+        '%Y-%m-%dT%H:%M:%S.%f',   # ISO datetime com microsegundos
+        '%Y-%m-%d %H:%M:%S',      # Datetime com espaço
+        '%Y-%m-%d',               # Apenas data
+    ]
+    
+    for formato in formatos:
+        try:
+            return datetime.strptime(data_str, formato)
+        except ValueError:
+            continue
+    
+    # Se nenhum formato funcionou, retornar data atual
+    return datetime.now()
+
 @reembolso_bp.route('/')
 @login_required
 def index():
@@ -101,7 +127,7 @@ def novo():
                     valor=avulso_data['valor'],
                     fornecedor=avulso_data.get('fornecedor', ''),
                     ndocumento=avulso_data.get('ndocumento', ''),
-                    data_documento=datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d'),
+                    data_documento=parse_data_documento(avulso_data.get('data_documento')),
                     centro_custo_id=avulso_data.get('centro_custo_id')
                 )
                 db.session.add(doc)
@@ -457,20 +483,8 @@ def download_anexo(anexo_id):
 def editar(reembolso_id):
     print(f'reembolso_id: {reembolso_id}')
     reembolso = Reembolso.query.get_or_404(reembolso_id)
-    re = ReembolsoDocumento.query.filter_by(reembolso_id=reembolso_id).all()
-    notas = []
-    for r in re:
-        if r.tipo == 'nota':
-            notas.append({
-                'id': r.nota_fiscal_id,
-                'descricao': r.descricao,
-                'valor': r.valor,
-                'centro_custo_id': r.centro_custo_id
-            })
-        else:
-            notas.append({
-                'id': r.id,
-            })
+   
+    
 
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
@@ -583,7 +597,7 @@ def editar(reembolso_id):
                     doc.valor = avulso_data['valor']
                     doc.fornecedor = avulso_data.get('fornecedor', '')
                     doc.ndocumento = avulso_data.get('ndocumento', '')
-                    doc.data_documento = datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d')
+                    doc.data_documento = parse_data_documento(avulso_data.get('data_documento'))
                     doc.centro_custo_id = avulso_data.get('centro_custo_id')
                     
                     # Remover anexos marcados para remoção (usando modelo Upload)
@@ -608,7 +622,7 @@ def editar(reembolso_id):
                         valor=avulso_data['valor'],
                         fornecedor=avulso_data.get('fornecedor', ''),
                         ndocumento=avulso_data.get('ndocumento', ''),
-                        data_documento=datetime.strptime(avulso_data.get('data_documento', datetime.now().strftime('%Y-%m-%d')), '%Y-%m-%d'),
+                        data_documento=parse_data_documento(avulso_data.get('data_documento')),
                         centro_custo_id=avulso_data.get('centro_custo_id')
                     )
                     db.session.add(doc)
@@ -695,13 +709,14 @@ def editar(reembolso_id):
     
     # Carregar documentos avulsos do reembolso
     avulsos = []
+    notas = []
     for doc in reembolso.documentos:
         if doc.tipo == 'avulso':
             avulsos.append({
                 'id': doc.id,
                 'fornecedor': doc.fornecedor or '',
                 'ndocumento': doc.ndocumento or '',
-                'data_documento': doc.data_documento.strftime('%Y-%m-%d') if doc.data_documento else datetime.now().strftime('%Y-%m-%d'),
+                'data_documento': doc.data_documento.isoformat() if doc.data_documento else None,
                 'descricao': doc.descricao,
                 'valor': float(doc.valor),
                 'centro_custo_id': doc.centro_custo_id,
@@ -710,6 +725,13 @@ def editar(reembolso_id):
                     {'id': upload.id, 'filename': upload.filename}
                     for upload in Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
                 ]
+            })
+        if doc.tipo == 'nota':
+            notas.append({
+                'id': doc.nota_fiscal_id,
+                'descricao': doc.descricao,
+                'valor': doc.valor,
+                'centro_custo_id': doc.centro_custo_id
             })
     
     return render_template('reembolsos/editar.html', 

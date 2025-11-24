@@ -244,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     const notasInput = document.getElementById('notas_selecionadas');
     const avulsosInput = document.getElementById('avulsos_data');
+    console.log('avulsosInput',avulsosInput.value);
     try {
         if (notasInput && notasInput.value && notasInput.value !== '[]') {
             notasSelecionadas = JSON.parse(notasInput.value).map(n => ({...n, id: parseInt(n.id)}));
