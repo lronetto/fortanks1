@@ -62,7 +62,8 @@
                 data_fim=filtros.data_fim,
                 valor_min=filtros.valor_min,
                 valor_max=filtros.valor_max,
-                termo_busca=filtros.termo_busca) }}" 
+                termo_busca=filtros.termo_busca,
+                documento_filtro=filtros.documento_filtro) }}" 
                class="btn btn-success">
                 <i class="fas fa-file-excel"></i> Exportar para Excel
             </a>
@@ -79,6 +80,7 @@
                     {% if filtros.valor_min %}{% set count = count + 1 %}{% endif %}
                     {% if filtros.valor_max %}{% set count = count + 1 %}{% endif %}
                     {% if filtros.termo_busca %}{% set count = count + 1 %}{% endif %}
+                    {% if filtros.documento_filtro %}{% set count = count + 1 %}{% endif %}
                     {{ count }}
                 </span>
             </button>
@@ -150,11 +152,18 @@
                 </div>
                 
                 <div class="row">
-                    <div class="col-md-8">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="documento_filtro">Documento:</label>
+                            <input type="text" class="form-control" id="documento_filtro" name="documento_filtro"
+                                   placeholder="Filtrar por documento" value="{{ filtros.documento_filtro or '' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-4">
                         <div class="form-group">
                             <label for="termo_busca">Buscar por Texto:</label>
                             <input type="text" class="form-control" id="termo_busca" name="termo_busca"
-                                   placeholder="Documento, Emitente ou Histórico" value="{{ filtros.termo_busca }}">
+                                   placeholder="Emitente ou Histórico" value="{{ filtros.termo_busca }}">
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -254,7 +263,8 @@
                                     data_fim=filtros.data_fim,
                                     valor_min=filtros.valor_min,
                                     valor_max=filtros.valor_max,
-                                    termo_busca=filtros.termo_busca) }}">
+                                    termo_busca=filtros.termo_busca,
+                                    documento_filtro=filtros.documento_filtro) }}">
                                     Anterior
                                 </a>
                             </li>
@@ -284,7 +294,8 @@
                                             data_fim=filtros.data_fim,
                                             valor_min=filtros.valor_min,
                                             valor_max=filtros.valor_max,
-                                            termo_busca=filtros.termo_busca) }}">
+                                            termo_busca=filtros.termo_busca,
+                                            documento_filtro=filtros.documento_filtro) }}">
                                             {{ page_num }}
                                         </a>
                                     </li>
@@ -307,7 +318,8 @@
                                     data_fim=filtros.data_fim,
                                     valor_min=filtros.valor_min,
                                     valor_max=filtros.valor_max,
-                                    termo_busca=filtros.termo_busca) }}">
+                                    termo_busca=filtros.termo_busca,
+                                    documento_filtro=filtros.documento_filtro) }}">
                                     Próxima
                                 </a>
                             </li>

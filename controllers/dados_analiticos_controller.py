@@ -140,7 +140,8 @@ def index():
         'sort_by': request.args.get('sort_by', 'data_pagamento'),
         'sort_dir': request.args.get('sort_dir', 'desc'),
         'emitente_filtro': request.args.get('emitente_filtro', type=str),
-        'historico_filtro': request.args.get('historico_filtro', type=str)
+        'historico_filtro': request.args.get('historico_filtro', type=str),
+        'documento': request.args.get('documento_filtro',type=str)
     }
     
     logger.info(f"Filtros aplicados: {filtros}")
@@ -167,6 +168,9 @@ def index():
     if filtros['historico_filtro']:
         query = query.filter(DadoAnalitico.historico.ilike(f"%{filtros['historico_filtro']}%" ))
     
+    if filtros['documento']:
+        query = query.filter(DadoAnalitico.documento.ilike(f"%{filtros['documento']}%" ))
+        
     # Ordenar por coluna selecionada
     query = aplicar_ordenacao(query, filtros['sort_by'], filtros['sort_dir'])
     

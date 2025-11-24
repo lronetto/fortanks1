@@ -63,11 +63,15 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-5 mb-3">
+                <div class="col-md-3 mb-3">
+                    <label for="documento_filtro">Documento</label>
+                    <input type="text" class="form-control" id="documento_filtro" name="documento_filtro" value="{{ filtros.documento_filtro or '' }}">
+                </div>
+                <div class="col-md-3 mb-3">
                     <label for="emitente_filtro">Emitente</label>
                     <input type="text" class="form-control" id="emitente_filtro" name="emitente_filtro" value="{{ filtros.emitente_filtro or '' }}">
                 </div>
-                <div class="col-md-5 mb-3">
+                <div class="col-md-3 mb-3">
                     <label for="historico_filtro">Histórico</label>
                     <input type="text" class="form-control" id="historico_filtro" name="historico_filtro" value="{{ filtros.historico_filtro or '' }}">
                 </div>
@@ -217,7 +221,8 @@
                                                                     sort_by=filtros.sort_by,
                                                                     sort_dir=filtros.sort_dir,
                                                                     emitente_filtro=filtros.emitente_filtro,
-                                                                    historico_filtro=filtros.historico_filtro
+                                                                    historico_filtro=filtros.historico_filtro,
+                                                                    documento_filtro=filtros.documento_filtro
                                                                     ) }}">
                                 Anterior
                             </a>
@@ -245,7 +250,8 @@
                                                                             sort_by=filtros.sort_by,
                                                                             sort_dir=filtros.sort_dir,
                                                                             emitente_filtro=filtros.emitente_filtro,
-                                                                            historico_filtro=filtros.historico_filtro
+                                                                            historico_filtro=filtros.historico_filtro,
+                                                                            documento_filtro=filtros.documento_filtro
                                                                             ) }}">
                                         {{ page_num }}
                                     </a>
@@ -269,7 +275,8 @@
                                                                     sort_by=filtros.sort_by,
                                                                     sort_dir=filtros.sort_dir,
                                                                     emitente_filtro=filtros.emitente_filtro,
-                                                                    historico_filtro=filtros.historico_filtro
+                                                                    historico_filtro=filtros.historico_filtro,
+                                                                    documento_filtro=filtros.documento_filtro
                                                                     ) }}">
                                 Próximo
                             </a>
