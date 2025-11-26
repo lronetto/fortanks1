@@ -28,7 +28,6 @@ from models.nota_fiscal import CNPJS_MATRIZ_FILIAIS,CNPJS_MATRIZ,CNPJS_FILIAIS
 from models.dados_analiticos import DadoAnalitico
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
-from scripts.importar_cte import extrair_dados_cte
 import pandas as pd
 import io
 from models.reembolso import ReembolsoDocumento
@@ -48,11 +47,65 @@ def verificar_permissao():
     #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
     #     return redirect(url_for('dashboard.index'))
 
+def atualizar_dados_adicionais():
+    """
+    Atualiza dados adicionais das notas fiscais processando em blocos de 100 registros.
+    """
+    TAMANHO_BLOCO = 100
+    total_notas = NotaFiscal.query.count()
+    total_processadas = 0
+    
+    logger.info(f'Iniciando atualização de dados adicionais. Total de notas: {total_notas}')
+    
+    # Processa em blocos de 100
+    offset = 0
+    while offset < total_notas:
+        # Busca bloco de 100 notas
+        notas = NotaFiscal.query.offset(offset).limit(TAMANHO_BLOCO).all()
+        
+        if not notas:
+            break
+        
+        # Processa cada nota do bloco
+        for nota in notas:
+            try:
+                if nota.tipo == 2:
+                    chave_acesso, dados = nota.extrair_dados_xml_cte()
+                    nota.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+                    nota.save()
+                elif nota.tipo < 2:
+                    chave_acesso, dados = nota.extrair_dados_xml_nfe()
+                    nota.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+                    nota.save()
+                total_processadas += 1
+            except Exception as e:
+                logger.error(f'Erro ao processar nota ID {nota.id}: {e}')
+                continue
+        
+        # Commit do bloco
+        try:
+            db.session.commit()
+            logger.info(f'Bloco processado: {total_processadas}/{total_notas} notas (offset: {offset})')
+        except Exception as e:
+            logger.error(f'Erro ao fazer commit do bloco (offset: {offset}): {e}')
+            db.session.rollback()
+        
+        offset += TAMANHO_BLOCO
+    
+    logger.info(f'Atualização concluída. Total processado: {total_processadas}/{total_notas} notas')
+
 @nota_fiscal_bp.route('/teste2')
 @login_required
 def teste2():
     print('teste2')
     processar_emails()
+    return redirect(url_for('nota_fiscal.index'))
+
+@nota_fiscal_bp.route('/teste3')
+@login_required
+def rota_atualizar_dados_adicionais():
+    print('atualizar_dados_adicionais')
+    atualizar_dados_adicionais()
     return redirect(url_for('nota_fiscal.index'))
 
 @nota_fiscal_bp.route('/teste1')

@@ -103,8 +103,8 @@ class NotaFiscal(db.Model):
                 
         if xml_data and tipo == 'cte':
             print(f'NotaFiscal cte')
-            return  self.processar_cte()
-            
+            self.processar_cte()
+             
         if chave_acesso:
             nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==chave_acesso).first()
             if nota:
@@ -312,7 +312,7 @@ class NotaFiscal(db.Model):
                 item_fiscal.save()
             self.vincular_automaticamente()
             db.session.refresh(self)
-            if not (self.cnpj_emitente in CNPJS_MATRIZ_FILIAIS):
+            if self.cnpj_emitente not in CNPJS_MATRIZ_FILIAIS:
                 print(f'importando itens para estoque')
                 self.importar_itens_para_estoque()
             
@@ -337,6 +337,18 @@ class NotaFiscal(db.Model):
         vPrest = infCte.find('.//cte:vPrest', ns) or infCte.find('.//vPrest', ns)
         compl = infCte.find('.//cte:compl', ns) or infCte.find('.//compl', ns)
         imp = infCte.find('.//cte:imp', ns) or infCte.find('.//imp', ns)
+        infCTeNorm = infCte.find('.//cte:infCTeNorm', ns) or infCte.find('.//infCTeNorm', ns)
+        chave_nf = ''
+        if infCTeNorm is not None:
+            infCarga = infCTeNorm.find('.//cte:infCarga', ns) or infCTeNorm.find('.//infCarga', ns)
+            if infCarga is not None:
+                infDoc = infCarga.find('.//cte:infDoc', ns) or infCarga.find('.//infDoc', ns)
+                if infDoc is not None:
+                    infNFe = infDoc.find('.//cte:infNFe', ns) or infDoc.find('.//infNFe', ns)
+                    if infNFe is not None:
+                        chave_nf = infNFe.findtext('.//cte:chave', default='', namespaces=ns)
+                    
+        
         impostos = {}
         if imp is not None:
             ICMSa = imp.find('.//cte:ICMS', ns) or imp.find('.//ICMS', ns) or imp.find('.//ICMS00', ns) or imp.find('.//ICMS', ns)
@@ -400,7 +412,6 @@ class NotaFiscal(db.Model):
         uf_inicio = ide.findtext('cte:UFIni', default='', namespaces=ns)
         municipio_destino = ide.findtext('cte:xMunFim', default='', namespaces=ns)
         uf_destino = ide.findtext('cte:UFFim', default='', namespaces=ns)
-
         # Placa e motorista
         placa = ''
         motorista = ''
@@ -436,7 +447,8 @@ class NotaFiscal(db.Model):
             'municipio_destino': municipio_destino,
             'uf_destino': uf_destino,
             'placa': placa,
-            'motorista': motorista
+            'motorista': motorista,
+            'chave_nf': chave_nf
         }
         dados_nf = {
             'chave_acesso': chave_acesso,

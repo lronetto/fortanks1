@@ -627,6 +627,10 @@ def confirmar_importacao():
                 if not material_existente and nome:
                     material_existente = Material.query.filter_by(nome=nome).first()
                 
+                unidade_id = None
+                if unidade:
+                    unidade_obj = Unidade.query.filter(Unidade.nome.like(f"%{unidade}%")).first()
+                    unidade_id = unidade_obj.id if unidade_obj else None
                 # Decidir se vamos atualizar, ignorar ou criar um novo
                 if material_existente:
                     if opcao_atualizacao == 'pular':
@@ -634,34 +638,49 @@ def confirmar_importacao():
                         continue
                     elif opcao_atualizacao == 'atualizar':
                         # Atualizar material existente
-                        material_existente.nome = nome
-                        material_existente.codigo = codigo
-                        if mascara:
+                        if material_existente.nome == nome and\
+                           material_existente.codigo == codigo and\
+                           material_existente.mascara == mascara and\
+                           material_existente.ncm == ncm and\
+                           material_existente.codigo_erp == codigo_erp and\
+                           material_existente.plano_conta == plano_conta and\
+                           material_existente.descricao == descricao and\
+                           material_existente.unidade_id == unidade_id and\
+                           material_existente.categoria == categoria:
+                            continue
+                        if material_existente.nome != nome:
+                            material_existente.nome = nome
+                        if material_existente.codigo != codigo:
+                            material_existente.codigo = codigo
+                        if material_existente.mascara != mascara:
                             material_existente.mascara = mascara
-                        if ncm:
+                        if material_existente.ncm != ncm:
                             material_existente.ncm = ncm
-                        if codigo_erp:
+                        if material_existente.codigo_erp != codigo_erp:
                             material_existente.codigo_erp = codigo_erp
-                        if plano_conta:
+                        if material_existente.plano_conta != plano_conta:
                             material_existente.plano_conta = plano_conta
-                        if descricao:
+                        if material_existente.descricao != descricao:
                             material_existente.descricao = descricao
-                        if unidade:
-                            material_existente.unidade = unidade
-                        if categoria:
+                        if material_existente.unidade_id != unidade_id:
+                            material_existente.unidade_id = unidade_id
+                        if material_existente.categoria != categoria:
                             material_existente.categoria = categoria
                         
                         db.session.add(material_existente)
                         atualizados += 1
                 else:
                     # Criar novo material
+                    # Buscar unidade se fornecida
+                   
+                    
                     novo_material = Material(
                         nome=nome,
                         codigo=codigo if codigo else None,
                         codigo_erp=codigo_erp if codigo_erp else None,
                         plano_conta=plano_conta if plano_conta else None,
                         descricao=descricao if descricao else None,
-                        unidade=unidade if unidade else None,
+                        unidade_id=unidade_id,
                         categoria=categoria,
                         mascara=mascara if mascara else None,
                         ncm=ncm if ncm else None
@@ -1168,7 +1187,7 @@ def exportar_excel():
                 'Descrição': mat.descricao,
                 'Categoria': mat.categoria,
                 'Unidade': mat.unidade_obj.nome,
-                'NCM': mat.ncm,
+                'NCM': mat.ncm if mat.ncm !='0' else ncm_unico if ncm_unico else '',
                 'Plano de Conta': mat.plano_conta,
                 'Código Alterdata': mat.codigo_erp,
                 'Data Criação': mat.data_criacao.strftime('%Y-%m-%d %H:%M:%S') if mat.data_criacao else '',
