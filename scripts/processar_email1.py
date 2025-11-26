@@ -626,7 +626,17 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
         return False
     
     logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
-    img = convert_from_bytes(payload, 500)[0]
+    try:
+        img = convert_from_bytes(payload, 500)[0]
+    except Exception as e:
+        logging.error(f"Erro ao converter o arquivo {filename} para imagem: {e}")
+        img = convert_from_path(filename, 500,poppler_path='/usr/local/bin')[0]
+    
+    
+    try:
+        decs = decode(img)
+    except Exception as e:
+        logging.error(f"Erro ao decodificar o arquivo {filename}: {e}")
     decs = decode(img)
     
     anexo['codbarras'] = {
