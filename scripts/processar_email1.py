@@ -630,7 +630,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
         img = convert_from_bytes(payload, 500)[0]
     except Exception as e:
         logging.error(f"Erro ao converter o arquivo {filename} para imagem: {e}")
-        img = convert_from_path(filename, 500,poppler_path='/usr/local/bin')[0]
+        img = convert_from_bytes(payload, 500,poppler_path='/usr/local/bin')[0]
     
     
     try:
