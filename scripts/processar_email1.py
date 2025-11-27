@@ -668,13 +668,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
         })
         
         if nota:
-            up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
-            if up:
-                anexo['upload'] = True
-                logging.info(f"upload realizado {nota.numero_nf}")
-            else:
-                logging.info(f"upload ja existe {nota.numero_nf}")
-            return True
+            processar_upload(anexo, nota, filename, payload, tipo)
         else:
             tiponfc = ('nfe' if tiponf == '55' else 'cte' if tiponf == '57' else None)
             if tiponfc:
@@ -684,9 +678,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
                     nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
                     if nota:
                         logging.info(f"fazendo o upload da nota: {nota}")
-                        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
-                        if up.id:
-                            logging.info(f"upload ja existe {nota.numero_nf}")
+                        processar_upload(anexo, nota, filename, payload, tipo)
                     return True
             else:
                 logging.info(f"codBarras nao identificado {dec1}")
@@ -773,6 +765,28 @@ def marcar_email_como_lido(uid, usar_imaplib, mail_marcar=None, imap=None):
         logging.warning(f'Erro ao marcar UID {uid} como lido: {e}')
         return False
 
+def processar_upload(anexo, nota, filename, payload, tipo):
+    up = Upload.query.filter(Upload.filename==filename).first()
+    if not up:
+        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+        if up.id:
+            anexo['upload'] = True
+            logging.info(f"upload realizado {nota.numero_nf}")
+            return True
+        else:
+            logging.info(f"upload ja existe {nota.numero_nf}")
+            return False
+    else:
+        if up.nota == nota.id and up.tipo == tipo and up.mimetype == 'application/pdf':
+            anexo['upload'] = True
+            logging.info(f"upload ja existe {nota.numero_nf}")
+        else:
+            up.nota = nota.id
+            up.tipo = tipo
+            up.mimetype = 'application/pdf'
+            up.save()
+            logging.info(f"upload atualizado {nota.numero_nf}")
+            anexo['upload'] = True
 def processar_anexos_email(msg, tipo, log_email_entry):
     """
     Processa todos os anexos de um email.
