@@ -203,9 +203,9 @@ class NotaFiscal(db.Model):
 
     def get_vencimento(self):
         dictvar = self.get_xml_json()
-        print(f'dictvar: {dictvar}')
+        #print(f'dictvar: {dictvar}')
         vencimento = dictvar.get('nfeProc',{}).get('NFe',{}).get('infNFe',{}).get('cobr',{}).get('dup',{}).get('dVenc',None)
-        print(f'vencimento: {vencimento}')
+        #print(f'vencimento: {vencimento}')
         if vencimento:
             return datetime.strptime(vencimento, '%Y-%m-%d')
         else:
