@@ -33,6 +33,7 @@
                                 <th>Valor Unit.</th>
                                 <th>Valor Total</th>
                                 <th>Status</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody id="corpoTabelaItens">
@@ -50,6 +51,19 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Função para obter token CSRF
+    function getCSRFToken() {
+        const tokenGlobal = document.getElementById('csrf_token_global');
+        if (tokenGlobal) {
+            return tokenGlobal.value;
+        }
+        const tokenField = document.querySelector('input[name="csrf_token"]');
+        if (tokenField) {
+            return tokenField.value;
+        }
+        return '';
+    }
+    
     $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-itens', function() {
         console.log('visualizar itens clicado');
         const notaId = $(this).data('id');
@@ -58,9 +72,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function carregarItensModal(notaId) {
         console.log(`Carregando itens para nota ID: ${notaId}`);
         
+        // Armazenar notaId para uso posterior
+        window.notaIdAtual = notaId;
+        
         // Mostrar carregamento
         const corpoTabela = 'corpoTabelaItens'
-        document.getElementById(corpoTabela).innerHTML = '<tr><td colspan="7" class="text-center">Carregando itens...</td></tr>';
+        document.getElementById(corpoTabela).innerHTML = '<tr><td colspan="9" class="text-center">Carregando itens...</td></tr>';
         
         // Abrir o modal
         const modalId = 'modalVisualizarItens';
@@ -86,19 +103,19 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Registrar URL bem-sucedida para uso futuro
                     console.log(`URL bem-sucedida: ${url}`);
                 } else {
-                    document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="7" class="text-center text-danger">${data.message || 'Erro ao carregar itens.'}</td></tr>`;
+                    document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="9" class="text-center text-danger">${data.message || 'Erro ao carregar itens.'}</td></tr>`;
                 }
             })
             .catch(error => {
                 console.warn(`Falha ao usar ${url}:`, error);
-                document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="7" class="text-center text-danger">${error.message || 'Erro ao carregar itens.'}</td></tr>`;
+                document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="9" class="text-center text-danger">${error.message || 'Erro ao carregar itens.'}</td></tr>`;
             });
     }
 
     // Preenche a tabela de visualização de itens
     function preencherTabelaVisualizacao(itens) {
         if (!itens || itens.length === 0) {
-            document.getElementById('corpoTabelaItens').innerHTML = '<tr><td colspan="7" class="text-center">Nenhum item encontrado.</td></tr>';
+            document.getElementById('corpoTabelaItens').innerHTML = '<tr><td colspan="9" class="text-center">Nenhum item encontrado.</td></tr>';
             return;
         }
         
@@ -128,6 +145,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 status = '<span class="badge bg-danger">Pendente</span>';
             }
             
+            // Botão de criar material (só aparece se não tiver material vinculado)
+            let acoes = '';
+            if (!item.material_id) {
+                acoes = `<button class="btn btn-sm btn-primary criar-material-btn" data-item-id="${item.id}" data-item-codigo="${item.codigo || ''}" data-item-descricao="${item.descricao || ''}" data-item-unidade="${item.unidade || ''}" data-item-ncm="${item.ncm || ''}" title="Criar material a partir deste item">
+                    <i class="fas fa-plus-circle"></i> Criar Material
+                </button>`;
+            } else {
+                acoes = '<span class="text-muted">-</span>';
+            }
+            
             html += `
                 <tr>
                     <td>${item.codigo || '-'}</td>
@@ -138,11 +165,31 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td>R$ ${valorUnitario}</td>
                     <td>R$ ${valorTotal}</td>
                     <td>${status}</td>
+                    <td>${acoes}</td>
                 </tr>
             `;
         });
         
         document.getElementById('corpoTabelaItens').innerHTML = html;
+        
+        // Adicionar event listeners aos botões de criar material
+        document.querySelectorAll('.criar-material-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemCodigo = this.getAttribute('data-item-codigo');
+                const itemDescricao = this.getAttribute('data-item-descricao');
+                const itemUnidade = this.getAttribute('data-item-unidade');
+                const itemNcm = this.getAttribute('data-item-ncm');
+                
+                criarMaterialDoItem({
+                    id: itemId,
+                    codigo: itemCodigo,
+                    descricao: itemDescricao,
+                    unidade: itemUnidade,
+                    ncm: itemNcm
+                });
+            });
+        });
     }
     function configurarFiltroItens() {
         const btnFiltrar = document.getElementById('btnFiltrarItens');
@@ -195,10 +242,285 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (itensFiltrados.length === 0) {
             document.getElementById('corpoTabelaItens').innerHTML = 
-                `<tr><td colspan="7" class="text-center">Nenhum item encontrado com o termo "${filtro}".</td></tr>`;
+                `<tr><td colspan="9" class="text-center">Nenhum item encontrado com o termo "${filtro}".</td></tr>`;
         } else {
             renderizarItensVisualizacao(itensFiltrados);
         }
+    }
+    
+    // Função para criar material a partir do item da nota fiscal
+    function criarMaterialDoItem(item) {
+        // Primeiro, buscar materiais semelhantes
+        buscarMateriaisSemelhantes(item).then(function(materiaisSemelhantes) {
+            mostrarModalCriarMaterial(item, materiaisSemelhantes);
+        }).catch(function(error) {
+            console.error('Erro ao buscar materiais semelhantes:', error);
+            // Mesmo com erro, mostrar modal para criar novo
+            mostrarModalCriarMaterial(item, []);
+        });
+    }
+    
+    // Função para buscar materiais semelhantes
+    function buscarMateriaisSemelhantes(item) {
+        return new Promise(function(resolve, reject) {
+            const params = new URLSearchParams();
+            if (item.codigo) params.append('codigo', item.codigo);
+            if (item.descricao) params.append('descricao', item.descricao);
+            if (item.ncm) params.append('ncm', item.ncm);
+            
+            fetch(`/materiais/api/buscar-semelhantes?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        resolve(data.materiais || []);
+                    } else {
+                        resolve([]);
+                    }
+                })
+                .catch(error => {
+                    reject(error);
+                });
+        });
+    }
+    
+    // Função para mostrar modal de criar material
+    function mostrarModalCriarMaterial(item, materiaisSemelhantes) {
+        // Buscar categorias disponíveis
+        const categorias = ['Matéria-prima', 'Insumo', 'Ferramenta', 'Equipamento', 'Material de Escritório', 'Serviço', 'EPI', 'Outro'];
+        
+        // HTML para materiais semelhantes
+        let htmlMateriaisSemelhantes = '';
+        if (materiaisSemelhantes && materiaisSemelhantes.length > 0) {
+            htmlMateriaisSemelhantes = `
+                <div class="alert alert-info mb-3">
+                    <h6><i class="fas fa-info-circle"></i> Materiais Semelhantes Encontrados</h6>
+                    <p class="mb-2">Foram encontrados ${materiaisSemelhantes.length} material(is) semelhante(s). Você pode selecionar um existente ou criar um novo.</p>
+                </div>
+                <div class="list-group mb-3" id="listaMateriaisSemelhantes">
+            `;
+            
+            materiaisSemelhantes.forEach(function(mat, index) {
+                const unidade = mat.unidade || 'Não informado';
+                const ncm = mat.ncm || 'Não informado';
+                const categoria = mat.categoria || 'Não informado';
+                
+                htmlMateriaisSemelhantes += `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${mat.nome || 'Sem nome'}</h6>
+                                <p class="mb-1">
+                                    <small><strong>Código:</strong> ${mat.codigo || 'Não informado'} | 
+                                    <strong>NCM:</strong> ${ncm} | 
+                                    <strong>Categoria:</strong> ${categoria} | 
+                                    <strong>Unidade:</strong> ${unidade}</small>
+                                </p>
+                                ${mat.descricao ? `<p class="mb-1 text-muted"><small>${mat.descricao}</small></p>` : ''}
+                                <small class="text-muted"><i class="fas fa-star"></i> ${mat.motivo} (Pontuação: ${mat.pontuacao})</small>
+                            </div>
+                            <button class="btn btn-sm btn-success ms-2 usar-material-existente" 
+                                    data-material-id="${mat.id}" 
+                                    data-material-nome="${mat.nome}"
+                                    title="Usar este material">
+                                <i class="fas fa-check"></i> Usar Este
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            htmlMateriaisSemelhantes += `
+                </div>
+                <div class="text-center mb-3">
+                    <hr>
+                    <p class="text-muted">ou</p>
+                </div>
+            `;
+        }
+        
+        // Criar modal de confirmação com formulário
+        const modalHtml = `
+            <div class="modal fade" id="modalCriarMaterial" tabindex="-1" aria-labelledby="modalCriarMaterialLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title" id="modalCriarMaterialLabel">
+                                <i class="fas fa-plus-circle"></i> Criar Material
+                            </h5>
+                            <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <div class="modal-body">
+                            ${htmlMateriaisSemelhantes}
+                            <div id="formularioCriarMaterial">
+                            <form id="formCriarMaterial">
+                                <div class="mb-3">
+                                    <label for="materialCodigo" class="form-label">Código</label>
+                                    <input type="text" class="form-control" id="materialCodigo" name="codigo" value="${item.codigo || ''}">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="materialNome" class="form-label">Nome <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="materialNome" name="nome" value="${item.descricao || ''}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="materialDescricao" class="form-label">Descrição</label>
+                                    <textarea class="form-control" id="materialDescricao" name="descricao" rows="2">${item.descricao || ''}</textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="materialCategoria" class="form-label">Categoria <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="materialCategoria" name="categoria" required>
+                                        <option value="">Selecione uma categoria</option>
+                                        ${categorias.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="materialUnidade" class="form-label">Unidade</label>
+                                    <input type="text" class="form-control" id="materialUnidade" name="unidade_nome" value="${item.unidade || ''}" placeholder="Ex: UN, KG, M">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="materialNCM" class="form-label">NCM</label>
+                                    <input type="text" class="form-control" id="materialNCM" name="ncm" value="${item.ncm || ''}" maxlength="15">
+                                </div>
+                                <input type="hidden" id="itemIdOriginal" value="${item.id}">
+                            </form>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-primary" id="btnConfirmarCriarMaterial">
+                                <i class="fas fa-save"></i> Criar Material
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remover modal anterior se existir
+        const modalExistente = document.getElementById('modalCriarMaterial');
+        if (modalExistente) {
+            modalExistente.remove();
+        }
+        
+        // Adicionar modal ao body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalCriarMaterial'));
+        modal.show();
+        
+        // Event listeners para botões "Usar Este" dos materiais semelhantes
+        document.querySelectorAll('.usar-material-existente').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const materialId = this.getAttribute('data-material-id');
+                const materialNome = this.getAttribute('data-material-nome');
+                const itemId = item.id;
+                
+                // Desabilitar botão durante processamento
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Vinculando...';
+                
+                // Vincular material ao item
+                const formData = new FormData();
+                formData.append('material_id', materialId);
+                formData.append('csrf_token', getCSRFToken());
+                
+                fetch(`/notas-fiscais/api/vincular-material/${itemId}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Material "${materialNome}" vinculado com sucesso ao item!`);
+                        modal.hide();
+                        
+                        // Recarregar itens para atualizar a tabela
+                        const notaId = window.notaIdAtual || null;
+                        if (notaId) {
+                            carregarItensModal(notaId);
+                        }
+                    } else {
+                        alert(`Erro ao vincular material: ${data.message}`);
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-check"></i> Usar Este';
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao vincular material:', error);
+                    alert('Erro ao vincular material. Por favor, tente novamente.');
+                    this.disabled = false;
+                    this.innerHTML = '<i class="fas fa-check"></i> Usar Este';
+                });
+            });
+        });
+        
+        // Event listener para o botão de confirmar
+        document.getElementById('btnConfirmarCriarMaterial').addEventListener('click', function() {
+            const form = document.getElementById('formCriarMaterial');
+            const formData = new FormData(form);
+            
+            // Validar campos obrigatórios
+            const nome = formData.get('nome');
+            const categoria = formData.get('categoria');
+            
+            if (!nome || !categoria) {
+                alert('Por favor, preencha todos os campos obrigatórios (Nome e Categoria).');
+                return;
+            }
+            
+            // Preparar dados para envio
+            const dadosMaterial = {
+                codigo: formData.get('codigo') || null,
+                nome: nome,
+                descricao: formData.get('descricao') || '',
+                categoria: categoria,
+                unidade_nome: formData.get('unidade_nome') || '',
+                ncm: formData.get('ncm') || null
+            };
+            
+            // Desabilitar botão durante o processamento
+            const btnConfirmar = document.getElementById('btnConfirmarCriarMaterial');
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
+            
+            // Fazer requisição para criar material
+            fetch('/materiais/api/criar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(dadosMaterial)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Material "${data.material.nome}" criado com sucesso!`);
+                    modal.hide();
+                    
+                    // Recarregar itens para atualizar a tabela
+                    const notaId = window.notaIdAtual || null;
+                    if (notaId) {
+                        carregarItensModal(notaId);
+                    }
+                } else {
+                    alert(`Erro ao criar material: ${data.message}`);
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.innerHTML = '<i class="fas fa-save"></i> Criar Material';
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao criar material:', error);
+                alert('Erro ao criar material. Por favor, tente novamente.');
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-save"></i> Criar Material';
+            });
+        });
+        
+        // Limpar modal quando fechar
+        document.getElementById('modalCriarMaterial').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
     }
 });
 </script>

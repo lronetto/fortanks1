@@ -1,5 +1,26 @@
 <div class="card shadow mb-4">
-    Resultados: <span id="total_resultados">{{ total_resultados }}</span>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-file-invoice fa-2x text-primary me-3"></i>
+                    <div>
+                        <h6 class="mb-0 text-muted">Total de Notas Fiscais</h6>
+                        <h4 class="mb-0 text-primary" id="total_resultados">{{ total_resultados }}</h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-dollar-sign fa-2x text-success me-3"></i>
+                    <div>
+                        <h6 class="mb-0 text-muted">Valor Total</h6>
+                        <h4 class="mb-0 text-success" id="valor_total_notas">R$ 0,00</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 <div class="table-responsive">
 
@@ -8,6 +29,7 @@
             <tr>
                 <th>Número NF</th>
                 <th>Data Emissão</th>
+                <th>Data Vencimento</th>
                 <th>Emitente</th>
                 <th>Destinatario</th>
                 <th>Fornecedor</th>
@@ -22,6 +44,7 @@
             <tr>
                 <td>{{ nf.numero_nf }}</td>
                 <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
+                <td>{{ nf.vencimento }}</td>
                 <td>{{ nf.emitente }}</td>
                 <td>{{ nf.destinatario }}</td>
                 <td>
@@ -103,7 +126,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="6" class="text-center">Nenhuma nota fiscal encontrada.</td>
+                <td colspan="9" class="text-center">Nenhuma nota fiscal encontrada.</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -24,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 material_bp = Blueprint('material', __name__, url_prefix='/materiais')
 
+MEGA_MP = [8,9,10,11,12,13,14,20,34,72,78,79,25,37,36,38,26,76]
+MEGA_UC = [17,18,31,32,33,39,19,40,41,42,73,74,75,77,23,43,44,45,46,24,47]
+MEGA_PA = [48,49,51,50,52]
+MEGA_IM = [21,27,28,29,30,22]
+MEGA_PT = [54,55]
+
 # Middleware para verificar se o usuário tem permissão
 #@material_bp.before_request
 #@login_required
@@ -888,6 +894,216 @@ def api_materiais():
     
     return jsonify(result)
 
+@material_bp.route('/api/buscar-semelhantes', methods=['GET'])
+@login_required
+def api_buscar_semelhantes():
+    """
+    API para buscar materiais semelhantes a um item da nota fiscal
+    Busca por código, nome/descrição e NCM
+    Retorna até 3 materiais mais semelhantes
+    """
+    try:
+        codigo = request.args.get('codigo', '').strip()
+        descricao = request.args.get('descricao', '').strip()
+        ncm = request.args.get('ncm', '').strip()
+        
+        if not codigo and not descricao and not ncm:
+            return jsonify({
+                'success': True,
+                'materiais': []
+            })
+        
+        # Lista para armazenar materiais encontrados com pontuação de similaridade
+        materiais_encontrados = []
+        
+        # Buscar por código exato (maior prioridade)
+        if codigo:
+            material_codigo_exato = Material.query.filter_by(codigo=codigo, ativo=True).first()
+            if material_codigo_exato:
+                materiais_encontrados.append({
+                    'material': material_codigo_exato,
+                    'pontuacao': 100,  # Máxima pontuação para código exato
+                    'motivo': 'Código exato'
+                })
+            
+            # Buscar por código similar
+            materiais_codigo_similar = Material.query.filter(
+                Material.codigo.ilike(f'%{codigo}%'),
+                Material.codigo != codigo,
+                Material.ativo == True
+            ).limit(5).all()
+            
+            for mat in materiais_codigo_similar:
+                if not any(m['material'].id == mat.id for m in materiais_encontrados):
+                    materiais_encontrados.append({
+                        'material': mat,
+                        'pontuacao': 70,
+                        'motivo': 'Código similar'
+                    })
+        
+        # Buscar por NCM (alta prioridade)
+        if ncm:
+            materiais_ncm = Material.query.filter(
+                Material.ncm == ncm,
+                Material.ativo == True
+            ).limit(5).all()
+            
+            for mat in materiais_ncm:
+                if not any(m['material'].id == mat.id for m in materiais_encontrados):
+                    materiais_encontrados.append({
+                        'material': mat,
+                        'pontuacao': 80,
+                        'motivo': 'NCM igual'
+                    })
+        
+        # Buscar por nome/descrição similar
+        if descricao:
+            # Dividir descrição em palavras para busca mais precisa
+            palavras = descricao.split()[:3]  # Pegar até 3 primeiras palavras
+            
+            for palavra in palavras:
+                if len(palavra) >= 3:  # Ignorar palavras muito curtas
+                    materiais_nome = Material.query.filter(
+                        db.or_(
+                            Material.nome.ilike(f'%{palavra}%'),
+                            Material.descricao.ilike(f'%{palavra}%')
+                        ),
+                        Material.ativo == True
+                    ).limit(10).all()
+                    
+                    for mat in materiais_nome:
+                        # Verificar se já está na lista
+                        existente = next((m for m in materiais_encontrados if m['material'].id == mat.id), None)
+                        if existente:
+                            # Aumentar pontuação se já existe
+                            existente['pontuacao'] += 10
+                            if 'nome' not in existente['motivo']:
+                                existente['motivo'] += ', Nome similar'
+                        else:
+                            # Calcular similaridade básica
+                            nome_lower = mat.nome.lower() if mat.nome else ''
+                            desc_lower = mat.descricao.lower() if mat.descricao else ''
+                            descricao_lower = descricao.lower()
+                            
+                            # Pontuação baseada em quantas palavras da descrição aparecem no material
+                            palavras_match = sum(1 for p in palavras if p.lower() in nome_lower or p.lower() in desc_lower)
+                            pontuacao = 30 + (palavras_match * 15)
+                            
+                            materiais_encontrados.append({
+                                'material': mat,
+                                'pontuacao': pontuacao,
+                                'motivo': 'Nome/Descrição similar'
+                            })
+        
+        # Ordenar por pontuação (maior primeiro) e pegar os 3 melhores
+        materiais_encontrados.sort(key=lambda x: x['pontuacao'], reverse=True)
+        top_3 = materiais_encontrados[:3]
+        
+        # Formatar resultado
+        resultado = []
+        for item in top_3:
+            mat = item['material']
+            resultado.append({
+                'id': mat.id,
+                'codigo': mat.codigo,
+                'nome': mat.nome,
+                'descricao': mat.descricao,
+                'categoria': mat.categoria,
+                'ncm': mat.ncm,
+                'unidade': mat.unidade_obj.nome if mat.unidade_obj else None,
+                'pontuacao': item['pontuacao'],
+                'motivo': item['motivo']
+            })
+        
+        return jsonify({
+            'success': True,
+            'materiais': resultado
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao buscar materiais semelhantes: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar materiais semelhantes: {str(e)}',
+            'materiais': []
+        }), 500
+
+@material_bp.route('/api/criar', methods=['POST'])
+@login_required
+def api_criar():
+    """
+    API para criar um novo material via JSON
+    Usado para criar material a partir de item da nota fiscal
+    """
+    try:
+        data = request.get_json()
+        
+        # Validar campos obrigatórios
+        if not data.get('nome'):
+            return jsonify({
+                'success': False,
+                'message': 'Nome do material é obrigatório'
+            }), 400
+        
+        if not data.get('categoria'):
+            return jsonify({
+                'success': False,
+                'message': 'Categoria do material é obrigatória'
+            }), 400
+        
+        # Verificar duplicidade de código se fornecido
+        codigo = data.get('codigo')
+        if codigo:
+            material_existente = Material.query.filter_by(codigo=codigo).first()
+            if material_existente:
+                return jsonify({
+                    'success': False,
+                    'message': f'Já existe um material com o código {codigo}'
+                }), 400
+        
+        # Buscar unidade por nome se unidade_id não foi fornecido
+        unidade_id = data.get('unidade_id')
+        if not unidade_id and data.get('unidade_nome'):
+            unidade = Unidade.obter_por_nome(data.get('unidade_nome'))
+            if unidade:
+                unidade_id = unidade.id
+        
+        # Criar nova instância
+        material = Material(
+            codigo=codigo,
+            nome=data.get('nome'),
+            descricao=data.get('descricao', ''),
+            categoria=data.get('categoria'),
+            plano_conta=data.get('plano_conta'),
+            codigo_erp=data.get('codigo_erp'),
+            unidade_id=unidade_id,
+            mascara=data.get('mascara'),
+            ncm=data.get('ncm'),
+            formula_calculo=data.get('formula_calculo') if data.get('formula_calculo') else None
+        )
+        
+        # Salvar no banco
+        material.save()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Material criado com sucesso!',
+            'material': {
+                'id': material.id,
+                'codigo': material.codigo,
+                'nome': material.nome,
+                'ncm': material.ncm
+            }
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro ao criar material via API: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao criar material: {str(e)}'
+        }), 500
+
 @material_bp.route('/editar-material-ajax/<int:id>', methods=['GET', 'POST'])
 def editar_material_ajax(id):
     """
@@ -1286,7 +1502,7 @@ def exportar_mega():
             
             # Coluna 3: Definição do item (categoria ou padrão)
             # Se não houver categoria específica, usar um padrão
-            def_item = 'MT'
+            def_item = 'MP' if material.mascara in MEGA_MP else 'MT' if material.mascara in MEGA_UC else 'PA' if material.mascara in MEGA_PA else 'EQ' if material.mascara in MEGA_IM else ''
             ws.cell(row=linha_atual, column=3, value=def_item)
             
             # Coluna 4: Item genérico (padrão 'N')
@@ -1295,11 +1511,10 @@ def exportar_mega():
             # Coluna 5: Unidade de processo
             unidade = material.unidade_obj.nome if material.unidade_obj else 'UN'
             ws.cell(row=linha_atual, column=5, value=unidade)
-            
+
+            def_fiscal = '01' if material.mascara in MEGA_MP else '07' if material.mascara in MEGA_UC else '04' if material.mascara in MEGA_PA else '08' if material.mascara in MEGA_IM else ''
             # Coluna 6: Definição fiscal (NCM)
-            def_fiscal = "07" if (material.categoria == 'EPI' or 
-                                  material.categoria == 'Insumo' or
-                                material.categoria == 'EPP') else "08"
+
             ws.cell(row=linha_atual, column=6, value=def_fiscal)
             
             # Coluna 7: Origem (padrão 'Comprado')
@@ -1333,6 +1548,28 @@ def exportar_mega():
             ws.cell(row=linha_atual, column=15, value='S')
             
             # Colunas 16-19 ficam vazias por padrão
+
+            # Coluna 18: UtilizaÃ§Ã£o do item
+            ws.cell(row=linha_atual, column=18, value='')
+
+            # Coluna 19: Controle de orÃ§amento de obra
+            ws.cell(row=linha_atual, column=19, value='')
+
+            # Coluna 20: Grupo base - TributaÃ§Ã£o
+            ws.cell(row=linha_atual, column=20, value=codigo_grupo)
+
+            
+             # Coluna 22: CÃ³digo NCM
+            ncm = material.ncm if material.ncm else ''
+            ws.cell(row=linha_atual, column=22, value=ncm)
+
+            # Coluna 24: CÃ³digo da aplicaÃ§Ã£o
+
+
+            codigo_aplicacao = '401' if material.mascara in MEGA_MP else '468' if material.mascara in MEGA_UC else '601' if material.mascara in MEGA_PA else '105' if material.mascara in MEGA_IM else ''
+            ws.cell(row=linha_atual, column=24, value=codigo_aplicacao)
+
+
             
             linha_atual += 1
         

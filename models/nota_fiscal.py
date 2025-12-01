@@ -201,6 +201,16 @@ class NotaFiscal(db.Model):
         dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))
         return dictvar
 
+    def get_vencimento(self):
+        dictvar = self.get_xml_json()
+        print(f'dictvar: {dictvar}')
+        vencimento = dictvar.get('nfeProc',{}).get('NFe',{}).get('infNFe',{}).get('cobr',{}).get('dup',{}).get('dVenc',None)
+        print(f'vencimento: {vencimento}')
+        if vencimento:
+            return datetime.strptime(vencimento, '%Y-%m-%d')
+        else:
+            return None
+        
     def importar_arquivei(data_inicial,data_final,tipo='nfe'):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
         total = len(notas.xml_datas)
@@ -615,16 +625,19 @@ class NotaFiscal(db.Model):
                 vencimento = dup.findtext('.//nfe:dVenc', ns) or dup.findtext('.//dVenc', ns)
                 if vencimento:
                     vencimento = datetime.strptime(vencimento, '%Y-%m-%d')
+                    # Converter para string para serialização JSON
+                    vencimento_str = vencimento.strftime('%Y-%m-%d')
                 else:
                     vencimento = None
+                    vencimento_str = None
                 if fatura:
                     numero_fatura = fatura.findtext('.//nfe:nFat', ns) or fatura.findtext('.//nFat', ns)
                     valor_total = fatura.findtext('.//nfe:vOrig', ns) or fatura.findtext('.//vOrig', ns)
                     valor_total = Decimal(valor_total)
                     nfe_data['dados_adicionais']['fatura'] = {
-                        'vencimento': vencimento,
+                        'vencimento': vencimento_str,  # Salvar como string para serialização JSON
                         'numero_fatura': numero_fatura,
-                        'valor_total': valor_total
+                        'valor_total': str(valor_total)  # Converter Decimal para string também
                     }
 
             return chave_acesso, nfe_data

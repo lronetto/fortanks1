@@ -1,0 +1,73 @@
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Histórico Semanal de Concretagens</h6>
+    </div>
+    <div class="card-body">
+        <div class="chart-area">
+            <canvas id="historicoSemanalConcretagensChart"></canvas>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        loadHistoricoSemanalConcretagensChart();
+    });
+    
+    function loadHistoricoSemanalConcretagensChart() {
+        dados = {{ cards.historico_semanal_concretagens.dados|tojson }};
+        console.log(dados);
+        
+        if (dados.concretagens_semanais) {
+            const ctx = document.getElementById("historicoSemanalConcretagensChart");
+            if (ctx) {
+                const concretagensData = dados.concretagens_semanais;
+                
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: concretagensData.map(item => item.semana),
+                        datasets: [{
+                            label: 'Concretagens Semanais',
+                            lineTension: 0.3,
+                            backgroundColor: "rgba(78, 115, 223, 0.05)",
+                            borderColor: "rgba(78, 115, 223, 1)",
+                            pointRadius: 3,
+                            pointBackgroundColor: "rgba(78, 115, 223, 1)",
+                            pointBorderColor: "rgba(78, 115, 223, 1)",
+                            pointHoverRadius: 5,
+                            pointHoverBackgroundColor: "rgba(78, 115, 223, 1)",
+                            pointHoverBorderColor: "rgba(78, 115, 223, 1)",
+                            pointHitRadius: 10,
+                            data: concretagensData.map(item => item.quantidade),
+                        }],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    stepSize: 1
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}
+

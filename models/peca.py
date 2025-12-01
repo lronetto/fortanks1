@@ -20,9 +20,7 @@ class Peca(db.Model):
     tanque_id = db.Column(db.Integer, db.ForeignKey('tanques.id', ondelete='CASCADE'), nullable=False)
     tanque = db.relationship('Tanque', backref=db.backref('pecas', lazy=True, cascade='all, delete-orphan'))
     
-    # Relação com concretagens através da classe de associação
-    concretagens_associadas = db.relationship('ConcretagemPeca', back_populates='peca', cascade='all, delete-orphan')
-    
+    # Relação com concretagens através da classe de associação    
     # Campos de auditoria
     data_cadastro = db.Column(db.DateTime, default=datetime.now)
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

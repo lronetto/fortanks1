@@ -1253,6 +1253,7 @@ def api_itens(nf_id):
                 'unidade': item.unidade,
                 'valor_unitario': float(item.valor_unitario),
                 'valor_total': float(item.valor_total),
+                'ncm': item.ncm,
                 'material_id': material_id,
                 'material_unidade': Material.query.get(material_id).unidade_obj.nome if material_id else None,
                 'material_nome': Material.query.get(material_id).nome if material_id else None,
@@ -2456,6 +2457,25 @@ def total_notas():
         logger.error(f'Erro ao obter total de notas: {str(e)}')
         return jsonify({'error': 'Erro ao obter total de notas', 'total_notas': 0}), 500
 
+@nota_fiscal_bp.route('/total-valor-notas', methods=['GET'])
+@login_required
+def total_valor_notas():
+    """Retorna o valor total das notas fiscais com os filtros aplicados"""
+    try:
+        # Obter query com filtros aplicados
+        query = api_get_dados_notas_fiscais(request)
+        
+        # Calcular soma dos valores totais
+        resultado = query.with_entities(func.sum(NotaFiscal.valor_total)).scalar()
+        valor_total = float(resultado) if resultado is not None else 0.0
+        
+        return jsonify({
+            'valor_total': valor_total
+        })
+    except Exception as e:
+        logger.error(f'Erro ao obter valor total de notas: {str(e)}')
+        return jsonify({'error': 'Erro ao obter valor total de notas', 'valor_total': 0.0}), 500
+
 @nota_fiscal_bp.route('/estatisticas-pdfs', methods=['GET'])
 @login_required
 def estatisticas_pdfs():
@@ -2656,6 +2676,7 @@ def tabela_notas_fiscais():
     print("tabela notas fiscais")
     page = request.args.get('page', 1, type=int)
     per_page = 50
+    print("request.args:", request.args)
     query = api_get_dados_notas_fiscais(request)
     print(f'query {time.time() - inicio}')
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -2665,6 +2686,11 @@ def tabela_notas_fiscais():
     for nota in notas_fiscais_pagina:
         nota.upload = None
         nota.pago = False
+        nota.vencimento = nota.get_vencimento()
+        if nota.vencimento:
+            nota.vencimento = nota.vencimento.strftime('%d/%m/%Y')
+        else:
+            nota.vencimento = '-'
         nota.emitente = ('Matriz' if nota.cnpj_emitente in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_emitente in CNPJS_FILIAIS else 'Terceiros')
         nota.destinatario = ('Matriz' if nota.cnpj_destinatario in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_destinatario in CNPJS_FILIAIS else 'Terceiros')
         dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
@@ -2672,6 +2698,8 @@ def tabela_notas_fiscais():
                                                            DadoAnalitico.valor == nota.valor_total).first()
         if dadosAnaliticos:
             nota.pago = True
+            if request.args.get('status_pagamento') == 'nao_pago':
+                continue
         nota.uploads = {'arquivei':False,'protocolo':False,'reembolso':False,'total':0}
         uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter(Upload.pai_id==nota.id, Upload.pai=='NotaFiscal').all()
         if uploads:

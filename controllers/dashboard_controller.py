@@ -15,7 +15,7 @@ from models.contrato import Contrato
 from models.solicitacao import Solicitacao
 from models.epi import EPI, Colaborador
 from models.estoque import Estoque, MovimentacaoEstoque
-from models.concretagem import Concretagem, ConcretagemPeca
+from models.concretagem import Concretagem, ConcretagemTanque
 from models.usinagem_concreto import UsinagemConcreto, UsinagemMaterial, ItemTracoConcreto, TracoConcreto
 from models.unidade import Unidade
 from models.conversao_unidade import ConversaoUnidade
@@ -82,6 +82,12 @@ def meu_dashboard():
         exibir_card_historico_usinagem = True
         historico_usinagem = card_historico_usinagem()
     
+    exibir_card_historico_semanal_concretagens = False
+    historico_semanal_concretagens = []
+    if current_user.colaborador and current_user.colaborador.departamento_id == 4:
+        exibir_card_historico_semanal_concretagens = True
+        historico_semanal_concretagens = card_historico_semanal_concretagens()
+    
     exibir_card_resumo_placas = False
     resumo_placas = []
     if current_user.colaborador and current_user.colaborador.departamento_id == 4:
@@ -123,6 +129,10 @@ def meu_dashboard():
             'historico_usinagem': {
                 'dados': historico_usinagem,
                 'exibir': exibir_card_historico_usinagem
+            },
+            'historico_semanal_concretagens': {
+                'dados': historico_semanal_concretagens,
+                'exibir': exibir_card_historico_semanal_concretagens
             },
             'resumo_placas': {
                 'dados': resumo_placas,
@@ -203,25 +213,69 @@ def card_historico_usinagem():
         'concretagens_semanais':concretagens_semanais_api,
         'volume_usinado_semanal':volume_usinado_semanal_api
     }
-def card_concretagens_recentes():
-
-
+def card_historico_semanal_concretagens():
+    """Retorna dados de concretagens semanais para o gráfico"""
+    num_semanas = 20
+    concretagens_semanais_api = []
+    hoje = datetime.now().date()
     
-        # Concretagens recentes
+    for i in range(num_semanas):
+        # Correção da lógica para as semanas:
+        # Semana 0: Domingo desta semana até hoje.
+        # Semana 1: Domingo da semana passada até Sábado da semana passada.
+        # ...
+        # Semana N: Domingo de (N semanas atrás) até Sábado de (N semanas atrás).
+
+        if i == 0: # Semana corrente
+            fim_periodo = hoje
+            # Início do período é o domingo da semana corrente
+            inicio_periodo = hoje - timedelta(days=(hoje.weekday() + 1) % 7)
+        else: # Semanas anteriores completas
+            # Ajuste para garantir que o fim_periodo seja o sábado da semana i-ésima anterior
+            dias_ate_ultimo_domingo = (hoje.weekday() + 1) % 7
+            sabado_da_semana_anterior_i = hoje - timedelta(days=(dias_ate_ultimo_domingo + 1 + (i-1)*7))
+            fim_periodo = sabado_da_semana_anterior_i
+            # Início do período é o domingo da semana (i) semanas atrás
+            inicio_periodo = fim_periodo - timedelta(days=6)
+
+        # Contagem de concretagens (baseado na data da concretagem)
+        qtd_concretagens = Concretagem.query.filter(
+            Concretagem.data_concretagem >= inicio_periodo,
+            Concretagem.data_concretagem <= fim_periodo
+        ).count()
+        
+        if i == 0:
+            rotulo_semana = f"Atual ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
+        else:
+            rotulo_semana = f"Sem {i} ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
+        
+        concretagens_semanais_api.append({
+            'semana': rotulo_semana,
+            'quantidade': qtd_concretagens
+        })
+    
+    concretagens_semanais_api.reverse()
+    print("concretagens_semanais_api", concretagens_semanais_api)
+    return {
+        'concretagens_semanais': concretagens_semanais_api
+    }
+
+def card_concretagens_recentes():
+    # Concretagens recentes
     concretagens_recentes_op = Concretagem.query.order_by(
         desc(Concretagem.data_concretagem)
     ).limit(5).all()
     
     # Total de peças concretadas nos últimos 30 dias
+    # Contar peças do campo JSON 'pecas' das concretagens dos últimos 30 dias
     data_limite = datetime.now().date() - timedelta(days=30)
-    total_pecas_recentes = db.session.query(
-        func.count(ConcretagemPeca.peca_id)
-    ).join(
-        Concretagem, 
-        Concretagem.id == ConcretagemPeca.concretagem_id
-    ).filter(
+    concretagens_recentes = Concretagem.query.filter(
         Concretagem.data_concretagem >= data_limite
-    ).scalar() or 0
+    ).all()
+    
+    total_pecas_recentes = 0
+    for concretagem in concretagens_recentes:
+        total_pecas_recentes += concretagem.get_quantidade_pecas_json()
 
     dados_especificos = {
         'concretagens_recentes': concretagens_recentes_op,
@@ -347,12 +401,18 @@ def card_materiais_usinagem():
 def acerto_data_concretagem():
     concretagens = Concretagem.query.all()
     for concretagem in concretagens:
-        pecas = ConcretagemPeca.query.join(Peca, Peca.id == ConcretagemPeca.peca_id).filter(ConcretagemPeca.concretagem_id==concretagem.id).all()
-        for peca in pecas:
-            peca1 = Peca.query.filter_by(id=peca.peca_id).first()
-            if peca1.data_concretagem is None or peca1.data_concretagem == '':
-                Peca.query.filter_by(id=peca.peca_id).update({'data_concretagem': concretagem.data_concretagem})
-                db.session.commit()
+        # Obter peças do campo JSON
+        if concretagem.pecas:
+            try:
+                pecas_json = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
+                if isinstance(pecas_json, list):
+                    for peca_id in pecas_json:
+                        peca1 = Peca.query.filter_by(id=peca_id).first()
+                        if peca1 and (peca1.data_concretagem is None or peca1.data_concretagem == ''):
+                            Peca.query.filter_by(id=peca_id).update({'data_concretagem': concretagem.data_concretagem})
+                            db.session.commit()
+            except (json.JSONDecodeError, TypeError, AttributeError):
+                continue
     return True
 def card_resumo_placas():
     tanques = Tanque.query.all()

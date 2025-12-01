@@ -25,7 +25,7 @@ from .endereco import Endereco
 from .tanque import Tanque
 from .peca import Peca
 from .tipo_peca import TipoPeca
-from .concretagem import Concretagem, ConcretagemPeca, ConcretagemTanque
+from .concretagem import Concretagem, ConcretagemTanque
 from .equipamento import Equipamento, Manutencao, ChecklistModelo, ChecklistItem, ChecklistEquipamento, ChecklistResposta
 from .colaborador import Colaborador
 from .solicitacao import Solicitacao
@@ -81,7 +81,7 @@ __all__ = [
     'db', 'Usuario', 'CentroCusto', 'PlanoConta', 'Contrato',
     'Material', 'MaterialTanque', 'ItemSolicitacao', 'Solicitacao','Cargo','Departamento','Colaborador','DadosBancarios',
     'NotaFiscal', 'NotaFiscalItem', 'Cliente', 'Endereco', 'Tanque', 'Peca', 'TipoPeca',
-    'Concretagem', 'ConcretagemPeca', 'ConcretagemTanque', 'Equipamento', 'Manutencao', 
+    'Concretagem', 'ConcretagemTanque', 'Equipamento', 'Manutencao', 
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
     'TracoConcreto', 'ItemTracoConcreto', 'UsinagemConcreto', 'UsinagemEquipamento',
     'UsinagemMaterial', 'ConversaoUnidade', 'Unidade', 'RompimentoCorpoProva',

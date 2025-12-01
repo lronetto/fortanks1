@@ -1,6 +1,6 @@
 import logging
 from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify
-from models import Concretagem, Tanque, Peca, ConcretagemPeca, ConcretagemTanque, UsinagemConcreto, db, CentroCusto, Contrato
+from models import Concretagem, Tanque, Peca, Concretagem, ConcretagemTanque, UsinagemConcreto, db, CentroCusto, Contrato
 from flask_login import login_required
 #from flask_wtf.csrf import csrf_exempt
 import json
@@ -17,12 +17,7 @@ concretagem = Blueprint('concretagem', __name__, url_prefix='/concretagens')
 @login_required
 def index():
     """Lista todas as concretagens cadastradas"""
-    concretagens = Concretagem.query.\
-        join(ConcretagemPeca).\
-        join(Peca).\
-        join(Tanque).\
-        join(Contrato).\
-        join(CentroCusto).order_by(CentroCusto.nome).all()
+    concretagens = Concretagem.query.all()
     # Buscar dados para o modal de nova concretagem
     tanques = Tanque.query.join(Contrato).join(CentroCusto).order_by(CentroCusto.nome).all()
     usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc(),UsinagemConcreto.nbt.desc(),UsinagemConcreto.nota.desc()).all()

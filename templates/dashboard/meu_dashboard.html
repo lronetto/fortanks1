@@ -20,6 +20,9 @@
             {% include 'dashboard/cards/historico_usinagem.html' %}
             {% endif %}
 
+            {% if cards.historico_semanal_concretagens.exibir %}
+            {% include 'dashboard/cards/historico_semanal_concretagens.html' %}
+            {% endif %}
 
             {% if cards.concretagens_recentes.exibir %}
             <!-- Concretagens Recentes -->

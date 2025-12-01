@@ -1,30 +1,6 @@
 from datetime import datetime
 from models.database import db
 
-# Criando uma classe de associação entre concretagem e peças
-class ConcretagemPeca(db.Model):
-    """
-    Modelo para associação entre concretagem e peças, incluindo a forma
-    """
-    __tablename__ = 'ConcPecas'
-    
-    concretagem_id = db.Column(db.Integer, db.ForeignKey('Conc.id', ondelete='CASCADE'), primary_key=True)
-    peca_id = db.Column(db.Integer, db.ForeignKey('pecas.id', ondelete='CASCADE'), primary_key=True)
-    
-    # Adicionar campo para a forma
-    forma = db.Column(db.String(100), nullable=True)
-    
-    # Adicionar campo para usinagem de concreto
-    usinagem_id = db.Column(db.Integer, db.ForeignKey('Usinagem.id'), nullable=True)
-    
-    # Relacionamentos
-    concretagem = db.relationship("Concretagem", back_populates="pecas_associadas")
-    peca = db.relationship("Peca", back_populates="concretagens_associadas")
-    usinagem = db.relationship("UsinagemConcreto")
-    
-    def __repr__(self):
-        return f'<ConcretagemPeca {self.concretagem_id}-{self.peca_id}>'
-
 # Nova tabela de associação entre concretagem e tanques
 class ConcretagemTanque(db.Model):
     """
@@ -53,27 +29,32 @@ class Concretagem(db.Model):
     observacoes = db.Column(db.Text, nullable=True)
     
     # Novo campo para pista (1 ou 2)
-    pista = db.Column(db.Integer, nullable=False)
-    alongamentos = db.Column(db.String(500), nullable=True)
+    pista = db.Column(db.String(11), nullable=False)
+    cordoalhas = db.Column(db.String(1000), nullable=True)
+    pecas = db.Column(db.String(1000), nullable=True)
     # Datas de controle
     data_cadastro = db.Column(db.DateTime, default=datetime.now)
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
-    # Nova relação com tanques usando a classe de associação
-    tanques_associados = db.relationship('ConcretagemTanque', back_populates="concretagem", cascade="all, delete-orphan")
+    # Relacionamentos
+    tanques_associados = db.relationship("ConcretagemTanque", back_populates="concretagem", cascade="all, delete-orphan")
     
-    # Relação com peças usando a classe de associação
-    pecas_associadas = db.relationship('ConcretagemPeca', back_populates="concretagem", cascade="all, delete-orphan")
-    
-    # Propriedade para acesso direto às peças (compatibilidade com código existente)
-    @property
-    def pecas(self):
-        return [cp.peca for cp in self.pecas_associadas]
-    
-    # Propriedade para acesso direto aos tanques
-    @property
-    def tanques(self):
-        return [ct.tanque for ct in self.tanques_associados]
+    def get_quantidade_pecas_json(self):
+        """
+        Retorna a quantidade de peças armazenadas no campo JSON 'pecas'
+        """
+        try:
+            import json
+            # Acessa o campo da coluna diretamente via __dict__ para evitar conflito com a propriedade @property
+            pecas_str = self.pecas
+            if not pecas_str:
+                return 0
+            pecas_json = json.loads(pecas_str) if isinstance(pecas_str, str) else pecas_str
+            if isinstance(pecas_json, list):
+                return len(pecas_json)
+            return 0
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            return 0
     
     def adicionar_tanque(self, tanque):
         """Adiciona um tanque à concretagem"""
@@ -92,41 +73,6 @@ class Concretagem(db.Model):
             if ct.tanque_id == tanque.id:
                 self.tanques_associados.remove(ct)
                 break
-    
-    def adicionar_peca(self, peca, forma=None, usinagem=None):
-        """Adiciona uma peça à concretagem com a forma especificada"""
-        # Verificar se a peça já existe
-        for cp in self.pecas_associadas:
-            if cp.peca_id == peca.id:
-                # Atualizar a forma se fornecida
-                if forma:
-                    cp.forma = forma
-                # Atualizar a usinagem se fornecida
-                if usinagem:
-                    cp.usinagem_id = usinagem.id
-                return
-        
-        # Adicionar nova associação
-        associacao = ConcretagemPeca(
-            peca=peca,
-            forma=forma,
-            usinagem_id=usinagem.id if usinagem else None
-        )
-        self.pecas_associadas.append(associacao)
-    
-    def remover_peca(self, peca):
-        """Remove uma peça da concretagem"""
-        for cp in self.pecas_associadas:
-            if cp.peca_id == peca.id:
-                self.pecas_associadas.remove(cp)
-                break
-    
-    def get_forma_peca(self, peca_id):
-        """Retorna a forma de uma peça específica"""
-        for cp in self.pecas_associadas:
-            if cp.peca_id == peca_id:
-                return cp.forma
-        return None
     
     def save(self):
         """Salva a concretagem no banco de dados"""
