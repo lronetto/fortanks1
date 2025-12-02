@@ -9,7 +9,8 @@ import base64
 import xml.etree.ElementTree as ET
 import json
 from decimal import Decimal
-from sqlalchemy import func, or_, case, distinct, and_, exists # Adicionar distinct e exists
+import sqlalchemy
+from sqlalchemy import func, or_, case, distinct, and_, exists, select, text, Integer # Adicionar distinct, exists e select
 from sqlalchemy.sql import func as sqlfunc # Alias para func
 from flask import make_response
 from models.database import db
@@ -182,9 +183,18 @@ def nota_fiscal_busca(filtros):
     
     #query = query.join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id)
     # Condições do Join para encontrar a correspondência de pagamento
+    # Normalizar documento para comparação (remover pontos e zeros à esquerda)
+    # Isso é usado apenas como referência, pois não usamos mais OUTER JOIN
+    # Mas mantido para compatibilidade caso seja usado em outro lugar
+    documento_normalizado_join = func.ltrim(
+        func.replace(DadoAnalitico.documento, '.', ''),
+        '0'
+    )
+    numero_nf_normalizado_join = func.ltrim(NotaFiscal.numero_nf, '0')
+    
     join_conditions_pagamento = and_(
         NotaFiscal.valor_total == DadoAnalitico.valor,
-        DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
+        documento_normalizado_join.like(func.concat(numero_nf_normalizado_join, '%'))
     )
     
     # Condições do Join para uploads
@@ -310,32 +320,100 @@ def api_get_dados_notas_fiscais(request):
     
     # Instanciar formulário de importação para o modal
 
-    pagamento_column = func.max(case((DadoAnalitico.id != None, 1), else_=0)).label('pagamento')
-    upload_column = func.max(case((Upload.id != None, 1), else_=0)).label('upload')
-    upload_arquivei_column = func.max(case((Upload.tipo == 1, 1), else_=0)).label('upload_arquivei')
-    upload_protocolo_column = func.max(case((Upload.tipo == 2, 1), else_=0)).label('upload_protocolo')
-    upload_reembolso_column = func.max(case((Upload.tipo == 3, 1), else_=0)).label('upload_reembolso')
-    vencimento_column = func.json_extract(NotaFiscal.dados_adicionais, '$.fatura.vencimento').label('vencimento')
-    # Construir query base
+    # OTIMIZAÇÃO: Usar subqueries ao invés de OUTER JOINs para evitar multiplicação de linhas
+    # Isso evita que uma nota com múltiplos DadoAnalitico ou Uploads crie múltiplas linhas
+    
+    # Subquery para verificar se tem pagamento (retorna 1 se existe, 0 se não existe)
+    # Usa subquery escalar com CASE e EXISTS - mais eficiente que OUTER JOIN
+    # EXISTS retorna True/False, então usamos CASE para converter para 1/0
+    # Normalizar documento: remover pontos e zeros à esquerda para comparação
+    # Exemplo: "000.123" ou "000123" deve comparar com "123"
+    documento_normalizado = func.cast(
+        func.replace(DadoAnalitico.documento, ".", ""),
+        Integer
+    )
+
+    # Número da NF convertido para inteiro (remove zeros à esquerda)
+    numero_nf_normalizado = func.cast(NotaFiscal.numero_nf, Integer)
+
+    
+    subquery_pagamento_exists = exists(
+        select(1).select_from(DadoAnalitico).where(
+            and_(
+                NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
+                DadoAnalitico.valor == NotaFiscal.valor_total,
+                # Comparar documentos normalizados (sem pontos e zeros à esquerda)
+                documento_normalizado == numero_nf_normalizado
+            )
+        )
+    )
+    subquery_pagamento = case((subquery_pagamento_exists, 1), else_=0)
+    
+    # Subqueries para uploads usando EXISTS (mais eficiente que MAX)
+    # EXISTS retorna True/False, então usamos CASE para converter para 1/0
+    subquery_upload_arquivei_exists = exists(
+        select(1).select_from(Upload).where(
+            and_(
+                Upload.pai_id == NotaFiscal.id,
+                Upload.pai == 'NotaFiscal',
+                Upload.tipo == 1
+            )
+        )
+    )
+    subquery_upload_arquivei = case((subquery_upload_arquivei_exists, 1), else_=0)
+    
+    subquery_upload_protocolo_exists = exists(
+        select(1).select_from(Upload).where(
+            and_(
+                Upload.pai_id == NotaFiscal.id,
+                Upload.pai == 'NotaFiscal',
+                Upload.tipo == 2
+            )
+        )
+    )
+    subquery_upload_protocolo = case((subquery_upload_protocolo_exists, 1), else_=0)
+    
+    subquery_upload_reembolso_exists = exists(
+        select(1).select_from(Upload).where(
+            and_(
+                Upload.pai_id == NotaFiscal.id,
+                Upload.pai == 'NotaFiscal',
+                Upload.tipo == 3
+            )
+        )
+    )
+    subquery_upload_reembolso = case((subquery_upload_reembolso_exists, 1), else_=0)
+    
+    # Subquery para verificar se tem qualquer upload
+    subquery_upload_qualquer_exists = exists(
+        select(1).select_from(Upload).where(
+            and_(
+                Upload.pai_id == NotaFiscal.id,
+                Upload.pai == 'NotaFiscal'
+            )
+        )
+    )
+    subquery_upload_qualquer = case((subquery_upload_qualquer_exists, 1), else_=0)
+    
+    # Colunas calculadas usando subqueries EXISTS (sem JOINs, sem multiplicação de linhas)
+    pagamento_column = subquery_pagamento.label('pagamento')
+    upload_column = subquery_upload_qualquer.label('upload')
+    upload_arquivei_column = subquery_upload_arquivei.label('upload_arquivei')
+    upload_protocolo_column = subquery_upload_protocolo.label('upload_protocolo')
+    upload_reembolso_column = subquery_upload_reembolso.label('upload_reembolso')
+    
+    # Construir query base SEM OUTER JOINs - isso evita multiplicação de linhas
     query = db.session.query(
         NotaFiscal,
         pagamento_column,
         upload_column,
         upload_protocolo_column,
         upload_reembolso_column,
-        upload_arquivei_column,
-        vencimento_column
+        upload_arquivei_column
     ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
-    join_conditions_pagamento = and_(
-        NotaFiscal.valor_total == DadoAnalitico.valor,
-        DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
-    )
-    join_conditions_upload = and_(
-        Upload.pai_id == NotaFiscal.id,
-        Upload.pai == 'NotaFiscal'
-    )
-    query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
-    query = query.outerjoin(Upload, join_conditions_upload)
+    
+    # REMOVIDO: OUTER JOINs que causavam multiplicação de linhas
+    # As subqueries acima já calculam os valores necessários
     
     # Aplicar filtros
     if busca:
@@ -453,33 +531,32 @@ def api_get_dados_notas_fiscais(request):
         elif status_upload == '5':
             query = query.filter(~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id).exists())
     
-    # Aplicar GROUP BY antes de usar HAVING para funções agregadas
-    query = query.group_by(NotaFiscal.id)
+    # OTIMIZAÇÃO: Não precisamos mais de GROUP BY pois as subqueries retornam apenas 1 valor por nota
+    # As subqueries correlacionadas já garantem uma linha por NotaFiscal (sem multiplicação de linhas)
     
-    # Filtros que usam funções agregadas devem usar HAVING, não WHERE
+    # Filtros de status de pagamento - agora usando WHERE pois são subqueries, não funções agregadas
     if status_pagamento:
         if status_pagamento == 'pago':
             query = query.having(pagamento_column == 1)
         elif status_pagamento == 'nao_pago':
             query = query.having(pagamento_column == 0)
         elif status_pagamento == 'com_faturamento':
-            # vencimento_column não é agregada, pode usar WHERE
-            query = query.filter(vencimento_column.isnot(None))
+            query = query.filter(NotaFiscal.vencimento.isnot(None))
         elif status_pagamento == 'vencido':
             # Comparar string JSON diretamente (formato 'YYYY-MM-DD')
             hoje_str = datetime.now().date().strftime('%Y-%m-%d')
             query = query.filter(
-                vencimento_column.isnot(None),
-                vencimento_column < hoje_str
+                NotaFiscal.vencimento.isnot(None),
+                NotaFiscal.vencimento < hoje_str
             )
         elif status_pagamento == 'vencido_nao_pago':
             # Comparar string JSON diretamente (formato 'YYYY-MM-DD')
             hoje_str = datetime.now().date().strftime('%Y-%m-%d')
             query = query.filter(
-                vencimento_column.isnot(None),
-                vencimento_column < hoje_str,
-                vencimento_column.isnot(None)
-            ).having(pagamento_column == 0)
+                NotaFiscal.vencimento.isnot(None),
+                NotaFiscal.vencimento < hoje_str,
+                pagamento_column == 0
+            )
     
     # Ordenar antes de paginar
     # Obter parâmetros de ordenação
@@ -490,7 +567,7 @@ def api_get_dados_notas_fiscais(request):
     order_mapping = {
         'numero_nf': NotaFiscal.numero_nf,
         'data_emissao': NotaFiscal.data_emissao,
-        'vencimento': vencimento_column,
+        'vencimento': NotaFiscal.vencimento,
         'valor_total': NotaFiscal.valor_total,
         'nome_emitente': NotaFiscal.nome_emitente,
         'cnpj_emitente': NotaFiscal.cnpj_emitente,
@@ -2773,8 +2850,19 @@ def tabela_notas_fiscais():
     pagamento = request.args.get('status_pagamento',None)
     query = api_get_dados_notas_fiscais(request)
     print(f'query {time.time() - inicio}')
-    
+    #print(f'query: {query}')
     inicio = time.time()
+    # Calcular valor total das notas filtradas
+    valor_total_raw = db.session.query(
+        func.coalesce(func.sum(NotaFiscal.valor_total), 0)
+    ).select_from(NotaFiscal).filter(
+        *query._where_criteria
+    ).scalar()
+    
+    # Formatar valor total para exibição (formato dinheiro brasileiro: R$ 1.234,56)
+    valor_total = float(valor_total_raw) if valor_total_raw else 0.0
+    # Formatar com separador de milhares (.) e decimal (,)
+    valor_total_formatado = f'R$ {valor_total:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
     # Obter TODAS as notas primeiro (sem paginação)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     print(f'pagination {time.time() - inicio}')
@@ -2784,15 +2872,15 @@ def tabela_notas_fiscais():
     print(f'notas_fiscais_pagina len:{len(notas_fiscais_pagina)} {time.time() - inicio}')
     for nota in notas_fiscais_pagina:
         # Extrair vencimento da coluna (pode ser string 'YYYY-MM-DD' ou None)
-        vencimento_str = getattr(nota, 'vencimento', None) if hasattr(nota, 'vencimento') else None
+        vencimento_str = getattr(nota.NotaFiscal, 'vencimento', None) if hasattr(nota.NotaFiscal, 'vencimento') else None
         
         # Formatar vencimento para exibição
         vencimento_formatado = '-'
         if vencimento_str:
             try:
                 # Se for string no formato 'YYYY-MM-DD', converter para datetime e formatar
-                if isinstance(vencimento_str, str) and len(vencimento_str) == 12 and '-' in vencimento_str:
-                    vencimento_date = datetime.strptime(vencimento_str, '"%Y-%m-%d"').date()
+                if isinstance(vencimento_str, str) and len(vencimento_str) == 10 and '-' in vencimento_str:
+                    vencimento_date = datetime.strptime(vencimento_str, '%Y-%m-%d').date()
                     vencimento_formatado = vencimento_date.strftime('%d/%m/%Y')
                 else:
                     vencimento_formatado = str(vencimento_str)
@@ -2830,5 +2918,6 @@ def tabela_notas_fiscais():
         
         notas_fiscais_pagina_upload.append(nota_dict)
     print(f'notas_fiscais_pagina_upload {time.time() - inicio}')
+    
     print(f'tabela notas fiscais - página {page} de {pagination.pages}, total filtrado: {pagination.total} {time.time() - inicio}')
-    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload, total_resultados=pagination.total)
+    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload, total_resultados=pagination.total, valor_total=valor_total_formatado)

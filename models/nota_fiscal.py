@@ -74,6 +74,7 @@ class NotaFiscal(db.Model):
     data_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     dados_adicionais = db.Column(db.Text, nullable=True)
+    vencimento = db.Column(db.String(10), nullable=True)
     
     # Relacionamentos
     itens = db.relationship('NotaFiscalItem', backref='nota_fiscal', cascade='all, delete-orphan')

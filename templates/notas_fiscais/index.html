@@ -271,9 +271,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         $.get(url + '?' + params, function(html) {
             $('#tabelaNotasFiscaisContainer').html(html);
+
             console.log('Tabela carregada com sucesso');
             // Atualizar valor total após carregar a tabela
-            carregarTotalValorNotas(params);
+            
             // Atualizar ícones de ordenação após carregar tabela
             updateSortIcons();
         }).fail(function(xhr, status, error) {
@@ -282,47 +283,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function carregarTotalNotas(params = null) {
-        let url = '/notas-fiscais/total-notas';
-        if (!params) {
-            params = $('#filtrosNotasFiscais').serialize();
-        }
-        $.get(url + '?' + params, function(response) {
-            $('#totalNotasFiscais').text(response.total_notas || 0);
-        }).fail(function(xhr, status, error) {
-            console.error('Erro ao carregar total de notas:', error);
-            $('#totalNotasFiscais').text('0');
-        });
-    }
+   
     
-    function carregarTotalValorNotas(params = null) {
-        let url = '/notas-fiscais/total-valor-notas';
-        if (!params) {
-            params = $('#filtrosNotasFiscais').serialize();
-        }
-        $.get(url + '?' + params, function(response) {
-            let valor = parseFloat(response.valor_total || 0);
-            let valorFormatado = valor.toLocaleString('pt-BR', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-            // Verificar se o elemento existe antes de atualizar
-            let elemento = $('#valor_total_notas');
-            if (elemento.length > 0) {
-                elemento.text('R$ ' + valorFormatado);
-            }
-        }).fail(function(xhr, status, error) {
-            console.error('Erro ao carregar valor total de notas:', error);
-            let elemento = $('#valor_total_notas');
-            if (elemento.length > 0) {
-                elemento.text('R$ 0,00');
-            }
-        });
-    }
+    
     
     // Carregar tabela e total ao iniciar
     carregarTabelaNotasFiscais();
-    carregarTotalNotas();
     
     // Submeter filtros via AJAX
     $('#filtrosNotasFiscais').on('submit', function(e) {
@@ -330,8 +296,6 @@ document.addEventListener('DOMContentLoaded', function() {
         $('#tabelaNotasFiscaisContainer').html('Carregando...');
         let params = $(this).serialize();
         carregarTabelaNotasFiscais(params);
-        carregarTotalNotas(params);
-        carregarTotalValorNotas(params);
     });
     
     // Paginação via AJAX (delegação)

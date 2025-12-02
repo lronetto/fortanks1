@@ -2,13 +2,13 @@ import json
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, case, and_
 from decimal import Decimal
 from models.peca import Peca
 from models.database import db
 from models.tanque import Tanque
 from models.usuario import Usuario
-from models.nota_fiscal import NotaFiscal, NotaFiscalItem
+from models.nota_fiscal import CNPJS_MATRIZ, NotaFiscal, NotaFiscalItem
 from models.material import Material
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
@@ -419,26 +419,67 @@ def card_resumo_placas():
     dados_especificos = []
     #acerto_data_concretagem()
     for tanque in tanques:
-        pecas = Peca.query.filter_by(tanque_id=tanque.id).all()
-        concretadas = 0
-        acabadas = 0
-        transportadas = 0
-        total_pecas = len(pecas)
-        for peca in pecas:
-            if peca.data_concretagem is not None and peca.data_concretagem != '':
-                concretadas += 1
-            if peca.qualidade and peca.qualidade != '':
-                json_data = json.loads(peca.qualidade)
-                if json_data['acabamento']:
-                    acabadas += 1
-                if json_data['transporte'].get('data_transporte'):
-                    transportadas += 1
+        # Query única otimizada: calcular todas as contagens em uma única query
+        resultado = db.session.query(
+            func.count(Peca.id).label('total_pecas'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Peca.data_concretagem.isnot(None),
+                            Peca.data_concretagem != ''
+                        ),
+                        1
+                    ),
+                    else_=0
+                )
+            ).label('concretadas'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Peca.qualidade.isnot(None),
+                            Peca.qualidade != '',
+                            func.json_extract(Peca.qualidade, '$.acabamento').isnot(None),
+                            func.json_extract(Peca.qualidade, '$.acabamento') != '',
+                            func.json_extract(Peca.qualidade, '$.acabamento') != 'null'
+                        ),
+                        1
+                    ),
+                    else_=0
+                )
+            ).label('acabadas'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Peca.qualidade.isnot(None),
+                            Peca.qualidade != '',
+                            func.json_extract(Peca.qualidade, '$.transporte.data_transporte') !='null'
+                        ),
+                        1
+                    ),
+                    else_=0
+                )
+            ).label('transportadas')
+        ).filter(
+            Peca.tanque_id == tanque.id
+        ).first()
+        
+        # Extrair valores do resultado (pode ser None se não houver peças)
+        total_pecas = resultado.total_pecas or 0
+        concretadas = resultado.concretadas or 0
+        acabadas = resultado.acabadas or 0
+        transportadas = resultado.transportadas or 0
+        
         em_estoque = concretadas - transportadas
         prontas_transportar = acabadas - transportadas
-        nfs_emitidas = NotaFiscalItem.query.filter_by(codigo=tanque.item_nf).all()
-        nfs_emitidas_total = 0
-        for nf in nfs_emitidas:
-            nfs_emitidas_total += nf.quantidade
+        nfs_emitidas_total = db.session.query(func.sum(NotaFiscalItem.quantidade)).\
+            join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).\
+            join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
+            filter(Tanque.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
+        if nfs_emitidas_total is None:
+            nfs_emitidas_total = 0
         dados_especificos.append({
             'tanque': tanque.nome,
             'concretadas': concretadas,
