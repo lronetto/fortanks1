@@ -38,7 +38,7 @@ class Concretagem(db.Model):
     
     # Relacionamentos
     tanques_associados = db.relationship("ConcretagemTanque", back_populates="concretagem", cascade="all, delete-orphan")
-    
+   
     def get_quantidade_pecas_json(self):
         """
         Retorna a quantidade de peças armazenadas no campo JSON 'pecas'

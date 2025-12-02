@@ -51,7 +51,7 @@ def atualizar_dados_adicionais():
     """
     Atualiza dados adicionais das notas fiscais processando em blocos de 100 registros.
     """
-    TAMANHO_BLOCO = 100
+    TAMANHO_BLOCO = 500
     total_notas = NotaFiscal.query.count()
     total_processadas = 0
     
@@ -72,10 +72,12 @@ def atualizar_dados_adicionais():
                 if nota.tipo == 2:
                     chave_acesso, dados = nota.extrair_dados_xml_cte()
                     nota.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+                    #print(f'dados_adicionais: {nota.dados_adicionais}')
                     nota.save()
                 elif nota.tipo < 2:
                     chave_acesso, dados = nota.extrair_dados_xml_nfe()
                     nota.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+                    #print(f'dados_adicionais: {nota.dados_adicionais}')
                     nota.save()
                 total_processadas += 1
             except Exception as e:
@@ -307,9 +309,33 @@ def api_get_dados_notas_fiscais(request):
     cnpj_destinatario = args.get('cnpj_destinatario', '').strip()
     
     # Instanciar formulário de importação para o modal
-    
+
+    pagamento_column = func.max(case((DadoAnalitico.id != None, 1), else_=0)).label('pagamento')
+    upload_column = func.max(case((Upload.id != None, 1), else_=0)).label('upload')
+    upload_arquivei_column = func.max(case((Upload.tipo == 1, 1), else_=0)).label('upload_arquivei')
+    upload_protocolo_column = func.max(case((Upload.tipo == 2, 1), else_=0)).label('upload_protocolo')
+    upload_reembolso_column = func.max(case((Upload.tipo == 3, 1), else_=0)).label('upload_reembolso')
+    vencimento_column = func.json_extract(NotaFiscal.dados_adicionais, '$.fatura.vencimento').label('vencimento')
     # Construir query base
-    query = NotaFiscal.query
+    query = db.session.query(
+        NotaFiscal,
+        pagamento_column,
+        upload_column,
+        upload_protocolo_column,
+        upload_reembolso_column,
+        upload_arquivei_column,
+        vencimento_column
+    ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
+    join_conditions_pagamento = and_(
+        NotaFiscal.valor_total == DadoAnalitico.valor,
+        DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
+    )
+    join_conditions_upload = and_(
+        Upload.pai_id == NotaFiscal.id,
+        Upload.pai == 'NotaFiscal'
+    )
+    query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
+    query = query.outerjoin(Upload, join_conditions_upload)
     
     # Aplicar filtros
     if busca:
@@ -384,19 +410,21 @@ def api_get_dados_notas_fiscais(request):
         elif tipo_nfe == '3':
             tipo = [3]
         query = query.filter(NotaFiscal.tipo.in_(tipo))
-        # Filtros extras para CTE
+        # Filtros extras para CTE - Otimizado para usar json_extract ao invés de ILIKE
         if tipo_nfe == '2':
             if origem:
+                # Usar json_extract é mais eficiente que ILIKE em JSON
                 query = query.filter(
-                    db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"municipio_inicio": "{origem}"%')
+                    func.json_extract(NotaFiscal.dados_adicionais, '$.municipio_inicio') == origem
                 )
             if destino:
                 query = query.filter(
-                    db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"municipio_destino": "{destino}"%')
+                    func.json_extract(NotaFiscal.dados_adicionais, '$.municipio_destino') == destino
                 )
             if remetente:
+                # Para remetente, ainda precisa de LIKE pois está aninhado
                 query = query.filter(
-                    db.cast(NotaFiscal.dados_adicionais, db.Text).ilike(f'%"remetente": %"nome": "%{remetente}%"%')
+                    func.json_extract(NotaFiscal.dados_adicionais, '$.remetente.nome').ilike(f'%{remetente}%')
                 )
     # Filtro de status de upload
     if status_upload:
@@ -424,8 +452,61 @@ def api_get_dados_notas_fiscais(request):
         
         elif status_upload == '5':
             query = query.filter(~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id).exists())
+    
+    # Aplicar GROUP BY antes de usar HAVING para funções agregadas
+    query = query.group_by(NotaFiscal.id)
+    
+    # Filtros que usam funções agregadas devem usar HAVING, não WHERE
+    if status_pagamento:
+        if status_pagamento == 'pago':
+            query = query.having(pagamento_column == 1)
+        elif status_pagamento == 'nao_pago':
+            query = query.having(pagamento_column == 0)
+        elif status_pagamento == 'com_faturamento':
+            # vencimento_column não é agregada, pode usar WHERE
+            query = query.filter(vencimento_column.isnot(None))
+        elif status_pagamento == 'vencido':
+            # Comparar string JSON diretamente (formato 'YYYY-MM-DD')
+            hoje_str = datetime.now().date().strftime('%Y-%m-%d')
+            query = query.filter(
+                vencimento_column.isnot(None),
+                vencimento_column < hoje_str
+            )
+        elif status_pagamento == 'vencido_nao_pago':
+            # Comparar string JSON diretamente (formato 'YYYY-MM-DD')
+            hoje_str = datetime.now().date().strftime('%Y-%m-%d')
+            query = query.filter(
+                vencimento_column.isnot(None),
+                vencimento_column < hoje_str,
+                vencimento_column.isnot(None)
+            ).having(pagamento_column == 0)
+    
     # Ordenar antes de paginar
-    query = query.order_by(NotaFiscal.data_emissao.desc(),NotaFiscal.numero_nf.desc())
+    # Obter parâmetros de ordenação
+    order_by = args.get('order_by', 'data_emissao')
+    order_dir = args.get('order_dir', 'desc')
+    
+    # Mapear colunas para ordenação
+    order_mapping = {
+        'numero_nf': NotaFiscal.numero_nf,
+        'data_emissao': NotaFiscal.data_emissao,
+        'vencimento': vencimento_column,
+        'valor_total': NotaFiscal.valor_total,
+        'nome_emitente': NotaFiscal.nome_emitente,
+        'cnpj_emitente': NotaFiscal.cnpj_emitente,
+        'cnpj_destinatario': NotaFiscal.cnpj_destinatario,
+    }
+    
+    # Aplicar ordenação
+    if order_by in order_mapping:
+        order_column = order_mapping[order_by]
+        if order_dir == 'asc':
+            query = query.order_by(order_column.asc(), NotaFiscal.id.asc())
+        else:
+            query = query.order_by(order_column.desc(), NotaFiscal.id.desc())
+    else:
+        # Ordenação padrão
+        query = query.order_by(NotaFiscal.data_emissao.desc(), NotaFiscal.numero_nf.desc())
     
     return query
 @nota_fiscal_bp.route('/api/notas-fiscais/ajax', methods=['GET','POST'])
@@ -2465,8 +2546,20 @@ def total_valor_notas():
         # Obter query com filtros aplicados
         query = api_get_dados_notas_fiscais(request)
         
-        # Calcular soma dos valores totais
-        resultado = query.with_entities(func.sum(NotaFiscal.valor_total)).scalar()
+        # Obter apenas os IDs únicos das notas filtradas (evita duplicatas dos joins)
+        nota_ids = [row[0] for row in query.with_entities(distinct(NotaFiscal.id)).all()]
+        
+        if not nota_ids:
+            return jsonify({'valor_total': 0.0})
+        
+        # Calcular soma dos valores totais usando apenas os IDs únicos
+        # Isso garante que cada nota seja contada apenas uma vez
+        resultado = db.session.query(
+            func.sum(NotaFiscal.valor_total)
+        ).filter(
+            NotaFiscal.id.in_(nota_ids)
+        ).scalar()
+        
         valor_total = float(resultado) if resultado is not None else 0.0
         
         return jsonify({
@@ -2677,37 +2770,65 @@ def tabela_notas_fiscais():
     page = request.args.get('page', 1, type=int)
     per_page = 50
     print("request.args:", request.args)
+    pagamento = request.args.get('status_pagamento',None)
     query = api_get_dados_notas_fiscais(request)
     print(f'query {time.time() - inicio}')
+    
+    inicio = time.time()
+    # Obter TODAS as notas primeiro (sem paginação)
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    print(f'pagination {time.time() - inicio}')
+    inicio = time.time()
     notas_fiscais_pagina = pagination.items
     notas_fiscais_pagina_upload = []
     print(f'notas_fiscais_pagina len:{len(notas_fiscais_pagina)} {time.time() - inicio}')
     for nota in notas_fiscais_pagina:
-        nota.upload = None
-        nota.pago = False
-        nota.vencimento = nota.get_vencimento()
-        if nota.vencimento:
-            nota.vencimento = nota.vencimento.strftime('%d/%m/%Y')
-        else:
-            nota.vencimento = '-'
-        nota.emitente = ('Matriz' if nota.cnpj_emitente in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_emitente in CNPJS_FILIAIS else 'Terceiros')
-        nota.destinatario = ('Matriz' if nota.cnpj_destinatario in CNPJS_MATRIZ else 'Filiais' if nota.cnpj_destinatario in CNPJS_FILIAIS else 'Terceiros')
-        dadosAnaliticos = db.session.query(DadoAnalitico.id).filter(DadoAnalitico.data_pagamento >= nota.data_emissao,\
-                                                           DadoAnalitico.documento.ilike(f'%{nota.numero_nf}%'),\
-                                                           DadoAnalitico.valor == nota.valor_total).first()
-        if dadosAnaliticos:
-            nota.pago = True
-            if request.args.get('status_pagamento') == 'nao_pago':
-                continue
-        nota.uploads = {'arquivei':False,'protocolo':False,'reembolso':False,'total':0}
-        uploads = db.session.query(Upload.pai_id,Upload.pai,Upload.tipo).filter(Upload.pai_id==nota.id, Upload.pai=='NotaFiscal').all()
-        if uploads:
-            nota.uploads['arquivei'] = any(u[2] == 1 for u in uploads)
-            nota.uploads['protocolo'] = any(u[2] == 2 for u in uploads)
-            nota.uploads['reembolso'] = any(u[2] == 3 for u in uploads)
-            nota.uploads['total'] = len(uploads)
-        notas_fiscais_pagina_upload.append(nota)
+        # Extrair vencimento da coluna (pode ser string 'YYYY-MM-DD' ou None)
+        vencimento_str = getattr(nota, 'vencimento', None) if hasattr(nota, 'vencimento') else None
+        
+        # Formatar vencimento para exibição
+        vencimento_formatado = '-'
+        if vencimento_str:
+            try:
+                # Se for string no formato 'YYYY-MM-DD', converter para datetime e formatar
+                if isinstance(vencimento_str, str) and len(vencimento_str) == 12 and '-' in vencimento_str:
+                    vencimento_date = datetime.strptime(vencimento_str, '"%Y-%m-%d"').date()
+                    vencimento_formatado = vencimento_date.strftime('%d/%m/%Y')
+                else:
+                    vencimento_formatado = str(vencimento_str)
+            except (ValueError, AttributeError):
+                vencimento_formatado = str(vencimento_str) if vencimento_str else '-'
+        
+        # Criar um objeto simples para passar ao template
+        # Row do SQLAlchemy é imutável, então criamos um dict ou objeto simples
+        nota_dict = {
+            'NotaFiscal': nota.NotaFiscal,
+            'pagamento': getattr(nota, 'pagamento', 0),
+            'upload': getattr(nota, 'upload', 0),
+            'upload_protocolo': getattr(nota, 'upload_protocolo', 0),
+            'upload_reembolso': getattr(nota, 'upload_reembolso', 0),
+            'upload_arquivei': getattr(nota, 'upload_arquivei', 0),
+            'vencimento': vencimento_str,
+            'vencimento_formatado': vencimento_formatado,
+            'id': nota.NotaFiscal.id,
+            'numero_nf': nota.NotaFiscal.numero_nf
+        }
+        
+        # Adicionar emitente e destinatário ao dicionário (não ao objeto NotaFiscal)
+        # O objeto NotaFiscal pode ser imutável, então armazenamos no dicionário
+        nota_dict['emitente'] = ('Matriz' if nota.NotaFiscal.cnpj_emitente in CNPJS_MATRIZ else 'Filiais' if nota.NotaFiscal.cnpj_emitente in CNPJS_FILIAIS else 'Terceiros')
+        nota_dict['destinatario'] = ('Matriz' if nota.NotaFiscal.cnpj_destinatario in CNPJS_MATRIZ else 'Filiais' if nota.NotaFiscal.cnpj_destinatario in CNPJS_FILIAIS else 'Terceiros')
+        
+        # Tentar adicionar ao objeto NotaFiscal também (pode funcionar se for um objeto ORM normal)
+        try:
+            nota_dict['NotaFiscal'].emitente = nota_dict['emitente']
+            nota_dict['NotaFiscal'].destinatario = nota_dict['destinatario']
+        except (AttributeError, TypeError):
+            # Se não conseguir, os valores já estão no dicionário
+            pass
 
-    print(f'tabela notas fiscais {time.time() - inicio}')
-    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload,total_resultados=len(notas_fiscais_pagina_upload))
+        
+        notas_fiscais_pagina_upload.append(nota_dict)
+    print(f'notas_fiscais_pagina_upload {time.time() - inicio}')
+    print(f'tabela notas fiscais - página {page} de {pagination.pages}, total filtrado: {pagination.total} {time.time() - inicio}')
+    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload, total_resultados=pagination.total)

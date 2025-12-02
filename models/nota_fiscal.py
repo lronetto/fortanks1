@@ -202,14 +202,47 @@ class NotaFiscal(db.Model):
         return dictvar
 
     def get_vencimento(self):
-        dictvar = self.get_xml_json()
-        #print(f'dictvar: {dictvar}')
-        vencimento = dictvar.get('nfeProc',{}).get('NFe',{}).get('infNFe',{}).get('cobr',{}).get('dup',{}).get('dVenc',None)
-        #print(f'vencimento: {vencimento}')
-        if vencimento:
-            return datetime.strptime(vencimento, '%Y-%m-%d')
-        else:
-            return None
+        # Primeiro tentar obter do dados_adicionais (mais rápido, já está processado)
+        if self.dados_adicionais:
+            try:
+                dados_json = json.loads(self.dados_adicionais) if isinstance(self.dados_adicionais, str) else self.dados_adicionais
+                if isinstance(dados_json, dict):
+                    fatura = dados_json.get('fatura', {})
+                    if isinstance(fatura, dict):
+                        vencimento_str = fatura.get('vencimento')
+                        if vencimento_str:
+                            return datetime.strptime(vencimento_str, '%Y-%m-%d')
+            except (json.JSONDecodeError, ValueError, TypeError, AttributeError):
+                pass
+        
+        # Se não encontrou em dados_adicionais, tentar extrair do XML
+        try:
+            dictvar = self.get_xml_json()
+            cobr = dictvar.get('nfeProc',{}).get('NFe',{}).get('infNFe',{}).get('cobr',{})
+            if not cobr:
+                return None
+            
+            dup = cobr.get('dup', None)
+            if not dup:
+                return None
+            
+            # Se dup é uma lista (múltiplas duplicatas), pegar a última (geralmente a mais importante)
+            if isinstance(dup, list):
+                if len(dup) > 0:
+                    # Pegar a última duplicata (geralmente a mais importante)
+                    dup = dup[-1]
+                else:
+                    return None
+            
+            # Se ainda for um dicionário, tentar obter o vencimento
+            if isinstance(dup, dict):
+                vencimento = dup.get('dVenc', None)
+                if vencimento:
+                    return datetime.strptime(vencimento, '%Y-%m-%d')
+        except Exception:
+            pass
+        
+        return None
         
     def importar_arquivei(data_inicial,data_final,tipo='nfe'):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
@@ -524,9 +557,11 @@ class NotaFiscal(db.Model):
                 'vICMS': vICMS,
             }
             if cobr:
+                #print(f'cobr: {cobr}')
                 fatura = cobr.find('.//nfe:fat', ns) or cobr.find('.//fat', ns)
-                dup = fatura.find('.//nfe:dup', ns) or fatura.find('.//dup', ns)
-
+                #print(f'fatura: {fatura}')
+                dup = cobr.find('.//nfe:dup', ns) or cobr.find('.//dup', ns)
+                #print(f'dup: {dup}')
             if not ide or not emit or not dest or not total:
                 logger.error("Dados essenciais ausentes no XML da NFe")
                 return chave_acesso, None
@@ -581,6 +616,27 @@ class NotaFiscal(db.Model):
                 'impostos': impostos
             }
             
+            if cobr and dup:
+                vencimento = get_xml_text(dup, './/nfe:dVenc', ns) or get_xml_text(dup, './/dVenc', ns)
+                if vencimento:
+                    vencimento = datetime.strptime(vencimento, '%Y-%m-%d')
+                    # Converter para string para serialização JSON
+                    vencimento_str = vencimento.strftime('%Y-%m-%d')
+                else:
+                    vencimento = None
+                    vencimento_str = None
+                #print(f'vencimento: {vencimento}')
+                if fatura:
+                    #print(f'fatura: {fatura}')
+                    numero_fatura = get_xml_text(fatura, './/nfe:nFat', ns) or get_xml_text(fatura, './/nFat', ns)
+                    valor_total = get_xml_text(fatura, './/nfe:vOrig', ns) or get_xml_text(fatura, './/vOrig', ns)
+                    valor_total = Decimal(valor_total)
+                    nfe_data['dados_adicionais']['fatura'] = {
+                        'vencimento': vencimento_str,  # Salvar como string para serialização JSON
+                        'numero_fatura': numero_fatura,
+                        'valor_total': str(valor_total)  # Converter Decimal para string também
+                    }
+
             # Extrair dados dos itens
             for item in itens:
                 try:
@@ -621,25 +677,7 @@ class NotaFiscal(db.Model):
                     nfe_data['itens'].append(item_data)
                 except Exception as e:
                     logger.error(f"Erro ao processar item {num_item}: {str(e)}")
-            if cobr and dup:
-                vencimento = dup.findtext('.//nfe:dVenc', ns) or dup.findtext('.//dVenc', ns)
-                if vencimento:
-                    vencimento = datetime.strptime(vencimento, '%Y-%m-%d')
-                    # Converter para string para serialização JSON
-                    vencimento_str = vencimento.strftime('%Y-%m-%d')
-                else:
-                    vencimento = None
-                    vencimento_str = None
-                if fatura:
-                    numero_fatura = fatura.findtext('.//nfe:nFat', ns) or fatura.findtext('.//nFat', ns)
-                    valor_total = fatura.findtext('.//nfe:vOrig', ns) or fatura.findtext('.//vOrig', ns)
-                    valor_total = Decimal(valor_total)
-                    nfe_data['dados_adicionais']['fatura'] = {
-                        'vencimento': vencimento_str,  # Salvar como string para serialização JSON
-                        'numero_fatura': numero_fatura,
-                        'valor_total': str(valor_total)  # Converter Decimal para string também
-                    }
-
+            
             return chave_acesso, nfe_data
         
         except Exception as e:

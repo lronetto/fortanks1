@@ -27,13 +27,48 @@
     <table class="table table-bordered" id="tabelaNotasFiscais">
         <thead>
             <tr>
-                <th>Número NF</th>
-                <th>Data Emissão</th>
-                <th>Data Vencimento</th>
-                <th>Emitente</th>
-                <th>Destinatario</th>
-                <th>Fornecedor</th>
-                <th>Valor Total</th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="numero_nf">
+                        Número NF
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="data_emissao">
+                        Data Emissão
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="vencimento">
+                        Data Vencimento
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="cnpj_emitente">
+                        Emitente
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="cnpj_destinatario">
+                        Destinatario
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="nome_emitente">
+                        Fornecedor
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
+                <th>
+                    <a href="javascript:void(0);" class="sortable-header text-decoration-none text-dark" data-column="valor_total">
+                        Valor Total
+                        <i class="fas fa-sort sort-icon"></i>
+                    </a>
+                </th>
                 <th>Status</th>
                 <th width="180">Ações</th>
             </tr>
@@ -42,28 +77,28 @@
             <!-- Iterar sobre os itens da página atual -->
             {% for nf in notas_fiscais %}
             <tr>
-                <td>{{ nf.numero_nf }}</td>
-                <td>{{ nf.data_emissao.strftime('%d/%m/%Y') if nf.data_emissao else '' }}</td>
-                <td>{{ nf.vencimento }}</td>
-                <td>{{ nf.emitente }}</td>
-                <td>{{ nf.destinatario }}</td>
+                <td>{{ nf.NotaFiscal.numero_nf }}</td>
+                <td>{{ nf.NotaFiscal.data_emissao.strftime('%d/%m/%Y') if nf.NotaFiscal.data_emissao else '' }}</td>
+                <td>{{ nf.vencimento_formatado if nf.vencimento_formatado else '-' }}</td>
+                <td>{{ nf.emitente if nf.emitente else (nf.NotaFiscal.emitente if nf.NotaFiscal.emitente else '-') }}</td>
+                <td>{{ nf.destinatario if nf.destinatario else (nf.NotaFiscal.destinatario if nf.NotaFiscal.destinatario else '-') }}</td>
                 <td>
                     <div class="d-flex align-items-center gap-2">
                         <a href="javascript:void(0);" class="visualizar-docs" data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Visualizar Documentos">
-                            {{ nf.nome_emitente }}
+                            {{ nf.NotaFiscal.nome_emitente }}
                         </a>
                     </div>
                 </td>
-                <td>R$ {{ "%.2f"|format(nf.valor_total) if nf.valor_total is not none else '0.00' }}</td>
+                <td>R$ {{ "%.2f"|format(nf.NotaFiscal.valor_total) if nf.NotaFiscal.valor_total is not none else '0.00' }}</td>
                 <td>
                     <!-- Lógica de status atual -->
-                    {% if nf.status_processamento == 'cancelada' %}
+                    {% if nf.NotaFiscal.status_processamento == 'cancelada' %}
                         <span class="badge bg-danger">Cancelada</span>
                     {% else %}
                         {# Verificar se o método existe antes de chamar #}
                         {% set percentual = -1 %} {# Valor padrão caso método não exista #}
-                        {% if nf.percentual_importacao is defined %}
-                            {% set percentual = nf.percentual_importacao() %}
+                        {% if nf.NotaFiscal.percentual_importacao is defined %}
+                            {% set percentual = nf.NotaFiscal.percentual_importacao() %}
                         {% endif %}
                         <span class="badge {% if percentual == 0 %}bg-danger{% elif percentual == 100 %}bg-success{% elif percentual > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
                             {% if percentual == 0 %}
@@ -78,25 +113,25 @@
                         </span>
                         
                         {# Verificar se tem documentos anexados #}
-                        {% if nf.uploads['total'] > 0 %}
-                            {% if nf.uploads['protocolo'] %}
+                        {% if nf.upload > 0  %}
+                            {% if nf.upload_protocolo == 1 %}
                                 <span class="badge bg-info ms-1" title="protocolo">
                                     <i class="fas fa-paperclip" style="color: green;"></i>
                                 </span>
                             {% endif %}
-                            {% if nf.uploads['arquivei'] %}
+                            {% if nf.upload_arquivei == 1 %}
                                 <span class="badge bg-info ms-1" title="arquivei">
                                     <i class="fas fa-paperclip"></i>
                                 </span>
                             {% endif %}
-                            {% if nf.uploads['reembolso'] %}
+                            {% if nf.upload_reembolso == 1 %}
                                 <span class="badge bg-info ms-1" title="reembolso">
                                     <i class="fas fa-paperclip" style="color: red;"></i>
                                 </span>
                             {% endif %}
                         {% endif %}
 
-                    {% if nf.pago %}
+                    {% if nf.pagamento == 1 %}
                             <span class="badge bg-success ms-1" title="Pago">
                                 <i class="fas fa-check"></i>
                             </span>

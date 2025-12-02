@@ -86,6 +86,12 @@
                         <option value="">Todos</option>
                         <option value="pago" {% if request.args.get('status_pagamento') == 'pago' %}selected{% endif %}>Pago</option>
                         <option value="nao_pago" {% if request.args.get('status_pagamento') == 'nao_pago' %}selected{% endif %}>Não Pago</option>
+                        <option value="com_faturamento" {% if request.args.get('status_pagamento') == 'com_faturamento' %}selected{% endif %}>Com Faturamento</option>
+                        <option value="vencido" {% if request.args.get('status_pagamento') == 'vencido' %}selected{% endif %}>Vencido</option>
+                        <option value="vencido_nao_pago" {% if request.args.get('status_pagamento') == 'vencido_nao_pago' %}selected{% endif %}>Vencido e Não Pago</option>
+
+
+
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -239,17 +245,37 @@ document.addEventListener('DOMContentLoaded', function() {
         var modal = new bootstrap.Modal(document.getElementById('modalExportarZip'));
         modal.show();
     });
+    
+    // Ordenação de colunas - Declarar variáveis antes de usar
+    function getUrlParameter(name) {
+        let urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+    }
+    
+    let currentOrderBy = getUrlParameter('order_by') || 'data_emissao';
+    let currentOrderDir = getUrlParameter('order_dir') || 'desc';
+    
     function carregarTabelaNotasFiscais(params = null) {
         let url = '/notas-fiscais/tabela-notas-fiscais';
         console.log('Carregando tabela com parâmetros:', params);
         if (!params) {
             params = $('#filtrosNotasFiscais').serialize();
         }
+        
+        // Adicionar parâmetros de ordenação se não estiverem presentes
+        if (params && !params.includes('order_by=')) {
+            params += '&order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
+        } else if (!params) {
+            params = 'order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
+        }
+        
         $.get(url + '?' + params, function(html) {
             $('#tabelaNotasFiscaisContainer').html(html);
             console.log('Tabela carregada com sucesso');
             // Atualizar valor total após carregar a tabela
             carregarTotalValorNotas(params);
+            // Atualizar ícones de ordenação após carregar tabela
+            updateSortIcons();
         }).fail(function(xhr, status, error) {
             console.error('Erro ao carregar tabela:', error);
             $('#tabelaNotasFiscaisContainer').html('<div class="alert alert-danger">Erro ao carregar dados: ' + error + '</div>');
@@ -315,6 +341,53 @@ document.addEventListener('DOMContentLoaded', function() {
         let params = url.split('?')[1];
         carregarTabelaNotasFiscais(params);
         // Não atualizar total na paginação, pois o total não muda
+    });
+    
+    function updateSortIcons() {
+        $('.sortable-header').each(function() {
+            let $icon = $(this).find('.sort-icon');
+            let column = $(this).data('column');
+            
+            if (column === currentOrderBy) {
+                $icon.removeClass('fa-sort fa-sort-up fa-sort-down');
+                if (currentOrderDir === 'asc') {
+                    $icon.addClass('fa-sort-up text-primary');
+                } else {
+                    $icon.addClass('fa-sort-down text-primary');
+                }
+            } else {
+                $icon.removeClass('fa-sort-up fa-sort-down text-primary');
+                $icon.addClass('fa-sort');
+            }
+        });
+    }
+    
+    // Inicializar ícones de ordenação
+    updateSortIcons();
+    
+    // Handler para cliques nos cabeçalhos ordenáveis
+    $('#tabelaNotasFiscaisContainer').on('click', '.sortable-header', function(e) {
+        e.preventDefault();
+        let column = $(this).data('column');
+        
+        // Alternar direção se clicar na mesma coluna
+        if (column === currentOrderBy) {
+            currentOrderDir = currentOrderDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentOrderBy = column;
+            currentOrderDir = 'asc';
+        }
+        
+        // Obter parâmetros atuais dos filtros
+        let params = $('#filtrosNotasFiscais').serialize();
+        if (params) {
+            params += '&';
+        }
+        params += 'order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
+        
+        // Recarregar tabela com nova ordenação
+        carregarTabelaNotasFiscais(params);
+        updateSortIcons();
     });
 });
 </script>
