@@ -16,13 +16,6 @@
                     </div>
                     
                     <div class="form-group mb-3">
-                        <label for="centro_custo_id">Centro de Custo para Importação</label>
-                        <select name="centro_custo_id" id="centro_custo_id" class="form-control select2">
-                            <option value="">Selecione um centro de custo</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group mb-3">
                         <label for="observacao">Observação</label>
                         <textarea name="observacao" id="observacao" class="form-control" rows="2" 
                                   placeholder="Observação opcional"></textarea>
@@ -70,6 +63,9 @@
                 
                 <div class="modal-footer">
                     <button type="button" class="btn btn-primary btn-close">Fechar</button>
+                    <button type="button" id="btnVincularEImportarAutomatico" class="btn btn-success btn-vincular-importar-auto">
+                        <i class="fas fa-file-import"></i> Importar e Vincular Vinculados (<span id="contadorPendentes">0</span>)
+                    </button>
                     <button type="button" id="btnImportar" class="btn btn-primary btn-importar-itens">
                         <i class="fas fa-file-import"></i> Importar Selecionados
                     </button>
@@ -81,14 +77,33 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        $('#tabelaItensImportacao tbody').on('click', '.btn-vincular-material', function(e) {
+            e.preventDefault();
+            console.log('vincular material clicado');
+            let id = $(this).data('item-id');
+            // Limpar id de espaços e caracteres extras
+            id = String(id).trim();
+            const quantidade = $(this).data('item-quantidade');
+            const nomeMaterial = $(this).data('material-nome');
+            const unidadeMaterial = $(this).data('material-unidade');
+            const descricaoMaterial = $(this).data('item-descricao');
+            document.getElementById('NomeMaterial').textContent = descricaoMaterial;
+            console.log('vincular material id', id);
+            document.getElementById('item_id_para_vincular').value = id;
+            document.getElementById('quantidade_para_vincular').value = quantidade;
+            const buscarMaterial = document.getElementById('buscarMaterial');
+            buscarMaterial.value = '';
+            buscarMaterial.focus();
+            document.getElementById('corpoTabelaMateriais').innerHTML = '';
+            const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
+            modal.show();
+        });
         $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
             console.log('importar itens');
             const notaId = $(this).data('id');
             modal=new bootstrap.Modal(document.getElementById('modalImportarItens'));
             modal.show();
             document.getElementById('importacao_nf_id').value = notaId;
-            // Carrega centros de custo para o select
-            carregarCentrosCusto('centro_custo_id');
             
             // Carrega itens da nota para importação
             carregarItensImportacao(notaId);
@@ -96,6 +111,10 @@
         $('#modalImportarItens').on('click', '.btn-importar-itens', function(e) {
             e.preventDefault();
             importarItens();
+        });
+        $('#modalImportarItens').on('click', '.btn-vincular-importar-auto', function(e) {
+            e.preventDefault();
+            vincularEImportarPendentes();
         });
         $('#modalImportarItens .btn-close').on('click', function () {
             fecharModal('#modalImportarItens');
@@ -148,11 +167,13 @@
                     console.log(`URL bem-sucedida: ${url}`);
                 } else {
                     document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="7" class="text-center text-danger">${data.message || 'Erro ao carregar itens.'}</td></tr>`;
+                    atualizarContadorPendentes(0);
                 }
             })
             .catch(error => {
                 console.warn(`Falha ao usar ${url}:`, error);
                 document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="7" class="text-center text-danger">${error.message || 'Erro ao carregar itens.'}</td></tr>`;
+                atualizarContadorPendentes(0);
             });
     }
     
@@ -160,6 +181,7 @@
     function preencherTabelaImportacao(itens) {
         if (!itens || itens.length === 0) {
             document.getElementById('corpoTabelaItensImportacao').innerHTML = '<tr><td colspan="7" class="text-center">Nenhum item encontrado.</td></tr>';
+            atualizarContadorPendentes(0);
             return;
         }
         
@@ -167,6 +189,7 @@
         window.todosOsItensImportacao = itens; // Filtrar para excluir itens já importados
         renderizarItensImportacao(window.todosOsItensImportacao);
         configurarFiltroItensImportacao();
+        atualizarContadorPendentes(itens);
     }
     
     // Função para renderizar os itens na tabela de importação
@@ -201,23 +224,62 @@
                     <td id="material_nome_${item.id}">${materialNome}</td>
                     <td>${item.material_unidade || '-'}</td>
                     <td>`
-            if(item.importado_estoque) {
-                html += '<span class="badge bg-success">Importado</span>';
-            } else {
+            if(item.material_id === null) {
+                html += `<button type="button" class="btn btn-sm btn-primary btn-vincular-material" 
+                                data-item-id="${item.id}"
+                                data-item-quantidade="${item.quantidade}"
+                                data-item-descricao="${item.descricao}"
+                                data-material-nome="${materialNome}"
+                                data-material-unidade="${item.material_unidade}"
+                                title="Vincular material">
+                                <i class="fas fa-link"></i>
+                            </button>
+                            `;
                 html += `
-                        <input type="hidden" id="material_id_${item.id}" value="${item.material_id || ''}">
-                        <input type="hidden" id="fator_conversao_${item.id}" value="${item.fator_conversao_aplicado || ''}">
-                        <div class="btn-group" role="group">
-                            <button type="button" class="btn btn-sm ${btnClassVincular} btn-vincular-material" 
-                                    data-item-id="${item.id}" 
-                                    data-item-descricao="${item.descricao}"
-                                    data-material-id="${item.material_id}" 
-                                    data-material-nome="${materialNome}" 
-                                    data-material-unidade="${item.unidade}"
-                                    data-quantidade="${item.quantidade}">
-                                ${btnIconVincular}
-                            </button>`;
-                }
+                        <button type="button" class="btn btn-sm btn-info btn-vincular-de-outras-notas" 
+                                data-item-id="${item.id}"
+                                data-item-codigo="${item.codigo || ''}"
+                                data-item-descricao="${item.descricao || ''}"
+                                data-item-unidade="${item.unidade || ''}"
+                                title="Vincular material de outras notas fiscais">
+                            <i class="fas fa-search"></i>
+                        </button>`;
+            }
+            if(item.material_id !== null) {
+                html += '<span class="badge bg-success">Vinculado</span>';
+            } 
+            if(item.importado_estoque === true) {
+                html += '<span class="badge bg-success">Importado</span>';
+            }
+            // Se não tem material vinculado, adicionar botão para buscar material de outras notas
+            if(!item.material_id) {
+              
+            }
+            // Se tem material vinculado, adicionar botão de importar individual
+            if(item.material_id) {
+                html += `
+                        <button type="button" class="btn btn-sm btn-success btn-importar-item-individual" 
+                                data-item-id="${item.id}"
+                                data-item-descricao="${item.descricao}"
+                                data-material-id=""
+                                data-material-vinc="false"
+                                title="Importar este item para o estoque">
+                            <i class="fas fa-file-import"></i>
+                        </button>`;
+                // Botão para vincular outros itens similares em todas as notas
+                html += `
+                        <button type="button" class="btn btn-sm btn-info btn-vincular-itens-similares" 
+                                data-item-id="${item.id}"
+                                data-item-codigo="${item.codigo || ''}"
+                                data-item-descricao="${item.descricao || ''}"
+                                data-material-id="${item.material_id}" 
+                                data-material-vinc="false" 
+                                data-fator-conversao="${item.fator_conversao_aplicado || ''}"
+                                title="Vincular este material a outros itens similares em todas as notas fiscais">
+                            <i class="fas fa-link"></i>
+                        </button>`;
+            }
+            // Se tem material vinculado, adicionar botão de desvincular
             if(item.material_id) {
                 html += `
                         <button type="button" class="btn btn-sm btn-danger btn-desvincular-material" 
@@ -235,7 +297,40 @@
         
         document.getElementById('corpoTabelaItensImportacao').innerHTML = html;
         
-       
+        // Atualizar contador de pendentes após renderizar
+        atualizarContadorPendentes(itens);
+        
+        // Adicionar event listeners aos botões de importar item individual
+        document.querySelectorAll('.btn-importar-item-individual').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemDescricao = this.getAttribute('data-item-descricao');
+                importarItemIndividualImportacao(itemId, itemDescricao);
+            });
+        });
+        
+        // Adicionar event listeners aos botões de vincular de outras notas
+        document.querySelectorAll('.btn-vincular-de-outras-notas').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemCodigo = this.getAttribute('data-item-codigo');
+                const itemDescricao = this.getAttribute('data-item-descricao');
+                const itemUnidade = this.getAttribute('data-item-unidade');
+                buscarEVincularDeOutrasNotas(itemId, itemCodigo, itemDescricao, itemUnidade);
+            });
+        });
+        
+        // Adicionar event listeners aos botões de vincular itens similares
+        document.querySelectorAll('.btn-vincular-itens-similares').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemCodigo = this.getAttribute('data-item-codigo');
+                const itemDescricao = this.getAttribute('data-item-descricao');
+                const materialId = this.getAttribute('data-material-id');
+                const fatorConversao = this.getAttribute('data-fator-conversao');
+                vincularItensSimilaresTodasNotas(itemId, itemCodigo, itemDescricao, materialId, fatorConversao);
+            });
+        });
     }
     
     // Configurar eventos para o filtro de itens de importação
@@ -291,6 +386,723 @@
         renderizarItensImportacao(itensFiltrados);
     }
 
+    // Função para atualizar o contador de itens pendentes
+    function atualizarContadorPendentes(itens) {
+        const contadorElement = document.getElementById('contadorPendentes');
+        if (!contadorElement) return;
+        
+        // Se recebeu um número diretamente (quando não há itens)
+        if (typeof itens === 'number') {
+            contadorElement.textContent = itens.toString();
+            return;
+        }
+        
+        if (!itens || itens.length === 0) {
+            contadorElement.textContent = '0';
+            return;
+        }
+        
+        // Contar itens pendentes: não importados E que já têm material vinculado
+        const pendentes = itens.filter(function(item) {
+            return !item.importado_estoque && item.material_id;
+        });
+        
+        contadorElement.textContent = pendentes.length.toString();
+    }
+
+    // Função para importar itens pendentes que já têm material vinculado
+    function vincularEImportarPendentes() {
+        const notaId = document.getElementById('importacao_nf_id').value;
+        const observacao = document.getElementById('observacao').value;
+        
+        // Validar notaId
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado. Por favor, recarregue a página e tente novamente.', 'error');
+            return;
+        }
+        
+        if (!confirm('Deseja importar e vincular os itens pendentes? Para cada item já vinculado, o sistema irá vincular itens similares em outras notas e importar todos para o estoque.')) {
+            return;
+        }
+        
+        mostrarCarregando('Vinculando itens similares e importando para o estoque...');
+        
+        const requestData = {
+            nf_id: notaId,
+            observacao: observacao || null
+        };
+        
+        console.log('Enviando requisição para importar pendentes:', requestData);
+        
+        fetch('/notas-fiscais/api/importar-pendentes-com-material', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').val(),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(async response => {
+            // Tentar obter a mensagem de erro do servidor
+            const responseData = await response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                return { success: false, message: 'Resposta inválida do servidor' };
+            });
+            
+            if (!response.ok) {
+                // Se houver uma mensagem de erro no JSON, usar ela
+                const errorMessage = responseData.message || `Erro de rede: ${response.status}`;
+                throw new Error(errorMessage);
+            }
+            
+            return responseData;
+        })
+        .then(data => {
+            // Fechar modal de carregamento primeiro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            // Pequeno delay para garantir que o modal de carregamento foi fechado
+            setTimeout(() => {
+                if (data.success) {
+                    // Montar mensagem com estatísticas detalhadas
+                    let mensagemEstatisticas = data.message || 'Itens importados com sucesso!';
+                    let usarHtml = false;
+                    
+                    // Sempre mostrar estatísticas se os dados estiverem presentes
+                    if (data.hasOwnProperty('itens_ja_importados') || data.hasOwnProperty('itens_importados') || data.hasOwnProperty('itens_vinculados')) {
+                        console.log('Estatísticas de vinculação e importação disponíveis:', {
+                            vinculados: data.itens_vinculados,
+                            ja_vinculados: data.itens_ja_vinculados,
+                            ja_importados: data.itens_ja_importados,
+                            importados_agora: data.itens_importados,
+                            com_erro: data.itens_com_erro,
+                            total_pendentes: data.total_pendentes
+                        });
+                        
+                        const itensVinculados = data.itens_vinculados !== undefined ? data.itens_vinculados : 0;
+                        const itensJaVinculados = data.itens_ja_vinculados !== undefined ? data.itens_ja_vinculados : 0;
+                        const itensJaImportados = data.itens_ja_importados !== undefined ? data.itens_ja_importados : 0;
+                        const itensImportadosAgora = data.itens_importados !== undefined ? data.itens_importados : 0;
+                        const itensComErro = data.itens_com_erro !== undefined ? data.itens_com_erro : 0;
+                        const totalPendentes = data.total_pendentes !== undefined ? data.total_pendentes : 0;
+                        
+                        mensagemEstatisticas = `<div style="text-align: left; padding: 10px;">
+                            <strong style="font-size: 1.1em;">Processamento concluído com sucesso!</strong><br><br>
+                            <div style="margin-left: 10px;">
+                                <div style="margin-bottom: 8px; font-size: 1.05em;">📊 <strong>Estatísticas:</strong></div>
+                                ${itensVinculados > 0 || itensJaVinculados > 0 ? `
+                                <div style="margin-left: 20px; margin-bottom: 8px; font-size: 1em;">
+                                    <strong style="color: #17a2b8;">🔗 Vinculação:</strong>
+                                </div>
+                                ${itensVinculados > 0 ? `
+                                <div style="margin-left: 30px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens vinculados agora: <strong style="color: #17a2b8;">${itensVinculados}</strong>
+                                </div>` : ''}
+                                ${itensJaVinculados > 0 ? `
+                                <div style="margin-left: 30px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens já vinculados: <strong style="color: #6c757d;">${itensJaVinculados}</strong>
+                                </div>` : ''}
+                                ` : ''}
+                                <div style="margin-left: 20px; margin-bottom: 8px; margin-top: ${itensVinculados > 0 || itensJaVinculados > 0 ? '8px' : '0'}; font-size: 1em;">
+                                    <strong style="color: #007bff;">📦 Importação:</strong>
+                                </div>
+                                ${itensJaImportados > 0 ? `
+                                <div style="margin-left: 30px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens já importados: <strong style="color: #28a745;">${itensJaImportados}</strong>
+                                </div>` : ''}
+                                <div style="margin-left: 30px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens importados agora: <strong style="color: #007bff;">${itensImportadosAgora}</strong>
+                                </div>
+                                ${itensComErro > 0 ? 
+                                    `<div style="margin-left: 30px; margin-bottom: 5px; font-size: 1em; color: #dc3545;">
+                                        • Itens com erro: <strong>${itensComErro}</strong>
+                                    </div>` : ''}
+                                ${totalPendentes > 0 ? 
+                                    `<div style="margin-left: 20px; margin-top: 8px; color: #666; font-size: 0.95em; border-top: 1px solid #ddd; padding-top: 8px;">
+                                        Total de itens pendentes encontrados: <strong>${totalPendentes}</strong>
+                                    </div>` : ''}
+                            </div>
+                        </div>`;
+                        usarHtml = true;
+                    }
+                    
+                    // Usar Swal.fire diretamente com HTML para garantir que as estatísticas sejam exibidas
+                    if (usarHtml && typeof Swal !== 'undefined') {
+                        console.log('Exibindo modal com estatísticas de importação:', mensagemEstatisticas);
+                        Swal.fire({
+                            title: 'Sucesso',
+                            html: mensagemEstatisticas,
+                            icon: 'success',
+                            confirmButtonText: 'OK',
+                            width: '500px',
+                            allowOutsideClick: false,
+                            allowEscapeKey: true,
+                            showCloseButton: true
+                        }).then(() => {
+                            // Recarregar os itens da nota para atualizar a interface
+                            carregarItensImportacao(notaId);
+                            // Recarregar a tabela de notas fiscais
+                            params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            carregarTotalNotas(params);
+                        });
+                    } else {
+                        mostrarAlerta('Sucesso', mensagemEstatisticas, 'success', function() {
+                            // Recarregar os itens da nota para atualizar a interface
+                            carregarItensImportacao(notaId);
+                            // Recarregar a tabela de notas fiscais
+                            params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            carregarTotalNotas(params);
+                        });
+                    }
+                } else {
+                    mostrarAlerta('Erro', data.message, 'error');
+                }
+            }, 100); // Delay de 100ms para garantir que o modal de carregamento foi fechado
+        })
+        .catch(error => {
+            // Fechar modal de carregamento em caso de erro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            console.error('Erro ao vincular e importar pendentes:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+        });
+    }
+
+    // Função para buscar e vincular material de outras notas fiscais
+    function buscarEVincularDeOutrasNotas(itemId, itemCodigo, itemDescricao, itemUnidade) {
+        if (!itemId) {
+            mostrarAlerta('Erro', 'ID do item não encontrado.', 'error');
+            return;
+        }
+        
+        mostrarCarregando('Buscando materiais vinculados em outras notas fiscais...');
+        
+        // Obter token CSRF
+        const csrfToken = $('input[name="csrf_token"]').val();
+        
+        // Construir parâmetros da busca
+        const params = new URLSearchParams();
+        if (itemCodigo) params.append('codigo', itemCodigo);
+        if (itemDescricao) params.append('descricao', itemDescricao);
+        
+        fetch(`/notas-fiscais/api/buscar-materiais-outras-notas?${params.toString()}`, {
+            method: 'GET',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            if (data.success && data.materiais && data.materiais.length > 0) {
+                mostrarModalSelecionarMaterialDeOutrasNotas(itemId, data.materiais, itemUnidade);
+            } else {
+                mostrarAlerta('Info', 'Nenhum material vinculado encontrado em outras notas fiscais com o mesmo código ou descrição.', 'info');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar materiais de outras notas:', error);
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            mostrarAlerta('Erro', `Ocorreu um erro ao buscar materiais: ${error.message}`, 'error');
+        });
+    }
+    
+    // Função para mostrar modal de seleção de material de outras notas
+    function mostrarModalSelecionarMaterialDeOutrasNotas(itemId, materiais, itemUnidade) {
+        let htmlMateriais = '';
+        
+        materiais.forEach(function(mat, index) {
+            const unidade = mat.unidade || 'Não informado';
+            const notaFiscal = mat.nota_fiscal_numero || 'N/A';
+            const dataImportacao = mat.data_importacao || 'N/A';
+            const fatorConversao = mat.fator_conversao || '1';
+            
+            htmlMateriais += `
+                <div class="list-group-item">
+                    <div class="d-flex w-100 justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${mat.material_nome || 'Sem nome'}</h6>
+                            <p class="mb-1">
+                                <small><strong>Material ID:</strong> ${mat.material_id} | 
+                                <strong>Unidade:</strong> ${unidade} | 
+                                <strong>Fator Conversão:</strong> ${fatorConversao}</small>
+                            </p>
+                            <p class="mb-1">
+                                <small><strong>Nota Fiscal:</strong> ${notaFiscal} | 
+                                <strong>Data Importação:</strong> ${dataImportacao}</small>
+                            </p>
+                        </div>
+                        <button class="btn btn-sm btn-success ms-2 usar-material-outra-nota" 
+                                data-item-id="${itemId}"
+                                data-material-id="${mat.material_id}" 
+                                data-fator-conversao="${fatorConversao}"
+                                data-material-nome="${mat.material_nome}"
+                                data-unidade-material="${unidade}"
+                                data-unidade-item="${itemUnidade}"
+                                title="Vincular este material">
+                            <i class="fas fa-check"></i> Usar
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        // Criar modal
+        const modalHtml = `
+            <div class="modal fade" id="modalSelecionarMaterialOutrasNotas" tabindex="-1" aria-labelledby="modalSelecionarMaterialOutrasNotasLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-info text-white">
+                            <h5 class="modal-title" id="modalSelecionarMaterialOutrasNotasLabel">
+                                <i class="fas fa-search"></i> Materiais Encontrados em Outras Notas Fiscais
+                            </h5>
+                            <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Selecione um material que já foi vinculado em outras notas fiscais. O material será vinculado ao item atual e a todos os outros itens similares (mesmo código ou descrição) nesta nota fiscal.
+                            </div>
+                            <div class="list-group" id="listaMateriaisOutrasNotas">
+                                ${htmlMateriais}
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remover modal anterior se existir
+        const modalExistente = document.getElementById('modalSelecionarMaterialOutrasNotas');
+        if (modalExistente) {
+            modalExistente.remove();
+        }
+        
+        // Adicionar modal ao body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Mostrar modal
+        const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterialOutrasNotas'));
+        modal.show();
+        
+        // Event listeners para botões "Usar"
+        document.querySelectorAll('.usar-material-outra-nota').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const materialId = this.getAttribute('data-material-id');
+                const fatorConversao = this.getAttribute('data-fator-conversao');
+                const materialNome = this.getAttribute('data-material-nome');
+                const unidadeMaterial = this.getAttribute('data-unidade-material');
+                const unidadeItem = this.getAttribute('data-unidade-item');
+                
+                // Buscar código e descrição do item atual dos dados armazenados
+                let itemCodigo = '';
+                let itemDescricao = '';
+                if (window.todosOsItensImportacao) {
+                    const itemAtual = window.todosOsItensImportacao.find(function(item) {
+                        return item.id == itemId;
+                    });
+                    if (itemAtual) {
+                        itemCodigo = itemAtual.codigo || '';
+                        itemDescricao = itemAtual.descricao || '';
+                    }
+                }
+                
+                vincularMaterialDeOutraNota(itemId, materialId, fatorConversao, materialNome, unidadeMaterial, unidadeItem, itemCodigo, itemDescricao);
+                modal.hide();
+            });
+        });
+        
+        // Limpar modal quando fechar
+        document.getElementById('modalSelecionarMaterialOutrasNotas').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
+    
+    // Função para vincular material de outra nota
+    function vincularMaterialDeOutraNota(itemId, materialId, fatorConversao, materialNome, unidadeMaterial, unidadeItem, itemCodigo, itemDescricao) {
+        const notaId = document.getElementById('importacao_nf_id').value;
+        
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado.', 'error');
+            return;
+        }
+        
+        if (!confirm(`Deseja vincular o material "${materialNome}" ao item atual e a todos os outros itens similares (mesmo código ou descrição) nesta nota fiscal?`)) {
+            return;
+        }
+        
+        mostrarCarregando('Vinculando material aos itens similares...');
+        
+        // Obter token CSRF
+        const csrfToken = $('input[name="csrf_token"]').val();
+        
+        fetch(`/notas-fiscais/api/vincular-material-outras-notas`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                nf_id: notaId,
+                item_id: itemId,
+                material_id: materialId,
+                fator_conversao: fatorConversao,
+                codigo: itemCodigo,
+                descricao: itemDescricao
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                mostrarAlerta('Sucesso', data.message || `Material "${materialNome}" vinculado com sucesso!`, 'success', function() {
+                    // Recarregar os itens da nota para atualizar a interface
+                    if (notaId) {
+                        carregarItensImportacao(notaId);
+                    }
+                    // Recarregar a tabela de notas fiscais se a função existir
+                    if (typeof carregarTabelaNotasFiscais === 'function') {
+                        params = $('#filtrosNotasFiscais').serialize();
+                        carregarTabelaNotasFiscais(params);
+                        if (typeof carregarTotalNotas === 'function') {
+                            carregarTotalNotas(params);
+                        }
+                    }
+                });
+            } else {
+                mostrarAlerta('Erro', data.message || 'Erro ao vincular material.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao vincular material:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+        })
+        .finally(() => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+        });
+    }
+
+    // Função para vincular itens similares em todas as notas fiscais
+    function vincularItensSimilaresTodasNotas(itemId, itemCodigo, itemDescricao, materialId, fatorConversao) {
+        if (!itemId || !materialId) {
+            mostrarAlerta('Erro', 'Dados do item não encontrados.', 'error');
+            return;
+        }
+        
+        if (!confirm(`Deseja vincular o material deste item a todos os outros itens similares (mesmo código e descrição) em TODAS as notas fiscais?\n\nCódigo: ${itemCodigo || 'N/A'}\nDescrição: ${itemDescricao || 'N/A'}`)) {
+            return;
+        }
+        
+        mostrarCarregando('Buscando e vinculando itens similares em todas as notas fiscais...');
+        
+        // Obter token CSRF
+        const csrfToken = $('input[name="csrf_token"]').val();
+        
+        fetch(`/notas-fiscais/api/vincular-itens-similares-todas-notas`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                item_id: itemId,
+                material_id: materialId,
+                fator_conversao: fatorConversao || null,
+                codigo: itemCodigo || '',
+                descricao: itemDescricao || ''
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            // Fechar modal de carregamento primeiro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            // Pequeno delay para garantir que o modal de carregamento foi fechado
+            setTimeout(() => {
+                console.log('Dados recebidos da API:', data);
+                
+                if (data.success) {
+                    // Montar mensagem com estatísticas detalhadas
+                    let mensagemEstatisticas = data.message || 'Itens similares vinculados com sucesso!';
+                    let usarHtml = false;
+                    
+                    // Sempre mostrar estatísticas se os dados estiverem presentes
+                    if (data.hasOwnProperty('itens_ja_vinculados') || data.hasOwnProperty('itens_vinculados')) {
+                        console.log('Estatísticas disponíveis:', {
+                            ja_vinculados: data.itens_ja_vinculados,
+                            vinculados_agora: data.itens_vinculados,
+                            total: data.total_itens_similares
+                        });
+                        
+                        const itensJaVinculados = data.itens_ja_vinculados !== undefined ? data.itens_ja_vinculados : 0;
+                        const itensVinculadosAgora = data.itens_vinculados !== undefined ? data.itens_vinculados : 0;
+                        const totalItens = data.total_itens_similares !== undefined ? data.total_itens_similares : 0;
+                        
+                        mensagemEstatisticas = `<div style="text-align: left; padding: 10px;">
+                            <strong style="font-size: 1.1em;">Vinculação concluída com sucesso!</strong><br><br>
+                            <div style="margin-left: 10px;">
+                                <div style="margin-bottom: 8px; font-size: 1.05em;">📊 <strong>Estatísticas:</strong></div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens já vinculados: <strong style="color: #28a745;">${itensJaVinculados}</strong>
+                                </div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens vinculados agora: <strong style="color: #007bff;">${itensVinculadosAgora}</strong>
+                                </div>
+                                ${totalItens > 0 ? 
+                                    `<div style="margin-left: 20px; margin-top: 8px; color: #666; font-size: 0.95em; border-top: 1px solid #ddd; padding-top: 8px;">
+                                        Total de itens similares encontrados: <strong>${totalItens}</strong>
+                                    </div>` : ''}
+                            </div>
+                        </div>`;
+                        usarHtml = true;
+                    }
+                    
+                    // Usar Swal.fire diretamente com HTML para garantir que as estatísticas sejam exibidas
+                    if (usarHtml && typeof Swal !== 'undefined') {
+                        console.log('Exibindo modal com estatísticas:', mensagemEstatisticas);
+                        Swal.fire({
+                            title: 'Sucesso',
+                            html: mensagemEstatisticas,
+                            icon: 'success',
+                            confirmButtonText: 'OK',
+                            width: '500px',
+                            allowOutsideClick: false,
+                            allowEscapeKey: true,
+                            showCloseButton: true
+                        }).then((result) => {
+                            console.log('Modal fechado pelo usuário');
+                        // Recarregar os itens da nota para atualizar a interface
+                        const notaId = document.getElementById('importacao_nf_id').value;
+                        if (notaId) {
+                            carregarItensImportacao(notaId);
+                        }
+                        // Recarregar a tabela de notas fiscais se a função existir
+                        if (typeof carregarTabelaNotasFiscais === 'function') {
+                            params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            if (typeof carregarTotalNotas === 'function') {
+                                carregarTotalNotas(params);
+                            }
+                        }
+                        });
+                    } else {
+                        mostrarAlerta('Sucesso', mensagemEstatisticas, 'success', function() {
+                            // Recarregar os itens da nota para atualizar a interface
+                            const notaId = document.getElementById('importacao_nf_id').value;
+                            if (notaId) {
+                                carregarItensImportacao(notaId);
+                            }
+                            // Recarregar a tabela de notas fiscais se a função existir
+                            if (typeof carregarTabelaNotasFiscais === 'function') {
+                                params = $('#filtrosNotasFiscais').serialize();
+                                carregarTabelaNotasFiscais(params);
+                                if (typeof carregarTotalNotas === 'function') {
+                                    carregarTotalNotas(params);
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    mostrarAlerta('Erro', data.message || 'Erro ao vincular itens similares.', 'error');
+                }
+            }, 100); // Delay de 100ms para garantir que o modal de carregamento foi fechado
+        })
+        .catch(error => {
+            // Fechar modal de carregamento em caso de erro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            console.error('Erro ao vincular itens similares:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+        });
+    }
+
+    // Função para importar um item individual
+    function importarItemIndividualImportacao(itemId, itemDescricao) {
+        if (!itemId) {
+            mostrarAlerta('Erro', 'ID do item não encontrado.', 'error');
+            return;
+        }
+        
+        const observacao = document.getElementById('observacao').value || '';
+        
+        if (!confirm(`Deseja importar o item "${itemDescricao}" para o estoque?`)) {
+            return;
+        }
+        
+        mostrarCarregando('Importando item para o estoque...');
+        
+        // Obter token CSRF
+        const csrfToken = $('input[name="csrf_token"]').val();
+        
+        fetch(`/notas-fiscais/api/importar-item-estoque/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                observacao: observacao
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            // Fechar modal de carregamento primeiro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            // Pequeno delay para garantir que o modal de carregamento foi fechado
+            setTimeout(() => {
+                if (data.success) {
+                    // Montar mensagem com estatísticas detalhadas
+                    let mensagemEstatisticas = data.message || 'Item importado com sucesso!';
+                    let usarHtml = false;
+                    
+                    // Sempre mostrar estatísticas se os dados estiverem presentes
+                    if (data.hasOwnProperty('itens_ja_importados') || data.hasOwnProperty('itens_importados') || data.hasOwnProperty('itens_similares_encontrados')) {
+                        console.log('Estatísticas de importação individual disponíveis:', {
+                            ja_importados: data.itens_ja_importados,
+                            importados_agora: data.itens_importados,
+                            similares_encontrados: data.itens_similares_encontrados,
+                            com_erro: data.itens_com_erro
+                        });
+                        
+                        const itensJaImportados = data.itens_ja_importados !== undefined ? data.itens_ja_importados : 0;
+                        const itensImportadosAgora = data.itens_importados !== undefined ? data.itens_importados : 0;
+                        const itensSimilaresEncontrados = data.itens_similares_encontrados !== undefined ? data.itens_similares_encontrados : 0;
+                        const itensComErro = data.itens_com_erro !== undefined ? data.itens_com_erro : 0;
+                        
+                        mensagemEstatisticas = `<div style="text-align: left; padding: 10px;">
+                            <strong style="font-size: 1.1em;">Importação concluída com sucesso!</strong><br><br>
+                            <div style="margin-left: 10px;">
+                                <div style="margin-bottom: 8px; font-size: 1.05em;">📊 <strong>Estatísticas:</strong></div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens já importados: <strong style="color: #28a745;">${itensJaImportados}</strong>
+                                </div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens importados agora: <strong style="color: #007bff;">${itensImportadosAgora}</strong>
+                                </div>
+                                ${itensSimilaresEncontrados > 0 ? 
+                                    `<div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                        • Itens similares encontrados e importados: <strong style="color: #17a2b8;">${itensSimilaresEncontrados}</strong>
+                                    </div>` : ''}
+                                ${itensComErro > 0 ? 
+                                    `<div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                        • Itens com erro: <strong style="color: #dc3545;">${itensComErro}</strong>
+                                    </div>` : ''}
+                            </div>
+                        </div>`;
+                        usarHtml = true;
+                    }
+                    
+                    // Usar Swal.fire diretamente com HTML para garantir que as estatísticas sejam exibidas
+                    if (usarHtml && typeof Swal !== 'undefined') {
+                        console.log('Exibindo modal com estatísticas de importação individual:', mensagemEstatisticas);
+                        Swal.fire({
+                            title: 'Sucesso',
+                            html: mensagemEstatisticas,
+                            icon: 'success',
+                            confirmButtonText: 'OK',
+                            width: '500px',
+                            allowOutsideClick: false,
+                            allowEscapeKey: true,
+                            showCloseButton: true
+                        }).then(() => {
+                            // Recarregar os itens da nota para atualizar a interface
+                            const notaId = document.getElementById('importacao_nf_id').value;
+                            if (notaId) {
+                                carregarItensImportacao(notaId);
+                            }
+                            // Recarregar a tabela de notas fiscais se a função existir
+                            if (typeof carregarTabelaNotasFiscais === 'function') {
+                                params = $('#filtrosNotasFiscais').serialize();
+                                carregarTabelaNotasFiscais(params);
+                                if (typeof carregarTotalNotas === 'function') {
+                                    carregarTotalNotas(params);
+                                }
+                            }
+                        });
+                    } else {
+                        mostrarAlerta('Sucesso', mensagemEstatisticas, 'success', function() {
+                            // Recarregar os itens da nota para atualizar a interface
+                            const notaId = document.getElementById('importacao_nf_id').value;
+                            if (notaId) {
+                                carregarItensImportacao(notaId);
+                            }
+                            // Recarregar a tabela de notas fiscais se a função existir
+                            if (typeof carregarTabelaNotasFiscais === 'function') {
+                                params = $('#filtrosNotasFiscais').serialize();
+                                carregarTabelaNotasFiscais(params);
+                                if (typeof carregarTotalNotas === 'function') {
+                                    carregarTotalNotas(params);
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    mostrarAlerta('Erro', data.message || 'Erro ao importar item.', 'error');
+                }
+            }, 100); // Delay de 100ms para garantir que o modal de carregamento foi fechado
+        })
+        .catch(error => {
+            // Fechar modal de carregamento em caso de erro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            console.error('Erro ao importar item:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+        });
+    }
+
     // Função para importar itens selecionados
     function importarItens() {
         const formData = new FormData(document.getElementById('formImportacao'));
@@ -326,7 +1138,6 @@
                     material_id: item.material_id,
                     fator_conversao: item.fator_conversao
                 })),
-                centro_custo_id: document.getElementById('centro_custo_id').value,
                 observacao: document.getElementById('observacao').value
             })
         })
@@ -340,21 +1151,94 @@
             });
         })
         .then(data => {
-            if (data.success) {
-                const modalImportar = bootstrap.Modal.getInstance(document.getElementById('modalImportarItens'));
-                if (modalImportar) modalImportar.hide();
-                
-                mostrarAlerta('Sucesso', data.message, 'success', function() {
-                    // Recarregar a página após importação
-                    params = $('#filtrosNotasFiscais').serialize();
-                    carregarTabelaNotasFiscais(params);
-                    carregarTotalNotas(params);
-                });
-            } else {
-                mostrarAlerta('Erro', data.message, 'error');
+            // Fechar modal de carregamento primeiro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
             }
+            
+            // Pequeno delay para garantir que o modal de carregamento foi fechado
+            setTimeout(() => {
+                if (data.success) {
+                    const modalImportar = bootstrap.Modal.getInstance(document.getElementById('modalImportarItens'));
+                    if (modalImportar) modalImportar.hide();
+                    
+                    // Montar mensagem com estatísticas detalhadas
+                    let mensagemEstatisticas = data.message || 'Itens importados com sucesso!';
+                    let usarHtml = false;
+                    
+                    // Sempre mostrar estatísticas se os dados estiverem presentes
+                    if (data.hasOwnProperty('itens_ja_importados') || data.hasOwnProperty('itens_importados')) {
+                        console.log('Estatísticas de importação disponíveis:', {
+                            ja_importados: data.itens_ja_importados,
+                            importados_agora: data.itens_importados,
+                            com_erro: data.itens_com_erro,
+                            total_selecionados: data.total_itens_selecionados
+                        });
+                        
+                        const itensJaImportados = data.itens_ja_importados !== undefined ? data.itens_ja_importados : 0;
+                        const itensImportadosAgora = data.itens_importados !== undefined ? data.itens_importados : 0;
+                        const itensComErro = data.itens_com_erro !== undefined ? data.itens_com_erro : 0;
+                        const totalSelecionados = data.total_itens_selecionados !== undefined ? data.total_itens_selecionados : 0;
+                        
+                        mensagemEstatisticas = `<div style="text-align: left; padding: 10px;">
+                            <strong style="font-size: 1.1em;">Importação concluída com sucesso!</strong><br><br>
+                            <div style="margin-left: 10px;">
+                                <div style="margin-bottom: 8px; font-size: 1.05em;">📊 <strong>Estatísticas:</strong></div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens já importados: <strong style="color: #28a745;">${itensJaImportados}</strong>
+                                </div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens importados agora: <strong style="color: #007bff;">${itensImportadosAgora}</strong>
+                                </div>
+                                ${itensComErro > 0 ? 
+                                    `<div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                        • Itens com erro: <strong style="color: #dc3545;">${itensComErro}</strong>
+                                    </div>` : ''}
+                                ${totalSelecionados > 0 ? 
+                                    `<div style="margin-left: 20px; margin-top: 8px; color: #666; font-size: 0.95em; border-top: 1px solid #ddd; padding-top: 8px;">
+                                        Total de itens selecionados: <strong>${totalSelecionados}</strong>
+                                    </div>` : ''}
+                            </div>
+                        </div>`;
+                        usarHtml = true;
+                    }
+                    
+                    // Usar Swal.fire diretamente com HTML para garantir que as estatísticas sejam exibidas
+                    if (usarHtml && typeof Swal !== 'undefined') {
+                        console.log('Exibindo modal com estatísticas de importação:', mensagemEstatisticas);
+                        Swal.fire({
+                            title: 'Sucesso',
+                            html: mensagemEstatisticas,
+                            icon: 'success',
+                            confirmButtonText: 'OK',
+                            width: '500px',
+                            allowOutsideClick: false,
+                            allowEscapeKey: true,
+                            showCloseButton: true
+                        }).then(() => {
+                            // Recarregar a página após importação
+                            params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            carregarTotalNotas(params);
+                        });
+                    } else {
+                        mostrarAlerta('Sucesso', mensagemEstatisticas, 'success', function() {
+                            // Recarregar a página após importação
+                            params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            carregarTotalNotas(params);
+                        });
+                    }
+                } else {
+                    mostrarAlerta('Erro', data.message, 'error');
+                }
+            }, 100); // Delay de 100ms para garantir que o modal de carregamento foi fechado
         })
         .catch(error => {
+            // Fechar modal de carregamento em caso de erro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
             console.error('Erro ao importar itens:', error);
             mostrarAlerta('Erro', `Ocorreu um erro ao importar os itens: ${error.message}`, 'error');
         })

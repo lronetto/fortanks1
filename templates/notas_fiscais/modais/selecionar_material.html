@@ -47,25 +47,7 @@
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        $('#tabelaItensImportacao tbody').on('click', '.btn-vincular-material', function(e) {
-            e.preventDefault();
-            console.log('vincular material clicado');
-            const id = $(this).data('item-id');
-            const quantidade = $(this).data('quantidade');
-            const nomeMaterial = $(this).data('material-nome');
-            const unidadeMaterial = $(this).data('material-unidade');
-            const descricaoMaterial = $(this).data('item-descricao');
-            document.getElementById('NomeMaterial').textContent = descricaoMaterial;
-            console.log('vincular material id', id);
-            document.getElementById('item_id_para_vincular').value = id;
-            document.getElementById('quantidade_para_vincular').value = quantidade;
-            const buscarMaterial = document.getElementById('buscarMaterial');
-            buscarMaterial.value = '';
-            buscarMaterial.focus();
-            document.getElementById('corpoTabelaMateriais').innerHTML = '';
-            const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
-            modal.show();
-        });
+        
     
         
             // Buscar materiais
@@ -92,26 +74,15 @@
             const materialNome = button.dataset.materialNome;
             const materialUnidade = button.dataset.materialUnidade;
           
-            const itemId = document.getElementById('item_id_para_vincular').value;
+            let itemId = document.getElementById('item_id_para_vincular').value;
+            // Limpar itemId de espaços e caracteres extras
+            itemId = String(itemId).trim();
             
             // Obter a unidade do item
             const unidadeElemento = document.getElementById(`unidade_${itemId}`);
             const itemUnidade = unidadeElemento ? unidadeElemento.textContent : '';
             
-            // Vincular material ao item
-            document.getElementById(`material_id_${itemId}`).value = materialId;
-            
-            const materialNomeElemento = document.getElementById(`material_nome_${itemId}`);
-            if (materialNomeElemento) materialNomeElemento.textContent = materialNome;
-            
-            const btnVincular = document.getElementById(`btn_vincular_${itemId}`);
-            if (btnVincular) {
-                btnVincular.innerHTML = '<i class="fas fa-edit"></i>';
-                btnVincular.classList.remove('btn-primary');
-                btnVincular.classList.add('btn-warning');
-            }
-            
-            // Fechar modal de seleção
+            // Fechar modal de seleção primeiro
             const modalSelecionar = bootstrap.Modal.getInstance(document.getElementById('modalSelecionarMaterial'));
             if (modalSelecionar) modalSelecionar.hide();
             
@@ -129,19 +100,70 @@
                 abrirModalConversao(itemId, materialId, itemUnidade, materialUnidade);
             }
             else {
-
-
+                // Unidades são iguais, vincular diretamente com fator = 1
+                vincularMaterialNoBackend(itemId, materialId, 1, materialNome);
+            }
+        }
+    });
+    
+    // Função para vincular material no backend
+    function vincularMaterialNoBackend(itemId, materialId, fatorConversao, materialNome) {
+        // Limpar itemId de espaços e caracteres extras
+        itemId = String(itemId).trim();
+        materialId = String(materialId).trim();
+        
+        mostrarCarregando('Vinculando material...');
+        
+        const csrfToken = $('input[name="csrf_token"]').val();
+        const formData = new FormData();
+        formData.append('material_id', materialId);
+        if (fatorConversao) {
+            formData.append('fator_conversao', String(fatorConversao).trim());
+        }
+        
+        fetch(`/notas-fiscais/api/vincular-material/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        })
+        .then(async response => {
+            // Tentar obter a mensagem de erro do servidor
+            const responseData = await response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                return { success: false, message: 'Resposta inválida do servidor' };
+            });
+            
+            if (!response.ok) {
+                // Se houver uma mensagem de erro no JSON, usar ela
+                const errorMessage = responseData.message || `Erro de rede: ${response.status}`;
+                throw new Error(errorMessage);
+            }
+            
+            return responseData;
+        })
+        .then(data => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            if (data.success) {
+                // Atualizar interface
+                const materialNomeElemento = document.getElementById(`material_nome_${itemId}`);
+                if (materialNomeElemento) materialNomeElemento.textContent = materialNome;
+                
+                // Atualizar fator de conversão na tabela
                 const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
                 if (linhaItem) {
                     const campoFatorConversao = document.getElementById(`fator_conversao_${itemId}`);
                     if (campoFatorConversao) {
-                        campoFatorConversao.value = 1;
+                        campoFatorConversao.value = fatorConversao || 1;
                     }
                     // A coluna "Fator de Conversão" é a 7ª coluna (índice 6)
                     const celulaFatorConversao = linhaItem.cells[6];
-                    if (celulaFatorConversao && fatorConversao) {
-                        // Formatar o fator de conversão com 4 casas decimais
-                        const fatorNum = parseFloat(fatorConversao);
+                    if (celulaFatorConversao) {
+                        const fatorNum = parseFloat(fatorConversao || 1);
                         if (!isNaN(fatorNum) && fatorNum > 0) {
                             const fatorFormatado = fatorNum.toLocaleString('pt-BR', {
                                 minimumFractionDigits: 4,
@@ -151,9 +173,26 @@
                         }
                     }
                 }
+                
+                // Recarregar itens da nota para atualizar a interface
+                const notaId = document.getElementById('importacao_nf_id').value;
+                if (notaId) {
+                    carregarItensImportacao(notaId);
+                }
+                
+                mostrarAlerta('Sucesso', data.message || `Material "${materialNome}" vinculado com sucesso!`, 'success');
+            } else {
+                mostrarAlerta('Erro', data.message || 'Erro ao vincular material.', 'error');
             }
-        }
-    });
+        })
+        .catch(error => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            console.error('Erro ao vincular material:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao vincular o material: ${error.message}`, 'error');
+        });
+    }
     function buscarMateriais(termo) {
         const corpoTabela = document.getElementById('corpoTabelaMateriais');
         if (!corpoTabela) return;

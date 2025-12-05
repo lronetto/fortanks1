@@ -190,11 +190,12 @@ document.addEventListener('DOMContentLoaded', function() {
         formImportacao.addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const centroCusto = document.getElementById('centro_custo_id').value;
-            if (!centroCusto) {
-                mostrarAlerta('Erro', 'Selecione um centro de custo para importação.', 'error');
-                return false;
-            }
+            // Centro de custo agora é opcional
+            // const centroCusto = document.getElementById('centro_custo_id').value;
+            // if (!centroCusto) {
+            //     mostrarAlerta('Erro', 'Selecione um centro de custo para importação.', 'error');
+            //     return false;
+            // }
             
             const itensSelecionados = document.querySelectorAll('.item-checkbox:checked').length;
             if (itensSelecionados === 0) {

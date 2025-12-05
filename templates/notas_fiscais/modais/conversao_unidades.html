@@ -69,34 +69,13 @@
                 mostrarAlerta('Erro', 'Informe um fator de conversão válido ou selecione uma conversão existente.', 'error');
                 return;
             }
-            // Salvar o fator de conversão no campo hidden da tabela
-            const campoFatorConversao = document.getElementById(`fator_conversao_${itemId}`);
-            if (campoFatorConversao) {
-                campoFatorConversao.value = fatorConversao;
-            }
             
-            // Atualizar a visualização do fator de conversão na tabela
-            const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
-            if (linhaItem) {
-                // A coluna "Fator de Conversão" é a 7ª coluna (índice 6)
-                const celulaFatorConversao = linhaItem.cells[6];
-                if (celulaFatorConversao && fatorConversao) {
-                    // Formatar o fator de conversão com 4 casas decimais
-                    const fatorNum = parseFloat(fatorConversao);
-                    if (!isNaN(fatorNum) && fatorNum > 0) {
-                        const fatorFormatado = fatorNum.toLocaleString('pt-BR', {
-                            minimumFractionDigits: 4,
-                            maximumFractionDigits: 4
-                        });
-                        celulaFatorConversao.textContent = fatorFormatado;
-                    }
-                }
-            }
-            
-            // Fechar o modal
+            // Fechar o modal de conversão primeiro
             const modalConversao = bootstrap.Modal.getInstance(document.getElementById('modalConversaoUnidades'));
             if (modalConversao) modalConversao.hide();
-            mostrarAlerta('Sucesso', 'Fator de conversão definido. O fator será aplicado durante a importação.', 'success');
+            
+            // Vincular material no backend com o fator de conversão
+            vincularMaterialComConversao(itemId, materialId, fatorConversao);
         });
     
     
@@ -152,5 +131,82 @@
             const modal = new bootstrap.Modal(document.getElementById('modalConversaoUnidades'));
             modal.show();
         }
+    
+    // Função para vincular material com fator de conversão
+    function vincularMaterialComConversao(itemId, materialId, fatorConversao) {
+        // Limpar itemId de espaços e caracteres extras
+        itemId = String(itemId).trim();
+        materialId = String(materialId).trim();
+        fatorConversao = String(fatorConversao).trim();
+        
+        mostrarCarregando('Vinculando material com fator de conversão...');
+        
+        const csrfToken = $('input[name="csrf_token"]').val();
+        const formData = new FormData();
+        formData.append('material_id', materialId);
+        formData.append('fator_conversao', fatorConversao);
+        
+        fetch(`/notas-fiscais/api/vincular-material/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            if (data.success) {
+                // Atualizar fator de conversão na tabela
+                const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
+                if (linhaItem) {
+                    const campoFatorConversao = document.getElementById(`fator_conversao_${itemId}`);
+                    if (campoFatorConversao) {
+                        campoFatorConversao.value = fatorConversao;
+                    }
+                    // A coluna "Fator de Conversão" é a 7ª coluna (índice 6)
+                    const celulaFatorConversao = linhaItem.cells[6];
+                    if (celulaFatorConversao) {
+                        const fatorNum = parseFloat(fatorConversao);
+                        if (!isNaN(fatorNum) && fatorNum > 0) {
+                            const fatorFormatado = fatorNum.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 4,
+                                maximumFractionDigits: 4
+                            });
+                            celulaFatorConversao.textContent = fatorFormatado;
+                        }
+                    }
+                }
+                
+                // Recarregar itens da nota para atualizar a interface
+                const notaId = document.getElementById('importacao_nf_id').value;
+                if (notaId) {
+                    carregarItensImportacao(notaId);
+                }
+                
+                mostrarAlerta('Sucesso', data.message || 'Material vinculado com fator de conversão aplicado!', 'success');
+            } else {
+                mostrarAlerta('Erro', data.message || 'Erro ao vincular material.', 'error');
+            }
+        })
+        .catch(error => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            console.error('Erro ao vincular material:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao vincular o material: ${error.message}`, 'error');
+        });
+    }
 </script>
 {% endblock %}

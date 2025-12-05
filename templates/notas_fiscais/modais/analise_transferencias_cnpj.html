@@ -1,0 +1,447 @@
+<!-- Modal de Análise de Transferências por CNPJ -->
+<div class="modal fade" id="modalAnaliseTransferenciasCNPJ" tabindex="-1" aria-labelledby="modalAnaliseTransferenciasCNPJLabel" aria-hidden="true">
+    <div class="modal-dialog" style="max-width: 90%; width: 90%;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAnaliseTransferenciasCNPJLabel">Análise de Transferências por CNPJ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtros do Modal -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label for="filtro_cnpj_emitente_modal">CNPJ Emitente(s)</label>
+                                    <select name="filtro_cnpj_emitente_modal" id="filtro_cnpj_emitente_modal" class="form-control select2-modal" multiple>
+                                        <!-- Será preenchido via JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="form-group">
+                                    <label for="filtro_cnpj_destinatario_modal">CNPJ Destinatário(s)</label>
+                                    <select name="filtro_cnpj_destinatario_modal" id="filtro_cnpj_destinatario_modal" class="form-control select2-modal" multiple>
+                                        <!-- Será preenchido via JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary w-100" id="btn-filtrar-modal">
+                                    <i class="fas fa-search"></i> Filtrar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="loadingModal" class="text-center p-4">
+                    <span class="spinner-border"></span> Carregando dados...
+                </div>
+                <div id="conteudoModal" style="display: none;">
+                    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                        <table class="table table-bordered table-sm table-hover" id="tabelaTransferenciasCNPJ">
+                            <thead class="table-primary sticky-top">
+                                <tr id="cabecalhoTabela">
+                                    <!-- Será preenchido via JavaScript -->
+                                </tr>
+                            </thead>
+                            <tbody id="corpoTabelaTransferenciasCNPJ">
+                                <!-- Será preenchido via JavaScript -->
+                            </tbody>
+                            <tfoot class="table-info" id="rodapeTabelaTransferenciasCNPJ">
+                                <!-- Será preenchido via JavaScript -->
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let cnpjsDisponiveis = [];
+    
+    function abrirModalAnaliseCNPJ() {
+        const modal = new bootstrap.Modal(document.getElementById('modalAnaliseTransferenciasCNPJ'));
+        modal.show();
+        
+        // Limpar seleções anteriores
+        const selectEmitente = document.getElementById('filtro_cnpj_emitente_modal');
+        const selectDestinatario = document.getElementById('filtro_cnpj_destinatario_modal');
+        if (selectEmitente) selectEmitente.innerHTML = '';
+        if (selectDestinatario) selectDestinatario.innerHTML = '';
+        
+        // Inicializar Select2 nos filtros do modal (após um pequeno delay para garantir que o modal está visível)
+        setTimeout(() => {
+            if (typeof $ !== 'undefined' && $.fn.select2) {
+                // Destruir instâncias anteriores se existirem
+                $('.select2-modal').select2('destroy');
+                $('.select2-modal').select2({
+                    width: '100%',
+                    placeholder: 'Selecione',
+                    allowClear: true,
+                    language: 'pt-BR'
+                });
+            }
+        }, 100);
+        
+        // Carregar CNPJs disponíveis primeiro
+        carregarCNPJsDisponiveis().then(() => {
+            // Atualizar Select2 após popular os options
+            setTimeout(() => {
+                if (typeof $ !== 'undefined' && $.fn.select2) {
+                    $('.select2-modal').trigger('change');
+                }
+                // Depois carregar os dados
+                carregarDadosModal();
+            }, 200);
+        }).catch(error => {
+            console.error('Erro ao carregar CNPJs:', error);
+            document.getElementById('loadingModal').innerHTML = 
+                `<div class="alert alert-danger">Erro ao carregar CNPJs: ${error.message}</div>`;
+        });
+    }
+    
+    function carregarCNPJsDisponiveis() {
+        return new Promise((resolve, reject) => {
+            // Coletar filtros do formulário principal (exceto CNPJs)
+            let formData = '';
+            const form = document.querySelector('form');
+            if (form) {
+                if (typeof $ !== 'undefined' && $.fn.serialize) {
+                    const params = new URLSearchParams($('form').serialize());
+                    // Remover filtros de CNPJ do formulário principal
+                    params.delete('cnpj_emitente');
+                    params.delete('cnpj_destinatario');
+                    formData = params.toString();
+                }
+            }
+            
+            const url = '/notas-fiscais/analise-transferencias/modal-cnpj?' + formData;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Coletar todos os CNPJs únicos dos dados
+                        const cnpjsEmitentes = new Set();
+                        const cnpjsDestinatarios = new Set();
+                        
+                        data.transferencias.forEach(t => {
+                            if (t.cnpj_emitente) cnpjsEmitentes.add(t.cnpj_emitente);
+                            if (t.cnpj_destinatario) cnpjsDestinatarios.add(t.cnpj_destinatario);
+                        });
+                        
+                        // Popular selects
+                        const selectEmitente = document.getElementById('filtro_cnpj_emitente_modal');
+                        const selectDestinatario = document.getElementById('filtro_cnpj_destinatario_modal');
+                        
+                        selectEmitente.innerHTML = '';
+                        selectDestinatario.innerHTML = '';
+                        
+                        Array.from(cnpjsEmitentes).sort().forEach(cnpj => {
+                            const option = document.createElement('option');
+                            option.value = cnpj;
+                            option.textContent = cnpj;
+                            selectEmitente.appendChild(option);
+                        });
+                        
+                        Array.from(cnpjsDestinatarios).sort().forEach(cnpj => {
+                            const option = document.createElement('option');
+                            option.value = cnpj;
+                            option.textContent = cnpj;
+                            selectDestinatario.appendChild(option);
+                        });
+                        
+                        cnpjsDisponiveis = Array.from(new Set([...cnpjsEmitentes, ...cnpjsDestinatarios])).sort();
+                        
+                        // Re-inicializar Select2 após popular options
+                        setTimeout(() => {
+                            if (typeof $ !== 'undefined' && $.fn.select2) {
+                                $('.select2-modal').select2('destroy');
+                                $('.select2-modal').select2({
+                                    width: '100%',
+                                    placeholder: 'Selecione',
+                                    allowClear: true,
+                                    language: 'pt-BR'
+                                });
+                            }
+                        }, 50);
+                        
+                        resolve();
+                    } else {
+                        reject(new Error(data.message || 'Erro ao carregar CNPJs'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar CNPJs:', error);
+                    reject(error);
+                });
+        });
+    }
+    
+    function carregarDadosModal() {
+        // Mostrar loading e esconder conteúdo
+        document.getElementById('loadingModal').style.display = 'block';
+        document.getElementById('conteudoModal').style.display = 'none';
+        
+        // Coletar filtros do formulário principal
+        let formData = '';
+        const form = document.querySelector('form');
+        if (form) {
+            if (typeof $ !== 'undefined' && $.fn.serialize) {
+                const params = new URLSearchParams($('form').serialize());
+                // Remover filtros de CNPJ do formulário principal (vamos usar os do modal)
+                params.delete('cnpj_emitente');
+                params.delete('cnpj_destinatario');
+                formData = params.toString();
+            }
+        }
+        
+        // Adicionar filtros do modal
+        const filtroEmitente = document.getElementById('filtro_cnpj_emitente_modal');
+        const filtroDestinatario = document.getElementById('filtro_cnpj_destinatario_modal');
+        
+        if (filtroEmitente) {
+            Array.from(filtroEmitente.selectedOptions).forEach(option => {
+                if (formData) formData += '&';
+                formData += 'cnpj_emitente=' + encodeURIComponent(option.value);
+            });
+        }
+        
+        if (filtroDestinatario) {
+            Array.from(filtroDestinatario.selectedOptions).forEach(option => {
+                if (formData) formData += '&';
+                formData += 'cnpj_destinatario=' + encodeURIComponent(option.value);
+            });
+        }
+        
+        const url = '/notas-fiscais/analise-transferencias/modal-cnpj?' + formData;
+        
+        fetch(url)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro de rede: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    preencherTabelaModalCNPJ(data);
+                    document.getElementById('loadingModal').style.display = 'none';
+                    document.getElementById('conteudoModal').style.display = 'block';
+                } else {
+                    document.getElementById('loadingModal').innerHTML = 
+                        `<div class="alert alert-danger">${data.message || 'Erro ao carregar dados.'}</div>`;
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar dados:', error);
+                document.getElementById('loadingModal').innerHTML = 
+                    `<div class="alert alert-danger">Erro ao carregar dados: ${error.message}</div>`;
+            });
+    }
+    
+    // Event listener para o botão de filtrar
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'btn-filtrar-modal') {
+            carregarDadosModal();
+        }
+    });
+    
+    function preencherTabelaModalCNPJ(data) {
+        const transferencias = data.transferencias || [];
+        const cnpjs = data.cnpjs || [];
+        const somatorias = data.somatorias || {};
+        
+        // Limpar tabela
+        const cabecalho = document.getElementById('cabecalhoTabela');
+        const corpo = document.getElementById('corpoTabelaTransferenciasCNPJ');
+        const rodape = document.getElementById('rodapeTabelaTransferenciasCNPJ');
+        
+        cabecalho.innerHTML = '';
+        corpo.innerHTML = '';
+        rodape.innerHTML = '';
+        
+        // Criar cabeçalho
+        const colunasFixas = [
+            'Data', 'Nome do Item', 'Código do Item', 'Número NF', 
+            'CNPJ Emitente', 'CNPJ Destinatário', 'Tipo da Nota', 'Quantidade'
+        ];
+        
+        colunasFixas.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col;
+            th.style.position = 'sticky';
+            th.style.top = '0';
+            th.style.backgroundColor = '#3498db';
+            th.style.color = 'white';
+            th.style.zIndex = '10';
+            cabecalho.appendChild(th);
+        });
+        
+        // Adicionar colunas de CNPJ
+        cnpjs.forEach(cnpj => {
+            const th = document.createElement('th');
+            th.textContent = cnpj;
+            th.style.position = 'sticky';
+            th.style.top = '0';
+            th.style.backgroundColor = '#3498db';
+            th.style.color = 'white';
+            th.style.zIndex = '10';
+            th.style.textAlign = 'right';
+            cabecalho.appendChild(th);
+        });
+        
+        // Preencher corpo da tabela
+        transferencias.forEach(transf => {
+            const tr = document.createElement('tr');
+            
+            // Colunas fixas
+            const dataFormatada = transf.data ? new Date(transf.data).toLocaleDateString('pt-BR') : '';
+            tr.appendChild(criarCelula(dataFormatada));
+            tr.appendChild(criarCelula(transf.nome_item || ''));
+            tr.appendChild(criarCelula(transf.codigo_item || ''));
+            tr.appendChild(criarCelula(transf.numero_nf || ''));
+            tr.appendChild(criarCelula(transf.cnpj_emitente || ''));
+            tr.appendChild(criarCelula(transf.cnpj_destinatario || ''));
+            tr.appendChild(criarCelula(transf.tipo_nota || ''));
+            
+            const qtdCell = criarCelula(formatarNumero(transf.quantidade || 0), 'text-end');
+            tr.appendChild(qtdCell);
+            
+            // Colunas de CNPJ com cálculos
+            cnpjs.forEach(cnpj => {
+                const valor = calcularValorCNPJ(transf, cnpj);
+                const cell = criarCelula(formatarNumero(valor), 'text-end');
+                if (valor < 0) {
+                    cell.style.color = '#e74c3c';
+                } else if (valor > 0) {
+                    cell.style.color = '#27ae60';
+                }
+                tr.appendChild(cell);
+            });
+            
+            corpo.appendChild(tr);
+        });
+        
+        // Criar rodapé com somatórias
+        const trRodape = document.createElement('tr');
+        trRodape.style.fontWeight = 'bold';
+        trRodape.style.backgroundColor = '#eaf1fb';
+        
+        // Células vazias para colunas fixas
+        for (let i = 0; i < colunasFixas.length - 1; i++) {
+            trRodape.appendChild(criarCelula(''));
+        }
+        
+        // Total de quantidade
+        const totalQtd = transferencias.reduce((sum, t) => sum + (parseFloat(t.quantidade) || 0), 0);
+        trRodape.appendChild(criarCelula(formatarNumero(totalQtd), 'text-end'));
+        
+        // Somatórias por CNPJ
+        cnpjs.forEach(cnpj => {
+            const soma = somatorias[cnpj] || 0;
+            const cell = criarCelula(formatarNumero(soma), 'text-end');
+            cell.style.fontWeight = 'bold';
+            if (soma < 0) {
+                cell.style.color = '#e74c3c';
+            } else if (soma > 0) {
+                cell.style.color = '#27ae60';
+            }
+            trRodape.appendChild(cell);
+        });
+        
+        rodape.appendChild(trRodape);
+    }
+    
+    function calcularValorCNPJ(transf, cnpj) {
+        const quantidade = parseFloat(transf.quantidade) || 0;
+        const cnpj_emit = transf.cnpj_emitente || '';
+        const cnpj_dest = transf.cnpj_destinatario || '';
+        const is_saida = (transf.tipo_nota === 'Saída' || transf.tipo_nota === 1);
+        let valor = 0;
+        
+        // Parte 1: Se CNPJ Emitente = CNPJ da coluna
+        if (cnpj_emit === cnpj) {
+            if (is_saida) {
+                valor -= quantidade;
+            } else {
+                valor += quantidade;
+            }
+        }
+        
+        // Parte 2: Se CNPJ Destinatário = CNPJ da coluna
+        if (cnpj_dest === cnpj) {
+            if (is_saida) {
+                valor += quantidade;
+            } else {
+                valor -= quantidade;
+            }
+        }
+        
+        // Parte 3: Se CNPJ Emitente = CNPJ Destinatário E CNPJ Destinatário = CNPJ da coluna
+        if (cnpj_emit === cnpj_dest && cnpj_dest === cnpj) {
+            if (is_saida) {
+                valor -= quantidade;
+            } else {
+                valor += quantidade;
+            }
+        }
+        
+        return valor;
+    }
+    
+    function criarCelula(texto, classe = '') {
+        const td = document.createElement('td');
+        td.textContent = texto;
+        if (classe) {
+            td.className = classe;
+        }
+        return td;
+    }
+    
+    function formatarNumero(valor) {
+        if (valor === null || valor === undefined) return '0,00';
+        return parseFloat(valor).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    // Expor função globalmente para ser chamada do template principal
+    window.abrirModalAnaliseCNPJ = abrirModalAnaliseCNPJ;
+});
+</script>
+
+<style>
+#modalAnaliseTransferenciasCNPJ .modal-dialog {
+    max-width: 90%;
+    width: 90%;
+}
+
+#modalAnaliseTransferenciasCNPJ .select2-container {
+    width: 100% !important;
+}
+
+#modalAnaliseTransferenciasCNPJ .table-responsive {
+    font-size: 0.85rem;
+}
+
+#modalAnaliseTransferenciasCNPJ th {
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+
+#modalAnaliseTransferenciasCNPJ td {
+    font-size: 0.8rem;
+}
+</style>
+

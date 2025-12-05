@@ -24,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 material_bp = Blueprint('material', __name__, url_prefix='/materiais')
 
-MEGA_MP = [8,9,10,11,12,13,14,20,34,72,78,79,25,37,36,38,26,76]
-MEGA_UC = [17,18,31,32,33,39,19,40,41,42,73,74,75,77,23,43,44,45,46,24,47]
-MEGA_PA = [48,49,51,50,52]
-MEGA_IM = [21,27,28,29,30,22]
-MEGA_PT = [54,55]
+MEGA_MP = ['8','9','10','11','12','13','14','20','34','72','78','79','25','37','36','38','26','76']
+MEGA_UC = ['17','18','31','32','33','39','19','40','41','42','73','74','75','77','23','43','44','45','46','24','47']
+MEGA_PA = ['48','49','51','50','52']
+MEGA_IM = ['21','27','28','29','30','22']
+MEGA_PT = ['54','55']
 
 # Middleware para verificar se o usuário tem permissão
 #@material_bp.before_request
@@ -1356,6 +1356,7 @@ def exportar_excel():
             if len(itens) == 0:
                 ncm_iguais = 'N/A'
                 ncms_validos = set()
+                ncm_unico = None
                 itens_por_ncm_json = '[]'
             else:
                 # Coletar todos os NCMs únicos (filtrando valores None e strings vazias)
@@ -1564,15 +1565,32 @@ def exportar_mega():
             ws.cell(row=linha_atual, column=22, value=ncm)
 
             # Coluna 24: CÃ³digo da aplicaÃ§Ã£o
-
-
             codigo_aplicacao = '401' if material.mascara in MEGA_MP else '468' if material.mascara in MEGA_UC else '601' if material.mascara in MEGA_PA else '105' if material.mascara in MEGA_IM else ''
             ws.cell(row=linha_atual, column=24, value=codigo_aplicacao)
 
+             # Coluna 27: ICMS definido por
+            codigo_aplicacao = 'NCM'
+            ws.cell(row=linha_atual, column=27, value=codigo_aplicacao)
 
+
+            # Coluna 41: grupo base - Estoque
+            ws.cell(row=linha_atual, column=41, value=material.mascara)
             
-            linha_atual += 1
+
+            # Coluna 43: Controle de Estoque
+            controle_estoque = 'S' if material.mascara in (MEGA_MP+MEGA_PA+MEGA_IM) else 'N'
+            ws.cell(row=linha_atual, column=43, value=controle_estoque)
         
+
+             # Coluna 53: Totaliza documentos
+            todos_documentos = 'S'
+            ws.cell(row=linha_atual, column=53, value=todos_documentos)
+
+             # Coluna 100: Grupo base - Manufatura
+            todos_documentos = material.mascara
+            ws.cell(row=linha_atual, column=100, value=todos_documentos)
+
+            linha_atual += 1
         # Criar arquivo em memória
         output = BytesIO()
         wb.save(output)

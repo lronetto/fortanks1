@@ -122,6 +122,15 @@
                         <option value="3" {% if request.args.get('tipo_nfe', '') == '3' %}selected{% endif %}>NFSe</option>
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label for="tipo_operacao" class="form-label">Tipo de Operação</label>
+                    <select name="tipo_operacao" id="tipo_operacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="compra" {% if request.args.get('tipo_operacao', '') == 'compra' %}selected{% endif %}>Compra</option>
+                        <option value="venda" {% if request.args.get('tipo_operacao', '') == 'venda' %}selected{% endif %}>Venda</option>
+                        <option value="transferencia" {% if request.args.get('tipo_operacao', '') == 'transferencia' %}selected{% endif %}>Transferência</option>
+                    </select>
+                </div>
                 <!-- Filtros extras para CTE -->
                 <div class="col-md-3 cte-extra-filtro" id="filtro-origem" style="display: none;">
                     <label for="origem" class="form-label">Origem (Município)</label>
@@ -302,7 +311,25 @@ document.addEventListener('DOMContentLoaded', function() {
     $('#tabelaNotasFiscaisContainer').on('click', '.pagination a', function(e) {
         e.preventDefault();
         let url = $(this).attr('href');
-        let params = url.split('?')[1];
+        // Extrair apenas o número da página do link
+        let pageMatch = url.match(/[?&]page=(\d+)/);
+        let pageNum = pageMatch ? pageMatch[1] : 1;
+        
+        // Preservar todos os filtros atuais e adicionar/atualizar o parâmetro page
+        let params = $('#filtrosNotasFiscais').serialize();
+        
+        // Remover page antigo se existir e adicionar o novo
+        params = params.replace(/[&]?page=\d+/g, '');
+        if (params && !params.endsWith('&')) {
+            params += '&';
+        }
+        params += 'page=' + pageNum;
+        
+        // Preservar ordenação se não estiver nos filtros
+        if (!params.includes('order_by=')) {
+            params += '&order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
+        }
+        
         carregarTabelaNotasFiscais(params);
         // Não atualizar total na paginação, pois o total não muda
     });

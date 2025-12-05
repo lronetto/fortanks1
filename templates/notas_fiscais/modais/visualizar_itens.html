@@ -43,6 +43,9 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button type="button" id="btnImportarPendentesComMaterial" class="btn btn-success btn-importar-pendentes-auto" style="display: none;">
+                    <i class="fas fa-file-import"></i> Importar Pendentes com Material (<span id="contadorPendentesVisualizacao">0</span>)
+                </button>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
             </div>
         </div>
@@ -104,11 +107,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log(`URL bem-sucedida: ${url}`);
                 } else {
                     document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="9" class="text-center text-danger">${data.message || 'Erro ao carregar itens.'}</td></tr>`;
+                    atualizarContadorPendentesVisualizacao(0);
                 }
             })
             .catch(error => {
                 console.warn(`Falha ao usar ${url}:`, error);
                 document.getElementById(corpoTabela).innerHTML = `<tr><td colspan="9" class="text-center text-danger">${error.message || 'Erro ao carregar itens.'}</td></tr>`;
+                atualizarContadorPendentesVisualizacao(0);
             });
     }
 
@@ -116,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function preencherTabelaVisualizacao(itens) {
         if (!itens || itens.length === 0) {
             document.getElementById('corpoTabelaItens').innerHTML = '<tr><td colspan="9" class="text-center">Nenhum item encontrado.</td></tr>';
+            atualizarContadorPendentesVisualizacao(0);
             return;
         }
         
@@ -126,6 +132,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Configurar eventos de filtro
         configurarFiltroItens();
+        
+        // Atualizar contador de pendentes
+        atualizarContadorPendentesVisualizacao(itens);
     }
     
     // Função para renderizar os itens na tabela de visualização
@@ -145,13 +154,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 status = '<span class="badge bg-danger">Pendente</span>';
             }
             
-            // Botão de criar material (só aparece se não tiver material vinculado)
+            // Botões de ação por item
             let acoes = '';
             if (!item.material_id) {
+                // Se não tem material vinculado, mostrar botão para criar material
                 acoes = `<button class="btn btn-sm btn-primary criar-material-btn" data-item-id="${item.id}" data-item-codigo="${item.codigo || ''}" data-item-descricao="${item.descricao || ''}" data-item-unidade="${item.unidade || ''}" data-item-ncm="${item.ncm || ''}" title="Criar material a partir deste item">
                     <i class="fas fa-plus-circle"></i> Criar Material
                 </button>`;
+            } else if (!item.importado_estoque) {
+                // Se tem material vinculado mas não está importado, mostrar botão para importar
+                acoes = `<button class="btn btn-sm btn-success importar-item-btn" data-item-id="${item.id}" data-item-descricao="${item.descricao || ''}" title="Importar este item para o estoque">
+                    <i class="fas fa-file-import"></i> Importar
+                </button>`;
             } else {
+                // Se já está importado, não mostrar ação
                 acoes = '<span class="text-muted">-</span>';
             }
             
@@ -172,6 +188,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         document.getElementById('corpoTabelaItens').innerHTML = html;
         
+        // Atualizar contador após renderizar
+        atualizarContadorPendentesVisualizacao(itens);
+        
         // Adicionar event listeners aos botões de criar material
         document.querySelectorAll('.criar-material-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
@@ -188,6 +207,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     unidade: itemUnidade,
                     ncm: itemNcm
                 });
+            });
+        });
+        
+        // Adicionar event listeners aos botões de importar item individual
+        document.querySelectorAll('.importar-item-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemDescricao = this.getAttribute('data-item-descricao');
+                importarItemIndividual(itemId, itemDescricao);
             });
         });
     }
@@ -243,10 +271,252 @@ document.addEventListener('DOMContentLoaded', function() {
         if (itensFiltrados.length === 0) {
             document.getElementById('corpoTabelaItens').innerHTML = 
                 `<tr><td colspan="9" class="text-center">Nenhum item encontrado com o termo "${filtro}".</td></tr>`;
+            atualizarContadorPendentesVisualizacao(0);
         } else {
             renderizarItensVisualizacao(itensFiltrados);
         }
     }
+    
+    // Função para atualizar o contador de itens pendentes na visualização
+    function atualizarContadorPendentesVisualizacao(itens) {
+        const contadorElement = document.getElementById('contadorPendentesVisualizacao');
+        const btnElement = document.getElementById('btnImportarPendentesComMaterial');
+        
+        if (!contadorElement || !btnElement) return;
+        
+        // Se recebeu um número diretamente (quando não há itens)
+        if (typeof itens === 'number') {
+            contadorElement.textContent = itens.toString();
+            btnElement.style.display = itens > 0 ? 'inline-block' : 'none';
+            return;
+        }
+        
+        if (!itens || itens.length === 0) {
+            contadorElement.textContent = '0';
+            btnElement.style.display = 'none';
+            return;
+        }
+        
+        // Contar itens pendentes: não importados E que já têm material vinculado
+        const pendentes = itens.filter(function(item) {
+            return !item.importado_estoque && item.material_id;
+        });
+        
+        contadorElement.textContent = pendentes.length.toString();
+        btnElement.style.display = pendentes.length > 0 ? 'inline-block' : 'none';
+    }
+    
+    // Função para importar um item individual
+    function importarItemIndividual(itemId, itemDescricao) {
+        if (!itemId) {
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Erro', 'ID do item não encontrado.', 'error');
+            } else {
+                alert('ID do item não encontrado.');
+            }
+            return;
+        }
+        
+        // Centro de custo agora é opcional
+        const centroCustoId = prompt(`Digite o ID do Centro de Custo para importar o item (opcional):\n"${itemDescricao}"`);
+        
+        const observacao = prompt('Observação (opcional):') || '';
+        
+        const mensagemConfirmacao = centroCustoId && centroCustoId.trim() !== '' 
+            ? `Deseja importar o item "${itemDescricao}" para o estoque?\n\nCentro de Custo: ${centroCustoId}`
+            : `Deseja importar o item "${itemDescricao}" para o estoque?`;
+        
+        if (!confirm(mensagemConfirmacao)) {
+            return;
+        }
+        
+        if (typeof mostrarCarregando === 'function') {
+            mostrarCarregando('Importando item para o estoque...');
+        }
+        
+        // Obter token CSRF
+        const csrfToken = getCSRFToken();
+        
+        // Preparar parâmetros (centro_custo_id só se fornecido)
+        const params = new URLSearchParams();
+        if (centroCustoId && centroCustoId.trim() !== '') {
+            params.append('centro_custo_id', centroCustoId.trim());
+        }
+        if (observacao && observacao.trim() !== '') {
+            params.append('observacao', observacao.trim());
+        }
+        
+        fetch(`/notas-fiscais/api/importar-item-estoque/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: params
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                if (typeof mostrarAlerta === 'function') {
+                    mostrarAlerta('Sucesso', data.message || 'Item importado com sucesso!', 'success', function() {
+                        // Recarregar os itens da nota para atualizar a interface
+                        const notaId = window.notaIdAtual;
+                        if (notaId) {
+                            carregarItensModal(notaId);
+                        }
+                        // Recarregar a tabela de notas fiscais se a função existir
+                        if (typeof carregarTabelaNotasFiscais === 'function') {
+                            const params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            if (typeof carregarTotalNotas === 'function') {
+                                carregarTotalNotas(params);
+                            }
+                        }
+                    });
+                } else {
+                    alert('Sucesso: Item importado com sucesso!');
+                    const notaId = window.notaIdAtual;
+                    if (notaId) {
+                        carregarItensModal(notaId);
+                    }
+                }
+            } else {
+                if (typeof mostrarAlerta === 'function') {
+                    mostrarAlerta('Erro', data.message || 'Erro ao importar item.', 'error');
+                } else {
+                    alert('Erro: ' + (data.message || 'Erro ao importar item.'));
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao importar item:', error);
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+            } else {
+                alert('Erro ao importar: ' + error.message);
+            }
+        })
+        .finally(() => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+        });
+    }
+    
+    // Função para importar itens pendentes que já têm material vinculado
+    function importarPendentesComMaterial() {
+        const notaId = window.notaIdAtual;
+        
+        if (!notaId) {
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Erro', 'ID da nota fiscal não encontrado.', 'error');
+            } else {
+                alert('ID da nota fiscal não encontrado.');
+            }
+            return;
+        }
+        
+        // Centro de custo agora é opcional
+        const centroCustoId = prompt('Digite o ID do Centro de Custo para importação (opcional):');
+        
+        const observacao = prompt('Observação (opcional):') || '';
+        
+        const mensagemConfirmacao = centroCustoId && centroCustoId.trim() !== ''
+            ? `Deseja importar os itens pendentes que já têm material vinculado para o estoque?\n\nCentro de Custo: ${centroCustoId}`
+            : `Deseja importar os itens pendentes que já têm material vinculado para o estoque?`;
+        
+        if (!confirm(mensagemConfirmacao)) {
+            return;
+        }
+        
+        if (typeof mostrarCarregando === 'function') {
+            mostrarCarregando('Importando itens pendentes com material vinculado...');
+        }
+        
+        // Obter token CSRF
+        const csrfToken = getCSRFToken();
+        
+        // Preparar dados (centro_custo_id só se fornecido)
+        const requestData = {
+            nf_id: notaId,
+            observacao: observacao.trim() || null
+        };
+        if (centroCustoId && centroCustoId.trim() !== '') {
+            requestData.centro_custo_id = centroCustoId.trim();
+        }
+        
+        fetch('/notas-fiscais/api/importar-pendentes-com-material', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                if (typeof mostrarAlerta === 'function') {
+                    mostrarAlerta('Sucesso', data.message, 'success', function() {
+                        // Recarregar os itens da nota para atualizar a interface
+                        carregarItensModal(notaId);
+                        // Recarregar a tabela de notas fiscais se a função existir
+                        if (typeof carregarTabelaNotasFiscais === 'function') {
+                            const params = $('#filtrosNotasFiscais').serialize();
+                            carregarTabelaNotasFiscais(params);
+                            if (typeof carregarTotalNotas === 'function') {
+                                carregarTotalNotas(params);
+                            }
+                        }
+                    });
+                } else {
+                    alert('Sucesso: ' + data.message);
+                    carregarItensModal(notaId);
+                }
+            } else {
+                if (typeof mostrarAlerta === 'function') {
+                    mostrarAlerta('Erro', data.message, 'error');
+                } else {
+                    alert('Erro: ' + data.message);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao importar pendentes:', error);
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+            } else {
+                alert('Erro ao importar: ' + error.message);
+            }
+        })
+        .finally(() => {
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+        });
+    }
+    
+    // Event listener para o botão de importar pendentes
+    $(document).on('click', '#btnImportarPendentesComMaterial', function(e) {
+        e.preventDefault();
+        importarPendentesComMaterial();
+    });
     
     // Função para criar material a partir do item da nota fiscal
     function criarMaterialDoItem(item) {

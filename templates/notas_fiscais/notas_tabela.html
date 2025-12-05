@@ -173,7 +173,7 @@
     <ul class="pagination justify-content-center">
         <!-- Link Anterior -->
         <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
-            <a class="page-link" href="?page={{ pagination.prev_num }}" aria-label="Anterior">
+            <a class="page-link" href="?{% if filtros_params %}{% for key, value in filtros_params.items() %}{{ key }}={{ value }}{% if not loop.last %}&{% endif %}{% endfor %}&{% endif %}page={{ pagination.prev_num }}" aria-label="Anterior">
                 <span aria-hidden="true">&laquo;</span>
             </a>
         </li>
@@ -181,7 +181,7 @@
         {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
             {% if page_num %}
                 <li class="page-item {{ 'active' if page_num == pagination.page else '' }}">
-                    <a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a>
+                    <a class="page-link" href="?{% if filtros_params %}{% for key, value in filtros_params.items() %}{{ key }}={{ value }}{% if not loop.last %}&{% endif %}{% endfor %}&{% endif %}page={{ page_num }}">{{ page_num }}</a>
                 </li>
             {% else %}
                 <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -189,7 +189,7 @@
         {% endfor %}
         <!-- Link Próximo -->
         <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
-            <a class="page-link" href="?page={{ pagination.next_num }}" aria-label="Próximo">
+            <a class="page-link" href="?{% if filtros_params %}{% for key, value in filtros_params.items() %}{{ key }}={{ value }}{% if not loop.last %}&{% endif %}{% endfor %}&{% endif %}page={{ pagination.next_num }}" aria-label="Próximo">
                 <span aria-hidden="true">&raquo;</span>
             </a>
         </li>

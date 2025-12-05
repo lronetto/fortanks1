@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+{% macro format_brl(value) %}
+    {% if value < 0 %}
+        {% set abs_value = -value %}
+        {% set sinal = '-' %}
+    {% else %}
+        {% set abs_value = value %}
+        {% set sinal = '' %}
+    {% endif %}
+    {% set formatted = '{:,.2f}'.format(abs_value).replace(',', 'X').replace('.', ',').replace('X', '.') %}
+    {{ sinal }}{{ formatted }}
+{% endmacro %}
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            color: #222;
+            margin: 0;
+            padding: 15px;
+            background: #fff;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 8px;
+        }
+        .logo {
+            height: 50px;
+            margin-right: 15px;
+        }
+        .title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .filtros-info {
+            margin-bottom: 15px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            font-size: 0.85em;
+        }
+        .filtros-info strong {
+            color: #2c3e50;
+        }
+        .table-container {
+            width: 100%;
+            margin: 0 auto;
+            overflow: hidden;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 0.65em;
+            table-layout: fixed;
+        }
+        thead th {
+            background: #3498db;
+            color: #fff;
+            font-weight: bold;
+            padding: 6px 3px;
+            border: 1px solid #2980b9;
+            text-align: left;
+            font-size: 0.9em;
+            word-wrap: break-word;
+        }
+        tbody tr:nth-child(even) {
+            background: #f2f6fa;
+        }
+        tbody tr:nth-child(odd) {
+            background: #fff;
+        }
+        td {
+            padding: 4px 3px;
+            border: 1px solid #d0d7de;
+            word-wrap: break-word;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        /* Larguras específicas para colunas */
+        th:nth-child(1), td:nth-child(1) { width: 7%; } /* Data */
+        th:nth-child(2), td:nth-child(2) { width: 18%; } /* Nome do Item */
+        th:nth-child(3), td:nth-child(3) { width: 8%; } /* Código do Item */
+        th:nth-child(4), td:nth-child(4) { width: 7%; } /* Número NF */
+        th:nth-child(5), td:nth-child(5) { width: 18%; } /* CNPJ Emitente */
+        th:nth-child(6), td:nth-child(6) { width: 18%; } /* CNPJ Destinatário */
+        th:nth-child(7), td:nth-child(7) { width: 6%; } /* Tipo da Nota */
+        th:nth-child(8), td:nth-child(8) { width: 9%; } /* Quantidade */
+        th:nth-child(9), td:nth-child(9) { width: 9%; } /* Valor */
+        tfoot th {
+            background: #eaf1fb;
+            color: #222;
+            font-size: 0.85em;
+            font-weight: bold;
+            padding: 6px 3px;
+            border: 1px solid #b0c4de;
+        }
+        .text-end {
+            text-align: right;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .footer {
+            text-align: center;
+            font-size: 0.9em;
+            color: #888;
+            margin-top: 40px;
+        }
+        .totais {
+            margin-top: 20px;
+            padding: 10px;
+            background: #eaf1fb;
+            border: 1px solid #b0c4de;
+        }
+        .totais strong {
+            color: #2c3e50;
+        }
+        .totais-por-cnpj {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .totais-por-cnpj h3 {
+            font-size: 1.1rem;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+        .totais-por-cnpj table {
+            font-size: 0.8em;
+            margin-bottom: 15px;
+        }
+        .totais-por-cnpj thead th {
+            background: #2980b9;
+            font-size: 0.85em;
+        }
+        .totais-por-cnpj tbody tr:last-child {
+            background: #eaf1fb;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        {% if logo_path %}
+        <img src="{{ logo_path }}" class="logo" alt="Logo Empresa">
+        {% endif %}
+        <span class="title">Análise de Transferências de Itens</span>
+    </div>
+    
+    {% if filtros_aplicados %}
+    <div class="filtros-info">
+        <strong>Filtros aplicados:</strong><br>
+        {% if filtros_aplicados.data_inicio or filtros_aplicados.data_fim %}
+        Período: 
+        {% if filtros_aplicados.data_inicio %}{{ filtros_aplicados.data_inicio }}{% endif %}
+        {% if filtros_aplicados.data_inicio and filtros_aplicados.data_fim %} até {% endif %}
+        {% if filtros_aplicados.data_fim %}{{ filtros_aplicados.data_fim }}{% endif %}<br>
+        {% endif %}
+        {% if filtros_aplicados.codigo_item %}
+        Código do Item: {{ filtros_aplicados.codigo_item }}<br>
+        {% endif %}
+        {% if filtros_aplicados.nome_item %}
+        Nome do Item: {{ filtros_aplicados.nome_item }}<br>
+        {% endif %}
+        {% if filtros_aplicados.cnpj_emitente %}
+        CNPJ Emitente(s): {{ filtros_aplicados.cnpj_emitente|join(', ') }}<br>
+        {% endif %}
+        {% if filtros_aplicados.cnpj_destinatario %}
+        CNPJ Destinatário(s): {{ filtros_aplicados.cnpj_destinatario|join(', ') }}<br>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    <div class="table-container">
+    {% if transferencias and transferencias|length > 0 %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Nome do Item</th>
+                    <th>Código do Item</th>
+                    <th>Número NF</th>
+                    <th>CNPJ Emitente</th>
+                    <th>CNPJ Destinatário</th>
+                    <th>Tipo da Nota</th>
+                    <th class="text-end">Quantidade</th>
+                    <th class="text-end">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for transf in transferencias %}
+                <tr>
+                    <td>{{ transf.data.strftime('%d/%m/%Y') if transf.data else '' }}</td>
+                    <td style="font-size: 0.9em;">{{ transf.nome_item }}</td>
+                    <td style="font-size: 0.9em;">{{ transf.codigo_item }}</td>
+                    <td>{{ transf.numero_nf }}</td>
+                    <td style="font-size: 0.9em;">{{ transf.cnpj_emitente }}<br><small style="font-size: 0.85em;">({{ transf.nome_emitente }})</small></td>
+                    <td style="font-size: 0.9em;">{{ transf.cnpj_destinatario }}<br><small style="font-size: 0.85em;">({{ transf.nome_destinatario }})</small></td>
+                    <td class="text-center">{% if transf.tipo_nota == 0 %}Entrada{% elif transf.tipo_nota == 1 %}Saída{% else %}{{ transf.tipo_nota }}{% endif %}</td>
+                    <td class="text-end">{{ '%.2f'|format(transf.quantidade) }}</td>
+                    <td class="text-end">R$ {{ format_brl(transf.valor) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <th colspan="7" class="text-end">Total</th>
+                    <th class="text-end">{{ '%.2f'|format(total_quantidade) }}</th>
+                    <th class="text-end">R$ {{ format_brl(total_valor) }}</th>
+                </tr>
+            </tfoot>
+        </table>
+        
+        <div class="totais">
+            <strong>Total Geral de registros:</strong> {{ transferencias|length }}<br>
+            <strong>Total Geral de quantidade:</strong> {{ '%.2f'|format(total_quantidade) }}<br>
+            <strong>Total Geral de valor:</strong> R$ {{ format_brl(total_valor) }}
+        </div>
+        
+        {% if saldos_por_cnpj %}
+        <div class="totais-por-cnpj">
+            <h3>Saldos por CNPJ (Emitente + Destinatário)</h3>
+            <p style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
+                <strong>Legenda:</strong> O saldo considera todas as operações onde o CNPJ aparece como emitente ou destinatário.<br>
+                Entrada (+) adiciona ao saldo, Saída (-) subtrai do saldo.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>CNPJ</th>
+                        <th>Nome</th>
+                        <th class="text-end">Registros</th>
+                        <th class="text-end">Saldo Quantidade</th>
+                        <th class="text-end">Saldo Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for dados in saldos_por_cnpj %}
+                    <tr>
+                        <td>{{ dados.cnpj }}</td>
+                        <td>{{ dados.nome }}</td>
+                        <td class="text-end">{{ dados.registros }}</td>
+                        <td class="text-end" style="{% if dados.quantidade < 0 %}color: #e74c3c;{% elif dados.quantidade > 0 %}color: #27ae60;{% endif %}">
+                            {{ '%.2f'|format(dados.quantidade) }}
+                        </td>
+                        <td class="text-end" style="{% if dados.valor < 0 %}color: #e74c3c;{% elif dados.valor > 0 %}color: #27ae60;{% endif %}">
+                            R$ {{ format_brl(dados.valor) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    {% else %}
+        <div style="padding: 20px; text-align: center; color: #888;">
+            Nenhuma transferência encontrada para os filtros selecionados.
+        </div>
+    {% endif %}
+    </div>
+    
+    <div class="footer">
+        Relatório gerado em {{ now }}
+    </div>
+</body>
+</html>
+

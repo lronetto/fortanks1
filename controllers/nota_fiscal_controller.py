@@ -25,7 +25,7 @@ from models.arquivei import Arquivei
 from scripts.processar_email1 import processar_emails
 from models.conversao_unidade import comparar_unidades
 from models.upload import Upload
-from models.nota_fiscal import CNPJS_MATRIZ_FILIAIS,CNPJS_MATRIZ,CNPJS_FILIAIS
+from models.nota_fiscal import CNPJS_MATRIZ_FILIAIS,CNPJS_MATRIZ,CNPJS_FILIAIS,CFOPS_COMPRA,CFOPS_VENDA,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
 from dateutil.relativedelta import relativedelta
 from datetime import datetime, timedelta
@@ -33,6 +33,13 @@ import pandas as pd
 import io
 from models.reembolso import ReembolsoDocumento
 from models.plano_conta import PlanoConta
+
+# Import WeasyPrint para geração de PDF
+try:
+    from weasyprint import HTML, CSS
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
 
 # Configurar o logger para o módulo
 logger = logging.getLogger(__name__)
@@ -314,6 +321,7 @@ def api_get_dados_notas_fiscais(request):
     destino = args.get('destino', '')  # Novo filtro para destino
     remetente = args.get('remetente', '')  # Novo filtro para remetente
     status_upload = args.get('status_upload', '')  # Novo filtro de status upload
+    tipo_operacao = args.get('tipo_operacao', '')  # Novo filtro de tipo de operação (Compra, Venda, Transferência)
     # Novos filtros de CNPJ direto (valor exato)
     cnpj_emitente = args.get('cnpj_emitente', '').strip()
     cnpj_destinatario = args.get('cnpj_destinatario', '').strip()
@@ -431,6 +439,19 @@ def api_get_dados_notas_fiscais(request):
         query = query.join(NotaFiscalItem).filter(
             NotaFiscalItem.descricao.ilike(f'%{item_nome}%')
         )
+    
+    # Aplicar filtro de tipo de operação (Compra, Venda, Transferência) baseado em CFOP
+    if tipo_operacao:
+        # Converter CFOPs para string para comparação (CFOP é armazenado como String no banco)
+        if tipo_operacao == 'compra':
+            cfops_lista = [str(cfop) for cfop in CFOPS_COMPRA]
+            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)))
+        elif tipo_operacao == 'venda':
+            cfops_lista = [str(cfop) for cfop in CFOPS_VENDA]
+            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)))
+        elif tipo_operacao == 'transferencia':
+            cfops_lista = [str(cfop) for cfop in CFOPS_TRANSFERENCIA]
+            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)))
     
     # Aplicar filtro de status de importação (Simplificado para paginação)
     if status_importacao == 'pendentes':
@@ -1012,35 +1033,470 @@ def importar_itens():
             # Processar os itens selecionados
             data = request.get_json()
             itens = data.get('itens')
-            print(f"Itens: {itens}")
+            centro_custo_id = data.get('centro_custo_id')
+            observacao = data.get('observacao')
+            
+            if not itens:
+                return jsonify({
+                    'success': False,
+                    'message': 'Nenhum item selecionado para importação.'
+                }), 400
+            
+            # Contar itens antes da operação
+            itens_ja_importados = 0
+            itens_importados = 0
+            itens_com_erro = []
+            total_itens_selecionados = len(itens)
+            
             # Importar os itens para o estoque
             for item_data in itens:
-                
                 item_id = item_data.get('item_id')
                 material_id = item_data.get('material_id')
                 fator_conversao = item_data.get('fator_conversao')
-                print(f"Item ID: {item_id}")
-                print(f"Material ID: {material_id}")
-                print(f"Fator Conversão: {fator_conversao}")
+                
                 item1 = NotaFiscalItem.query.get_or_404(item_id)
-                print(f"Item: {item1}")
-                item1.material_id = material_id
+                
+                # Verificar se já estava importado
+                if item1.importado_estoque:
+                    itens_ja_importados += 1
+                    continue
+                
+                # Verificar se tem material vinculado
+                if not material_id:
+                    itens_com_erro.append({
+                        'item_id': item_id,
+                        'descricao': item1.descricao,
+                        'erro': 'Item não possui material vinculado'
+                    })
+                    continue
+                
                 material = Material.query.get_or_404(material_id)
                 
                 # Aplicar fator de conversão se fornecido, senão verificar se as unidades são iguais
-                if not fator_conversao or fator_conversao== None :
+                if not fator_conversao or fator_conversao == None:
                     if comparar_unidades(item1.unidade, material.unidade_obj.nome):
                         fator_conversao = 1
                     else:
                         fator_conversao = None
-                item1.vincular(fator_conversao,material_id)
-                item1.vincular_e_importar_estoque_todos()
                 
-            return jsonify({'success': True, 'message': f'Item {item_id} importado com sucesso!'})
+                # Vincular material se necessário
+                if not item1.material_id:
+                    item1.vincular(fator_conversao, material_id)
+                
+                # Importar para o estoque
+                try:
+                    sucesso, mensagem = item1.importar_para_estoque(
+                        usuario_id=current_user.id,
+                        centro_custo_id=centro_custo_id if centro_custo_id else None,
+                        observacao=observacao or f"Importação da NF {item1.nota_fiscal.numero_nf if item1.nota_fiscal else 'N/A'}"
+                    )
+                    if sucesso:
+                        itens_importados += 1
+                    else:
+                        itens_com_erro.append({
+                            'item_id': item_id,
+                            'descricao': item1.descricao,
+                            'erro': mensagem
+                        })
+                except Exception as e:
+                    logger.error(f'Erro ao importar item {item_id}: {str(e)}')
+                    itens_com_erro.append({
+                        'item_id': item_id,
+                        'descricao': item1.descricao,
+                        'erro': str(e)
+                    })
+            
+            # Montar mensagem com estatísticas
+            mensagem = f'Importação concluída!\n\n'
+            mensagem += f'• Itens já importados: {itens_ja_importados}\n'
+            mensagem += f'• Itens importados agora: {itens_importados}'
+            if itens_com_erro:
+                mensagem += f'\n• Itens com erro: {len(itens_com_erro)}'
+            
+            return jsonify({
+                'success': True,
+                'message': mensagem,
+                'itens_importados': itens_importados,
+                'itens_ja_importados': itens_ja_importados,
+                'itens_com_erro': len(itens_com_erro),
+                'total_itens_selecionados': total_itens_selecionados
+            })
        # except Exception as e:
        #     logger.error(f"Erro ao importar itens: {str(e)}")
        #     return jsonify({'success': False, 'message': f'Erro ao importar itens: {str(e)}'}), 500
     return jsonify({'success': False, 'message': 'Método inválido'}), 405
+
+def _buscar_itens_similares_todas_notas(codigo, descricao):
+    """
+    Busca todos os itens similares em todas as notas fiscais baseado em código e/ou descrição.
+    
+    Args:
+        codigo: Código do item
+        descricao: Descrição do item
+    
+    Returns:
+        Lista de NotaFiscalItem encontrados
+    """
+    if codigo and descricao:
+        return NotaFiscalItem.query.filter(
+            NotaFiscalItem.codigo == codigo,
+            NotaFiscalItem.descricao == descricao
+        ).all()
+    elif codigo:
+        return NotaFiscalItem.query.filter(
+            NotaFiscalItem.codigo == codigo
+        ).all()
+    elif descricao:
+        return NotaFiscalItem.query.filter(
+            NotaFiscalItem.descricao == descricao
+        ).all()
+    return []
+
+
+def _aplicar_fator_conversao(item, material, fator_conversao):
+    """
+    Aplica o fator de conversão ao item baseado no material e fator fornecido.
+    
+    Args:
+        item: NotaFiscalItem
+        material: Material
+        fator_conversao: Fator de conversão a ser aplicado
+    """
+    if fator_conversao:
+        try:
+            item.fator_conversao_aplicado = float(fator_conversao)
+        except (ValueError, TypeError):
+            if comparar_unidades(item.unidade, material.unidade_obj.nome):
+                item.fator_conversao_aplicado = 1
+            else:
+                item.fator_conversao_aplicado = None
+    elif comparar_unidades(item.unidade, material.unidade_obj.nome):
+        item.fator_conversao_aplicado = 1
+    else:
+        item.fator_conversao_aplicado = None
+
+
+def _vincular_material_a_itens_similares(item_original, material, itens_sem_material, itens_processados):
+    """
+    Vincula o material aos itens similares que não têm material vinculado.
+    
+    Args:
+        item_original: Item original que já tem material vinculado
+        material: Material a ser vinculado
+        itens_sem_material: Lista de itens similares sem material
+        itens_processados: Set de IDs de itens já processados
+    
+    Returns:
+        Número de itens vinculados
+    """
+    itens_vinculados = 0
+    fator_conversao = item_original.fator_conversao_aplicado
+    
+    for item_similar in itens_sem_material:
+        if item_similar.id in itens_processados:
+            continue
+        
+        _aplicar_fator_conversao(item_similar, material, fator_conversao)
+        item_similar.material_id = item_original.material_id
+        item_similar.save()
+        
+        itens_vinculados += 1
+        itens_processados.add(item_similar.id)
+        logger.info(f'Item {item_similar.id} vinculado ao material {material.nome} na nota {item_similar.nota_fiscal.numero_nf}')
+    
+    return itens_vinculados
+
+
+def _importar_item_para_estoque(item, usuario_id, centro_custo_id, observacao, nota_fiscal):
+    """
+    Importa um item para o estoque.
+    
+    Args:
+        item: NotaFiscalItem a ser importado
+        usuario_id: ID do usuário
+        centro_custo_id: ID do centro de custo
+        observacao: Observação para a importação
+        nota_fiscal: NotaFiscal relacionada
+    
+    Returns:
+        Tupla (sucesso: bool, mensagem: str)
+    """
+    try:
+        sucesso, mensagem = item.importar_para_estoque(
+            usuario_id=usuario_id,
+            centro_custo_id=centro_custo_id,
+            observacao=observacao or f"Importação automática da NF {nota_fiscal.numero_nf} de {nota_fiscal.nome_emitente}"
+        )
+        if sucesso:
+            logger.info(f'Item {item.id} importado para o estoque')
+        else:
+            logger.error(f'Erro ao importar item {item.id}: {mensagem}')
+        return sucesso, mensagem
+    except Exception as e:
+        logger.error(f'Erro ao importar item {item.id}: {str(e)}')
+        return False, str(e)
+
+
+def _vincular_similares_para_item(item, material, itens_processados, grupos_processados, estatisticas):
+    """
+    Vincula itens similares em todas as notas para um item específico.
+    
+    Args:
+        item: Item a ser processado
+        material: Material vinculado ao item
+        itens_processados: Set de IDs de itens já processados
+        grupos_processados: Set de chaves de grupos já processados
+        estatisticas: Dicionário com estatísticas da operação
+    
+    Returns:
+        Lista de todos os itens similares encontrados (incluindo o original)
+    """
+    codigo = item.codigo.strip() if item.codigo else ''
+    descricao = item.descricao.strip() if item.descricao else ''
+    
+    # Criar chave única para o grupo de itens similares
+    chave_grupo = f"{codigo}|{descricao}"
+    if chave_grupo in grupos_processados:
+        return []  # Já processamos este grupo
+    
+    grupos_processados.add(chave_grupo)
+    
+    # 1. Buscar TODOS os itens similares em TODAS as notas fiscais
+    logger.info(f'Buscando itens similares para código="{codigo}", descrição="{descricao}" em TODAS as notas fiscais')
+    itens_similares_todos = _buscar_itens_similares_todas_notas(codigo, descricao)
+    logger.info(f'Encontrados {len(itens_similares_todos)} itens similares em todas as notas')
+    
+    # Separar itens já vinculados dos que não têm material
+    itens_ja_vinculados_local = [i for i in itens_similares_todos if i.material_id]
+    itens_sem_material = [i for i in itens_similares_todos if not i.material_id]
+    logger.info(f'Dos {len(itens_similares_todos)} itens similares: {len(itens_ja_vinculados_local)} já vinculados, {len(itens_sem_material)} sem material')
+    
+    # 2. Vincular material aos itens que não têm material vinculado
+    itens_vinculados_local = _vincular_material_a_itens_similares(
+        item, material, itens_sem_material, itens_processados
+    )
+    estatisticas['total_itens_vinculados'] += itens_vinculados_local
+    estatisticas['total_itens_ja_vinculados'] += len(itens_ja_vinculados_local)
+    
+    # Retornar todos os itens similares (incluindo o original)
+    return [item] + itens_similares_todos
+
+
+def _importar_itens(itens_para_importar, nota_fiscal, centro_custo_id, observacao, 
+                    itens_processados, estatisticas):
+    """
+    Importa uma lista de itens para o estoque.
+    
+    Args:
+        itens_para_importar: Lista de itens para importar
+        nota_fiscal: Nota fiscal relacionada
+        centro_custo_id: ID do centro de custo
+        observacao: Observação para importação
+        itens_processados: Set de IDs de itens já processados
+        estatisticas: Dicionário com estatísticas da operação
+    """
+    for item_para_importar in itens_para_importar:
+        if item_para_importar.id in itens_processados:
+            if item_para_importar.importado_estoque:
+                estatisticas['total_itens_ja_importados'] += 1
+            continue
+        
+        if item_para_importar.material_id:
+            if not item_para_importar.importado_estoque:
+                sucesso, mensagem = _importar_item_para_estoque(
+                    item_para_importar, current_user.id, centro_custo_id, observacao, nota_fiscal
+                )
+                if sucesso:
+                    estatisticas['total_itens_importados'] += 1
+                else:
+                    estatisticas['itens_com_erro'].append({
+                        'item_id': item_para_importar.id,
+                        'descricao': item_para_importar.descricao,
+                        'erro': mensagem
+                    })
+            else:
+                estatisticas['total_itens_ja_importados'] += 1
+        
+        itens_processados.add(item_para_importar.id)
+
+
+@nota_fiscal_bp.route('/api/importar-pendentes-com-material', methods=['POST'])
+@login_required
+def api_importar_pendentes_com_material():
+    """
+    API para importar e vincular itens pendentes que já têm material vinculado.
+    Para cada item já vinculado:
+    1. Vincula itens similares em outras notas
+    2. Importa o item atual e todos os similares encontrados
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            logger.error('Dados JSON não fornecidos na requisição')
+            return jsonify({
+                'success': False,
+                'message': 'Dados não fornecidos na requisição'
+            }), 400
+        
+        nf_id = data.get('nf_id')
+        centro_custo_id = data.get('centro_custo_id')
+        observacao = data.get('observacao')
+        
+        logger.info(f'Recebida requisição para importar pendentes: nf_id={nf_id}, centro_custo_id={centro_custo_id}')
+        
+        if not nf_id:
+            logger.error('ID da nota fiscal não fornecido')
+            return jsonify({
+                'success': False,
+                'message': 'ID da nota fiscal não fornecido'
+            }), 400
+        
+        # Buscar a nota fiscal
+        try:
+            nf_id_int = int(nf_id)
+        except (ValueError, TypeError):
+            logger.error(f'ID da nota fiscal inválido: {nf_id}')
+            return jsonify({
+                'success': False,
+                'message': f'ID da nota fiscal inválido: {nf_id}'
+            }), 400
+        
+        nota_fiscal = NotaFiscal.query.get(nf_id_int)
+        if not nota_fiscal:
+            logger.error(f'Nota fiscal com ID {nf_id_int} não encontrada')
+            return jsonify({
+                'success': False,
+                'message': f'Nota fiscal com ID {nf_id_int} não encontrada'
+            }), 404
+        
+        # Contar itens antes da operação
+        itens_ja_importados = [item for item in nota_fiscal.itens 
+                              if item.importado_estoque and item.material_id]
+        itens_pendentes_com_material = [item for item in nota_fiscal.itens 
+                                       if not item.importado_estoque and item.material_id]
+        total_pendentes = len(itens_pendentes_com_material)
+        
+        # Verificar se há itens para processar:
+        # 1. Itens pendentes na nota atual (já têm material mas não foram importados)
+        # 2. Itens similares em outras notas que podem ser vinculados e importados
+        tem_itens_para_processar = total_pendentes > 0
+        
+        # Se não há pendentes na nota atual, verificar se há itens similares em outras notas
+        # que podem ser vinculados (mesmo que todos os itens da nota atual já estejam importados)
+        if not tem_itens_para_processar:
+            logger.info('Nenhum item pendente na nota atual. Verificando itens similares em outras notas...')
+            
+            # Buscar todos os itens da nota atual que têm material vinculado
+            # (mesmo que já estejam importados, podem ter similares em outras notas)
+            itens_com_material = [item for item in nota_fiscal.itens if item.material_id]
+            
+            # Para cada item com material, verificar se há similares em outras notas sem material
+            grupos_verificados = set()
+            for item in itens_com_material:
+                codigo = item.codigo.strip() if item.codigo else ''
+                descricao = item.descricao.strip() if item.descricao else ''
+                chave_grupo = f"{codigo}|{descricao}"
+                
+                # Evitar verificar o mesmo grupo múltiplas vezes
+                if chave_grupo in grupos_verificados:
+                    continue
+                grupos_verificados.add(chave_grupo)
+                
+                # Buscar itens similares em todas as notas
+                itens_similares = _buscar_itens_similares_todas_notas(codigo, descricao)
+                
+                # Verificar se há algum item similar sem material vinculado
+                itens_similares_sem_material = [i for i in itens_similares if not i.material_id]
+                
+                if itens_similares_sem_material:
+                    tem_itens_para_processar = True
+                    logger.info(f'Encontrados {len(itens_similares_sem_material)} itens similares sem material em outras notas para processar')
+                    break
+        
+        if not tem_itens_para_processar:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum item pendente com material vinculado encontrado na nota atual e nenhum item similar sem material encontrado em outras notas.'
+            }), 400
+        
+        # Inicializar estatísticas e estruturas de controle
+        estatisticas = {
+            'total_itens_vinculados': 0,
+            'total_itens_ja_vinculados': 0,
+            'total_itens_importados': 0,
+            'total_itens_ja_importados': 0,
+            'itens_com_erro': []
+        }
+        itens_processados = set()  # Para evitar processar o mesmo item múltiplas vezes
+        grupos_processados = set()  # Para evitar processar o mesmo grupo de itens similares múltiplas vezes
+        
+        # ETAPA 1: Vincular similares em todas as notas
+        # Coletar todos os itens que serão processados (originais + similares)
+        todos_itens_para_importar = []
+        
+        # Processar cada item já vinculado na nota atual
+        # Processar tanto itens pendentes quanto itens já importados (que podem ter similares em outras notas)
+        for item in nota_fiscal.itens:
+            # Processar se tiver material vinculado (mesmo que já esteja importado, pode ter similares em outras notas)
+            if item.material_id and item.id not in itens_processados:
+                material = Material.query.get(item.material_id)
+                if not material:
+                    continue
+                
+                # Vincular similares em todas as notas
+                itens_similares = _vincular_similares_para_item(
+                    item=item,
+                    material=material,
+                    itens_processados=itens_processados,
+                    grupos_processados=grupos_processados,
+                    estatisticas=estatisticas
+                )
+                
+                # Adicionar à lista de itens para importar (sem duplicatas)
+                for item_similar in itens_similares:
+                    if item_similar.id not in [i.id for i in todos_itens_para_importar]:
+                        todos_itens_para_importar.append(item_similar)
+        
+        # ETAPA 2: Importar todos os itens (originais + similares recém-vinculados)
+        logger.info(f'Iniciando importação de {len(todos_itens_para_importar)} itens para o estoque')
+        _importar_itens(
+            itens_para_importar=todos_itens_para_importar,
+            nota_fiscal=nota_fiscal,
+            centro_custo_id=centro_custo_id,
+            observacao=observacao,
+            itens_processados=itens_processados,
+            estatisticas=estatisticas
+        )
+        
+        # Montar mensagem de resposta
+        mensagens = []
+        if estatisticas['total_itens_vinculados'] > 0:
+            mensagens.append(f'{estatisticas["total_itens_vinculados"]} item(ns) vinculado(s) em outras notas.')
+        if estatisticas['total_itens_importados'] > 0:
+            mensagens.append(f'{estatisticas["total_itens_importados"]} item(ns) importado(s) para o estoque.')
+        if estatisticas['itens_com_erro']:
+            mensagens.append(f'{len(estatisticas["itens_com_erro"])} item(ns) com erro na importação.')
+        
+        mensagem_final = ' '.join(mensagens) if mensagens else 'Nenhum item foi processado.'
+        
+        return jsonify({
+            'success': True,
+            'message': mensagem_final,
+            'itens_vinculados': estatisticas['total_itens_vinculados'],
+            'itens_ja_vinculados': estatisticas['total_itens_ja_vinculados'],
+            'itens_importados': estatisticas['total_itens_importados'],
+            'itens_ja_importados': estatisticas['total_itens_ja_importados'],
+            'itens_com_erro': len(estatisticas['itens_com_erro']),
+            'total_pendentes': total_pendentes
+        })
+    
+    except Exception as e:
+        logger.error(f'Erro ao importar e vincular pendentes: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao processar: {str(e)}'
+        }), 500
+
 def importar_estoque(id):
     """
     Interface para vincular itens da nota fiscal com materiais do sistema e importar para estoque
@@ -1164,12 +1620,22 @@ def api_vincular_material(item_id):
         item = NotaFiscalItem.query.get_or_404(item_id)
         
         # Obter o material_id do formulário
-        material_id = request.form.get('material_id')
+        material_id_str = request.form.get('material_id')
+        fator_conversao_fornecido = request.form.get('fator_conversao')
         
-        if not material_id:
+        if not material_id_str:
             return jsonify({
                 'success': False,
                 'message': 'ID do material não fornecido'
+            }), 400
+        
+        # Converter material_id para inteiro
+        try:
+            material_id = int(material_id_str)
+        except (ValueError, TypeError):
+            return jsonify({
+                'success': False,
+                'message': f'ID do material inválido: {material_id_str}'
             }), 400
         
         # Verificar se o material existe
@@ -1180,9 +1646,30 @@ def api_vincular_material(item_id):
                 'message': f'Material com ID {material_id} não encontrado'
             }), 404
         
-        if comparar_unidades(item.unidade, material.unidade.nome):
-            item.fator_conversao_aplicado = 1
-            print(f'fator_conversao_aplicado: {item.fator_conversao_aplicado}')
+        # Aplicar fator de conversão se fornecido, senão verificar se as unidades são iguais
+        if fator_conversao_fornecido:
+            try:
+                item.fator_conversao_aplicado = float(fator_conversao_fornecido)
+            except (ValueError, TypeError):
+                item.fator_conversao_aplicado = None
+        else:
+            # Obter nome da unidade do material
+            material_unidade_nome = None
+            if hasattr(material, 'unidade_obj') and material.unidade_obj:
+                material_unidade_nome = material.unidade_obj.nome
+            elif hasattr(material, 'get_unidade_nome'):
+                material_unidade_nome = material.get_unidade_nome()
+            
+            # Comparar unidades se ambas existirem
+            if item.unidade and material_unidade_nome:
+                if comparar_unidades(item.unidade, material_unidade_nome):
+                    item.fator_conversao_aplicado = 1
+                else:
+                    item.fator_conversao_aplicado = None
+            else:
+                item.fator_conversao_aplicado = None
+        
+        print(f'fator_conversao_aplicado: {item.fator_conversao_aplicado}')
         # Atualizar o item da nota fiscal
         item.material_id = material_id
         item.save()
@@ -1195,7 +1682,7 @@ def api_vincular_material(item_id):
         print(f'notas_fiscais: {len(notas_fiscais)}')
         for nota_fiscal in notas_fiscais:
             nota_fiscal.vincular_automaticamente()
-            nota_fiscal.importar_itens_para_estoque(usuario_id=current_user.id)
+            nota_fiscal.importar_itens_para_estoque()
             
         return jsonify({
             'success': True,
@@ -1207,6 +1694,302 @@ def api_vincular_material(item_id):
         return jsonify({
             'success': False,
             'message': f'Erro ao vincular material: {str(e)}'
+        }), 500
+
+@nota_fiscal_bp.route('/api/buscar-materiais-outras-notas', methods=['GET'])
+@login_required
+def api_buscar_materiais_outras_notas():
+    """
+    API para buscar materiais que foram vinculados em outras notas fiscais
+    baseado no código ou descrição do item
+    """
+    try:
+        codigo = request.args.get('codigo', '').strip()
+        descricao = request.args.get('descricao', '').strip()
+        
+        if not codigo and not descricao:
+            return jsonify({
+                'success': False,
+                'message': 'Código ou descrição do item é obrigatório'
+            }), 400
+        
+        materiais_encontrados = []
+        
+        # Buscar por código (prioridade 1)
+        if codigo:
+            itens_por_codigo = NotaFiscalItem.query.join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == True
+            ).order_by(NotaFiscalItem.data_importacao_estoque.desc()).limit(10).all()
+            
+            for item in itens_por_codigo:
+                if item.material_id and item.material:
+                    # Verificar se já não foi adicionado
+                    if not any(m['material_id'] == item.material_id for m in materiais_encontrados):
+                        materiais_encontrados.append({
+                            'material_id': item.material_id,
+                            'material_nome': item.material.nome if item.material else 'N/A',
+                            'unidade': item.material.unidade_obj.nome if item.material and item.material.unidade_obj else 'N/A',
+                            'fator_conversao': str(item.fator_conversao_aplicado) if item.fator_conversao_aplicado else '1',
+                            'nota_fiscal_numero': item.nota_fiscal.numero_nf if item.nota_fiscal else 'N/A',
+                            'data_importacao': item.data_importacao_estoque.strftime('%d/%m/%Y') if item.data_importacao_estoque else 'N/A'
+                        })
+        
+        # Buscar por descrição (prioridade 2) se não encontrou por código ou para adicionar mais opções
+        if descricao:
+            itens_por_descricao = NotaFiscalItem.query.filter(
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == True
+            ).order_by(NotaFiscalItem.data_importacao_estoque.desc()).limit(10).all()
+            
+            for item in itens_por_descricao:
+                if item.material_id and item.material:
+                    # Verificar se já não foi adicionado
+                    if not any(m['material_id'] == item.material_id for m in materiais_encontrados):
+                        materiais_encontrados.append({
+                            'material_id': item.material_id,
+                            'material_nome': item.material.nome if item.material else 'N/A',
+                            'unidade': item.material.unidade_obj.nome if item.material and item.material.unidade_obj else 'N/A',
+                            'fator_conversao': str(item.fator_conversao_aplicado) if item.fator_conversao_aplicado else '1',
+                            'nota_fiscal_numero': item.nota_fiscal.numero_nf if item.nota_fiscal else 'N/A',
+                            'data_importacao': item.data_importacao_estoque.strftime('%d/%m/%Y') if item.data_importacao_estoque else 'N/A'
+                        })
+        
+        return jsonify({
+            'success': True,
+            'materiais': materiais_encontrados
+        })
+    
+    except Exception as e:
+        logger.error(f'Erro ao buscar materiais de outras notas: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar materiais: {str(e)}'
+        }), 500
+
+@nota_fiscal_bp.route('/api/vincular-material-outras-notas', methods=['POST'])
+@login_required
+def api_vincular_material_outras_notas():
+    """
+    API para vincular material a um item e a todos os outros itens similares (mesmo código ou descrição) na mesma nota fiscal
+    """
+    try:
+        data = request.get_json()
+        nf_id = data.get('nf_id')
+        item_id = data.get('item_id')
+        material_id = data.get('material_id')
+        fator_conversao = data.get('fator_conversao')
+        codigo = data.get('codigo', '').strip()
+        descricao = data.get('descricao', '').strip()
+        
+        if not nf_id or not item_id or not material_id:
+            return jsonify({
+                'success': False,
+                'message': 'Parâmetros obrigatórios não fornecidos'
+            }), 400
+        
+        # Buscar a nota fiscal
+        nota_fiscal = NotaFiscal.query.get_or_404(nf_id)
+        
+        # Verificar se o material existe
+        material = Material.query.get(material_id)
+        if not material:
+            return jsonify({
+                'success': False,
+                'message': f'Material com ID {material_id} não encontrado'
+            }), 404
+        
+        # Buscar o item original
+        item_original = NotaFiscalItem.query.get_or_404(item_id)
+        
+        # Buscar todos os itens similares na mesma nota (mesmo código ou descrição)
+        itens_similares = []
+        
+        # Buscar por código se fornecido
+        if codigo:
+            itens_por_codigo = NotaFiscalItem.query.filter(
+                NotaFiscalItem.nf_id == nf_id,
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.material_id.is_(None)  # Apenas itens sem material vinculado
+            ).all()
+            itens_similares.extend(itens_por_codigo)
+        
+        # Buscar por descrição se fornecido
+        if descricao:
+            itens_por_descricao = NotaFiscalItem.query.filter(
+                NotaFiscalItem.nf_id == nf_id,
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.material_id.is_(None)  # Apenas itens sem material vinculado
+            ).all()
+            # Adicionar apenas se não estiver na lista (evitar duplicatas)
+            for item in itens_por_descricao:
+                if item not in itens_similares:
+                    itens_similares.append(item)
+        
+        # Se não encontrou itens similares, vincular apenas ao item original
+        if not itens_similares:
+            itens_similares = [item_original]
+        elif item_original not in itens_similares:
+            # Garantir que o item original está na lista
+            itens_similares.append(item_original)
+        
+        # Vincular material a todos os itens similares
+        itens_vinculados = 0
+        for item in itens_similares:
+            # Aplicar fator de conversão
+            if fator_conversao:
+                try:
+                    item.fator_conversao_aplicado = float(fator_conversao)
+                except (ValueError, TypeError):
+                    # Se não conseguir converter, verificar se as unidades são iguais
+                    if comparar_unidades(item.unidade, material.unidade_obj.nome):
+                        item.fator_conversao_aplicado = 1
+                    else:
+                        item.fator_conversao_aplicado = None
+            elif comparar_unidades(item.unidade, material.unidade_obj.nome):
+                item.fator_conversao_aplicado = 1
+            else:
+                item.fator_conversao_aplicado = None
+            
+            # Vincular o material
+
+            item.material_id = material_id
+            item.save()
+            itens_vinculados += 1
+        
+        # Atualizar NCM do material se necessário
+        if item_original.ncm and not material.ncm:
+            material.ncm = item_original.ncm
+            material.save()
+        
+        mensagem = f'Material "{material.nome}" vinculado com sucesso a {itens_vinculados} item(ns)!'
+        
+        return jsonify({
+            'success': True,
+            'message': mensagem,
+            'itens_vinculados': itens_vinculados
+        })
+    
+    except Exception as e:
+        logger.error(f'Erro ao vincular material a itens similares: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao vincular material: {str(e)}'
+        }), 500
+
+@nota_fiscal_bp.route('/api/vincular-itens-similares-todas-notas', methods=['POST'])
+@login_required
+def api_vincular_itens_similares_todas_notas():
+    """
+    API para vincular material a todos os itens similares (mesmo código e descrição) em TODAS as notas fiscais
+    """
+    try:
+        data = request.get_json()
+        item_id = data.get('item_id')
+        material_id = data.get('material_id')
+        fator_conversao = data.get('fator_conversao')
+        codigo = data.get('codigo', '').strip()
+        descricao = data.get('descricao', '').strip()
+        
+        if not item_id or not material_id:
+            return jsonify({
+                'success': False,
+                'message': 'Parâmetros obrigatórios não fornecidos'
+            }), 400
+        
+        # Buscar o item original
+        item_original = NotaFiscalItem.query.get_or_404(item_id)
+        
+        # Verificar se o material existe
+        material = Material.query.get(material_id)
+        if not material:
+            return jsonify({
+                'success': False,
+                'message': f'Material com ID {material_id} não encontrado'
+            }), 404
+        
+        # Buscar TODOS os itens similares em TODAS as notas fiscais (incluindo os que já têm material)
+        # Critério: mesmo código E mesma descrição
+        itens_similares_todos = []
+        itens_ja_vinculados = []
+        itens_sem_material = []
+        
+        # Buscar por código E descrição (ambos devem corresponder)
+        if codigo and descricao:
+            itens_encontrados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.id != item_id  # Excluir o item original
+            ).all()
+            itens_similares_todos.extend(itens_encontrados)
+        elif codigo:
+            # Se só tem código, buscar por código
+            itens_encontrados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.id != item_id
+            ).all()
+            itens_similares_todos.extend(itens_encontrados)
+        elif descricao:
+            # Se só tem descrição, buscar por descrição
+            itens_encontrados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.id != item_id
+            ).all()
+            itens_similares_todos.extend(itens_encontrados)
+        
+        # Separar itens já vinculados dos que não têm material
+        for item in itens_similares_todos:
+            if item.material_id:
+                itens_ja_vinculados.append(item)
+            else:
+                itens_sem_material.append(item)
+        
+        # Vincular material apenas aos itens que não têm material vinculado
+        itens_vinculados = 0
+        for item in itens_sem_material:
+            # Aplicar fator de conversão
+            if fator_conversao:
+                try:
+                    item.fator_conversao_aplicado = float(fator_conversao)
+                except (ValueError, TypeError):
+                    # Se não conseguir converter, verificar se as unidades são iguais
+                    if comparar_unidades(item.unidade, material.unidade_obj.nome):
+                        item.fator_conversao_aplicado = 1
+                    else:
+                        item.fator_conversao_aplicado = None
+            elif comparar_unidades(item.unidade, material.unidade_obj.nome):
+                item.fator_conversao_aplicado = 1
+            else:
+                item.fator_conversao_aplicado = None
+            
+            # Vincular o material
+            item.material_id = material_id
+            item.save()
+            itens_vinculados += 1
+        
+        # Montar mensagem com estatísticas
+        mensagem = f'Material "{material.nome}" vinculado com sucesso!\n\n'
+        mensagem += f'• Itens já vinculados: {len(itens_ja_vinculados)}\n'
+        mensagem += f'• Itens vinculados agora: {itens_vinculados}'
+        
+        if not itens_similares_todos and not itens_vinculados:
+            mensagem = 'Nenhum item similar encontrado em outras notas fiscais para vincular.'
+        
+        return jsonify({
+            'success': True,
+            'message': mensagem,
+            'itens_vinculados': itens_vinculados,
+            'itens_ja_vinculados': len(itens_ja_vinculados),
+            'total_itens_similares': len(itens_similares_todos)
+        })
+    
+    except Exception as e:
+        logger.error(f'Erro ao vincular itens similares em todas as notas: {str(e)}')
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao vincular itens similares: {str(e)}'
         }), 500
 
 @nota_fiscal_bp.route('/api/desvincular-material/<int:item_id>', methods=['POST'])
@@ -1760,19 +2543,15 @@ def api_importar_item_estoque(item_id):
         # Obter o item da nota fiscal
         item = NotaFiscalItem.query.get_or_404(item_id)
         
-        # Verificar se o item já foi importado
-        if item.importado_estoque:
-            return jsonify({
-                'success': False,
-                'message': 'Este item já foi importado para o estoque'
-            }), 400
-        
         # Verificar se o material está vinculado
         if not item.material_id:
             return jsonify({
                 'success': False,
                 'message': 'Este item não está vinculado a um material do sistema'
             }), 400
+        
+        # Verificar se o item já foi importado (não retornar erro, apenas marcar)
+        item_ja_importado = item.importado_estoque
         
         # Obter parâmetros adicionais
         centro_custo_id = request.form.get('centro_custo_id')
@@ -1783,19 +2562,116 @@ def api_importar_item_estoque(item_id):
         if importacao_automatica and not observacao:
             observacao = f"Importação automática da NF {item.nota_fiscal.numero_nf} de {item.nota_fiscal.nome_emitente}"
         
+        # Buscar outros itens similares (mesmo código e descrição) que já estão vinculados mas não foram importados
+        itens_similares_para_importar = []
+        codigo = item.codigo
+        descricao = item.descricao
+        
+        # Buscar por código E descrição (ambos devem corresponder)
+        if codigo and descricao:
+            itens_encontrados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.material_id.isnot(None),  # Já tem material vinculado
+                NotaFiscalItem.importado_estoque == False,  # Ainda não foi importado
+                NotaFiscalItem.id != item_id  # Excluir o item original
+            ).all()
+            itens_similares_para_importar.extend(itens_encontrados)
+        elif codigo:
+            # Se só tem código, buscar por código
+            itens_encontrados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == False,
+                NotaFiscalItem.id != item_id
+            ).all()
+            itens_similares_para_importar.extend(itens_encontrados)
+        elif descricao:
+            # Se só tem descrição, buscar por descrição
+            itens_encontrados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == False,
+                NotaFiscalItem.id != item_id
+            ).all()
+            itens_similares_para_importar.extend(itens_encontrados)
+        
+        # Contar itens já importados (que já estavam importados antes)
+        itens_ja_importados = 0
+        if codigo and descricao:
+            itens_ja_importados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == True
+            ).count()
+        elif codigo:
+            itens_ja_importados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == True
+            ).count()
+        elif descricao:
+            itens_ja_importados = NotaFiscalItem.query.filter(
+                NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.material_id.isnot(None),
+                NotaFiscalItem.importado_estoque == True
+            ).count()
+        
         # Verificar estado atual do estoque antes da importação
         from models.estoque import Estoque
         estoque_atual = Estoque.query.filter_by(material_id=item.material_id, tipo_item='material').first()
         qtd_atual = float(estoque_atual.quantidade) if estoque_atual else 0
         
         logger.info(f"API: Estoque atual para material {item.material_id}: {qtd_atual}")
+        logger.info(f"API: Encontrados {len(itens_similares_para_importar)} itens similares para importar")
         
-        # Realizar a importação para o estoque
-        sucesso, mensagem = item.importar_para_estoque(
-            usuario_id=current_user.id,
-            centro_custo_id=centro_custo_id if centro_custo_id else None,
-            observacao=observacao
-        )
+        # Importar o item original (apenas se ainda não foi importado)
+        itens_importados = 0
+        itens_com_erro = []
+        
+        if not item_ja_importado:
+            sucesso, mensagem = item.importar_para_estoque(
+                usuario_id=current_user.id,
+                centro_custo_id=centro_custo_id if centro_custo_id else None,
+                observacao=observacao
+            )
+            
+            if sucesso:
+                itens_importados += 1
+            else:
+                itens_com_erro.append({
+                    'item_id': item.id,
+                    'descricao': item.descricao,
+                    'erro': mensagem
+                })
+        else:
+            # Item já estava importado, incrementar contador de já importados
+            itens_ja_importados += 1
+        
+        # Importar itens similares encontrados
+        for item_similar in itens_similares_para_importar:
+            try:
+                sucesso_similar, mensagem_similar = item_similar.importar_para_estoque(
+                    usuario_id=current_user.id,
+                    centro_custo_id=centro_custo_id if centro_custo_id else None,
+                    observacao=observacao or f"Importação automática da NF {item_similar.nota_fiscal.numero_nf if item_similar.nota_fiscal else 'N/A'}"
+                )
+                if sucesso_similar:
+                    itens_importados += 1
+                else:
+                    itens_com_erro.append({
+                        'item_id': item_similar.id,
+                        'descricao': item_similar.descricao,
+                        'erro': mensagem_similar
+                    })
+            except Exception as e:
+                logger.error(f'Erro ao importar item similar {item_similar.id}: {str(e)}')
+                itens_com_erro.append({
+                    'item_id': item_similar.id,
+                    'descricao': item_similar.descricao,
+                    'erro': str(e)
+                })
         
         # Verificar estado do estoque depois da importação
         db.session.refresh(estoque_atual) if estoque_atual else None
@@ -1804,29 +2680,49 @@ def api_importar_item_estoque(item_id):
         
         logger.info(f"API: Estoque após importação para material {item.material_id}: {qtd_depois}")
         
-        if sucesso:
-            # Registrar se foi importação automática
-            if importacao_automatica:
-                item.dados_adicionais = json.dumps({
-                    "importacao_automatica": True,
-                    "data_importacao_automatica": datetime.now().isoformat()
-                })
-                item.save()
-            
-            # Se foi bem-sucedido, retornar sucesso
-            return jsonify({
-                'success': True,
-                'message': mensagem,
-                'quantidade_anterior': qtd_atual,
-                'quantidade_atual': qtd_depois,
-                'importacao_automatica': importacao_automatica
+        # Atualizar quantidade depois se houve importação
+        if itens_importados > 0:
+            db.session.refresh(estoque_depois) if estoque_depois else None
+            estoque_depois = Estoque.query.filter_by(material_id=item.material_id, tipo_item='material').first()
+            qtd_depois = float(estoque_depois.quantidade) if estoque_depois else 0
+        
+        # Registrar se foi importação automática (apenas se importou algo)
+        if itens_importados > 0 and importacao_automatica:
+            item.dados_adicionais = json.dumps({
+                "importacao_automatica": True,
+                "data_importacao_automatica": datetime.now().isoformat()
             })
+            item.save()
+        
+        # Sempre retornar estatísticas, mesmo se o item já estava importado
+        if item_ja_importado:
+            mensagem_final = 'Este item já estava importado para o estoque.'
+            if len(itens_similares_para_importar) > 0:
+                mensagem_final += f' {len(itens_similares_para_importar)} item(ns) similar(es) foram encontrado(s) e importado(s).'
+            elif itens_importados > 0:
+                mensagem_final += f' {itens_importados} item(ns) similar(es) foram importado(s).'
+        elif itens_importados > 0:
+            mensagem_final = f'Item importado com sucesso!'
+            if len(itens_similares_para_importar) > 0:
+                mensagem_final += f' {len(itens_similares_para_importar)} item(ns) similar(es) também foram importado(s).'
         else:
-            # Se houve erro, retornar o erro
-            return jsonify({
-                'success': False,
-                'message': mensagem
-            }), 400
+            mensagem_final = 'Nenhum item foi importado.'
+            if itens_com_erro:
+                mensagem_final += f' {len(itens_com_erro)} item(ns) com erro.'
+        
+        # Retornar sempre com sucesso e estatísticas
+        return jsonify({
+            'success': True,
+            'message': mensagem_final,
+            'quantidade_anterior': qtd_atual,
+            'quantidade_atual': qtd_depois,
+            'importacao_automatica': importacao_automatica,
+            'itens_importados': itens_importados,
+            'itens_ja_importados': itens_ja_importados,
+            'itens_com_erro': len(itens_com_erro),
+            'itens_similares_encontrados': len(itens_similares_para_importar),
+            'item_ja_estava_importado': item_ja_importado
+        })
         
     except Exception as e:
         logger.error(f'Erro ao importar item para estoque: {str(e)}')
@@ -2165,6 +3061,203 @@ def importar_xml():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro ao importar XML: {str(e)}'}), 500
 
+def buscar_transferencias_com_saldos_cnpj(filtros):
+    """
+    Função auxiliar reutilizável para buscar transferências e calcular saldos por CNPJ.
+    
+    Args:
+        filtros (dict): Dicionário com os filtros:
+            - data_inicio: str (formato 'YYYY-MM-DD')
+            - data_fim: str (formato 'YYYY-MM-DD')
+            - codigo_item: str
+            - nome_item: str
+            - cnpjs_emitente: list
+            - cnpjs_destinatario: list
+            - materiais_ids: list
+    
+    Returns:
+        dict: Dicionário com:
+            - transferencias: lista de objetos de transferência
+            - cnpjs_unicos: lista ordenada de CNPJs únicos
+            - saldos_por_cnpj: lista ordenada com saldos calculados por CNPJ
+            - somatorias_por_cnpj: dicionário com somatórias por CNPJ (para colunas)
+            - totais_gerais: dict com total_quantidade e total_valor
+    """
+    from models.nota_fiscal import NotaFiscal, NotaFiscalItem
+    
+    # Query base
+    query = db.session.query(
+        NotaFiscal.numero_nf.label('numero_nf'),
+        NotaFiscalItem.descricao.label('nome_item'),
+        NotaFiscalItem.codigo.label('codigo_item'),
+        NotaFiscal.cnpj_emitente,
+        NotaFiscal.cnpj_destinatario,
+        NotaFiscal.nome_emitente,
+        NotaFiscal.nome_destinatario,
+        NotaFiscal.tipo.label('tipo_nota'),
+        NotaFiscalItem.quantidade,
+        NotaFiscalItem.valor_total.label('valor'),
+        NotaFiscal.data_emissao.label('data')
+    ).join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+    query = query.filter(NotaFiscal.status_processamento != 'cancelada')
+    
+    # Aplicar filtros
+    if filtros.get('data_inicio'):
+        try:
+            data_inicio = datetime.strptime(filtros['data_inicio'], '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+        except Exception:
+            pass
+    
+    if filtros.get('data_fim'):
+        try:
+            data_fim = datetime.strptime(filtros['data_fim'], '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao <= data_fim)
+        except Exception:
+            pass
+    
+    if filtros.get('codigo_item'):
+        query = query.filter(NotaFiscalItem.codigo.ilike(f'%{filtros["codigo_item"]}%'))
+    
+    if filtros.get('nome_item'):
+        query = query.filter(NotaFiscalItem.descricao.ilike(f'%{filtros["nome_item"]}%'))
+    
+    if filtros.get('cnpjs_emitente'):
+        query = query.filter(NotaFiscal.cnpj_emitente.in_(filtros['cnpjs_emitente']))
+    
+    if filtros.get('cnpjs_destinatario'):
+        query = query.filter(NotaFiscal.cnpj_destinatario.in_(filtros['cnpjs_destinatario']))
+    
+    if filtros.get('materiais_ids'):
+        try:
+            materiais_ids_int = [int(mid) for mid in filtros['materiais_ids'] if mid]
+            if materiais_ids_int:
+                query = query.filter(NotaFiscalItem.material_id.in_(materiais_ids_int))
+        except (ValueError, TypeError):
+            pass
+    
+    query = query.order_by(NotaFiscal.data_emissao.desc())
+    transferencias = query.all()
+    
+    # Calcular totais gerais
+    total_quantidade = sum(t.quantidade for t in transferencias if t.quantidade)
+    total_valor = sum(float(t.valor) for t in transferencias if t.valor)
+    
+    # Coletar todos os CNPJs únicos
+    cnpjs_unicos = set()
+    for t in transferencias:
+        if t.cnpj_emitente:
+            cnpjs_unicos.add(t.cnpj_emitente)
+        if t.cnpj_destinatario:
+            cnpjs_unicos.add(t.cnpj_destinatario)
+    cnpjs_unicos = sorted(list(cnpjs_unicos))
+    
+    # Calcular saldos unificados por CNPJ
+    # Considera o CNPJ tanto como emitente quanto como destinatário
+    # Lógica: tipo_nota == 0 (Entrada) = adiciona, tipo_nota == 1 (Saída) = subtrai
+    saldos_por_cnpj_dict = {}
+    
+    for t in transferencias:
+        quantidade = t.quantidade if t.quantidade else 0
+        valor = float(t.valor) if t.valor else 0
+        
+        # Processar CNPJ Emitente
+        cnpj_emit = t.cnpj_emitente or 'Sem CNPJ'
+        nome_emit = t.nome_emitente or 'Sem nome'
+        if cnpj_emit not in saldos_por_cnpj_dict:
+            saldos_por_cnpj_dict[cnpj_emit] = {
+                'cnpj': cnpj_emit,
+                'nome': nome_emit,
+                'quantidade': 0,
+                'valor': 0,
+                'registros': 0
+            }
+        
+        # Se for Entrada (tipo_nota == 0), adiciona ao saldo do emitente
+        # Se for Saída (tipo_nota == 1), subtrai do saldo do emitente
+        if t.tipo_nota == 0:  # Entrada
+            saldos_por_cnpj_dict[cnpj_emit]['quantidade'] += quantidade
+            saldos_por_cnpj_dict[cnpj_emit]['valor'] += valor
+        elif t.tipo_nota == 1:  # Saída
+            saldos_por_cnpj_dict[cnpj_emit]['quantidade'] -= quantidade
+            saldos_por_cnpj_dict[cnpj_emit]['valor'] -= valor
+        
+        saldos_por_cnpj_dict[cnpj_emit]['registros'] += 1
+        
+        # Processar CNPJ Destinatário (somando ao mesmo CNPJ se for o mesmo)
+        cnpj_dest = t.cnpj_destinatario or 'Sem CNPJ'
+        nome_dest = t.nome_destinatario or 'Sem nome'
+        if cnpj_dest not in saldos_por_cnpj_dict:
+            saldos_por_cnpj_dict[cnpj_dest] = {
+                'cnpj': cnpj_dest,
+                'nome': nome_dest,
+                'quantidade': 0,
+                'valor': 0,
+                'registros': 0
+            }
+        
+        # Se for Entrada (tipo_nota == 0), adiciona ao saldo do destinatário
+        # Se for Saída (tipo_nota == 1), subtrai do saldo do destinatário
+        if t.tipo_nota == 0:  # Entrada
+            saldos_por_cnpj_dict[cnpj_dest]['quantidade'] += quantidade
+            saldos_por_cnpj_dict[cnpj_dest]['valor'] += valor
+        elif t.tipo_nota == 1:  # Saída
+            saldos_por_cnpj_dict[cnpj_dest]['quantidade'] -= quantidade
+            saldos_por_cnpj_dict[cnpj_dest]['valor'] -= valor
+        
+        saldos_por_cnpj_dict[cnpj_dest]['registros'] += 1
+    
+    # Converter para lista ordenada por CNPJ
+    saldos_por_cnpj = sorted(saldos_por_cnpj_dict.values(), key=lambda x: x['cnpj'])
+    
+    # Calcular somatórias por CNPJ para uso nas colunas (mesma fórmula do Excel)
+    somatorias_por_cnpj = {}
+    for cnpj in cnpjs_unicos:
+        somatorias_por_cnpj[cnpj] = 0.0
+    
+    for t in transferencias:
+        quantidade = float(t.quantidade) if t.quantidade else 0.0
+        cnpj_emit = t.cnpj_emitente or ''
+        cnpj_dest = t.cnpj_destinatario or ''
+        is_saida = (t.tipo_nota == 1)
+        
+        for cnpj in cnpjs_unicos:
+            valor = 0.0
+            
+            # Parte 1: Se CNPJ Emitente = CNPJ da coluna
+            if cnpj_emit == cnpj:
+                if is_saida:
+                    valor -= quantidade
+                else:
+                    valor += quantidade
+            
+            # Parte 2: Se CNPJ Destinatário = CNPJ da coluna
+            if cnpj_dest == cnpj:
+                if is_saida:
+                    valor += quantidade
+                else:
+                    valor -= quantidade
+            
+            # Parte 3: Se CNPJ Emitente = CNPJ Destinatário E CNPJ Destinatário = CNPJ da coluna
+            if cnpj_emit == cnpj_dest == cnpj:
+                if is_saida:
+                    valor -= quantidade
+                else:
+                    valor += quantidade
+            
+            somatorias_por_cnpj[cnpj] += valor
+    
+    return {
+        'transferencias': transferencias,
+        'cnpjs_unicos': cnpjs_unicos,
+        'saldos_por_cnpj': saldos_por_cnpj,
+        'somatorias_por_cnpj': somatorias_por_cnpj,
+        'totais_gerais': {
+            'quantidade': total_quantidade,
+            'valor': total_valor
+        }
+    }
+
 @nota_fiscal_bp.route('/analise-transferencias')
 @login_required
 def analise_transferencias():
@@ -2185,6 +3278,7 @@ def analise_transferencias():
     # Receber os filtros de CNPJ como arrays (para múltipla seleção do select2)
     cnpjs_emitente = request.args.getlist('cnpj_emitente')
     cnpjs_destinatario = request.args.getlist('cnpj_destinatario')
+    materiais_ids = request.args.getlist('material_id')
 
     # Query base
     query = db.session.query(
@@ -2225,6 +3319,13 @@ def analise_transferencias():
         query = query.filter(NotaFiscal.cnpj_emitente.in_(cnpjs_emitente))
     if cnpjs_destinatario:
         query = query.filter(NotaFiscal.cnpj_destinatario.in_(cnpjs_destinatario))
+    if materiais_ids:
+        try:
+            materiais_ids_int = [int(mid) for mid in materiais_ids if mid]
+            if materiais_ids_int:
+                query = query.filter(NotaFiscalItem.material_id.in_(materiais_ids_int))
+        except (ValueError, TypeError):
+            pass
 
     query = query.order_by(NotaFiscal.data_emissao.desc())
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -2236,6 +3337,13 @@ def analise_transferencias():
     cnpjs_emitentes = [c[0] for c in cnpjs_emitentes_lista if c[0]]
     cnpjs_destinatarios = [c[0] for c in cnpjs_destinatarios_lista if c[0]]
 
+    # Buscar materiais que têm itens de nota fiscal vinculados
+    materiais_vinculados = db.session.query(Material).join(
+        NotaFiscalItem, Material.id == NotaFiscalItem.material_id
+    ).filter(
+        NotaFiscalItem.material_id.isnot(None)
+    ).distinct().order_by(Material.nome).all()
+
     return render_template(
         'notas_fiscais/analise_transferencias.html',
         transferencias=transferencias,
@@ -2246,8 +3354,10 @@ def analise_transferencias():
         filtro_nome_item=filtro_nome_item,
         filtro_cnpj_emitente=cnpjs_emitente,
         filtro_cnpj_destinatario=cnpjs_destinatario,
+        filtro_material_id=materiais_ids,
         cnpjs_emitentes=cnpjs_emitentes,
-        cnpjs_destinatarios=cnpjs_destinatarios
+        cnpjs_destinatarios=cnpjs_destinatarios,
+        materiais=materiais_vinculados
     )
 
 @nota_fiscal_bp.route('/api/documentos/<int:nota_id>', methods=['GET'])
@@ -2497,6 +3607,7 @@ def analise_transferencias_ajax():
     filtro_nome_item = request.args.get('nome_item', '')
     cnpjs_emitente = request.args.getlist('cnpj_emitente')
     cnpjs_destinatario = request.args.getlist('cnpj_destinatario')
+    materiais_ids = request.args.getlist('material_id')
 
     query = db.session.query(
         NotaFiscal.numero_nf.label('numero_nf'),
@@ -2535,6 +3646,13 @@ def analise_transferencias_ajax():
         query = query.filter(NotaFiscal.cnpj_emitente.in_(cnpjs_emitente))
     if cnpjs_destinatario:
         query = query.filter(NotaFiscal.cnpj_destinatario.in_(cnpjs_destinatario))
+    if materiais_ids:
+        try:
+            materiais_ids_int = [int(mid) for mid in materiais_ids if mid]
+            if materiais_ids_int:
+                query = query.filter(NotaFiscalItem.material_id.in_(materiais_ids_int))
+        except (ValueError, TypeError):
+            pass
 
     query = query.order_by(NotaFiscal.data_emissao.desc())
     paginacao = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -2550,6 +3668,529 @@ def analise_transferencias_ajax():
         filtro_nome_item=filtro_nome_item,
         filtro_cnpj_emitente=cnpjs_emitente,
         filtro_cnpj_destinatario=cnpjs_destinatario
+    )
+
+@nota_fiscal_bp.route('/analise-transferencias/exportar-pdf', methods=['GET'])
+@login_required
+def analise_transferencias_exportar_pdf():
+    """
+    Exporta a análise de transferências para PDF considerando os filtros aplicados.
+    """
+    if not WEASYPRINT_AVAILABLE:
+        flash('Funcionalidade de PDF indisponível. WeasyPrint não instalado.', 'danger')
+        return redirect(url_for('nota_fiscal.analise_transferencias'))
+    
+    import os
+    
+    # Obter filtros da query string
+    filtros = {
+        'data_inicio': request.args.get('data_inicio', '').strip() or '',
+        'data_fim': request.args.get('data_fim', '').strip() or '',
+        'codigo_item': request.args.get('codigo_item', ''),
+        'nome_item': request.args.get('nome_item', ''),
+        'cnpjs_emitente': request.args.getlist('cnpj_emitente'),
+        'cnpjs_destinatario': request.args.getlist('cnpj_destinatario'),
+        'materiais_ids': request.args.getlist('material_id')
+    }
+    
+    # Buscar dados usando função auxiliar
+    resultado = buscar_transferencias_com_saldos_cnpj(filtros)
+    
+    # Preparar informações de filtros para exibir no PDF
+    filtros_aplicados = {}
+    if filtros['data_inicio']:
+        try:
+            data_inicio_dt = datetime.strptime(filtros['data_inicio'], '%Y-%m-%d')
+            filtros_aplicados['data_inicio'] = data_inicio_dt.strftime('%d/%m/%Y')
+        except:
+            pass
+    if filtros['data_fim']:
+        try:
+            data_fim_dt = datetime.strptime(filtros['data_fim'], '%Y-%m-%d')
+            filtros_aplicados['data_fim'] = data_fim_dt.strftime('%d/%m/%Y')
+        except:
+            pass
+    if filtros['codigo_item']:
+        filtros_aplicados['codigo_item'] = filtros['codigo_item']
+    if filtros['nome_item']:
+        filtros_aplicados['nome_item'] = filtros['nome_item']
+    if filtros['cnpjs_emitente']:
+        filtros_aplicados['cnpj_emitente'] = filtros['cnpjs_emitente']
+    if filtros['cnpjs_destinatario']:
+        filtros_aplicados['cnpj_destinatario'] = filtros['cnpjs_destinatario']
+    
+    # Caminho absoluto da logo para o WeasyPrint
+    logo_path = None
+    try:
+        logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
+        if os.path.exists(logo_path):
+            logo_path_uri = 'file:///' + logo_path.replace('\\', '/').replace('\\', '/')
+        else:
+            logo_path_uri = None
+    except:
+        logo_path_uri = None
+    
+    # Caminho absoluto da logo para o WeasyPrint
+    logo_path = None
+    try:
+        logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
+        if os.path.exists(logo_path):
+            logo_path_uri = 'file:///' + logo_path.replace('\\', '/').replace('\\', '/')
+        else:
+            logo_path_uri = None
+    except:
+        logo_path_uri = None
+    
+    # Renderizar template HTML
+    html = render_template(
+        'notas_fiscais/analise_transferencias_pdf.html',
+        transferencias=resultado['transferencias'],
+        total_quantidade=resultado['totais_gerais']['quantidade'],
+        total_valor=resultado['totais_gerais']['valor'],
+        saldos_por_cnpj=resultado['saldos_por_cnpj'],
+        filtros_aplicados=filtros_aplicados if filtros_aplicados else None,
+        now=datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+        logo_path=logo_path_uri
+    )
+    
+    # Gerar PDF
+    pdf_bytes = HTML(string=html).write_pdf(
+        stylesheets=[CSS(string='body { font-family: Arial, sans-serif; }')]
+    )
+    
+    # Preparar resposta
+    pdf_io = io.BytesIO(pdf_bytes)
+    pdf_io.seek(0)
+    
+    # Nome do arquivo com timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'analise_transferencias_{timestamp}.pdf'
+    
+    return send_file(
+        pdf_io,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
+def buscar_transferencias_com_saldos_cnpj(filtros):
+    """
+    Função auxiliar reutilizável para buscar transferências e calcular saldos por CNPJ.
+    
+    Args:
+        filtros (dict): Dicionário com os filtros:
+            - data_inicio: str (formato 'YYYY-MM-DD')
+            - data_fim: str (formato 'YYYY-MM-DD')
+            - codigo_item: str
+            - nome_item: str
+            - cnpjs_emitente: list
+            - cnpjs_destinatario: list
+            - materiais_ids: list
+    
+    Returns:
+        dict: Dicionário com:
+            - transferencias: lista de objetos de transferência
+            - cnpjs_unicos: lista ordenada de CNPJs únicos
+            - saldos_por_cnpj: dicionário com saldos calculados por CNPJ
+            - totais_gerais: dict com total_quantidade e total_valor
+    """
+    from models.nota_fiscal import NotaFiscal, NotaFiscalItem
+    
+    # Query base
+    query = db.session.query(
+        NotaFiscal.numero_nf.label('numero_nf'),
+        NotaFiscalItem.descricao.label('nome_item'),
+        NotaFiscalItem.codigo.label('codigo_item'),
+        NotaFiscal.cnpj_emitente,
+        NotaFiscal.cnpj_destinatario,
+        NotaFiscal.nome_emitente,
+        NotaFiscal.nome_destinatario,
+        NotaFiscal.tipo.label('tipo_nota'),
+        NotaFiscalItem.quantidade,
+        NotaFiscalItem.valor_total.label('valor'),
+        NotaFiscal.data_emissao.label('data')
+    ).join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+    query = query.filter(NotaFiscal.status_processamento != 'cancelada')
+    
+    # Aplicar filtros
+    if filtros.get('data_inicio'):
+        try:
+            data_inicio = datetime.strptime(filtros['data_inicio'], '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao >= data_inicio)
+        except Exception:
+            pass
+    
+    if filtros.get('data_fim'):
+        try:
+            data_fim = datetime.strptime(filtros['data_fim'], '%Y-%m-%d')
+            query = query.filter(NotaFiscal.data_emissao <= data_fim)
+        except Exception:
+            pass
+    
+    if filtros.get('codigo_item'):
+        query = query.filter(NotaFiscalItem.codigo.ilike(f'%{filtros["codigo_item"]}%'))
+    
+    if filtros.get('nome_item'):
+        query = query.filter(NotaFiscalItem.descricao.ilike(f'%{filtros["nome_item"]}%'))
+    
+    if filtros.get('cnpjs_emitente'):
+        query = query.filter(NotaFiscal.cnpj_emitente.in_(filtros['cnpjs_emitente']))
+    
+    if filtros.get('cnpjs_destinatario'):
+        query = query.filter(NotaFiscal.cnpj_destinatario.in_(filtros['cnpjs_destinatario']))
+    
+    if filtros.get('materiais_ids'):
+        try:
+            materiais_ids_int = [int(mid) for mid in filtros['materiais_ids'] if mid]
+            if materiais_ids_int:
+                query = query.filter(NotaFiscalItem.material_id.in_(materiais_ids_int))
+        except (ValueError, TypeError):
+            pass
+    
+    query = query.order_by(NotaFiscal.data_emissao.desc())
+    transferencias = query.all()
+    
+    # Calcular totais gerais
+    total_quantidade = sum(t.quantidade for t in transferencias if t.quantidade)
+    total_valor = sum(float(t.valor) for t in transferencias if t.valor)
+    
+    # Coletar todos os CNPJs únicos
+    cnpjs_unicos = set()
+    for t in transferencias:
+        if t.cnpj_emitente:
+            cnpjs_unicos.add(t.cnpj_emitente)
+        if t.cnpj_destinatario:
+            cnpjs_unicos.add(t.cnpj_destinatario)
+    cnpjs_unicos = sorted(list(cnpjs_unicos))
+    
+    # Calcular saldos unificados por CNPJ
+    # Considera o CNPJ tanto como emitente quanto como destinatário
+    # Lógica: tipo_nota == 0 (Entrada) = adiciona, tipo_nota == 1 (Saída) = subtrai
+    saldos_por_cnpj_dict = {}
+    
+    for t in transferencias:
+        quantidade = t.quantidade if t.quantidade else 0
+        valor = float(t.valor) if t.valor else 0
+        
+        # Processar CNPJ Emitente
+        cnpj_emit = t.cnpj_emitente or 'Sem CNPJ'
+        nome_emit = t.nome_emitente or 'Sem nome'
+        if cnpj_emit not in saldos_por_cnpj_dict:
+            saldos_por_cnpj_dict[cnpj_emit] = {
+                'cnpj': cnpj_emit,
+                'nome': nome_emit,
+                'quantidade': 0,
+                'valor': 0,
+                'registros': 0
+            }
+        
+        # Se for Entrada (tipo_nota == 0), adiciona ao saldo do emitente
+        # Se for Saída (tipo_nota == 1), subtrai do saldo do emitente
+        if t.tipo_nota == 0:  # Entrada
+            saldos_por_cnpj_dict[cnpj_emit]['quantidade'] += quantidade
+            saldos_por_cnpj_dict[cnpj_emit]['valor'] += valor
+        elif t.tipo_nota == 1:  # Saída
+            saldos_por_cnpj_dict[cnpj_emit]['quantidade'] -= quantidade
+            saldos_por_cnpj_dict[cnpj_emit]['valor'] -= valor
+        
+        saldos_por_cnpj_dict[cnpj_emit]['registros'] += 1
+        
+        # Processar CNPJ Destinatário (somando ao mesmo CNPJ se for o mesmo)
+        cnpj_dest = t.cnpj_destinatario or 'Sem CNPJ'
+        nome_dest = t.nome_destinatario or 'Sem nome'
+        if cnpj_dest not in saldos_por_cnpj_dict:
+            saldos_por_cnpj_dict[cnpj_dest] = {
+                'cnpj': cnpj_dest,
+                'nome': nome_dest,
+                'quantidade': 0,
+                'valor': 0,
+                'registros': 0
+            }
+        
+        # Se for Entrada (tipo_nota == 0), adiciona ao saldo do destinatário
+        # Se for Saída (tipo_nota == 1), subtrai do saldo do destinatário
+        if t.tipo_nota == 0:  # Entrada
+            saldos_por_cnpj_dict[cnpj_dest]['quantidade'] += quantidade
+            saldos_por_cnpj_dict[cnpj_dest]['valor'] += valor
+        elif t.tipo_nota == 1:  # Saída
+            saldos_por_cnpj_dict[cnpj_dest]['quantidade'] -= quantidade
+            saldos_por_cnpj_dict[cnpj_dest]['valor'] -= valor
+        
+        saldos_por_cnpj_dict[cnpj_dest]['registros'] += 1
+    
+    # Converter para lista ordenada por CNPJ
+    saldos_por_cnpj = sorted(saldos_por_cnpj_dict.values(), key=lambda x: x['cnpj'])
+    
+    # Calcular somatórias por CNPJ para uso nas colunas (mesma fórmula do Excel)
+    somatorias_por_cnpj = {}
+    for cnpj in cnpjs_unicos:
+        somatorias_por_cnpj[cnpj] = 0.0
+    
+    for t in transferencias:
+        quantidade = float(t.quantidade) if t.quantidade else 0.0
+        cnpj_emit = t.cnpj_emitente or ''
+        cnpj_dest = t.cnpj_destinatario or ''
+        is_saida = (t.tipo_nota == 1)
+        
+        for cnpj in cnpjs_unicos:
+            valor = 0.0
+            
+            # Parte 1: Se CNPJ Emitente = CNPJ da coluna
+            if cnpj_emit == cnpj:
+                if is_saida:
+                    valor -= quantidade
+                else:
+                    valor += quantidade
+            
+            # Parte 2: Se CNPJ Destinatário = CNPJ da coluna
+            if cnpj_dest == cnpj:
+                if is_saida:
+                    valor += quantidade
+                else:
+                    valor -= quantidade
+            
+            # Parte 3: Se CNPJ Emitente = CNPJ Destinatário E CNPJ Destinatário = CNPJ da coluna
+            if cnpj_emit == cnpj_dest == cnpj:
+                if is_saida:
+                    valor -= quantidade
+                else:
+                    valor += quantidade
+            
+            somatorias_por_cnpj[cnpj] += valor
+    
+    return {
+        'transferencias': transferencias,
+        'cnpjs_unicos': cnpjs_unicos,
+        'saldos_por_cnpj': saldos_por_cnpj,
+        'somatorias_por_cnpj': somatorias_por_cnpj,
+        'totais_gerais': {
+            'quantidade': total_quantidade,
+            'valor': total_valor
+        }
+    }
+
+@nota_fiscal_bp.route('/analise-transferencias/modal-cnpj', methods=['GET'])
+@login_required
+def analise_transferencias_modal_cnpj():
+    """
+    Retorna dados formatados para o modal de análise por CNPJ.
+    """
+    # Obter filtros da query string
+    filtros = {
+        'data_inicio': request.args.get('data_inicio', '').strip() or '',
+        'data_fim': request.args.get('data_fim', '').strip() or '',
+        'codigo_item': request.args.get('codigo_item', ''),
+        'nome_item': request.args.get('nome_item', ''),
+        'cnpjs_emitente': request.args.getlist('cnpj_emitente'),
+        'cnpjs_destinatario': request.args.getlist('cnpj_destinatario'),
+        'materiais_ids': request.args.getlist('material_id')
+    }
+    
+    # Buscar dados usando função auxiliar
+    resultado = buscar_transferencias_com_saldos_cnpj(filtros)
+    
+    # Preparar dados de transferências para JSON
+    dados_transferencias = []
+    for t in resultado['transferencias']:
+        tipo_nota_str = 'Entrada' if t.tipo_nota == 0 else ('Saída' if t.tipo_nota == 1 else str(t.tipo_nota))
+        dados_transferencias.append({
+            'data': t.data.isoformat() if t.data else None,
+            'nome_item': t.nome_item or '',
+            'codigo_item': t.codigo_item or '',
+            'numero_nf': t.numero_nf or '',
+            'cnpj_emitente': t.cnpj_emitente or '',
+            'cnpj_destinatario': t.cnpj_destinatario or '',
+            'tipo_nota': tipo_nota_str,
+            'quantidade': float(t.quantidade) if t.quantidade else 0.0,
+        })
+    
+    return jsonify({
+        'success': True,
+        'transferencias': dados_transferencias,
+        'cnpjs': resultado['cnpjs_unicos'],
+        'somatorias': resultado['somatorias_por_cnpj']
+    })
+
+@nota_fiscal_bp.route('/analise-transferencias/exportar-excel', methods=['GET'])
+@login_required
+def analise_transferencias_exportar_excel():
+    """
+    Exporta a análise de transferências para Excel considerando os filtros aplicados.
+    """
+    # Obter filtros da query string
+    filtros = {
+        'data_inicio': request.args.get('data_inicio', '').strip() or '',
+        'data_fim': request.args.get('data_fim', '').strip() or '',
+        'codigo_item': request.args.get('codigo_item', ''),
+        'nome_item': request.args.get('nome_item', ''),
+        'cnpjs_emitente': request.args.getlist('cnpj_emitente'),
+        'cnpjs_destinatario': request.args.getlist('cnpj_destinatario'),
+        'materiais_ids': request.args.getlist('material_id')
+    }
+    
+    # Buscar dados usando função auxiliar
+    resultado = buscar_transferencias_com_saldos_cnpj(filtros)
+    transferencias = resultado['transferencias']
+    cnpjs_unicos = resultado['cnpjs_unicos']
+    
+    # Preparar dados para o DataFrame
+    dados = []
+    for t in transferencias:
+        tipo_nota_str = 'Entrada' if t.tipo_nota == 0 else ('Saída' if t.tipo_nota == 1 else str(t.tipo_nota))
+        quantidade = float(t.quantidade) if t.quantidade else 0.0
+        cnpj_emit = t.cnpj_emitente or ''
+        cnpj_dest = t.cnpj_destinatario or ''
+        is_saida = (t.tipo_nota == 1)
+        
+        linha = {
+            'Data': t.data if t.data else None,
+            'Nome do Item': t.nome_item or '',
+            'Código do Item': t.codigo_item or '',
+            'Número NF': t.numero_nf or '',
+            'CNPJ Emitente': cnpj_emit,
+            'CNPJ Destinatário': cnpj_dest,
+            'Tipo da Nota': tipo_nota_str,
+            'Quantidade': quantidade,
+        }
+        
+        # Calcular valor para cada CNPJ conforme a fórmula
+        # Fórmula Excel: SE($E2=J$1;SE($G2="Saída";-$H2;$H2);0)+SE($F2=J$1;SE($G2="Saída";$H2;-$H2);0)+SE(E($E2=$F2;$F2=J$1);SE($G2="Saída";-H2;H2);0)
+        for cnpj in cnpjs_unicos:
+            valor_cnpj = 0.0
+            
+            # Parte 1: Se CNPJ Emitente = CNPJ da coluna
+            if cnpj_emit == cnpj:
+                if is_saida:
+                    valor_cnpj -= quantidade  # Saída: subtrai do emitente
+                else:
+                    valor_cnpj += quantidade  # Entrada: adiciona ao emitente
+            
+            # Parte 2: Se CNPJ Destinatário = CNPJ da coluna
+            if cnpj_dest == cnpj:
+                if is_saida:
+                    valor_cnpj += quantidade  # Saída: adiciona ao destinatário
+                else:
+                    valor_cnpj -= quantidade  # Entrada: subtrai do destinatário
+            
+            # Parte 3: Se CNPJ Emitente = CNPJ Destinatário E CNPJ Destinatário = CNPJ da coluna
+            # (Esta parte só se aplica quando emitente e destinatário são o mesmo)
+            if cnpj_emit == cnpj_dest and cnpj_dest == cnpj:
+                if is_saida:
+                    valor_cnpj -= quantidade  # Saída: subtrai
+                else:
+                    valor_cnpj += quantidade  # Entrada: adiciona
+            
+            linha[cnpj] = valor_cnpj
+        
+        dados.append(linha)
+    
+    # Criar DataFrame
+    df = pd.DataFrame(dados)
+    
+    # Converter coluna Data para datetime se necessário
+    if 'Data' in df.columns:
+        df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
+    
+    # Preparar dados de saldos para o DataFrame (usando resultado da função auxiliar)
+    dados_saldos = []
+    for dados in resultado['saldos_por_cnpj']:
+        dados_saldos.append({
+            'CNPJ': dados['cnpj'],
+            'Nome': dados['nome'],
+            'Registros': dados['registros'],
+            'Saldo Quantidade': dados['quantidade'],
+            'Saldo Valor': dados['valor']
+        })
+    
+    df_saldos = pd.DataFrame(dados_saldos)
+    
+    # Criar arquivo Excel com múltiplas abas
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        # Aba 1: Transferências
+        df.to_excel(writer, index=False, sheet_name='Transferências')
+        
+        # Aba 2: Saldos por CNPJ
+        if not df_saldos.empty:
+            df_saldos.to_excel(writer, index=False, sheet_name='Saldos por CNPJ')
+        
+        # Formatação
+        workbook = writer.book
+        worksheet = writer.sheets['Transferências']
+        
+        # Formatar cabeçalhos
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#3498db',
+            'font_color': 'white',
+            'border': 1
+        })
+        
+        for col_num, value in enumerate(df.columns.values):
+            worksheet.write(0, col_num, value, header_format)
+        
+        # Formatar coluna de data
+        date_format = workbook.add_format({'num_format': 'dd/mm/yyyy'})
+        # Encontrar o índice da coluna 'Data'
+        if 'Data' in df.columns:
+            data_col_idx = list(df.columns).index('Data')
+            worksheet.set_column(data_col_idx, data_col_idx, None, date_format)
+        
+        # Formatar valores monetários
+        money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
+        if 'Valor' in df.columns:
+            valor_col_idx = list(df.columns).index('Valor')
+            worksheet.set_column(valor_col_idx, valor_col_idx, None, money_format)
+        
+        # Formatar quantidade
+        number_format = workbook.add_format({'num_format': '#,##0.00'})
+        if 'Quantidade' in df.columns:
+            quantidade_col_idx = list(df.columns).index('Quantidade')
+            worksheet.set_column(quantidade_col_idx, quantidade_col_idx, None, number_format)
+        
+        # Formatar colunas de CNPJ (valores numéricos)
+        for cnpj in cnpjs_unicos:
+            if cnpj in df.columns:
+                cnpj_col_idx = list(df.columns).index(cnpj)
+                worksheet.set_column(cnpj_col_idx, cnpj_col_idx, None, number_format)
+        
+        # Ajustar largura das colunas
+        for i, col in enumerate(df.columns):
+            if col not in ['Data', 'Valor', 'Quantidade'] and col not in cnpjs_unicos:  # Já formatadas acima
+                column_len = max(df[col].astype(str).map(len).max(), len(col)) + 2
+                worksheet.set_column(i, i, min(column_len, 50))
+            elif col in cnpjs_unicos:
+                # Colunas de CNPJ: largura baseada no CNPJ (14 caracteres) + margem
+                worksheet.set_column(i, i, 18)
+        
+        # Formatar a aba de saldos se existir
+        if not df_saldos.empty:
+            worksheet_saldos = writer.sheets['Saldos por CNPJ']
+            for col_num, value in enumerate(df_saldos.columns.values):
+                worksheet_saldos.write(0, col_num, value, header_format)
+            
+            for i, col in enumerate(df_saldos.columns):
+                column_len = max(df_saldos[col].astype(str).map(len).max(), len(col)) + 2
+                worksheet_saldos.set_column(i, i, min(column_len, 50))
+            
+            # Formatar valores monetários e numéricos
+            money_format = workbook.add_format({'num_format': 'R$ #,##0.00'})
+            number_format = workbook.add_format({'num_format': '#,##0.00'})
+            
+            worksheet_saldos.set_column('D:D', None, number_format)  # Saldo Quantidade
+            worksheet_saldos.set_column('E:E', None, money_format)  # Saldo Valor
+    
+    output.seek(0)
+    
+    # Nome do arquivo com timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'analise_transferencias_{timestamp}.xlsx'
+    
+    return send_file(
+        output,
+        download_name=filename,
+        as_attachment=True,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
 @nota_fiscal_bp.route('/exportar-zip', methods=['GET'])
@@ -2920,4 +4561,14 @@ def tabela_notas_fiscais():
     print(f'notas_fiscais_pagina_upload {time.time() - inicio}')
     
     print(f'tabela notas fiscais - página {page} de {pagination.pages}, total filtrado: {pagination.total} {time.time() - inicio}')
-    return render_template('notas_fiscais/notas_tabela.html', pagination=pagination, notas_fiscais=notas_fiscais_pagina_upload, total_resultados=pagination.total, valor_total=valor_total_formatado)
+    # Passar todos os parâmetros de filtro para o template, para preservar nos links de paginação
+    filtros_params = dict(request.args)
+    # Remover 'page' dos parâmetros, pois será adicionado dinamicamente nos links
+    if 'page' in filtros_params:
+        del filtros_params['page']
+    return render_template('notas_fiscais/notas_tabela.html', 
+                         pagination=pagination, 
+                         notas_fiscais=notas_fiscais_pagina_upload, 
+                         total_resultados=pagination.total, 
+                         valor_total=valor_total_formatado,
+                         filtros_params=filtros_params)

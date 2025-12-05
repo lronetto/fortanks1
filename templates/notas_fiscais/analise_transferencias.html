@@ -59,13 +59,32 @@
                             </select>
                         </div>
                     </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="material_id">Material Vinculado</label>
+                            <select name="material_id" id="material_id" class="form-control select2" multiple>
+                                {% for material in materiais %}
+                                    <option value="{{ material.id }}" {% if filtro_material_id and material.id|string in filtro_material_id %}selected{% endif %}>{{ material.nome }}{% if material.codigo %} ({{ material.codigo }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
                     <div class="col-md-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary mr-2">
                             <i class="fas fa-search"></i> Filtrar
                         </button>
-                        <a href="?" class="btn btn-secondary">
+                        <a href="?" class="btn btn-secondary mr-2">
                             <i class="fas fa-sync"></i> Limpar
                         </a>
+                        <button type="button" class="btn btn-info mr-2" id="btn-modal-cnpj">
+                            <i class="fas fa-table"></i> Análise por CNPJ
+                        </button>
+                        <button type="button" class="btn btn-success mr-2" id="btn-exportar-excel">
+                            <i class="fas fa-file-excel"></i> Exportar Excel
+                        </button>
+                        <button type="button" class="btn btn-danger" id="btn-exportar-pdf">
+                            <i class="fas fa-file-pdf"></i> Exportar PDF
+                        </button>
                     </div>
                 </div>
             </form>
@@ -84,6 +103,9 @@
         </div>
     </div>
 </div>
+
+<!-- Incluir Modal de Análise por CNPJ -->
+{% include 'notas_fiscais/modais/analise_transferencias_cnpj.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -115,6 +137,35 @@
                     $('#tabela-transferencias-ajax').html(data);
                 });
             }
+            
+            // Exportar Excel
+            $('#btn-exportar-excel').on('click', function() {
+                // Coletar todos os filtros do formulário
+                let formData = $('form').serialize();
+                let url = '/notas-fiscais/analise-transferencias/exportar-excel?' + formData;
+                
+                // Abrir em nova aba para download
+                window.open(url, '_blank');
+            });
+            
+            // Exportar PDF
+            $('#btn-exportar-pdf').on('click', function() {
+                // Coletar todos os filtros do formulário
+                let formData = $('form').serialize();
+                let url = '/notas-fiscais/analise-transferencias/exportar-pdf?' + formData;
+                
+                // Abrir em nova aba para download
+                window.open(url, '_blank');
+            });
+            
+            // Abrir modal de análise por CNPJ
+            $('#btn-modal-cnpj').on('click', function() {
+                if (typeof window.abrirModalAnaliseCNPJ === 'function') {
+                    window.abrirModalAnaliseCNPJ();
+                } else {
+                    console.error('Função abrirModalAnaliseCNPJ não encontrada');
+                }
+            });
         });
     </script>
 {% endblock %} 
