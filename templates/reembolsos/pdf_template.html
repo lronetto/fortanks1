@@ -22,9 +22,13 @@
         .relatorio-table th, .relatorio-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 12px; text-align: left;}
         .relatorio-table th { background: #f0f0f0; }
         .assinatura-table { width: 100%; border: 1px solid #333; margin-top: 10px; }
-        .assinatura-table td { height: 100px; text-align: left; vertical-align: top; }
+        .assinatura-table td { height: 50px; text-align: left; vertical-align: top; }
         .assinatura-table th, .assinatura-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 11px; }
         .assinatura-table th { background: #f0f0f0; }
+        .pagamento-table { width: 100%; border: 1px solid #333; margin-top: 10px; }
+        .pagamento-table td { height: 10px; text-align: left; vertical-align: top; }
+        .pagamento-table th, .pagamento-table td { border-right: 1px solid #333; border-bottom: 1px solid #333; padding: 4px 6px; font-size: 11px; }
+        .pagamento-table th { background: #f0f0f0; }
         .assinatura { margin-top: 40px; }
         .assinatura .linha { border-top: 1px solid #333; width: 250px; margin: 0 auto; text-align: center; padding-top: 4px; }
         .right { text-align: right; }
@@ -106,25 +110,23 @@
     </table> 
     <table class="pagamento-table">
         <tr>
-            <td colspan="5" class="right">NOME DO FAVORECIDO: {{ reembolso.usuario.nome }}</td>
+            <td colspan="4" class="right">NOME DO FAVORECIDO: {{ reembolso.usuario.nome }}</td>
         </tr>
         <tr>
-            <td>BANCO:</td>
-            <td>AGENCIA:</td>
-            <td>OPERACAO:</td>
-            <td>CONTA:</td>
+            <td><strong>PIX:</strong></td>
+            <td><strong>BANCO:</strong></td>
+            <td><strong>AGENCIA:</strong></td>
+            <td><strong>OPERACAO:</strong></td>
+            <td><strong>CONTA:</strong></td>
         </tr>
         <tr>
-            <td>BANCO:WEF</td>
-            <td>AGENCIA:WE</td>
-            <td>OPERACAOSDF:</td>
-            <td>CONTA:34</td>
+            <td>{{ reembolso.usuario.colaborador.dados_bancarios.pix if reembolso.usuario.colaborador and reembolso.usuario.colaborador.dados_bancarios and reembolso.usuario.colaborador.dados_bancarios.pix else '' }}</td>
+            <td>{{ reembolso.usuario.colaborador.dados_bancarios.banco if reembolso.usuario.colaborador and reembolso.usuario.colaborador.dados_bancarios and reembolso.usuario.colaborador.dados_bancarios.banco else '' }}</td>
+            <td>{{ reembolso.usuario.colaborador.dados_bancarios.agencia if reembolso.usuario.colaborador and reembolso.usuario.colaborador.dados_bancarios and reembolso.usuario.colaborador.dados_bancarios.agencia else '' }}</td>
+            <td>{{ '' }}</td>
+            <td>{{ reembolso.usuario.colaborador.dados_bancarios.conta if reembolso.usuario.colaborador and reembolso.usuario.colaborador.dados_bancarios and reembolso.usuario.colaborador.dados_bancarios.conta else '' }}</td>
         </tr>
     </table>
 
-
-    <div class="assinatura">
-        <div class="linha">Assinatura do Solicitante</div>
-    </div>
 </body>
 </html> 

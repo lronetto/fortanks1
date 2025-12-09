@@ -5,10 +5,10 @@ class DadosBancarios(db.Model):
     __tablename__ = 'dados_bancarios'
     id = db.Column(db.Integer, primary_key=True)
     colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'), nullable=False)
-    pix = db.Column(db.String(100), nullable=False)
-    banco = db.Column(db.String(100), nullable=False)
-    agencia = db.Column(db.String(100), nullable=False)
-    conta = db.Column(db.String(100), nullable=False)
+    pix = db.Column(db.String(100), nullable=True)
+    banco = db.Column(db.String(100), nullable=True)
+    agencia = db.Column(db.String(100), nullable=True)
+    conta = db.Column(db.String(100), nullable=True)
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 

@@ -307,25 +307,30 @@ def nota_fiscal_busca(filtros):
     return notas_filtradas,pagination
 def api_get_dados_notas_fiscais(request):
     # Obter parâmetros de filtro
-    args = request.args
-    busca = args.get('busca', '')
-    item_nome = args.get('item_nome', '')
-    status_importacao = args.get('status_importacao', '')
-    emitente = args.get('emitente', '')
-    destinatario = args.get('destinatario', '')
-    status_pagamento = args.get('status_pagamento', '')
-    data_emissao_inicio = args.get('data_emissao_inicio', '')
-    data_emissao_fim = args.get('data_emissao_fim', '')
-    tipo_nfe = args.get('tipo_nfe', '')
-    origem = args.get('origem', '')  # Novo filtro para origem
-    destino = args.get('destino', '')  # Novo filtro para destino
-    remetente = args.get('remetente', '')  # Novo filtro para remetente
-    status_upload = args.get('status_upload', '')  # Novo filtro de status upload
-    tipo_operacao = args.get('tipo_operacao', '')  # Novo filtro de tipo de operação (Compra, Venda, Transferência)
+    json_filtros =request
+    print(f'json_filtros: {json_filtros}')
+    busca = json_filtros.get('busca', '')
+    item_nome = json_filtros.get('item_nome', '')
+    status_importacao = json_filtros.get('status_importacao', '')
+    emitente = json_filtros.get('emitente', '')
+    destinatario = json_filtros.get('destinatario', '')
+    status_pagamento = json_filtros.get('status_pagamento', '')
+    data_emissao_inicio = json_filtros.get('data_emissao_inicio', '')
+    data_emissao_fim = json_filtros.get('data_emissao_fim', '')
+    tipo_nfe = json_filtros.get('tipo_nfe', '')
+    origem = json_filtros.get('origem', '')  # Novo filtro para origem
+    destino = json_filtros.get('destino', '')  # Novo filtro para destino
+    remetente = json_filtros.get('remetente', '')  # Novo filtro para remetente
+    status_upload = json_filtros.get('status_upload', '')  # Novo filtro de status upload
+    tipo_operacao = json_filtros.get('tipo_operacao', '')  # Novo filtro de tipo de operação (Compra, Venda, Transferência)
     # Novos filtros de CNPJ direto (valor exato)
-    cnpj_emitente = args.get('cnpj_emitente', '').strip()
-    cnpj_destinatario = args.get('cnpj_destinatario', '').strip()
-    
+    cnpj_emitente = json_filtros.get('cnpj_emitente', '').strip()
+    cnpj_destinatario = json_filtros.get('cnpj_destinatario', '').strip()
+    valor_minimo = json_filtros.get('valor_minimo', '')
+    valor_maximo = json_filtros.get('valor_maximo', '')
+    valor_exato = json_filtros.get('valor_exato', '')
+    pagamento = json_filtros.get('pagamento', '')
+    notas_selecionadas = json_filtros.get('notas_selecionadas', [])
     # Instanciar formulário de importação para o modal
 
     # OTIMIZAÇÃO: Usar subqueries ao invés de OUTER JOINs para evitar multiplicação de linhas
@@ -464,8 +469,6 @@ def api_get_dados_notas_fiscais(request):
         status_importacao = '' # Resetar para não quebrar a lógica do template
     
     # Filtro por data de emissão
-    data_emissao_inicio = request.args.get('data_emissao_inicio', '')
-    data_emissao_fim = request.args.get('data_emissao_fim', '')
     if emitente:
         if emitente == 'Terceiros':
             query = query.filter(~NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
@@ -551,6 +554,12 @@ def api_get_dados_notas_fiscais(request):
         
         elif status_upload == '5':
             query = query.filter(~db.session.query(Upload.id).filter(Upload.pai == 'NotaFiscal', Upload.pai_id == NotaFiscal.id).exists())
+    if valor_minimo:
+        query = query.filter(NotaFiscal.valor_total >= valor_minimo)
+    if valor_maximo:
+        query = query.filter(NotaFiscal.valor_total <= valor_maximo)
+    if valor_exato:
+        query = query.filter(NotaFiscal.valor_total == valor_exato)
     
     # OTIMIZAÇÃO: Não precisamos mais de GROUP BY pois as subqueries retornam apenas 1 valor por nota
     # As subqueries correlacionadas já garantem uma linha por NotaFiscal (sem multiplicação de linhas)
@@ -558,9 +567,9 @@ def api_get_dados_notas_fiscais(request):
     # Filtros de status de pagamento - agora usando WHERE pois são subqueries, não funções agregadas
     if status_pagamento:
         if status_pagamento == 'pago':
-            query = query.having(pagamento_column == 1)
+            query = query.filter(pagamento_column == 1)
         elif status_pagamento == 'nao_pago':
-            query = query.having(pagamento_column == 0)
+            query = query.filter(pagamento_column == 0)
         elif status_pagamento == 'com_faturamento':
             query = query.filter(NotaFiscal.vencimento.isnot(None))
         elif status_pagamento == 'vencido':
@@ -578,11 +587,18 @@ def api_get_dados_notas_fiscais(request):
                 NotaFiscal.vencimento < hoje_str,
                 pagamento_column == 0
             )
-    
+        elif  status_pagamento == 'apenas_reembolso':
+            query = query.filter(upload_reembolso_column == 1)
+        elif status_pagamento == 'reembolso_e_nao_pago':
+            query = query.filter(upload_reembolso_column == 1, 
+                                pagamento_column == 0)
+        elif status_pagamento == 'selecionados':
+            nsel = [item.get('id') for item in notas_selecionadas if item.get('id')]
+            query = query.filter(NotaFiscal.id.in_(nsel))
     # Ordenar antes de paginar
     # Obter parâmetros de ordenação
-    order_by = args.get('order_by', 'data_emissao')
-    order_dir = args.get('order_dir', 'desc')
+    order_by = json_filtros.get('order_by', 'data_emissao')
+    order_dir = json_filtros.get('order_dir', 'desc')
     
     # Mapear colunas para ordenação
     order_mapping = {

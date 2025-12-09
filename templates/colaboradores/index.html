@@ -86,6 +86,12 @@
                                         title="Ficha EPI">
                                     <i class="fas fa-address-card"></i>
                                 </button>
+                                <button type="button" class="btn btn-sm btn-info btn-dados-bancarios" 
+                                        data-id="{{ colaborador.id }}" 
+                                        data-nome="{{ colaborador.nome }}"
+                                        title="Dados Bancários">
+                                    <i class="fas fa-university"></i>
+                                </button>
                                 <button type="button" class="btn btn-sm btn-danger btn-excluir"
                                     data-id="{{ colaborador.id }}" data-nome="{{ colaborador.nome }}" title="Excluir">
                                     <i class="fas fa-trash"></i>
@@ -522,6 +528,9 @@
     </div>
 </div>
 
+<!-- Incluir Modal de Dados Bancários -->
+{% include 'colaboradores/modais/dados_bancarios.html' %}
+
 <!-- Modal Ficha EPI (Estrutura) -->
 <div class="modal fade" id="fichaEpiModal" tabindex="-1" aria-labelledby="fichaEpiModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -772,6 +781,135 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Chamada inicial para configurar o estado da tabela (ex: se já começa vazia)
     filtrarTabela();
+
+    // Script para Modal de Dados Bancários
+    const dadosBancariosModalEl = document.getElementById('dadosBancariosModal');
+    if (!dadosBancariosModalEl) {
+        console.warn('Modal de dados bancários não encontrado');
+    } else {
+        const dadosBancariosModal = new bootstrap.Modal(dadosBancariosModalEl);
+        const formDadosBancarios = document.getElementById('formDadosBancarios');
+        const modoVisualizacao = document.getElementById('modo-visualizacao');
+        const modoEdicao = document.getElementById('modo-edicao');
+        const btnEditar = document.getElementById('btn-editar-dados');
+        const btnSalvar = document.getElementById('btn-salvar-dados');
+        const nomeColaboradorBancario = document.getElementById('nome-colaborador-bancario');
+        
+        // Handlers para os botões de dados bancários
+        document.querySelectorAll('.btn-dados-bancarios').forEach(button => {
+            button.addEventListener('click', function() {
+                const colaboradorId = this.dataset.id;
+                const colaboradorNome = this.dataset.nome;
+                
+                nomeColaboradorBancario.textContent = colaboradorNome;
+                document.getElementById('colaborador-id-bancario').value = colaboradorId;
+                
+                // Limpar formulário
+                formDadosBancarios.reset();
+                modoVisualizacao.style.display = 'none';
+                modoEdicao.style.display = 'block';
+                btnEditar.style.display = 'none';
+                btnSalvar.style.display = 'inline-block';
+                
+                // Carregar dados bancários existentes
+                fetch(`/colaboradores/${colaboradorId}/dados_bancarios`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.pix || data.banco || data.agencia || data.conta) {
+                            // Tem dados - mostrar modo visualização primeiro
+                            document.getElementById('view-pix').textContent = data.pix || 'Não informado';
+                            document.getElementById('view-banco').textContent = data.banco || 'Não informado';
+                            document.getElementById('view-agencia').textContent = data.agencia || 'Não informado';
+                            document.getElementById('view-conta').textContent = data.conta || 'Não informado';
+                            
+                            // Preencher campos de edição também
+                            document.getElementById('pix').value = data.pix || '';
+                            document.getElementById('banco').value = data.banco || '';
+                            document.getElementById('agencia').value = data.agencia || '';
+                            document.getElementById('conta').value = data.conta || '';
+                            
+                            modoVisualizacao.style.display = 'block';
+                            modoEdicao.style.display = 'none';
+                            btnEditar.style.display = 'inline-block';
+                            btnSalvar.style.display = 'none';
+                        } else {
+                            // Não tem dados - mostrar modo edição
+                            modoVisualizacao.style.display = 'none';
+                            modoEdicao.style.display = 'block';
+                            btnEditar.style.display = 'none';
+                            btnSalvar.style.display = 'inline-block';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro ao carregar dados bancários:', error);
+                        modoVisualizacao.style.display = 'none';
+                        modoEdicao.style.display = 'block';
+                        btnEditar.style.display = 'none';
+                        btnSalvar.style.display = 'inline-block';
+                    });
+                
+                dadosBancariosModal.show();
+            });
+        });
+        
+        // Handler para botão Editar
+        if (btnEditar) {
+            btnEditar.addEventListener('click', function() {
+                modoVisualizacao.style.display = 'none';
+                modoEdicao.style.display = 'block';
+                btnEditar.style.display = 'none';
+                btnSalvar.style.display = 'inline-block';
+            });
+        }
+        
+        // Handler para submissão do formulário
+        if (formDadosBancarios) {
+            formDadosBancarios.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Validação: pelo menos um campo deve ser preenchido
+                const pix = document.getElementById('pix').value.trim();
+                const banco = document.getElementById('banco').value.trim();
+                const agencia = document.getElementById('agencia').value.trim();
+                const conta = document.getElementById('conta').value.trim();
+                
+                const feedbackValidacao = document.getElementById('feedback-validacao');
+                
+                if (!pix && !banco && !agencia && !conta) {
+                    feedbackValidacao.style.display = 'block';
+                    feedbackValidacao.classList.add('d-block');
+                    formDadosBancarios.classList.add('was-validated');
+                    return;
+                }
+                
+                feedbackValidacao.style.display = 'none';
+                feedbackValidacao.classList.remove('d-block');
+                
+                const colaboradorId = document.getElementById('colaborador-id-bancario').value;
+                const formData = new FormData(this);
+                
+                fetch(`/colaboradores/${colaboradorId}/dados_bancarios`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (response.ok) {
+                        dadosBancariosModal.hide();
+                        // Recarregar a página para mostrar mensagem de sucesso
+                        window.location.reload();
+                    } else {
+                        return response.text().then(text => {
+                            throw new Error('Erro ao salvar dados bancários');
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    alert('Erro ao salvar dados bancários. Tente novamente.');
+                });
+            });
+        }
+    }
 
 });
 </script>

@@ -22,7 +22,7 @@ import zipfile
 from sqlalchemy.orm import joinedload
 
 from models.database import db
-from models.colaborador import Colaborador
+from models.colaborador import Colaborador, DadosBancarios
 from models.departamento import Departamento
 from models.cargo import Cargo
 from models.usuario import Usuario
@@ -45,7 +45,7 @@ def index():
     """
     Lista todos os colaboradores
     """
-    colaboradores = Colaborador.query.order_by(Colaborador.data_admissao.desc()).all()
+    colaboradores = Colaborador.query.order_by(Colaborador.nome.asc()).all()
     departamentos = Departamento.query.filter_by(status='Ativo').all()
     cargos = Cargo.query.filter_by(status='Ativo').all()
     
@@ -562,4 +562,81 @@ def api_buscar():
     ]
     
     return jsonify(resultado)
+
+@colaborador_bp.route('/<int:id>/dados_bancarios', methods=['GET'])
+@login_required
+def dados_bancarios(id):
+    """
+    Retorna os dados bancários de um colaborador (JSON)
+    """
+    colaborador = Colaborador.query.get_or_404(id)
+    dados = colaborador.dados_bancarios
+    
+    if dados:
+        return jsonify({
+            'id': dados.id,
+            'pix': dados.pix or '',
+            'banco': dados.banco or '',
+            'agencia': dados.agencia or '',
+            'conta': dados.conta or ''
+        })
+    else:
+        return jsonify({
+            'id': None,
+            'pix': '',
+            'banco': '',
+            'agencia': '',
+            'conta': ''
+        })
+
+@colaborador_bp.route('/<int:id>/dados_bancarios', methods=['POST'])
+@login_required
+def salvar_dados_bancarios(id):
+    """
+    Salva ou atualiza os dados bancários de um colaborador
+    """
+    colaborador = Colaborador.query.get_or_404(id)
+    
+    pix = request.form.get('pix', '').strip()
+    banco = request.form.get('banco', '').strip()
+    agencia = request.form.get('agencia', '').strip()
+    conta = request.form.get('conta', '').strip()
+    
+    # Validação: pelo menos um campo deve ser preenchido
+    if not pix and not banco and not agencia and not conta:
+        flash('Por favor, preencha pelo menos um campo de dados bancários.', 'danger')
+        return redirect(url_for('colaborador.index'))
+    
+    # Permite valores None para campos não preenchidos
+    pix = pix if pix else None
+    banco = banco if banco else None
+    agencia = agencia if agencia else None
+    conta = conta if conta else None
+    
+    # Verifica se já existem dados bancários
+    dados_existentes = colaborador.dados_bancarios
+    
+    if dados_existentes:
+        # Atualiza dados existentes
+        dados_existentes.pix = pix
+        dados_existentes.banco = banco
+        dados_existentes.agencia = agencia
+        dados_existentes.conta = conta
+        dados_existentes.atualizado_em = datetime.now()
+        db.session.commit()
+        flash('Dados bancários atualizados com sucesso.', 'success')
+    else:
+        # Cria novos dados bancários
+        novos_dados = DadosBancarios(
+            colaborador_id=colaborador.id,
+            pix=pix,
+            banco=banco,
+            agencia=agencia,
+            conta=conta
+        )
+        db.session.add(novos_dados)
+        db.session.commit()
+        flash('Dados bancários cadastrados com sucesso.', 'success')
+    
+    return redirect(url_for('colaborador.index'))
 

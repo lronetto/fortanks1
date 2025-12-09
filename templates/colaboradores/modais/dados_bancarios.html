@@ -1,0 +1,73 @@
+<!-- Modal de Dados Bancários -->
+<div class="modal fade" id="dadosBancariosModal" tabindex="-1" aria-labelledby="dadosBancariosModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="dadosBancariosModalLabel">Dados Bancários - <span id="nome-colaborador-bancario"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formDadosBancarios" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="colaborador-id-bancario" name="colaborador_id">
+                <div class="modal-body">
+                    <div id="modo-visualizacao" style="display: none;">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>PIX:</strong></label>
+                                <p id="view-pix" class="form-control-plaintext"></p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Banco:</strong></label>
+                                <p id="view-banco" class="form-control-plaintext"></p>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Agência:</strong></label>
+                                <p id="view-agencia" class="form-control-plaintext"></p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label"><strong>Conta:</strong></label>
+                                <p id="view-conta" class="form-control-plaintext"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="modo-edicao">
+                        <div class="alert alert-info mb-3">
+                            <small><i class="fas fa-info-circle"></i> Preencha pelo menos um dos campos abaixo.</small>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="pix" class="form-label">PIX</label>
+                                <input type="text" class="form-control" id="pix" name="pix">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="banco" class="form-label">Banco</label>
+                                <input type="text" class="form-control" id="banco" name="banco">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="agencia" class="form-label">Agência</label>
+                                <input type="text" class="form-control" id="agencia" name="agencia">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="conta" class="form-label">Conta</label>
+                                <input type="text" class="form-control" id="conta" name="conta">
+                            </div>
+                        </div>
+                        <div class="invalid-feedback" id="feedback-validacao" style="display: none;">
+                            Por favor, preencha pelo menos um campo de dados bancários.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" id="btn-editar-dados" style="display: none;">Editar</button>
+                    <button type="submit" class="btn btn-success" id="btn-salvar-dados">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+

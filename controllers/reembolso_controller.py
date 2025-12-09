@@ -6,10 +6,12 @@ from controllers.nota_fiscal_controller import api_get_dados_notas_fiscais
 from models.nota_fiscal import CFOPS_COMPRA,CNPJS_MATRIZ_FILIAIS,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
 from models import db, Reembolso, ReembolsoDocumento, ReembolsoAnexo, NotaFiscal,NotaFiscalItem ,CentroCusto,Usuario
+from models.colaborador import Colaborador, DadosBancarios
 from models.upload import Upload
 from models.reembolso import ReembolsoAnexo
 from forms.reembolso_forms import ReembolsoForm, DocumentoAvulsoForm
 from sqlalchemy import or_, and_, cast, Date, case, func
+from sqlalchemy.orm import joinedload
 from io import BytesIO
 from datetime import datetime, date
 from weasyprint import HTML
@@ -200,126 +202,74 @@ def nota_fiscal_busca_reembolso():
     tinicial = time.time()
     if request.method == 'POST':
         try:
-            # Obter filtros do JSON do body
-            filtros = request.get_json() if request.is_json else {}
-            print(f'filtros: {filtros}')
+            print(f'request: {request.get_json()}')
+            json_request = request.get_json()
+            reembolso_id = json_request.get('reembolso_id', '')
             # Obter parâmetros de paginação
-            page = filtros.get('page', request.args.get('page', 1, type=int))
-            per_page = filtros.get('per_page', request.args.get('per_page', 25, type=int))
-            
+            notas_selecionadas = json_request.get('notas_selecionadas', [])
             # Filtro de pagamento
-            pagamento_filtro = filtros.get('pagamento', '')
-            notas_selecionadas = filtros.get('notas_selecionadas', [])
-            ids = filtros.get('ids', [])
-            
-            # Adicionar joins para informações de pagamento e reembolso
-            tem_pagamento_column = func.max(case((DadoAnalitico.id != None, 1), else_=0)).label('tem_pagamento')
-            upload_column = func.max(case((Upload.id != None, 1), else_=0)).label('upload')
-            upload_envio_column = func.max(case((Upload.tipo == 2, 1), else_=0)).label('upload_envio')
-            upload_reembolso_column = func.max(case((Upload.tipo == 3, 1), else_=0)).label('upload_reembolso')
-            
-            # Criar query com joins (similar ao que api_get_dados_notas_fiscais faz, mas com joins necessários)
-            join_conditions_pagamento = and_(
-                NotaFiscal.valor_total == DadoAnalitico.valor,
-                DadoAnalitico.documento.like('%' + NotaFiscal.numero_nf + '%')
-            )
-            join_conditions_upload = and_(
-                Upload.pai_id == NotaFiscal.id,
-                Upload.pai == 'NotaFiscal'
-            )
-            
-            query = db.session.query(
-                NotaFiscal,
-                tem_pagamento_column,
-                upload_column,
-                upload_envio_column,
-                upload_reembolso_column,
-                ReembolsoDocumento
-            ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
-            
-            # Aplicar filtros (usando a mesma lógica de api_get_dados_notas_fiscais)
-            if filtros.get('numero'):
-                busca_like = f"%{filtros.get('numero')}%"
-                query = query.filter(
-                    or_(
-                        NotaFiscal.numero_nf.ilike(busca_like),
-                        NotaFiscal.nome_emitente.ilike(busca_like),
-                        NotaFiscal.chave_acesso.ilike(busca_like)
-                    )
-                )
-            if filtros.get('fornecedor'):
-                query = query.filter(NotaFiscal.nome_emitente.ilike(f"%{filtros.get('fornecedor')}%"))
-            if filtros.get('data_inicial') or filtros.get('data_ini'):
-                data_ini = filtros.get('data_inicial') or filtros.get('data_ini')
-                try:
-                    data_inicio = datetime.strptime(data_ini, '%Y-%m-%d')
-                    query = query.filter(NotaFiscal.data_emissao >= data_inicio)
-                except:
-                    pass
-            if filtros.get('data_final') or filtros.get('data_fim'):
-                data_fim = filtros.get('data_final') or filtros.get('data_fim')
-                try:
-                    data_final = datetime.strptime(data_fim, '%Y-%m-%d')
-                    query = query.filter(NotaFiscal.data_emissao <= data_final)
-                except:
-                    pass
-            if filtros.get('valor_minimo'):
-                query = query.filter(NotaFiscal.valor_total >= float(filtros.get('valor_minimo')))
-            if filtros.get('valor_maximo'):
-                query = query.filter(NotaFiscal.valor_total <= float(filtros.get('valor_maximo')))
-            if filtros.get('valor_exato'):
-                query = query.filter(NotaFiscal.valor_total == float(filtros.get('valor_exato')))
-            
-            # Filtros de CNPJ e CFOP
-            query = query.filter(NotaFiscal.cnpj_emitente.notin_(CNPJS_MATRIZ_FILIAIS))
-            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.notin_(CFOPS_TRANSFERENCIA)))
-            
-            # Joins
-            query = query.outerjoin(DadoAnalitico, join_conditions_pagamento)
-            query = query.outerjoin(ReembolsoDocumento, ReembolsoDocumento.nota_fiscal_id == NotaFiscal.id)
-            query = query.outerjoin(Upload, join_conditions_upload)
-            
-            # Filtros de pagamento
-            if pagamento_filtro == '0':  # Não Pago
-                query = query.having(tem_pagamento_column == 0)
-            elif pagamento_filtro == '1':  # Pago
-                query = query.having(tem_pagamento_column == 1)
-            elif pagamento_filtro == '2':  # Sem upload de envio
-                query = query.having(upload_envio_column == 0)
-            elif pagamento_filtro == '3':  # Com upload de reembolso
-                query = query.having(upload_reembolso_column == 1)
-            elif pagamento_filtro == '4':  # Selecionados
-                query = query.filter(NotaFiscal.id.in_(ids))
-            elif pagamento_filtro == '5':  # Reembolso e nao pago
-                query = query.having(upload_reembolso_column == 1, tem_pagamento_column == 0)
-            # Agrupar e ordenar
-            query = query.group_by(NotaFiscal.id)
-            query = query.order_by(NotaFiscal.data_emissao.desc())
-            
-            # Aplicar paginação
-            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+            print(f'request.form: {request.form.to_dict()}')
+            page = json_request.get('page', 1)
+            per_page = json_request.get('per_page', 25)
+            pagamento = json_request.get('pagamento', '')
+            json_filtros = {
+                'page': page,
+                'per_page': per_page,
+                'notas_selecionadas': notas_selecionadas,
+                'busca': json_request.get('numero', ''),
+                'fornecedor': json_request.get('fornecedor', ''),
+                'data_inicial': request.form.get('data_ini', ''),
+                'data_final': json_request.get('data_fim', ''),
+                'valor_minimo': json_request.get('valor_minimo', ''),
+                'valor_maximo': json_request.get('valor_maximo', ''),
+                'valor_exato': json_request.get('valor_exato', ''),
+            }
+            if pagamento:
+                if pagamento == '0':
+                    json_filtros['status_pagamento'] = 'nao_pago'
+                elif pagamento == '1':
+                    json_filtros['status_pagamento'] = 'pago'
+                elif pagamento == '2':
+                    json_filtros['status_pagamento'] = 'sem_envio'
+                elif pagamento == '3':
+                    json_filtros['status_pagamento'] = 'apenas_reembolso'
+                elif pagamento == '4':
+                    json_filtros['status_pagamento'] = 'selecionados'
+                elif pagamento == '5':
+                    json_filtros['status_pagamento'] = 'reembolso_e_nao_pago'
+            print(f'json_filtros: {json_filtros}')
+            query = api_get_dados_notas_fiscais(json_filtros)
+            pagination = query.paginate(page=page, per_page=per_page,error_out=False)
             notas = pagination.items
-            
             # Processar notas para o JSON de resposta
             notas_filtradas = []
             for n in notas:
                 try:
                     nota_fiscal_obj = n.NotaFiscal
+                    selecionada = nota_fiscal_obj.id in [item.get('id') for item in notas_selecionadas if item.get('id')]
+                    reembolso_documento = ReembolsoDocumento.query.filter_by(nota_fiscal_id=n.NotaFiscal.id,reembolso_id=reembolso_id).first()
+                    # Encontrar o item selecionado correspondente
+                    item_selecionado = next((item for item in notas_selecionadas if item.get('id') == nota_fiscal_obj.id), None)
+                    # Construir o doc baseado na seleção
+                    doc_info = ''
+                    if selecionada and item_selecionado:
+                        doc_info = {
+                            'cc': item_selecionado.get('centro_custo_id') or '',
+                            'descricao': item_selecionado.get('descricao') or ''
+                        }
                     notas_filtradas.append({
-                        'doc': '' if n.ReembolsoDocumento is None else {
-                            'cc': n.ReembolsoDocumento.centro_custo_id,
-                            'descricao': n.ReembolsoDocumento.descricao
-                        },
+                        'doc': doc_info,
                         'id': nota_fiscal_obj.id,
-                        'selecionada': nota_fiscal_obj.id in notas_selecionadas,
+                        'selecionada': selecionada,
                         'numero_nf': nota_fiscal_obj.numero_nf,
                         'nome_emitente': nota_fiscal_obj.nome_emitente,
                         'data_emissao': nota_fiscal_obj.data_emissao.isoformat() if nota_fiscal_obj.data_emissao else '',
                         'valor_total': float(nota_fiscal_obj.valor_total) if nota_fiscal_obj.valor_total else 0.0,
-                        'pagamento': n.tem_pagamento if hasattr(n, 'tem_pagamento') else 0,
+                        'pagamento': n.pagamento if hasattr(n, 'pagamento') else 0,
                         'upload': n.upload if hasattr(n, 'upload') else 0,
-                        'upload_envio': n.upload_envio if hasattr(n, 'upload_envio') else 0,
+                        'upload_envio': n.upload_protocolo if hasattr(n, 'upload_protocolo') else 0,
                         'upload_reembolso': n.upload_reembolso if hasattr(n, 'upload_reembolso') else 0,
+                        'upload_arquivei': n.upload_arquivei if hasattr(n, 'upload_arquivei') else 0,
                         'chave_acesso': nota_fiscal_obj.chave_acesso or '',
                     })
                 except Exception as e:
@@ -349,7 +299,9 @@ def nota_fiscal_busca_reembolso():
 @reembolso_bp.route('/<int:reembolso_id>/pdf_template')
 @login_required
 def pdf_template(reembolso_id):
-    reembolso = Reembolso.query.get_or_404(reembolso_id)
+    reembolso = Reembolso.query.options(
+        joinedload(Reembolso.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
+    ).get_or_404(reembolso_id)
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
     
@@ -384,7 +336,9 @@ def dias_desde_1900(data):
 
 @reembolso_bp.route('/exportar_pdf/<int:id>')
 def exportar_pdf(id):
-    reembolso = Reembolso.query.join(Usuario, Reembolso.usuario_id==Usuario.id).filter(Reembolso.id==id).first()
+    reembolso = Reembolso.query.options(
+        joinedload(Reembolso.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
+    ).filter(Reembolso.id==id).first()
     if not reembolso:
         abort(404)
     pdf_writer = PdfWriter()
