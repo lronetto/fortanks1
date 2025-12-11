@@ -18,7 +18,8 @@ from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.material import Material
 from models.centro_custo import CentroCusto
 from models.unidade import Unidade
-from models.conversao_unidade import ConversaoUnidade
+from models.estoque import MovimentacaoEstoque
+from models.conversao_unidade import ConversaoUnidade, get_conversao_unidade
 from forms.nota_fiscal_forms import NotaFiscalImportForm # Import para formulário do modal
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from models.arquivei import Arquivei
@@ -55,7 +56,9 @@ def verificar_permissao():
     #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
     #     return redirect(url_for('dashboard.index'))
 
-def atualizar_dados_adicionais():
+@nota_fiscal_bp.route('/atualizar_notas_fiscais')
+@login_required
+def atualizar_notas_fiscais():
     """
     Atualiza dados adicionais das notas fiscais processando em blocos de 100 registros.
     """
@@ -85,6 +88,38 @@ def atualizar_dados_adicionais():
                 elif nota.tipo < 2:
                     chave_acesso, dados = nota.extrair_dados_xml_nfe()
                     nota.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+                    for item in nota.itens:
+                        for item_dados in dados.get('itens', []):
+                            if item_dados.get('codigo') == item.codigo and item_dados.get('descricao') == item.descricao:
+                                #print(f'item_dados: {item_dados.get('quantidade')}')
+                                item.quantidade = item_dados.get('quantidade')
+                                item.valor_unitario = item_dados.get('valor_unitario')
+                                item.valor_total = item_dados.get('valor_total')
+                                mov = MovimentacaoEstoque.query.filter_by(id=item.movimentacao_estoque_id).first()
+                                if mov:
+                                    mov.delete()
+                                    item.movimentacao_estoque_id = None
+                                if item.material_id:
+
+                                    material = Material.query.get(item.material_id)
+                                    if material:
+                                        fator_conversao = get_conversao_unidade(item.unidade, material.unidade_obj.nome)
+                                        if fator_conversao:
+                                            item.fator_conversao_aplicado = fator_conversao
+                                dados_adicionais = item_dados.get('dados_adicionais')
+                                dados_adicionais['status'] = {
+                                    'importado': False,
+                                    'vinculado': True if item.material_id else False,
+                                }
+                                
+                                item.importado_estoque = False
+                                item.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
+                                item.save()
+                                item.importar_para_estoque()
+
+                                break
+                   # nota.status_importacao = None
+
                     #print(f'dados_adicionais: {nota.dados_adicionais}')
                     nota.save()
                 total_processadas += 1
@@ -103,7 +138,7 @@ def atualizar_dados_adicionais():
         offset += TAMANHO_BLOCO
     
     logger.info(f'Atualização concluída. Total processado: {total_processadas}/{total_notas} notas')
-
+    return redirect(url_for('nota_fiscal.index'))
 @nota_fiscal_bp.route('/teste2')
 @login_required
 def teste2():
@@ -308,6 +343,10 @@ def nota_fiscal_busca(filtros):
 def api_get_dados_notas_fiscais(request):
     # Obter parâmetros de filtro
     json_filtros =request
+    if hasattr(request, 'args'):
+        json_filtros = request.args
+    else:
+        json_filtros = request.get_json()
     print(f'json_filtros: {json_filtros}')
     busca = json_filtros.get('busca', '')
     item_nome = json_filtros.get('item_nome', '')
@@ -1669,40 +1708,21 @@ def api_vincular_material(item_id):
             except (ValueError, TypeError):
                 item.fator_conversao_aplicado = None
         else:
-            # Obter nome da unidade do material
-            material_unidade_nome = None
-            if hasattr(material, 'unidade_obj') and material.unidade_obj:
-                material_unidade_nome = material.unidade_obj.nome
-            elif hasattr(material, 'get_unidade_nome'):
-                material_unidade_nome = material.get_unidade_nome()
-            
-            # Comparar unidades se ambas existirem
-            if item.unidade and material_unidade_nome:
-                if comparar_unidades(item.unidade, material_unidade_nome):
-                    item.fator_conversao_aplicado = 1
-                else:
-                    item.fator_conversao_aplicado = None
+            fator_conversao = get_conversao_unidade(item.unidade, material.unidade_obj.nome)
+            if not fator_conversao:
+                return jsonify({
+                'success': False,
+                'message': f'Fator de conversão não encontrado para as unidades: {item.unidade} e {material.unidade_obj.nome}'
+                })
             else:
-                item.fator_conversao_aplicado = None
+                item.fator_conversao_aplicado = fator_conversao
         
         print(f'fator_conversao_aplicado: {item.fator_conversao_aplicado}')
-        # Atualizar o item da nota fiscal
-        item.material_id = material_id
-        item.save()
-        material.ncm = item.ncm
-        material.save()
-        cnpj_emitente = item.nota_fiscal.cnpj_emitente
-        
-        notas_fiscais = NotaFiscal.query.\
-            filter(NotaFiscal.cnpj_emitente==cnpj_emitente).all()
-        print(f'notas_fiscais: {len(notas_fiscais)}')
-        for nota_fiscal in notas_fiscais:
-            nota_fiscal.vincular_automaticamente()
-            nota_fiscal.importar_itens_para_estoque()
-            
+        item.vincular(item.fator_conversao_aplicado, material_id)
         return jsonify({
             'success': True,
-            'message': f'Material {material.nome} vinculado com sucesso ao item'
+            'message': f'Material {material.nome} vinculado com sucesso ao item',
+            'fator_conversao': item.fator_conversao_aplicado 
         })
     
     except Exception as e:
@@ -1793,6 +1813,7 @@ def api_vincular_material_outras_notas():
     """
     try:
         data = request.get_json()
+        print(f'data: {data}')
         nf_id = data.get('nf_id')
         item_id = data.get('item_id')
         material_id = data.get('material_id')
@@ -1854,25 +1875,11 @@ def api_vincular_material_outras_notas():
         # Vincular material a todos os itens similares
         itens_vinculados = 0
         for item in itens_similares:
-            # Aplicar fator de conversão
-            if fator_conversao:
-                try:
-                    item.fator_conversao_aplicado = float(fator_conversao)
-                except (ValueError, TypeError):
-                    # Se não conseguir converter, verificar se as unidades são iguais
-                    if comparar_unidades(item.unidade, material.unidade_obj.nome):
-                        item.fator_conversao_aplicado = 1
-                    else:
-                        item.fator_conversao_aplicado = None
-            elif comparar_unidades(item.unidade, material.unidade_obj.nome):
-                item.fator_conversao_aplicado = 1
-            else:
-                item.fator_conversao_aplicado = None
-            
-            # Vincular o material
-
-            item.material_id = material_id
-            item.save()
+            if not fator_conversao:
+                fator_conversao = get_conversao_unidade(item.unidade, material.unidade_obj.nome)
+            item.vincular(fator_conversao, material_id)
+            print(f'item: {item.id}')
+            print(f'item: fator_conversao: {fator_conversao}')
             itens_vinculados += 1
         
         # Atualizar NCM do material se necessário
@@ -2541,10 +2548,11 @@ def api_comparar_unidades():
         unidade_nota = request.json.get('unidadeNota')
         unidade_material = request.json.get('unidadeMaterial')
 
-        if comparar_unidades(unidade_nota, unidade_material):
-            return jsonify({'success': True})
+        fator_conversao = get_conversao_unidade(unidade_nota, unidade_material)
+        if fator_conversao:
+            return jsonify({'success': True, 'fator_conversao': fator_conversao})
         else:
-            return jsonify({'success': False})
+            return jsonify({'success': False, 'message': 'Fator de conversão não encontrado para as unidades: {unidade_nota} e {unidade_material}'})
     except Exception as e:
         logger.error(f'Erro ao comparar unidades: {str(e)}')
         return jsonify({'error': f'Erro ao comparar unidades: {str(e)}', 'success': False}), 500
@@ -2649,8 +2657,6 @@ def api_importar_item_estoque(item_id):
         if not item_ja_importado:
             sucesso, mensagem = item.importar_para_estoque(
                 usuario_id=current_user.id,
-                centro_custo_id=centro_custo_id if centro_custo_id else None,
-                observacao=observacao
             )
             
             if sucesso:
@@ -2670,8 +2676,6 @@ def api_importar_item_estoque(item_id):
             try:
                 sucesso_similar, mensagem_similar = item_similar.importar_para_estoque(
                     usuario_id=current_user.id,
-                    centro_custo_id=centro_custo_id if centro_custo_id else None,
-                    observacao=observacao or f"Importação automática da NF {item_similar.nota_fiscal.numero_nf if item_similar.nota_fiscal else 'N/A'}"
                 )
                 if sucesso_similar:
                     itens_importados += 1
@@ -4505,6 +4509,7 @@ def tabela_notas_fiscais():
     per_page = 50
     print("request.args:", request.args)
     pagamento = request.args.get('status_pagamento',None)
+   
     query = api_get_dados_notas_fiscais(request)
     print(f'query {time.time() - inicio}')
     #print(f'query: {query}')

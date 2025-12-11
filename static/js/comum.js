@@ -52,7 +52,7 @@ async function compararUnidades(unidadeNota, unidadeMaterial) {
             body: JSON.stringify({unidadeNota, unidadeMaterial})
         });
         const data = await response.json();
-        return data.success;
+        return data;
     } catch (error) {
         console.error('Erro ao comparar unidades:', error);
         return false;

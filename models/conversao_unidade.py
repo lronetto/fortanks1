@@ -8,7 +8,7 @@ UNIDADES_IGUAIS = [
     ['L','LITROS','Litro'],
     ['M²','M²','M²'],
     ['M³','M³','M³'],
-    ['TON','TON','Ton','TL'],
+    ['TON','TON','Ton','TL','TO','TN'],
     ['M','Metro','Mt','MTR'],
     ['G','G','G'],
     ['ML','ML','Ml'],
@@ -28,7 +28,25 @@ def comparar_unidades(unidade_entrada, unidade_saida):
             else:
                 return False
     return False
-
+def normalizar_unidade(unidade):
+    unidade_normalizada = unidade.upper()
+    for lista_unidades in UNIDADES_IGUAIS:
+        if unidade_normalizada in lista_unidades:
+            return lista_unidades[0]  # Retorna a primeira unidade da lista
+    return unidade_normalizada
+def get_conversao_unidade(unidade_entrada, unidade_saida):
+    unidade_entrada = normalizar_unidade(unidade_entrada)
+    unidade_saida = normalizar_unidade(unidade_saida)
+    if unidade_entrada == unidade_saida:
+        return 1.0
+    conversao = ConversaoUnidade.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida).first()
+    if conversao:
+        return conversao.fator
+    else:
+        conversao = ConversaoUnidade.query.filter_by(unidade_entrada=unidade_saida, unidade_saida=unidade_entrada).first()
+        if conversao:
+            return 1.0 / conversao.fator
+                        
 class ConversaoUnidade(db.Model):
     """Modelo para armazenar as conversões de unidades."""
     __tablename__ = 'conversoes_unidades'

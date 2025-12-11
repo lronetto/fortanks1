@@ -1,5 +1,8 @@
 from datetime import datetime
+import json
+import traceback
 from models.database import db
+from models.logs import Logs
 from models.material import Material
 from models.epi import EPI
 from models.nota_fiscal import NotaFiscalItem
@@ -153,6 +156,18 @@ class MovimentacaoEstoque(db.Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         #print(f"kwargs: {kwargs}")
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'estoque_id': self.estoque_id,
+            'tipo_movimento': self.tipo_movimento,
+            'quantidade': self.quantidade,
+            'data_movimento': self.data_movimento,
+            'origem_id': self.origem_id,
+            'origem_tipo': self.origem_tipo,
+            'observacao': self.observacao,
+            'usuario_id': self.usuario_id,
+        }
     @classmethod
     def get_historico_saldo_para_grafico(cls, estoque_id, data_inicio=None, data_fim=None):
         """
@@ -432,25 +447,39 @@ class MovimentacaoEstoque(db.Model):
         """
         Remove a movimentação e reverte a alteração no estoque
         """
-        # Reverter a movimentação no estoque
-        if self.estoque:
-            if self.tipo_movimento == 'entrada':
-                self.estoque.quantidade -= self.quantidade
-            elif self.tipo_movimento == 'saida':
-                self.estoque.quantidade += self.quantidade
-            elif self.tipo_movimento == 'ajuste':
-                # No caso de ajuste, não fazer nada pois não temos a quantidade anterior
-                pass
-            
-            # Garante que a quantidade nunca será negativa
-            if self.estoque.quantidade < 0:
-                self.estoque.quantidade = 0
+        try:
+            # Reverter a movimentação no estoque
+            if self.estoque:
+                if self.tipo_movimento == 'entrada':
+                    self.estoque.quantidade -= self.quantidade
+                elif self.tipo_movimento == 'saida':
+                    self.estoque.quantidade += self.quantidade
+                elif self.tipo_movimento == 'ajuste':
+                    # No caso de ajuste, não fazer nada pois não temos a quantidade anterior
+                    pass
                 
-            # Atualizar o estoque no banco de dados
-            db.session.add(self.estoque)
-        
-        db.session.delete(self)
-        db.session.commit()
+                # Garante que a quantidade nunca será negativa
+                if self.estoque.quantidade < 0:
+                    self.estoque.quantidade = 0
+                    
+                # Atualizar o estoque no banco de dados
+                db.session.add(self.estoque)
+
+                log = {
+                    'MovimentacaoEstoque deletada': self.id,
+                    'movimentacao': self.to_dict(),
+                }
+                Logs(local='estoque', data=datetime.now(), texto=json.dumps(log))
+        except Exception as e:
+            print(f"ERRO ao deletar movimentação de estoque: {str(e)}")
+            print(traceback.format_exc())
+            raise e
+            return False
+        finally:
+            db.session.delete(self)
+            db.session.commit()
+            print(f"Movimentação de estoque deletada com sucesso")
+            return True
     
     def __repr__(self):
         """

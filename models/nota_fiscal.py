@@ -384,13 +384,11 @@ class NotaFiscal(db.Model):
         infCTeNorm = infCte.find('.//cte:infCTeNorm', ns) or infCte.find('.//infCTeNorm', ns)
         chave_nf = ''
         if infCTeNorm is not None:
-            infCarga = infCTeNorm.find('.//cte:infCarga', ns) or infCTeNorm.find('.//infCarga', ns)
-            if infCarga is not None:
-                infDoc = infCarga.find('.//cte:infDoc', ns) or infCarga.find('.//infDoc', ns)
-                if infDoc is not None:
-                    infNFe = infDoc.find('.//cte:infNFe', ns) or infDoc.find('.//infNFe', ns)
-                    if infNFe is not None:
-                        chave_nf = infNFe.findtext('.//cte:chave', default='', namespaces=ns)
+            infDoc = infCTeNorm.find('.//cte:infDoc', ns) or infCTeNorm.find('.//infDoc', ns)
+            if infDoc is not None:
+                infNFe = infDoc.find('.//cte:infNFe', ns) or infDoc.find('.//infNFe', ns)
+                if infNFe is not None:
+                    chave_nf = infNFe.findtext('.//cte:chave', default='', namespaces=ns)
                     
         
         impostos = {}
@@ -492,7 +490,8 @@ class NotaFiscal(db.Model):
             'uf_destino': uf_destino,
             'placa': placa,
             'motorista': motorista,
-            'chave_nf': chave_nf
+            'chave_nf': chave_nf,
+            'impostos': impostos
         }
         dados_nf = {
             'chave_acesso': chave_acesso,
@@ -504,8 +503,6 @@ class NotaFiscal(db.Model):
             'valor_total': valor_total,
             'data_emissao': data_emissao,
             'dados_adicionais': dados_adicionais,
-            'impostos': impostos,
-            'tipo': 2
         }
         return chave_acesso, dados_nf     
     def extrair_dados_xml_nfe(self):
@@ -602,6 +599,14 @@ class NotaFiscal(db.Model):
                 
             valor_total = Decimal(valor_total_text)
             
+            dados_adicionais = {
+                'fatura': {
+                    'vencimento': None,
+                    'numero_fatura': None,
+                    'valor_total': None
+                },
+                'impostos': impostos
+            }
             # Dados básicos da nota
             nfe_data = {
                 'numero': numero,
@@ -613,8 +618,7 @@ class NotaFiscal(db.Model):
                 'nome_destinatario': nome_destinatario,
                 'valor_total': valor_total,
                 'itens': [],
-                'dados_adicionais': {},
-                'impostos': impostos
+                'dados_adicionais': dados_adicionais,
             }
             
             if cobr and dup:
@@ -645,6 +649,7 @@ class NotaFiscal(db.Model):
                     prod = item.find('.//nfe:prod', ns) or item.find('.//prod', ns)
 
                     infAdProd = item.find('.//nfe:infAdProd', ns) or item.find('.//infAdProd', ns)
+
                     
                     if not prod:
                         logger.warning(f"Produto não encontrado para o item {num_item}")
@@ -660,7 +665,57 @@ class NotaFiscal(db.Model):
                     ncm = get_xml_text(prod, './/nfe:NCM', ns) or get_xml_text(prod, './/NCM', ns) or ''
                     cfop = get_xml_text(prod, './/nfe:CFOP', ns) or get_xml_text(prod, './/CFOP', ns) or ''
                     unidade = get_xml_text(prod, './/nfe:uCom', ns) or get_xml_text(prod, './/uCom', ns) or 'UN'
+                    xPed = get_xml_text(prod, './/nfe:xPed', ns) or get_xml_text(prod, './/xPed', ns) or ''
+                    nItemPed = get_xml_text(prod, './/nfe:nItemPed', ns) or get_xml_text(prod, './/nItemPed', ns) or ''
+                    impostos = item.find('.//nfe:imposto', ns) or item.find('.//imposto', ns)
+                    ICMS = impostos.find('.//nfe:ICMS', ns) or impostos.find('.//ICMS', ns)
+                    if ICMS:   
+                        ICMS60 = ICMS.find('.//nfe:ICMS60', ns) or ICMS.find('.//ICMS60', ns)
+                    else:
+                        ICMS60 = None
+                    IPI = impostos.find('.//nfe:IPI', ns) or impostos.find('.//IPI', ns)
+                    if IPI: 
+                        IPITrib = IPI.find('.//nfe:IPITrib', ns) or IPI.find('.//IPITrib', ns)
+                    else:
+                        IPITrib = None
+                    PIS = impostos.find('.//nfe:PIS', ns) or impostos.find('.//PIS', ns)
+                    if PIS:
+                        PISAliq = PIS.find('.//nfe:PISAliq', ns) or PIS.find('.//PISAliq', ns)
+                    else:
+                        PISAliq = None
+                    COFINS = impostos.find('.//nfe:COFINS', ns) or impostos.find('.//COFINS', ns)
+                    if COFINS:
+                        COFINSAliq = COFINS.find('.//nfe:COFINSAliq', ns) or COFINS.find('.//COFINSAliq', ns)
+                    else:
+                        COFINSAliq = None
                     
+                    impostos = {
+                        'ICMS': {
+                            'CST': ICMS60.findtext('.//nfe:CST', default='0', namespaces=ns) or ICMS60.findtext('.//CST', default='0', namespaces=ns) if ICMS60 else None,
+                            'vBCSTRet': ICMS60.findtext('.//nfe:vBCSTRet', default='0', namespaces=ns) or ICMS60.findtext('.//vBCSTRet', default='0', namespaces=ns) if ICMS60 else None,
+                            'pST': ICMS60.findtext('.//nfe:pST', default='0', namespaces=ns) or ICMS60.findtext('.//pST', default='0', namespaces=ns) if ICMS60 else None,
+                            'vICMSSTRet': ICMS60.findtext('.//nfe:vICMSSTRet', default='0', namespaces=ns) or ICMS60.findtext('.//vICMSSTRet', default='0', namespaces=ns) if ICMS60 else None,
+                            'vICMSSubstituto': ICMS60.findtext('.//nfe:vICMSSubstituto', default='0', namespaces=ns) or ICMS60.findtext('.//vICMSSubstituto', default='0', namespaces=ns) if ICMS60 else None,
+                        },
+                        'IPI': {
+                            'CST': IPITrib.findtext('.//nfe:CST', default='0', namespaces=ns) or IPITrib.findtext('.//CST', default='0', namespaces=ns) if IPITrib else None,
+                            'vBC': IPITrib.findtext('.//nfe:vBC', default='0', namespaces=ns) or IPITrib.findtext('.//vBC', default='0', namespaces=ns) if IPITrib else None,
+                            'pIPI': IPITrib.findtext('.//nfe:pIPI', default='0', namespaces=ns) or IPITrib.findtext('.//pIPI', default='0', namespaces=ns) if IPITrib else None,
+                            'vIPI': IPITrib.findtext('.//nfe:vIPI', default='0', namespaces=ns) or IPITrib.findtext('.//vIPI', default='0', namespaces=ns) if IPITrib else None,
+                        },
+                        'PIS': {
+                            'CST': PISAliq.findtext('.//nfe:CST', default='0', namespaces=ns) or PISAliq.findtext('.//CST', default='0', namespaces=ns) if PISAliq else None,
+                            'vBC': PISAliq.findtext('.//nfe:vBC', default='0', namespaces=ns) or PISAliq.findtext('.//vBC', default='0', namespaces=ns) if PISAliq else None,
+                            'pPIS': PISAliq.findtext('.//nfe:pPIS', default='0', namespaces=ns) or PISAliq.findtext('.//pPIS', default='0', namespaces=ns) if PISAliq else None,
+                            'vPIS': PISAliq.findtext('.//nfe:vPIS', default='0', namespaces=ns) or PISAliq.findtext('.//vPIS', default='0', namespaces=ns) if PISAliq else None,
+                        },
+                        'COFINS': {
+                            'CST': COFINSAliq.findtext('.//nfe:CST', default='0', namespaces=ns) or COFINSAliq.findtext('.//CST', default='0', namespaces=ns) if COFINSAliq else None,
+                            'vBC': COFINSAliq.findtext('.//nfe:vBC', default='0', namespaces=ns) or COFINSAliq.findtext('.//vBC', default='0', namespaces=ns) if COFINSAliq else None,
+                            'pCOFINS': COFINSAliq.findtext('.//nfe:pCOFINS', default='0', namespaces=ns) or COFINSAliq.findtext('.//pCOFINS', default='0', namespaces=ns) if COFINSAliq else None,
+                            'vCOFINS': COFINSAliq.findtext('.//nfe:vCOFINS', default='0', namespaces=ns) or COFINSAliq.findtext('.//vCOFINS', default='0', namespaces=ns) if COFINSAliq else None,
+                        },
+                    }
                     item_data = {
                         'codigo': codigo,
                         'descricao': descricao,
@@ -671,7 +726,10 @@ class NotaFiscal(db.Model):
                         'cfop': cfop,
                         'unidade': unidade,
                         'dados_adicionais':{
-                            'infAdProd': infAdProd
+                            'xPed': xPed,
+                            'nItemPed': nItemPed,
+                            'infAdProd': infAdProd,
+                            'impostos': impostos
                             }
                         }
                     
@@ -929,7 +987,7 @@ class NotaFiscalItem(db.Model):
                 estoque = Estoque(
                     material_id=self.material_id,
                     tipo_item='material',
-                    quantidade=0,
+                    quantidade=float(self.quantidade),
                     localizacao=local,
                     centro_custo_id=centro_custo_id,
                     usuario_id=usuario_id
@@ -941,11 +999,11 @@ class NotaFiscalItem(db.Model):
             # Criar movimentação de entrada no estoque
             if not observacao:
                 observacao = f"Importação da NF {self.nota_fiscal.numero_nf} de {self.nota_fiscal.nome_emitente}"
-                
+            quantidade = 0
             # Adicionar informação sobre conversão de unidade, se aplicável
-            if self.fator_conversao_aplicado:
-                self.quantidade = self.quantidade*self.fator_conversao_aplicado
-                observacao += f" (Conversão: {self.quantidade} {self.unidade} → {self.quantidade} {estoque.material.unidade_obj.nome})"
+            if self.fator_conversao_aplicado != 1:
+                quantidade = self.quantidade*self.fator_conversao_aplicado
+                observacao += f" (Conversão: {float(self.quantidade):.2f} {self.unidade} → {float(quantidade):.2f} {estoque.material.unidade_obj.nome})"
             
             # Registrar a quantidade atual antes da atualização para log
             quantidade_anterior = float(estoque.quantidade) if estoque.quantidade else 0
@@ -954,7 +1012,7 @@ class NotaFiscalItem(db.Model):
             movimentacao = MovimentacaoEstoque(
                 estoque_id=estoque.id,
                 tipo_movimento=tipo_movimento,
-                quantidade=self.quantidade,
+                quantidade=self.quantidade*self.fator_conversao_aplicado,
                 data_movimento=self.nota_fiscal.data_emissao,
                 nota_fiscal_item_id=self.id,
                 origem_tipo='NotaFiscal',
@@ -965,6 +1023,7 @@ class NotaFiscalItem(db.Model):
             
             # Salvar movimentação (isso vai atualizar o estoque automaticamente)
             movimentacao.save()
+            db.session.flush()
             
             
             # Garantir que o estoque seja atualizado corretamente

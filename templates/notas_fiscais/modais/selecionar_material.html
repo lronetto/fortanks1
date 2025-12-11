@@ -79,29 +79,68 @@
             itemId = String(itemId).trim();
             
             // Obter a unidade do item
+            let itemUnidade = '';
             const unidadeElemento = document.getElementById(`unidade_${itemId}`);
-            const itemUnidade = unidadeElemento ? unidadeElemento.textContent : '';
+            if (unidadeElemento) {
+                // Tenta pegar textContent primeiro, depois innerText, depois innerHTML
+                itemUnidade = unidadeElemento.textContent || unidadeElemento.innerText || unidadeElemento.innerHTML || '';
+                itemUnidade = itemUnidade.trim();
+            } else {
+                // Fallback: buscar pela linha da tabela (coluna 3, índice 3)
+                const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
+                if (linhaItem && linhaItem.cells && linhaItem.cells.length > 3) {
+                    itemUnidade = linhaItem.cells[3].textContent || linhaItem.cells[3].innerText || '';
+                    itemUnidade = itemUnidade.trim();
+                }
+            }
             
             // Fechar modal de seleção primeiro
             const modalSelecionar = bootstrap.Modal.getInstance(document.getElementById('modalSelecionarMaterial'));
             if (modalSelecionar) modalSelecionar.hide();
             
             // Esperar o resultado da comparação antes de continuar
-            const iguais = await compararUnidades(itemUnidade, materialUnidade);
+            iguais = false;
+            fatorConversao = 0;
+            const resultado = await compararUnidades(itemUnidade, materialUnidade);
+            if (resultado.success) {
+                fatorConversao = resultado.fator_conversao;
+                iguais = true;
+            }
             console.log('materialUnidade', materialUnidade);
             console.log('itemUnidade', itemUnidade);
             console.log('compararUnidades (iguais?)', iguais);
             console.log('itemId', itemId);
             console.log('materialId', materialId);
-
+            console.log('fatorConversao', fatorConversao);
             
             // Verificar se precisa de conversão de unidades
-            if (materialUnidade && itemUnidade && !iguais) {
+            if (!fatorConversao) {
                 abrirModalConversao(itemId, materialId, itemUnidade, materialUnidade);
             }
             else {
-                // Unidades são iguais, vincular diretamente com fator = 1
-                vincularMaterialNoBackend(itemId, materialId, 1, materialNome);
+                 // Atualizar fator de conversão na tabela
+                 const linhaItem = document.querySelector(`#tabelaItensImportacao tr[id="item_${itemId}"]`);
+                if (linhaItem) {
+                    const campoFatorConversao = document.getElementById(`fator_conversao_${itemId}`);
+                    if (campoFatorConversao) {
+                        campoFatorConversao.value = fatorConversao;
+                    }
+                    // A coluna "Fator de Conversão" é a 7ª coluna (índice 6)
+                    const celulaFatorConversao = linhaItem.cells[6];
+                    if (celulaFatorConversao) {
+                        const fatorNum = parseFloat(fatorConversao);
+                        if (!isNaN(fatorNum) && fatorNum > 0) {
+                            const fatorFormatado = fatorNum.toLocaleString('pt-BR', {
+                                minimumFractionDigits: 4,
+                                maximumFractionDigits: 4
+                            });
+                            celulaFatorConversao.textContent = fatorFormatado;
+                        }
+                    }
+                }
+
+                vincularMaterialNoBackend(itemId, materialId, fatorConversao, materialNome);
+               
             }
         }
     });
