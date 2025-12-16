@@ -10,10 +10,10 @@
             <a href="{{ url_for('estoque.movimentacoes') }}" class="btn btn-info btn-sm">
                 <i class="fas fa-exchange-alt"></i> Movimentações
             </a>
-            <a href="{{ url_for('estoque.gerenciar_inventario') }}" class="btn btn-warning btn-sm">
+            <a href="{{ url_for('inventario.gerenciar_inventario') }}" class="btn btn-warning btn-sm">
                 <i class="fas fa-clipboard-list"></i> Gerenciar Inventário
             </a>
-            <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-outline-warning btn-sm">
+            <a href="{{ url_for('inventario.inventarios') }}" class="btn btn-outline-warning btn-sm">
                 <i class="fas fa-history"></i> Histórico
             </a>
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoItem">
@@ -51,11 +51,19 @@
                         {{ form_filtro.localizacao.label }}
                         {{ form_filtro.localizacao(class="form-control") }}
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         {{ form_filtro.termo_busca.label }}
                         {{ form_filtro.termo_busca(class="form-control", placeholder="Buscar por nome, código...") }}
                     </div>
-                    <div class="col-md-2 mb-3 d-flex align-items-end">
+                    <div class="col-md-2 mb-3 d-flex align-items-center">
+                        <div class="form-check mt-4">
+                            {{ form_filtro.ignorar_localizacoes(class="form-check-input") }}
+                            <label class="form-check-label" for="{{ form_filtro.ignorar_localizacoes.id }}">
+                                Agrupar por Item (Ignorar Localizações)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-1 mb-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-search"></i> Filtrar
                         </button>
@@ -101,9 +109,29 @@
                             </td>
                             <td>
                                 {% if item.tipo_item == "material" %}
-                                    {{ item.material.nome }}
+                                    <a href="#" class="link-historico-estoque" 
+                                       data-estoque-id="{{ item.id }}"
+                                       data-material-id="{% if item.material %}{{ item.material.id }}{% else %}0{% endif %}"
+                                       data-codigo="{% if item.material %}{{ item.material.id or 'N/A' }}{% else %}N/A{% endif %}"
+                                       data-nome="{{ item.material.nome }}"
+                                       data-quantidade-atual="{{ item.quantidade }}"
+                                       data-agrupar-material="{% if form_filtro.ignorar_localizacoes.data %}true{% else %}false{% endif %}"
+                                       data-bs-toggle="modal" 
+                                       data-bs-target="#modalHistoricoEstoque"
+                                       title="Clique para ver o histórico">
+                                        {{ item.material.nome }}
+                                    </a>
                                 {% elif item.tipo_item == "produto_composto" %}
-                                    {{ item.produto_composto.nome }}                             
+                                    <a href="#" class="link-historico-estoque" 
+                                       data-estoque-id="{{ item.id }}"
+                                       data-codigo="{% if item.produto_composto %}{{ item.produto_composto.id or 'N/A' }}{% else %}N/A{% endif %}"
+                                       data-nome="{{ item.produto_composto.nome }}"
+                                       data-quantidade-atual="{{ item.quantidade }}"
+                                       data-bs-toggle="modal" 
+                                       data-bs-target="#modalHistoricoEstoque"
+                                       title="Clique para ver o histórico">
+                                        {{ item.produto_composto.nome }}
+                                    </a>
                                 {% else %}
                                     Item sem descrição
                                 {% endif %}
@@ -191,7 +219,7 @@
                             {% if page %}
                                 {% if page != items.page %}
                                     <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('estoque.index', page=page, tipo_item=form_filtro.tipo_item.data, status_estoque=form_filtro.status_estoque.data, localizacao=form_filtro.localizacao.data, termo_busca=form_filtro.termo_busca.data) }}">{{ page }}</a>
+                                        <a class="page-link" href="{{ url_for('estoque.index', page=page, tipo_item=form_filtro.tipo_item.data or '', status_estoque=form_filtro.status_estoque.data or '', localizacao=form_filtro.localizacao.data or '', termo_busca=form_filtro.termo_busca.data or '', ignorar_localizacoes='on' if form_filtro.ignorar_localizacoes.data else '') }}">{{ page }}</a>
                                     </li>
                                 {% else %}
                                     <li class="page-item active">
@@ -216,6 +244,7 @@
 {% include 'estoque/modais/editar_item.html' %}
 {% include 'estoque/modais/visualizar_item.html' %}
 {% include 'estoque/modais/confirmar_exclusao.html' %}
+{% include 'estoque/modais/historico_estoque.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -224,6 +253,25 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+.link-historico-estoque {
+    text-decoration: none;
+    color: #4e73df;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.link-historico-estoque:hover {
+    color: #224abe;
+    text-decoration: underline;
+}
+
+.link-historico-estoque:active {
+    color: #1e3a8a;
+}
+</style>
 
 <script>
 $(document).ready(function() {

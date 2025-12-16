@@ -12,7 +12,7 @@ import datetime
 load_dotenv()
 
 # Adicionar o diretório pai ao PYTHONPATH
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from flask import Flask
 from config.config import Config
@@ -36,7 +36,7 @@ def main():
     
     # Caminho do arquivo
     base_dir = os.path.dirname(__file__)
-    xlsx_path = os.path.join(base_dir, 'inspecao.xlsx')
+    xlsx_path = os.path.join(base_dir, 'INSPEÇÃO DE PISTA -  NEREDA - PRIMARIO.xlsx')
     
     if not os.path.exists(xlsx_path):
         print(f"Arquivo não encontrado: {xlsx_path}")

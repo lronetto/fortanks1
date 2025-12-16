@@ -25,9 +25,15 @@
                         <strong>Progresso:</strong> <span id="cancelamento-progresso">-</span>
                     </div>
                     
+                    <!-- Aviso especial para inventários concluídos -->
+                    <div class="alert alert-danger" id="aviso-concluido" style="display: none;">
+                        <i class="fas fa-undo"></i> 
+                        <strong>INVENTÁRIO CONCLUÍDO:</strong> Ao cancelar este inventário, todas as movimentações de estoque criadas durante a finalização serão desfeitas e os estoques serão revertidos para os valores anteriores ao inventário.
+                    </div>
+                    
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i> 
-                        Ao cancelar, o inventário será marcado como cancelado e não poderá ser retomado.
+                        <span id="mensagem-info">Ao cancelar, o inventário será marcado como cancelado e não poderá ser retomado.</span>
                     </div>
                 </div>
             </div>
@@ -60,6 +66,18 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('cancelamento-tipo').textContent = inventarioData.tipo || '-';
             document.getElementById('cancelamento-status').textContent = inventarioData.status || '-';
             document.getElementById('cancelamento-progresso').textContent = inventarioData.progresso || '-';
+            
+            // Mostrar aviso especial se o inventário estiver concluído
+            const avisoConcluido = document.getElementById('aviso-concluido');
+            const mensagemInfo = document.getElementById('mensagem-info');
+            
+            if (inventarioData.status === 'Concluído') {
+                avisoConcluido.style.display = 'block';
+                mensagemInfo.textContent = 'Ao cancelar, o inventário será marcado como cancelado, todas as movimentações de estoque serão desfeitas e os estoques serão revertidos para os valores anteriores ao inventário.';
+            } else {
+                avisoConcluido.style.display = 'none';
+                mensagemInfo.textContent = 'Ao cancelar, o inventário será marcado como cancelado e não poderá ser retomado.';
+            }
         }
         
         // Mostrar o modal

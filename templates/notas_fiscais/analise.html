@@ -359,7 +359,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                 <p><strong>Item:</strong> <span id="historicoItemNome"></span></p>
+                 <div class="mb-3">
+                     <p class="mb-1"><strong>Item:</strong> <span id="historicoItemNome"></span></p>
+                     <p class="mb-0"><strong>Preço Médio de Compra:</strong> <span id="precoMedioCompra" class="text-primary font-weight-bold">R$ 0,00</span></p>
+                 </div>
                  <div id="graficoHistoricoContainer" style="height: 300px; margin-bottom: 1rem;"></div>
                  <div style="max-height: 300px; overflow-y: auto;">
                      <div class="table-responsive mt-3">
@@ -454,6 +457,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Limpar tabela e gráfico anteriores
         $('#historicoPrecosBody').html('<tr><td colspan="6" class="text-center">Carregando histórico...</td></tr>');
+        $('#precoMedioCompra').text('R$ 0,00');
         if (historicoChart) {
             historicoChart.destroy(); 
             historicoChart = null;
@@ -489,6 +493,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 var htmlTabela = '';
                 var chartLabels = [];
                 var chartData = [];
+                var valorTotalPonderado = 0;
+                var quantidadeTotal = 0;
 
                 if (historico.length > 0) {
                     historico.forEach(function(reg) {
@@ -503,12 +509,19 @@ document.addEventListener('DOMContentLoaded', function() {
                             } catch(e) { console.error("Erro ao formatar data:", reg.data_emissao, e); }
                         }
                         
+                        var quantidade = parseFloat(reg.quantidade) || 0;
+                        var valorUnitario = parseFloat(reg.valor_unitario) || 0;
+                        
+                        // Acumular para cálculo do preço médio ponderado
+                        valorTotalPonderado += quantidade * valorUnitario;
+                        quantidadeTotal += quantidade;
+                        
                         htmlTabela += `<tr>
                             <td>${dataFormatada}</td>
                             <td>${reg.nome_emitente || 'N/D'}</td>
                             <td>${reg.numero_nf || 'N/D'}</td>
-                            <td>${parseFloat(reg.quantidade).toFixed(2)}</td>
-                            <td>R$ ${parseFloat(reg.valor_unitario).toFixed(2)}</td>
+                            <td>${quantidade.toFixed(2)}</td>
+                            <td>R$ ${valorUnitario.toFixed(2)}</td>
                             <td>
                                 ${reg.nota_id ? `
                                 <button class="btn btn-sm btn-info visualizar-docs-historico" 
@@ -522,10 +535,15 @@ document.addEventListener('DOMContentLoaded', function() {
                         </tr>`;
 
                         chartLabels.push(dataFormatada);
-                        chartData.push(parseFloat(reg.valor_unitario));
+                        chartData.push(valorUnitario);
                     });
+                    
+                    // Calcular e exibir preço médio ponderado
+                    var precoMedio = quantidadeTotal > 0 ? valorTotalPonderado / quantidadeTotal : 0;
+                    $('#precoMedioCompra').text('R$ ' + precoMedio.toFixed(4));
                 } else {
                     htmlTabela = '<tr><td colspan="6" class="text-center">Nenhum histórico de preço encontrado para este item/material nos filtros aplicados.</td></tr>';
+                    $('#precoMedioCompra').text('R$ 0,00');
                 }
 
                 $('#historicoPrecosBody').html(htmlTabela);

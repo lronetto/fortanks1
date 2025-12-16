@@ -7,7 +7,7 @@
                 <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                <form method="POST" id="form-novo-inventario" action="{{ url_for('estoque.novo_inventario') }}">
+                <form method="POST" id="form-novo-inventario" action="{{ url_for('inventario.novo_inventario') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     
                     <div class="row mb-3">
@@ -219,7 +219,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         $.ajax({
-            url: "{{ url_for('estoque.api_buscar_itens') }}",
+            url: "{{ url_for('inventario.api_buscar_itens') }}",
             data: { termo: termo },
             method: 'GET',
             success: function(response) {
@@ -339,7 +339,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Enviar formulário via AJAX
         $.ajax({
-            url: "{{ url_for('estoque.novo_inventario') }}",
+            url: "{{ url_for('inventario.novo_inventario') }}",
             type: "POST",
             data: $('#form-novo-inventario').serialize(),
             dataType: "json",

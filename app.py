@@ -22,6 +22,7 @@ from controllers.cargo_controller import cargo_bp
 from controllers.departamento_controller import departamento_bp
 from controllers.nota_fiscal_controller import nota_fiscal_bp
 from controllers.estoque_controller import estoque_bp
+from controllers.inventario_controller import inventario_bp
 from controllers.unidade_controller import unidade_bp
 from controllers.produto_composto_controller import produto_composto_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
@@ -191,6 +192,7 @@ app.register_blueprint(cargo_bp, url_prefix='/cargos')
 app.register_blueprint(departamento_bp, url_prefix='/departamentos')
 app.register_blueprint(nota_fiscal_bp, url_prefix='/notas-fiscais')
 app.register_blueprint(estoque_bp, url_prefix='/estoque')
+app.register_blueprint(inventario_bp)
 app.register_blueprint(grupo_material_bp, url_prefix='/grupos-materiais')
 app.register_blueprint(unidade_bp)
 app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')

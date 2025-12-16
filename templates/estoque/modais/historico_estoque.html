@@ -1,0 +1,312 @@
+<!-- Modal de Histórico de Estoque -->
+<div class="modal fade" id="modalHistoricoEstoque" tabindex="-1" aria-labelledby="modalHistoricoEstoqueLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalHistoricoEstoqueLabel">
+                    <i class="fas fa-chart-line"></i> Histórico de Estoque
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Informações do Item -->
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <strong>Código:</strong> <span id="historico_codigo">-</span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Nome:</strong> <span id="historico_nome">-</span>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>Quantidade Atual:</strong> <span id="historico_quantidade_atual">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros de Data -->
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="historico_data_inicio" class="form-label">Data Início</label>
+                        <input type="date" class="form-control" id="historico_data_inicio">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="historico_data_fim" class="form-label">Data Fim</label>
+                        <input type="date" class="form-control" id="historico_data_fim">
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="form-check form-switch w-100">
+                            <input class="form-check-input" type="checkbox" id="agruparPorSemana" checked>
+                            <label class="form-check-label" for="agruparPorSemana">
+                                Agrupar por Semana
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary w-100 me-2" id="btnAplicarFiltroHistorico">
+                            <i class="fas fa-filter"></i> Aplicar Filtro
+                        </button>
+                        <button type="button" class="btn btn-secondary w-100" id="btnLimparFiltroHistorico">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Gráfico -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <canvas id="graficoHistoricoEstoque" style="max-height: 400px;"></canvas>
+                                <div id="historicoMensagem" class="text-center text-muted mt-3" style="display: none;">
+                                    Carregando dados...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    let historicoChart = null;
+    let estoqueIdAtual = null;
+
+    // Função para carregar e renderizar o gráfico
+    function carregarGraficoHistorico(estoqueId, dataInicio = null, dataFim = null, agruparPorMaterial = false) {
+        estoqueIdAtual = estoqueId;
+        
+        // Mostrar mensagem de carregamento
+        $('#historicoMensagem').text('Carregando dados...').show();
+        
+        // Verificar se deve agrupar por semana
+        const agruparSemana = $('#agruparPorSemana').is(':checked');
+        
+        // Construir URL da API
+        let apiUrl = `/estoque/api/estoque/${estoqueId}/historico-saldo`;
+        const params = new URLSearchParams();
+        if (dataInicio) {
+            params.append('data_inicio', dataInicio);
+        }
+        if (dataFim) {
+            params.append('data_fim', dataFim);
+        }
+        if (agruparSemana) {
+            params.append('agrupar_semana', 'true');
+        }
+        if (agruparPorMaterial) {
+            params.append('agrupar_por_material', 'true');
+        }
+        if (params.toString()) {
+            apiUrl += `?${params.toString()}`;
+        }
+
+        // Fazer requisição AJAX
+        $.ajax({
+            url: apiUrl,
+            method: 'GET',
+            success: function(response) {
+                $('#historicoMensagem').hide();
+                
+                if (response.error) {
+                    $('#historicoMensagem').text('Erro ao carregar dados: ' + response.error).show();
+                    return;
+                }
+
+                // Atualizar quantidade atual se fornecida pela API
+                if (response.quantidade_atual !== undefined) {
+                    $('#historico_quantidade_atual').text(parseFloat(response.quantidade_atual).toFixed(2));
+                }
+
+                if (!response.datas || !response.saldos || response.datas.length === 0) {
+                    $('#historicoMensagem').text('Nenhuma movimentação encontrada para o período selecionado.').show();
+                    return;
+                }
+
+                // Destruir gráfico anterior se existir
+                if (historicoChart) {
+                    historicoChart.destroy();
+                }
+
+                // Preparar dados para o gráfico
+                const ctx = document.getElementById('graficoHistoricoEstoque').getContext('2d');
+                
+                // Formatar labels para exibição
+                let labelsFormatadas;
+                if (response.agrupar_semana && response.semanas && response.semanas.length > 0) {
+                    // Se agrupado por semana, usar os labels de semana
+                    labelsFormatadas = response.semanas;
+                } else {
+                    // Formatar datas normalmente
+                    labelsFormatadas = response.datas.map(function(data) {
+                        const date = new Date(data);
+                        return date.toLocaleDateString('pt-BR', { 
+                            day: '2-digit', 
+                            month: '2-digit', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    });
+                }
+
+                // Criar gráfico (Chart.js 2.9.4)
+                historicoChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labelsFormatadas,
+                        datasets: [{
+                            label: 'Quantidade em Estoque',
+                            data: response.saldos,
+                            borderColor: 'rgba(78, 115, 223, 1)',
+                            backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            lineTension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: 'rgba(78, 115, 223, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltips: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: function(tooltipItem, data) {
+                                    return 'Quantidade: ' + parseFloat(tooltipItem.yLabel).toFixed(2);
+                                }
+                            }
+                        },
+                        scales: {
+                            yAxes: [{
+                                beginAtZero: true,
+                                scaleLabel: {
+                                    display: true,
+                                    labelString: 'Quantidade'
+                                },
+                                ticks: {
+                                    callback: function(value) {
+                                        return parseFloat(value).toFixed(2);
+                                    }
+                                }
+                            }],
+                            xAxes: [{
+                                scaleLabel: {
+                                    display: true,
+                                    labelString: 'Data'
+                                },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            }]
+                        },
+                        hover: {
+                            mode: 'nearest',
+                            intersect: false
+                        }
+                    }
+                });
+            },
+            error: function(xhr, status, error) {
+                $('#historicoMensagem').text('Erro ao carregar dados do histórico. Tente novamente.').show();
+                console.error('Erro ao carregar histórico:', error);
+            }
+        });
+    }
+
+    // Evento quando o modal é aberto
+    $('#modalHistoricoEstoque').on('show.bs.modal', function(event) {
+        const button = $(event.relatedTarget);
+        const estoqueId = button.data('estoque-id');
+        const materialId = button.data('material-id');
+        const agruparMaterial = button.data('agrupar-material') === true || button.data('agrupar-material') === 'true';
+        const codigo = button.data('codigo') || '-';
+        const nome = button.data('nome') || '-';
+        const quantidadeAtual = button.data('quantidade-atual') || '0';
+
+        // Preencher informações do item
+        $('#historico_codigo').text(codigo);
+        $('#historico_nome').text(nome);
+        $('#historico_quantidade_atual').text(parseFloat(quantidadeAtual).toFixed(2));
+
+        // Limpar filtros
+        $('#historico_data_inicio').val('');
+        $('#historico_data_fim').val('');
+
+        // Armazenar flag de agrupamento no modal para uso posterior
+        $('#modalHistoricoEstoque').data('agrupar-material', agruparMaterial);
+        
+        // Carregar gráfico (passar informação se deve agrupar por material)
+        carregarGraficoHistorico(estoqueId, null, null, agruparMaterial);
+    });
+
+    // Evento quando o modal é fechado
+    $('#modalHistoricoEstoque').on('hidden.bs.modal', function() {
+        // Destruir gráfico ao fechar o modal
+        if (historicoChart) {
+            historicoChart.destroy();
+            historicoChart = null;
+        }
+        estoqueIdAtual = null;
+    });
+
+    // Botão aplicar filtro
+    $('#btnAplicarFiltroHistorico').on('click', function() {
+        if (!estoqueIdAtual) return;
+        
+        const dataInicio = $('#historico_data_inicio').val();
+        const dataFim = $('#historico_data_fim').val();
+        const agruparPorMaterial = $('#modalHistoricoEstoque').data('agrupar-material') || false;
+        
+        if (!dataInicio && !dataFim) {
+            alert('Por favor, selecione pelo menos uma data para filtrar.');
+            return;
+        }
+        
+        carregarGraficoHistorico(estoqueIdAtual, dataInicio || null, dataFim || null, agruparPorMaterial);
+    });
+
+    // Botão limpar filtro
+    $('#btnLimparFiltroHistorico').on('click', function() {
+        $('#historico_data_inicio').val('');
+        $('#historico_data_fim').val('');
+        
+        if (estoqueIdAtual) {
+            carregarGraficoHistorico(estoqueIdAtual);
+        }
+    });
+    
+    // Atualizar gráfico quando o checkbox de agrupar por semana mudar
+    $('#agruparPorSemana').on('change', function() {
+        if (estoqueIdAtual) {
+            const dataInicio = $('#historico_data_inicio').val();
+            const dataFim = $('#historico_data_fim').val();
+            const agruparPorMaterial = $('#modalHistoricoEstoque').data('agrupar-material') || false;
+            carregarGraficoHistorico(estoqueIdAtual, dataInicio || null, dataFim || null, agruparPorMaterial);
+        }
+    });
+});
+</script>
+

@@ -1,12 +1,13 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort
 from flask_login import login_required, current_user
-from models.estoque import Estoque, MovimentacaoEstoque, InventarioEstoque, ItemInventario
+from models.estoque import Estoque, MovimentacaoEstoque
 from models.material import Material
 from models.epi import EPI
 from models.centro_custo import CentroCusto
 from models.database import db
-from forms.estoque_forms import EstoqueForm, MovimentacaoEstoqueForm, InventarioEstoqueForm, ItemInventarioForm, FiltroEstoqueForm
+from forms.estoque_forms import EstoqueForm, MovimentacaoEstoqueForm, FiltroEstoqueForm
 from datetime import datetime, date
+from models.unidade import Unidade
 from sqlalchemy import or_, func
 
 from decimal import Decimal
@@ -35,17 +36,33 @@ def index():
         form_filtro.tipo_item.data = request.args.get('tipo_item')
     if request.args.get('status_estoque'):
         form_filtro.status_estoque.data = request.args.get('status_estoque')
-    if request.args.get('localizacao'):
-        form_filtro.localizacao.data = request.args.get('localizacao')
-    if request.args.get('termo_busca'):
-        form_filtro.termo_busca.data = request.args.get('termo_busca')
     
-    # Obter lista de localizações únicas para o filtro
+    # Obter lista de localizações únicas para o filtro ANTES de aplicar o valor
     localizacoes = db.session.query(Estoque.localizacao).filter(
         Estoque.localizacao != None,
         Estoque.localizacao != ''
     ).distinct().order_by(Estoque.localizacao).all()
     form_filtro.localizacao.choices = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
+    
+    # Aplicar valor de localização após popular as choices
+    localizacao_param = request.args.get('localizacao', '').strip()
+    if localizacao_param:
+        form_filtro.localizacao.data = localizacao_param
+    
+    if request.args.get('termo_busca'):
+        form_filtro.termo_busca.data = request.args.get('termo_busca')
+    
+    # Verificar o checkbox de ignorar localizações
+    # Verificar tanto em args (GET) quanto em form (POST)
+    ignorar_localizacoes_param = request.args.get('ignorar_localizacoes') or request.form.get('ignorar_localizacoes', '')
+    form_filtro.ignorar_localizacoes.data = (ignorar_localizacoes_param == 'on' or 
+                                              ignorar_localizacoes_param == 'True' or 
+                                              ignorar_localizacoes_param == 'true' or
+                                              ignorar_localizacoes_param == '1' or
+                                              bool(ignorar_localizacoes_param))
+    
+    # Log para debug
+    logger.info(f"Filtro ignorar_localizacoes: args={request.args.get('ignorar_localizacoes')}, form={request.form.get('ignorar_localizacoes')}, param={ignorar_localizacoes_param}, data={form_filtro.ignorar_localizacoes.data}")
     
     # Consulta base
     query = Estoque.query
@@ -54,13 +71,22 @@ def index():
     if form_filtro.tipo_item.data and form_filtro.tipo_item.data != 'todos':
         query = query.filter(Estoque.tipo_item == form_filtro.tipo_item.data)
     
+    # Aplicar filtro de localização (não aplicar se estiver agrupando por item)
+    # Verificar tanto no form quanto diretamente nos parâmetros da requisição
+    localizacao_filtro = None
     if form_filtro.localizacao.data:
-        query = query.filter(Estoque.localizacao == form_filtro.localizacao.data)
+        localizacao_filtro = str(form_filtro.localizacao.data).strip()
+    elif request.args.get('localizacao'):
+        localizacao_filtro = request.args.get('localizacao', '').strip()
+    
+    # Aplicar filtro se houver valor e não estiver agrupando
+    if localizacao_filtro and localizacao_filtro != '' and localizacao_filtro != 'None' and not form_filtro.ignorar_localizacoes.data:
+        query = query.filter(Estoque.localizacao == localizacao_filtro)
     
     if form_filtro.termo_busca.data:
         termo = f"%{form_filtro.termo_busca.data}%"
-        query = query.join(Estoque.material, isouter=True).join(
-            ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id, isouter=True).filter(
+        query = query.outerjoin(Material, Estoque.material_id == Material.id).outerjoin(
+            ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id).filter(
             or_(
                 Material.nome.ilike(termo),
                 Material.codigo.ilike(termo),
@@ -79,8 +105,130 @@ def index():
         elif form_filtro.status_estoque.data == 'excesso':
             query = query.filter(Estoque.quantidade >= Estoque.quantidade_maxima)
     
-    # Obter resultados paginados
-    items = query.order_by(Estoque.id.desc()).paginate(page=page, per_page=20, error_out=False)
+    # Garantir joins com Material e ProdutoComposto para ordenação
+    # Verificar se os joins já foram feitos (quando há termo de busca)
+    if not form_filtro.termo_busca.data:
+        query = query.outerjoin(Material, Estoque.material_id == Material.id)\
+                     .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
+    
+    # Se o filtro de ignorar localizações estiver ativo, agrupar por material/produto
+    # Verificar também diretamente nos parâmetros como fallback
+    ignorar_ativo = form_filtro.ignorar_localizacoes.data
+    if not ignorar_ativo:
+        ignorar_param = request.args.get('ignorar_localizacoes') or request.form.get('ignorar_localizacoes', '')
+        ignorar_ativo = (ignorar_param == 'on' or ignorar_param == 'True' or ignorar_param == 'true' or ignorar_param == '1' or bool(ignorar_param))
+    
+    logger.info(f"Verificando agrupamento: form.data={form_filtro.ignorar_localizacoes.data}, ignorar_ativo={ignorar_ativo}")
+    
+    if ignorar_ativo:
+        logger.info("Agrupamento ATIVO - iniciando processo de agrupamento")
+        # Garantir que os relacionamentos são carregados para evitar N+1 queries
+        # Usar options para fazer eager loading dos relacionamentos
+        from sqlalchemy.orm import joinedload
+        # Aplicar eager loading apenas se os joins não foram feitos no termo de busca
+        # Se os joins já foram feitos, os relacionamentos já estão disponíveis
+        if not form_filtro.termo_busca.data:
+            query = query.options(
+                joinedload(Estoque.material),
+                joinedload(Estoque.produto_composto),
+                joinedload(Estoque.epi)
+            )
+        # Buscar todos os itens e agrupar em Python
+        all_items = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).all()
+        logger.info(f"Total de itens encontrados antes do agrupamento: {len(all_items)}")
+        
+        # Agrupar por material_id ou ProdComp_id
+        grouped = {}
+        for item in all_items:
+            # Chave única para agrupamento - usar material_id ou ProdComp_id como chave principal
+            # Se ambos forem None, usar o ID do estoque como fallback
+            if item.material_id:
+                key = f"material_{item.material_id}"
+                logger.info(f"Item ID {item.id}: material_id={item.material_id}, quantidade={item.quantidade}, localizacao={item.localizacao}, key={key}")
+            elif item.ProdComp_id:
+                key = f"produto_{item.ProdComp_id}"
+                logger.info(f"Item ID {item.id}: ProdComp_id={item.ProdComp_id}, quantidade={item.quantidade}, localizacao={item.localizacao}, key={key}")
+            else:
+                # Se não tem material nem produto composto, não agrupar (manter separado)
+                key = f"item_{item.id}"
+                logger.info(f"Item ID {item.id}: sem material/produto, quantidade={item.quantidade}, key={key}")
+            
+            if key not in grouped:
+                # Criar um novo objeto Estoque agrupado
+                grouped_item = Estoque()
+                grouped_item.id = item.id
+                grouped_item.material_id = item.material_id
+                grouped_item.ProdComp_id = item.ProdComp_id
+                grouped_item.tipo_item = item.tipo_item
+                grouped_item.quantidade = Decimal(0)
+                grouped_item.quantidade_minima = item.quantidade_minima or Decimal(0)
+                grouped_item.quantidade_maxima = item.quantidade_maxima or Decimal(0)
+                grouped_item.localizacao = item.localizacao or "Não especificado"
+                grouped_item.material = item.material
+                grouped_item.produto_composto = item.produto_composto
+                grouped_item.epi = item.epi
+                grouped_item.lote = item.lote
+                grouped_item.data_validade = item.data_validade
+                grouped_item.centro_custo_id = item.centro_custo_id
+                grouped_item.criado_em = item.criado_em
+                grouped_item.atualizado_em = item.atualizado_em
+                grouped_item.usuario_id = item.usuario_id
+                grouped[key] = grouped_item
+            
+            # Somar quantidades
+            grouped[key].quantidade += item.quantidade or Decimal(0)
+            
+            # Coletar localizações únicas
+            if item.localizacao:
+                current_loc = grouped[key].localizacao or "Não especificado"
+                if current_loc == "Não especificado":
+                    grouped[key].localizacao = item.localizacao
+                elif "," in current_loc:
+                    # Se já tem múltiplas, verificar se a nova localização já está na lista
+                    localizacoes_list = current_loc.split(", ")
+                    if item.localizacao not in localizacoes_list:
+                        grouped[key].localizacao += f", {item.localizacao}"
+                elif current_loc != item.localizacao:
+                    # Se é diferente da primeira, marcar como múltiplas
+                    grouped[key].localizacao = f"{current_loc}, {item.localizacao}"
+        
+        # Converter para lista e ordenar
+        grouped_items = list(grouped.values())
+        grouped_items.sort(key=lambda x: (x.material.nome if x.material else x.produto_composto.nome if x.produto_composto else ""))
+        
+        # Log para debug
+        logger.info(f"Agrupamento: {len(all_items)} itens originais agrupados em {len(grouped_items)} grupos")
+        for grouped_item in grouped_items:
+            logger.info(f"  Grupo: material_id={grouped_item.material_id}, quantidade={grouped_item.quantidade}, localizacao={grouped_item.localizacao}")
+        
+        # Paginação manual
+        total = len(grouped_items)
+        per_page = 20
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_items = grouped_items[start:end]
+        
+        # Criar um objeto paginado manual
+        class PaginatedList:
+            def __init__(self, items, page, per_page, total):
+                self.items = items
+                self.page = page
+                self.per_page = per_page
+                self.total = total
+                self.pages = (total + per_page - 1) // per_page if per_page > 0 else 1
+                
+            def iter_pages(self, left_edge=2, right_edge=2, left_current=2, right_current=5):
+                last = self.pages
+                for num in range(1, last + 1):
+                    if num <= left_edge or \
+                       (num > self.page - left_current - 1 and num < self.page + right_current) or \
+                       num > last - right_edge:
+                        yield num
+        
+        items = PaginatedList(paginated_items, page, per_page, total)
+    else:
+        # Ordenar pelo nome do material ou pelo nome do produto composto
+        items = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).paginate(page=page, per_page=20, error_out=False)
     
     return render_template('estoque/index.html', items=items, form_filtro=form_filtro)
 
@@ -548,632 +696,6 @@ def api_estoque_por_material(material_id):
             'message': f'Erro ao buscar informações: {str(e)}'
         }), 500
 
-# Rotas de Inventário
-@estoque_bp.route('/inventarios')
-@login_required
-def inventarios():
-    """
-    Listagem de inventários
-    """
-    page = request.args.get('page', 1, type=int)
-    tipo = request.args.get('tipo', None)
-    status = request.args.get('status', None)
-    localizacao = request.args.get('localizacao', None)
-    
-    # Consulta base
-    query = InventarioEstoque.query
-    
-    # Aplicar filtros
-    if tipo:
-        query = query.filter(InventarioEstoque.tipo_inventario == tipo)
-    
-    if status:
-        query = query.filter(InventarioEstoque.status == status)
-    
-    # Filtro por localização - filtrar inventários que têm itens com a localização especificada
-    if localizacao:
-        # Encontrar IDs de inventários que têm itens com a localização especificada
-        inventarios_ids = db.session.query(ItemInventario.inventario_id).join(
-            Estoque, ItemInventario.estoque_id == Estoque.id
-        ).filter(Estoque.localizacao == localizacao).distinct().all()
-        
-        if inventarios_ids:
-            inventarios_ids_list = [row[0] for row in inventarios_ids]
-            query = query.filter(InventarioEstoque.id.in_(inventarios_ids_list))
-        else:
-            # Se não há inventários com essa localização, retornar query vazia
-            query = query.filter(InventarioEstoque.id == -1)
-    
-    # Obter resultados
-    inventarios = query.order_by(InventarioEstoque.id.desc()).all()
-    
-    # Obter lista de localizações únicas para o filtro
-    localizacoes = db.session.query(Estoque.localizacao).filter(
-        Estoque.localizacao != None,
-        Estoque.localizacao != ''
-    ).distinct().order_by(Estoque.localizacao).all()
-    localizacoes_list = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
-    
-    # Paginação manual se necessário
-    pagination = {
-        'page': page,
-        'pages': (len(inventarios) + 9) // 10,  # Arredonda para cima
-        'total': len(inventarios)
-    }
-    
-    return render_template('estoque/inventario_lista.html', 
-                          inventarios=inventarios, 
-                          pagination=pagination,
-                          localizacoes=localizacoes_list,
-                          localizacao=localizacao,
-                          request=request)
-
-@estoque_bp.route('/novo-inventario', methods=['GET', 'POST'])
-@login_required
-def novo_inventario():
-    """
-    Criar novo inventário
-    """
-    # Verificar se é uma requisição AJAX
-    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-    
-    form = InventarioEstoqueForm()
-    
-    # Carregar categorias e localizações para filtros
-    categorias = db.session.query(Material.categoria).filter(
-        Material.categoria != None, 
-        Material.categoria != ''
-    ).distinct().all()
-    categorias = [cat[0] for cat in categorias]
-    
-    localizacoes = db.session.query(Estoque.localizacao).filter(
-        Estoque.localizacao != None, 
-        Estoque.localizacao != ''
-    ).distinct().all()
-    localizacoes = [loc[0] for loc in localizacoes]
-    
-    # Debug: verificar se é AJAX e dados do formulário
-    if is_ajax:
-        logger.info(f"Requisição AJAX recebida - Dados: {request.form.to_dict()}")
-    
-    if form.validate_on_submit():
-        try:
-            logger.info(f"Criando inventário - Tipo: {form.tipo_inventario.data}")
-            inventario = InventarioEstoque(
-                tipo_inventario=form.tipo_inventario.data,
-                observacoes=form.observacoes.data,
-                criado_por_id=current_user.id
-            )
-            
-            db.session.add(inventario)
-            db.session.flush()  # Para obter o ID antes do commit
-            
-            # Selecionar itens para o inventário
-            query = Estoque.query
-            
-            # Filtrar por tipo se for inventário parcial
-            if form.tipo_inventario.data == 'Parcial':
-                # Obter filtros do request
-                filtro_parcial = request.form.get('filtro_parcial')
-                logger.info(f"Filtro parcial selecionado: {filtro_parcial}")
-                
-                tipo_item = request.form.get('tipo_item')
-                localizacao = request.form.get('localizacao')
-                categoria = request.form.get('categoria')
-                grupos_selecionados = request.form.getlist('grupos[]')
-                
-                logger.info(f"Filtros recebidos - Tipo: {tipo_item}, Localização: {localizacao}, Categoria: {categoria}, Grupos: {grupos_selecionados}")
-                
-                # Verificar se pelo menos um filtro foi selecionado
-                if not any([tipo_item, localizacao, categoria, grupos_selecionados]):
-                    logger.warning("Inventário parcial sem filtros selecionados")
-                    if is_ajax:
-                        return jsonify({
-                            'success': False,
-                            'message': 'Para inventário parcial, selecione pelo menos um filtro.'
-                        }), 400
-                    else:
-                        flash('Para inventário parcial, selecione pelo menos um filtro.', 'danger')
-                        return render_template('estoque/inventario_form.html', 
-                                              form=form, 
-                                              categorias=categorias, 
-                                              localizacoes=localizacoes)
-                
-                if tipo_item:
-                    query = query.filter(Estoque.tipo_item == tipo_item)
-                
-                if localizacao:
-                    query = query.filter(Estoque.localizacao == localizacao)
-                
-                if categoria:
-                    # Filtrar por categoria do material
-                    query = query.join(Estoque.material).filter(Material.categoria == categoria)
-                
-                if grupos_selecionados:
-                    # Filtrar por grupos de materiais selecionados
-                    logger.info(f"Filtrando por grupos: {grupos_selecionados}")
-                    
-                    # Construir placeholders para IN clause
-                    placeholders = ','.join([f':grupo_{i}' for i in range(len(grupos_selecionados))])
-                    sql = f"""
-                        SELECT DISTINCT material_id FROM materiais_grupos 
-                        WHERE grupo_id IN ({placeholders})
-                    """
-                    
-                    # Criar dicionário de parâmetros
-                    params = {f'grupo_{i}': int(grupo_id) for i, grupo_id in enumerate(grupos_selecionados)}
-                    logger.info(f"SQL: {sql}")
-                    logger.info(f"Parâmetros: {params}")
-                    
-                    materiais_grupo = db.session.execute(
-                        db.text(sql), params
-                    ).fetchall()
-                    if materiais_grupo:
-                        ids_materiais = [row[0] for row in materiais_grupo]
-                        logger.info(f"Materiais encontrados nos grupos: {ids_materiais}")
-                        
-                        # Verificar se esses materiais existem no estoque
-                        estoque_count = db.session.query(Estoque).filter(Estoque.material_id.in_(ids_materiais)).count()
-                        logger.info(f"Quantidade de itens no estoque para esses materiais: {estoque_count}")
-                        
-                        if estoque_count > 0:
-                            query = query.filter(Estoque.material_id.in_(ids_materiais))
-                        else:
-                            logger.warning("Nenhum item no estoque encontrado para os materiais dos grupos selecionados")
-                            # Se não há itens no estoque para esses materiais, retornar query vazia
-                            query = query.filter(Estoque.id == -1)
-                    else:
-                        logger.info("Nenhum material encontrado nos grupos selecionados")
-                        # Se não há materiais nos grupos, retornar query vazia
-                        query = query.filter(Estoque.id == -1)
-                
-                # Verificar se tem itens específicos selecionados
-                itens_selecionados = request.form.getlist('itens[]')
-                if itens_selecionados:
-                    query = query.filter(Estoque.id.in_(itens_selecionados))
-            
-            estoque_items = query.all()
-            logger.info(f"Total de itens encontrados para o inventário: {len(estoque_items)}")
-            
-            # Criar itens de inventário
-            for item in estoque_items:
-                item_inventario = ItemInventario(
-                    inventario_id=inventario.id,
-                    estoque_id=item.id,
-                    quantidade_sistema=item.quantidade
-                )
-                db.session.add(item_inventario)
-            
-            db.session.commit()
-            
-            if is_ajax:
-                return jsonify({
-                    'success': True,
-                    'message': 'Inventário criado com sucesso! Agora você pode iniciar a contagem.',
-                    'redirect': url_for('estoque.inventario_detalhes', id=inventario.id)
-                })
-            else:
-                flash('Inventário criado com sucesso! Agora você pode iniciar a contagem.', 'success')
-                return redirect(url_for('estoque.inventario_detalhes', id=inventario.id))
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erro ao criar inventário: {str(e)}")
-            
-            if is_ajax:
-                return jsonify({
-                    'success': False,
-                    'message': f'Erro ao criar inventário: {str(e)}'
-                }), 500
-            else:
-                flash(f'Erro ao criar inventário: {str(e)}', 'danger')
-    else:
-        # Formulário não é válido
-        if is_ajax:
-            errors = {}
-            for field, field_errors in form.errors.items():
-                errors[field] = field_errors
-            return jsonify({
-                'success': False,
-                'message': 'Dados do formulário inválidos',
-                'errors': errors
-            }), 400
-    
-    if is_ajax:
-        # Se chegou até aqui e é AJAX, retornar erro genérico
-        return jsonify({
-            'success': False,
-            'message': 'Erro inesperado ao processar requisição'
-        }), 500
-    
-    return render_template('estoque/inventario_form.html', 
-                          form=form, 
-                          categorias=categorias, 
-                          localizacoes=localizacoes)
-
-@estoque_bp.route('/inventario/<int:id>')
-@login_required
-def inventario_detalhes(id):
-    """
-    Detalhes de um inventário
-    """
-    inventario = InventarioEstoque.query.get_or_404(id)
-    itens = ItemInventario.query.filter_by(inventario_id=id).all()
-    
-    return render_template('estoque/inventario_detalhes.html', 
-                          inventario=inventario, 
-                          itens=itens)
-
-@estoque_bp.route('/gerenciar-inventario')
-@login_required
-def gerenciar_inventario():
-    """
-    Página principal para gerenciar inventários
-    """
-    return render_template('estoque/gerenciar_inventario.html')
-
-@estoque_bp.route('/api/estatisticas-inventario')
-@login_required
-def api_estatisticas_inventario():
-    """
-    API para obter estatísticas dos inventários
-    """
-    try:
-        # Inventários ativos
-        inventarios_ativos = InventarioEstoque.query.filter_by(status='Em Andamento').count()
-        
-        # Itens pendentes de contagem
-        itens_pendentes = db.session.query(ItemInventario).join(InventarioEstoque).filter(
-            InventarioEstoque.status == 'Em Andamento',
-            ItemInventario.quantidade_contada.is_(None)
-        ).count()
-        
-        # Diferenças encontradas
-        diferencas = db.session.query(ItemInventario).join(InventarioEstoque).filter(
-            InventarioEstoque.status == 'Finalizado',
-            ItemInventario.quantidade_contada != ItemInventario.quantidade_sistema
-        ).count()
-        
-        # Inventários finalizados nos últimos 30 dias
-        from datetime import datetime, timedelta
-        data_limite = datetime.now() - timedelta(days=30)
-        finalizados_30_dias = InventarioEstoque.query.filter(
-            InventarioEstoque.status == 'Finalizado',
-            InventarioEstoque.data_fim >= data_limite
-        ).count()
-        
-        return jsonify({
-            'success': True,
-            'estatisticas': {
-                'inventarios_ativos': inventarios_ativos,
-                'itens_pendentes': itens_pendentes,
-                'diferencas': diferencas,
-                'finalizados_30_dias': finalizados_30_dias
-            }
-        })
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter estatísticas de inventário: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Erro ao obter estatísticas: {str(e)}'
-        }), 500
-
-@estoque_bp.route('/api/inventarios-ativos')
-@login_required
-def api_inventarios_ativos():
-    """
-    API para obter inventários ativos
-    """
-    try:
-        inventarios = InventarioEstoque.query.filter_by(status='Em Andamento').order_by(
-            InventarioEstoque.data_inicio.desc()
-        ).all()
-        
-        inventarios_data = []
-        for inv in inventarios:
-            # Contar itens totais e contados
-            total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
-            itens_contados = ItemInventario.query.filter_by(
-                inventario_id=inv.id
-            ).filter(ItemInventario.quantidade_contada.isnot(None)).count()
-            
-            inventarios_data.append({
-                'id': inv.id,
-                'tipo_inventario': inv.tipo_inventario,
-                'data_inicio': inv.data_inicio.isoformat(),
-                'total_itens': total_itens,
-                'itens_contados': itens_contados,
-                'status': inv.status,
-                'responsavel': inv.criado_por.nome if inv.criado_por else None
-            })
-        
-        return jsonify({
-            'success': True,
-            'inventarios': inventarios_data
-        })
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter inventários ativos: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Erro ao obter inventários ativos: {str(e)}'
-        }), 500
-
-@estoque_bp.route('/api/historico-inventarios')
-@login_required
-def api_historico_inventarios():
-    """
-    API para obter histórico de inventários
-    """
-    try:
-        # Parâmetros de filtro
-        tipo = request.args.get('tipo', '')
-        status = request.args.get('status', '')
-        data = request.args.get('data', '')
-        
-        # Query base
-        query = InventarioEstoque.query
-        
-        # Aplicar filtros
-        if tipo:
-            query = query.filter(InventarioEstoque.tipo_inventario == tipo)
-        
-        if status:
-            query = query.filter(InventarioEstoque.status == status)
-        
-        if data:
-            from datetime import datetime
-            data_filtro = datetime.strptime(data, '%Y-%m-%d').date()
-            query = query.filter(db.func.date(InventarioEstoque.data_inicio) == data_filtro)
-        
-        # Obter inventários
-        inventarios = query.order_by(InventarioEstoque.data_inicio.desc()).limit(100).all()
-        
-        inventarios_data = []
-        for inv in inventarios:
-            # Contar itens e diferenças
-            total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
-            diferencas = db.session.query(ItemInventario).filter_by(
-                inventario_id=inv.id
-            ).filter(ItemInventario.quantidade_contada != ItemInventario.quantidade_sistema).count()
-            
-            inventarios_data.append({
-                'id': inv.id,
-                'tipo_inventario': inv.tipo_inventario,
-                'data_inicio': inv.data_inicio.isoformat(),
-                'data_fim': inv.data_fim.isoformat() if inv.data_fim else None,
-                'status': inv.status,
-                'total_itens': total_itens,
-                'diferencas': diferencas,
-                'responsavel': inv.criado_por.nome if inv.criado_por else None
-            })
-        
-        return jsonify({
-            'success': True,
-            'inventarios': inventarios_data
-        })
-    
-    except Exception as e:
-        logger.error(f"Erro ao obter histórico de inventários: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Erro ao obter histórico: {str(e)}'
-        }), 500
-
-@estoque_bp.route('/api/salvar-configuracoes', methods=['POST'])
-@login_required
-def api_salvar_configuracoes():
-    """
-    API para salvar configurações de inventário
-    """
-    try:
-        data = request.get_json()
-        
-        # Aqui você pode implementar a lógica para salvar as configurações
-        # Por exemplo, em uma tabela de configurações ou em cache
-        
-        # Por enquanto, apenas retornar sucesso
-        return jsonify({
-            'success': True,
-            'message': 'Configurações salvas com sucesso!'
-        })
-    
-    except Exception as e:
-        logger.error(f"Erro ao salvar configurações: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': f'Erro ao salvar configurações: {str(e)}'
-        }), 500
-
-@estoque_bp.route('/inventario/<int:id>/contagem')
-@login_required
-def inventario_contagem(id):
-    """
-    Página de contagem de inventário
-    """
-    inventario = InventarioEstoque.query.get_or_404(id)
-    
-    # Verificar se o inventário está em andamento
-    if inventario.status != 'Em andamento':
-        flash('Este inventário já foi finalizado ou cancelado', 'warning')
-        return redirect(url_for('estoque.inventario_detalhes', id=id))
-    
-    return render_template('estoque/inventario_contagem.html', 
-                          inventario=inventario)
-
-@estoque_bp.route('/inventario/<int:id>/finalizar', methods=['POST'])
-@login_required
-
-def finalizar_inventario(id):
-    """
-    Finalizar inventário com ajustes de estoque
-    """
-    inventario = InventarioEstoque.query.get_or_404(id)
-    
-    # Verificar se todos os itens foram contados
-    itens_nao_contados = ItemInventario.query.filter_by(inventario_id=id, quantidade_contada=None).count()
-    if itens_nao_contados > 0:
-        flash(f'Existem {itens_nao_contados} itens não contados. Finalize a contagem antes de encerrar o inventário.', 'danger')
-        return redirect(url_for('estoque.inventario_contagem', id=id))
-    
-    try:
-        # Finalizar inventário e ajustar estoques
-        inventario.finalizar(current_user.id)
-        flash('Inventário finalizado com sucesso! Os estoques foram ajustados.', 'success')
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao finalizar inventário: {str(e)}")
-        flash(f'Erro ao finalizar inventário: {str(e)}', 'danger')
-    
-    return redirect(url_for('estoque.inventario_detalhes', id=id))
-
-@estoque_bp.route('/inventario/<int:id>/cancelar', methods=['POST'])
-@login_required
-
-def cancelar_inventario(id):
-    """
-    Cancelar inventário
-    """
-    inventario = InventarioEstoque.query.get_or_404(id)
-    
-    try:
-        inventario.status = 'Cancelado'
-        inventario.data_fim = datetime.now()
-        inventario.finalizado_por_id = current_user.id
-        db.session.commit()
-        flash('Inventário cancelado com sucesso!', 'success')
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao cancelar inventário: {str(e)}")
-        flash(f'Erro ao cancelar inventário: {str(e)}', 'danger')
-    
-    return redirect(url_for('estoque.inventario_detalhes', id=id))
-
-@estoque_bp.route('/inventario/<int:inventario_id>/item/<int:item_id>/contagem', methods=['POST'])
-@login_required
-def salvar_contagem_item(inventario_id, item_id):
-    """
-    Salvar contagem de um item
-    """
-    inventario = InventarioEstoque.query.get_or_404(inventario_id)
-    
-    # Verificar se o inventário está em andamento
-    if inventario.status != 'Em andamento':
-        return jsonify({'error': 'Este inventário não está em andamento'}), 400
-    
-    item = ItemInventario.query.filter_by(inventario_id=inventario_id, id=item_id).first_or_404()
-    quantidade = request.form.get('quantidade_contada', type=float)
-    
-    try:
-        item.contar(Decimal(str(quantidade)) if quantidade is not None else None, current_user.id)
-        
-        # Calcular o progresso atual
-        total_itens = len(inventario.itens)
-        itens_contados = sum(1 for i in inventario.itens if i.quantidade_contada is not None)
-        percentual = int((itens_contados / total_itens * 100)) if total_itens > 0 else 0
-        
-        return jsonify({
-            'success': True, 
-            'diferenca': float(item.diferenca) if item.diferenca is not None else None,
-            'progresso': {
-                'contados': itens_contados,
-                'total': total_itens,
-                'percentual': percentual
-            }
-        })
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao salvar contagem: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@estoque_bp.route('/inventario/<int:inventario_id>/item/<int:item_id>/observacao', methods=['POST'])
-@login_required
-def salvar_observacao_item(inventario_id, item_id):
-    """
-    Salvar observação de um item
-    """
-    inventario = InventarioEstoque.query.get_or_404(inventario_id)
-    
-    # Verificar se o inventário está em andamento
-    if inventario.status != 'Em andamento':
-        return jsonify({'error': 'Este inventário não está em andamento'}), 400
-    
-    item = ItemInventario.query.filter_by(inventario_id=inventario_id, id=item_id).first_or_404()
-    observacoes = request.form.get('observacoes', '')
-    
-    try:
-        item.observacoes = observacoes
-        db.session.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Erro ao salvar observação: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@estoque_bp.route('/api/buscar-itens')
-@login_required
-def api_buscar_itens():
-    """
-    API para buscar itens para o inventário
-    """
-    termo = request.args.get('termo', '')
-    
-    if len(termo) < 3:
-        return jsonify({'itens': []})
-    
-    try:
-        termo = f"%{termo}%"
-        
-        # Consulta para itens de material
-        query = db.session.query(
-            Estoque.id,
-            Material.codigo,
-            Material.nome,
-            Estoque.tipo_item,
-            Estoque.localizacao,
-            Estoque.quantidade,
-            Material.unidade
-        ).join(Material, Estoque.material_id == Material.id).filter(
-            or_(
-                Material.nome.ilike(termo),
-                Material.codigo.ilike(termo),
-                Estoque.localizacao.ilike(termo)
-            )
-        )
-        
-        # Similar para EPIs se necessário
-        
-        resultados = query.limit(20).all()
-        
-        itens = []
-        for r in resultados:
-            itens.append({
-                'id': r[0],
-                'codigo': r[1],
-                'nome': r[2],
-                'tipo': r[3],
-                'localizacao': r[4],
-                'quantidade': float(r[5]),
-                'unidade': r[6]
-            })
-        
-        return jsonify({'itens': itens})
-    except Exception as e:
-        logger.error(f"Erro na busca de itens: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@estoque_bp.route('/inventario/<int:id>/verificar-itens-nao-contados')
-@login_required
-def verificar_itens_nao_contados(id):
-    """
-    Verificar se existem itens não contados em um inventário
-    """
-    try:
-        itens_nao_contados = ItemInventario.query.filter_by(inventario_id=id, quantidade_contada=None).count()
-        return jsonify({'itens_nao_contados': itens_nao_contados})
-    except Exception as e:
-        logger.error(f"Erro ao verificar itens não contados: {str(e)}")
-        return jsonify({'error': str(e)}), 500
 
 # Rotas de API para o gráfico
 @estoque_bp.route('/api/estoque/<int:estoque_id>/historico-saldo')
@@ -1181,11 +703,14 @@ def verificar_itens_nao_contados(id):
 def api_historico_saldo_estoque(estoque_id):
     """
     Retorna dados formatados para o gráfico de histórico de saldo.
-    Aceita 'data_inicio' e 'data_fim' como query parameters.
-    Ex: /api/estoque/1/historico-saldo?data_inicio=2023-01-01&data_fim=2023-12-31
+    Aceita 'data_inicio', 'data_fim', 'agrupar_semana' e 'agrupar_por_material' como query parameters.
+    Se 'agrupar_por_material' for true, agrega o histórico de todos os estoques do mesmo material.
+    Ex: /api/estoque/1/historico-saldo?data_inicio=2023-01-01&data_fim=2023-12-31&agrupar_semana=true&agrupar_por_material=true
     """
     data_inicio_str = request.args.get('data_inicio')
     data_fim_str = request.args.get('data_fim')
+    agrupar_semana = request.args.get('agrupar_semana', 'false').lower() == 'true'
+    agrupar_por_material = request.args.get('agrupar_por_material', 'false').lower() == 'true'
 
     data_inicio = None
     if data_inicio_str:
@@ -1203,17 +728,139 @@ def api_historico_saldo_estoque(estoque_id):
 
     # Verificar se o item de estoque existe
     item_estoque = Estoque.query.get_or_404(estoque_id)
-
-    historico_data = MovimentacaoEstoque.get_historico_saldo_para_grafico(
-        estoque_id=item_estoque.id,
-        data_inicio=data_inicio,
-        data_fim=data_fim
-    )
+    
+    # Se deve agrupar por material, buscar todos os estoques do mesmo material
+    if agrupar_por_material and item_estoque.material_id:
+        # Buscar todos os estoques com o mesmo material_id
+        estoques_material = Estoque.query.filter_by(material_id=item_estoque.material_id).all()
+        estoque_ids = [e.id for e in estoques_material]
+        
+        # Calcular quantidade total atual
+        quantidade_total = sum(float(e.quantidade) for e in estoques_material)
+        
+        # Buscar todas as movimentações de todos os estoques do material
+        query = MovimentacaoEstoque.query.filter(MovimentacaoEstoque.estoque_id.in_(estoque_ids))
+        
+        if data_inicio:
+            query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+        if data_fim:
+            from datetime import timedelta
+            query = query.filter(MovimentacaoEstoque.data_movimento < data_fim + timedelta(days=1))
+        
+        movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+        
+        # Calcular saldo inicial (antes da data_inicio, se houver)
+        saldo_inicial = Decimal('0.0')
+        if data_inicio:
+            movimentacoes_anteriores = MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.estoque_id.in_(estoque_ids),
+                MovimentacaoEstoque.data_movimento < data_inicio
+            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            
+            for mov in movimentacoes_anteriores:
+                if mov.tipo_movimento == 'entrada':
+                    saldo_inicial += mov.quantidade
+                elif mov.tipo_movimento == 'saida':
+                    saldo_inicial -= mov.quantidade
+                elif mov.tipo_movimento == 'ajuste':
+                    saldo_inicial = mov.quantidade
+        
+        # Agregar movimentações por data e hora (para manter ordem cronológica)
+        from collections import defaultdict
+        from datetime import datetime, timedelta
+        
+        # Rastrear saldo individual de cada estoque para calcular ajustes corretamente
+        saldos_estoques = {eid: Decimal('0.0') for eid in estoque_ids}
+        
+        # Calcular saldo inicial de cada estoque
+        if data_inicio:
+            for eid in estoque_ids:
+                movs_ant = MovimentacaoEstoque.query.filter(
+                    MovimentacaoEstoque.estoque_id == eid,
+                    MovimentacaoEstoque.data_movimento < data_inicio
+                ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+                for mov in movs_ant:
+                    if mov.tipo_movimento == 'entrada':
+                        saldos_estoques[eid] += mov.quantidade
+                    elif mov.tipo_movimento == 'saida':
+                        saldos_estoques[eid] -= mov.quantidade
+                    elif mov.tipo_movimento == 'ajuste':
+                        saldos_estoques[eid] = mov.quantidade
+        
+        # Ordenar movimentações por data para processar em ordem cronológica
+        movimentacoes_ordenadas = sorted(movimentacoes, key=lambda x: x.data_movimento)
+        
+        # Construir histórico agregado processando cada movimentação em ordem
+        historico_data = []
+        saldo_acumulado = saldo_inicial
+        
+        for mov in movimentacoes_ordenadas:
+            estoque_id_mov = mov.estoque_id
+            saldo_anterior_estoque = saldos_estoques.get(estoque_id_mov, Decimal('0.0'))
+            
+            if mov.tipo_movimento == 'entrada':
+                saldo_acumulado += mov.quantidade
+                saldos_estoques[estoque_id_mov] += mov.quantidade
+            elif mov.tipo_movimento == 'saida':
+                saldo_acumulado -= mov.quantidade
+                saldos_estoques[estoque_id_mov] -= mov.quantidade
+            elif mov.tipo_movimento == 'ajuste':
+                # Calcular diferença do ajuste e aplicar ao saldo agregado
+                diferenca = mov.quantidade - saldo_anterior_estoque
+                saldo_acumulado += diferenca
+                saldos_estoques[estoque_id_mov] = mov.quantidade
+            
+            historico_data.append({
+                "data": mov.data_movimento.strftime('%Y-%m-%d %H:%M:%S'),
+                "saldo": float(saldo_acumulado)
+            })
+        
+        # Garantir que o último ponto corresponde à quantidade total atual
+        if not data_fim:
+            agora = datetime.now()
+            if not historico_data or abs(quantidade_total - historico_data[-1]['saldo']) > 0.01:
+                if historico_data:
+                    historico_data.append({
+                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                        "saldo": quantidade_total
+                    })
+                else:
+                    historico_data.append({
+                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                        "saldo": quantidade_total
+                    })
+        
+        # Agrupar por semana se solicitado
+        if agrupar_semana and historico_data:
+            historico_data = MovimentacaoEstoque._agrupar_por_semana(historico_data)
+            if not data_fim and historico_data:
+                if abs(quantidade_total - historico_data[-1]['saldo']) > 0.01:
+                    agora = datetime.now()
+                    dias_para_segunda = agora.weekday()
+                    inicio_semana = agora - timedelta(days=dias_para_segunda)
+                    historico_data.append({
+                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                        "saldo": quantidade_total,
+                        "semana": f"Semana de {inicio_semana.strftime('%d/%m/%Y')}"
+                    })
+    else:
+        # Comportamento normal: histórico de um único estoque
+        historico_data = MovimentacaoEstoque.get_historico_saldo_para_grafico(
+            estoque_id=item_estoque.id,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+            agrupar_por_semana=agrupar_semana
+        )
+        quantidade_total = float(item_estoque.quantidade)
 
     datas = [item['data'] for item in historico_data]
     saldos = [item['saldo'] for item in historico_data]
+    semanas = [item.get('semana', '') for item in historico_data] if agrupar_semana else []
 
     return jsonify({
         'datas': datas,
-        'saldos': saldos
+        'saldos': saldos,
+        'semanas': semanas,
+        'agrupar_semana': agrupar_semana,
+        'quantidade_atual': quantidade_total
     }) 

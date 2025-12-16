@@ -417,10 +417,10 @@
 </div>
 
 <!-- Incluir Modais -->
-{% include 'estoque/modais/novo_inventario.html' %}
-{% include 'estoque/modais/visualizar_inventario.html' %}
-{% include 'estoque/modais/confirmar_finalizacao.html' %}
-{% include 'estoque/modais/confirmar_cancelamento.html' %}
+{% include 'inventario/modais/novo_inventario.html' %}
+{% include 'inventario/modais/visualizar_inventario.html' %}
+{% include 'inventario/modais/confirmar_finalizacao.html' %}
+{% include 'inventario/modais/confirmar_cancelamento.html' %}
 
 <!-- Incluir Modais de Grupos de Materiais -->
 {% include 'grupos_materiais/modais/novo_grupo.html' %}
@@ -460,7 +460,7 @@ $(document).ready(function() {
 // Função para carregar estatísticas do dashboard
 function carregarEstatisticas() {
     $.ajax({
-        url: "{{ url_for('estoque.api_estatisticas_inventario') }}",
+        url: "{{ url_for('inventario.api_estatisticas_inventario') }}",
         method: 'GET',
         success: function(response) {
             if (response.success) {
@@ -479,7 +479,7 @@ function carregarEstatisticas() {
 // Função para carregar inventários ativos
 function carregarInventariosAtivos() {
     $.ajax({
-        url: "{{ url_for('estoque.api_inventarios_ativos') }}",
+        url: "{{ url_for('inventario.api_inventarios_ativos') }}",
         method: 'GET',
         success: function(response) {
             if (response.success) {
@@ -538,7 +538,7 @@ function carregarHistorico() {
     };
     
     $.ajax({
-        url: "{{ url_for('estoque.api_historico_inventarios') }}",
+        url: "{{ url_for('inventario.api_historico_inventarios') }}",
         method: 'GET',
         data: filtros,
         success: function(response) {
@@ -617,7 +617,7 @@ function salvarConfiguracoes() {
     };
     
     $.ajax({
-        url: "{{ url_for('estoque.api_salvar_configuracoes') }}",
+        url: "{{ url_for('inventario.api_salvar_configuracoes') }}",
         method: 'POST',
         data: JSON.stringify(configuracoes),
         contentType: 'application/json',

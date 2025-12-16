@@ -47,6 +47,7 @@ from .conversao_unidade import ConversaoUnidade
 
 # Importamos os novos modelos de produto composto
 from .produto_composto import ProdutoComposto, ProdutoCompostoItem
+from .tanque_produto_composto import TanqueProdutoComposto
 from .dados_analiticos import DadoAnalitico
 from .reembolso import Reembolso, ReembolsoDocumento, ReembolsoAnexo
 
@@ -85,6 +86,6 @@ __all__ = [
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
     'TracoConcreto', 'ItemTracoConcreto', 'UsinagemConcreto', 'UsinagemEquipamento',
     'UsinagemMaterial', 'ConversaoUnidade', 'Unidade', 'RompimentoCorpoProva',
-    'Colaborador', 'ProdutoComposto', 'ProdutoCompostoItem', 'Estoque', 'MovimentacaoEstoque',
+    'Colaborador', 'ProdutoComposto', 'ProdutoCompostoItem', 'TanqueProdutoComposto', 'Estoque', 'MovimentacaoEstoque',
     'DadoAnalitico', 'configure_mappers', 'Reembolso', 'ReembolsoDocumento', 'ReembolsoAnexo',
 ] 

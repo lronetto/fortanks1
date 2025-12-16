@@ -1,0 +1,80 @@
+<!-- Modal de Confirmação de Reabertura -->
+<div class="modal fade" id="modalConfirmarReabertura" tabindex="-1" aria-labelledby="modalConfirmarReaberturaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalConfirmarReaberturaLabel"><i class="fas fa-undo"></i> Reabrir Inventário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h5>Desfazer Ajustes de Estoque</h5>
+                    <p class="text-muted">Esta ação vai desfazer as movimentações criadas na finalização e reabrir a contagem.</p>
+
+                    <div class="alert alert-danger">
+                        <i class="fas fa-info-circle"></i>
+                        As quantidades em estoque serão revertidas para os valores anteriores ao inventário e o status voltará para <strong>Em andamento</strong>.
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <strong>Inventário:</strong> <span id="reabertura-inventario-id">-</span><br>
+                        <strong>Tipo:</strong> <span id="reabertura-tipo">-</span><br>
+                        <strong>Status atual:</strong> <span id="reabertura-status">-</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-arrow-left"></i> Voltar
+                </button>
+                <form id="form-reabertura" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-warning text-dark">
+                        <i class="fas fa-undo"></i> Confirmar Reabertura
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    function abrirModalReabertura(url, inventarioData) {
+        const form = document.getElementById('form-reabertura');
+        form.action = url;
+
+        if (inventarioData) {
+            document.getElementById('reabertura-inventario-id').textContent = inventarioData.id || '-';
+            document.getElementById('reabertura-tipo').textContent = inventarioData.tipo || '-';
+            document.getElementById('reabertura-status').textContent = inventarioData.status || '-';
+        }
+
+        const modal = new bootstrap.Modal(document.getElementById('modalConfirmarReabertura'));
+        modal.show();
+    }
+
+    const reabrirButtons = document.querySelectorAll('.btn-reabrir-inventario');
+    reabrirButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const url = this.getAttribute('data-url');
+            const inventarioData = {
+                id: this.getAttribute('data-id'),
+                tipo: this.getAttribute('data-tipo'),
+                status: this.getAttribute('data-status')
+            };
+            abrirModalReabertura(url, inventarioData);
+        });
+    });
+
+    // Função global para compatibilidade
+    window.abrirModalReabertura = function(url) {
+        abrirModalReabertura(url, null);
+    };
+});
+</script>
+{% endblock %}
+

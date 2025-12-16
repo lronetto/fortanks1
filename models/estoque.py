@@ -86,7 +86,25 @@ class Estoque(db.Model):
             return "Próximo ao vencimento"
         else:
             return "Válido"
-    
+    def processar_movimentacoes(self,data_fim=None,data_inicio=None):
+        """
+        Processa as movimentações de estoque
+        """
+        movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
+        if data_inicio:
+            movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+        if data_fim:
+            movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento < data_fim)
+        movimentacoes = movimentacoes.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+        self.quantidade = 0
+        for movimentacao in movimentacoes:
+            if movimentacao.tipo_movimento == 'entrada':
+                self.quantidade += Decimal(str(movimentacao.quantidade))
+            elif movimentacao.tipo_movimento == 'saida':
+                self.quantidade -= Decimal(str(movimentacao.quantidade))
+            elif movimentacao.tipo_movimento == 'ajuste':
+                self.quantidade = Decimal(str(movimentacao.quantidade))
+        self.save()
     def get_valor_unitario(self):
         """Retorna o valor unitário do item"""
         if self.material:
@@ -103,6 +121,43 @@ class Estoque(db.Model):
             elif movimentacao.tipo_movimento == 'saida':
                 saldo_anterior -= Decimal(str(movimentacao.quantidade))
         return saldo_anterior
+    def get_estoque(self,data_fim=None,data_inicio=None):
+        query = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
+        if data_inicio:
+            query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+        if data_fim is None:
+            data_fim = datetime.now()
+        query = query.filter(MovimentacaoEstoque.data_movimento < data_fim)
+        return query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+    
+    def get_saldo_ate_data(self, data_fim=None):
+        """
+        Calcula o saldo do estoque até uma data específica baseado nas movimentações
+        """
+        if data_fim is None:
+            data_fim = datetime.now()
+        
+        # Adicionar um dia e definir hora como 23:59:59 para incluir todo o dia
+        from datetime import timedelta
+        if isinstance(data_fim, datetime):
+            data_fim_completa = data_fim.replace(hour=23, minute=59, second=59)
+        else:
+            # Se for date, converter para datetime
+            data_fim_completa = datetime.combine(data_fim, datetime.max.time())
+        
+        movimentacoes = self.get_estoque(data_fim=data_fim_completa)
+        saldo = Decimal('0.0')
+        
+        for movimentacao in movimentacoes:
+            if movimentacao.tipo_movimento == 'entrada':
+                saldo += Decimal(str(movimentacao.quantidade))
+            elif movimentacao.tipo_movimento == 'saida':
+                saldo -= Decimal(str(movimentacao.quantidade))
+            elif movimentacao.tipo_movimento == 'ajuste':
+                # Para ajuste, a quantidade representa o novo saldo total
+                saldo = Decimal(str(movimentacao.quantidade))
+        
+        return saldo
     @property
     def valor_estimado(self):
         """
@@ -169,7 +224,7 @@ class MovimentacaoEstoque(db.Model):
             'usuario_id': self.usuario_id,
         }
     @classmethod
-    def get_historico_saldo_para_grafico(cls, estoque_id, data_inicio=None, data_fim=None):
+    def get_historico_saldo_para_grafico(cls, estoque_id, data_inicio=None, data_fim=None, agrupar_por_semana=False):
         """
         Retorna o histórico de saldo para um item de estoque específico,
         calculado a partir de suas movimentações.
@@ -178,29 +233,47 @@ class MovimentacaoEstoque(db.Model):
             estoque_id (int): ID do item de estoque.
             data_inicio (datetime.date, optional): Data de início do período.
             data_fim (datetime.date, optional): Data de fim do período.
+            agrupar_por_semana (bool): Se True, agrupa os dados por semana.
 
         Returns:
             list: Lista de dicionários {"data": data_formatada, "saldo": saldo_acumulado}
         """
+        # Buscar o item de estoque para obter a quantidade atual
+        estoque = Estoque.query.get(estoque_id)
+        if not estoque:
+            return []
+        
         query = cls.query.filter_by(estoque_id=estoque_id)
 
+        # Calcular saldo inicial (antes da data_inicio, se houver)
+        saldo_inicial = Decimal('0.0')
         if data_inicio:
+            # Buscar todas as movimentações antes da data de início
+            movimentacoes_anteriores = cls.query.filter_by(estoque_id=estoque_id).filter(
+                MovimentacaoEstoque.data_movimento < data_inicio
+            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            
+            for mov in movimentacoes_anteriores:
+                if mov.tipo_movimento == 'entrada':
+                    saldo_inicial += mov.quantidade
+                elif mov.tipo_movimento == 'saida':
+                    saldo_inicial -= mov.quantidade
+                elif mov.tipo_movimento == 'ajuste':
+                    saldo_inicial = mov.quantidade
+            
             query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+        
+        # Importar datetime e timedelta para uso no método
+        from datetime import datetime, timedelta
+        
         if data_fim:
             # Adicionar um dia para incluir movimentações no dia final
-            from datetime import timedelta
             query = query.filter(MovimentacaoEstoque.data_movimento < data_fim + timedelta(days=1))
 
         movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
 
         historico_saldo = []
-        saldo_acumulado = Decimal('0.0') # Inicia com saldo zero
-
-        # Se houver um data_inicio, precisamos calcular o saldo até essa data
-        # para que o gráfico comece com o valor correto no período filtrado.
-        # No entanto, para simplificar e dado que o padrão é mostrar tudo,
-        # vamos sempre calcular a partir do zero para todas as movimentações
-        # retornadas pela query. O frontend controlará o zoom/período visualizado.
+        saldo_acumulado = saldo_inicial  # Inicia com saldo anterior à data_inicio, se houver
 
         for mov in movimentacoes:
             if mov.tipo_movimento == 'entrada':
@@ -208,24 +281,6 @@ class MovimentacaoEstoque(db.Model):
             elif mov.tipo_movimento == 'saida':
                 saldo_acumulado -= mov.quantidade
             elif mov.tipo_movimento == 'ajuste':
-                # Para 'ajuste', o 'quantidade' na movimentação representa o NOVO saldo.
-                # No entanto, a lógica atual do 'save' da MovimentacaoEstoque parece
-                # atualizar o Estoque.quantidade para o valor do ajuste, o que é correto.
-                # Mas, para o cálculo do histórico aqui, precisamos ver como o saldo foi
-                # afetado PELA MOVIMENTAÇÃO.
-                #
-                # Se a movimentação de ajuste guarda o NOVO saldo total,
-                # então o saldo_acumulado deve se tornar esse valor.
-                # Se ela guarda a DIFERENÇA do ajuste, então devemos somar/subtrair.
-                #
-                # Assumindo que o método 'save' da MovimentacaoEstoque ao fazer ajuste
-                # já coloca o saldo correto no Estoque.quantidade e que a 'quantidade'
-                # na MovimentacaoEstoque do tipo 'ajuste' é o novo saldo total.
-                #
-                # Revisando o controller: na rota 'editar', quando a quantidade é alterada,
-                # uma movimentação de 'ajuste' é criada com a 'nova_quantidade'.
-                # E o Estoque.quantidade é atualizado para essa nova_quantidade.
-                # Portanto, para 'ajuste', o saldo_acumulado deve ser definido para mov.quantidade.
                 saldo_acumulado = mov.quantidade
 
             # Formatar a data para string (ex: YYYY-MM-DD HH:MM:SS) para o Plotly
@@ -234,7 +289,109 @@ class MovimentacaoEstoque(db.Model):
                 "saldo": float(saldo_acumulado) # Plotly geralmente prefere float
             })
         
+        # Se não há filtro de data_fim, garantir que o último ponto corresponda à quantidade atual
+        if not data_fim:
+            agora = datetime.now()
+            
+            # Se não há movimentações ou o último ponto não corresponde à quantidade atual
+            if not historico_saldo or abs(float(estoque.quantidade) - historico_saldo[-1]['saldo']) > 0.01:
+                # Adicionar ou atualizar ponto final com a quantidade atual
+                if historico_saldo:
+                    # Atualizar o último ponto se a diferença for pequena, senão adicionar novo
+                    if abs(float(estoque.quantidade) - historico_saldo[-1]['saldo']) > 0.01:
+                        historico_saldo.append({
+                            "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                            "saldo": float(estoque.quantidade)
+                        })
+                    else:
+                        # Atualizar o último ponto
+                        historico_saldo[-1]['saldo'] = float(estoque.quantidade)
+                        historico_saldo[-1]['data'] = agora.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    # Se não há movimentações, criar um ponto inicial
+                    historico_saldo.append({
+                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                        "saldo": float(estoque.quantidade)
+                    })
+        
+        # Se solicitado, agrupar por semana
+        if agrupar_por_semana and historico_saldo:
+            historico_saldo = cls._agrupar_por_semana(historico_saldo)
+            # Garantir que o último ponto agrupado corresponda à quantidade atual quando não há filtro de data_fim
+            if not data_fim:
+                agora = datetime.now()
+                if historico_saldo:
+                    if abs(float(estoque.quantidade) - historico_saldo[-1]['saldo']) > 0.01:
+                        # Calcular início da semana atual
+                        dias_para_segunda = agora.weekday()
+                        inicio_semana = agora - timedelta(days=dias_para_segunda)
+                        historico_saldo.append({
+                            "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                            "saldo": float(estoque.quantidade),
+                            "semana": f"Semana de {inicio_semana.strftime('%d/%m/%Y')}"
+                        })
+                    else:
+                        # Atualizar o último ponto
+                        historico_saldo[-1]['saldo'] = float(estoque.quantidade)
+        
         return historico_saldo
+    
+    @classmethod
+    def _agrupar_por_semana(cls, historico_saldo):
+        """
+        Agrupa o histórico de saldo por semana, usando o último valor de cada semana.
+        
+        Args:
+            historico_saldo: Lista de dicionários com "data" e "saldo"
+            
+        Returns:
+            list: Lista agrupada por semana
+        """
+        from datetime import datetime, timedelta
+        from collections import defaultdict
+        
+        # Agrupar por semana (ano-semana)
+        semanas = defaultdict(list)
+        
+        for item in historico_saldo:
+            data_str = item['data']
+            # Converter string para datetime
+            if ' ' in data_str:
+                data_dt = datetime.strptime(data_str, '%Y-%m-%d %H:%M:%S')
+            else:
+                data_dt = datetime.strptime(data_str, '%Y-%m-%d')
+            
+            # Calcular ano e número da semana (ISO week)
+            ano, semana, dia_semana = data_dt.isocalendar()
+            chave_semana = f"{ano}-W{semana:02d}"
+            
+            semanas[chave_semana].append({
+                'data': data_dt,
+                'saldo': item['saldo']
+            })
+        
+        # Para cada semana, pegar o último valor (mais recente)
+        historico_agrupado = []
+        for chave_semana in sorted(semanas.keys()):
+            itens_semana = semanas[chave_semana]
+            # Ordenar por data para pegar o último
+            itens_semana.sort(key=lambda x: x['data'])
+            ultimo_item = itens_semana[-1]
+            
+            # Calcular início da semana (segunda-feira)
+            # weekday() retorna: 0=segunda, 1=terça, ..., 6=domingo
+            data_dt = ultimo_item['data']
+            dias_para_segunda = data_dt.weekday()  # 0 para segunda, 6 para domingo
+            inicio_semana = data_dt - timedelta(days=dias_para_segunda)
+            
+            # Formatar como "Semana de DD/MM/YYYY"
+            historico_agrupado.append({
+                "data": inicio_semana.strftime('%Y-%m-%d %H:%M:%S'),
+                "saldo": ultimo_item['saldo'],
+                "semana": f"Semana de {inicio_semana.strftime('%d/%m/%Y')}"
+            })
+        
+        return historico_agrupado
     
     @classmethod
     def criar_baixa_usinagem(cls, estoque_id, quantidade, data_movimento, origem_id, usuario_id, observacao=None):
@@ -348,27 +505,24 @@ class MovimentacaoEstoque(db.Model):
         self.observacao = observacao
         self.tipo_movimento = 'saida'
 
-    def Ajuste(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id):
+    def Ajuste(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id,data_movimento=None):
         """
         Cria uma nova movimentação de estoque
         """
         estoque = Estoque.query.get(estoque_id)
         if not estoque:
             raise ValueError(f"Estoque ID {estoque_id} não encontrado")
-        diferenca = quantidade - estoque.get_estoque_atual()
-        if diferenca == 0:
-            raise ValueError(f"A quantidade ajustada é igual à quantidade atual do estoque")
-        if diferenca > 0:
-            tipo_movimento = 'entrada'
-        else:
-            tipo_movimento = 'saida'
-        quantidade = abs(diferenca)
+        if not data_movimento:
+            data_movimento = datetime.now()
+        diferenca = quantidade - estoque.get_saldo_ate_data(data_fim=data_movimento)
+        tipo_movimento = 'ajuste'
         self.quantidade = quantidade
         self.estoque_id = estoque_id
+        self.usuario_id = usuario_id
         self.origem_id = origem_id
         self.origem_tipo = origem_tipo
-        self.usuario_id = usuario_id
         self.observacao = f'Ajuste de estoque #{origem_tipo} #{origem_id}'
+        self.data_movimento = data_movimento
         self.tipo_movimento = tipo_movimento
 
     def save(self):
@@ -400,12 +554,12 @@ class MovimentacaoEstoque(db.Model):
                 elif self.tipo_movimento == 'ajuste':
                     print(f"Movimentação AJUSTE: {estoque_anterior} -> {self.quantidade}")
                     self.estoque.quantidade = self.quantidade
+                    self.estoque.processar_movimentacoes(data_inicio=self.data_movimento)
                 
                 # Garante que a quantidade nunca será negativa
                 if self.estoque.quantidade < 0:
                     print(f"AVISO: Quantidade negativa corrigida para 0")
                     self.estoque.quantidade = 0
-                
                 # Importante: atualizar o estoque no banco de dados
                 db.session.add(self.estoque)
             else:
@@ -537,27 +691,70 @@ class InventarioEstoque(db.Model):
             # Ajustar o estoque para cada item do inventário
             for item in self.itens:
                 if item.estoque:
-                    # Criar movimentação de ajuste
-                    movimento = MovimentacaoEstoque(
-                        estoque_id=item.estoque_id,
-                        tipo_movimento='ajuste',
-                        quantidade=item.quantidade_contada,
-                        observacao=f'Ajuste de inventário #{self.id}',
-                        usuario_id=usuario_id,
-                        origem_id=self.id,
-                        origem_tipo='InventarioEstoque'
-                    )
-                    
-                    # Atualizar a quantidade no estoque
-                    diferenca = item.quantidade_contada - item.quantidade_sistema
-                    item.diferenca = diferenca
-                    item.estoque.quantidade = item.quantidade_contada
-                    
-                    db.session.add(movimento)
-            
-            db.session.commit()
+                  mov=MovimentacaoEstoque()
+                  mov.Ajuste(item.quantidade_contada,item.estoque_id,self.id,"InventarioEstoque",usuario_id,item.contado_em)
+                  mov.save()
+            self.save()
             return True
         return False
+    
+    def cancelar(self, usuario_id):
+        """
+        Cancela o inventário e desfaz movimentações se o inventário estiver concluído
+        """
+        if self.status not in ['Em andamento', 'Concluído']:
+            return False
+
+        if self.status == 'Concluído':
+            # Desfazer movimentações criadas na finalização
+            movimentacoes = MovimentacaoEstoque.query.filter_by(
+                origem_tipo='InventarioEstoque',
+                origem_id=self.id
+            ).all()
+            itens_por_estoque = {item.estoque_id: item for item in self.itens}
+
+            for movimento in movimentacoes:
+                item_ref = itens_por_estoque.get(movimento.estoque_id)
+                if movimento.estoque and item_ref:
+                    movimento.estoque.quantidade = item_ref.quantidade_sistema
+                    db.session.add(movimento.estoque)
+                db.session.delete(movimento)
+
+        self.status = 'Cancelado'
+        self.data_fim = datetime.now()
+        self.finalizado_por_id = usuario_id
+
+        db.session.commit()
+        return True
+
+    def reabrir(self, usuario_id):
+        """
+        Reabre um inventário concluído, desfazendo ajustes e retornando para 'Em andamento'
+        """
+        if self.status != 'Concluído':
+            return False
+
+        # Desfazer movimentações de ajuste criadas na finalização
+        movimentacoes = MovimentacaoEstoque.query.filter_by(
+            origem_tipo='InventarioEstoque',
+            origem_id=self.id
+        ).all()
+        itens_por_estoque = {item.estoque_id: item for item in self.itens}
+
+        for movimento in movimentacoes:
+            item_ref = itens_por_estoque.get(movimento.estoque_id)
+            if movimento.estoque and item_ref:
+                movimento.estoque.quantidade = item_ref.quantidade_sistema
+                db.session.add(movimento.estoque)
+            db.session.delete(movimento)
+
+        # Voltar para status em andamento para permitir nova contagem
+        self.status = 'Em andamento'
+        self.data_fim = None
+        self.finalizado_por_id = None
+
+        db.session.commit()
+        return True
     
     def __repr__(self):
         """
@@ -595,13 +792,13 @@ class ItemInventario(db.Model):
             db.session.add(self)
         db.session.commit()
     
-    def contar(self, quantidade, usuario_id, observacoes=None):
+    def contar(self, quantidade, usuario_id, observacoes=None, data_contagem=None):
         """
         Registra a contagem do item
         """
         self.quantidade_contada = quantidade
         self.diferenca = quantidade - self.quantidade_sistema
-        self.contado_em = datetime.now()
+        self.contado_em = data_contagem if data_contagem else datetime.now()
         self.contado_por_id = usuario_id
         
         if observacoes:

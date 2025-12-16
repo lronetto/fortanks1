@@ -447,13 +447,31 @@ def api_get_dados_notas_fiscais(request):
     )
     subquery_upload_qualquer = case((subquery_upload_qualquer_exists, 1), else_=0)
     
+    # Subquery para calcular percentual de importação
+    # Calcula: (itens_importados / total_itens) * 100
+    # Usa CASE para evitar divisão por zero quando não há itens
+    subquery_percentual_importacao = (
+        select(
+            case(
+                (func.count(NotaFiscalItem.id) > 0,
+                 (func.sum(case((NotaFiscalItem.importado_estoque == True, 1), else_=0)).cast(db.Numeric(15, 2)) / 
+                  func.count(NotaFiscalItem.id).cast(db.Numeric(15, 2))) * 100),
+                else_=0
+            )
+        )
+        .select_from(NotaFiscalItem)
+        .where(NotaFiscalItem.nf_id == NotaFiscal.id)
+        .correlate(NotaFiscal)
+        .scalar_subquery()
+    )
+    
     # Colunas calculadas usando subqueries EXISTS (sem JOINs, sem multiplicação de linhas)
     pagamento_column = subquery_pagamento.label('pagamento')
     upload_column = subquery_upload_qualquer.label('upload')
     upload_arquivei_column = subquery_upload_arquivei.label('upload_arquivei')
     upload_protocolo_column = subquery_upload_protocolo.label('upload_protocolo')
     upload_reembolso_column = subquery_upload_reembolso.label('upload_reembolso')
-    
+    percentual_importacao_column = subquery_percentual_importacao.label('percentual_importacao')
     # Construir query base SEM OUTER JOINs - isso evita multiplicação de linhas
     query = db.session.query(
         NotaFiscal,
@@ -461,7 +479,8 @@ def api_get_dados_notas_fiscais(request):
         upload_column,
         upload_protocolo_column,
         upload_reembolso_column,
-        upload_arquivei_column
+        upload_arquivei_column,
+        percentual_importacao_column
     ).select_from(NotaFiscal).filter(NotaFiscal.status_processamento != 'cancelada')
     
     # REMOVIDO: OUTER JOINs que causavam multiplicação de linhas
@@ -502,11 +521,16 @@ def api_get_dados_notas_fiscais(request):
         # Notas sem NENHUM item importado
         query = query.filter(~NotaFiscal.itens.any(NotaFiscalItem.importado_estoque == True))
         flash("Filtrando por notas pendentes (sem itens importados). Filtros 'Importadas' e 'Parciais' estão desativados com paginação.", "info")
-    elif status_importacao == 'importadas' or status_importacao == 'parciais':
+    elif status_importacao == 'importadas':
         # Avisar que estes filtros complexos estão desativados por enquanto
         flash(f"Filtro por status '{status_importacao}' não está otimizado para paginação e foi desativado. Mostrando todos os status.", "warning")
         status_importacao = '' # Resetar para não quebrar a lógica do template
-    
+    elif status_importacao == 'parciais':
+        query = query.filter(percentual_importacao_column > 0, percentual_importacao_column < 100)
+        flash("Filtrando por notas parciais (com itens importados). Filtros 'Importadas' e 'Pendentes' estão desativados com paginação.", "info")
+    elif status_importacao == 'nao_importadas':
+        query = query.filter(percentual_importacao_column == 0)
+        flash("Filtrando por notas não importadas (sem itens importados). Filtros 'Importadas' e 'Parciais' estão desativados com paginação.", "info")
     # Filtro por data de emissão
     if emitente:
         if emitente == 'Terceiros':
@@ -1181,198 +1205,7 @@ def importar_itens():
        #     return jsonify({'success': False, 'message': f'Erro ao importar itens: {str(e)}'}), 500
     return jsonify({'success': False, 'message': 'Método inválido'}), 405
 
-def _buscar_itens_similares_todas_notas(codigo, descricao):
-    """
-    Busca todos os itens similares em todas as notas fiscais baseado em código e/ou descrição.
-    
-    Args:
-        codigo: Código do item
-        descricao: Descrição do item
-    
-    Returns:
-        Lista de NotaFiscalItem encontrados
-    """
-    if codigo and descricao:
-        return NotaFiscalItem.query.filter(
-            NotaFiscalItem.codigo == codigo,
-            NotaFiscalItem.descricao == descricao
-        ).all()
-    elif codigo:
-        return NotaFiscalItem.query.filter(
-            NotaFiscalItem.codigo == codigo
-        ).all()
-    elif descricao:
-        return NotaFiscalItem.query.filter(
-            NotaFiscalItem.descricao == descricao
-        ).all()
-    return []
-
-
-def _aplicar_fator_conversao(item, material, fator_conversao):
-    """
-    Aplica o fator de conversão ao item baseado no material e fator fornecido.
-    
-    Args:
-        item: NotaFiscalItem
-        material: Material
-        fator_conversao: Fator de conversão a ser aplicado
-    """
-    if fator_conversao:
-        try:
-            item.fator_conversao_aplicado = float(fator_conversao)
-        except (ValueError, TypeError):
-            if comparar_unidades(item.unidade, material.unidade_obj.nome):
-                item.fator_conversao_aplicado = 1
-            else:
-                item.fator_conversao_aplicado = None
-    elif comparar_unidades(item.unidade, material.unidade_obj.nome):
-        item.fator_conversao_aplicado = 1
-    else:
-        item.fator_conversao_aplicado = None
-
-
-def _vincular_material_a_itens_similares(item_original, material, itens_sem_material, itens_processados):
-    """
-    Vincula o material aos itens similares que não têm material vinculado.
-    
-    Args:
-        item_original: Item original que já tem material vinculado
-        material: Material a ser vinculado
-        itens_sem_material: Lista de itens similares sem material
-        itens_processados: Set de IDs de itens já processados
-    
-    Returns:
-        Número de itens vinculados
-    """
-    itens_vinculados = 0
-    fator_conversao = item_original.fator_conversao_aplicado
-    
-    for item_similar in itens_sem_material:
-        if item_similar.id in itens_processados:
-            continue
-        
-        _aplicar_fator_conversao(item_similar, material, fator_conversao)
-        item_similar.material_id = item_original.material_id
-        item_similar.save()
-        
-        itens_vinculados += 1
-        itens_processados.add(item_similar.id)
-        logger.info(f'Item {item_similar.id} vinculado ao material {material.nome} na nota {item_similar.nota_fiscal.numero_nf}')
-    
-    return itens_vinculados
-
-
-def _importar_item_para_estoque(item, usuario_id, centro_custo_id, observacao, nota_fiscal):
-    """
-    Importa um item para o estoque.
-    
-    Args:
-        item: NotaFiscalItem a ser importado
-        usuario_id: ID do usuário
-        centro_custo_id: ID do centro de custo
-        observacao: Observação para a importação
-        nota_fiscal: NotaFiscal relacionada
-    
-    Returns:
-        Tupla (sucesso: bool, mensagem: str)
-    """
-    try:
-        sucesso, mensagem = item.importar_para_estoque(
-            usuario_id=usuario_id,
-            centro_custo_id=centro_custo_id,
-            observacao=observacao or f"Importação automática da NF {nota_fiscal.numero_nf} de {nota_fiscal.nome_emitente}"
-        )
-        if sucesso:
-            logger.info(f'Item {item.id} importado para o estoque')
-        else:
-            logger.error(f'Erro ao importar item {item.id}: {mensagem}')
-        return sucesso, mensagem
-    except Exception as e:
-        logger.error(f'Erro ao importar item {item.id}: {str(e)}')
-        return False, str(e)
-
-
-def _vincular_similares_para_item(item, material, itens_processados, grupos_processados, estatisticas):
-    """
-    Vincula itens similares em todas as notas para um item específico.
-    
-    Args:
-        item: Item a ser processado
-        material: Material vinculado ao item
-        itens_processados: Set de IDs de itens já processados
-        grupos_processados: Set de chaves de grupos já processados
-        estatisticas: Dicionário com estatísticas da operação
-    
-    Returns:
-        Lista de todos os itens similares encontrados (incluindo o original)
-    """
-    codigo = item.codigo.strip() if item.codigo else ''
-    descricao = item.descricao.strip() if item.descricao else ''
-    
-    # Criar chave única para o grupo de itens similares
-    chave_grupo = f"{codigo}|{descricao}"
-    if chave_grupo in grupos_processados:
-        return []  # Já processamos este grupo
-    
-    grupos_processados.add(chave_grupo)
-    
-    # 1. Buscar TODOS os itens similares em TODAS as notas fiscais
-    logger.info(f'Buscando itens similares para código="{codigo}", descrição="{descricao}" em TODAS as notas fiscais')
-    itens_similares_todos = _buscar_itens_similares_todas_notas(codigo, descricao)
-    logger.info(f'Encontrados {len(itens_similares_todos)} itens similares em todas as notas')
-    
-    # Separar itens já vinculados dos que não têm material
-    itens_ja_vinculados_local = [i for i in itens_similares_todos if i.material_id]
-    itens_sem_material = [i for i in itens_similares_todos if not i.material_id]
-    logger.info(f'Dos {len(itens_similares_todos)} itens similares: {len(itens_ja_vinculados_local)} já vinculados, {len(itens_sem_material)} sem material')
-    
-    # 2. Vincular material aos itens que não têm material vinculado
-    itens_vinculados_local = _vincular_material_a_itens_similares(
-        item, material, itens_sem_material, itens_processados
-    )
-    estatisticas['total_itens_vinculados'] += itens_vinculados_local
-    estatisticas['total_itens_ja_vinculados'] += len(itens_ja_vinculados_local)
-    
-    # Retornar todos os itens similares (incluindo o original)
-    return [item] + itens_similares_todos
-
-
-def _importar_itens(itens_para_importar, nota_fiscal, centro_custo_id, observacao, 
-                    itens_processados, estatisticas):
-    """
-    Importa uma lista de itens para o estoque.
-    
-    Args:
-        itens_para_importar: Lista de itens para importar
-        nota_fiscal: Nota fiscal relacionada
-        centro_custo_id: ID do centro de custo
-        observacao: Observação para importação
-        itens_processados: Set de IDs de itens já processados
-        estatisticas: Dicionário com estatísticas da operação
-    """
-    for item_para_importar in itens_para_importar:
-        if item_para_importar.id in itens_processados:
-            if item_para_importar.importado_estoque:
-                estatisticas['total_itens_ja_importados'] += 1
-            continue
-        
-        if item_para_importar.material_id:
-            if not item_para_importar.importado_estoque:
-                sucesso, mensagem = _importar_item_para_estoque(
-                    item_para_importar, current_user.id, centro_custo_id, observacao, nota_fiscal
-                )
-                if sucesso:
-                    estatisticas['total_itens_importados'] += 1
-                else:
-                    estatisticas['itens_com_erro'].append({
-                        'item_id': item_para_importar.id,
-                        'descricao': item_para_importar.descricao,
-                        'erro': mensagem
-                    })
-            else:
-                estatisticas['total_itens_ja_importados'] += 1
-        
-        itens_processados.add(item_para_importar.id)
+# Funções auxiliares removidas - agora estão centralizadas no modelo NotaFiscalItem
 
 
 @nota_fiscal_bp.route('/api/importar-pendentes-com-material', methods=['POST'])
@@ -1458,7 +1291,7 @@ def api_importar_pendentes_com_material():
                 grupos_verificados.add(chave_grupo)
                 
                 # Buscar itens similares em todas as notas
-                itens_similares = _buscar_itens_similares_todas_notas(codigo, descricao)
+                itens_similares = NotaFiscalItem.buscar_itens_similares_todas_notas(codigo, descricao)
                 
                 # Verificar se há algum item similar sem material vinculado
                 itens_similares_sem_material = [i for i in itens_similares if not i.material_id]
@@ -1474,53 +1307,11 @@ def api_importar_pendentes_com_material():
                 'message': 'Nenhum item pendente com material vinculado encontrado na nota atual e nenhum item similar sem material encontrado em outras notas.'
             }), 400
         
-        # Inicializar estatísticas e estruturas de controle
-        estatisticas = {
-            'total_itens_vinculados': 0,
-            'total_itens_ja_vinculados': 0,
-            'total_itens_importados': 0,
-            'total_itens_ja_importados': 0,
-            'itens_com_erro': []
-        }
-        itens_processados = set()  # Para evitar processar o mesmo item múltiplas vezes
-        grupos_processados = set()  # Para evitar processar o mesmo grupo de itens similares múltiplas vezes
-        
-        # ETAPA 1: Vincular similares em todas as notas
-        # Coletar todos os itens que serão processados (originais + similares)
-        todos_itens_para_importar = []
-        
-        # Processar cada item já vinculado na nota atual
-        # Processar tanto itens pendentes quanto itens já importados (que podem ter similares em outras notas)
-        for item in nota_fiscal.itens:
-            # Processar se tiver material vinculado (mesmo que já esteja importado, pode ter similares em outras notas)
-            if item.material_id and item.id not in itens_processados:
-                material = Material.query.get(item.material_id)
-                if not material:
-                    continue
-                
-                # Vincular similares em todas as notas
-                itens_similares = _vincular_similares_para_item(
-                    item=item,
-                    material=material,
-                    itens_processados=itens_processados,
-                    grupos_processados=grupos_processados,
-                    estatisticas=estatisticas
-                )
-                
-                # Adicionar à lista de itens para importar (sem duplicatas)
-                for item_similar in itens_similares:
-                    if item_similar.id not in [i.id for i in todos_itens_para_importar]:
-                        todos_itens_para_importar.append(item_similar)
-        
-        # ETAPA 2: Importar todos os itens (originais + similares recém-vinculados)
-        logger.info(f'Iniciando importação de {len(todos_itens_para_importar)} itens para o estoque')
-        _importar_itens(
-            itens_para_importar=todos_itens_para_importar,
-            nota_fiscal=nota_fiscal,
+        # Usar método centralizado do modelo
+        estatisticas = nota_fiscal.importar_pendentes_com_material(
+            usuario_id=current_user.id,
             centro_custo_id=centro_custo_id,
-            observacao=observacao,
-            itens_processados=itens_processados,
-            estatisticas=estatisticas
+            observacao=observacao
         )
         
         # Montar mensagem de resposta
@@ -1849,6 +1640,7 @@ def api_vincular_material_outras_notas():
             itens_por_codigo = NotaFiscalItem.query.filter(
                 NotaFiscalItem.nf_id == nf_id,
                 NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.unidade == item_original.unidade,
                 NotaFiscalItem.material_id.is_(None)  # Apenas itens sem material vinculado
             ).all()
             itens_similares.extend(itens_por_codigo)
@@ -1858,6 +1650,7 @@ def api_vincular_material_outras_notas():
             itens_por_descricao = NotaFiscalItem.query.filter(
                 NotaFiscalItem.nf_id == nf_id,
                 NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.unidade == item_original.unidade,
                 NotaFiscalItem.material_id.is_(None)  # Apenas itens sem material vinculado
             ).all()
             # Adicionar apenas se não estiver na lista (evitar duplicatas)
@@ -1944,6 +1737,7 @@ def api_vincular_itens_similares_todas_notas():
             itens_encontrados = NotaFiscalItem.query.filter(
                 NotaFiscalItem.codigo == codigo,
                 NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.unidade == item_original.unidade,
                 NotaFiscalItem.id != item_id  # Excluir o item original
             ).all()
             itens_similares_todos.extend(itens_encontrados)
@@ -1951,6 +1745,7 @@ def api_vincular_itens_similares_todas_notas():
             # Se só tem código, buscar por código
             itens_encontrados = NotaFiscalItem.query.filter(
                 NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.unidade == item_original.unidade,
                 NotaFiscalItem.id != item_id
             ).all()
             itens_similares_todos.extend(itens_encontrados)
@@ -1958,6 +1753,7 @@ def api_vincular_itens_similares_todas_notas():
             # Se só tem descrição, buscar por descrição
             itens_encontrados = NotaFiscalItem.query.filter(
                 NotaFiscalItem.descricao == descricao,
+                NotaFiscalItem.unidade == item_original.unidade,
                 NotaFiscalItem.id != item_id
             ).all()
             itens_similares_todos.extend(itens_encontrados)
@@ -2449,8 +2245,9 @@ def importar_todas_pendentes():
     """
     try:
         # Buscar todas as notas fiscais
-        notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada',
-                                                NotaFiscal.data_emissao>=datetime.now()-relativedelta(months=3))\
+        notas_fiscais = NotaFiscal.query.filter(NotaFiscal.status_processamento!='cancelada',\
+                                                NotaFiscalItem.material_id!=None)\
+                                                .join(NotaFiscalItem, NotaFiscal.id == NotaFiscalItem.nf_id)\
                                                 .all()
         
         itens_importados = 0
@@ -2472,7 +2269,7 @@ def importar_todas_pendentes():
                 if itens_vinculados > 0:
                     nota_fiscal.importar_itens_para_estoque()
                     notas_importadas+=1
-                
+            nota_fiscal.importar_itens_para_estoque()
         
             print(f'{notas_processadas} - {notas_importadas} - {notas_canceladas} - {total_notas}')
 

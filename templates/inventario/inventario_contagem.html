@@ -1,0 +1,1117 @@
+{% extends "common/base.html" %}
+
+{% block title %}Contagem de Inventário{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Contagem de Inventário #{{ inventario.id }}</h1>
+        <div>
+            <a href="{{ url_for('inventario.inventario_detalhes', id=inventario.id) }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar para Detalhes
+            </a>
+            
+            {% if inventario.status == 'Em andamento' %}
+                <button type="button" class="btn btn-success btn-sm" id="btnFinalizarInventario"
+                        onclick="confirmarFinalizacao('{{ url_for('inventario.finalizar_inventario', id=inventario.id) }}')">
+                    <i class="fas fa-check-double"></i> Finalizar Inventário
+                </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Informações do Inventário -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Informações do Inventário</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p><strong>Tipo:</strong> {{ inventario.tipo_inventario }}</p>
+                    <p><strong>Data de Início:</strong> {{ inventario.data_inicio.strftime('%d/%m/%Y %H:%M') }}</p>
+                </div>
+                <div class="col-md-8">
+                    <p class="mb-1"><strong>Progresso da Contagem:</strong></p>
+                    {% set total_itens = inventario.itens|length %}
+                    {% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}
+                    <div class="progress mb-2">
+                        <div class="progress-bar bg-info" role="progressbar" 
+                             style="width: {{ (itens_contados / total_itens * 100)|int if total_itens > 0 else 0 }}%" 
+                             aria-valuenow="{{ itens_contados }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="{{ total_itens }}">
+                            {{ (itens_contados / total_itens * 100)|int if total_itens > 0 else 0 }}%
+                        </div>
+                    </div>
+                    <p class="text-right"><small>{{ itens_contados }}/{{ total_itens }} itens contados</small></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário de Contagem -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <h6 class="m-0 font-weight-bold text-primary">Contagem de Itens</h6>
+            <div>
+                {% if inventario.status == 'Em andamento' %}
+                    <button type="button" class="btn btn-success btn-sm mr-2" data-toggle="modal" data-target="#modalAdicionarItem">
+                        <i class="fas fa-plus"></i> Adicionar Item
+                    </button>
+                {% endif %}
+                <button type="button" class="btn btn-info btn-sm" data-toggle="collapse" data-target="#filtrosCollapse">
+                    <i class="fas fa-filter"></i> Filtros
+                </button>
+            </div>
+        </div>
+        
+        <!-- Data Padrão de Contagem -->
+        {% if inventario.status == 'Em andamento' %}
+        <div class="card-body bg-light border-bottom">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <label for="dataPadraoContagem" class="mb-0"><strong>Data Padrão de Contagem:</strong></label>
+                </div>
+                <div class="col-md-4">
+                    <input type="date" class="form-control form-control-sm" id="dataPadraoContagem">
+                </div>
+                <div class="col-md-4">
+                    <small class="text-muted">Esta data será usada para itens sem data individual</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Filtros -->
+        <div class="collapse" id="filtrosCollapse">
+            <div class="card-body bg-light">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filtroTipo">Tipo de Item</label>
+                            <select id="filtroTipo" class="form-control">
+                                <option value="">Todos</option>
+                                <option value="material">Material</option>
+                                <option value="epi">EPI</option>
+                                <option value="usinagem">Usinagem</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filtroStatus">Status</label>
+                            <select id="filtroStatus" class="form-control">
+                                <option value="">Todos</option>
+                                <option value="contado">Contados</option>
+                                <option value="nao-contado">Não Contados</option>
+                                <option value="divergente">Com Divergência</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label for="filtroBusca">Buscar</label>
+                            <input type="text" id="filtroBusca" class="form-control" placeholder="Nome, código...">
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-secondary btn-block" id="btnLimparFiltros">
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabelaItens" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th style="width: 10%">Tipo</th>
+                            <th style="width: 10%">Código</th>
+                            <th style="width: 20%">Descrição</th>
+                            <th style="width: 10%">Localização</th>
+                            <th style="width: 10%">Qtd. Sistema</th>
+                            <th style="width: 15%">Qtd. Contada</th>
+                            <th style="width: 10%">Diferença</th>
+                            <th style="width: 15%">Observações</th>
+                            {% if inventario.status == 'Em andamento' %}
+                            <th style="width: 5%">Ações</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in inventario.itens %}
+                        <tr class="item-row {{ 'contado' if item.quantidade_contada is not none else 'nao-contado' }} {{ 'divergente' if item.diferenca and item.diferenca != 0 else '' }}" 
+                            data-id="{{ item.id }}" 
+                            data-tipo="{{ item.estoque.tipo_item }}" 
+                            data-busca="{{ item.estoque.material.nome if item.estoque.material else '' }} {{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }} {{ item.estoque.material.codigo if item.estoque.material else '' }}">
+                            <td>{{ item.estoque.tipo_item|capitalize }}</td>
+                            <td>
+                                {% if item.estoque.material %}
+                                    {{ item.estoque.material.codigo or "N/A" }}
+                                {% elif item.estoque.epi and item.estoque.epi.material %}
+                                    {{ item.estoque.epi.material.codigo or "N/A" }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.estoque.material %}
+                                    {{ item.estoque.material.nome }}
+                                {% elif item.estoque.epi and item.estoque.epi.material %}
+                                    {{ item.estoque.epi.material.nome }} - CA: {{ item.estoque.epi.ca_numero or "N/A" }}
+                                {% else %}
+                                    Item sem descrição
+                                {% endif %}
+                            </td>
+                            <td>{{ item.estoque.localizacao or "Não especificado" }}</td>
+                            <td class="text-right quantidade-sistema" data-estoque-id="{{ item.estoque_id }}">
+                                {{ "%.2f"|format(item.quantidade_sistema|float) }}
+                                {% if item.estoque.material %}
+                                    {{ item.estoque.material.unidade or "" }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('inventario.salvar_contagem_item', inventario_id=inventario.id, item_id=item.id) }}" class="form-contagem">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="form-row">
+                                        <div class="col-md-5 mb-2">
+                                            <input type="date" class="form-control form-control-sm data-contagem" 
+                                                   name="data_contagem" 
+                                                   value="{{ item.contado_em.strftime('%Y-%m-%d') if item.contado_em else '' }}"
+                                                   {{ 'disabled' if inventario.status != 'Em andamento' else '' }}
+                                                   data-original="{{ item.contado_em.strftime('%Y-%m-%d') if item.contado_em else '' }}"
+                                                   data-item-id="{{ item.id }}"
+                                                   title="Data da contagem (deixe em branco para usar a data padrão)">
+                                        </div>
+                                        <div class="col-md-7">
+                                            <div class="input-group input-group-sm">
+                                                <input type="number" step="0.01" min="0" class="form-control quantidade-contada" 
+                                                       name="quantidade_contada" value="{{ "%.2f"|format(item.quantidade_contada|float) if item.quantidade_contada is not none else '' }}"
+                                                       {{ 'disabled' if inventario.status != 'Em andamento' else '' }}
+                                                       data-sistema="{{ item.quantidade_sistema }}"
+                                                       data-original="{{ item.quantidade_contada if item.quantidade_contada is not none else '' }}"
+                                                       placeholder="Quantidade">
+                                                <div class="input-group-append">
+                                                    <button class="btn btn-outline-primary btn-salvar-item" type="submit" {{ 'disabled' if inventario.status != 'Em andamento' else '' }}>
+                                                        <i class="fas fa-save"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                            </td>
+                            <td class="text-right diferenca-container {{ 'text-danger' if item.diferenca and item.diferenca < 0 else 'text-success' if item.diferenca and item.diferenca > 0 else '' }}">
+                                {% if item.diferenca is not none %}
+                                    {{ "%.2f"|format(item.diferenca|float) }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form method="POST" action="{{ url_for('inventario.salvar_observacao_item', inventario_id=inventario.id, item_id=item.id) }}" class="form-observacao">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" name="observacoes" value="{{ item.observacoes or '' }}"
+                                               {{ 'disabled' if inventario.status != 'Em andamento' else '' }}
+                                               placeholder="Observação">
+                                        <div class="input-group-append">
+                                            <button class="btn btn-outline-primary btn-salvar-obs" type="submit" {{ 'disabled' if inventario.status != 'Em andamento' else '' }}>
+                                                <i class="fas fa-save"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </td>
+                            {% if inventario.status == 'Em andamento' %}
+                            <td class="text-center">
+                                <button type="button" class="btn btn-danger btn-sm btn-excluir-item" 
+                                        data-item-id="{{ item.id }}"
+                                        data-inventario-id="{{ inventario.id }}"
+                                        data-item-nome="{{ item.estoque.material.nome if item.estoque.material else (item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else 'Item') }}"
+                                        data-item-codigo="{{ item.estoque.material.codigo if item.estoque.material else (item.estoque.epi.material.codigo if item.estoque.epi and item.estoque.epi.material else 'N/A') }}"
+                                        title="Excluir item do inventário">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="{% if inventario.status == 'Em andamento' %}9{% else %}8{% endif %}" class="text-center">Nenhum item encontrado para este inventário</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Item -->
+{% include 'inventario/modais/adicionar_item_inventario.html' %}
+
+<!-- Modal de Confirmação de Exclusão de Item -->
+{% include 'inventario/modais/confirmar_exclusao_item.html' %}
+
+<!-- Modal de Confirmação de Finalização -->
+<div class="modal fade" id="confirmacaoFinalizacaoModal" tabindex="-1" role="dialog" aria-labelledby="confirmacaoFinalizacaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmacaoFinalizacaoModalLabel">Confirmar Finalização</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> ATENÇÃO: Ao finalizar o inventário, as quantidades em estoque serão ajustadas conforme a contagem realizada.
+                </div>
+                <p>Tem certeza que deseja finalizar este inventário?</p>
+                
+                <div id="alertItensNaoContados" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i> Existem <span id="contadorItensNaoContados">0</span> itens não contados. Finalize a contagem antes de encerrar o inventário.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formFinalizacao" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-success" id="btnConfirmarFinalizacao">
+                        Confirmar Finalização
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        // Definir data padrão como hoje
+        const hoje = new Date().toISOString().split('T')[0];
+        $('#dataPadraoContagem').val(hoje);
+        
+        // Função auxiliar para obter data de contagem (individual ou padrão)
+        function obterDataContagem($dataInput) {
+            const dataIndividual = $dataInput.val();
+            if (dataIndividual && dataIndividual.trim() !== '') {
+                return dataIndividual;
+            }
+            return $('#dataPadraoContagem').val();
+        }
+        
+        // Função para calcular e atualizar itens não contados
+        function atualizarItensNaoContados() {
+            const totalItens = $('.item-row').length;
+            const itensContados = $('.item-row.contado').length;
+            const itensNaoContados = totalItens - itensContados;
+            
+            // Atualizar alerta no modal
+            const $alert = $('#alertItensNaoContados');
+            const $contador = $('#contadorItensNaoContados');
+            const $btnConfirmar = $('#btnConfirmarFinalizacao');
+            const $btnFinalizar = $('#btnFinalizarInventario');
+            
+            if (itensNaoContados > 0) {
+                $alert.show();
+                $contador.text(itensNaoContados);
+                $btnConfirmar.prop('disabled', true);
+                $btnFinalizar.prop('disabled', true);
+            } else {
+                $alert.hide();
+                $btnConfirmar.prop('disabled', false);
+                $btnFinalizar.prop('disabled', false);
+            }
+        }
+        
+        // Função para fechar o modal de finalização
+        function fecharModalFinalizacao() {
+            const modalElement = document.getElementById('confirmacaoFinalizacaoModal');
+            if (!modalElement) return;
+            
+            // Tentar Bootstrap 5 primeiro
+            if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                try {
+                    const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    } else {
+                        // Se não existe instância, criar e fechar
+                        const modal = new bootstrap.Modal(modalElement);
+                        modal.hide();
+                    }
+                } catch (e) {
+                    console.error('Erro ao fechar modal Bootstrap 5:', e);
+                    // Fallback manual
+                    $(modalElement).removeClass('show').css('display', 'none');
+                    $('body').removeClass('modal-open');
+                    $('.modal-backdrop').remove();
+                }
+            } else if (typeof $ !== 'undefined' && $.fn.modal) {
+                // Fallback para Bootstrap 4/jQuery
+                try {
+                    $('#confirmacaoFinalizacaoModal').modal('hide');
+                } catch (e) {
+                    console.error('Erro ao fechar modal jQuery:', e);
+                    // Fallback manual
+                    $(modalElement).removeClass('show').css('display', 'none');
+                    $('body').removeClass('modal-open');
+                    $('.modal-backdrop').remove();
+                }
+            } else {
+                // Fallback manual
+                $(modalElement).removeClass('show').css('display', 'none');
+                $('body').removeClass('modal-open');
+                $('.modal-backdrop').remove();
+            }
+        }
+        
+        // Calcular inicialmente
+        atualizarItensNaoContados();
+        
+        // Função para atualizar quantidade do sistema baseado na data de contagem
+        function atualizarQuantidadeSistema($dataInput, dataContagem) {
+            const $row = $dataInput.closest('tr');
+            const itemId = $row.data('id');
+            const estoqueId = $row.find('.quantidade-sistema').data('estoque-id');
+            const $quantidadeSistema = $row.find('.quantidade-sistema');
+            const $quantidadeContada = $row.find('.quantidade-contada');
+            
+            // Usar data padrão se não houver data individual ou se dataContagem não foi fornecida
+            if (!dataContagem || dataContagem.trim() === '') {
+                dataContagem = $('#dataPadraoContagem').val();
+            }
+            
+            if (!dataContagem || !estoqueId) {
+                return;
+            }
+            
+            // Buscar quantidade do sistema via AJAX
+            $.ajax({
+                url: "{{ url_for('inventario.api_get_quantidade_sistema') }}",
+                method: 'GET',
+                data: {
+                    estoque_id: estoqueId,
+                    data_contagem: dataContagem
+                },
+                success: function(response) {
+                    if (response.success) {
+                        const novaQuantidade = parseFloat(response.quantidade_sistema);
+                        const quantidadeAtual = parseFloat($quantidadeSistema.text().trim().split(' ')[0]);
+                        
+                        // Atualizar exibição da quantidade do sistema
+                        const unidade = $quantidadeSistema.text().trim().split(' ').slice(1).join(' ');
+                        $quantidadeSistema.html(novaQuantidade.toFixed(2) + (unidade ? ' ' + unidade : ''));
+                        
+                        // Atualizar data-sistema no input de quantidade contada
+                        $quantidadeContada.data('sistema', novaQuantidade);
+                        
+                        // Recalcular diferença se houver quantidade contada
+                        if ($quantidadeContada.val()) {
+                            const qtdContada = parseFloat($quantidadeContada.val()) || 0;
+                            const diferenca = qtdContada - novaQuantidade;
+                            
+                            const $diferencaContainer = $row.find('.diferenca-container');
+                            if (!isNaN(diferenca)) {
+                                $diferencaContainer.text(diferenca.toFixed(2));
+                                $diferencaContainer.removeClass('text-danger text-success');
+                                if (diferenca < 0) {
+                                    $diferencaContainer.addClass('text-danger');
+                                } else if (diferenca > 0) {
+                                    $diferencaContainer.addClass('text-success');
+                                }
+                            }
+                        }
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Erro ao atualizar quantidade do sistema:', xhr);
+                }
+            });
+        }
+        
+        // Atualizar quantidade do sistema quando a data de contagem mudar
+        $(document).on('change', '.data-contagem', function() {
+            const $this = $(this);
+            const dataContagem = $this.val();
+            atualizarQuantidadeSistema($this, dataContagem);
+        });
+        
+        // Atualizar quantidade do sistema quando a data padrão mudar
+        $('#dataPadraoContagem').on('change', function() {
+            const dataPadrao = $(this).val();
+            if (!dataPadrao || dataPadrao.trim() === '') {
+                return;
+            }
+            // Atualizar campos de data e quantidade do sistema para itens sem data individual
+            $('.data-contagem').each(function() {
+                const $this = $(this);
+                if (!$this.val() || $this.val().trim() === '') {
+                    // Atualizar o campo de data com a nova data padrão
+                    $this.val(dataPadrao);
+                    // Atualizar o atributo data-original para refletir a mudança
+                    $this.data('original', dataPadrao);
+                    // Atualizar quantidade do sistema baseado na nova data
+                    atualizarQuantidadeSistema($this, dataPadrao);
+                }
+            });
+        });
+        
+        // Inicializar quantidade do sistema para todos os itens ao carregar a página
+        // Aguardar um pouco para garantir que a data padrão foi definida
+        setTimeout(function() {
+            $('.data-contagem').each(function() {
+                const $this = $(this);
+                const dataContagem = obterDataContagem($this);
+                if (dataContagem) {
+                    atualizarQuantidadeSistema($this, dataContagem);
+                }
+            });
+        }, 100);
+        
+        // Atualizar diferença quando a quantidade contada mudar
+        $('.quantidade-contada').on('input', function() {
+            const $this = $(this);
+            const qtdSistema = parseFloat($this.data('sistema')) || 0;
+            const qtdContada = parseFloat($this.val()) || 0;
+            const diferenca = qtdContada - qtdSistema;
+            
+            const $diferencaContainer = $this.closest('tr').find('.diferenca-container');
+            
+            if (!isNaN(diferenca)) {
+                $diferencaContainer.text(diferenca.toFixed(2));
+                
+                // Atualizar classe de cor conforme a diferença
+                $diferencaContainer.removeClass('text-danger text-success');
+                if (diferenca < 0) {
+                    $diferencaContainer.addClass('text-danger');
+                } else if (diferenca > 0) {
+                    $diferencaContainer.addClass('text-success');
+                }
+            } else {
+                $diferencaContainer.text('-');
+                $diferencaContainer.removeClass('text-danger text-success');
+            }
+        });
+        
+        // Salvar contagem via AJAX
+        $('.form-contagem').submit(function(e) {
+            e.preventDefault();
+            
+            const $form = $(this);
+            const $input = $form.find('.quantidade-contada');
+            const $dataContagem = $form.find('.data-contagem');
+            const $row = $input.closest('tr');
+            const $diferencaContainer = $row.find('.diferenca-container');
+            const $quantidadeSistema = $row.find('.quantidade-sistema');
+            const itemId = $row.data('id');
+            
+            // Usar data padrão se não houver data individual
+            let dataContagemValor = $dataContagem.val();
+            if (!dataContagemValor || dataContagemValor.trim() === '') {
+                dataContagemValor = $('#dataPadraoContagem').val();
+                // Atualizar o campo visualmente para que o usuário veja qual data será usada
+                // IMPORTANTE: Atualizar antes de serializar para garantir que seja enviado
+                if (dataContagemValor) {
+                    $dataContagem.val(dataContagemValor);
+                }
+            }
+            
+            // Validar se temos uma data válida
+            if (!dataContagemValor || dataContagemValor.trim() === '') {
+                alert('Por favor, defina uma data padrão de contagem ou uma data individual para o item.');
+                return false;
+            }
+            
+            // Não enviar se o valor não mudou e a data não mudou
+            const valorOriginal = $input.data('original');
+            const dataOriginal = $dataContagem.data('original') || '';
+            // Comparar considerando data padrão se não havia data original
+            const dataOriginalComparar = dataOriginal || $('#dataPadraoContagem').val();
+            if ($input.val() === valorOriginal && dataContagemValor === dataOriginalComparar) {
+                return false;
+            }
+            
+            // Garantir que o campo de data tenha o valor correto antes de serializar
+            // Isso é necessário porque campos vazios podem não ser incluídos no serialize()
+            if (!$dataContagem.val() || $dataContagem.val().trim() === '') {
+                $dataContagem.val(dataContagemValor);
+            }
+            
+            $.ajax({
+                url: $form.attr('action'),
+                method: 'POST',
+                data: $form.serialize(),
+                beforeSend: function() {
+                    $input.prop('disabled', true);
+                    $dataContagem.prop('disabled', true);
+                    $form.find('.btn-salvar-item').html('<i class="fas fa-spinner fa-spin"></i>');
+                },
+                success: function(response) {
+                    $input.data('original', $input.val());
+                    $dataContagem.data('original', $dataContagem.val());
+                    
+                    // Atualizar classe da linha baseado na quantidade contada
+                    $row.removeClass('nao-contado contado');
+                    const qtdContada = $input.val().trim();
+                    if (qtdContada !== '' && qtdContada !== null && !isNaN(parseFloat(qtdContada))) {
+                        $row.addClass('contado');
+                    } else {
+                        $row.addClass('nao-contado');
+                    }
+                    
+                    // Atualizar quantidade do sistema se retornada
+                    if (response.quantidade_sistema !== undefined) {
+                        const unidade = $quantidadeSistema.text().trim().split(' ').slice(1).join(' ');
+                        $quantidadeSistema.html(parseFloat(response.quantidade_sistema).toFixed(2) + (unidade ? ' ' + unidade : ''));
+                        $input.data('sistema', response.quantidade_sistema);
+                    }
+                    
+                    // Atualizar diferença e classes
+                    if (response.diferenca !== null) {
+                        $diferencaContainer.text(parseFloat(response.diferenca).toFixed(2));
+                        $diferencaContainer.removeClass('text-danger text-success');
+                        
+                        if (response.diferenca < 0) {
+                            $diferencaContainer.addClass('text-danger');
+                            $row.addClass('divergente');
+                        } else if (response.diferenca > 0) {
+                            $diferencaContainer.addClass('text-success');
+                            $row.addClass('divergente');
+                        } else {
+                            $row.removeClass('divergente');
+                        }
+                    } else {
+                        $diferencaContainer.text('-');
+                        $diferencaContainer.removeClass('text-danger text-success');
+                        $row.removeClass('divergente');
+                    }
+                    
+                    // Atualizar progresso
+                    if (response.progresso) {
+                        $('.progress-bar').css('width', response.progresso.percentual + '%');
+                        $('.progress-bar').text(response.progresso.percentual + '%');
+                        $('.progress-bar').attr('aria-valuenow', response.progresso.contados);
+                        $('.progress-bar').parent().next('p').find('small').text(
+                            response.progresso.contados + '/' + response.progresso.total + ' itens contados'
+                        );
+                    }
+                    
+                    // Atualizar contagem de itens não contados
+                    atualizarItensNaoContados();
+                    
+                    // Feedback
+                    $form.find('.btn-salvar-item')
+                        .removeClass('btn-outline-primary')
+                        .addClass('btn-outline-success')
+                        .html('<i class="fas fa-check"></i>');
+                    
+                    setTimeout(function() {
+                        $form.find('.btn-salvar-item')
+                            .removeClass('btn-outline-success')
+                            .addClass('btn-outline-primary')
+                            .html('<i class="fas fa-save"></i>');
+                    }, 2000);
+                },
+                error: function(xhr) {
+                    alert('Erro ao salvar contagem: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Falha na requisição'));
+                },
+                complete: function() {
+                    $input.prop('disabled', false);
+                    $dataContagem.prop('disabled', false);
+                }
+            });
+        });
+        
+        // Salvar observação via AJAX
+        $('.form-observacao').submit(function(e) {
+            e.preventDefault();
+            
+            const $form = $(this);
+            const $input = $form.find('input[name="observacoes"]');
+            
+            $.ajax({
+                url: $form.attr('action'),
+                method: 'POST',
+                data: $form.serialize(),
+                beforeSend: function() {
+                    $input.prop('disabled', true);
+                    $form.find('.btn-salvar-obs').html('<i class="fas fa-spinner fa-spin"></i>');
+                },
+                success: function() {
+                    // Feedback
+                    $form.find('.btn-salvar-obs')
+                        .removeClass('btn-outline-primary')
+                        .addClass('btn-outline-success')
+                        .html('<i class="fas fa-check"></i>');
+                    
+                    setTimeout(function() {
+                        $form.find('.btn-salvar-obs')
+                            .removeClass('btn-outline-success')
+                            .addClass('btn-outline-primary')
+                            .html('<i class="fas fa-save"></i>');
+                    }, 2000);
+                },
+                error: function(xhr) {
+                    alert('Erro ao salvar observação: ' + (xhr.responseJSON ? xhr.responseJSON.message : 'Falha na requisição'));
+                },
+                complete: function() {
+                    $input.prop('disabled', false);
+                }
+            });
+        });
+        
+        // Filtros
+        function aplicarFiltros() {
+            const tipo = $('#filtroTipo').val();
+            const status = $('#filtroStatus').val();
+            const busca = $('#filtroBusca').val().toLowerCase();
+            
+            $('.item-row').each(function() {
+                let mostrar = true;
+                
+                // Filtro por tipo
+                if (tipo && $(this).data('tipo') !== tipo) {
+                    mostrar = false;
+                }
+                
+                // Filtro por status
+                if (status === 'contado' && !$(this).hasClass('contado')) {
+                    mostrar = false;
+                } else if (status === 'nao-contado' && !$(this).hasClass('nao-contado')) {
+                    mostrar = false;
+                } else if (status === 'divergente' && !$(this).hasClass('divergente')) {
+                    mostrar = false;
+                }
+                
+                // Filtro por busca
+                if (busca && !$(this).data('busca').toLowerCase().includes(busca)) {
+                    mostrar = false;
+                }
+                
+                $(this).toggle(mostrar);
+            });
+        }
+        
+        $('#filtroTipo, #filtroStatus').change(aplicarFiltros);
+        $('#filtroBusca').on('input', aplicarFiltros);
+        
+        $('#btnLimparFiltros').click(function() {
+            $('#filtroTipo, #filtroStatus').val('');
+            $('#filtroBusca').val('');
+            aplicarFiltros();
+        });
+        
+        // Confirmação de finalização
+        window.confirmarFinalizacao = function(url) {
+            // Atualizar contagem antes de abrir o modal
+            atualizarItensNaoContados();
+            $('#formFinalizacao').attr('action', url);
+            
+            // Abrir modal (compatível com Bootstrap 4 e 5)
+            const modalElement = document.getElementById('confirmacaoFinalizacaoModal');
+            if (modalElement) {
+                // Tentar Bootstrap 5 primeiro
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                } else if (typeof $ !== 'undefined' && $.fn.modal) {
+                    // Fallback para Bootstrap 4/jQuery
+                    $('#confirmacaoFinalizacaoModal').modal('show');
+                }
+            }
+        };
+        
+        // Atualizar contagem quando o modal de finalização for aberto
+        const modalElement = document.getElementById('confirmacaoFinalizacaoModal');
+        if (modalElement) {
+            modalElement.addEventListener('show.bs.modal', function() {
+                atualizarItensNaoContados();
+            });
+        }
+        
+        // Interceptar submit do formulário de finalização
+        $('#formFinalizacao').on('submit', function(e) {
+            e.preventDefault();
+            
+            const $form = $(this);
+            const url = $form.attr('action');
+            const $btn = $('#btnConfirmarFinalizacao');
+            
+            // Verificar se há itens não contados antes de enviar
+            const itensNaoContados = $('.item-row.nao-contado').length;
+            if (itensNaoContados > 0) {
+                alert('Existem ' + itensNaoContados + ' itens não contados. Finalize a contagem antes de encerrar o inventário.');
+                return false;
+            }
+            
+            // Desabilitar botão durante o envio
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Finalizando...');
+            
+            $.ajax({
+                url: url,
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                data: $form.serialize(),
+                success: function(response) {
+                    // Fechar o modal imediatamente após sucesso
+                    fecharModalFinalizacao();
+                    
+                    // Verificar se a resposta é válida
+                    if (!response || typeof response !== 'object') {
+                        // Se a resposta não for JSON válido, pode ser um redirect HTML
+                        // Extrair ID e redirecionar
+                        const inventarioId = url.match(/\/(\d+)\/finalizar/);
+                        if (inventarioId) {
+                            window.location.href = '/estoque/inventario/' + inventarioId[1];
+                        } else {
+                            location.reload();
+                        }
+                        return;
+                    }
+                    
+                    if (response.success) {
+                        // Mostrar mensagem de sucesso
+                        if (response.message) {
+                            // Criar uma notificação de sucesso (você pode usar toast ou flash message)
+                            alert(response.message);
+                        }
+                        
+                        // Redirecionar para a página de detalhes do inventário
+                        if (response.redirect) {
+                            window.location.href = response.redirect;
+                        } else {
+                            // Fallback: extrair ID da URL
+                            const inventarioId = url.match(/\/(\d+)\/finalizar/);
+                            if (inventarioId) {
+                                window.location.href = '/estoque/inventario/' + inventarioId[1];
+                            } else {
+                                location.reload();
+                            }
+                        }
+                    } else {
+                        // Reabilitar botão em caso de erro
+                        $btn.prop('disabled', false).html('Confirmar Finalização');
+                        alert(response.message || 'Erro ao finalizar inventário.');
+                    }
+                },
+                error: function(xhr) {
+                    // Reabilitar botão
+                    $btn.prop('disabled', false).html('Confirmar Finalização');
+                    
+                    let errorMsg = 'Erro ao finalizar inventário.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    } else if (xhr.status === 400 || xhr.status === 500) {
+                        errorMsg = 'Erro ao finalizar inventário. Verifique se todos os itens foram contados.';
+                    }
+                    
+                    alert(errorMsg);
+                }
+            });
+            
+            return false;
+        });
+        
+        // Funcionalidade do modal de adicionar item
+        
+        // Garantir que o modal seja aberto quando o botão for clicado
+        $(document).on('click', 'button[data-target="#modalAdicionarItem"]', function(e) {
+            e.preventDefault();
+            $('#modalAdicionarItem').modal('show');
+        });
+        
+        // Buscar itens (usando delegação de eventos para garantir que funcione)
+        $(document).on('click', '#btnBuscarItemInventario', function() {
+            const termo = $('#buscaItemInventario').val().trim();
+            
+            if (termo.length < 3) {
+                $('#mensagemBuscaInventario').removeClass('d-none alert-danger').addClass('alert-warning');
+                $('#textoMensagemBusca').text('Digite pelo menos 3 caracteres para buscar');
+                $('#resultadosBuscaInventario').addClass('d-none');
+                return;
+            }
+            
+            $('#btnBuscarItemInventario').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Buscando...');
+            
+            $.ajax({
+                url: "{{ url_for('inventario.api_buscar_itens') }}",
+                data: { termo: termo },
+                method: 'GET',
+                success: function(response) {
+                    $('#btnBuscarItemInventario').prop('disabled', false).html('<i class="fas fa-search"></i> Buscar');
+                    
+                    if (response.error) {
+                        $('#mensagemBuscaInventario').removeClass('d-none alert-info').addClass('alert-danger');
+                        $('#textoMensagemBusca').text('Erro: ' + response.error);
+                        $('#resultadosBuscaInventario').addClass('d-none');
+                        return;
+                    }
+                    
+                    if (!response.itens || response.itens.length === 0) {
+                        $('#mensagemBuscaInventario').removeClass('d-none alert-danger').addClass('alert-info');
+                        $('#textoMensagemBusca').text('Nenhum item encontrado');
+                        $('#resultadosBuscaInventario').addClass('d-none');
+                        return;
+                    }
+                    
+                    $('#mensagemBuscaInventario').addClass('d-none');
+                    $('#resultadosBuscaInventario').removeClass('d-none');
+                    $('#resultadosItensInventario').empty();
+                    
+                    response.itens.forEach(function(item) {
+                        const row = `
+                            <tr>
+                                <td class="text-center">
+                                    <div class="form-check">
+                                        <input type="checkbox" class="form-check-input checkbox-item-inventario" 
+                                               name="itens_selecionados[]" value="${item.id}" 
+                                               data-nome="${item.nome || ''}" 
+                                               data-codigo="${item.codigo || 'N/A'}"
+                                               data-tipo="${item.tipo || ''}">
+                                        <label class="form-check-label"></label>
+                                    </div>
+                                </td>
+                                <td>${item.codigo || 'N/A'}</td>
+                                <td>${item.nome || 'Item sem descrição'}</td>
+                                <td>${item.tipo || 'N/A'}</td>
+                                <td>${item.localizacao || 'Não especificado'}</td>
+                                <td>${parseFloat(item.quantidade || 0).toFixed(2)} ${item.unidade || ''}</td>
+                            </tr>
+                        `;
+                        $('#resultadosItensInventario').append(row);
+                    });
+                    
+                    // Função para atualizar contador e botão
+                    function atualizarSelecaoItens() {
+                        const itensSelecionados = $('.checkbox-item-inventario:checked');
+                        const quantidade = itensSelecionados.length;
+                        
+                        if (quantidade > 0) {
+                            $('#contadorItensSelecionados').text(quantidade + ' item(ns) selecionado(s)').show();
+                            $('#btnAdicionarItemInventario').prop('disabled', false);
+                        } else {
+                            $('#contadorItensSelecionados').hide();
+                            $('#btnAdicionarItemInventario').prop('disabled', true);
+                        }
+                    }
+                    
+                    // Adicionar evento aos checkboxes (usando delegação de eventos)
+                    $(document).off('change', '.checkbox-item-inventario').on('change', '.checkbox-item-inventario', function() {
+                        atualizarSelecaoItens();
+                    });
+                    
+                    // Selecionar/Deselecionar todos
+                    $(document).off('change', '#selecionarTodosItens').on('change', '#selecionarTodosItens', function() {
+                        const checked = $(this).prop('checked');
+                        $('.checkbox-item-inventario').prop('checked', checked);
+                        atualizarSelecaoItens();
+                    });
+                },
+                error: function(xhr) {
+                    $('#btnBuscarItemInventario').prop('disabled', false).html('<i class="fas fa-search"></i> Buscar');
+                    $('#mensagemBuscaInventario').removeClass('d-none alert-info').addClass('alert-danger');
+                    $('#textoMensagemBusca').text('Erro ao buscar itens: ' + (xhr.responseJSON ? xhr.responseJSON.error : 'Falha na requisição'));
+                    $('#resultadosBuscaInventario').addClass('d-none');
+                }
+            });
+        });
+        
+        // Permitir busca ao pressionar Enter (usando delegação de eventos)
+        $(document).on('keypress', '#buscaItemInventario', function(e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                $('#btnBuscarItemInventario').click();
+            }
+        });
+        
+        // Adicionar itens ao inventário (usando delegação de eventos)
+        $(document).on('click', '#btnAdicionarItemInventario', function() {
+            const itensSelecionados = $('.checkbox-item-inventario:checked');
+            
+            if (itensSelecionados.length === 0) {
+                alert('Selecione pelo menos um item para adicionar');
+                return;
+            }
+            
+            const $btn = $(this);
+            const quantidade = itensSelecionados.length;
+            $btn.prop('disabled', true).html(`<i class="fas fa-spinner fa-spin"></i> Adicionando ${quantidade} item(ns)...`);
+            
+            // Coletar IDs dos itens selecionados
+            const estoqueIds = [];
+            itensSelecionados.each(function() {
+                estoqueIds.push($(this).val());
+            });
+            
+            // Preparar dados para envio
+            const formData = new FormData();
+            formData.append('csrf_token', "{{ csrf_token() }}");
+            estoqueIds.forEach(function(id) {
+                formData.append('estoque_ids[]', id);
+            });
+            
+            $.ajax({
+                url: "{{ url_for('inventario.adicionar_item_inventario', inventario_id=inventario.id) }}",
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        // Mostrar mensagem de sucesso
+                        const mensagem = response.itens_adicionados.length + ' item(ns) adicionado(s) com sucesso!';
+                        if (response.itens_nao_adicionados && response.itens_nao_adicionados.length > 0) {
+                            const naoAdicionados = response.itens_nao_adicionados.length;
+                            alert(mensagem + '\n\n' + naoAdicionados + ' item(ns) não foram adicionados (já estavam no inventário ou erro).');
+                        } else {
+                            alert(mensagem);
+                        }
+                        // Recarregar a página para mostrar os novos itens
+                        location.reload();
+                    } else {
+                        alert('Erro ao adicionar itens: ' + (response.error || 'Erro desconhecido'));
+                        $btn.prop('disabled', false).html('<i class="fas fa-plus"></i> Adicionar Itens Selecionados');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.error : 'Erro ao adicionar itens';
+                    alert('Erro ao adicionar itens: ' + errorMsg);
+                    $btn.prop('disabled', false).html('<i class="fas fa-plus"></i> Adicionar Itens Selecionados');
+                }
+            });
+        });
+        
+        // Função para abrir modal de exclusão
+        function abrirModalExclusaoItem(url, itemData) {
+            const form = document.getElementById('form-exclusao-item');
+            if (form) {
+                form.action = url;
+            }
+            
+            if (itemData) {
+                const codigoEl = document.getElementById('exclusao-item-codigo');
+                const nomeEl = document.getElementById('exclusao-item-nome');
+                if (codigoEl) codigoEl.textContent = itemData.codigo || '-';
+                if (nomeEl) nomeEl.textContent = itemData.nome || '-';
+            }
+            
+            const modalElement = document.getElementById('modalConfirmarExclusaoItem');
+            if (modalElement) {
+                // Tentar Bootstrap 5 primeiro
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                } else if (typeof $ !== 'undefined' && $.fn.modal) {
+                    // Fallback para Bootstrap 4/jQuery
+                    $(modalElement).modal('show');
+                }
+            }
+        }
+        
+        // Adicionar evento para os botões de exclusão (usando delegação de eventos)
+        $(document).on('click', '.btn-excluir-item', function(e) {
+            e.preventDefault();
+            
+            const itemId = $(this).attr('data-item-id');
+            const inventarioId = $(this).attr('data-inventario-id');
+            const url = `/estoque/inventario/${inventarioId}/item/${itemId}/excluir`;
+            
+            const itemData = {
+                id: itemId,
+                codigo: $(this).attr('data-item-codigo'),
+                nome: $(this).attr('data-item-nome')
+            };
+            
+            abrirModalExclusaoItem(url, itemData);
+        });
+        
+        // Exclusão de item via AJAX
+        $(document).on('submit', '#form-exclusao-item', function(e) {
+            e.preventDefault();
+            
+            const $form = $(this);
+            const url = $form.attr('action');
+            const $btn = $form.find('button[type="submit"]');
+            
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Excluindo...');
+            
+            $.ajax({
+                url: url,
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                data: $form.serialize(),
+                success: function(response) {
+                    if (response.success) {
+                        // Fechar modal
+                        const modalElement = document.getElementById('modalConfirmarExclusaoItem');
+                        if (modalElement) {
+                            const modal = bootstrap.Modal.getInstance(modalElement);
+                            if (modal) {
+                                modal.hide();
+                            }
+                        }
+                        
+                        // Remover a linha da tabela
+                        const $row = $(`.item-row[data-id="${response.item_id}"]`);
+                        if ($row.length) {
+                            $row.fadeOut(300, function() {
+                                $(this).remove();
+                                
+                                // Atualizar contagem de itens
+                                atualizarItensNaoContados();
+                                
+                                // Verificar se não há mais itens
+                                if ($('.item-row').length === 0) {
+                                    const colspan = {{ 9 if inventario.status == 'Em andamento' else 8 }};
+                                    $('#tabelaItens tbody').append(`
+                                        <tr>
+                                            <td colspan="${colspan}" class="text-center">Nenhum item encontrado para este inventário</td>
+                                        </tr>
+                                    `);
+                                }
+                            });
+                        } else {
+                            // Se não encontrou a linha, recarregar a página
+                            location.reload();
+                        }
+                        
+                        // Mostrar mensagem de sucesso
+                        alert(response.message || 'Item excluído com sucesso!');
+                    } else {
+                        alert('Erro ao excluir item: ' + (response.message || 'Erro desconhecido'));
+                        $btn.prop('disabled', false).html('<i class="fas fa-trash"></i> Confirmar Exclusão');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'Erro ao excluir item';
+                    alert('Erro ao excluir item: ' + errorMsg);
+                    $btn.prop('disabled', false).html('<i class="fas fa-trash"></i> Confirmar Exclusão');
+                }
+            });
+        });
+        
+        // Limpar seleção ao fechar o modal
+        $('#modalAdicionarItem').on('hidden.bs.modal', function() {
+            $('#buscaItemInventario').val('');
+            $('#resultadosBuscaInventario').addClass('d-none');
+            $('#mensagemBuscaInventario').addClass('d-none');
+            $('#resultadosItensInventario').empty();
+            $('#contadorItensSelecionados').hide();
+            $('#btnAdicionarItemInventario').prop('disabled', true).html('<i class="fas fa-plus"></i> Adicionar Itens Selecionados');
+            $('#selecionarTodosItens').prop('checked', false);
+            $('.checkbox-item-inventario').prop('checked', false);
+        });
+    });
+</script>
+{% endblock %} 

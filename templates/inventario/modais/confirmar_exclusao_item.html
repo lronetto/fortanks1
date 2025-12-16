@@ -1,0 +1,42 @@
+<!-- Modal de Confirmação de Exclusão de Item -->
+<div class="modal fade" id="modalConfirmarExclusaoItem" tabindex="-1" aria-labelledby="modalConfirmarExclusaoItemLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalConfirmarExclusaoItemLabel">
+                    <i class="fas fa-trash"></i> Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center">
+                    <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                    <h5>Excluir Item do Inventário</h5>
+                    <p class="text-muted">Tem certeza que deseja excluir este item do inventário?</p>
+                    
+                    <div class="alert alert-warning">
+                        <strong>Item:</strong> <span id="exclusao-item-codigo">-</span> - <span id="exclusao-item-nome">-</span>
+                    </div>
+                    
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>ATENÇÃO:</strong> Esta ação não pode ser desfeita. O item será removido do inventário, mas os dados de contagem já realizados serão perdidos.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-arrow-left"></i> Cancelar
+                </button>
+                <form id="form-exclusao-item" method="POST" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Confirmar Exclusão
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+

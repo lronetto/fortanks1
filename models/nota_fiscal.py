@@ -32,6 +32,45 @@ CFOPS_COMPRA = [6101,5101,5405,6105,6401]
 CFOPS_VENDA = [6101,5101,6107]
 CFOPS_TRANSFERENCIA = [5949,6949]
 
+def determinar_movimentacoes_estoque(nota_fiscal):
+    """
+    Determina as movimentações de estoque necessárias baseado nos CNPJs da nota fiscal.
+    
+    Args:
+        nota_fiscal: Instância de NotaFiscal
+        
+    Returns:
+        list: Lista de tuplas (local, tipo_movimento) que devem ser processadas
+    """
+    movimentacoes = []
+    
+    # Apenas processar notas fiscais (tipo 1)
+    if nota_fiscal.tipo != 1:
+        return movimentacoes
+    
+    cnpj_emitente = nota_fiscal.cnpj_emitente
+    cnpj_destinatario = nota_fiscal.cnpj_destinatario
+    
+    # Caso 1: Compra externa para Matriz
+    if cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario in CNPJS_MATRIZ:
+        movimentacoes.append(("Estoque Matriz", "entrada"))
+    
+    # Caso 2: Compra externa para Filial
+    elif cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario in CNPJS_FILIAIS:
+        movimentacoes.append((f"Estoque Filial {cnpj_destinatario}", "entrada"))
+    
+    # Caso 3: Transferência Matriz -> Filial
+    elif cnpj_emitente in CNPJS_MATRIZ and cnpj_destinatario in CNPJS_FILIAIS:
+        movimentacoes.append(("Estoque Matriz", "saida"))
+        movimentacoes.append((f"Estoque Filial {cnpj_destinatario}", "entrada"))
+    
+    # Caso 4: Transferência Filial -> Matriz
+    elif cnpj_emitente in CNPJS_FILIAIS and cnpj_destinatario in CNPJS_MATRIZ:
+        movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "saida"))
+        movimentacoes.append(("Estoque Matriz", "entrada"))
+    
+    return movimentacoes
+
 def get_xml_text(element, xpath, ns):
     """
     Função auxiliar para obter texto de um elemento XML, retornando None se o elemento não existir
@@ -778,9 +817,82 @@ class NotaFiscal(db.Model):
         Logs("vinculacao_automatica",datetime.now(),json.dumps(log))
         print(f'itens_vinculados: {itens_vinculados}')
         return itens_vinculados
-    def importar_itens_para_estoque(self):
+    def importar_itens_para_estoque(self, usuario_id=None, centro_custo_id=None, observacao=None):
+        """
+        Importa todos os itens da nota fiscal para o estoque usando a lógica de localização padrão.
+        
+        Args:
+            usuario_id: ID do usuário realizando a importação
+            centro_custo_id: ID do centro de custo (opcional)
+            observacao: Observação para a importação (opcional)
+        """
         for item in self.itens:
-            item.importar_para_estoque()
+            item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)
+    
+    def importar_pendentes_com_material(self, usuario_id, centro_custo_id=None, observacao=None):
+        """
+        Importa e vincula itens pendentes que já têm material vinculado.
+        Para cada item já vinculado:
+        1. Vincula itens similares em outras notas
+        2. Importa o item atual e todos os similares encontrados
+        
+        Args:
+            usuario_id: ID do usuário realizando a operação
+            centro_custo_id: ID do centro de custo (opcional)
+            observacao: Observação para a importação (opcional)
+        
+        Returns:
+            dict: Dicionário com estatísticas da operação
+        """
+        from models.material import Material
+        
+        # Inicializar estatísticas
+        estatisticas = {
+            'total_itens_vinculados': 0,
+            'total_itens_ja_vinculados': 0,
+            'total_itens_importados': 0,
+            'total_itens_ja_importados': 0,
+            'itens_com_erro': []
+        }
+        itens_processados = set()
+        grupos_processados = set()
+        
+        # ETAPA 1: Vincular similares em todas as notas
+        todos_itens_para_importar = []
+        
+        # Processar cada item já vinculado na nota atual
+        for item in self.itens:
+            if item.material_id and item.id not in itens_processados:
+                material = Material.query.get(item.material_id)
+                if not material:
+                    continue
+                
+                # Vincular similares em todas as notas
+                itens_similares = item.vincular_similares_em_todas_notas(
+                    itens_processados=itens_processados,
+                    grupos_processados=grupos_processados,
+                    estatisticas=estatisticas
+                )
+                
+                # Adicionar à lista de itens para importar (sem duplicatas)
+                for item_similar in itens_similares:
+                    if item_similar.id not in [i.id for i in todos_itens_para_importar]:
+                        todos_itens_para_importar.append(item_similar)
+        
+        # ETAPA 2: Importar todos os itens (originais + similares recém-vinculados)
+        logger.info(f'Iniciando importação de {len(todos_itens_para_importar)} itens para o estoque')
+        NotaFiscalItem.importar_lista_itens(
+            itens_para_importar=todos_itens_para_importar,
+            nota_fiscal=self,
+            usuario_id=usuario_id,
+            centro_custo_id=centro_custo_id,
+            observacao=observacao,
+            itens_processados=itens_processados,
+            estatisticas=estatisticas
+        )
+        
+        return estatisticas
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -901,6 +1013,7 @@ class NotaFiscalItem(db.Model):
         itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
                                             NotaFiscalItem.descricao==self.descricao,
                                             NotaFiscalItem.unidade==self.unidade,
+                                            NotaFiscalItem.nota_fiscal.has(NotaFiscal.cnpj_emitente == self.nota_fiscal.cnpj_emitente),
                                             NotaFiscalItem.material_id==None).all()
         print(f'itens a ser vinculados: {len(itens)}')
         for item in itens:
@@ -912,6 +1025,8 @@ class NotaFiscalItem(db.Model):
         inicio = datetime.now()
         itens = NotaFiscalItem.query.\
             join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).filter(
+                            NotaFiscal.status_processamento!='cancelada',
+                            NotaFiscal.material_id==None,
                             NotaFiscalItem.codigo.like(f'%{self.codigo}%'),
                             NotaFiscalItem.descricao.like(f'%{self.descricao}%'),
                             NotaFiscalItem.nota_fiscal.has(NotaFiscal.cnpj_emitente == self.nota_fiscal.cnpj_emitente),
@@ -920,41 +1035,26 @@ class NotaFiscalItem(db.Model):
         print(f'itens: {len(itens)}')
         self.importar_para_estoque()
         print(f'itens a ser vinculados e importado estoque: {len(itens)}')
+        
         for item in itens:
-            item.vincular(self.fator_conversao_aplicado,self.material_id)
+            item.vincular(self.fator_conversao_aplicado, self.material_id)
             item.save()
-            nota=self.nota_fiscal
-            if nota.tipo == 1:
-                if nota.cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and nota.cnpj_destinatario in CNPJS_MATRIZ:
-                    local = "Estoque Matriz"
-                    tipo_movimento = 'entrada'
-                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
-                elif nota.cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and nota.cnpj_destinatario in CNPJS_FILIAIS:
-                    local = "Estoque Filial " + nota.cnpj_destinatario
-                    tipo_movimento = 'entrada'
-                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
-                elif nota.cnpj_emitente in CNPJS_MATRIZ and nota.cnpj_destinatario in CNPJS_FILIAIS:
-                    local = "Estoque Matriz"
-                    tipo_movimento = 'saida'
-                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
-                    local = "Estoque Filial " + nota.cnpj_destinatario
-                    tipo_movimento = 'entrada'
-                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
-                elif nota.cnpj_emitente in CNPJS_FILIAIS and nota.cnpj_destinatario in CNPJS_MATRIZ:
-                    local = "Estoque Filial" + nota.cnpj_destinatario
-                    tipo_movimento = 'saida'
-                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
-                    local = "Estoque Matriz"
-                    tipo_movimento = 'entrada'
-                    item.importar_para_estoque(local=local,tipo_movimento=tipo_movimento)
             
-            return
+            # Determinar movimentações baseado na nota fiscal
+            movimentacoes = determinar_movimentacoes_estoque(item.nota_fiscal)
+            for local, tipo_movimento in movimentacoes:
+                if not item.importado_estoque:
+                    item.importar_para_estoque(local=local, tipo_movimento=tipo_movimento)
+                else:
+                    print(f'item {item.id} ja foi importado para o estoque')
             
         fim = datetime.now()
         print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')
-    def importar_para_estoque(self,usuario_id=None,centro_custo_id=None,observacao=None,local='Estoque Matriz',tipo_movimento='entrada'):
+    
+    def importar_para_estoque_automatico(self, usuario_id=None, centro_custo_id=None, observacao=None):
         """
-        Importa o item da nota fiscal para o estoque
+        Importa o item para o estoque processando todas as movimentações necessárias
+        baseado na nota fiscal (pode ser múltiplas movimentações para transferências).
         
         Args:
             usuario_id: ID do usuário que está realizando a importação
@@ -964,16 +1064,90 @@ class NotaFiscalItem(db.Model):
         Returns:
             tuple: (bool, str) - (Sucesso, Mensagem)
         """
+        # Determinar todas as movimentações necessárias
+        movimentacoes = determinar_movimentacoes_estoque(self.nota_fiscal)
+        
+        if not movimentacoes:
+            # Se não há movimentações determinadas, usar valores padrão
+            return self.importar_para_estoque(
+                usuario_id=usuario_id,
+                centro_custo_id=centro_custo_id,
+                observacao=observacao,
+                local='Estoque Matriz',
+                tipo_movimento='entrada'
+            )
+        
+        # Processar todas as movimentações
+        resultados = []
+        for local, tipo_movimento in movimentacoes:
+            resultado = self.importar_para_estoque(
+                usuario_id=usuario_id,
+                centro_custo_id=centro_custo_id,
+                observacao=observacao,
+                local=local,
+                tipo_movimento=tipo_movimento
+            )
+            resultados.append(resultado)
+        
+        # Verificar se houve erro em alguma movimentação
+        for sucesso, mensagem in resultados:
+            if not sucesso:
+                return (False, mensagem)
+        
+        # Marcar como importado após processar todas as movimentações com sucesso
+        self.importado_estoque = True
+        self.data_importacao_estoque = datetime.now()
+        self.usuario_importacao_id = usuario_id
+        self.status_importacao = 'importado'
+        self.ultima_tentativa_importacao = datetime.now()
+        self.tentativas_importacao += 1
+        if resultados:
+            # Usar o ID da última movimentação
+            from models.estoque import MovimentacaoEstoque
+            ultima_mov = MovimentacaoEstoque.query.filter_by(
+                nota_fiscal_item_id=self.id
+            ).order_by(MovimentacaoEstoque.id.desc()).first()
+            if ultima_mov:
+                self.movimentacao_estoque_id = ultima_mov.id
+        self.save()
+        
+        return resultados[-1] if resultados else (True, "Item importado com sucesso")
+    
+    def importar_para_estoque(self, usuario_id=None, centro_custo_id=None, observacao=None, local=None, tipo_movimento=None):
+        """
+        Importa o item da nota fiscal para o estoque
+        
+        Args:
+            usuario_id: ID do usuário que está realizando a importação
+            centro_custo_id: ID do centro de custo (opcional)
+            observacao: Observação adicional para a movimentação
+            local: Localização do estoque (opcional, será determinado automaticamente se não informado)
+            tipo_movimento: Tipo de movimento 'entrada' ou 'saida' (opcional, será determinado automaticamente se não informado)
+            
+        Returns:
+            tuple: (bool, str) - (Sucesso, Mensagem)
+        """
         inicio = datetime.now()
         from models.estoque import Estoque, MovimentacaoEstoque
-        
-        # Verificar se o item já foi importado
-        if self.importado_estoque:
-            return (False, "Item já foi importado para o estoque.")
         
         # Verificar se o item tem um material vinculado
         if not self.material_id:
             return (False, "Este item não está vinculado a um material do sistema.")
+        
+        # Se local e tipo_movimento não foram informados, determinar automaticamente
+        # Neste caso, verificar se já foi importado para evitar duplicação
+        if local is None or tipo_movimento is None:
+            if self.importado_estoque:
+                return (False, "Item já foi importado para o estoque.")
+            
+            movimentacoes = determinar_movimentacoes_estoque(self.nota_fiscal)
+            if not movimentacoes:
+                # Se não há movimentações determinadas, usar valores padrão
+                local = local or 'Estoque Matriz'
+                tipo_movimento = tipo_movimento or 'entrada'
+            else:
+                # Usar a primeira movimentação determinada
+                local, tipo_movimento = movimentacoes[0]
         
         try:
             # Buscar estoque existente para o material
@@ -1001,24 +1175,36 @@ class NotaFiscalItem(db.Model):
                 observacao = f"Importação da NF {self.nota_fiscal.numero_nf} de {self.nota_fiscal.nome_emitente}"
             quantidade = 0
             # Adicionar informação sobre conversão de unidade, se aplicável
-            if self.fator_conversao_aplicado != 1:
-                quantidade = self.quantidade*self.fator_conversao_aplicado
+            fator = self.fator_conversao_aplicado if self.fator_conversao_aplicado is not None else 1
+            if fator != 1:
+                quantidade = self.quantidade * fator
                 observacao += f" (Conversão: {float(self.quantidade):.2f} {self.unidade} → {float(quantidade):.2f} {estoque.material.unidade_obj.nome})"
             
             # Registrar a quantidade atual antes da atualização para log
             quantidade_anterior = float(estoque.quantidade) if estoque.quantidade else 0
             
             # Criar e salvar a movimentação
+            fator = self.fator_conversao_aplicado if self.fator_conversao_aplicado is not None else 1
+            # Determinar usuario_id: priorizar o passado como parâmetro, depois current_user, depois None
+            usuario_id_final = usuario_id
+            if not usuario_id_final:
+                try:
+                    from flask_login import current_user
+                    if current_user and hasattr(current_user, 'id'):
+                        usuario_id_final = current_user.id
+                except:
+                    pass
+            
             movimentacao = MovimentacaoEstoque(
                 estoque_id=estoque.id,
                 tipo_movimento=tipo_movimento,
-                quantidade=self.quantidade*self.fator_conversao_aplicado,
+                quantidade=self.quantidade * fator,
                 data_movimento=self.nota_fiscal.data_emissao,
                 nota_fiscal_item_id=self.id,
                 origem_tipo='NotaFiscal',
                 origem_id=self.nota_fiscal.id,
                 observacao=observacao,
-                usuario_id=current_user.id
+                usuario_id=usuario_id_final
             )
             
             # Salvar movimentação (isso vai atualizar o estoque automaticamente)
@@ -1038,15 +1224,22 @@ class NotaFiscalItem(db.Model):
                 estoque.save()
                 quantidade_nova = float(estoque.quantidade)
             
-            # Atualizar status do item
-            self.importado_estoque = True
-            self.data_importacao_estoque = datetime.now()
-            self.usuario_importacao_id = usuario_id
-            self.status_importacao = 'importado'
-            self.ultima_tentativa_importacao = datetime.now()
-            self.tentativas_importacao += 1
-            self.movimentacao_estoque_id = movimentacao.id
-            self.save()
+            # Atualizar status do item apenas se local e tipo_movimento foram especificados
+            # (caso contrário, será marcado em importar_para_estoque_automatico após todas as movimentações)
+            if local is not None and tipo_movimento is not None:
+                # Para movimentações específicas, não marcar como importado aqui
+                # Isso será feito em importar_para_estoque_automatico após todas as movimentações
+                pass
+            else:
+                # Para importação automática (sem local/tipo especificado), marcar como importado
+                self.importado_estoque = True
+                self.data_importacao_estoque = datetime.now()
+                self.usuario_importacao_id = usuario_id
+                self.status_importacao = 'importado'
+                self.ultima_tentativa_importacao = datetime.now()
+                self.tentativas_importacao += 1
+                self.movimentacao_estoque_id = movimentacao.id
+                self.save()
             fim = datetime.now()
             print(f'tempo de execucao importar_para_estoque: {fim - inicio}')
             # Verificar se o material é da categoria EPI
@@ -1085,6 +1278,183 @@ class NotaFiscalItem(db.Model):
             
             return (False, f"Erro ao importar item para estoque: {str(e)}")
     
+    @staticmethod
+    def buscar_itens_similares_todas_notas(codigo, descricao):
+        """
+        Busca todos os itens similares em todas as notas fiscais baseado em código e/ou descrição.
+        
+        Args:
+            codigo: Código do item
+            descricao: Descrição do item
+        
+        Returns:
+            Lista de NotaFiscalItem encontrados
+        """
+        if codigo and descricao:
+            return NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo,
+                NotaFiscalItem.descricao == descricao
+            ).all()
+        elif codigo:
+            return NotaFiscalItem.query.filter(
+                NotaFiscalItem.codigo == codigo
+            ).all()
+        elif descricao:
+            return NotaFiscalItem.query.filter(
+                NotaFiscalItem.descricao == descricao
+            ).all()
+        return []
+
+    def aplicar_fator_conversao(self, material, fator_conversao=None):
+        """
+        Aplica o fator de conversão ao item baseado no material e fator fornecido.
+        
+        Args:
+            material: Material
+            fator_conversao: Fator de conversão a ser aplicado (opcional)
+        """
+        if fator_conversao:
+            try:
+                self.fator_conversao_aplicado = float(fator_conversao)
+            except (ValueError, TypeError):
+                if comparar_unidades(self.unidade, material.unidade_obj.nome):
+                    self.fator_conversao_aplicado = 1
+                else:
+                    self.fator_conversao_aplicado = None
+        elif comparar_unidades(self.unidade, material.unidade_obj.nome):
+            self.fator_conversao_aplicado = 1
+        else:
+            self.fator_conversao_aplicado = None
+
+    def vincular_material_a_itens_similares(self, itens_sem_material, itens_processados):
+        """
+        Vincula o material aos itens similares que não têm material vinculado.
+        
+        Args:
+            itens_sem_material: Lista de itens similares sem material
+            itens_processados: Set de IDs de itens já processados
+        
+        Returns:
+            Número de itens vinculados
+        """
+        if not self.material_id:
+            return 0
+            
+        from models.material import Material
+        material = Material.query.get(self.material_id)
+        if not material:
+            return 0
+            
+        itens_vinculados = 0
+        fator_conversao = self.fator_conversao_aplicado
+        
+        for item_similar in itens_sem_material:
+            if item_similar.id in itens_processados:
+                continue
+            
+            item_similar.aplicar_fator_conversao(material, fator_conversao)
+            item_similar.material_id = self.material_id
+            item_similar.save()
+            
+            itens_vinculados += 1
+            itens_processados.add(item_similar.id)
+            logger.info(f'Item {item_similar.id} vinculado ao material {material.nome} na nota {item_similar.nota_fiscal.numero_nf}')
+        
+        return itens_vinculados
+
+    def vincular_similares_em_todas_notas(self, itens_processados, grupos_processados, estatisticas):
+        """
+        Vincula itens similares em todas as notas para este item.
+        
+        Args:
+            itens_processados: Set de IDs de itens já processados
+            grupos_processados: Set de chaves de grupos já processados
+            estatisticas: Dicionário com estatísticas da operação
+        
+        Returns:
+            Lista de todos os itens similares encontrados (incluindo o original)
+        """
+        if not self.material_id:
+            return []
+            
+        from models.material import Material
+        material = Material.query.get(self.material_id)
+        if not material:
+            return []
+            
+        codigo = self.codigo.strip() if self.codigo else ''
+        descricao = self.descricao.strip() if self.descricao else ''
+        
+        # Criar chave única para o grupo de itens similares
+        chave_grupo = f"{codigo}|{descricao}"
+        if chave_grupo in grupos_processados:
+            return []  # Já processamos este grupo
+        
+        grupos_processados.add(chave_grupo)
+        
+        # 1. Buscar TODOS os itens similares em TODAS as notas fiscais
+        logger.info(f'Buscando itens similares para código="{codigo}", descrição="{descricao}" em TODAS as notas fiscais')
+        itens_similares_todos = NotaFiscalItem.buscar_itens_similares_todas_notas(codigo, descricao)
+        logger.info(f'Encontrados {len(itens_similares_todos)} itens similares em todas as notas')
+        
+        # Separar itens já vinculados dos que não têm material
+        itens_ja_vinculados_local = [i for i in itens_similares_todos if i.material_id]
+        itens_sem_material = [i for i in itens_similares_todos if not i.material_id]
+        logger.info(f'Dos {len(itens_similares_todos)} itens similares: {len(itens_ja_vinculados_local)} já vinculados, {len(itens_sem_material)} sem material')
+        
+        # 2. Vincular material aos itens que não têm material vinculado
+        itens_vinculados_local = self.vincular_material_a_itens_similares(
+            itens_sem_material, itens_processados
+        )
+        estatisticas['total_itens_vinculados'] += itens_vinculados_local
+        estatisticas['total_itens_ja_vinculados'] += len(itens_ja_vinculados_local)
+        
+        # Retornar todos os itens similares (incluindo o original)
+        return [self] + itens_similares_todos
+
+    @staticmethod
+    def importar_lista_itens(itens_para_importar, nota_fiscal, usuario_id, centro_custo_id, observacao, 
+                             itens_processados, estatisticas):
+        """
+        Importa uma lista de itens para o estoque.
+        
+        Args:
+            itens_para_importar: Lista de itens para importar
+            nota_fiscal: Nota fiscal relacionada
+            usuario_id: ID do usuário
+            centro_custo_id: ID do centro de custo
+            observacao: Observação para importação
+            itens_processados: Set de IDs de itens já processados
+            estatisticas: Dicionário com estatísticas da operação
+        """
+        for item_para_importar in itens_para_importar:
+            if item_para_importar.id in itens_processados:
+                if item_para_importar.importado_estoque:
+                    estatisticas['total_itens_ja_importados'] += 1
+                continue
+            
+            if item_para_importar.material_id:
+                if not item_para_importar.importado_estoque:
+                    sucesso, mensagem = item_para_importar.importar_para_estoque_automatico(
+                        usuario_id=usuario_id,
+                        centro_custo_id=centro_custo_id,
+                        observacao=observacao or f"Importação automática da NF {nota_fiscal.numero_nf} de {nota_fiscal.nome_emitente}"
+                    )
+                    if sucesso:
+                        estatisticas['total_itens_importados'] += 1
+                        logger.info(f'Item {item_para_importar.id} importado para o estoque')
+                    else:
+                        estatisticas['itens_com_erro'].append({
+                            'item_id': item_para_importar.id,
+                            'descricao': item_para_importar.descricao,
+                            'erro': mensagem
+                        })
+                        logger.error(f'Erro ao importar item {item_para_importar.id}: {mensagem}')
+                else:
+                    estatisticas['total_itens_ja_importados'] += 1
+            
+            itens_processados.add(item_para_importar.id)
+
     def __repr__(self):
         """
         Representação em string do item de nota fiscal

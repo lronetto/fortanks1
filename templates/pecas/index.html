@@ -7,39 +7,88 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3"><i class="fas fa-cogs"></i> Peças de Tanques</h1>
         <div>
+            <button type="button" class="btn btn-success me-2" id="btnProcessarProducao">
+                <i class="fas fa-cogs"></i> Processar Produção
+            </button>
+            <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalVinculacaoProdutoComposto">
+                <i class="fas fa-link"></i> Vincular Produto Composto
+            </button>
             <a href="{{ url_for('tanque.index') }}" class="btn btn-secondary">
                 <i class="fas fa-water"></i> Ver Todos os Tanques
             </a>
         </div>
     </div>
 
-    {% if tanques_pecas %}
-    {% for tanque, pecas in tanques_pecas.items() %}
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter"></i> Filtros
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('peca.index') }}" id="filtroForm">
+                <div class="row">
+                    <div class="col-md-5">
+                        <label for="projeto_id" class="form-label">Projeto (Contrato)</label>
+                        <select class="form-select" id="projeto_id" name="projeto_id">
+                            <option value="">Todos os projetos</option>
+                            {% for contrato in contratos %}
+                            <option value="{{ contrato.id }}" {% if projeto_id_filtro == contrato.id %}selected{% endif %}>
+                                {{ contrato.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="tanque_id" class="form-label">Tanque</label>
+                        <select class="form-select" id="tanque_id" name="tanque_id">
+                            <option value="">Todos os tanques</option>
+                            {% for tanque in tanques %}
+                            <option value="{{ tanque.id }}" 
+                                    data-projeto-id="{{ tanque.contrato_id if tanque.contrato_id else '' }}"
+                                    {% if tanque_id_filtro == tanque.id %}selected{% endif %}>
+                                {{ tanque.nome }} ({{ tanque.sistema }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+                {% if tanque_id_filtro or projeto_id_filtro %}
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <a href="{{ url_for('peca.index') }}" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-times"></i> Limpar Filtros
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Peças -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">
-                Tanque: {{ tanque.nome }} ({{ tanque.sistema }})
+                <i class="fas fa-list"></i> Peças Cadastradas
             </h6>
-            <div>
-                <span class="badge bg-info">{{ pecas|length }} peça(s)</span>
-                <a href="{{ url_for('tanque.visualizar', id=tanque.id) }}" class="btn btn-sm btn-info ml-2">
-                    <i class="fas fa-eye"></i> Ver Tanque
-                </a>
-                <a href="{{ url_for('peca.listar_por_tanque', tanque_id=tanque.id) }}"
-                    class="btn btn-sm btn-primary ml-2">
-                    <i class="fas fa-list"></i> Listar Peças
-                </a>
-                <a href="{{ url_for('peca.novo', tanque_id=tanque.id) }}" class="btn btn-sm btn-success ml-2">
-                    <i class="fas fa-plus-circle"></i> Nova Peça
-                </a>
-            </div>
+            <span class="badge bg-info">{{ pecas|length }} peça(s)</span>
         </div>
         <div class="card-body">
+            {% if pecas %}
             <div class="table-responsive">
-                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                <table class="table table-bordered table-hover" id="tabelaPecas" width="100%" cellspacing="0">
                     <thead>
                         <tr>
                             <th>Nº Seq.</th>
+                            <th>Tanque</th>
+                            <th>Projeto</th>
                             <th>Tipo</th>
                             <th>Nome</th>
                             <th>Data de Cadastro</th>
@@ -49,21 +98,34 @@
                     <tbody>
                         {% for peca in pecas %}
                         <tr>
-                            <td class="text-center"><span class="badge bg-primary">{{ peca.numero_sequencial }}</span>
+                            <td class="text-center">
+                                <span class="badge bg-primary">{{ peca.numero_sequencial }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('tanque.visualizar', id=peca.tanque.id) }}" class="text-decoration-none">
+                                    {{ peca.tanque.nome }} ({{ peca.tanque.sistema }})
+                                </a>
+                            </td>
+                            <td>
+                                {% if peca.tanque.contrato %}
+                                    {{ peca.tanque.contrato.nome }}
+                                {% else %}
+                                    <span class="text-muted">Sem projeto</span>
+                                {% endif %}
                             </td>
                             <td>{{ peca.tipo }}</td>
                             <td>{{ peca.nome }}</td>
                             <td>{{ peca.data_cadastro.strftime('%d/%m/%Y %H:%M') }}</td>
                             <td>
                                 <div class="btn-group" role="group">
-                                    <a href="{{ url_for('peca.visualizar', id=peca.id) }}" class="btn btn-info btn-sm">
+                                    <a href="{{ url_for('peca.visualizar', id=peca.id) }}" class="btn btn-info btn-sm" title="Visualizar">
                                         <i class="fas fa-eye"></i>
                                     </a>
-                                    <a href="{{ url_for('peca.editar', id=peca.id) }}" class="btn btn-warning btn-sm">
+                                    <a href="{{ url_for('peca.editar', id=peca.id) }}" class="btn btn-warning btn-sm" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal"
-                                        data-bs-target="#excluirModal{{ peca.id }}">
+                                        data-bs-target="#excluirModal{{ peca.id }}" title="Excluir">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -74,15 +136,13 @@
                                     <div class="modal-dialog">
                                         <div class="modal-content">
                                             <div class="modal-header">
-                                                <h5 class="modal-title" id="excluirModalLabel{{ peca.id }}">Confirmar
-                                                    Exclusão</h5>
+                                                <h5 class="modal-title" id="excluirModalLabel{{ peca.id }}">Confirmar Exclusão</h5>
                                                 <button type="button" class="btn-close" data-bs-dismiss="modal"
                                                     aria-label="Close"></button>
                                             </div>
                                             <div class="modal-body">
-                                                <p>Tem certeza que deseja excluir a peça <strong>{{ peca.nome
-                                                        }}</strong> (Nº {{ peca.numero_sequencial }}) do tanque
-                                                    <strong>{{ tanque.nome }}</strong>?
+                                                <p>Tem certeza que deseja excluir a peça <strong>{{ peca.nome }}</strong> 
+                                                    (Nº {{ peca.numero_sequencial }}) do tanque <strong>{{ peca.tanque.nome }}</strong>?
                                                 </p>
                                                 <p class="text-danger">Esta ação não pode ser desfeita!</p>
                                             </div>
@@ -103,28 +163,637 @@
                     </tbody>
                 </table>
             </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Não há peças cadastradas com os filtros selecionados.
+                {% if tanque_id_filtro or projeto_id_filtro %}
+                <a href="{{ url_for('peca.index') }}" class="alert-link">Limpar filtros</a> ou
+                {% endif %}
+                <a href="{{ url_for('tanque.index') }}" class="alert-link">selecione um tanque para adicionar peças</a>.
+            </div>
+            {% endif %}
         </div>
     </div>
-    {% endfor %}
-    {% else %}
-    <div class="alert alert-info">
-        <i class="fas fa-info-circle"></i> Não há peças cadastradas no sistema.
-        <a href="{{ url_for('tanque.index') }}" class="alert-link">Selecione um tanque para adicionar peças</a>.
-    </div>
-    {% endif %}
 </div>
+
+<!-- Modal de Vinculação -->
+{% include 'pecas/modais/vinculacao_produto_composto.html' %}
 {% endblock %}
 
 {% block scripts %}
 <script>
     $(document).ready(function () {
-        $('.table').DataTable({
+        // Inicializar DataTable
+        $('#tabelaPecas').DataTable({
             language: {
                 url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
             },
-            order: [[0, 'asc']],
-            pageLength: 5,
-            lengthMenu: [5, 10, 25, 50]
+            order: [[1, 'asc'], [0, 'asc']], // Ordenar por tanque e depois por número sequencial
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            columnDefs: [
+                { orderable: false, targets: 6 } // Desabilitar ordenação na coluna de ações
+            ]
+        });
+
+        // Armazenar todas as opções de tanques
+        var todasOpcoesTanques = $('#tanque_id option').clone();
+        var tanqueSelecionado = $('#tanque_id').val();
+
+        // Função para filtrar tanques por projeto
+        function filtrarTanquesPorProjeto(projetoId) {
+            var selectTanque = $('#tanque_id');
+            var valorSelecionado = selectTanque.val();
+            
+            // Limpar o select
+            selectTanque.empty();
+            selectTanque.append('<option value="">Todos os tanques</option>');
+            
+            if (projetoId) {
+                // Filtrar apenas tanques do projeto selecionado
+                todasOpcoesTanques.each(function() {
+                    var option = $(this);
+                    var projetoIdOption = option.data('projeto-id');
+                    
+                    if (option.val() === '' || projetoIdOption == projetoId || projetoIdOption === '') {
+                        // Incluir opção "Todos os tanques" e tanques do projeto ou sem projeto
+                        selectTanque.append(option.clone());
+                    }
+                });
+            } else {
+                // Mostrar todos os tanques
+                todasOpcoesTanques.each(function() {
+                    selectTanque.append($(this).clone());
+                });
+            }
+            
+            // Restaurar seleção anterior se ainda existir
+            if (valorSelecionado && selectTanque.find('option[value="' + valorSelecionado + '"]').length > 0) {
+                selectTanque.val(valorSelecionado);
+            } else {
+                selectTanque.val('');
+            }
+        }
+
+        // Evento quando o projeto é alterado
+        $('#projeto_id').on('change', function() {
+            var projetoId = $(this).val();
+            filtrarTanquesPorProjeto(projetoId);
+        });
+
+        // Aplicar filtro inicial se houver projeto selecionado
+        var projetoInicial = $('#projeto_id').val();
+        if (projetoInicial) {
+            filtrarTanquesPorProjeto(projetoInicial);
+        }
+
+        // ========== SCRIPTS DO MODAL DE VINCULAÇÃO ==========
+        var timeoutBusca;
+        var produtosCarregados = [];
+        var apiUrlTanques = '{{ url_for("peca.api_tanques_por_projeto") }}';
+        var apiUrlProdutos = '{{ url_for("peca.api_produtos_compostos") }}';
+        var apiUrlSalvar = '{{ url_for("peca.vinculacao_produto_composto") }}';
+
+        // Função para carregar tanques por projeto
+        function carregarTanquesPorProjeto(contratoId) {
+            // Usar seletor específico do modal para evitar conflitos
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var selectTanque = modal.find('#tanque_id');
+            var selectTipoPeca = modal.find('#tipo_peca');
+            
+            console.log('Carregando tanques para projeto:', contratoId);
+            
+            if (!contratoId) {
+                selectTanque.prop('disabled', true);
+                selectTanque.html('<option value="" selected disabled>Primeiro selecione um projeto</option>');
+                selectTipoPeca.prop('disabled', true);
+                selectTipoPeca.html('<option value="" selected disabled>Primeiro selecione um tanque</option>');
+                return;
+            }
+            
+            selectTanque.prop('disabled', true);
+            selectTanque.html('<option value="">Carregando...</option>');
+            selectTipoPeca.prop('disabled', true);
+            selectTipoPeca.html('<option value="" selected disabled>Primeiro selecione um tanque</option>');
+            
+            console.log('URL da API:', apiUrlTanques);
+            console.log('Enviando requisição com projeto_id:', contratoId);
+            
+            $.ajax({
+                url: apiUrlTanques,
+                method: 'GET',
+                data: { projeto_id: contratoId },
+                dataType: 'json',
+                success: function(response) {
+                    console.log('Resposta recebida:', response);
+                    selectTanque.html('<option value="" selected disabled>Selecione um tanque</option>');
+                    
+                    if (response.tanques && response.tanques.length > 0) {
+                        response.tanques.forEach(function(tanque) {
+                            selectTanque.append(
+                                $('<option></option>')
+                                    .attr('value', tanque.id)
+                                    .text(tanque.nome + ' (' + tanque.sistema + ')')
+                            );
+                        });
+                        console.log('Tanques carregados:', response.tanques.length);
+                    } else {
+                        selectTanque.append(
+                            $('<option value="" disabled>Nenhum tanque encontrado para este projeto</option>')
+                        );
+                    }
+                    selectTanque.prop('disabled', false);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro na requisição:', status, error);
+                    console.error('Resposta do servidor:', xhr.responseText);
+                    console.error('Status HTTP:', xhr.status);
+                    selectTanque.html('<option value="">Erro ao carregar tanques</option>');
+                    var errorMsg = 'Erro ao carregar tanques';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg += ': ' + xhr.responseJSON.message;
+                    } else if (xhr.status === 0) {
+                        errorMsg += ': Erro de conexão. Verifique sua internet.';
+                    } else {
+                        errorMsg += ': ' + (error || 'Erro desconhecido');
+                    }
+                    alert(errorMsg);
+                }
+            });
+        }
+
+        // Função para carregar tipos de peças por tanque
+        function carregarTiposPecaPorTanque(tanqueId) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var selectTipoPeca = modal.find('#tipo_peca');
+            
+            console.log('Carregando tipos de peças para tanque:', tanqueId);
+            
+            if (!tanqueId) {
+                selectTipoPeca.prop('disabled', true);
+                selectTipoPeca.html('<option value="" selected disabled>Primeiro selecione um tanque</option>');
+                return;
+            }
+            
+            selectTipoPeca.prop('disabled', true);
+            selectTipoPeca.html('<option value="">Carregando...</option>');
+            
+            var apiUrlTipos = '{{ url_for("peca.api_tipos_peca_por_tanque") }}';
+            console.log('URL da API de tipos:', apiUrlTipos);
+            
+            $.ajax({
+                url: apiUrlTipos,
+                method: 'GET',
+                data: { tanque_id: tanqueId },
+                dataType: 'json',
+                success: function(response) {
+                    console.log('Tipos de peças recebidos:', response);
+                    selectTipoPeca.html('<option value="" selected disabled>Selecione o tipo de peça</option>');
+                    
+                    if (response.tipos && response.tipos.length > 0) {
+                        response.tipos.forEach(function(tipo) {
+                            selectTipoPeca.append(
+                                $('<option></option>')
+                                    .attr('value', tipo)
+                                    .text(tipo)
+                            );
+                        });
+                        console.log('Tipos de peças carregados:', response.tipos.length);
+                    } else {
+                        selectTipoPeca.append(
+                            $('<option value="" disabled>Nenhum tipo de peça encontrado para este tanque</option>')
+                        );
+                    }
+                    selectTipoPeca.prop('disabled', false);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar tipos de peças:', status, error);
+                    console.error('Resposta do servidor:', xhr.responseText);
+                    selectTipoPeca.html('<option value="">Erro ao carregar tipos de peças</option>');
+                    alert('Erro ao carregar tipos de peças. Tente novamente.');
+                }
+            });
+        }
+
+        // Anexar evento de mudança do contrato (usando delegação de eventos para funcionar mesmo se o modal ainda não estiver no DOM)
+        $(document).on('change', '#filtro_contrato_id', function() {
+            var contratoId = $(this).val();
+            console.log('Evento change disparado para contrato:', contratoId);
+            carregarTanquesPorProjeto(contratoId);
+        });
+
+        // Anexar evento de mudança do tanque para carregar tipos de peças
+        $(document).on('change', '#modalVinculacaoProdutoComposto #tanque_id', function() {
+            var tanqueId = $(this).val();
+            console.log('Evento change disparado para tanque:', tanqueId);
+            carregarTiposPecaPorTanque(tanqueId);
+        });
+
+        // Função para carregar vinculações existentes
+        function carregarVinculacoes() {
+            var tbody = $('#tbodyVinculacoes');
+            tbody.html('<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+            
+            $.ajax({
+                url: '{{ url_for("peca.api_vinculacoes_todas") }}',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    tbody.empty();
+                    
+                    if (response.vinculacoes && response.vinculacoes.length > 0) {
+                        response.vinculacoes.forEach(function(v) {
+                            var row = $('<tr></tr>');
+                            row.append($('<td></td>').text(v.projeto_nome || '-'));
+                            row.append($('<td></td>').html(
+                                (v.tanque_nome || 'N/A') + 
+                                (v.tanque_sistema ? ' <span class="badge bg-secondary">' + v.tanque_sistema + '</span>' : '')
+                            ));
+                            row.append($('<td></td>').text(v.tipo_peca || '-'));
+                            row.append($('<td></td>').text(v.produto_composto_nome || '-'));
+                            row.append($('<td></td>').text(v.criado_em || '-'));
+                            
+                            // Botão de excluir
+                            var btnExcluir = $('<button></button>')
+                                .addClass('btn btn-sm btn-danger')
+                                .attr('type', 'button')
+                                .attr('data-vinculacao-id', v.id)
+                                .html('<i class="fas fa-trash"></i>')
+                                .attr('title', 'Excluir vinculação')
+                                .on('click', function() {
+                                    excluirVinculacao(v.id, v.tanque_nome, v.produto_composto_nome);
+                                });
+                            
+                            row.append($('<td></td>').append(btnExcluir));
+                            tbody.append(row);
+                        });
+                    } else {
+                        tbody.append(
+                            $('<tr></tr>').append(
+                                $('<td></td>')
+                                    .attr('colspan', 6)
+                                    .addClass('text-center text-muted')
+                                    .text('Nenhuma vinculação encontrada')
+                            )
+                        );
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar vinculações:', error);
+                    tbody.html(
+                        '<tr><td colspan="6" class="text-center text-danger">' +
+                        '<i class="fas fa-exclamation-triangle"></i> Erro ao carregar vinculações' +
+                        '</td></tr>'
+                    );
+                }
+            });
+        }
+
+        // Função para excluir vinculação
+        function excluirVinculacao(vinculacaoId, tanqueNome, produtoNome) {
+            if (!confirm('Deseja realmente excluir a vinculação entre o tanque "' + tanqueNome + '" e o produto "' + produtoNome + '"?')) {
+                return;
+            }
+            
+            var csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = $('input[name="csrf_token"]').first().val();
+            }
+            
+            $.ajax({
+                url: '/pecas/vinculacao-produto-composto/' + vinculacaoId + '/excluir',
+                method: 'POST',
+                data: {
+                    csrf_token: csrfToken
+                },
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert('Vinculação excluída com sucesso!');
+                        carregarVinculacoes(); // Recarregar tabela
+                    } else {
+                        alert('Erro: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var response = xhr.responseJSON;
+                    alert('Erro ao excluir vinculação: ' + (response ? response.message : 'Erro desconhecido'));
+                }
+            });
+        }
+
+        // Inicializar eventos do modal quando ele for aberto
+        $('#modalVinculacaoProdutoComposto').on('shown.bs.modal', function() {
+            console.log('Modal de vinculação aberto');
+            
+            // Carregar vinculações existentes
+            carregarVinculacoes();
+            
+            // Garantir que o select de tanque está desabilitado inicialmente
+            $('#tanque_id').prop('disabled', true);
+
+            // Buscar produtos compostos ao digitar
+            $('#busca_produto_composto').off('input').on('input', function() {
+                var termo = $(this).val().trim();
+                clearTimeout(timeoutBusca);
+                if (termo.length < 2) {
+                    $('#containerProdutosCompostos').hide();
+                    $('#listaProdutosCompostos').empty();
+                    return;
+                }
+                timeoutBusca = setTimeout(function() {
+                    buscarProdutosCompostos(termo);
+                }, 500);
+            });
+
+            // Buscar ao clicar no botão
+            $('#btnBuscarProduto').off('click').on('click', function() {
+                var termo = $('#busca_produto_composto').val().trim();
+                if (termo.length >= 2) {
+                    buscarProdutosCompostos(termo);
+                }
+            });
+
+            // Limpar produto selecionado
+            $('#btnLimparProduto').off('click').on('click', function() {
+                var modal = $('#modalVinculacaoProdutoComposto');
+                modal.find('#produto_composto_id').val('');
+                modal.find('#produtoSelecionadoNome').text('');
+                modal.find('#containerProdutoSelecionado').hide();
+                modal.find('#busca_produto_composto').val('');
+                modal.find('#containerProdutosCompostos').hide();
+            });
+
+            // Salvar vinculação
+            $('#btnSalvarVinculacao').off('click').on('click', function() {
+                var modal = $('#modalVinculacaoProdutoComposto');
+                var form = modal.find('#formVinculacaoProdutoComposto');
+                
+                // Usar seletores específicos do modal
+                var filtroContratoId = modal.find('#filtro_contrato_id').val();
+                var tanqueId = modal.find('#tanque_id').val();
+                var tipoPeca = modal.find('#tipo_peca').val();
+                var produtoCompostoId = modal.find('#produto_composto_id').val();
+                
+                console.log('Validação - Contrato:', filtroContratoId, typeof filtroContratoId);
+                console.log('Validação - Tanque:', tanqueId, typeof tanqueId);
+                console.log('Validação - Tipo Peça:', tipoPeca, typeof tipoPeca);
+                console.log('Validação - Produto Composto:', produtoCompostoId, typeof produtoCompostoId);
+                
+                // Validação completa - verificar se não está vazio, null, undefined ou string vazia
+                var camposFaltando = [];
+                if (!filtroContratoId || filtroContratoId === '' || filtroContratoId === 'null' || filtroContratoId === 'undefined') {
+                    camposFaltando.push('Projeto');
+                }
+                if (!tanqueId || tanqueId === '' || tanqueId === 'null' || tanqueId === 'undefined') {
+                    camposFaltando.push('Tanque');
+                }
+                if (!tipoPeca || tipoPeca === '' || tipoPeca === 'null' || tipoPeca === 'undefined') {
+                    camposFaltando.push('Tipo de Peça');
+                }
+                if (!produtoCompostoId || produtoCompostoId === '' || produtoCompostoId === 'null' || produtoCompostoId === 'undefined') {
+                    camposFaltando.push('Produto Composto');
+                }
+                
+                if (camposFaltando.length > 0) {
+                    alert('Por favor, preencha todos os campos obrigatórios.\n\nCampos faltando: ' + camposFaltando.join(', '));
+                    console.error('Campos faltando:', camposFaltando);
+                    return;
+                }
+                
+                // Obter token CSRF da meta tag (sempre atualizado) ou do formulário
+                var csrfToken = $('meta[name="csrf-token"]').attr('content');
+                if (!csrfToken) {
+                    csrfToken = form.find('input[name="csrf_token"]').val();
+                }
+                
+                if (!csrfToken) {
+                    alert('Erro: Token CSRF não encontrado. Recarregue a página e tente novamente.');
+                    console.error('CSRF token não encontrado');
+                    return;
+                }
+                
+                // Montar dados do formulário manualmente para garantir que tudo seja enviado
+                var formData = {
+                    csrf_token: csrfToken,
+                    filtro_contrato_id: filtroContratoId,
+                    tanque_id: tanqueId,
+                    tipo_peca: tipoPeca,
+                    produto_composto_id: produtoCompostoId
+                };
+                
+                console.log('Dados a serem enviados:', {
+                    ...formData,
+                    csrf_token: '[TOKEN OCULTO]' // Não logar o token completo por segurança
+                });
+                
+                $.ajax({
+                    url: '{{ url_for("peca.vinculacao_produto_composto") }}',
+                    method: 'POST',
+                    data: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Vinculação criada com sucesso!');
+                            // Recarregar tabela de vinculações
+                            carregarVinculacoes();
+                            // Limpar formulário
+                            $('#formVinculacaoProdutoComposto')[0].reset();
+                            $('#filtro_contrato_id').val('').trigger('change');
+                            $('#tanque_id').html('<option value="" selected disabled>Primeiro selecione um projeto</option>').prop('disabled', true);
+                            $('#tipo_peca').html('<option value="" selected disabled>Primeiro selecione um tanque</option>').prop('disabled', true);
+                            $('#containerProdutosCompostos').hide();
+                            $('#containerProdutoSelecionado').hide();
+                            $('#listaProdutosCompostos').empty();
+                        } else {
+                            alert('Erro: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Erro ao salvar:', xhr);
+                        var response = xhr.responseJSON;
+                        var errorMsg = 'Erro ao salvar vinculação';
+                        
+                        if (xhr.status === 400 && response && response.message) {
+                            errorMsg = response.message;
+                        } else if (xhr.status === 403) {
+                            errorMsg = 'Erro de autenticação CSRF. Recarregue a página e tente novamente.';
+                        } else if (response && response.message) {
+                            errorMsg = response.message;
+                        }
+                        
+                        alert(errorMsg);
+                    }
+                });
+            });
+        });
+
+        // Função para buscar produtos compostos
+        function buscarProdutosCompostos(termo) {
+            $.ajax({
+                url: '{{ url_for("peca.api_produtos_compostos") }}',
+                method: 'GET',
+                data: { termo: termo },
+                success: function(response) {
+                    produtosCarregados = response.produtos;
+                    exibirProdutosCompostos(response.produtos);
+                },
+                error: function() {
+                    alert('Erro ao buscar produtos compostos. Tente novamente.');
+                }
+            });
+        }
+
+        // Função para exibir produtos compostos
+        function exibirProdutosCompostos(produtos) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var lista = modal.find('#listaProdutosCompostos');
+            lista.empty();
+            
+            if (produtos.length === 0) {
+                lista.append('<div class="list-group-item text-muted">Nenhum produto encontrado</div>');
+            } else {
+                produtos.forEach(function(produto) {
+                    var item = $('<a href="#" class="list-group-item list-group-item-action"></a>')
+                        .data('produto-id', produto.id)
+                        .html(
+                            '<div class="d-flex w-100 justify-content-between">' +
+                            '<h6 class="mb-1">' + produto.nome + '</h6>' +
+                            '</div>' +
+                            '<p class="mb-1 text-muted small">' + (produto.descricao || 'Sem descrição') + '</p>' +
+                            '<small class="text-muted">' + produto.componentes + ' componente(s)</small>'
+                        )
+                        .on('click', function(e) {
+                            e.preventDefault();
+                            selecionarProduto(produto);
+                        });
+                    lista.append(item);
+                });
+            }
+            
+            modal.find('#containerProdutosCompostos').show();
+        }
+
+        // Função para selecionar um produto
+        function selecionarProduto(produto) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var campoProdutoId = modal.find('#produto_composto_id');
+            
+            if (campoProdutoId.length === 0) {
+                console.error('Campo produto_composto_id não encontrado no modal!');
+                alert('Erro: Campo de produto não encontrado. Recarregue a página.');
+                return;
+            }
+            
+            campoProdutoId.val(produto.id);
+            modal.find('#produtoSelecionadoNome').text(produto.nome);
+            modal.find('#containerProdutoSelecionado').show();
+            modal.find('#containerProdutosCompostos').hide();
+            modal.find('#busca_produto_composto').val(produto.nome);
+            
+            console.log('Produto selecionado:', produto.id, produto.nome);
+            console.log('Campo produto_composto_id preenchido com:', campoProdutoId.val());
+        }
+
+        // Limpar formulário ao fechar o modal
+        $('#modalVinculacaoProdutoComposto').on('hidden.bs.modal', function() {
+            $('#formVinculacaoProdutoComposto')[0].reset();
+            $('#filtro_contrato_id').val('').trigger('change');
+            $('#tanque_id').html('<option value="" selected disabled>Primeiro selecione um projeto</option>').prop('disabled', true);
+            $('#tipo_peca').html('<option value="" selected disabled>Primeiro selecione um tanque</option>').prop('disabled', true);
+            $('#containerProdutosCompostos').hide();
+            $('#containerProdutoSelecionado').hide();
+            $('#listaProdutosCompostos').empty();
+        });
+
+        // Processar produção
+        $('#btnProcessarProducao').on('click', function() {
+            if (!confirm('Deseja processar a produção de todas as peças concretadas?\n\nIsso irá consumir o estoque baseado nos produtos compostos vinculados.')) {
+                return;
+            }
+            
+            var btn = $(this);
+            btn.prop('disabled', true);
+            btn.html('<i class="fas fa-spinner fa-spin"></i> Processando...');
+            
+            // Obter token CSRF
+            var csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = $('input[name="csrf_token"]').first().val();
+            }
+            
+            $.ajax({
+                url: '{{ url_for("peca.processar_producao") }}',
+                method: 'POST',
+                data: {
+                    csrf_token: csrfToken
+                },
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var mensagem = response.message;
+                        
+                        // Adicionar detalhes se houver
+                        if (response.pecas_sem_vinculacao && response.pecas_sem_vinculacao.length > 0) {
+                            mensagem += '\n\nPeças sem vinculação:';
+                            response.pecas_sem_vinculacao.slice(0, 5).forEach(function(p) {
+                                mensagem += '\n- ' + p.peca_nome + ' (Tanque: ' + p.tanque + ', Tipo: ' + p.tipo + ')';
+                            });
+                            if (response.pecas_sem_vinculacao.length > 5) {
+                                mensagem += '\n... e mais ' + (response.pecas_sem_vinculacao.length - 5) + ' peça(s)';
+                            }
+                        }
+                        
+                        if (response.pecas_sem_estoque && response.pecas_sem_estoque.length > 0) {
+                            mensagem += '\n\nGrupos com estoque insuficiente:';
+                            response.pecas_sem_estoque.slice(0, 5).forEach(function(g) {
+                                mensagem += '\n- ' + (g.produto_composto || 'Produto desconhecido');
+                                mensagem += ' (' + (g.data || 'Data desconhecida') + ', ' + g.quantidade_pecas + ' peça(s))';
+                                if (g.material) {
+                                    mensagem += '\n  Material: ' + g.material;
+                                    if (g.necessario && g.disponivel) {
+                                        mensagem += ' (necessário: ' + g.necessario + ', disponível: ' + g.disponivel + ')';
+                                    }
+                                }
+                            });
+                            if (response.pecas_sem_estoque.length > 5) {
+                                mensagem += '\n... e mais ' + (response.pecas_sem_estoque.length - 5) + ' grupo(s)';
+                            }
+                        }
+                        
+                        alert(mensagem);
+                        location.reload();
+                    } else {
+                        alert('Erro: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Erro ao processar produção:', xhr);
+                    var response = xhr.responseJSON;
+                    var errorMsg = 'Erro ao processar produção';
+                    
+                    if (xhr.status === 400 && response && response.message) {
+                        errorMsg = response.message;
+                    } else if (response && response.message) {
+                        errorMsg = response.message;
+                    }
+                    
+                    alert(errorMsg);
+                },
+                complete: function() {
+                    btn.prop('disabled', false);
+                    btn.html('<i class="fas fa-cogs"></i> Processar Produção');
+                }
+            });
         });
     });
 </script>

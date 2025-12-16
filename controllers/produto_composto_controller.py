@@ -127,7 +127,7 @@ def get_produto_composto(id):
             componentes.append({
                 'estoque_id': p.estoque_id,
                 'quantidade': p.quantidade,
-                'nome': '[M] '+p.estoque.material.nome if p.estoque.material_id else '[P] '+p.estoque.produto_composto.nome
+                'nome': '('+str(p.estoque.id)+') '+('[M] '+p.estoque.material.nome if p.estoque.material_id else '[P] '+p.estoque.produto_composto.nome)
             })
         produtos.append({
             'id': produto.id,

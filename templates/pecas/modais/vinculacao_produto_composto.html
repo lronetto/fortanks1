@@ -1,0 +1,127 @@
+<!-- Modal de Vinculação Tanque - Produto Composto -->
+<div class="modal fade" id="modalVinculacaoProdutoComposto" tabindex="-1" aria-labelledby="modalVinculacaoProdutoCompostoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalVinculacaoProdutoCompostoLabel">
+                    <i class="fas fa-link"></i> Vincular Tanque a Produto Composto
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formVinculacaoProdutoComposto">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    
+                    <!-- Filtro de Contrato -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="filtro_contrato_id" class="form-label">Projeto (Contrato) *</label>
+                            <select class="form-select" id="filtro_contrato_id" name="filtro_contrato_id" required>
+                                <option value="" selected disabled>Selecione um projeto</option>
+                                {% for contrato in contratos %}
+                                <option value="{{ contrato.id }}">{{ contrato.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Filtro de Tanque -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="tanque_id" class="form-label">Tanque *</label>
+                            <select class="form-select" id="tanque_id" name="tanque_id" required disabled>
+                                <option value="" selected disabled>Primeiro selecione um projeto</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Tipo de Peça -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="tipo_peca" class="form-label">Tipo de Peça *</label>
+                            <select class="form-select" id="tipo_peca" name="tipo_peca" required disabled>
+                                <option value="" selected disabled>Primeiro selecione um tanque</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Busca de Produto Composto -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="busca_produto_composto" class="form-label">Buscar Produto Composto *</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="busca_produto_composto" 
+                                       placeholder="Digite o nome do produto composto..." autocomplete="off">
+                                <button class="btn btn-outline-secondary" type="button" id="btnBuscarProduto">
+                                    <i class="fas fa-search"></i> Buscar
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Digite pelo menos 2 caracteres para buscar</small>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Produtos Compostos -->
+                    <div class="row mb-3" id="containerProdutosCompostos" style="display: none;">
+                        <div class="col-md-12">
+                            <label class="form-label">Produtos Compostos Encontrados</label>
+                            <div id="listaProdutosCompostos" class="list-group" style="max-height: 300px; overflow-y: auto;">
+                                <!-- Produtos serão carregados aqui via JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Produto Selecionado -->
+                    <div class="row mb-3" id="containerProdutoSelecionado" style="display: none;">
+                        <div class="col-md-12">
+                            <div class="alert alert-info">
+                                <strong>Produto Selecionado:</strong>
+                                <span id="produtoSelecionadoNome"></span>
+                                <input type="hidden" id="produto_composto_id" name="produto_composto_id">
+                                <button type="button" class="btn btn-sm btn-outline-secondary float-end" id="btnLimparProduto">
+                                    <i class="fas fa-times"></i> Limpar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Tabela de Vinculações Existentes -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <hr>
+                        <h6 class="mb-3">
+                            <i class="fas fa-list"></i> Vinculações Existentes
+                        </h6>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover table-bordered" id="tabelaVinculacoes">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Projeto</th>
+                                        <th>Tanque</th>
+                                        <th>Tipo de Peça</th>
+                                        <th>Produto Composto</th>
+                                        <th>Data</th>
+                                        <th>Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyVinculacoes">
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted">
+                                            <i class="fas fa-spinner fa-spin"></i> Carregando...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarVinculacao">
+                    <i class="fas fa-save"></i> Salvar Vinculação
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -684,7 +684,7 @@
                 </li>
                 
                 <!-- Módulo de Estoque -->
-                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }} {{ is_active('estoque.inventarios') }}">
+                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }} {{ is_active('inventario.inventarios') }}">
                     <a href="#estoqueSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                         class="dropdown-toggle">
                         <i class="fas fa-warehouse"></i> Estoque
@@ -700,13 +700,13 @@
                                 <i class="fas fa-exchange-alt"></i> Movimentações
                             </a>
                         </li>
-                        <li class="{{ is_active('estoque.inventarios') }}">
-                            <a href="{{ url_for('estoque.inventarios') }}">
+                        <li class="{{ is_active('inventario.inventarios') }}">
+                            <a href="{{ url_for('inventario.inventarios') }}">
                                 <i class="fas fa-clipboard-check"></i> Inventários
                             </a>
                         </li>
-                        <li class="{{ is_active('estoque.novo_inventario') }}">
-                            <a href="{{ url_for('estoque.novo_inventario') }}">
+                        <li class="{{ is_active('inventario.novo_inventario') }}">
+                            <a href="{{ url_for('inventario.novo_inventario') }}">
                                 <i class="fas fa-plus-circle"></i> Novo Inventário
                             </a>
                         </li>

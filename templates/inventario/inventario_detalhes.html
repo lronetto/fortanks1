@@ -7,22 +7,22 @@
     <div class="d-sm-flex justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Detalhes do Inventário #{{ inventario.id }}</h1>
         <div>
-            <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-secondary btn-sm">
+            <a href="{{ url_for('inventario.inventarios') }}" class="btn btn-secondary btn-sm">
                 <i class="fas fa-arrow-left"></i> Voltar
             </a>
             
             {% if inventario.status == 'Em andamento' %}
-                <a href="{{ url_for('estoque.inventario_contagem', id=inventario.id) }}" class="btn btn-primary btn-sm">
+                <a href="{{ url_for('inventario.inventario_contagem', id=inventario.id) }}" class="btn btn-primary btn-sm">
                     <i class="fas fa-clipboard-check"></i> Continuar Contagem
                 </a>
                 
                 <button type="button" class="btn btn-success btn-sm" 
-                        onclick="confirmarFinalizacao('{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}')">
+                        onclick="confirmarFinalizacao('{{ url_for('inventario.finalizar_inventario', id=inventario.id) }}')">
                     <i class="fas fa-check-double"></i> Finalizar
                 </button>
                 
                 <button type="button" class="btn btn-danger btn-sm" 
-                        onclick="confirmarCancelamento('{{ url_for('estoque.cancelar_inventario', id=inventario.id) }}')">
+                        onclick="confirmarCancelamento('{{ url_for('inventario.cancelar_inventario', id=inventario.id) }}')">
                     <i class="fas fa-times"></i> Cancelar
                 </button>
             {% endif %}

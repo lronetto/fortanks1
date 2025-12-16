@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, SelectField, FloatField, DateField, HiddenField
+from wtforms import StringField, SelectField, FloatField, DateField, HiddenField, BooleanField
 from wtforms.validators import DataRequired, Optional, NumberRange
 
 class EstoqueForm(FlaskForm):
@@ -45,4 +45,5 @@ class FiltroEstoqueForm(FlaskForm):
         ('excesso', 'Excesso')
     ])
     localizacao = SelectField('Localização', choices=[], validators=[Optional()])
-    termo_busca = StringField('Buscar') 
+    termo_busca = StringField('Buscar')
+    ignorar_localizacoes = BooleanField('Agrupar por Item (Ignorar Localizações)', default=False) 

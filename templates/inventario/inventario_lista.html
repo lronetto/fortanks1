@@ -18,7 +18,7 @@
         </a>
         <div class="collapse" id="collapseCardFiltros">
             <div class="card-body">
-                <form method="GET" action="{{ url_for('estoque.inventarios') }}">
+                <form method="GET" action="{{ url_for('inventario.inventarios') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row">
                         <div class="col-md-3">
@@ -72,7 +72,7 @@
                             <button type="submit" class="btn btn-primary float-right ml-2">
                                 <i class="fas fa-search"></i> Filtrar
                             </button>
-                            <a href="{{ url_for('estoque.inventarios') }}" class="btn btn-secondary float-right">
+                            <a href="{{ url_for('inventario.inventarios') }}" class="btn btn-secondary float-right">
                                 <i class="fas fa-sync"></i> Limpar
                             </a>
                         </div>
@@ -152,20 +152,20 @@
                                         data-progresso-texto="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
                                         data-diferencas="0"
                                         data-observacoes="{{ inventario.observacoes or '' }}"
-                                        data-url-contagem="{{ url_for('estoque.inventario_contagem', id=inventario.id) }}"
-                                        data-url-finalizar="{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}"
+                                        data-url-contagem="{{ url_for('inventario.inventario_contagem', id=inventario.id) }}"
+                                        data-url-finalizar="{{ url_for('inventario.finalizar_inventario', id=inventario.id) }}"
                                         data-bs-toggle="modal" data-bs-target="#modalVisualizarInventario"
                                         title="Visualizar Detalhes">
                                     <i class="fas fa-eye"></i>
                                 </button>
                                 
                                 {% if inventario.status == 'Em andamento' %}
-                                    <a href="{{ url_for('estoque.inventario_contagem', id=inventario.id) }}" class="btn btn-primary btn-sm" title="Continuar Contagem">
+                                    <a href="{{ url_for('inventario.inventario_contagem', id=inventario.id) }}" class="btn btn-primary btn-sm" title="Continuar Contagem">
                                         <i class="fas fa-clipboard-check"></i>
                                     </a>
                                     
                                     <button type="button" class="btn btn-success btn-sm btn-finalizar-inventario" 
-                                            data-url="{{ url_for('estoque.finalizar_inventario', id=inventario.id) }}"
+                                            data-url="{{ url_for('inventario.finalizar_inventario', id=inventario.id) }}"
                                             data-id="{{ inventario.id }}"
                                             data-tipo="{{ inventario.tipo_inventario }}"
                                             data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|list|length }}"
@@ -173,17 +173,27 @@
                                             title="Finalizar Inventário">
                                         <i class="fas fa-check-double"></i>
                                     </button>
-                                    
-                                    <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
-                                            data-url="{{ url_for('estoque.cancelar_inventario', id=inventario.id) }}"
+                                {% elif inventario.status == 'Concluído' %}
+                                    <button type="button" class="btn btn-warning btn-sm text-dark btn-reabrir-inventario"
+                                            data-url="{{ url_for('inventario.reabrir_inventario', id=inventario.id) }}"
+                                            data-id="{{ inventario.id }}"
+                                            data-tipo="{{ inventario.tipo_inventario }}"
+                                            data-status="{{ inventario.status }}"
+                                            title="Reabrir contagem e desfazer movimentações">
+                                        <i class="fas fa-undo"></i> Reabrir
+                                    </button>
+                                {% endif %}
+
+                                <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
+                                            data-url="{{ url_for('inventario.cancelar_inventario', id=inventario.id) }}"
                                             data-id="{{ inventario.id }}"
                                             data-tipo="{{ inventario.tipo_inventario }}"
                                             data-status="{{ inventario.status }}"
                                             data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
-                                            title="Cancelar Inventário">
-                                        <i class="fas fa-times"></i>
+                                            title="Cancelar e Desfazer Movimentações">
+                                        <i class="fas fa-undo"></i> Cancelar
                                     </button>
-                                {% endif %}
+                               
                             </td>
                         </tr>
                         {% else %}
@@ -201,7 +211,7 @@
                 <nav aria-label="Navegação de páginas">
                     <ul class="pagination">
                         <li class="page-item {% if pagination.page == 1 %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('estoque.inventarios', page=pagination.page-1, **request.args) }}" aria-label="Anterior">
+                            <a class="page-link" href="{{ url_for('inventario.inventarios', page=pagination.page-1, **request.args) }}" aria-label="Anterior">
                                 <span aria-hidden="true">&laquo;</span>
                             </a>
                         </li>
@@ -209,7 +219,7 @@
                         {# Exibir páginas anteriores à atual #}
                         {% for p in range(max(1, pagination.page-2), pagination.page) %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('estoque.inventarios', page=p, **request.args) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('inventario.inventarios', page=p, **request.args) }}">{{ p }}</a>
                         </li>
                         {% endfor %}
                         
@@ -221,12 +231,12 @@
                         {# Exibir páginas posteriores à atual #}
                         {% for p in range(pagination.page+1, min(pagination.pages+1, pagination.page+3)) %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('estoque.inventarios', page=p, **request.args) }}">{{ p }}</a>
+                            <a class="page-link" href="{{ url_for('inventario.inventarios', page=p, **request.args) }}">{{ p }}</a>
                         </li>
                         {% endfor %}
                         
                         <li class="page-item {% if pagination.page == pagination.pages %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('estoque.inventarios', page=pagination.page+1, **request.args) }}" aria-label="Próximo">
+                            <a class="page-link" href="{{ url_for('inventario.inventarios', page=pagination.page+1, **request.args) }}" aria-label="Próximo">
                                 <span aria-hidden="true">&raquo;</span>
                             </a>
                         </li>
@@ -239,10 +249,11 @@
 </div>
 
 <!-- Incluir Modais -->
-{% include 'estoque/modais/novo_inventario.html' %}
-{% include 'estoque/modais/visualizar_inventario.html' %}
-{% include 'estoque/modais/confirmar_finalizacao.html' %}
-{% include 'estoque/modais/confirmar_cancelamento.html' %}
+{% include 'inventario/modais/novo_inventario.html' %}
+{% include 'inventario/modais/visualizar_inventario.html' %}
+{% include 'inventario/modais/confirmar_finalizacao.html' %}
+{% include 'inventario/modais/confirmar_cancelamento.html' %}
+{% include 'inventario/modais/confirmar_reabertura.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -271,4 +282,4 @@ $(document).ready(function() {
     $('[data-bs-toggle="tooltip"]').tooltip();
 });
 </script>
-{% endblock %} 
+{% endblock %}
