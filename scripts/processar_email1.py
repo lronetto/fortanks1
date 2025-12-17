@@ -99,7 +99,7 @@ IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
 NUMBER_WHATSAPP = '5527996440664-1630085280@g.us'
 
 # Configurações para otimização de quota IMAP
-MAX_EMAILS_POR_EXECUCAO = int(os.getenv('MAX_EMAILS_POR_EXECUCAO', '2'))  # Limite de emails por execução (reduzido para evitar quota)
+MAX_EMAILS_POR_EXECUCAO = 5  # Limite de emails por execução (reduzido para evitar quota)
 DELAY_ENTRE_EMAILS = float(os.getenv('DELAY_ENTRE_EMAILS', '1.0'))  # Delay em segundos entre emails (aumentado)
 DELAY_ENTRE_BUSCAS_IMAP = float(os.getenv('DELAY_ENTRE_BUSCAS_IMAP', '0.5'))  # Delay entre buscas IMAP
 MARCAR_LIDOS_EM_LOTE = os.getenv('MARCAR_LIDOS_EM_LOTE', 'true').lower() == 'true'  # Marcar emails como lidos em lote
@@ -437,7 +437,6 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
     except Exception as e:
         print(f"Erro ao extrair número e fornecedor do nome do arquivo: {e}")
         return None, None
-
 
 def decodificar_assunto_email(subject_raw):
     """

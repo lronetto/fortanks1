@@ -425,8 +425,8 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
     # Processar cada componente do produto composto
     for componente in produto_composto.componentes:
         estoque_id = componente.estoque_id
-        quantidade_por_peca = Decimal(str(componente.quantidade))
-        quantidade_total = quantidade_por_peca * Decimal(str(quantidade_pecas))
+        quantidade_por_peca = componente.quantidade
+        quantidade_total = quantidade_por_peca * quantidade_pecas
         
         # Buscar o estoque
         estoque = Estoque.query.get(estoque_id)
@@ -551,7 +551,7 @@ def processar_producao():
         
         MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo.like('%producao_peca%')).delete()
         # Buscar todas as peças com data_concretagem preenchida
-        pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None)).all()
+        pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None)).limit(50).all()
         
         if not pecas_concretadas:
             return jsonify({
@@ -673,7 +673,7 @@ def processar_producao():
             'pecas_sem_estoque': pecas_sem_estoque,
             'erros': erros
         }
-        Logs(local='peca', data=datetime.now(), texto=json.dumps(msg))
+        Logs(local='peca_processar_producao', data=datetime.now(), texto=json.dumps(msg))
         return jsonify(msg)
         
     except Exception as e:
