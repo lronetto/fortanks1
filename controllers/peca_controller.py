@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from datetime import datetime
 from decimal import Decimal
 import json
-
+from models.logs import Logs
 # Criação do blueprint
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
 
@@ -504,7 +504,7 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
                 'disponivel': float(estoque.quantidade),
                 'nivel': nivel_recursao
             })
-            continue
+            
         
         # Criar uma única movimentação para todo o grupo
         movimentacao = MovimentacaoEstoque()
@@ -528,7 +528,7 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
             quantidade=quantidade_total,
             estoque_id=estoque_id,
             origem_id=produto_composto_id,
-            origem_tipo='producao_peca_grupo',
+            origem_tipo='producao_peca',
             usuario_id=usuario_id,
             motivo=observacao
         )
@@ -663,7 +663,7 @@ def processar_producao():
         if erros:
             mensagem += f'\n\n{len(erros)} erro(s) durante o processamento.'
         
-        return jsonify({
+        msg = {
             'success': True,
             'message': mensagem,
             'pecas_processadas': pecas_processadas,
@@ -672,7 +672,9 @@ def processar_producao():
             'pecas_sem_vinculacao': pecas_sem_vinculacao,
             'pecas_sem_estoque': pecas_sem_estoque,
             'erros': erros
-        })
+        }
+        Logs(local='peca', data=datetime.now(), texto=json.dumps(msg))
+        return jsonify(msg)
         
     except Exception as e:
         db.session.rollback()

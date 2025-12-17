@@ -6,7 +6,7 @@ from models.epi import EPI
 from models.centro_custo import CentroCusto
 from models.database import db
 from forms.estoque_forms import EstoqueForm, MovimentacaoEstoqueForm, FiltroEstoqueForm
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from models.unidade import Unidade
 from sqlalchemy import or_, func
 
@@ -175,8 +175,9 @@ def index():
                 grouped_item.usuario_id = item.usuario_id
                 grouped[key] = grouped_item
             
-            # Somar quantidades
-            grouped[key].quantidade += item.quantidade or Decimal(0)
+            # Somar saldos reais (não usar item.quantidade diretamente)
+            saldo_real_item = item.get_saldo_real()
+            grouped[key].quantidade += saldo_real_item
             
             # Coletar localizações únicas
             if item.localizacao:
@@ -195,6 +196,23 @@ def index():
         # Converter para lista e ordenar
         grouped_items = list(grouped.values())
         grouped_items.sort(key=lambda x: (x.material.nome if x.material else x.produto_composto.nome if x.produto_composto else ""))
+        
+        # Recalcular quantidade agrupada usando saldo real de cada estoque
+        for grouped_item in grouped_items:
+            # Buscar todos os estoques do mesmo material/produto
+            if grouped_item.material_id:
+                estoques_grupo = Estoque.query.filter_by(material_id=grouped_item.material_id).all()
+            elif grouped_item.ProdComp_id:
+                estoques_grupo = Estoque.query.filter_by(ProdComp_id=grouped_item.ProdComp_id).all()
+            else:
+                estoques_grupo = [grouped_item]
+            
+            # Calcular saldo real total
+            saldo_real_total = Decimal('0.0')
+            for estoque in estoques_grupo:
+                saldo_real_total += estoque.get_saldo_real()
+            
+            grouped_item.quantidade = saldo_real_total
         
         # Log para debug
         logger.info(f"Agrupamento: {len(all_items)} itens originais agrupados em {len(grouped_items)} grupos")
@@ -229,6 +247,13 @@ def index():
     else:
         # Ordenar pelo nome do material ou pelo nome do produto composto
         items = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).paginate(page=page, per_page=20, error_out=False)
+    
+    # Atualizar quantidade de cada item com o saldo real calculado
+    for item in items.items:
+        saldo_real = item.get_saldo_real()
+        if item.quantidade != saldo_real:
+            # Atualizar a quantidade com o saldo real para exibição
+            item.quantidade = saldo_real
     
     return render_template('estoque/index.html', items=items, form_filtro=form_filtro)
 
@@ -735,8 +760,8 @@ def api_historico_saldo_estoque(estoque_id):
         estoques_material = Estoque.query.filter_by(material_id=item_estoque.material_id).all()
         estoque_ids = [e.id for e in estoques_material]
         
-        # Calcular quantidade total atual
-        quantidade_total = sum(float(e.quantidade) for e in estoques_material)
+        # Calcular quantidade total atual usando saldo real (baseado em movimentações)
+        quantidade_total = sum(float(e.get_saldo_real()) for e in estoques_material)
         
         # Buscar todas as movimentações de todos os estoques do material
         query = MovimentacaoEstoque.query.filter(MovimentacaoEstoque.estoque_id.in_(estoque_ids))
@@ -744,7 +769,6 @@ def api_historico_saldo_estoque(estoque_id):
         if data_inicio:
             query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
         if data_fim:
-            from datetime import timedelta
             query = query.filter(MovimentacaoEstoque.data_movimento < data_fim + timedelta(days=1))
         
         movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
@@ -767,7 +791,6 @@ def api_historico_saldo_estoque(estoque_id):
         
         # Agregar movimentações por data e hora (para manter ordem cronológica)
         from collections import defaultdict
-        from datetime import datetime, timedelta
         
         # Rastrear saldo individual de cada estoque para calcular ajustes corretamente
         saldos_estoques = {eid: Decimal('0.0') for eid in estoque_ids}
@@ -815,34 +838,69 @@ def api_historico_saldo_estoque(estoque_id):
                 "saldo": float(saldo_acumulado)
             })
         
-        # Garantir que o último ponto corresponde à quantidade total atual
-        if not data_fim:
-            agora = datetime.now()
-            if not historico_data or abs(quantidade_total - historico_data[-1]['saldo']) > 0.01:
-                if historico_data:
+        # Verificar se há movimentações após a última data do histórico
+        if not data_fim and historico_data:
+            # Buscar a última data do histórico
+            ultima_data_str = historico_data[-1]['data']
+            if ' ' in ultima_data_str:
+                ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d %H:%M:%S')
+            else:
+                ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d')
+            
+            # Verificar se há movimentações após a última data do histórico
+            movimentacoes_posteriores = MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.estoque_id.in_(estoque_ids),
+                MovimentacaoEstoque.data_movimento > ultima_data
+            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            
+            # Se houver movimentações posteriores, processá-las
+            if movimentacoes_posteriores:
+                saldo_atual = historico_data[-1]['saldo']
+                for mov in movimentacoes_posteriores:
+                    estoque_id_mov = mov.estoque_id
+                    saldo_anterior_estoque = saldos_estoques.get(estoque_id_mov, Decimal('0.0'))
+                    
+                    if mov.tipo_movimento == 'entrada':
+                        saldo_atual += mov.quantidade
+                        saldos_estoques[estoque_id_mov] += mov.quantidade
+                    elif mov.tipo_movimento == 'saida':
+                        saldo_atual -= mov.quantidade
+                        saldos_estoques[estoque_id_mov] -= mov.quantidade
+                    elif mov.tipo_movimento == 'ajuste':
+                        diferenca = mov.quantidade - saldo_anterior_estoque
+                        saldo_atual += diferenca
+                        saldos_estoques[estoque_id_mov] = mov.quantidade
+                    
                     historico_data.append({
-                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
-                        "saldo": quantidade_total
+                        "data": mov.data_movimento.strftime('%Y-%m-%d %H:%M:%S'),
+                        "saldo": float(saldo_atual)
                     })
-                else:
-                    historico_data.append({
-                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
-                        "saldo": quantidade_total
-                    })
+            
+            # Verificar se o saldo calculado corresponde à quantidade total atual
+            # Se não corresponder e não houver movimentações posteriores, não adicionamos ponto artificial
+            saldo_calculado = historico_data[-1]['saldo']
+            diferenca = abs(quantidade_total - saldo_calculado)
+            
+            if diferenca > 0.01 and not movimentacoes_posteriores:
+                # Log para debug, mas não adiciona ponto artificial
+                logger.warning(f"Diferença entre saldo calculado ({saldo_calculado}) e quantidade total atual ({quantidade_total})")
+        
+        # Se não há histórico e não há filtro de data_fim, criar um ponto inicial apenas se não houver movimentações
+        elif not data_fim and not historico_data:
+            total_movimentacoes = MovimentacaoEstoque.query.filter(
+                MovimentacaoEstoque.estoque_id.in_(estoque_ids)
+            ).count()
+            if total_movimentacoes == 0:
+                agora = datetime.now()
+                historico_data.append({
+                    "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                    "saldo": quantidade_total
+                })
         
         # Agrupar por semana se solicitado
         if agrupar_semana and historico_data:
             historico_data = MovimentacaoEstoque._agrupar_por_semana(historico_data)
-            if not data_fim and historico_data:
-                if abs(quantidade_total - historico_data[-1]['saldo']) > 0.01:
-                    agora = datetime.now()
-                    dias_para_segunda = agora.weekday()
-                    inicio_semana = agora - timedelta(days=dias_para_segunda)
-                    historico_data.append({
-                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
-                        "saldo": quantidade_total,
-                        "semana": f"Semana de {inicio_semana.strftime('%d/%m/%Y')}"
-                    })
+            # Não adicionar ponto artificial após agrupamento
     else:
         # Comportamento normal: histórico de um único estoque
         historico_data = MovimentacaoEstoque.get_historico_saldo_para_grafico(
@@ -851,7 +909,8 @@ def api_historico_saldo_estoque(estoque_id):
             data_fim=data_fim,
             agrupar_por_semana=agrupar_semana
         )
-        quantidade_total = float(item_estoque.quantidade)
+        # Usar saldo real (baseado em movimentações) em vez de estoque.quantidade
+        quantidade_total = float(item_estoque.get_saldo_real())
 
     datas = [item['data'] for item in historico_data]
     saldos = [item['saldo'] for item in historico_data]
@@ -863,4 +922,37 @@ def api_historico_saldo_estoque(estoque_id):
         'semanas': semanas,
         'agrupar_semana': agrupar_semana,
         'quantidade_atual': quantidade_total
-    }) 
+    })
+
+@estoque_bp.route('/sincronizar-quantidades', methods=['POST'])
+@login_required
+def sincronizar_quantidades():
+    """
+    Sincroniza as quantidades de todos os estoques com os saldos reais calculados.
+    """
+    try:
+        sincronizados = Estoque.sincronizar_todos_estoques()
+        flash(f'{sincronizados} estoques sincronizados com sucesso!', 'success')
+        return redirect(url_for('estoque.index'))
+    except Exception as e:
+        logger.error(f"Erro ao sincronizar quantidades: {str(e)}")
+        flash(f'Erro ao sincronizar quantidades: {str(e)}', 'danger')
+        return redirect(url_for('estoque.index'))
+
+@estoque_bp.route('/<int:id>/sincronizar', methods=['POST'])
+@login_required
+def sincronizar_estoque(id):
+    """
+    Sincroniza a quantidade de um estoque específico com o saldo real.
+    """
+    estoque = Estoque.query.get_or_404(id)
+    try:
+        if estoque.sincronizar_quantidade():
+            flash('Quantidade sincronizada com sucesso!', 'success')
+        else:
+            flash('A quantidade já está sincronizada.', 'info')
+    except Exception as e:
+        logger.error(f"Erro ao sincronizar estoque {id}: {str(e)}")
+        flash(f'Erro ao sincronizar quantidade: {str(e)}', 'danger')
+    
+    return redirect(url_for('estoque.index')) 

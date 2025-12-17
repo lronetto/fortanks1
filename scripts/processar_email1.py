@@ -648,19 +648,26 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
     tiponf = None
     
     if decs:
-        dec = [dec for dec in decs if dec.type == 'CODE128']
-        if dec:
-            dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
-            tiponf = dec1[20:22] if dec1 and len(dec1) > 22 else None
-        
         for dec in decs:
             anexo['codbarras']['codigos'].append({
                 'decodificado': dec.data.decode('utf-8'),
                 'tiponf': dec.type
             })
+        dec = [dec for dec in decs if dec.type == 'CODE128']
+        if dec:
+            dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
+            tiponf = dec1[20:22] if dec1 and len(dec1) > 22 else None
+        else:
+            dec = [dec for dec in decs if dec.type == 'QRCODE']
+            if dec:
+                dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
+                if "https://nfe.fazenda.sp.gov.br/CTeConsulta" in dec1:
+                    dec1 = dec1.split('=')[1]
+                    dec1 = dec1.split('&')[0]
+                tiponf ='57'
     
     if dec1:
-        logging.info(f"com codigo de barras tipo: {tiponf} dec1: {dec1}")
+        logging.info(f"com codigo de barras /qrcode tipo: {tiponf} dec1: {dec1}")
         nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == dec1).first()
         anexo['db'].append({
             'chave_acesso': dec1,
@@ -730,16 +737,25 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
                     logging.info(f"upload realizado sem nota {numero_nf}")
                 return True
 
-def processar_anexo_xml(filename, payload):
+def processar_anexo_xml(filename, payload,log_email_entry):
     """
     Processa um anexo XML: cria NotaFiscal e Arquivei.
     Retorna True se processou com sucesso, False caso contrário.
     """
     try:
-        nf = NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'))
+        chave_acesso = filename.split('.')[0]
+        if len(chave_acesso) == 44:
+            tipo = 'cte' if chave_acesso[20:22] == '57' else 'nfe' if chave_acesso[20:22] == '55' else None
+            
+        nf = NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'), tipo=tipo)
         if nf.inserido:
             try:
-                Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                resp= Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                log_email_entry['arquivei'].append({
+                    'arquivei': resp.json(),
+                    'chave_acesso': chave_acesso,
+                    'tipo': tipo,
+                })
                 return True
             except Exception as e:
                 logging.error(f"Erro ao processar arquivo xml {filename}: {e}")
@@ -824,7 +840,7 @@ def processar_anexos_email(msg, tipo, log_email_entry):
             log_email_entry['anexos_existentes']['qtd'] += 1
         else:
             anexos_nao_processados.append(att)
-    
+
     total_anexos = len(anexos_ordenados)
     total_nao_processados = len(anexos_nao_processados)
     
@@ -875,7 +891,7 @@ def processar_anexos_email(msg, tipo, log_email_entry):
         if filename.lower().endswith('.pdf'):
             processar_anexo_pdf(anexo, filename, payload, tipo)
         elif filename.lower().endswith('.xml'):
-            processar_anexo_xml(filename, payload)
+            processar_anexo_xml(filename, payload, log_email_entry)
         
         log_email_entry['anexos'].append(anexo)
     

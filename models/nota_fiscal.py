@@ -70,7 +70,6 @@ def determinar_movimentacoes_estoque(nota_fiscal):
         movimentacoes.append(("Estoque Matriz", "entrada"))
     
     return movimentacoes
-
 def get_xml_text(element, xpath, ns):
     """
     Função auxiliar para obter texto de um elemento XML, retornando None se o elemento não existir
@@ -166,7 +165,6 @@ class NotaFiscal(db.Model):
                 else:
                     self.upload = upload
                 print('self.upload: ',self.upload)
-
     def extrair_tipo_nota(self, xml_data):
         """
         Extrai o tipo de nota fiscal do XML
@@ -188,15 +186,13 @@ class NotaFiscal(db.Model):
         Salva a nota fiscal no banco de dados
         """
         db.session.add(self)
-        db.session.commit()
-    
+        db.session.commit()   
     def delete(self):
         """
         Remove a nota fiscal do banco de dados
         """
         db.session.delete(self)
-        db.session.commit()
-    
+        db.session.commit()    
     def todos_itens_importados(self):
         """
         Verifica se todos os itens da nota fiscal foram importados para o estoque
@@ -211,8 +207,7 @@ class NotaFiscal(db.Model):
             if not item.importado_estoque:
                 return False
                 
-        return True
-    
+        return True    
     def percentual_importacao(self):
         """
         Calcula o percentual de itens da nota fiscal que foram importados para o estoque
@@ -226,8 +221,7 @@ class NotaFiscal(db.Model):
         total_itens = len(self.itens)
         itens_importados = sum(1 for item in self.itens if item.importado_estoque)
         
-        return (itens_importados / total_itens) * 100
-    
+        return (itens_importados / total_itens) * 100   
     def get_pdf(self):
         if not self.upload:
             if not db.session.query(Upload.id).filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first():
@@ -235,12 +229,10 @@ class NotaFiscal(db.Model):
                 self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
         return self.upload
     def get_chave_acesso(self):
-        return self.chave_acesso
-    
+        return self.chave_acesso    
     def get_xml_json(self):
         dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))
         return dictvar
-
     def get_vencimento(self):
         # Primeiro tentar obter do dados_adicionais (mais rápido, já está processado)
         if self.dados_adicionais:
@@ -282,38 +274,57 @@ class NotaFiscal(db.Model):
         except Exception:
             pass
         
-        return None
-        
+        return None        
     def importar_arquivei(data_inicial,data_final,tipo='nfe'):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
         total = len(notas.xml_datas)
         i=0
         existente=0
+        notas_log = []
         if total > 0:
             
             for xml_data in notas.xml_datas:
                 nf = NotaFiscal(xml_data=xml_data,tipo=tipo)
                 existente+=(1 if nf.inserido else 0)
                 i+=1
+                # Coletar informações de log da nota processada
+                if hasattr(nf, 'log_info') and nf.log_info:
+                    notas_log.append(nf.log_info)
         log = {
             'data_ini': data_inicial,
             'data_fim': data_final,
             'total': total,
             'existentes': existente,
-            'tipo': tipo
+            'tipo': tipo,
+            'notas_processadas': i,
+            'notas': notas_log
         }
-        Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log))
-        
+        Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log, ensure_ascii=False, default=str))      
     def processar_cte(self):
         chave_acesso, dados = self.extrair_dados_xml_cte()
         #print(f'dados: {dados}')
         # Verifica se já existe
+        log = {
+            'existente': False,
+            'inserido': False,
+            'erro': None,
+            'chave_acesso': chave_acesso,
+            'numero_cte': dados.get('numero_cte'),
+            'tipo': 2,
+            'data_emissao': dados.get('data_emissao'),
+            'valor_total': dados.get('valor_total'),
+            'cnpj_emitente': dados.get('cnpj_emitente'),
+            'nome_emitente': dados.get('nome_emitente'),
+            'cnpj_destinatario': dados.get('cnpj_destinatario'),
+            'nome_destinatario': dados.get('nome_destinatario'),
+        }
         existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
-            
+            log['existente'] = True
             existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             existente.save()
             existente.inserido = False
+            existente.log_info = log
             return existente
         try:
             self.tipo = 2
@@ -329,14 +340,31 @@ class NotaFiscal(db.Model):
             self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             self.save()
             self.inserido = True
+            log['inserido'] = True
+            self.log_info = log
+            return self
         except Exception as e:
             logger.error(f"Erro ao processar CT-e: {str(e)}")
+            log['erro'] = str(e)
+            self.log_info = log
             return False
-        return self
     def processar_nf(self):
         """
         Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
+        self.inserido = False
+        log = {
+                'existente': False,
+                'inserido': False,
+                'erro': None,
+                'chave_acesso': None,
+                'numero_nf': None,
+                'tipo': None,
+                'data_emissao': None,
+                'valor_total': None,
+                'cnpj_emitente': None,
+                'nome_emitente': None,
+            }
         try:
             # Extrair dados do XML
             #self.xml_data = base64.b64encode(xml_text.encode('utf-8')).decode('utf-8')
@@ -346,22 +374,36 @@ class NotaFiscal(db.Model):
             #print('dados_nf: ',dados_nf)
             if not chave_acesso or not dados_nf:
                 logger.warning(f"Não foi possível extrair dados do XML")
+                log['erro'] = "Não foi possível extrair dados do XML"
+                self.log_info = log
                 return False
             self.chave_acesso=chave_acesso
+            
+            # Atualizar log com dados extraídos
+            log['chave_acesso'] = chave_acesso
+            log['numero_nf'] = dados_nf.get('numero')
+            log['tipo'] = dados_nf.get('tipo')
+            log['data_emissao'] = dados_nf.get('data_emissao')
+            log['valor_total'] = dados_nf.get('valor_total')
+            log['cnpj_emitente'] = dados_nf.get('cnpj_emitente')
+            log['nome_emitente'] = dados_nf.get('nome_emitente')
+            
             # Verificar se a nota fiscal já existe
             nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             #print('nf: ',nf)
             #print('self: ',self)
+            
             if nf:
-                Logs(local='processar_nf',data=datetime.now(),texto=f"Nota {chave_acesso} já existe no banco de dados")
+                log['existente'] = True
                 logger.info(f"Nota {chave_acesso} já existe no banco de dados")
                 nf.inserido = False
-                print(f'num ={nf.numero_nf} dados_adicionais: {nf.dados_adicionais}')
+                #print(f'num ={nf.numero_nf} dados_adicionais: {nf.dados_adicionais}')
                 if not nf.dados_adicionais:
                    # print(f'num ={nf.numero_nf} dados_adicionais: {nf.dados_adicionais}')
                     nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
                     nf.save()
                 
+                nf.log_info = log
                 return nf
             
             #self.xml_data=self.xml_data
@@ -401,10 +443,14 @@ class NotaFiscal(db.Model):
             
 
             self.inserido = True
+            log['inserido'] = True
+            self.log_info = log
             return self
 
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
+            log['erro'] = str(e)
+            self.log_info = log
             return False
     def extrair_dados_xml_cte(self):
 
@@ -827,8 +873,7 @@ class NotaFiscal(db.Model):
             observacao: Observação para a importação (opcional)
         """
         for item in self.itens:
-            item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)
-    
+            item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)   
     def importar_pendentes_com_material(self, usuario_id, centro_custo_id=None, observacao=None):
         """
         Importa e vincula itens pendentes que já têm material vinculado.
@@ -892,7 +937,6 @@ class NotaFiscal(db.Model):
         )
         
         return estatisticas
-    
     def to_dict(self):
         return {
             'id': self.id,
@@ -1049,8 +1093,7 @@ class NotaFiscalItem(db.Model):
                     print(f'item {item.id} ja foi importado para o estoque')
             
         fim = datetime.now()
-        print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')
-    
+        print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')  
     def importar_para_estoque_automatico(self, usuario_id=None, centro_custo_id=None, observacao=None):
         """
         Importa o item para o estoque processando todas as movimentações necessárias
@@ -1111,8 +1154,7 @@ class NotaFiscalItem(db.Model):
                 self.movimentacao_estoque_id = ultima_mov.id
         self.save()
         
-        return resultados[-1] if resultados else (True, "Item importado com sucesso")
-    
+        return resultados[-1] if resultados else (True, "Item importado com sucesso")  
     def importar_para_estoque(self, usuario_id=None, centro_custo_id=None, observacao=None, local=None, tipo_movimento=None):
         """
         Importa o item da nota fiscal para o estoque
@@ -1304,7 +1346,6 @@ class NotaFiscalItem(db.Model):
                 NotaFiscalItem.descricao == descricao
             ).all()
         return []
-
     def aplicar_fator_conversao(self, material, fator_conversao=None):
         """
         Aplica o fator de conversão ao item baseado no material e fator fornecido.
@@ -1325,7 +1366,6 @@ class NotaFiscalItem(db.Model):
             self.fator_conversao_aplicado = 1
         else:
             self.fator_conversao_aplicado = None
-
     def vincular_material_a_itens_similares(self, itens_sem_material, itens_processados):
         """
         Vincula o material aos itens similares que não têm material vinculado.
@@ -1361,7 +1401,6 @@ class NotaFiscalItem(db.Model):
             logger.info(f'Item {item_similar.id} vinculado ao material {material.nome} na nota {item_similar.nota_fiscal.numero_nf}')
         
         return itens_vinculados
-
     def vincular_similares_em_todas_notas(self, itens_processados, grupos_processados, estatisticas):
         """
         Vincula itens similares em todas as notas para este item.
@@ -1411,7 +1450,6 @@ class NotaFiscalItem(db.Model):
         
         # Retornar todos os itens similares (incluindo o original)
         return [self] + itens_similares_todos
-
     @staticmethod
     def importar_lista_itens(itens_para_importar, nota_fiscal, usuario_id, centro_custo_id, observacao, 
                              itens_processados, estatisticas):
@@ -1454,7 +1492,6 @@ class NotaFiscalItem(db.Model):
                     estatisticas['total_itens_ja_importados'] += 1
             
             itens_processados.add(item_para_importar.id)
-
     def __repr__(self):
         """
         Representação em string do item de nota fiscal

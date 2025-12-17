@@ -170,17 +170,26 @@
                 
                 <div class="row">
                     <div class="col-md-12">
-                        <h6 class="text-primary">Conteúdo (JSON)</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="text-primary mb-0">Conteúdo (JSON)</h6>
+                            <div class="btn-group" role="group" id="json-controls" style="display: none;">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-expandir-tudo" title="Expandir tudo">
+                                    <i class="fas fa-expand"></i> Expandir Tudo
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="btn-colapsar-tudo" title="Colapsar tudo">
+                                    <i class="fas fa-compress"></i> Colapsar Tudo
+                                </button>
+                                <button type="button" class="btn btn-sm btn-secondary" id="btn-copiar-json" title="Copiar JSON">
+                                    <i class="fas fa-copy"></i> Copiar
+                                </button>
+                            </div>
+                        </div>
                         <div class="position-relative">
-                            <pre id="view_log_texto" class="bg-light p-3 border rounded" style="max-height: 500px; overflow-y: auto; overflow-x: auto; font-size: 0.85em; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"></pre>
-                            <button type="button" class="btn btn-sm btn-secondary position-absolute top-0 end-0 m-2" 
-                                    id="btn-copiar-json" title="Copiar JSON">
-                                <i class="fas fa-copy"></i> Copiar
-                            </button>
+                            <div id="view_log_texto" class="bg-light p-3 border rounded" style="max-height: 500px; overflow-y: auto; overflow-x: auto; font-size: 0.85em; font-family: 'Courier New', monospace;"></div>
                         </div>
                         <small class="text-muted">
                             <i class="fas fa-info-circle"></i> 
-                            O conteúdo será formatado automaticamente se for um JSON válido.
+                            O conteúdo será formatado automaticamente se for um JSON válido. Clique nos ícones para expandir/colapsar itens.
                         </small>
                     </div>
                 </div>
@@ -194,20 +203,70 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.json-viewer {
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    line-height: 1.6;
+}
+
+.json-item {
+    margin-left: 20px;
+}
+
+.json-toggle {
+    cursor: pointer;
+    user-select: none;
+    display: inline-block;
+    width: 16px;
+    text-align: center;
+    margin-right: 4px;
+    color: #666;
+    font-weight: bold;
+}
+
+.json-toggle:hover {
+    color: #007bff;
+}
+
+.json-key {
+    color: #d73a49;
+    font-weight: bold;
+}
+
+.json-string {
+    color: #28a745;
+}
+
+.json-number {
+    color: #ffc107;
+    font-weight: bold;
+}
+
+.json-boolean {
+    color: #17a2b8;
+    font-weight: bold;
+}
+
+.json-null {
+    color: #6c757d;
+    font-weight: bold;
+}
+
+.json-collapsed {
+    display: none;
+}
+
+.json-bracket {
+    color: #333;
+    font-weight: bold;
+}
+</style>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Função para formatar JSON
-    function formatarJSON(texto) {
-        try {
-            // Tentar fazer parse do JSON
-            const jsonObj = JSON.parse(texto);
-            // Retornar JSON formatado com indentação
-            return JSON.stringify(jsonObj, null, 2);
-        } catch (e) {
-            // Se não for JSON válido, retornar o texto original
-            return texto;
-        }
-    }
+    // Variável para armazenar o texto original (sem formatação HTML)
+    let textoOriginalJSON = '';
+    let jsonObject = null;
 
     // Função para escapar HTML
     function escapeHtml(text) {
@@ -221,32 +280,121 @@ document.addEventListener('DOMContentLoaded', function() {
         return text.replace(/[&<>"']/g, function(m) { return map[m]; });
     }
 
-    // Função para destacar sintaxe JSON
-    function destacarJSON(jsonString) {
-        // Primeiro, escapar HTML
-        let escaped = escapeHtml(jsonString);
-        
-        // Destacar chaves (keys)
-        escaped = escaped.replace(/"([^"]+)":/g, '<span class="text-danger fw-bold">"$1"</span>:');
-        
-        // Destacar valores string
-        escaped = escaped.replace(/: "([^"]*)"/g, ': <span class="text-success">"$1"</span>');
-        
-        // Destacar booleanos
-        escaped = escaped.replace(/\b(true|false)\b/g, '<span class="text-info fw-bold">$1</span>');
-        
-        // Destacar null
-        escaped = escaped.replace(/\bnull\b/g, '<span class="text-muted fw-bold">null</span>');
-        
-        // Destacar números
-        escaped = escaped.replace(/: (-?\d+\.?\d*)/g, ': <span class="text-warning fw-bold">$1</span>');
-        
-        return escaped;
+    // Função para criar visualização JSON colapsável
+    function criarJSONColapsavel(obj, nivel = 0, chave = null) {
+        let html = '';
+        const isArray = Array.isArray(obj);
+        const isObjeto = !isArray && obj !== null && typeof obj === 'object';
+        const temItens = isArray ? obj.length > 0 : (isObjeto ? Object.keys(obj).length > 0 : false);
+
+        if (isObjeto || isArray) {
+            const id = 'json-' + Math.random().toString(36).substr(2, 9);
+            
+            // Linha do toggle e chave
+            if (chave !== null) {
+                html += '<div class="json-item">';
+                html += `<span class="json-toggle" data-target="${id}" data-expanded="true">▼</span>`;
+                html += `<span class="json-key">"${escapeHtml(chave)}"</span>: `;
+                html += isArray ? '<span class="json-bracket">[</span>' : '<span class="json-bracket">{</span>';
+                html += '</div>';
+            } else {
+                html += '<div>';
+                html += isArray ? '<span class="json-bracket">[</span>' : '<span class="json-bracket">{</span>';
+                html += '</div>';
+            }
+
+            // Conteúdo colapsável
+            html += `<div id="${id}" class="json-item">`;
+            
+            if (isArray) {
+                obj.forEach((item, index) => {
+                    html += '<div class="json-item">';
+                    html += criarJSONColapsavel(item, nivel + 1);
+                    if (index < obj.length - 1) {
+                        html += ',';
+                    }
+                    html += '</div>';
+                });
+            } else {
+                const keys = Object.keys(obj);
+                keys.forEach((key, index) => {
+                    html += '<div class="json-item">';
+                    html += criarJSONColapsavel(obj[key], nivel + 1, key);
+                    if (index < keys.length - 1) {
+                        html += ',';
+                    }
+                    html += '</div>';
+                });
+            }
+            
+            html += '</div>';
+            
+            // Fechamento
+            html += '<div class="json-item">';
+            html += isArray ? '<span class="json-bracket">]</span>' : '<span class="json-bracket">}</span>';
+            html += '</div>';
+        } else {
+            // Valores primitivos
+            if (chave !== null) {
+                html += `<span class="json-key">"${escapeHtml(chave)}"</span>: `;
+            }
+            
+            const tipo = obj === null ? 'null' : typeof obj;
+            if (tipo === 'string') {
+                html += `<span class="json-string">"${escapeHtml(obj)}"</span>`;
+            } else if (tipo === 'number') {
+                html += `<span class="json-number">${obj}</span>`;
+            } else if (tipo === 'boolean') {
+                html += `<span class="json-boolean">${obj}</span>`;
+            } else if (tipo === 'null') {
+                html += '<span class="json-null">null</span>';
+            }
+        }
+
+        return html;
     }
 
-
-    // Variável para armazenar o texto original (sem formatação HTML)
-    let textoOriginalJSON = '';
+    // Função para formatar e exibir JSON
+    function exibirJSON(texto) {
+        const container = document.getElementById('view_log_texto');
+        const controls = document.getElementById('json-controls');
+        
+        try {
+            // Tentar fazer parse do JSON
+            jsonObject = JSON.parse(texto);
+            textoOriginalJSON = JSON.stringify(jsonObject, null, 2);
+            
+            // Criar visualização colapsável
+            container.innerHTML = '<div class="json-viewer">' + criarJSONColapsavel(jsonObject) + '</div>';
+            controls.style.display = 'flex';
+            
+            // Adicionar eventos de toggle
+            container.querySelectorAll('.json-toggle').forEach(toggle => {
+                toggle.addEventListener('click', function() {
+                    const targetId = this.dataset.target;
+                    const target = document.getElementById(targetId);
+                    const isExpanded = this.dataset.expanded === 'true';
+                    
+                    if (target) {
+                        if (isExpanded) {
+                            target.classList.add('json-collapsed');
+                            this.textContent = '▶';
+                            this.dataset.expanded = 'false';
+                        } else {
+                            target.classList.remove('json-collapsed');
+                            this.textContent = '▼';
+                            this.dataset.expanded = 'true';
+                        }
+                    }
+                });
+            });
+        } catch (e) {
+            // Se não for JSON válido, exibir como texto simples
+            container.innerHTML = '<pre style="white-space: pre-wrap; word-wrap: break-word;">' + escapeHtml(texto) + '</pre>';
+            controls.style.display = 'none';
+            textoOriginalJSON = texto;
+        }
+    }
 
     // Adicionar evento para os botões de visualizar
     const viewButtons = document.querySelectorAll('.btn-visualizar-log');
@@ -262,11 +410,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('view_log_local').textContent = logLocal;
             document.getElementById('view_log_data').textContent = logData;
 
-            // Formatar e exibir JSON
-            const textoFormatado = formatarJSON(logTexto);
-            textoOriginalJSON = textoFormatado; // Armazenar para cópia
-            const textoDestacado = destacarJSON(textoFormatado);
-            document.getElementById('view_log_texto').innerHTML = textoDestacado;
+            // Exibir JSON
+            exibirJSON(logTexto);
 
             // Mostrar modal
             const modal = new bootstrap.Modal(document.getElementById('modalVisualizarLog'));
@@ -276,12 +421,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Botão para copiar JSON
     document.getElementById('btn-copiar-json').addEventListener('click', function() {
-        // Usar o texto original armazenado (sem formatação HTML)
         const texto = textoOriginalJSON || document.getElementById('view_log_texto').textContent;
         
-        // Copiar para clipboard
         navigator.clipboard.writeText(texto).then(function() {
-            // Feedback visual
             const btn = document.getElementById('btn-copiar-json');
             const originalHTML = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
@@ -296,6 +438,38 @@ document.addEventListener('DOMContentLoaded', function() {
         }).catch(function(err) {
             console.error('Erro ao copiar:', err);
             alert('Erro ao copiar para a área de transferência');
+        });
+    });
+
+    // Botão para expandir tudo
+    document.getElementById('btn-expandir-tudo').addEventListener('click', function() {
+        const container = document.getElementById('view_log_texto');
+        container.querySelectorAll('.json-collapsed').forEach(el => {
+            el.classList.remove('json-collapsed');
+        });
+        container.querySelectorAll('.json-toggle').forEach(toggle => {
+            toggle.textContent = '▼';
+            toggle.dataset.expanded = 'true';
+        });
+    });
+
+    // Botão para colapsar tudo
+    document.getElementById('btn-colapsar-tudo').addEventListener('click', function() {
+        const container = document.getElementById('view_log_texto');
+        container.querySelectorAll('[id^="json-"]').forEach(el => {
+            if (el.id !== 'view_log_texto') {
+                el.classList.add('json-collapsed');
+            }
+        });
+        container.querySelectorAll('.json-toggle').forEach(toggle => {
+            const targetId = toggle.dataset.target;
+            if (targetId) {
+                const target = document.getElementById(targetId);
+                if (target && target !== container) {
+                    toggle.textContent = '▶';
+                    toggle.dataset.expanded = 'false';
+                }
+            }
         });
     });
 

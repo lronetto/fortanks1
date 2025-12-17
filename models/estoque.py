@@ -88,22 +88,29 @@ class Estoque(db.Model):
             return "Válido"
     def processar_movimentacoes(self,data_fim=None,data_inicio=None):
         """
-        Processa as movimentações de estoque
+        Processa as movimentações de estoque e atualiza a quantidade.
+        Este método recalcula a quantidade baseado em todas as movimentações.
         """
-        movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
-        if data_inicio:
-            movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
-        if data_fim:
-            movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento < data_fim)
-        movimentacoes = movimentacoes.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
-        self.quantidade = 0
-        for movimentacao in movimentacoes:
-            if movimentacao.tipo_movimento == 'entrada':
-                self.quantidade += Decimal(str(movimentacao.quantidade))
-            elif movimentacao.tipo_movimento == 'saida':
-                self.quantidade -= Decimal(str(movimentacao.quantidade))
-            elif movimentacao.tipo_movimento == 'ajuste':
-                self.quantidade = Decimal(str(movimentacao.quantidade))
+        # Usar get_saldo_ate_data para garantir consistência
+        if data_fim is None and data_inicio is None:
+            # Se não há filtros, usar saldo real atual
+            self.quantidade = self.get_saldo_real()
+        else:
+            # Se há filtros, processar movimentações no intervalo
+            movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
+            if data_inicio:
+                movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+            if data_fim:
+                movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento < data_fim)
+            movimentacoes = movimentacoes.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            self.quantidade = Decimal('0.0')
+            for movimentacao in movimentacoes:
+                if movimentacao.tipo_movimento == 'entrada':
+                    self.quantidade += Decimal(str(movimentacao.quantidade))
+                elif movimentacao.tipo_movimento == 'saida':
+                    self.quantidade -= Decimal(str(movimentacao.quantidade))
+                elif movimentacao.tipo_movimento == 'ajuste':
+                    self.quantidade = Decimal(str(movimentacao.quantidade))
         self.save()
     def get_valor_unitario(self):
         """Retorna o valor unitário do item"""
@@ -113,14 +120,7 @@ class Estoque(db.Model):
             return self.produto_composto.get_valor_total()
         return 0
     def get_estoque_atual(self):
-        movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id = self.id).order_by(MovimentacaoEstoque.data_movimento.desc()).all()
-        saldo_anterior = 0
-        for movimentacao in movimentacoes:
-            if movimentacao.tipo_movimento == 'entrada':
-                saldo_anterior += Decimal(str(movimentacao.quantidade))
-            elif movimentacao.tipo_movimento == 'saida':
-                saldo_anterior -= Decimal(str(movimentacao.quantidade))
-        return saldo_anterior
+        return self.get_saldo_ate_data()
     def get_estoque(self,data_fim=None,data_inicio=None):
         query = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
         if data_inicio:
@@ -158,6 +158,47 @@ class Estoque(db.Model):
                 saldo = Decimal(str(movimentacao.quantidade))
         
         return saldo
+    
+    def get_saldo_real(self, data_fim=None):
+        """
+        Calcula o saldo real baseado em todas as movimentações até uma data específica.
+        Considera entradas, saídas e ajustes.
+        Este método é um alias para get_saldo_ate_data() para manter compatibilidade.
+        
+        Args:
+            data_fim (datetime, optional): Data limite para cálculo. Se None, usa datetime.now()
+            
+        Returns:
+            Decimal: Saldo real calculado
+        """
+        return self.get_saldo_ate_data(data_fim)
+    
+    def sincronizar_quantidade(self):
+        """
+        Sincroniza a quantidade do estoque com o saldo real calculado a partir das movimentações.
+        Use este método para corrigir inconsistências entre quantidade e saldo real.
+        """
+        saldo_real = self.get_saldo_real()
+        if self.quantidade != saldo_real:
+            print(f"Sincronizando estoque ID {self.id}: quantidade atual {self.quantidade} -> saldo real {saldo_real}")
+            self.quantidade = saldo_real
+            self.save()
+            return True
+        return False
+    
+    @classmethod
+    def sincronizar_todos_estoques(cls):
+        """
+        Sincroniza a quantidade de todos os estoques com seus saldos reais.
+        Útil para corrigir inconsistências em massa.
+        """
+        estoques = cls.query.all()
+        sincronizados = 0
+        for estoque in estoques:
+            if estoque.sincronizar_quantidade():
+                sincronizados += 1
+        return sincronizados
+    
     @property
     def valor_estimado(self):
         """
@@ -289,50 +330,65 @@ class MovimentacaoEstoque(db.Model):
                 "saldo": float(saldo_acumulado) # Plotly geralmente prefere float
             })
         
-        # Se não há filtro de data_fim, garantir que o último ponto corresponda à quantidade atual
-        if not data_fim:
-            agora = datetime.now()
+        # Se não há filtro de data_fim, verificar se há movimentações após a última data do histórico
+        if not data_fim and historico_saldo:
+            # Buscar a última data do histórico
+            ultima_data_str = historico_saldo[-1]['data']
+            if ' ' in ultima_data_str:
+                ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d %H:%M:%S')
+            else:
+                ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d')
             
-            # Se não há movimentações ou o último ponto não corresponde à quantidade atual
-            if not historico_saldo or abs(float(estoque.quantidade) - historico_saldo[-1]['saldo']) > 0.01:
-                # Adicionar ou atualizar ponto final com a quantidade atual
-                if historico_saldo:
-                    # Atualizar o último ponto se a diferença for pequena, senão adicionar novo
-                    if abs(float(estoque.quantidade) - historico_saldo[-1]['saldo']) > 0.01:
-                        historico_saldo.append({
-                            "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
-                            "saldo": float(estoque.quantidade)
-                        })
-                    else:
-                        # Atualizar o último ponto
-                        historico_saldo[-1]['saldo'] = float(estoque.quantidade)
-                        historico_saldo[-1]['data'] = agora.strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    # Se não há movimentações, criar um ponto inicial
+            # Verificar se há movimentações após a última data do histórico
+            movimentacoes_posteriores = cls.query.filter_by(estoque_id=estoque_id).filter(
+                MovimentacaoEstoque.data_movimento > ultima_data
+            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            
+            # Se houver movimentações posteriores, processá-las
+            if movimentacoes_posteriores:
+                saldo_atual = historico_saldo[-1]['saldo']
+                for mov in movimentacoes_posteriores:
+                    if mov.tipo_movimento == 'entrada':
+                        saldo_atual += mov.quantidade
+                    elif mov.tipo_movimento == 'saida':
+                        saldo_atual -= mov.quantidade
+                    elif mov.tipo_movimento == 'ajuste':
+                        saldo_atual = mov.quantidade
+                    
                     historico_saldo.append({
-                        "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
-                        "saldo": float(estoque.quantidade)
+                        "data": mov.data_movimento.strftime('%Y-%m-%d %H:%M:%S'),
+                        "saldo": float(saldo_atual)
                     })
+            
+            # Verificar se o saldo calculado corresponde ao saldo real atual
+            # Usar get_saldo_real() em vez de estoque.quantidade
+            saldo_calculado = historico_saldo[-1]['saldo']
+            saldo_real_atual = estoque.get_saldo_real()
+            diferenca = abs(float(saldo_real_atual) - saldo_calculado)
+            
+            # Se a diferença for muito grande (> 1%), pode indicar um problema
+            # Mas não vamos adicionar um ponto artificial - deixamos o gráfico mostrar o histórico real
+            if diferenca > 0.01 and not movimentacoes_posteriores:
+                # Log para debug, mas não adiciona ponto artificial
+                print(f"AVISO: Diferença entre saldo calculado ({saldo_calculado}) e saldo real atual ({saldo_real_atual})")
+        
+        # Se não há histórico e não há filtro de data_fim, criar um ponto inicial apenas se não houver movimentações
+        elif not data_fim and not historico_saldo:
+            # Verificar se realmente não há movimentações
+            total_movimentacoes = cls.query.filter_by(estoque_id=estoque_id).count()
+            if total_movimentacoes == 0:
+                # Se não há movimentações, criar um ponto inicial com o saldo real atual
+                agora = datetime.now()
+                saldo_real = estoque.get_saldo_real()
+                historico_saldo.append({
+                    "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
+                    "saldo": float(saldo_real)
+                })
         
         # Se solicitado, agrupar por semana
         if agrupar_por_semana and historico_saldo:
             historico_saldo = cls._agrupar_por_semana(historico_saldo)
-            # Garantir que o último ponto agrupado corresponda à quantidade atual quando não há filtro de data_fim
-            if not data_fim:
-                agora = datetime.now()
-                if historico_saldo:
-                    if abs(float(estoque.quantidade) - historico_saldo[-1]['saldo']) > 0.01:
-                        # Calcular início da semana atual
-                        dias_para_segunda = agora.weekday()
-                        inicio_semana = agora - timedelta(days=dias_para_segunda)
-                        historico_saldo.append({
-                            "data": agora.strftime('%Y-%m-%d %H:%M:%S'),
-                            "saldo": float(estoque.quantidade),
-                            "semana": f"Semana de {inicio_semana.strftime('%d/%m/%Y')}"
-                        })
-                    else:
-                        # Atualizar o último ponto
-                        historico_saldo[-1]['saldo'] = float(estoque.quantidade)
+            # Não adicionar ponto artificial após agrupamento - o agrupamento já processou todas as movimentações
         
         return historico_saldo
     
@@ -431,10 +487,10 @@ class MovimentacaoEstoque(db.Model):
                 print(f"Erro: Quantidade inválida: {quantidade}")
                 raise ValueError(f"Quantidade inválida para movimentação: {quantidade}")
             
-            # Verificar disponibilidade
-            if estoque.quantidade < quantidade:
-                print(f"Erro: Quantidade em estoque insuficiente: {estoque.quantidade} < {quantidade}")
-                raise ValueError(f"Quantidade insuficiente em estoque. Disponível: {estoque.quantidade}, Necessário: {quantidade}")
+            # Permitir estoque negativo - removida verificação de disponibilidade
+            # if estoque.quantidade < quantidade:
+            #     print(f"Erro: Quantidade em estoque insuficiente: {estoque.quantidade} < {quantidade}")
+            #     raise ValueError(f"Quantidade insuficiente em estoque. Disponível: {estoque.quantidade}, Necessário: {quantidade}")
                 
             # Criar a movimentação
             movimentacao = cls(
@@ -544,22 +600,22 @@ class MovimentacaoEstoque(db.Model):
                     print(f"Movimentação ENTRADA: {estoque_anterior} + {self.quantidade} = {self.estoque.quantidade}")
                     
                 elif self.tipo_movimento == 'saida':
-                    if self.estoque.quantidade >= self.quantidade:
-                        self.estoque.quantidade -= self.quantidade
-                        print(f"Movimentação SAÍDA: {estoque_anterior} - {self.quantidade} = {self.estoque.quantidade}")
-                    else:
-                        print(f"ERRO: Quantidade insuficiente. Em estoque: {self.estoque.quantidade}, Tentando baixar: {self.quantidade}")
-                        raise ValueError(f"Quantidade insuficiente em estoque. Disponível: {self.estoque.quantidade}, Necessário: {self.quantidade}")
+                    # Permitir estoque negativo - removida verificação de quantidade suficiente
+                    self.estoque.quantidade -= self.quantidade
+                    print(f"Movimentação SAÍDA: {estoque_anterior} - {self.quantidade} = {self.estoque.quantidade}")
+                    if self.estoque.quantidade < 0:
+                        print(f"AVISO: Estoque ficou negativo: {self.estoque.quantidade}")
                 
                 elif self.tipo_movimento == 'ajuste':
                     print(f"Movimentação AJUSTE: {estoque_anterior} -> {self.quantidade}")
-                    self.estoque.quantidade = self.quantidade
-                    self.estoque.processar_movimentacoes(data_inicio=self.data_movimento)
+                    # Para ajuste, a quantidade já é o novo saldo total
+                    # Recalcular a partir de todas as movimentações para garantir consistência
+                    self.estoque.quantidade = self.estoque.get_saldo_real()
                 
-                # Garante que a quantidade nunca será negativa
-                if self.estoque.quantidade < 0:
-                    print(f"AVISO: Quantidade negativa corrigida para 0")
-                    self.estoque.quantidade = 0
+                # Permitir estoque negativo - removida correção que forçava para 0
+                # if self.estoque.quantidade < 0:
+                #     print(f"AVISO: Quantidade negativa corrigida para 0")
+                #     self.estoque.quantidade = 0
                 # Importante: atualizar o estoque no banco de dados
                 db.session.add(self.estoque)
             else:
@@ -583,19 +639,35 @@ class MovimentacaoEstoque(db.Model):
             print(traceback.format_exc())
             raise e
 
-    def saldo_anterior(self,data_movimento=None):
+    def saldo_anterior(self, data_movimento=None):
+        """
+        Calcula o saldo anterior a uma data específica.
+        Considera entradas, saídas e ajustes.
+        """
         if data_movimento is None:
             data_movimento = self.data_movimento
-        movimentacoes = MovimentacaoEstoque.query.filter(MovimentacaoEstoque.data_movimento < data_movimento,MovimentacaoEstoque.estoque_id == self.estoque_id).order_by(MovimentacaoEstoque.data_movimento.desc()).all()
-        saldo_anterior = 0
-        for movimentacao in movimentacoes:
-            if movimentacao.tipo_movimento == 'entrada':
-                saldo_anterior += Decimal(str(movimentacao.quantidade))
-            elif movimentacao.tipo_movimento == 'saida':
-                saldo_anterior -= Decimal(str(movimentacao.quantidade))
-        return saldo_anterior
+        
+        # Se não há estoque associado, retornar 0
+        if not self.estoque:
+            return Decimal('0.0')
+        
+        # Se não há data_movimento, retornar saldo atual
+        if data_movimento is None:
+            return self.estoque.get_saldo_real()
+        
+        # Calcular saldo até um momento antes da data especificada
+        from datetime import timedelta
+        data_anterior = data_movimento - timedelta(microseconds=1)
+        return self.estoque.get_saldo_real(data_anterior)
+    
     def saldo_atual(self):
-        return self.saldo_anterior(datetime.now())
+        """
+        Calcula o saldo atual baseado em todas as movimentações.
+        Usa get_saldo_real() do estoque associado.
+        """
+        if not self.estoque:
+            return Decimal('0.0')
+        return self.estoque.get_saldo_real()
     
     def delete(self):
         """
@@ -612,9 +684,9 @@ class MovimentacaoEstoque(db.Model):
                     # No caso de ajuste, não fazer nada pois não temos a quantidade anterior
                     pass
                 
-                # Garante que a quantidade nunca será negativa
-                if self.estoque.quantidade < 0:
-                    self.estoque.quantidade = 0
+                # Permitir estoque negativo - removida correção que forçava para 0
+                # if self.estoque.quantidade < 0:
+                #     self.estoque.quantidade = 0
                     
                 # Atualizar o estoque no banco de dados
                 db.session.add(self.estoque)
