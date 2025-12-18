@@ -99,7 +99,7 @@ IMAGEM_MARCA_DAGUA = 'static/img/carimbo_0014-00.png'
 NUMBER_WHATSAPP = '5527996440664-1630085280@g.us'
 
 # Configurações para otimização de quota IMAP
-MAX_EMAILS_POR_EXECUCAO = 5  # Limite de emails por execução (reduzido para evitar quota)
+MAX_EMAILS_POR_EXECUCAO = 20  # Limite de emails por execução (reduzido para evitar quota)
 DELAY_ENTRE_EMAILS = float(os.getenv('DELAY_ENTRE_EMAILS', '1.0'))  # Delay em segundos entre emails (aumentado)
 DELAY_ENTRE_BUSCAS_IMAP = float(os.getenv('DELAY_ENTRE_BUSCAS_IMAP', '0.5'))  # Delay entre buscas IMAP
 MARCAR_LIDOS_EM_LOTE = os.getenv('MARCAR_LIDOS_EM_LOTE', 'true').lower() == 'true'  # Marcar emails como lidos em lote
@@ -107,7 +107,7 @@ TAMANHO_LOTE_MARCAR_LIDOS = int(os.getenv('TAMANHO_LOTE_MARCAR_LIDOS', '10'))  #
 
 # Configurações para otimização de anexos
 MAX_ANEXOS_POR_EMAIL = int(os.getenv('MAX_ANEXOS_POR_EMAIL', '50'))  # Limite de anexos processados por email
-MAX_ANEXOS_POR_EMAIL_PROCESSAR = int(os.getenv('MAX_ANEXOS_POR_EMAIL_PROCESSAR', '10'))  # Limite de anexos processados por email por execução
+MAX_ANEXOS_POR_EMAIL_PROCESSAR = int(os.getenv('MAX_ANEXOS_POR_EMAIL_PROCESSAR', '50'))  # Limite de anexos processados por email por execução
 TAMANHO_MAX_ANEXO_MB = float(os.getenv('TAMANHO_MAX_ANEXO_MB', '10.0'))  # Tamanho máximo de anexo em MB
 PROCESSAR_APENAS_PDF_XML = os.getenv('PROCESSAR_APENAS_PDF_XML', 'true').lower() == 'true'  # Processar apenas PDF e XML
 PRIORIZAR_XML = os.getenv('PRIORIZAR_XML', 'true').lower() == 'true'  # Processar XML antes de PDF
