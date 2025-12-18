@@ -107,7 +107,7 @@ def get_produto_composto(id):
     """
     produtos = []
     if id == 0 or not id:
-        produto = ProdutoComposto.query.all()
+        produto = ProdutoComposto.query.order_by(ProdutoComposto.nome.asc()).all()
        
         for p in produto:
             estoque = Estoque.query.filter(Estoque.ProdComp_id == p.id).first()
@@ -122,13 +122,23 @@ def get_produto_composto(id):
     else:
         produto = ProdutoComposto.query.get_or_404(id)
         componentes = []
+
         for p in produto.componentes:
             estoque = Estoque.query.filter(Estoque.ProdComp_id == p.estoque_id).first()
+            nome_material_ou_produto = p.estoque.material.nome if p.estoque.material_id else p.estoque.produto_composto.nome
             componentes.append({
                 'estoque_id': p.estoque_id,
                 'quantidade': p.quantidade,
-                'nome': '('+str(p.estoque.id)+') '+('[M] '+p.estoque.material.nome if p.estoque.material_id else '[P] '+p.estoque.produto_composto.nome)
+                'nome': '('+str(p.estoque.id)+') '+('[M] '+p.estoque.material.nome if p.estoque.material_id else '[P] '+p.estoque.produto_composto.nome),
+                'nome_ordenacao': nome_material_ou_produto
             })
+        
+        # Ordenar componentes pelo nome do material ou produto composto (case-insensitive)
+        componentes.sort(key=lambda x: x['nome_ordenacao'].lower())
+        
+        # Remover a chave temporária de ordenação
+        for componente in componentes:
+            componente.pop('nome_ordenacao', None)
         produtos.append({
             'id': produto.id,
             'nome': produto.nome,
@@ -303,7 +313,13 @@ def salvar():
 
             # Flush para obter o ID do produto antes de adicionar componentes
             db.session.flush()
-
+            estoque = Estoque(
+                produto_composto=produto,
+                quantidade=0,
+                tipo_item='produto_composto',
+                localizacao='Estoque Matriz',
+                )
+            estoque.save()
             # Adicionar componentes
             componentes_data = data.get('componentes', [])
             for item in componentes_data:
@@ -373,7 +389,13 @@ def duplicar(id):
         
         db.session.add(novo_produto)
         db.session.flush()  # Para obter o ID do novo produto
-        
+        estoque = Estoque(
+            produto_composto=novo_produto,
+            quantidade=0,
+            tipo_item='produto_composto',
+            localizacao='Estoque Matriz',
+        )
+        estoque.save()
         # Duplicar todos os componentes
         for componente in produto_original.componentes:
             novo_componente = ProdutoCompostoItem(
@@ -454,6 +476,7 @@ def api_componentes(id):
     
     # Montar resposta com componentes
     componentes = []
+
     for componente in produto.componentes:
         componentes.append({
             'id': componente.id,
@@ -463,7 +486,7 @@ def api_componentes(id):
             'unidade': componente.estoque.material.unidade_obj.sigla if (componente.estoque.material and componente.estoque.material.unidade_obj) else '',
             'observacao': componente.observacao
         })
-        
+    componentes.sort(key=lambda x: x['estoque_nome'])
     return jsonify({
         'id': produto.id,
         'nome': produto.nome,

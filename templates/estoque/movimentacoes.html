@@ -110,7 +110,88 @@
             </div>
         </div>
     </div>
-
+        <!-- Resumo - Mostrar apenas quando um material for selecionado -->
+        {% if material_id and material_selecionado %}
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    Resumo das Movimentações - {{ material_selecionado.nome }}
+                    {% if material_selecionado.unidade_obj %}
+                        <small class="text-muted">({{ material_selecionado.unidade_obj.nome }})</small>
+                    {% endif %}
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card border-left-success h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                            Total de Entradas</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            {{ "%.2f"|format(total_entradas|float) }}
+                                            {% if material_selecionado.unidade_obj %}
+                                                {{ material_selecionado.unidade_obj.nome }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-arrow-down fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card border-left-danger h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                            Total de Saídas</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            {{ "%.2f"|format(total_saidas|float) }}
+                                            {% if material_selecionado.unidade_obj %}
+                                                {{ material_selecionado.unidade_obj.nome }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-arrow-up fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="card border-left-info h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                            Saldo Líquido</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                            {{ "%.2f"|format((total_entradas - total_saidas)|float) }}
+                                            {% if material_selecionado.unidade_obj %}
+                                                {{ material_selecionado.unidade_obj.nome }}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     <!-- Tabela de Movimentações -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
@@ -256,66 +337,7 @@
         </div>
     </div>
 
-    <!-- Resumo -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Resumo das Movimentações</h6>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="card border-left-success h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                        Total de Entradas</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_entradas }}</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-arrow-down fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="card border-left-danger h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                        Total de Saídas</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_saidas }}</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-arrow-up fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-4">
-                    <div class="card border-left-warning h-100 py-2">
-                        <div class="card-body">
-                            <div class="row no-gutters align-items-center">
-                                <div class="col mr-2">
-                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                        Total de Ajustes</div>
-                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_ajustes }}</div>
-                                </div>
-                                <div class="col-auto">
-                                    <i class="fas fa-sync fa-2x text-gray-300"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+
 </div>
 {% endblock %}
 

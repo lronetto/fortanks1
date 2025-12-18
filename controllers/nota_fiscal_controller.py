@@ -34,6 +34,7 @@ import pandas as pd
 import io
 from models.reembolso import ReembolsoDocumento
 from models.plano_conta import PlanoConta
+from models.logs import Logs
 
 # Import WeasyPrint para geração de PDF
 try:
@@ -55,6 +56,15 @@ def verificar_permissao():
     # if not current_user.is_gerente_ou_superior:
     #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
     #     return redirect(url_for('dashboard.index'))
+
+@nota_fiscal_bp.route('/reprocessar-importacao')
+@login_required
+def reprocessar_importacao():
+    print('reprocessar_importacao')
+    NotaFiscalItem.query.update({'importado_estoque': False, 'movimentacao_estoque_id': None, 'data_importacao_estoque': None}, synchronize_session=False)
+    MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo == 'NotaFiscal').delete()
+    importar_todas_pendentes()
+    return jsonify({'success': True, 'message': 'Importação reprocessada com sucesso'}), 200
 
 @nota_fiscal_bp.route('/atualizar_notas_fiscais')
 @login_required
@@ -115,7 +125,7 @@ def atualizar_notas_fiscais():
                                 item.importado_estoque = False
                                 item.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
                                 item.save()
-                                item.importar_para_estoque()
+                                sucesso, mensagem, estatisticas_item = item.importar_para_estoque()
 
                                 break
                    # nota.status_importacao = None
@@ -1065,10 +1075,6 @@ def importar_arquivei():
     
     # Se for GET, redirecionar para index
     return jsonify({'success': False, 'message': 'Método inválido'}), 405
-
-
-
-
 @nota_fiscal_bp.route('/pdf/<int:id>', methods=['GET'])
 @login_required
 def gerar_pdf(id):
@@ -1164,7 +1170,7 @@ def importar_itens():
                 
                 # Importar para o estoque
                 try:
-                    sucesso, mensagem = item1.importar_para_estoque(
+                    sucesso, mensagem, estatisticas_item = item1.importar_para_estoque(
                         usuario_id=current_user.id,
                         centro_custo_id=centro_custo_id if centro_custo_id else None,
                         observacao=observacao or f"Importação da NF {item1.nota_fiscal.numero_nf if item1.nota_fiscal else 'N/A'}"
@@ -1400,7 +1406,7 @@ def importar_estoque(id):
                     logger.info(f"Estoque atual para material {material_id}: {qtd_atual}")
                     
                     # Importar para estoque
-                    success, message = item.importar_para_estoque(
+                    success, message, estatisticas_item = item.importar_para_estoque(
                         usuario_id=current_user.id,
                         centro_custo_id=centro_custo_id,
                         observacao=observacao
@@ -1987,7 +1993,7 @@ def api_itens(nf_id):
                     
                     # Importar automaticamente para o estoque se material foi vinculado
                     if not item.importado_estoque:
-                        sucesso, mensagem = item.importar_para_estoque(
+                        sucesso, mensagem, estatisticas_item = item.importar_para_estoque(
                             usuario_id=current_user.id,
                             centro_custo_id=None,
                             observacao=f"Importação automática da NF {nota_fiscal.numero_nf} de {nota_fiscal.nome_emitente}"
@@ -2256,20 +2262,16 @@ def importar_todas_pendentes():
         notas_canceladas = 0
         # Para cada nota fiscal
         total_notas = len(notas_fiscais)
-        print(f'total_notas: {total_notas}')
+        #print(f'total_notas: {total_notas}')
         for nota_fiscal in notas_fiscais:
             notas_processadas += 1
-            if False: #(Arquivei(chave_acesso=nota_fiscal.chave_acesso,cancelamento=True).cancelada):
-                nota_fiscal.status_processamento = 'cancelada'
-                nota_fiscal.save()
-                notas_canceladas+=1
+            
+            estatisticas = nota_fiscal.importar_itens_para_estoque()
+            if estatisticas['total_importados'] > 0:
+                notas_importadas += 1
+                itens_importados += estatisticas['total_importados']
             else:
-                nota_teve_importacao = False
-                itens_vinculados = nota_fiscal.vincular_automaticamente()
-                if itens_vinculados > 0:
-                    nota_fiscal.importar_itens_para_estoque()
-                    notas_importadas+=1
-            nota_fiscal.importar_itens_para_estoque()
+                notas_ignoradas += 1
         
             print(f'{notas_processadas} - {notas_importadas} - {notas_canceladas} - {total_notas}')
 
@@ -2277,7 +2279,14 @@ def importar_todas_pendentes():
             flash(f"{itens_importados} itens de {notas_processadas} notas fiscais foram importados automaticamente para o estoque.", "success")
         else:
             flash("Não foram encontrados itens pendentes com materiais vinculados para importação.", "info")
-        
+        log={
+            'itens_importados': itens_importados,
+            'notas_processadas': notas_processadas,
+            'notas_importadas': notas_importadas,
+            'notas_canceladas': notas_canceladas,
+            'total_notas': total_notas
+        }
+        Logs(local='importar_todas_pendentes', data=datetime.now(), texto=json.dumps(log))
         return redirect(url_for('nota_fiscal.index'))
         
     except Exception as e:
@@ -2354,11 +2363,173 @@ def api_comparar_unidades():
         logger.error(f'Erro ao comparar unidades: {str(e)}')
         return jsonify({'error': f'Erro ao comparar unidades: {str(e)}', 'success': False}), 500
 
+def _importar_item_original(item, usuario_id, centro_custo_id, observacao, estatisticas):
+    """
+    Importa o item original para o estoque.
+    
+    Args:
+        item: NotaFiscalItem a ser importado
+        usuario_id: ID do usuário realizando a importação
+        centro_custo_id: ID do centro de custo (opcional)
+        observacao: Observação para a importação
+        estatisticas: Dicionário com estatísticas da operação
+        
+    Returns:
+        bool: True se o item foi importado com sucesso, False caso contrário
+    """
+    if item.importado_estoque:
+        estatisticas['total_itens_ja_importados'] += 1
+        logger.info(f"API: Item original {item.id} já estava importado")
+        return False
+    
+    sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(
+        usuario_id=usuario_id,
+        centro_custo_id=centro_custo_id,
+        observacao=observacao
+    )
+    
+    if sucesso:
+        estatisticas['total_itens_importados'] += 1
+        logger.info(f"API: Item original {item.id} importado com sucesso")
+        return True
+    else:
+        estatisticas['itens_com_erro'].append({
+            'item_id': item.id,
+            'descricao': item.descricao,
+            'erro': mensagem
+        })
+        logger.error(f"API: Erro ao importar item original {item.id}: {mensagem}")
+        return False
+
+def _vincular_itens_similares(item, item_id, estatisticas):
+    """
+    Vincula itens similares em todas as notas fiscais.
+    
+    Args:
+        item: NotaFiscalItem original
+        item_id: ID do item original
+        estatisticas: Dicionário com estatísticas da operação
+        
+    Returns:
+        tuple: (itens_similares_vinculados, itens_processados, grupos_processados)
+    """
+    itens_processados = {item_id}  # Incluir o item original nos processados
+    grupos_processados = set()
+    
+    # Vincular itens similares usando método do modelo
+    itens_similares_vinculados = item.vincular_similares_em_todas_notas(
+        itens_processados=itens_processados,
+        grupos_processados=grupos_processados,
+        estatisticas=estatisticas
+    )
+    
+    logger.info(f"API: {estatisticas['total_itens_vinculados']} itens vinculados, {estatisticas['total_itens_ja_vinculados']} já estavam vinculados")
+    
+    return itens_similares_vinculados, itens_processados, grupos_processados
+
+def _importar_itens_similares(itens_similares_vinculados, item_id, nota_fiscal, usuario_id, 
+                               centro_custo_id, observacao, itens_processados, estatisticas):
+    """
+    Importa itens similares para o estoque.
+    
+    Args:
+        itens_similares_vinculados: Lista de itens similares vinculados
+        item_id: ID do item original (para excluir da importação)
+        nota_fiscal: NotaFiscal relacionada
+        usuario_id: ID do usuário realizando a importação
+        centro_custo_id: ID do centro de custo (opcional)
+        observacao: Observação para a importação
+        itens_processados: Set de IDs de itens já processados
+        estatisticas: Dicionário com estatísticas da operação
+        
+    Returns:
+        list: Lista de itens similares que foram importados
+    """
+    # Filtrar itens similares que têm material vinculado mas ainda não foram importados
+    itens_similares_para_importar = [
+        i for i in itens_similares_vinculados 
+        if i.id != item_id and i.material_id and not i.importado_estoque
+    ]
+    
+    logger.info(f"API: Encontrados {len(itens_similares_para_importar)} itens similares para importar (após vinculação)")
+    
+    # Importar itens similares usando método estático do modelo
+    if itens_similares_para_importar:
+        NotaFiscalItem.importar_lista_itens(
+            itens_para_importar=itens_similares_para_importar,
+            nota_fiscal=nota_fiscal,
+            usuario_id=usuario_id,
+            centro_custo_id=centro_custo_id,
+            observacao=observacao,
+            itens_processados=itens_processados,
+            estatisticas=estatisticas
+        )
+    
+    return itens_similares_para_importar
+
+def _montar_resposta_importacao(item, item_ja_importado, item_importado_com_sucesso, 
+                                estatisticas, itens_similares_para_importar, qtd_atual, 
+                                qtd_depois, importacao_automatica):
+    """
+    Monta a resposta JSON com estatísticas da importação.
+    
+    Args:
+        item: NotaFiscalItem original
+        item_ja_importado: Se o item original já estava importado
+        item_importado_com_sucesso: Se o item original foi importado com sucesso
+        estatisticas: Dicionário com estatísticas da operação
+        itens_similares_para_importar: Lista de itens similares importados
+        qtd_atual: Quantidade anterior no estoque
+        qtd_depois: Quantidade atual no estoque
+        importacao_automatica: Se foi importação automática
+        
+    Returns:
+        dict: Dicionário com a resposta JSON
+    """
+    # Montar mensagem final com estatísticas
+    mensagens = []
+    if estatisticas['total_itens_vinculados'] > 0:
+        mensagens.append(f"{estatisticas['total_itens_vinculados']} item(ns) similar(es) vinculado(s)")
+    if item_importado_com_sucesso:
+        mensagens.append("Item original importado")
+    if estatisticas['total_itens_importados'] > 0:
+        mensagens.append(f"{estatisticas['total_itens_importados']} item(ns) similar(es) importado(s)")
+    if estatisticas['total_itens_ja_importados'] > 0:
+        mensagens.append(f"{estatisticas['total_itens_ja_importados']} item(ns) já estavam importados")
+    if len(estatisticas['itens_com_erro']) > 0:
+        mensagens.append(f"{len(estatisticas['itens_com_erro'])} item(ns) com erro")
+    
+    if item_ja_importado:
+        mensagem_final = 'Este item já estava importado para o estoque.'
+        if mensagens:
+            mensagem_final += ' ' + '. '.join(mensagens) + '.'
+    elif mensagens:
+        mensagem_final = 'Processamento concluído! ' + '. '.join(mensagens) + '.'
+    else:
+        mensagem_final = 'Nenhum item foi processado.'
+    
+    return {
+        'success': True,
+        'message': mensagem_final,
+        'quantidade_anterior': qtd_atual,
+        'quantidade_atual': qtd_depois,
+        'importacao_automatica': importacao_automatica,
+        'itens_vinculados': estatisticas['total_itens_vinculados'],
+        'itens_ja_vinculados': estatisticas['total_itens_ja_vinculados'],
+        'itens_importados': estatisticas['total_itens_importados'],
+        'itens_ja_importados': estatisticas['total_itens_ja_importados'],
+        'itens_com_erro': len(estatisticas['itens_com_erro']),
+        'itens_similares_encontrados': len(itens_similares_para_importar),
+        'item_ja_estava_importado': item_ja_importado
+    }
+
 @nota_fiscal_bp.route('/api/importar-item-estoque/<int:item_id>', methods=['POST'])
 @login_required
 def api_importar_item_estoque(item_id):
     """
     API para importar um item de nota fiscal para o estoque
+    Primeiro importa o item original, depois vincula e importa itens similares
+    Utiliza os métodos do modelo NotaFiscalItem
     """
     try:
         # Obter o item da nota fiscal
@@ -2383,112 +2554,51 @@ def api_importar_item_estoque(item_id):
         if importacao_automatica and not observacao:
             observacao = f"Importação automática da NF {item.nota_fiscal.numero_nf} de {item.nota_fiscal.nome_emitente}"
         
-        # Buscar outros itens similares (mesmo código e descrição) que já estão vinculados mas não foram importados
-        itens_similares_para_importar = []
-        codigo = item.codigo
-        descricao = item.descricao
-        
-        # Buscar por código E descrição (ambos devem corresponder)
-        if codigo and descricao:
-            itens_encontrados = NotaFiscalItem.query.filter(
-                NotaFiscalItem.codigo == codigo,
-                NotaFiscalItem.descricao == descricao,
-                NotaFiscalItem.material_id.isnot(None),  # Já tem material vinculado
-                NotaFiscalItem.importado_estoque == False,  # Ainda não foi importado
-                NotaFiscalItem.id != item_id  # Excluir o item original
-            ).all()
-            itens_similares_para_importar.extend(itens_encontrados)
-        elif codigo:
-            # Se só tem código, buscar por código
-            itens_encontrados = NotaFiscalItem.query.filter(
-                NotaFiscalItem.codigo == codigo,
-                NotaFiscalItem.material_id.isnot(None),
-                NotaFiscalItem.importado_estoque == False,
-                NotaFiscalItem.id != item_id
-            ).all()
-            itens_similares_para_importar.extend(itens_encontrados)
-        elif descricao:
-            # Se só tem descrição, buscar por descrição
-            itens_encontrados = NotaFiscalItem.query.filter(
-                NotaFiscalItem.descricao == descricao,
-                NotaFiscalItem.material_id.isnot(None),
-                NotaFiscalItem.importado_estoque == False,
-                NotaFiscalItem.id != item_id
-            ).all()
-            itens_similares_para_importar.extend(itens_encontrados)
-        
-        # Contar itens já importados (que já estavam importados antes)
-        itens_ja_importados = 0
-        if codigo and descricao:
-            itens_ja_importados = NotaFiscalItem.query.filter(
-                NotaFiscalItem.codigo == codigo,
-                NotaFiscalItem.descricao == descricao,
-                NotaFiscalItem.material_id.isnot(None),
-                NotaFiscalItem.importado_estoque == True
-            ).count()
-        elif codigo:
-            itens_ja_importados = NotaFiscalItem.query.filter(
-                NotaFiscalItem.codigo == codigo,
-                NotaFiscalItem.material_id.isnot(None),
-                NotaFiscalItem.importado_estoque == True
-            ).count()
-        elif descricao:
-            itens_ja_importados = NotaFiscalItem.query.filter(
-                NotaFiscalItem.descricao == descricao,
-                NotaFiscalItem.material_id.isnot(None),
-                NotaFiscalItem.importado_estoque == True
-            ).count()
-        
         # Verificar estado atual do estoque antes da importação
         from models.estoque import Estoque
         estoque_atual = Estoque.query.filter_by(material_id=item.material_id, tipo_item='material').first()
         qtd_atual = float(estoque_atual.quantidade) if estoque_atual else 0
         
         logger.info(f"API: Estoque atual para material {item.material_id}: {qtd_atual}")
-        logger.info(f"API: Encontrados {len(itens_similares_para_importar)} itens similares para importar")
         
-        # Importar o item original (apenas se ainda não foi importado)
-        itens_importados = 0
-        itens_com_erro = []
+        # Inicializar estatísticas
+        estatisticas = {
+            'total_itens_vinculados': 0,
+            'total_itens_ja_vinculados': 0,
+            'total_itens_importados': 0,
+            'total_itens_ja_importados': 0,
+            'itens_com_erro': []
+        }
         
-        if not item_ja_importado:
-            sucesso, mensagem = item.importar_para_estoque(
-                usuario_id=current_user.id,
+        # ETAPA 1: Importar o item original
+        item_importado_com_sucesso = _importar_item_original(
+            item=item,
+            usuario_id=current_user.id,
+            centro_custo_id=centro_custo_id if centro_custo_id else None,
+            observacao=observacao,
+            estatisticas=estatisticas
+        )
+        itens_similares_para_importar = []
+        itens_similares_vinculados = []
+        if importacao_automatica:
+            # ETAPA 2: Vincular itens similares em todas as notas
+            itens_similares_vinculados, itens_processados, grupos_processados = _vincular_itens_similares(
+                item=item,
+                item_id=item_id,
+                estatisticas=estatisticas
             )
             
-            if sucesso:
-                itens_importados += 1
-            else:
-                itens_com_erro.append({
-                    'item_id': item.id,
-                    'descricao': item.descricao,
-                    'erro': mensagem
-                })
-        else:
-            # Item já estava importado, incrementar contador de já importados
-            itens_ja_importados += 1
-        
-        # Importar itens similares encontrados
-        for item_similar in itens_similares_para_importar:
-            try:
-                sucesso_similar, mensagem_similar = item_similar.importar_para_estoque(
-                    usuario_id=current_user.id,
-                )
-                if sucesso_similar:
-                    itens_importados += 1
-                else:
-                    itens_com_erro.append({
-                        'item_id': item_similar.id,
-                        'descricao': item_similar.descricao,
-                        'erro': mensagem_similar
-                    })
-            except Exception as e:
-                logger.error(f'Erro ao importar item similar {item_similar.id}: {str(e)}')
-                itens_com_erro.append({
-                    'item_id': item_similar.id,
-                    'descricao': item_similar.descricao,
-                    'erro': str(e)
-                })
+            # ETAPA 3: Importar itens similares
+            itens_similares_para_importar = _importar_itens_similares(
+                itens_similares_vinculados=itens_similares_vinculados,
+                item_id=item_id,
+                nota_fiscal=item.nota_fiscal,
+                usuario_id=current_user.id,
+                centro_custo_id=centro_custo_id if centro_custo_id else None,
+                observacao=observacao,
+                itens_processados=itens_processados,
+                estatisticas=estatisticas
+            )
         
         # Verificar estado do estoque depois da importação
         db.session.refresh(estoque_atual) if estoque_atual else None
@@ -2497,49 +2607,27 @@ def api_importar_item_estoque(item_id):
         
         logger.info(f"API: Estoque após importação para material {item.material_id}: {qtd_depois}")
         
-        # Atualizar quantidade depois se houve importação
-        if itens_importados > 0:
-            db.session.refresh(estoque_depois) if estoque_depois else None
-            estoque_depois = Estoque.query.filter_by(material_id=item.material_id, tipo_item='material').first()
-            qtd_depois = float(estoque_depois.quantidade) if estoque_depois else 0
-        
         # Registrar se foi importação automática (apenas se importou algo)
-        if itens_importados > 0 and importacao_automatica:
+        if (item_importado_com_sucesso or estatisticas['total_itens_importados'] > 0) and importacao_automatica:
             item.dados_adicionais = json.dumps({
                 "importacao_automatica": True,
                 "data_importacao_automatica": datetime.now().isoformat()
             })
             item.save()
         
-        # Sempre retornar estatísticas, mesmo se o item já estava importado
-        if item_ja_importado:
-            mensagem_final = 'Este item já estava importado para o estoque.'
-            if len(itens_similares_para_importar) > 0:
-                mensagem_final += f' {len(itens_similares_para_importar)} item(ns) similar(es) foram encontrado(s) e importado(s).'
-            elif itens_importados > 0:
-                mensagem_final += f' {itens_importados} item(ns) similar(es) foram importado(s).'
-        elif itens_importados > 0:
-            mensagem_final = f'Item importado com sucesso!'
-            if len(itens_similares_para_importar) > 0:
-                mensagem_final += f' {len(itens_similares_para_importar)} item(ns) similar(es) também foram importado(s).'
-        else:
-            mensagem_final = 'Nenhum item foi importado.'
-            if itens_com_erro:
-                mensagem_final += f' {len(itens_com_erro)} item(ns) com erro.'
+        # Montar e retornar resposta
+        resposta = _montar_resposta_importacao(
+            item=item,
+            item_ja_importado=item_ja_importado,
+            item_importado_com_sucesso=item_importado_com_sucesso,
+            estatisticas=estatisticas,
+            itens_similares_para_importar=itens_similares_para_importar,
+            qtd_atual=qtd_atual,
+            qtd_depois=qtd_depois,
+            importacao_automatica=importacao_automatica
+        )
         
-        # Retornar sempre com sucesso e estatísticas
-        return jsonify({
-            'success': True,
-            'message': mensagem_final,
-            'quantidade_anterior': qtd_atual,
-            'quantidade_atual': qtd_depois,
-            'importacao_automatica': importacao_automatica,
-            'itens_importados': itens_importados,
-            'itens_ja_importados': itens_ja_importados,
-            'itens_com_erro': len(itens_com_erro),
-            'itens_similares_encontrados': len(itens_similares_para_importar),
-            'item_ja_estava_importado': item_ja_importado
-        })
+        return jsonify(resposta)
         
     except Exception as e:
         logger.error(f'Erro ao importar item para estoque: {str(e)}')

@@ -115,7 +115,7 @@ def main():
                 tipo_tanque_raw = row.iloc[4] if len(row) > 4 else None
                 tipo_tanque = str(tipo_tanque_raw).strip() if pd.notna(tipo_tanque_raw) else None
                 
-                if tipo_tanque and tipo_tanque in ['REATOR 1', 'REATOR 2', 'REATOR 3', 'REATOR 4', 'REATOR 5', 'REATOR 6', 'REATOR 7', 'REATOR 8', 'REATOR 9', 'REATOR 10','REATOR 11','REATOR 12']:
+                if tipo_tanque and tipo_tanque in ['REATOR 1', 'REATOR 2', 'REATOR 3', 'REATOR 4', 'REATOR 5', 'REATOR 6', 'REATOR 7', 'REATOR 8', 'REATOR 9', 'REATOR 10','REATOR 11','REATOR 12','NEREDA']:
                     peca['tanque_id'] = 1
                 elif tipo_tanque and tipo_tanque in ['PRIMARIO 1', 'PRIMARIO 2', 'PRIMARIO 3']:
                     peca['tanque_id'] = 4

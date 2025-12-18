@@ -266,6 +266,15 @@
                                 title="Importar este item para o estoque">
                             <i class="fas fa-file-import"></i>
                         </button>`;
+                // Botão para importar todos os itens similares
+                html += `
+                        <button type="button" class="btn btn-sm btn-warning btn-importar-itens-similares" 
+                                data-item-id="${item.id}"
+                                data-item-codigo="${item.codigo || ''}"
+                                data-item-descricao="${item.descricao || ''}"
+                                title="Importar este item e todos os itens similares para o estoque">
+                            <i class="fas fa-file-import"></i> Todos
+                        </button>`;
                 // Botão para vincular outros itens similares em todas as notas
                 html += `
                         <button type="button" class="btn btn-sm btn-info btn-vincular-itens-similares" 
@@ -306,6 +315,16 @@
                 const itemId = this.getAttribute('data-item-id');
                 const itemDescricao = this.getAttribute('data-item-descricao');
                 importarItemIndividualImportacao(itemId, itemDescricao);
+            });
+        });
+        
+        // Adicionar event listeners aos botões de importar itens similares
+        document.querySelectorAll('.btn-importar-itens-similares').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const itemId = this.getAttribute('data-item-id');
+                const itemCodigo = this.getAttribute('data-item-codigo');
+                const itemDescricao = this.getAttribute('data-item-descricao');
+                importarItensSimilares(itemId, itemCodigo, itemDescricao);
             });
         });
         
@@ -1099,6 +1118,153 @@
                 Swal.close();
             }
             console.error('Erro ao importar item:', error);
+            mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
+        });
+    }
+
+    // Função para importar todos os itens similares
+    function importarItensSimilares(itemId, itemCodigo, itemDescricao) {
+        if (!itemId) {
+            mostrarAlerta('Erro', 'ID do item não encontrado.', 'error');
+            return;
+        }
+        
+        const observacao = document.getElementById('observacao').value || '';
+        
+        if (!confirm(`Deseja importar este item e TODOS os itens similares (mesmo código ou descrição) para o estoque?\n\nCódigo: ${itemCodigo || 'N/A'}\nDescrição: ${itemDescricao || 'N/A'}\n\nO sistema buscará e importará automaticamente todos os itens similares encontrados.`)) {
+            return;
+        }
+        
+        mostrarCarregando('Importando item e todos os itens similares para o estoque...');
+        
+        // Obter token CSRF
+        const csrfToken = $('input[name="csrf_token"]').val();
+        
+        fetch(`/notas-fiscais/api/importar-item-estoque/${itemId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                observacao: observacao,
+                importacao_automatica: 'true'
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            return response.json().catch(e => {
+                console.error('Erro ao fazer parse do JSON:', e);
+                throw new Error('Resposta inválida do servidor: não é um JSON válido');
+            });
+        })
+        .then(data => {
+            // Fechar modal de carregamento primeiro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            
+            // Pequeno delay para garantir que o modal de carregamento foi fechado
+            setTimeout(() => {
+                if (data.success) {
+                    // Montar mensagem com estatísticas detalhadas
+                    let mensagemEstatisticas = data.message || 'Item e itens similares importados com sucesso!';
+                    let usarHtml = false;
+                    
+                    // Sempre mostrar estatísticas se os dados estiverem presentes
+                    if (data.hasOwnProperty('itens_ja_importados') || data.hasOwnProperty('itens_importados') || data.hasOwnProperty('itens_similares_encontrados')) {
+                        console.log('Estatísticas de importação de itens similares disponíveis:', {
+                            ja_importados: data.itens_ja_importados,
+                            importados_agora: data.itens_importados,
+                            similares_encontrados: data.itens_similares_encontrados,
+                            com_erro: data.itens_com_erro
+                        });
+                        
+                        const itensJaImportados = data.itens_ja_importados !== undefined ? data.itens_ja_importados : 0;
+                        const itensImportadosAgora = data.itens_importados !== undefined ? data.itens_importados : 0;
+                        const itensSimilaresEncontrados = data.itens_similares_encontrados !== undefined ? data.itens_similares_encontrados : 0;
+                        const itensComErro = data.itens_com_erro !== undefined ? data.itens_com_erro : 0;
+                        
+                        mensagemEstatisticas = `<div style="text-align: left; padding: 10px;">
+                            <strong style="font-size: 1.1em;">Importação de itens similares concluída!</strong><br><br>
+                            <div style="margin-left: 10px;">
+                                <div style="margin-bottom: 8px; font-size: 1.05em;">📊 <strong>Estatísticas:</strong></div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens já importados: <strong style="color: #28a745;">${itensJaImportados}</strong>
+                                </div>
+                                <div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                    • Itens importados agora: <strong style="color: #007bff;">${itensImportadosAgora}</strong>
+                                </div>
+                                ${itensSimilaresEncontrados > 0 ? 
+                                    `<div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                        • Itens similares encontrados e importados: <strong style="color: #17a2b8;">${itensSimilaresEncontrados}</strong>
+                                    </div>` : ''}
+                                ${itensComErro > 0 ? 
+                                    `<div style="margin-left: 20px; margin-bottom: 5px; font-size: 1em;">
+                                        • Itens com erro: <strong style="color: #dc3545;">${itensComErro}</strong>
+                                    </div>` : ''}
+                            </div>
+                        </div>`;
+                        usarHtml = true;
+                    }
+                    
+                    // Usar Swal.fire diretamente com HTML para garantir que as estatísticas sejam exibidas
+                    if (usarHtml && typeof Swal !== 'undefined') {
+                        console.log('Exibindo modal com estatísticas de importação de itens similares:', mensagemEstatisticas);
+                        Swal.fire({
+                            title: 'Sucesso',
+                            html: mensagemEstatisticas,
+                            icon: 'success',
+                            confirmButtonText: 'OK',
+                            width: '500px',
+                            allowOutsideClick: false,
+                            allowEscapeKey: true,
+                            showCloseButton: true
+                        }).then(() => {
+                            // Recarregar os itens da nota para atualizar a interface
+                            const notaId = document.getElementById('importacao_nf_id').value;
+                            if (notaId) {
+                                carregarItensImportacao(notaId);
+                            }
+                            // Recarregar a tabela de notas fiscais se a função existir
+                            if (typeof carregarTabelaNotasFiscais === 'function') {
+                                params = $('#filtrosNotasFiscais').serialize();
+                                carregarTabelaNotasFiscais(params);
+                                if (typeof carregarTotalNotas === 'function') {
+                                    carregarTotalNotas(params);
+                                }
+                            }
+                        });
+                    } else {
+                        mostrarAlerta('Sucesso', mensagemEstatisticas, 'success', function() {
+                            // Recarregar os itens da nota para atualizar a interface
+                            const notaId = document.getElementById('importacao_nf_id').value;
+                            if (notaId) {
+                                carregarItensImportacao(notaId);
+                            }
+                            // Recarregar a tabela de notas fiscais se a função existir
+                            if (typeof carregarTabelaNotasFiscais === 'function') {
+                                params = $('#filtrosNotasFiscais').serialize();
+                                carregarTabelaNotasFiscais(params);
+                                if (typeof carregarTotalNotas === 'function') {
+                                    carregarTotalNotas(params);
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    mostrarAlerta('Erro', data.message || 'Erro ao importar itens similares.', 'error');
+                }
+            }, 100); // Delay de 100ms para garantir que o modal de carregamento foi fechado
+        })
+        .catch(error => {
+            // Fechar modal de carregamento em caso de erro
+            if (typeof Swal !== 'undefined' && Swal.isVisible()) {
+                Swal.close();
+            }
+            console.error('Erro ao importar itens similares:', error);
             mostrarAlerta('Erro', `Ocorreu um erro ao processar: ${error.message}`, 'error');
         });
     }

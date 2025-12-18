@@ -522,22 +522,61 @@ def movimentacoes():
     if observacao:
         query = query.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao}%'))
     
+    # Converter datas se fornecidas
+    data_inicio_obj = None
+    data_fim_obj = None
+    
     if data_inicio:
         try:
-            data_inicio = datetime.strptime(data_inicio, '%Y-%m-%d').date()
-            query = query.filter(func.date(MovimentacaoEstoque.data_movimento) >= data_inicio)
+            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+            query = query.filter(func.date(MovimentacaoEstoque.data_movimento) >= data_inicio_obj)
         except ValueError:
             flash('Formato de data inválido para Data Início', 'warning')
+            data_inicio_obj = None
     
     if data_fim:
         try:
-            data_fim = datetime.strptime(data_fim, '%Y-%m-%d').date()
-            query = query.filter(func.date(MovimentacaoEstoque.data_movimento) <= data_fim)
+            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+            query = query.filter(func.date(MovimentacaoEstoque.data_movimento) <= data_fim_obj)
         except ValueError:
             flash('Formato de data inválido para Data Fim', 'warning')
+            data_fim_obj = None
     
     # Obter resultados paginados
     movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.desc()).paginate(page=page, per_page=20, error_out=False)
+    
+    # Calcular totais de movimentações (usando a mesma query filtrada, mas sem paginação)
+    query_totais = MovimentacaoEstoque.query.join(Estoque)
+    
+    # Aplicar os mesmos filtros para os totais
+    if estoque_id:
+        query_totais = query_totais.filter(MovimentacaoEstoque.estoque_id == estoque_id)
+    
+    if material_id:
+        query_totais = query_totais.filter(Estoque.material_id == material_id)
+    
+    if localizacao:
+        query_totais = query_totais.filter(Estoque.localizacao == localizacao)
+    
+    if observacao:
+        query_totais = query_totais.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao}%'))
+    
+    if data_inicio_obj:
+        query_totais = query_totais.filter(func.date(MovimentacaoEstoque.data_movimento) >= data_inicio_obj)
+    
+    if data_fim_obj:
+        query_totais = query_totais.filter(func.date(MovimentacaoEstoque.data_movimento) <= data_fim_obj)
+    
+    # Calcular totais por tipo de movimentação
+    total_entradas = query_totais.filter(MovimentacaoEstoque.tipo_movimento == 'entrada').with_entities(
+        func.sum(MovimentacaoEstoque.quantidade)
+    ).scalar() or Decimal('0.0')
+    
+    total_saidas = query_totais.filter(MovimentacaoEstoque.tipo_movimento == 'saida').with_entities(
+        func.sum(MovimentacaoEstoque.quantidade)
+    ).scalar() or Decimal('0.0')
+    
+    total_ajustes = query_totais.filter(MovimentacaoEstoque.tipo_movimento == 'ajuste').count() or 0
     
     # Obter todos os itens de estoque para o filtro
     itens_estoque = Estoque.query.all()
@@ -552,6 +591,15 @@ def movimentacoes():
     ).distinct().order_by(Estoque.localizacao).all()
     localizacoes_list = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
     
+    # Obter informações do material selecionado, se houver
+    material_selecionado = None
+    if material_id:
+        material_selecionado = Material.query.get(material_id)
+    
+    # Converter datas de volta para string para o template (se foram convertidas)
+    data_inicio_str = data_inicio_obj.strftime('%Y-%m-%d') if data_inicio_obj else data_inicio
+    data_fim_str = data_fim_obj.strftime('%Y-%m-%d') if data_fim_obj else data_fim
+    
     return render_template('estoque/movimentacoes.html', 
                           movimentacoes=movimentacoes, 
                           itens_estoque=itens_estoque,
@@ -559,11 +607,15 @@ def movimentacoes():
                           localizacoes=localizacoes_list,
                           estoque_id=estoque_id, 
                           tipo=tipo, 
-                          data_inicio=data_inicio, 
-                          data_fim=data_fim,
+                          data_inicio=data_inicio_str, 
+                          data_fim=data_fim_str,
                           material_id=material_id,
                           localizacao=localizacao,
-                          observacao=observacao)
+                          observacao=observacao,
+                          total_entradas=float(total_entradas),
+                          total_saidas=float(total_saidas),
+                          total_ajustes=total_ajustes,
+                          material_selecionado=material_selecionado)
 
 @estoque_bp.route('/nova-movimentacao', methods=['GET', 'POST'])
 @login_required

@@ -542,7 +542,7 @@ class MovimentacaoEstoque(db.Model):
         self.observacao = observacao
         self.tipo_movimento = 'entrada'
     
-    def remover(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id,motivo=None):
+    def remover(self,quantidade,estoque_id,origem_id,origem_tipo,usuario_id,motivo=None,log=False):
         """
         Cria uma nova movimentação de estoque de saída
         """
@@ -581,14 +581,15 @@ class MovimentacaoEstoque(db.Model):
         self.data_movimento = data_movimento
         self.tipo_movimento = tipo_movimento
 
-    def save(self):
+    def save(self,log=False):
         """
         Salva a movimentação de estoque e atualiza o estoque
         """
         import traceback
         
         try:
-            print(f"Iniciando save() de MovimentacaoEstoque: tipo={self.tipo_movimento}, quantidade={self.quantidade}, estoque_id={self.estoque_id}")
+            if log:
+                print(f"Iniciando save() de MovimentacaoEstoque: tipo={self.tipo_movimento}, quantidade={self.quantidade}, estoque_id={self.estoque_id}")
             if self.estoque_id:
                 self.estoque = Estoque.query.get(self.estoque_id)
             # Atualizar quantidade do estoque baseado no tipo de movimento
@@ -597,17 +598,21 @@ class MovimentacaoEstoque(db.Model):
             
                 if self.tipo_movimento == 'entrada':
                     self.estoque.quantidade += self.quantidade
-                    print(f"Movimentação ENTRADA: {estoque_anterior} + {self.quantidade} = {self.estoque.quantidade}")
+                    if log:
+                        print(f"Movimentação ENTRADA: {estoque_anterior} + {self.quantidade} = {self.estoque.quantidade}")
                     
                 elif self.tipo_movimento == 'saida':
                     # Permitir estoque negativo - removida verificação de quantidade suficiente
                     self.estoque.quantidade -= self.quantidade
-                    print(f"Movimentação SAÍDA: {estoque_anterior} - {self.quantidade} = {self.estoque.quantidade}")
+                    if log:
+                        print(f"Movimentação SAÍDA: {estoque_anterior} - {self.quantidade} = {self.estoque.quantidade}")
                     if self.estoque.quantidade < 0:
-                        print(f"AVISO: Estoque ficou negativo: {self.estoque.quantidade}")
+                        if log:
+                            print(f"AVISO: Estoque ficou negativo: {self.estoque.quantidade}")
                 
                 elif self.tipo_movimento == 'ajuste':
-                    print(f"Movimentação AJUSTE: {estoque_anterior} -> {self.quantidade}")
+                    if log:
+                        print(f"Movimentação AJUSTE: {estoque_anterior} -> {self.quantidade}")
                     # Para ajuste, a quantidade já é o novo saldo total
                     # Recalcular a partir de todas as movimentações para garantir consistência
                     self.estoque.quantidade = self.estoque.get_saldo_real()
@@ -619,7 +624,8 @@ class MovimentacaoEstoque(db.Model):
                 # Importante: atualizar o estoque no banco de dados
                 db.session.add(self.estoque)
             else:
-                print(f"ERRO: Estoque não encontrado para ID {self.estoque_id}")
+                if log:
+                    print(f"ERRO: Estoque não encontrado para ID {self.estoque_id}")
         
         # Adiciona a movimentação ao banco
             if not self.id:  # Se for um novo registro
@@ -627,15 +633,18 @@ class MovimentacaoEstoque(db.Model):
             
                 # Executa o commit para salvar as alterações
                 db.session.flush()  # Garante que os objetos tenham IDs
-                print(f"Movimentação de estoque criada com ID {self.id}")
+                if log:
+                    print(f"Movimentação de estoque criada com ID {self.id}")
                 
                 db.session.commit()
-                print(f"Transação concluída com sucesso")
+                if log:
+                    print(f"Transação concluída com sucesso")
                 return True
             
         except Exception as e:
             db.session.rollback()
-            print(f"ERRO ao salvar movimentação de estoque: {str(e)}")
+            if log:
+                print(f"ERRO ao salvar movimentação de estoque: {str(e)}")
             print(traceback.format_exc())
             raise e
 

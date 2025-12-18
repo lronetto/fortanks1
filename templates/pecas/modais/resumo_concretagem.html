@@ -1,0 +1,297 @@
+<!-- Modal de Resumo de Concretagem -->
+<div class="modal fade" id="modalResumoConcretagem" tabindex="-1" aria-labelledby="modalResumoConcretagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalResumoConcretagemLabel">
+                    <i class="fas fa-chart-bar"></i> Resumo de Peças Concretadas
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtros -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <form id="formFiltroResumo">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label for="data_inicial" class="form-label">Data Inicial</label>
+                                    <input type="date" class="form-control" id="data_inicial" name="data_inicial">
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="data_final" class="form-label">Data Final</label>
+                                    <input type="date" class="form-control" id="data_final" name="data_final">
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary w-100" id="btnBuscarResumo">
+                                        <i class="fas fa-search"></i> Buscar
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Totais -->
+                <div class="row mb-3" id="containerTotais" style="display: none;">
+                    <div class="col-md-3">
+                        <div class="card text-center bg-primary text-white">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="fas fa-cubes"></i></h5>
+                                <h3 id="totalPecas">0</h3>
+                                <p class="card-text mb-0">Peças Concretadas</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-success text-white">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="fas fa-water"></i></h5>
+                                <h3 id="totalTanques">0</h3>
+                                <p class="card-text mb-0">Tanques</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-warning text-white">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="fas fa-tags"></i></h5>
+                                <h3 id="totalTipos">0</h3>
+                                <p class="card-text mb-0">Tipos de Peças</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card text-center bg-info text-white">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="fas fa-layer-group"></i></h5>
+                                <h3 id="totalGrupos">0</h3>
+                                <p class="card-text mb-0">Grupos</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de Resumo -->
+                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                    <table class="table table-sm table-hover table-bordered" id="tabelaResumoConcretagem">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Projeto</th>
+                                <th>Tanque</th>
+                                <th>Sistema</th>
+                                <th>Tipo de Peça</th>
+                                <th class="text-center">Quantidade</th>
+                                <th>Primeira Concretagem</th>
+                                <th>Última Concretagem</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyResumoConcretagem">
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">
+                                    <i class="fas fa-info-circle"></i> Selecione um período e clique em "Buscar" para ver o resumo
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        // Definir data final como hoje por padrão
+        var hoje = new Date().toISOString().split('T')[0];
+        $('#data_final').val(hoje);
+        
+        // Definir data inicial como 30 dias atrás por padrão
+        var dataInicial = new Date();
+        dataInicial.setDate(dataInicial.getDate() - 30);
+        $('#data_inicial').val(dataInicial.toISOString().split('T')[0]);
+
+        // Função para buscar resumo
+        function buscarResumo() {
+            var dataInicial = $('#data_inicial').val();
+            var dataFinal = $('#data_final').val();
+            
+            // Validação básica
+            if (dataInicial && dataFinal) {
+                if (dataInicial > dataFinal) {
+                    alert('A data inicial não pode ser maior que a data final!');
+                    return;
+                }
+            }
+            
+            var tbody = $('#tbodyResumoConcretagem');
+            tbody.html('<tr><td colspan="7" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+            
+            $.ajax({
+                url: '{{ url_for("peca.api_resumo_concretagem") }}',
+                method: 'GET',
+                data: {
+                    data_inicial: dataInicial || '',
+                    data_final: dataFinal || ''
+                },
+                dataType: 'json',
+                success: function(response) {
+                    tbody.empty();
+                    
+                    if (response.success && response.resumo && response.resumo.length > 0) {
+                        // Exibir totais
+                        $('#containerTotais').show();
+                        $('#totalPecas').text(response.totais.total_pecas || 0);
+                        $('#totalTanques').text(response.totais.total_tanques || 0);
+                        $('#totalTipos').text(response.totais.total_tipos || 0);
+                        $('#totalGrupos').text(response.totais.total_grupos || 0);
+                        
+                        // Agrupar por tanque para calcular subtotais
+                        var tanqueAtual = null;
+                        var subtotalTanque = 0;
+                        var primeiraDataTanque = null;
+                        var ultimaDataTanque = null;
+                        
+                        // Função auxiliar para converter data string para objeto Date para comparação
+                        function parseData(dataStr) {
+                            if (!dataStr || dataStr === '-') return null;
+                            // Formato: DD/MM/YYYY HH:MM
+                            var partes = dataStr.split(' ');
+                            if (partes.length < 1) return null;
+                            var dataPartes = partes[0].split('/');
+                            if (dataPartes.length !== 3) return null;
+                            return new Date(dataPartes[2], dataPartes[1] - 1, dataPartes[0]);
+                        }
+                        
+                        // Função para adicionar linha de subtotal
+                        function adicionarSubtotal() {
+                            var subtotalRow = $('<tr></tr>').addClass('table-info fw-bold');
+                            subtotalRow.append($('<td></td>').text(''));
+                            subtotalRow.append($('<td></td>').html('<i class="fas fa-calculator"></i> <strong>Subtotal</strong>'));
+                            subtotalRow.append($('<td></td>').text(''));
+                            subtotalRow.append($('<td></td>').text(''));
+                            subtotalRow.append($('<td class="text-center"></td>').html(
+                                '<span class="badge bg-info fs-6">' + subtotalTanque + '</span>'
+                            ));
+                            subtotalRow.append($('<td></td>').text(primeiraDataTanque || '-'));
+                            subtotalRow.append($('<td></td>').text(ultimaDataTanque || '-'));
+                            tbody.append(subtotalRow);
+                            
+                            // Adicionar linha em branco para separação visual
+                            tbody.append($('<tr></tr>').append($('<td></td>').attr('colspan', 7).html('&nbsp;')));
+                        }
+                        
+                        response.resumo.forEach(function(item, index) {
+                            var chaveTanque = (item.tanque_nome || '') + '|' + (item.tanque_sistema || '');
+                            
+                            // Se mudou de tanque, adicionar linha de subtotal do tanque anterior
+                            if (tanqueAtual !== null && tanqueAtual !== chaveTanque) {
+                                adicionarSubtotal();
+                                
+                                // Resetar contadores
+                                subtotalTanque = 0;
+                                primeiraDataTanque = null;
+                                ultimaDataTanque = null;
+                            }
+                            
+                            // Atualizar contadores do tanque atual
+                            tanqueAtual = chaveTanque;
+                            subtotalTanque += item.quantidade;
+                            
+                            // Atualizar primeira e última data do tanque
+                            if (item.primeira_concretagem) {
+                                var dataItem = parseData(item.primeira_concretagem);
+                                if (dataItem) {
+                                    if (!primeiraDataTanque) {
+                                        primeiraDataTanque = item.primeira_concretagem;
+                                    } else {
+                                        var dataAtual = parseData(primeiraDataTanque);
+                                        if (dataAtual && dataItem < dataAtual) {
+                                            primeiraDataTanque = item.primeira_concretagem;
+                                        }
+                                    }
+                                }
+                            }
+                            if (item.ultima_concretagem) {
+                                var dataItem = parseData(item.ultima_concretagem);
+                                if (dataItem) {
+                                    if (!ultimaDataTanque) {
+                                        ultimaDataTanque = item.ultima_concretagem;
+                                    } else {
+                                        var dataAtual = parseData(ultimaDataTanque);
+                                        if (dataAtual && dataItem > dataAtual) {
+                                            ultimaDataTanque = item.ultima_concretagem;
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Adicionar linha de dados
+                            var row = $('<tr></tr>');
+                            row.append($('<td></td>').text(item.projeto_nome || '-'));
+                            row.append($('<td></td>').text(item.tanque_nome || '-'));
+                            row.append($('<td></td>').html(
+                                item.tanque_sistema ? 
+                                '<span class="badge bg-secondary">' + item.tanque_sistema + '</span>' : 
+                                '-'
+                            ));
+                            row.append($('<td></td>').text(item.tipo_peca || '-'));
+                            row.append($('<td class="text-center"></td>').html(
+                                '<span class="badge bg-primary">' + item.quantidade + '</span>'
+                            ));
+                            row.append($('<td></td>').text(item.primeira_concretagem || '-'));
+                            row.append($('<td></td>').text(item.ultima_concretagem || '-'));
+                            tbody.append(row);
+                            
+                            // Se for o último item, adicionar subtotal final
+                            if (index === response.resumo.length - 1) {
+                                adicionarSubtotal();
+                            }
+                        });
+                    } else {
+                        $('#containerTotais').hide();
+                        tbody.append(
+                            $('<tr></tr>').append(
+                                $('<td></td>')
+                                    .attr('colspan', 7)
+                                    .addClass('text-center text-muted')
+                                    .text('Nenhum resultado encontrado para o período selecionado')
+                            )
+                        );
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao buscar resumo:', error);
+                    tbody.html(
+                        '<tr><td colspan="7" class="text-center text-danger">' +
+                        '<i class="fas fa-exclamation-triangle"></i> Erro ao carregar resumo: ' + 
+                        (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : error) +
+                        '</td></tr>'
+                    );
+                    $('#containerTotais').hide();
+                }
+            });
+        }
+
+        // Evento do botão buscar
+        $('#btnBuscarResumo').on('click', function() {
+            buscarResumo();
+        });
+
+        // Buscar ao pressionar Enter nos campos de data
+        $('#data_inicial, #data_final').on('keypress', function(e) {
+            if (e.which === 13) {
+                buscarResumo();
+            }
+        });
+
+        // Buscar automaticamente ao abrir o modal
+        $('#modalResumoConcretagem').on('shown.bs.modal', function() {
+            buscarResumo();
+        });
+    });
+</script>
+

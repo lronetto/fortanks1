@@ -9,6 +9,21 @@ from datetime import datetime
 from decimal import Decimal
 import json
 from models.logs import Logs
+
+# Função auxiliar para converter Decimal para float recursivamente
+def converter_decimal_para_float(obj):
+    """Converte valores Decimal para float recursivamente em estruturas de dados"""
+    if isinstance(obj, Decimal):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {key: converter_decimal_para_float(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [converter_decimal_para_float(item) for item in obj]
+    elif isinstance(obj, tuple):
+        return tuple(converter_decimal_para_float(item) for item in obj)
+    else:
+        return obj
+
 # Criação do blueprint
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
 
@@ -404,9 +419,103 @@ def excluir_vinculacao(id):
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro ao excluir vinculação: {str(e)}'}), 500
 
-def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_movimento, produto_composto_id, 
+@peca.route('/api/resumo-concretagem', methods=['GET'])
+def api_resumo_concretagem():
+    """API para buscar resumo de peças concretadas por tanque e tipo com filtro de data"""
+    try:
+        from sqlalchemy import func
+        from datetime import datetime as dt
+        
+        # Obter parâmetros de data
+        data_inicial = request.args.get('data_inicial')
+        data_final = request.args.get('data_final')
+        
+        # Query base: peças com data_concretagem preenchida
+        query = db.session.query(
+            Tanque.nome.label('tanque_nome'),
+            Tanque.sistema.label('tanque_sistema'),
+            Contrato.nome.label('projeto_nome'),
+            Peca.tipo.label('tipo_peca'),
+            func.count(Peca.id).label('quantidade'),
+            func.min(Peca.data_concretagem).label('primeira_concretagem'),
+            func.max(Peca.data_concretagem).label('ultima_concretagem')
+        ).join(
+            Tanque, Peca.tanque_id == Tanque.id
+        ).outerjoin(
+            Contrato, Tanque.contrato_id == Contrato.id
+        ).filter(
+            Peca.data_concretagem.isnot(None)
+        )
+        
+        # Aplicar filtros de data se fornecidos
+        if data_inicial:
+            try:
+                data_inicial_dt = dt.strptime(data_inicial, '%Y-%m-%d')
+                query = query.filter(func.date(Peca.data_concretagem) >= data_inicial_dt.date())
+            except ValueError:
+                pass
+        
+        if data_final:
+            try:
+                data_final_dt = dt.strptime(data_final, '%Y-%m-%d')
+                query = query.filter(func.date(Peca.data_concretagem) <= data_final_dt.date())
+            except ValueError:
+                pass
+        
+        # Agrupar por tanque e tipo
+        query = query.group_by(
+            Tanque.nome,
+            Tanque.sistema,
+            Contrato.nome,
+            Peca.tipo
+        ).order_by(
+            Contrato.nome,
+            Tanque.nome,
+            Peca.tipo
+        )
+        
+        resultados = query.all()
+        
+        # Formatar resultados
+        resumo = []
+        for r in resultados:
+            resumo.append({
+                'projeto_nome': r.projeto_nome or 'Sem projeto',
+                'tanque_nome': r.tanque_nome,
+                'tanque_sistema': r.tanque_sistema,
+                'tipo_peca': r.tipo_peca,
+                'quantidade': r.quantidade,
+                'primeira_concretagem': r.primeira_concretagem.strftime('%d/%m/%Y %H:%M') if r.primeira_concretagem else None,
+                'ultima_concretagem': r.ultima_concretagem.strftime('%d/%m/%Y %H:%M') if r.ultima_concretagem else None
+            })
+        
+        # Calcular totais
+        total_pecas = sum(r['quantidade'] for r in resumo)
+        total_tanques = len(set((r['tanque_nome'], r['tanque_sistema']) for r in resumo))
+        total_tipos = len(set(r['tipo_peca'] for r in resumo))
+        
+        return jsonify({
+            'success': True,
+            'resumo': resumo,
+            'totais': {
+                'total_pecas': total_pecas,
+                'total_tanques': total_tanques,
+                'total_tipos': total_tipos,
+                'total_grupos': len(resumo)
+            }
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar resumo: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_movimento, produto_composto_id, 
                                      data_dia, usuario_id, pecas_grupo, pecas_sem_estoque, produtos_processados, 
-                                     nivel_recursao=0, prefixo_observacao=''):
+                                     nivel_recursao=0, prefixo_observacao='', log=False):
     """
     Processa componentes de um produto composto recursivamente.
     Se um componente for outro produto composto, processa seus componentes também.
@@ -493,7 +602,7 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
             continue
         
         # Verificar disponibilidade de estoque
-        if estoque.quantidade < quantidade_total:
+        if estoque.get_saldo_ate_data(data_movimento) < quantidade_total:
             material_nome = estoque.material.nome if estoque.material else f'Estoque ID {estoque_id}'
             pecas_sem_estoque.append({
                 'produto_composto': produto_composto.nome,
@@ -501,7 +610,7 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
                 'quantidade_pecas': quantidade_pecas,
                 'material': material_nome,
                 'necessario': float(quantidade_total),
-                'disponivel': float(estoque.quantidade),
+                'disponivel': float(estoque.get_saldo_ate_data(data_movimento)),
                 'nivel': nivel_recursao
             })
             
@@ -511,7 +620,7 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
         
         # Criar lista de peças para observação
         nomes_pecas = [f"{p.nome} (Tanque: {p.tanque.nome})" for p in pecas_grupo[:5]]
-        if len(pecas_grupo) > 5:
+        if len(pecas_grupo) > 10:
             nomes_pecas.append(f"... e mais {len(pecas_grupo) - 5} peça(s)")
         
         observacao_base = (
@@ -530,19 +639,20 @@ def _processar_componentes_recursivo(produto_composto, quantidade_pecas, data_mo
             origem_id=produto_composto_id,
             origem_tipo='producao_peca',
             usuario_id=usuario_id,
-            motivo=observacao
+            motivo=observacao,
+            log=log
         )
         movimentacao.data_movimento = data_movimento
         
         # Salvar movimentação (o método save() atualiza o estoque automaticamente)
-        movimentacao.save()
+        movimentacao.save(log=log)
         movimentacoes_criadas += 1
     
     return movimentacoes_criadas
 
 @peca.route('/processar-producao', methods=['POST'])
 @login_required
-def processar_producao():
+def processar_producao(log=False):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia"""
     try:
@@ -551,7 +661,7 @@ def processar_producao():
         
         MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo.like('%producao_peca%')).delete()
         # Buscar todas as peças com data_concretagem preenchida
-        pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None)).limit(50).all()
+        pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None)).all()
         
         if not pecas_concretadas:
             return jsonify({
@@ -629,7 +739,8 @@ def processar_producao():
                     usuario_id=usuario_id,
                     pecas_grupo=pecas_grupo,
                     pecas_sem_estoque=pecas_sem_estoque,
-                    produtos_processados=set()  # Para evitar loops infinitos
+                    produtos_processados=set(),  # Para evitar loops infinitos
+                    log=log
                 )
                 movimentacoes_criadas += movimentacoes_grupo
                 
@@ -647,6 +758,42 @@ def processar_producao():
         # Commit de todas as alterações
         db.session.commit()
         
+        # Agrupar pecas_sem_estoque por produto composto e data
+        pecas_sem_estoque_agrupadas = {}
+        for item in pecas_sem_estoque:
+            chave = (item.get('produto_composto'), item.get('data'))
+            if chave not in pecas_sem_estoque_agrupadas:
+                pecas_sem_estoque_agrupadas[chave] = {
+                    'produto_composto': item.get('produto_composto'),
+                    'data': item.get('data'),
+                    'quantidade_pecas': item.get('quantidade_pecas', 0),
+                    'materiais': []
+                }
+            else:
+                # Garantir que usamos a maior quantidade de peças (caso haja inconsistência)
+                quantidade_atual = pecas_sem_estoque_agrupadas[chave]['quantidade_pecas']
+                quantidade_item = item.get('quantidade_pecas', 0)
+                if quantidade_item > quantidade_atual:
+                    pecas_sem_estoque_agrupadas[chave]['quantidade_pecas'] = quantidade_item
+            
+            # Adicionar material à lista de materiais do grupo
+            material_info = {}
+            if 'material' in item:
+                material_info['material'] = item['material']
+            if 'estoque_id' in item:
+                material_info['estoque_id'] = item['estoque_id']
+            if 'necessario' in item:
+                material_info['necessario'] = item['necessario']
+            if 'disponivel' in item:
+                material_info['disponivel'] = item['disponivel']
+            if 'nivel' in item:
+                material_info['nivel'] = item['nivel']
+            
+            pecas_sem_estoque_agrupadas[chave]['materiais'].append(material_info)
+        
+        # Converter dicionário agrupado para lista
+        pecas_sem_estoque_final = list(pecas_sem_estoque_agrupadas.values())
+        
         mensagem = (
             f'Processamento concluído!\n'
             f'- {pecas_processadas} peça(s) processada(s)\n'
@@ -657,8 +804,8 @@ def processar_producao():
         if pecas_sem_vinculacao:
             mensagem += f'\n\n{len(pecas_sem_vinculacao)} peça(s) sem vinculação de produto composto.'
         
-        if pecas_sem_estoque:
-            mensagem += f'\n\n{len(pecas_sem_estoque)} grupo(s) com estoque insuficiente.'
+        if pecas_sem_estoque_final:
+            mensagem += f'\n\n{len(pecas_sem_estoque_final)} grupo(s) com estoque insuficiente.'
         
         if erros:
             mensagem += f'\n\n{len(erros)} erro(s) durante o processamento.'
@@ -670,11 +817,13 @@ def processar_producao():
             'movimentacoes_criadas': movimentacoes_criadas,
             'grupos_processados': len(grupos_producao),
             'pecas_sem_vinculacao': pecas_sem_vinculacao,
-            'pecas_sem_estoque': pecas_sem_estoque,
+            'pecas_sem_estoque': pecas_sem_estoque_final,
             'erros': erros
         }
-        Logs(local='peca_processar_producao', data=datetime.now(), texto=json.dumps(msg))
-        return jsonify(msg)
+        # Converter Decimal para float antes de serializar para JSON
+        msg_serializavel = converter_decimal_para_float(msg)
+        Logs(local='peca_processar_producao', data=datetime.now(), texto=json.dumps(msg_serializavel))
+        return jsonify(msg_serializavel)
         
     except Exception as e:
         db.session.rollback()

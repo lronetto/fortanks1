@@ -17,9 +17,14 @@
             <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
                 <i class="fas fa-file-upload"></i> Importar XML
             </button>
+            {% if current_user.is_admin %}
             <a href="{{ url_for('nota_fiscal.importar_todas_pendentes') }}" class="btn btn-warning" id="btnImportarTodasPendentes">
                 <i class="fas fa-file-import"></i> Importar Pendentes
             </a>
+            <a href="{{ url_for('nota_fiscal.reprocessar_importacao') }}" class="btn btn-warning" id="btnReprocessarImportacao">
+                <i class="fas fa-file-import"></i> Reprocessar Importacao
+            </a>
+            {% endif %}
             <a href="{{ url_for('nota_fiscal.analise') }}" class="btn btn-info">
                 <i class="fas fa-chart-bar"></i> Análise
             </a>
@@ -255,6 +260,24 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.show();
     });
     
+    $('#btnReprocessarImportacao').on('click', function() {
+        $.ajax({    
+            url: '/notas-fiscais/reprocessar-importacao',
+            type: 'GET',  
+            success: function(response) {
+                console.log(response);
+                if (response.success) {
+                    mostrarAlerta('Sucesso', response.message, 'success');
+                } else {
+                    mostrarAlerta('Erro', response.message, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao reprocessar importação:', error);
+                mostrarAlerta('Erro', 'Erro ao reprocessar importação: ' + error, 'error');
+            }
+        });
+    });
     // Ordenação de colunas - Declarar variáveis antes de usar
     function getUrlParameter(name) {
         let urlParams = new URLSearchParams(window.location.search);

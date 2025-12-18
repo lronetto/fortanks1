@@ -43,9 +43,10 @@ def determinar_movimentacoes_estoque(nota_fiscal):
         list: Lista de tuplas (local, tipo_movimento) que devem ser processadas
     """
     movimentacoes = []
-    
+    print("cnpj_emitente: ",nota_fiscal.cnpj_emitente)
+    print("cnpj_destinatario: ",nota_fiscal.cnpj_destinatario)
     # Apenas processar notas fiscais (tipo 1)
-    if nota_fiscal.tipo != 1:
+    if nota_fiscal.tipo >1:
         return movimentacoes
     
     cnpj_emitente = nota_fiscal.cnpj_emitente
@@ -56,7 +57,7 @@ def determinar_movimentacoes_estoque(nota_fiscal):
         movimentacoes.append(("Estoque Matriz", "entrada"))
     
     # Caso 2: Compra externa para Filial
-    elif cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario in CNPJS_FILIAIS:
+    elif cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario in CNPJS_MATRIZ:
         movimentacoes.append((f"Estoque Filial {cnpj_destinatario}", "entrada"))
     
     # Caso 3: Transferência Matriz -> Filial
@@ -130,9 +131,9 @@ class NotaFiscal(db.Model):
         self.cancelada = cancelada
         if xml_data and tipo is None:
             self.tipo = self.extrair_tipo_nota(xml_data)
-            if self.tipo is 'nfe':
+            if self.tipo == 'nfe':
                 self.processar_nf()
-            elif self.tipo is 'cte':
+            elif self.tipo == 'cte':
                 self.processar_cte()
             
         if xml_data and tipo == 'nfe':
@@ -871,9 +872,53 @@ class NotaFiscal(db.Model):
             usuario_id: ID do usuário realizando a importação
             centro_custo_id: ID do centro de custo (opcional)
             observacao: Observação para a importação (opcional)
+        
+        Returns:
+            dict: Dicionário com estatísticas da operação
         """
+        estatisticas = {
+            'total_processados': 0,
+            'total_importados': 0,
+            'total_nao_vinculados': 0,
+            'total_ja_importados': 0,
+            'itens_com_erro': []
+        }
+        
         for item in self.itens:
-            item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)   
+            estatisticas['total_processados'] += 1
+            
+            # Verificar se já foi importado
+            if item.importado_estoque:
+                estatisticas['total_ja_importados'] += 1
+                continue
+            
+            # Verificar se tem material vinculado
+            if not item.material_id:
+                estatisticas['total_nao_vinculados'] += 1
+                estatisticas['itens_com_erro'].append({
+                    'item_id': item.id,
+                    'descricao': item.descricao,
+                    'erro': 'Item não vinculado a um material do sistema'
+                })
+                continue
+            
+            # Tentar importar
+            sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(
+                usuario_id=usuario_id, 
+                centro_custo_id=centro_custo_id, 
+                observacao=observacao
+            )
+            
+            if sucesso:
+                estatisticas['total_importados'] += 1
+            else:
+                estatisticas['itens_com_erro'].append({
+                    'item_id': item.id,
+                    'descricao': item.descricao,
+                    'erro': mensagem
+                })
+        
+        return estatisticas   
     def importar_pendentes_com_material(self, usuario_id, centro_custo_id=None, observacao=None):
         """
         Importa e vincula itens pendentes que já têm material vinculado.
@@ -893,10 +938,12 @@ class NotaFiscal(db.Model):
         
         # Inicializar estatísticas
         estatisticas = {
+            'total_processados': 0,
+            'total_importados': 0,
+            'total_nao_vinculados': 0,
+            'total_ja_importados': 0,
             'total_itens_vinculados': 0,
             'total_itens_ja_vinculados': 0,
-            'total_itens_importados': 0,
-            'total_itens_ja_importados': 0,
             'itens_com_erro': []
         }
         itens_processados = set()
@@ -926,6 +973,7 @@ class NotaFiscal(db.Model):
         
         # ETAPA 2: Importar todos os itens (originais + similares recém-vinculados)
         logger.info(f'Iniciando importação de {len(todos_itens_para_importar)} itens para o estoque')
+        estatisticas['total_processados'] = len(todos_itens_para_importar)
         NotaFiscalItem.importar_lista_itens(
             itens_para_importar=todos_itens_para_importar,
             nota_fiscal=self,
@@ -934,6 +982,12 @@ class NotaFiscal(db.Model):
             observacao=observacao,
             itens_processados=itens_processados,
             estatisticas=estatisticas
+        )
+        
+        # Calcular total de não vinculados
+        estatisticas['total_nao_vinculados'] = sum(
+            1 for item in todos_itens_para_importar 
+            if not item.material_id
         )
         
         return estatisticas
@@ -1077,7 +1131,7 @@ class NotaFiscalItem(db.Model):
                             NotaFiscalItem.unidade.like(f'%{self.unidade}%'),
                             NotaFiscalItem.material_id==None).all()
         print(f'itens: {len(itens)}')
-        self.importar_para_estoque()
+        sucesso, mensagem, estatisticas_item = self.importar_para_estoque()
         print(f'itens a ser vinculados e importado estoque: {len(itens)}')
         
         for item in itens:
@@ -1088,7 +1142,7 @@ class NotaFiscalItem(db.Model):
             movimentacoes = determinar_movimentacoes_estoque(item.nota_fiscal)
             for local, tipo_movimento in movimentacoes:
                 if not item.importado_estoque:
-                    item.importar_para_estoque(local=local, tipo_movimento=tipo_movimento)
+                    sucesso, mensagem, estatisticas_item = item.importar_para_estoque(local=local, tipo_movimento=tipo_movimento)
                 else:
                     print(f'item {item.id} ja foi importado para o estoque')
             
@@ -1105,37 +1159,64 @@ class NotaFiscalItem(db.Model):
             observacao: Observação adicional para a movimentação
             
         Returns:
-            tuple: (bool, str) - (Sucesso, Mensagem)
+            tuple: (bool, str, dict) - (Sucesso, Mensagem, Estatísticas)
         """
+        estatisticas = {
+            'processado': True,
+            'importado': False,
+            'nao_vinculado': False,
+            'ja_importado': False,
+            'erro': None
+        }
+        
+        # Verificar se já foi importado
+        if self.importado_estoque:
+            estatisticas['ja_importado'] = True
+            return (False, "Item já foi importado para o estoque.", estatisticas)
+        
+        # Verificar se tem material vinculado
+        if not self.material_id:
+            estatisticas['nao_vinculado'] = True
+            estatisticas['erro'] = 'Item não vinculado a um material do sistema'
+            return (False, "Este item não está vinculado a um material do sistema.", estatisticas)
+        
         # Determinar todas as movimentações necessárias
         movimentacoes = determinar_movimentacoes_estoque(self.nota_fiscal)
         
         if not movimentacoes:
+            print(f'Não há movimentações determinadas')
             # Se não há movimentações determinadas, usar valores padrão
-            return self.importar_para_estoque(
+            sucesso, mensagem, stats = self.importar_para_estoque(
                 usuario_id=usuario_id,
                 centro_custo_id=centro_custo_id,
                 observacao=observacao,
                 local='Estoque Matriz',
                 tipo_movimento='entrada'
             )
+            estatisticas.update(stats)
+            if sucesso:
+                estatisticas['importado'] = True
+            return (sucesso, mensagem, estatisticas)
         
         # Processar todas as movimentações
         resultados = []
         for local, tipo_movimento in movimentacoes:
-            resultado = self.importar_para_estoque(
+            sucesso, mensagem, stats = self.importar_para_estoque(
                 usuario_id=usuario_id,
                 centro_custo_id=centro_custo_id,
                 observacao=observacao,
                 local=local,
                 tipo_movimento=tipo_movimento
             )
-            resultados.append(resultado)
+            resultados.append((sucesso, mensagem, stats))
+            estatisticas.update(stats)
         
+        print(f'resultados: {resultados}')
         # Verificar se houve erro em alguma movimentação
-        for sucesso, mensagem in resultados:
+        for sucesso, mensagem, stats in resultados:
             if not sucesso:
-                return (False, mensagem)
+                estatisticas['erro'] = mensagem
+                return (False, mensagem, estatisticas)
         
         # Marcar como importado após processar todas as movimentações com sucesso
         self.importado_estoque = True
@@ -1154,7 +1235,9 @@ class NotaFiscalItem(db.Model):
                 self.movimentacao_estoque_id = ultima_mov.id
         self.save()
         
-        return resultados[-1] if resultados else (True, "Item importado com sucesso")  
+        estatisticas['importado'] = True
+        resultado_final = resultados[-1] if resultados else (True, "Item importado com sucesso", estatisticas)
+        return (resultado_final[0], resultado_final[1], estatisticas)  
     def importar_para_estoque(self, usuario_id=None, centro_custo_id=None, observacao=None, local=None, tipo_movimento=None):
         """
         Importa o item da nota fiscal para o estoque
@@ -1167,20 +1250,31 @@ class NotaFiscalItem(db.Model):
             tipo_movimento: Tipo de movimento 'entrada' ou 'saida' (opcional, será determinado automaticamente se não informado)
             
         Returns:
-            tuple: (bool, str) - (Sucesso, Mensagem)
+            tuple: (bool, str, dict) - (Sucesso, Mensagem, Estatísticas)
         """
         inicio = datetime.now()
         from models.estoque import Estoque, MovimentacaoEstoque
         
+        estatisticas = {
+            'processado': True,
+            'importado': False,
+            'nao_vinculado': False,
+            'ja_importado': False,
+            'erro': None
+        }
+        
         # Verificar se o item tem um material vinculado
         if not self.material_id:
-            return (False, "Este item não está vinculado a um material do sistema.")
+            estatisticas['nao_vinculado'] = True
+            estatisticas['erro'] = 'Item não vinculado a um material do sistema'
+            return (False, "Este item não está vinculado a um material do sistema.", estatisticas)
         
         # Se local e tipo_movimento não foram informados, determinar automaticamente
         # Neste caso, verificar se já foi importado para evitar duplicação
         if local is None or tipo_movimento is None:
             if self.importado_estoque:
-                return (False, "Item já foi importado para o estoque.")
+                estatisticas['ja_importado'] = True
+                return (False, "Item já foi importado para o estoque.", estatisticas)
             
             movimentacoes = determinar_movimentacoes_estoque(self.nota_fiscal)
             if not movimentacoes:
@@ -1303,9 +1397,11 @@ class NotaFiscalItem(db.Model):
                     
                     # Adicionar mensagem sobre a criação do EPI
                     mensagem_extra = f" Material identificado como EPI. Registro de EPI criado automaticamente."
-                    return (True, f"Item importado com sucesso. {self.quantidade} {self.unidade or ''} adicionado(s) ao estoque. Estoque anterior: {quantidade_anterior}, Estoque atual: {quantidade_nova}{mensagem_extra}")
+                    estatisticas['importado'] = True
+                    return (True, f"Item importado com sucesso. {self.quantidade} {self.unidade or ''} adicionado(s) ao estoque. Estoque anterior: {quantidade_anterior}, Estoque atual: {quantidade_nova}{mensagem_extra}", estatisticas)
             
-            return (True, f"Item importado com sucesso. {self.quantidade} {self.unidade or ''} adicionado(s) ao estoque. Estoque anterior: {quantidade_anterior}, Estoque atual: {quantidade_nova}")
+            estatisticas['importado'] = True
+            return (True, f"Item importado com sucesso. {self.quantidade} {self.unidade or ''} adicionado(s) ao estoque. Estoque anterior: {quantidade_anterior}, Estoque atual: {quantidade_nova}", estatisticas)
             
         except Exception as e:
             import traceback
@@ -1318,7 +1414,8 @@ class NotaFiscalItem(db.Model):
             self.dados_adicionais = str(e)
             self.save()
             
-            return (False, f"Erro ao importar item para estoque: {str(e)}")
+            estatisticas['erro'] = str(e)
+            return (False, f"Erro ao importar item para estoque: {str(e)}", estatisticas)
     
     @staticmethod
     def buscar_itens_similares_todas_notas(codigo, descricao):
@@ -1465,6 +1562,20 @@ class NotaFiscalItem(db.Model):
             itens_processados: Set de IDs de itens já processados
             estatisticas: Dicionário com estatísticas da operação
         """
+        # Garantir que todas as chaves necessárias existam
+        if 'total_importados' not in estatisticas:
+            estatisticas['total_importados'] = 0
+        if 'total_ja_importados' not in estatisticas:
+            estatisticas['total_ja_importados'] = 0
+        if 'total_nao_vinculados' not in estatisticas:
+            estatisticas['total_nao_vinculados'] = 0
+        if 'total_itens_importados' not in estatisticas:
+            estatisticas['total_itens_importados'] = 0
+        if 'total_itens_ja_importados' not in estatisticas:
+            estatisticas['total_itens_ja_importados'] = 0
+        if 'itens_com_erro' not in estatisticas:
+            estatisticas['itens_com_erro'] = []
+        
         for item_para_importar in itens_para_importar:
             if item_para_importar.id in itens_processados:
                 if item_para_importar.importado_estoque:
@@ -1473,13 +1584,14 @@ class NotaFiscalItem(db.Model):
             
             if item_para_importar.material_id:
                 if not item_para_importar.importado_estoque:
-                    sucesso, mensagem = item_para_importar.importar_para_estoque_automatico(
+                    sucesso, mensagem, stats = item_para_importar.importar_para_estoque_automatico(
                         usuario_id=usuario_id,
                         centro_custo_id=centro_custo_id,
                         observacao=observacao or f"Importação automática da NF {nota_fiscal.numero_nf} de {nota_fiscal.nome_emitente}"
                     )
                     if sucesso:
                         estatisticas['total_itens_importados'] += 1
+                        estatisticas['total_importados'] += 1
                         logger.info(f'Item {item_para_importar.id} importado para o estoque')
                     else:
                         estatisticas['itens_com_erro'].append({
@@ -1490,6 +1602,9 @@ class NotaFiscalItem(db.Model):
                         logger.error(f'Erro ao importar item {item_para_importar.id}: {mensagem}')
                 else:
                     estatisticas['total_itens_ja_importados'] += 1
+                    estatisticas['total_ja_importados'] += 1
+            else:
+                estatisticas['total_nao_vinculados'] += 1
             
             itens_processados.add(item_para_importar.id)
     def __repr__(self):
