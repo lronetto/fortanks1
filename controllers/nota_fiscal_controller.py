@@ -4402,7 +4402,8 @@ def tabela_notas_fiscais():
     # Calcular valor total das notas filtradas
     valor_total_raw = db.session.query(
         func.coalesce(func.sum(NotaFiscal.valor_total), 0)
-    ).select_from(NotaFiscal).filter(
+    ).select_from(NotaFiscal).join(NotaFiscalItem).filter(
+        NotaFiscalItem.nf_id == NotaFiscal.id,
         *query._where_criteria
     ).scalar()
     
