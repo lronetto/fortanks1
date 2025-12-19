@@ -144,10 +144,10 @@ def importar_todas_pendentes():
 
         for nota_fiscal in notas_fiscais:
             notas_processadas += 1
-            estatisticas = nota_fiscal.importar_itens_para_estoque()
-            if estatisticas.get("total_importados", 0) > 0:
+            nota_fiscal.importar_itens_para_estoque()
+            if nota_fiscal.estatisticas.get("total_importados", 0) > 0:
                 notas_importadas += 1
-                itens_importados += estatisticas["total_importados"]
+                itens_importados += nota_fiscal.estatisticas["total_importados"]
 
         if itens_importados > 0:
             flash(
