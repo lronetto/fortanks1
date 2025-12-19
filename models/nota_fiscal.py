@@ -70,6 +70,18 @@ def determinar_movimentacoes_estoque(nota_fiscal):
         movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "saida"))
         movimentacoes.append(("Estoque Matriz", "entrada"))
     
+    elif cnpj_emitente in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario not in CNPJS_MATRIZ_FILIAIS:
+        if cnpj_emitente in CNPJS_MATRIZ:
+            if nota_fiscal.tipo == 1:
+                movimentacoes.append(("Estoque Matriz", "saida"))
+            else:
+                movimentacoes.append(("Estoque Matriz", "entrada"))
+        if cnpj_emitente in CNPJS_FILIAIS:
+            if nota_fiscal.tipo == 1:
+                movimentacoes.append(("Estoque Filial {cnpj_emitente}", "saida"))
+            else:
+                movimentacoes.append(("Estoque Filial {cnpj_emitente}", "entrada"))
+    
     return movimentacoes
 def get_xml_text(element, xpath, ns):
     """
