@@ -122,6 +122,8 @@ class NotaFiscal(db.Model):
     cancelada = False
     pdf = None
     inserido = False
+    existente = False
+    log_info = None
     
     def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False,tipo=None):
         self.xml_data = xml_data
@@ -143,7 +145,7 @@ class NotaFiscal(db.Model):
                 
         if xml_data and tipo == 'cte':
             print(f'NotaFiscal cte')
-            self.processar_cte()
+            return self,self.processar_cte()
              
         if chave_acesso:
             nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==chave_acesso).first()
@@ -281,21 +283,23 @@ class NotaFiscal(db.Model):
         total = len(notas.xml_datas)
         i=0
         existente=0
+        inseridos=0
         notas_log = []
         if total > 0:
             
             for xml_data in notas.xml_datas:
                 nf = NotaFiscal(xml_data=xml_data,tipo=tipo)
-                existente+=(1 if nf.inserido else 0)
+                existente+=(1 if nf.existente else 0)
+                inseridos+=(1 if nf.inserido else 0)
                 i+=1
                 # Coletar informações de log da nota processada
                 if hasattr(nf, 'log_info') and nf.log_info:
                     notas_log.append(nf.log_info)
         log = {
-            'data_ini': data_inicial,
-            'data_fim': data_final,
+            'arquivei': notas.log_info,
             'total': total,
             'existentes': existente,
+            'inseridos': inseridos,
             'tipo': tipo,
             'notas_processadas': i,
             'notas': notas_log
@@ -343,7 +347,7 @@ class NotaFiscal(db.Model):
             self.inserido = True
             log['inserido'] = True
             self.log_info = log
-            return self
+            return log
         except Exception as e:
             logger.error(f"Erro ao processar CT-e: {str(e)}")
             log['erro'] = str(e)
@@ -354,6 +358,7 @@ class NotaFiscal(db.Model):
         Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
         self.inserido = False
+        self.existente = False
         log = {
                 'existente': False,
                 'inserido': False,
@@ -404,8 +409,9 @@ class NotaFiscal(db.Model):
                     nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
                     nf.save()
                 
-                nf.log_info = log
-                return nf
+                self.existente = True
+                self.log_info = log
+                return nf   
             
             #self.xml_data=self.xml_data
             self.numero_nf=dados_nf.get('numero')
@@ -438,16 +444,14 @@ class NotaFiscal(db.Model):
                 item_fiscal.save()
             self.vincular_automaticamente()
             db.session.refresh(self)
-            if self.cnpj_emitente not in CNPJS_MATRIZ_FILIAIS:
-                print(f'importando itens para estoque')
-                self.importar_itens_para_estoque()
+            self.importar_itens_para_estoque()
             
 
             self.inserido = True
             log['inserido'] = True
+            log['estatisticas'] = self.estatisticas
             self.log_info = log
-            return self
-
+            
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
             log['erro'] = str(e)
@@ -917,8 +921,7 @@ class NotaFiscal(db.Model):
                     'descricao': item.descricao,
                     'erro': mensagem
                 })
-        
-        return estatisticas   
+        self.estatisticas = estatisticas   
     def importar_pendentes_com_material(self, usuario_id, centro_custo_id=None, observacao=None):
         """
         Importa e vincula itens pendentes que já têm material vinculado.
@@ -1162,6 +1165,8 @@ class NotaFiscalItem(db.Model):
             tuple: (bool, str, dict) - (Sucesso, Mensagem, Estatísticas)
         """
         estatisticas = {
+            'nota_fiscal_id': self.nota_fiscal.id,
+            'item_id': self.id,
             'processado': True,
             'importado': False,
             'nao_vinculado': False,

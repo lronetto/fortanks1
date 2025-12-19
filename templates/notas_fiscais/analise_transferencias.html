@@ -124,19 +124,42 @@
             // Delegação para garantir funcionamento após atualização da tabela
             $('#tabela-transferencias-ajax').on('click', '.pagination a', function(e) {
                 e.preventDefault();
-                carregarTabelaAjax($(this).attr('href'));
+                // Preservar filtros e enviar a página clicada
+                let href = $(this).attr('href') || '';
+                let params = new URLSearchParams(href.split('?')[1] || '');
+                let page = params.get('page');
+                let formParams = $('form').serialize();
+                if (page) {
+                    formParams += (formParams ? '&' : '') + 'page=' + encodeURIComponent(page);
+                }
+                carregarTabelaAjax(formParams);
             });
-            $('form').on('submit', function(e) {
-                e.preventDefault();
-                let url = '/notas-fiscais/analise-transferencias/ajax?' + $(this).serialize();
-                carregarTabelaAjax(url);
-            });
-            function carregarTabelaAjax(url) {
-                $('#tabela-transferencias-ajax').html('<div class="text-center p-4"><span class="spinner-border"></span> Carregando...</div>');
-                $.get(url, function(data) {
-                    $('#tabela-transferencias-ajax').html(data);
+            function carregarTabelaAjax(params) {
+                let url = '/notas-fiscais/analise-transferencias/ajax'
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    data: params,
+                    contentType: 'application/x-www-form-urlencoded',
+                    headers: {
+                        'X-CSRF-Token': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(data) {
+                       // console.log(data);
+                        $('#tabela-transferencias-ajax').html(data);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Erro ao carregar tabela:', error);
+                    }
                 });
             }
+            $('form').on('submit', function(e) {
+                e.preventDefault();
+                carregarTabelaAjax($(this).serialize());
+               
+            });
+            
             
             // Exportar Excel
             $('#btn-exportar-excel').on('click', function() {

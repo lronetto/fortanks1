@@ -258,7 +258,7 @@
                 width: '100%',
                 dropdownParent: $('#modal-produto-composto'),
                 ajax: {
-                    url: "/estoque/api/listar",
+                    url: "/produto-composto/api/itens-estoque",
                     dataType: 'json',
                     delay: 250,
                     data: function(params) {
@@ -318,10 +318,10 @@
             reader.readAsDataURL(file);
         }
         
-        function adicionarLinhaTabela(estoqueId,quantidade,nomeItem) {
+        function adicionarLinhaTabela(estoqueId,quantidade,nomeItem,tipo) {
             console.log('adicionarLinhaTabela');
             const newRow = `
-                <tr data-estoque-id="${estoqueId}">
+                <tr data-estoque-id="${estoqueId}" data-tipo="${tipo}">
                     <td>${nomeItem}</td>
                     <td><input type="text" class="form-control form-control-sm quantidade-componente" value="${quantidade}"></td>
                     <td class="text-center">
@@ -345,6 +345,7 @@
             
             const estoqueId = selectedOption.id;
             const nomeItem = selectedOption.text;
+            const tipo = selectedOption.tipo;
 
             // Verifica se o item já foi adicionado
             if ($(`#tabela-componentes tbody tr[data-estoque-id="${estoqueId}"]`).length > 0) {
@@ -352,7 +353,7 @@
                 return;
             }
             
-            adicionarLinhaTabela(estoqueId,quantidade,nomeItem);
+            adicionarLinhaTabela(estoqueId,quantidade,nomeItem,tipo);
 
             // Limpa os campos
             select.val(null).trigger('change');
@@ -373,9 +374,13 @@
                 
                 console.log(`Componente - Estoque ID: ${row.data('estoque-id')}, Valor original: "${quantidadeValor}", Valor convertido: ${quantidade}`);
                 
+                const estoqueId = row.data('estoque-id');
+                const tipo = row.data('tipo');
                 componentes.push({
-                    estoque_id: parseInt(row.data('estoque-id')),
-                    quantidade: quantidade
+                    // Pode ser number (estoque_id) ou string (ex: "material:123")
+                    estoque_id: String(estoqueId),
+                    quantidade: quantidade,
+                    tipo: tipo
                 });
             });
 

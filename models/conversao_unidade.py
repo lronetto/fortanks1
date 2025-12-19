@@ -46,6 +46,7 @@ def get_conversao_unidade(unidade_entrada, unidade_saida):
         conversao = ConversaoUnidade.query.filter_by(unidade_entrada=unidade_saida, unidade_saida=unidade_entrada).first()
         if conversao:
             return 1.0 / conversao.fator
+    return False
                         
 class ConversaoUnidade(db.Model):
     """Modelo para armazenar as conversões de unidades."""

@@ -882,7 +882,7 @@ def api_historico_saldo_estoque(estoque_id):
             elif mov.tipo_movimento == 'ajuste':
                 # Calcular diferença do ajuste e aplicar ao saldo agregado
                 diferenca = mov.quantidade - saldo_anterior_estoque
-                saldo_acumulado += diferenca
+                #saldo_acumulado += diferenca
                 saldos_estoques[estoque_id_mov] = mov.quantidade
             
             historico_data.append({

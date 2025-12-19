@@ -8,10 +8,49 @@ import logging
 import base64
 from PIL import Image
 import io
+from sqlalchemy import or_, func, and_
+from sqlalchemy.orm import joinedload
 
 logger = logging.getLogger(__name__)
 
 produto_composto_bp = Blueprint('produto_composto', __name__, url_prefix='/produto-composto')
+
+
+def _resolver_estoque_id_para_componente(estoque_id_raw):
+    """
+    Resolve o identificador vindo do Select2:
+    - "123" / 123  -> estoque_id (int) existente
+    - "material:45" -> cria/busca Estoque(tipo_item='material') e retorna estoque_id (int)
+    """
+    if estoque_id_raw is None:
+        raise ValueError("estoque_id não informado")
+
+    # Pode vir como string (ex: "material:123") ou número
+    estoque_id_txt = str(estoque_id_raw).strip()
+    if estoque_id_txt.startswith("material:"):
+        material_id_txt = estoque_id_txt.split("material:", 1)[1].strip()
+        if not material_id_txt.isdigit():
+            raise ValueError("material_id inválido no estoque_id")
+        material_id = int(material_id_txt)
+
+        material = Material.query.get_or_404(material_id)
+        estoque = Estoque.query.filter_by(material_id=material.id, tipo_item='material').first()
+        if not estoque:
+            estoque = Estoque(
+                material_id=material.id,
+                tipo_item='material',
+                quantidade=0,
+                localizacao='Estoque Matriz',
+                usuario_id=getattr(current_user, "id", None),
+            )
+            db.session.add(estoque)
+            db.session.flush()
+        return estoque.id
+
+    # fallback: id numérico de Estoque
+    if not estoque_id_txt.isdigit():
+        raise ValueError("estoque_id inválido")
+    return int(estoque_id_txt)
 
 def comprimir_imagem_base64(imagem_base64, max_size=(400, 300), quality=70):
     """
@@ -255,7 +294,19 @@ def salvar():
             
             # Adicionar ou atualizar componentes
             for item in componentes_data:
-                estoque = Estoque.query.get_or_404(item['estoque_id'])
+                tipo = item.get('tipo')
+                if tipo == 'material':
+                    estoque=Estoque(
+                            material_id=item.get('estoque_id'),
+                            quantidade=0,
+                            tipo_item='material',
+                            localizacao='Estoque Matriz',
+                        )
+                    estoque.save()
+                    estoque.refresh()
+                else:
+                    estoque_id = item.get('estoque_id')
+                    estoque = Estoque.query.get_or_404(estoque_id)
                 
                 # Log para debug dos valores de quantidade
                 logger.info(f"Adicionando componente - Estoque ID: {item['estoque_id']}, Quantidade: {item['quantidade']} (tipo: {type(item['quantidade'])})")
@@ -323,7 +374,19 @@ def salvar():
             # Adicionar componentes
             componentes_data = data.get('componentes', [])
             for item in componentes_data:
-                estoque = Estoque.query.get_or_404(item['estoque_id'])
+                tipo = item.get('tipo')
+                if tipo == 'material':
+                    estoque=Estoque(
+                            material_id=item.get('estoque_id'),
+                            quantidade=0,
+                            tipo_item='material',
+                            localizacao='Estoque Matriz',
+                        )
+                    estoque.save()
+                    estoque.refresh()
+                else:
+                    estoque_id = item.get('estoque_id')
+                    estoque = Estoque.query.get_or_404(estoque_id)
                 
                     
                 # Log para debug dos valores de quantidade
@@ -337,7 +400,9 @@ def salvar():
         if not estoque:
             estoque = Estoque(produto_composto=produto,
                               quantidade=0,
-                              tipo_item='produto_composto')
+                              tipo_item='produto_composto',
+                              localizacao='Estoque Matriz',
+                              )
             db.session.add(estoque)
             db.session.flush()
         
@@ -521,3 +586,75 @@ def api_verificar_estoque(id):
         'disponibilidade': resultado,
         'disponivel_total': all(item['disponivel'] for item in disponibilidade)
     })
+
+
+@produto_composto_bp.route('/api/itens-estoque', methods=['GET'])
+@login_required
+def api_itens_estoque():
+    """
+    API para Select2: lista itens de estoque que podem ser componentes de Produto Composto.
+    Retorna Materiais (Estoque.material_id) e Produtos Compostos (Estoque.ProdComp_id).
+    """
+    search_term = (request.args.get('q') or '').strip()
+
+    query = (
+        Estoque.query.options(
+            joinedload(Estoque.material).joinedload(Material.unidade_obj),
+            joinedload(Estoque.produto_composto),
+        )
+        .filter(or_(Estoque.material_id.isnot(None), Estoque.ProdComp_id.isnot(None)))
+        .outerjoin(Material, Estoque.material_id == Material.id)
+        .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
+    )
+
+    if search_term:
+        like = f'%{search_term}%'
+        query = query.filter(
+            or_(
+                Material.nome.ilike(like),
+                Material.codigo.ilike(like),
+                ProdutoComposto.nome.ilike(like),
+            )
+        )
+
+    itens = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).limit(200).all()
+
+    results = []
+    for item in itens:
+        if item.material:
+            sigla = item.material.unidade_obj.sigla if (item.material.unidade_obj and hasattr(item.material.unidade_obj, "sigla")) else None
+            unidade_txt = f" ({sigla})" if sigla else ""
+            codigo_txt = f"{item.material.codigo} - " if item.material.codigo else ""
+            # [E] = material contido em estoque.py (ou seja, existe registro em Estoque)
+            text = f"[E] {codigo_txt}{item.material.nome}{unidade_txt}"
+            results.append({'id': item.id, 'text_sort': item.material.nome.lower(), 'text': text,'tipo': 'estoque'})
+        elif item.produto_composto:
+            text = f"[P] {item.produto_composto.nome}"
+            results.append({'id': item.id, 'text_sort': item.produto_composto.nome.lower(), 'text': text,'tipo': 'produto_composto'})
+
+    # [M] = material em material.py que não está em estoque.py (sem registro em Estoque)
+    materiais_query = (
+        Material.query.options(joinedload(Material.unidade_obj))
+        .filter(Material.ativo.is_(True))
+        .outerjoin(
+            Estoque,
+            and_(
+                Estoque.material_id == Material.id,
+                Estoque.tipo_item == 'material',
+            ),
+        )
+        .filter(Estoque.id.is_(None))
+    )
+    if search_term:
+        like = f'%{search_term}%'
+        materiais_query = materiais_query.filter(or_(Material.nome.ilike(like), Material.codigo.ilike(like)))
+
+    materiais_sem_estoque = materiais_query.order_by(Material.nome.asc()).limit(200).all()
+    for material in materiais_sem_estoque:
+        sigla = material.unidade_obj.sigla if (material.unidade_obj and hasattr(material.unidade_obj, "sigla")) else None
+        unidade_txt = f" ({sigla})" if sigla else ""
+        codigo_txt = f"{material.codigo} - " if material.codigo else ""
+        results.append({'id': f"material:{material.id}", 'text_sort': material.nome.lower(), 'text': f"[M] {codigo_txt}{material.nome}{unidade_txt}",'tipo': 'material'})
+
+    results.sort(key=lambda x: x['text_sort'])
+    return jsonify({'results': results})

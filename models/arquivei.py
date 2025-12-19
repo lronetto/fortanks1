@@ -22,7 +22,7 @@ class Arquivei:
     xml_datas = []
     cancelada = False
     tipo = 'nfe'
-    
+    log_info = None
     def __init__(self, data_inicial=None, data_final=None, chave_acesso=None, xml_data=None,cancelamento=False,send=False,tipo='nfe'):
         self.chave_acesso = chave_acesso
         self.xml_data = xml_data
@@ -200,7 +200,7 @@ class Arquivei:
                 'notas_ignoradas': notas_ignoradas,
                 'tipo': self.tipo
             }
-            Logs(local='arquivei', data=datetime.now(), texto=json.dumps(log))
+            self.log_info = log
         else: 
             try:
                 error_data = response.json()
@@ -208,6 +208,7 @@ class Arquivei:
                     error_msg += f' - {error_data["error"]}'
                 if 'message' in error_data:
                     error_msg += f' - {error_data["message"]}'
+                self.log_info['erro'] = error_msg
                 return jsonify({'success': False, 'message': error_msg})
             except:
                 pass

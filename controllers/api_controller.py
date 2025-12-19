@@ -14,6 +14,21 @@ from models.material import Material
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
+# Registrar APIs por modelo (centralizadas em controllers/api/*)
+try:
+    from controllers.api.nota_fiscal_api import register_api as register_nota_fiscal_api  # noqa: E402
+    register_nota_fiscal_api(api_bp)
+except Exception:
+    # Evitar quebrar import do app caso dependências opcionais não estejam instaladas
+    pass
+
+try:
+    from controllers.api.material_api import register as register_material_api  # noqa: E402
+    # material_api.register espera um blueprint; aqui registramos as rotas sob /api/materiais/...
+    register_material_api(api_bp)
+except Exception:
+    pass
+
 @api_bp.route('/tanques/<int:tanque_id>/proximo-sequencial', methods=['GET'])
 def proximo_sequencial(tanque_id):
     """Retorna o próximo número sequencial para uma peça em um tanque"""
