@@ -19,6 +19,7 @@ import logging
 from models.upload import Upload
 from models.arquivei import Arquivei
 from models.logs import Logs
+from models.conversao_unidade import get_conversao_unidade
 import xmltodict
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -862,17 +863,14 @@ class NotaFiscal(db.Model):
                 # Se encontrar, vincular
                 if item_anterior:
                     print(f'item_anterior: {item_anterior.unidade} {item.unidade}')
-                    if comparar_unidades(item.unidade, item_anterior.unidade):
-                        print(f'fator_conversao: {item_anterior.fator_conversao_aplicado}')
-                        fator_conversao = item_anterior.fator_conversao_aplicado
-                        if fator_conversao:
-                            item.fator_conversao_aplicado = fator_conversao
-                            itens_vinculados += 1
-                            item.material_id = item_anterior.material_id
-                        else:
-                            item.fator_conversao_aplicado = fator_conversao
-                            itens_vinculados += 1
-                        item.save()
+                    fator = get_conversao_unidade(item.unidade, item_anterior.unidade)
+                    if fator:
+                        item.fator_conversao_aplicado = fator
+                        itens_vinculados += 1
+                        item.material_id = item_anterior.material_id                      
+                    else:
+                        item.fator_conversao_aplicado = None
+                    item.save()
         log={
             "itens": len(self.itens),
             "itens_vinculados": itens_vinculados

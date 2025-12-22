@@ -619,6 +619,11 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
     Processa um anexo PDF: tenta identificar por código de barras ou nome do arquivo.
     Retorna True se processou com sucesso, False caso contrário.
     """
+    anexo['codbarras'] = {
+        'qtd': 0,
+        'codigos': [],
+        'erro': None
+    }
     # Ignora arquivos que contenham 'protocolo' no nome
     if 'protocolo' in filename.lower():
         logging.info(f"Ignorando arquivo de protocolo: {filename}")
@@ -629,20 +634,19 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
         img = convert_from_bytes(payload, 500,poppler_path='/usr/bin')[0]
     except Exception as e:
         logging.error(f"Erro ao converter o arquivo {filename} para imagem: {e}")
+        anexo['codbarras']['erro'].append(str(e))
         img = convert_from_bytes(payload, 500)[0]
+        
     
-    
+
     try:
         decs = decode(img)
     except Exception as e:
         logging.error(f"Erro ao decodificar o arquivo {filename}: {e}")
-    decs = decode(img)
+        anexo['codbarras']['erro'].append(str(e))
     
-    anexo['codbarras'] = {
-        'qtd': len(decs),
-        'codigos': []
-    }
-    
+   
+    anexo['codbarras']['qtd'] = len(decs)
     dec1 = None
     tiponf = None
     

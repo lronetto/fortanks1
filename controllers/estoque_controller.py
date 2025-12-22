@@ -543,7 +543,8 @@ def movimentacoes():
             data_fim_obj = None
     
     # Obter resultados paginados
-    movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.desc()).paginate(page=page, per_page=20, error_out=False)
+    query = query.order_by(MovimentacaoEstoque.id.desc())
+    movimentacoes = query.paginate(page=page, per_page=20, error_out=False)
     
     # Calcular totais de movimentações (usando a mesma query filtrada, mas sem paginação)
     query_totais = MovimentacaoEstoque.query.join(Estoque)
