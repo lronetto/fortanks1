@@ -626,10 +626,10 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
     
     logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
     try:
-        img = convert_from_bytes(payload, 500)[0]
+        img = convert_from_bytes(payload, 500,poppler_path='/usr/bin')[0]
     except Exception as e:
         logging.error(f"Erro ao converter o arquivo {filename} para imagem: {e}")
-        img = convert_from_bytes(payload, 500,poppler_path='/usr/bin')[0]
+        img = convert_from_bytes(payload, 500)[0]
     
     
     try:

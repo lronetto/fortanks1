@@ -98,6 +98,7 @@ def meu_dashboard():
    
     exibir_card_resumo_notas = False
     resumo_notas = []
+    contratos = []
     if current_user.colaborador and current_user.colaborador.departamento_id == 4:
         exibir_card_resumo_notas = True
         resumo_notas = card_resumo_notas()
