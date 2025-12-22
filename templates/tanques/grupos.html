@@ -1,0 +1,261 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Grupos de Tanques - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-users"></i> Gerenciamento de Grupos de Tanques</h1>
+    <p class="mb-4">Organize tanques em grupos para facilitar a gestão</p>
+
+    <div class="row">
+        <!-- Lista de Grupos -->
+        <div class="col-lg-8">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                    <h6 class="m-0 font-weight-bold text-primary">Grupos Cadastrados</h6>
+                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo">
+                        <i class="fas fa-plus"></i> Novo Grupo
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if grupos %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Descrição</th>
+                                    <th>Tanques</th>
+                                    <th>Cor</th>
+                                    <th class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for grupo in grupos %}
+                                <tr>
+                                    <td>
+                                        <span class="badge" style="background-color: {{ grupo.cor or '#007bff' }};">
+                                            <i class="{{ grupo.icone or 'fas fa-water' }}"></i> {{ grupo.nome }}
+                                        </span>
+                                    </td>
+                                    <td>{{ grupo.descricao or '-' }}</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-secondary">{{ grupo.total_tanques }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge" style="background-color: {{ grupo.cor or '#007bff' }}; width: 30px; height: 20px; display: inline-block;"></span>
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-info btn-sm btn-visualizar-grupo" 
+                                            data-id="{{ grupo.id }}"
+                                            data-nome="{{ grupo.nome }}"
+                                            title="Visualizar Tanques">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-primary btn-sm btn-editar-grupo" 
+                                            data-id="{{ grupo.id }}"
+                                            data-nome="{{ grupo.nome }}"
+                                            data-descricao="{{ grupo.descricao or '' }}"
+                                            data-cor="{{ grupo.cor or '#007bff' }}"
+                                            data-icone="{{ grupo.icone or 'fas fa-water' }}"
+                                            title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <form action="{{ url_for('tanque.excluir_grupo', id=grupo.id) }}" method="POST"
+                                            class="d-inline form-excluir-grupo">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> Nenhum grupo cadastrado. Crie um novo grupo para começar.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações -->
+        <div class="col-lg-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Informações</h6>
+                </div>
+                <div class="card-body">
+                    <p>Os grupos permitem organizar tanques relacionados, facilitando:</p>
+                    <ul>
+                        <li>Visualização agrupada</li>
+                        <li>Relatórios por grupo</li>
+                        <li>Gestão organizada</li>
+                    </ul>
+                    <p class="mb-0">
+                        <a href="{{ url_for('tanque.index') }}" class="btn btn-secondary btn-sm">
+                            <i class="fas fa-arrow-left"></i> Voltar para Tanques
+                        </a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Novo/Editar Grupo -->
+<div class="modal fade" id="modalNovoGrupo" tabindex="-1" aria-labelledby="modalNovoGrupoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoGrupoLabel">Novo Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formGrupo" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="grupoId" name="grupo_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nomeGrupo" class="form-label">Nome do Grupo *</label>
+                        <input type="text" class="form-control" id="nomeGrupo" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricaoGrupo" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricaoGrupo" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="corGrupo" class="form-label">Cor</label>
+                                <input type="color" class="form-control form-control-color" id="corGrupo" name="cor" value="#007bff">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="iconeGrupo" class="form-label">Ícone (classe FontAwesome)</label>
+                                <input type="text" class="form-control" id="iconeGrupo" name="icone" value="fas fa-water" placeholder="fas fa-water">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvarGrupo">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Visualizar Tanques do Grupo -->
+<div class="modal fade" id="modalVisualizarGrupo" tabindex="-1" aria-labelledby="modalVisualizarGrupoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarGrupoLabel">Tanques do Grupo: <span id="nomeGrupoVisualizar"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="listaTanquesGrupo">
+                    <p class="text-muted">Carregando...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Botão de editar grupo
+        document.querySelectorAll('.btn-editar-grupo').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.getElementById('grupoId').value = this.getAttribute('data-id');
+                document.getElementById('nomeGrupo').value = this.getAttribute('data-nome');
+                document.getElementById('descricaoGrupo').value = this.getAttribute('data-descricao');
+                document.getElementById('corGrupo').value = this.getAttribute('data-cor');
+                document.getElementById('iconeGrupo').value = this.getAttribute('data-icone');
+                document.getElementById('modalNovoGrupoLabel').textContent = 'Editar Grupo';
+                document.getElementById('formGrupo').action = `/tanques/grupos/${this.getAttribute('data-id')}/editar`;
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalNovoGrupo'));
+                modal.show();
+            });
+        });
+        
+        // Botão de visualizar grupo
+        document.querySelectorAll('.btn-visualizar-grupo').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const grupoId = this.getAttribute('data-id');
+                const grupoNome = this.getAttribute('data-nome');
+                document.getElementById('nomeGrupoVisualizar').textContent = grupoNome;
+                
+                // Buscar tanques do grupo
+                fetch(`/api/tanques/grupo/${grupoId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const listaDiv = document.getElementById('listaTanquesGrupo');
+                        if (data.success && data.tanques && data.tanques.length > 0) {
+                            let html = '<div class="table-responsive"><table class="table table-sm"><thead><tr><th>ID</th><th>Nome</th><th>Sistema</th><th>Ações</th></tr></thead><tbody>';
+                            data.tanques.forEach(tanque => {
+                                html += `<tr>
+                                    <td>${tanque.id}</td>
+                                    <td>${tanque.nome}</td>
+                                    <td>${tanque.sistema}</td>
+                                    <td>
+                                        <form action="/tanques/grupos/${grupoId}/remover-tanque/${tanque.id}" method="POST" class="d-inline">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Remover este tanque do grupo?')">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>`;
+                            });
+                            html += '</tbody></table></div>';
+                            listaDiv.innerHTML = html;
+                        } else {
+                            listaDiv.innerHTML = '<p class="text-muted">Nenhum tanque neste grupo.</p>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Erro ao buscar tanques:', error);
+                        document.getElementById('listaTanquesGrupo').innerHTML = '<p class="text-danger">Erro ao carregar tanques.</p>';
+                    });
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalVisualizarGrupo'));
+                modal.show();
+            });
+        });
+        
+        // Resetar modal ao fechar
+        document.getElementById('modalNovoGrupo').addEventListener('hidden.bs.modal', function() {
+            document.getElementById('formGrupo').reset();
+            document.getElementById('grupoId').value = '';
+            document.getElementById('modalNovoGrupoLabel').textContent = 'Novo Grupo';
+            document.getElementById('formGrupo').action = '{{ url_for("tanque.grupos") }}';
+        });
+        
+        // Confirmação para exclusão
+        document.querySelectorAll('.form-excluir-grupo').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (confirm('Tem certeza que deseja excluir este grupo? Os tanques não serão removidos, apenas a associação com o grupo.')) {
+                    form.submit();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
+

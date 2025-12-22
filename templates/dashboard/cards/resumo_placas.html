@@ -1,6 +1,13 @@
 <div class="card shadow mb-4">
-    <div class="card-header py-3">
+    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
         <h6 class="m-0 font-weight-bold text-info">Resumo de Placas</h6>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="agruparPorGrupo" 
+                   {% if request.args.get('agrupar_por_grupo') == 'true' %}checked{% endif %}>
+            <label class="form-check-label" for="agruparPorGrupo">
+                Agrupar por Grupo
+            </label>
+        </div>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -16,7 +23,7 @@
                         <th>NFs emitidas</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="tbodyResumoPlacas">
                     {% for item in cards.resumo_placas.dados %}
                     <tr>
                         <td>{{ item.tanque }}</td>
@@ -33,3 +40,63 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const checkboxAgrupar = document.getElementById('agruparPorGrupo');
+    if (checkboxAgrupar) {
+        checkboxAgrupar.addEventListener('change', function() {
+            const agrupar = this.checked;
+            
+            // Mostrar loading
+            const tbody = document.getElementById('tbodyResumoPlacas');
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+            
+            // Fazer requisição AJAX
+            fetch(`/dashboard/api/resumo-placas?agrupar_por_grupo=${agrupar}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Atualizar tabela
+                        let html = '';
+                        if (data.dados && data.dados.length > 0) {
+                            data.dados.forEach(item => {
+                                html += `
+                                    <tr>
+                                        <td>${item.tanque}</td>
+                                        <td>${item.concretadas}</td>
+                                        <td>${item.acabadas}</td>
+                                        <td>${item.transportadas}</td>
+                                        <td>${item.em_estoque}</td>
+                                        <td>${item.prontas_transportar}</td>
+                                        <td>${item.nfs_emitidas}</td>
+                                    </tr>
+                                `;
+                            });
+                        } else {
+                            html = '<tr><td colspan="7" class="text-center text-muted">Nenhum dado encontrado</td></tr>';
+                        }
+                        tbody.innerHTML = html;
+                        
+                        // Atualizar URL sem recarregar a página
+                        const url = new URL(window.location);
+                        if (agrupar) {
+                            url.searchParams.set('agrupar_por_grupo', 'true');
+                        } else {
+                            url.searchParams.delete('agrupar_por_grupo');
+                        }
+                        window.history.pushState({}, '', url);
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar dados</td></tr>';
+                        alert('Erro ao carregar dados: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar resumo de placas:', error);
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar dados</td></tr>';
+                    alert('Erro ao carregar dados. Verifique o console.');
+                });
+        });
+    }
+});
+</script>

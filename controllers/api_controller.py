@@ -341,6 +341,32 @@ def adicionar_lote_pecas(tanque_id):
             'error': str(e)
         }), 500
 
+@api_bp.route('/tanques/grupo/<int:grupo_id>', methods=['GET'])
+def obter_tanques_grupo(grupo_id):
+    """Retorna os tanques de um grupo"""
+    try:
+        from models.grupo_tanque import GrupoTanque
+        grupo = GrupoTanque.query.get_or_404(grupo_id)
+        
+        tanques = []
+        for tanque in grupo.tanques:
+            tanques.append({
+                'id': tanque.id,
+                'nome': tanque.nome,
+                'sistema': tanque.sistema,
+                'dimensoes': tanque.dimensoes
+            })
+        
+        return jsonify({
+            'success': True,
+            'tanques': tanques
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @api_bp.route('/tanques/<int:tanque_id>', methods=['GET'])
 def obter_tanque(tanque_id):
     """Retorna os detalhes de um tanque"""

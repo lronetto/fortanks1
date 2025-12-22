@@ -23,6 +23,7 @@ from .contrato import Contrato
 from .cliente import Cliente
 from .endereco import Endereco
 from .tanque import Tanque
+from .grupo_tanque import GrupoTanque
 from .peca import Peca
 from .tipo_peca import TipoPeca
 from .concretagem import Concretagem, ConcretagemTanque

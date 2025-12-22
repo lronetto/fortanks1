@@ -21,6 +21,7 @@ from models.unidade import Unidade
 from models.conversao_unidade import ConversaoUnidade
 from models.dados_analiticos import DadoAnalitico, PL_CUSTO, PL_RECOP
 from models.epi import EntregaEPI
+from models.grupo_tanque import GrupoTanque
 
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -90,9 +91,10 @@ def meu_dashboard():
     
     exibir_card_resumo_placas = False
     resumo_placas = []
+    agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'false').lower() == 'true'
     if current_user.colaborador and current_user.colaborador.departamento_id == 4:
         exibir_card_resumo_placas = True
-        resumo_placas = card_resumo_placas()
+        resumo_placas = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo)
    
     exibir_card_resumo_notas = False
     resumo_notas = []
@@ -414,9 +416,196 @@ def acerto_data_concretagem():
             except (json.JSONDecodeError, TypeError, AttributeError):
                 continue
     return True
-def card_resumo_placas():
-    tanques = Tanque.query.all()
+def card_resumo_placas(agrupar_por_grupo=False):
+    """
+    Gera resumo de placas por tanque ou agrupado por grupo de tanques
+    """
+    tanques = Tanque.query.order_by(Tanque.contrato_id, Tanque.nome).all()
     dados_especificos = []
+    
+    if agrupar_por_grupo:
+        # Agrupar por grupo de tanques
+        grupos_dict = {}
+        tanques_sem_grupo = []
+        
+        for tanque in tanques:
+            if tanque.grupos:
+                # Tanque pertence a um ou mais grupos
+                for grupo in tanque.grupos:
+                    if grupo.id not in grupos_dict:
+                        grupos_dict[grupo.id] = {
+                            'nome': grupo.nome,
+                            'tanques': [],
+                            'concretadas': 0,
+                            'acabadas': 0,
+                            'transportadas': 0,
+                            'total_pecas': 0,
+                            'em_estoque': 0,
+                            'prontas_transportar': 0,
+                            'nfs_emitidas': 0
+                        }
+                    grupos_dict[grupo.id]['tanques'].append(tanque)
+            else:
+                # Tanque sem grupo
+                tanques_sem_grupo.append(tanque)
+        
+        # Processar grupos
+        for grupo_id, grupo_data in grupos_dict.items():
+            for tanque in grupo_data['tanques']:
+                resultado = db.session.query(
+                    func.count(Peca.id).label('total_pecas'),
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    Peca.data_concretagem.isnot(None),
+                                    Peca.data_concretagem != ''
+                                ),
+                                1
+                            ),
+                            else_=0
+                        )
+                    ).label('concretadas'),
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    Peca.qualidade.isnot(None),
+                                    Peca.qualidade != '',
+                                    func.json_extract(Peca.qualidade, '$.acabamento').isnot(None),
+                                    func.json_extract(Peca.qualidade, '$.acabamento') != '',
+                                    func.json_extract(Peca.qualidade, '$.acabamento') != 'null'
+                                ),
+                                1
+                            ),
+                            else_=0
+                        )
+                    ).label('acabadas'),
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    Peca.qualidade.isnot(None),
+                                    Peca.qualidade != '',
+                                    func.json_extract(Peca.qualidade, '$.transporte.data_transporte') !='null'
+                                ),
+                                1
+                            ),
+                            else_=0
+                        )
+                    ).label('transportadas')
+                ).filter(
+                    Peca.tanque_id == tanque.id
+                ).first()
+                
+                total_pecas = resultado.total_pecas or 0
+                concretadas = resultado.concretadas or 0
+                acabadas = resultado.acabadas or 0
+                transportadas = resultado.transportadas or 0
+                
+                grupo_data['total_pecas'] += total_pecas
+                grupo_data['concretadas'] += concretadas
+                grupo_data['acabadas'] += acabadas
+                grupo_data['transportadas'] += transportadas
+                
+                nfs_emitidas_total = db.session.query(func.sum(NotaFiscalItem.quantidade)).\
+                    join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).\
+                    join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
+                    filter(Tanque.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
+                if nfs_emitidas_total:
+                    grupo_data['nfs_emitidas'] += nfs_emitidas_total
+            
+            grupo_data['em_estoque'] = grupo_data['concretadas'] - grupo_data['transportadas']
+            grupo_data['prontas_transportar'] = grupo_data['acabadas'] - grupo_data['transportadas']
+            grupo_data['nfs_emitidas'] = "{:,.0f}".format(grupo_data['nfs_emitidas'])
+            
+            dados_especificos.append({
+                'tanque': f"Grupo: {grupo_data['nome']}",
+                'concretadas': grupo_data['concretadas'],
+                'acabadas': grupo_data['acabadas'],
+                'transportadas': grupo_data['transportadas'],
+                'total_pecas': grupo_data['total_pecas'],
+                'em_estoque': grupo_data['em_estoque'],
+                'prontas_transportar': grupo_data['prontas_transportar'],
+                'nfs_emitidas': grupo_data['nfs_emitidas']
+            })
+        
+        # Processar tanques sem grupo
+        for tanque in tanques_sem_grupo:
+            resultado = db.session.query(
+                func.count(Peca.id).label('total_pecas'),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Peca.data_concretagem.isnot(None),
+                                Peca.data_concretagem != ''
+                            ),
+                            1
+                        ),
+                        else_=0
+                    )
+                ).label('concretadas'),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Peca.qualidade.isnot(None),
+                                Peca.qualidade != '',
+                                func.json_extract(Peca.qualidade, '$.acabamento').isnot(None),
+                                func.json_extract(Peca.qualidade, '$.acabamento') != '',
+                                func.json_extract(Peca.qualidade, '$.acabamento') != 'null'
+                            ),
+                            1
+                        ),
+                        else_=0
+                    )
+                ).label('acabadas'),
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Peca.qualidade.isnot(None),
+                                Peca.qualidade != '',
+                                func.json_extract(Peca.qualidade, '$.transporte.data_transporte') !='null'
+                            ),
+                            1
+                        ),
+                        else_=0
+                    )
+                ).label('transportadas')
+            ).filter(
+                Peca.tanque_id == tanque.id
+            ).first()
+            
+            total_pecas = resultado.total_pecas or 0
+            concretadas = resultado.concretadas or 0
+            acabadas = resultado.acabadas or 0
+            transportadas = resultado.transportadas or 0
+            
+            em_estoque = concretadas - transportadas
+            prontas_transportar = acabadas - transportadas
+            nfs_emitidas_total = db.session.query(func.sum(NotaFiscalItem.quantidade)).\
+                join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).\
+                join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
+                filter(Tanque.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
+            if nfs_emitidas_total is None:
+                nfs_emitidas_total = 0
+            
+            dados_especificos.append({
+                'tanque': tanque.nome,
+                'concretadas': concretadas,
+                'acabadas': acabadas,
+                'transportadas': transportadas,
+                'total_pecas': total_pecas,
+                'em_estoque': em_estoque,
+                'prontas_transportar': prontas_transportar,
+                'nfs_emitidas': "{:,.0f}".format(nfs_emitidas_total)
+            })
+        
+        return dados_especificos
+    
+    # Modo normal: um registro por tanque
     #acerto_data_concretagem()
     for tanque in tanques:
         # Query única otimizada: calcular todas as contagens em uma única query
@@ -492,6 +681,31 @@ def card_resumo_placas():
         })
     print(dados_especificos)
     return dados_especificos
+
+@dashboard_bp.route('/api/resumo-placas')
+@login_required
+def api_resumo_placas():
+    """
+    API para retornar resumo de placas com opção de agrupar por grupo
+    """
+    agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'false').lower() == 'true'
+    
+    if not (current_user.colaborador and current_user.colaborador.departamento_id == 4):
+        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
+    
+    try:
+        dados = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo)
+        return jsonify({
+            'success': True,
+            'dados': dados,
+            'agrupar_por_grupo': agrupar_por_grupo
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 def card_resumo_notas():
     projetos = Contrato.query.all()
     dados_especificos = []

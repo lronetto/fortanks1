@@ -16,7 +16,22 @@ def get_pecas(filtros):
     nome_peca = filtros.get('nome_peca', '').strip()
     pecas_query = Peca.query.join(Tanque)
     if nome_peca:
-        pecas_query = pecas_query.filter(Peca.nome.ilike(f'%{nome_peca}%'))
+        pecas_query = pecas_query.filter(\
+            Peca.nome.ilike(f'%{nome_peca}%'))
+    if filtro == 'acabadas':
+        pecas_query = pecas_query.filter(\
+            Peca.qualidade.isnot(None), \
+            Peca.qualidade.notlike(f'%"acabamento": null%'))
+    elif filtro == 'transportadas':
+        pecas_query = pecas_query.filter(\
+            Peca.qualidade.isnot(None), \
+            Peca.qualidade.notlike(f'%"data_transporte": null%'))
+    elif filtro == 'acabada_nao_transportada':
+        print('acabada_nao_transportada')
+        pecas_query = pecas_query.filter(\
+            Peca.qualidade.isnot(None), \
+            Peca.qualidade.notlike(f'%"acabamento": null%'), \
+            Peca.qualidade.like(f'%"data_transporte": null%'))
     pecas_query = pecas_query.all()
     tanques = Tanque.query.order_by(Tanque.nome).all()
     pecas = []
@@ -44,16 +59,7 @@ def get_pecas(filtros):
         else:
             peca.nota_fiscal = None
         pecas.append(peca)
-    # Aplicar filtro
-    if filtro == 'acabadas':
-        pecas = [p for p in pecas if p.acabamento]
-        pecas.sort(key=lambda x: x.acabamento, reverse=True)
-    elif filtro == 'transportadas':
-        pecas = [p for p in pecas if p.transporte]
-        pecas.sort(key=lambda x: x.transporte, reverse=True)
-    elif filtro == 'acabada_nao_transportada':
-        pecas = [p for p in pecas if p.acabamento and not p.transporte]
-        pecas.sort(key=lambda x: x.transporte, reverse=True)
+   
     return pecas
 @acabamento_transporte_bp.route('/')
 def index():

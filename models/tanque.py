@@ -42,6 +42,7 @@ class Tanque(db.Model):
     
     # Relacionamentos
     contrato = db.relationship('Contrato',back_populates='tanques',foreign_keys=[contrato_id])
+    grupos = db.relationship('GrupoTanque', secondary='tanques_grupos', back_populates='tanques')
     
     @property
     def tipo_tanque(self):

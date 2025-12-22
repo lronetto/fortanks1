@@ -19,6 +19,8 @@ from config.config import Config
 from models.database import db
 from models.nota_fiscal import NotaFiscal, CNPJS_MATRIZ
 from models.peca import Peca
+from models.tanque import Tanque
+from models.logs import Logs
 import json
 
 # Inicializa o app Flask e o contexto
@@ -36,7 +38,7 @@ def main():
     
     # Caminho do arquivo
     base_dir = os.path.dirname(__file__)
-    xlsx_path = os.path.join(base_dir, 'INSPEÇÃO DE PISTA -  NEREDA - PRIMARIO.xlsx')
+    xlsx_path = os.path.join(base_dir, 'INSPEÇÃO DE PISTA.xlsx')
     
     if not os.path.exists(xlsx_path):
         print(f"Arquivo não encontrado: {xlsx_path}")
@@ -75,7 +77,12 @@ def main():
             pecas = []
             log = {
                 'total_pecas': 0,
-                'ignoradas': 0,
+                'novas': 0,
+                'atualizadas': 0,
+                'ignoradas': {
+                    'quantidade': 0,
+                    'lista': []
+                },
                 'linhas_ignoradas': []
             }
             def serialize_value(value):
@@ -111,23 +118,23 @@ def main():
                         }
                     },
                 }
+                if row.iloc[5] == '-' or pd.isna(row.iloc[5]) or row.iloc[5] == None:
+                    log['ignoradas']['quantidade'] += 1
+                    log['ignoradas']['lista'].append(index)
+                    continue
                 # Usa iloc para acessar por posição (evita warnings de depreciação)
                 tipo_tanque_raw = row.iloc[4] if len(row) > 4 else None
                 tipo_tanque = str(tipo_tanque_raw).strip() if pd.notna(tipo_tanque_raw) else None
-                
-                if tipo_tanque and tipo_tanque in ['REATOR 1', 'REATOR 2', 'REATOR 3', 'REATOR 4', 'REATOR 5', 'REATOR 6', 'REATOR 7', 'REATOR 8', 'REATOR 9', 'REATOR 10','REATOR 11','REATOR 12','NEREDA']:
-                    peca['tanque_id'] = 1
-                elif tipo_tanque and tipo_tanque in ['PRIMARIO 1', 'PRIMARIO 2', 'PRIMARIO 3']:
-                    peca['tanque_id'] = 4
-                elif tipo_tanque and tipo_tanque in ['TANQUE AERADOR 1','TANQUE AERADOR 2','TANQUE AERADOR']:
-                    peca['tanque_id'] = 2
-                
-                if peca['tanque_id'] is None:
-                    log['ignoradas'] += 1
-                    log['linhas_ignoradas'].append(index)
+                peca['tipo_tanque'] = None
+                tanque = Tanque.query.filter(Tanque.nome.like(f'%{tipo_tanque}%')).first()
+               # print(f"indice: {index} - procurado tanque: {tipo_tanque} - Tanque encontrado: {tanque.nome}")
+                if tanque:
+                    peca['tanque_id'] = tanque.id
+                else:
+                    log['ignoradas']['quantidade'] += 1
+                    log['ignoradas']['lista'].append(index)
                     continue
-
-                # Trata valores nan do pandas
+                                                # Trata valores nan do pandas
                 nome_part1 = row.iloc[5] if len(row) > 5 and pd.notna(row.iloc[5]) else ''
                 nome_part2 = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ''
                 seq_match = re.search(r'\d+', str(nome_part2)) if nome_part2 != '' else None
@@ -147,7 +154,7 @@ def main():
                 # Converte para datetime object ou None para salvar no MySQL
                 if data_raw and hasattr(data_raw, 'strftime'):
                     peca['data_concretagem'] = data_raw
-                elif data_raw and isinstance(data_raw, str):
+                elif data_raw and isinstance(data_raw, str) and data_raw != '-':
                     # Tenta parsear string no formato DD/MM/YYYY
                     try:
                         peca['data_concretagem'] = datetime.datetime.strptime(data_raw, '%d/%m/%Y')
@@ -155,7 +162,7 @@ def main():
                         peca['data_concretagem'] = None
                 else:
                     peca['data_concretagem'] = None
-                
+                #print(f"indice: {row.iloc[0]} - data_concretagem: {peca['data_concretagem']}")
                 peca['tipo'] = row.iloc[9] if len(row) > 9 and pd.notna(row.iloc[9]) else None
                 peca['qualidade']['pista'] = row.iloc[18] if len(row) > 18 and pd.notna(row.iloc[18]) else None
                 peca['qualidade']['acabamento'] = row.iloc[17] if len(row) > 17 and pd.notna(row.iloc[17]) else None
@@ -176,7 +183,7 @@ def main():
                     peca['qualidade']['transporte']['data_transporte'] = None
                 # Trata nan do pandas antes de usar na query
                 nota_raw = row.iloc[22] if len(row) > 23 else None
-                if pd.notna(nota_raw):
+                if pd.notna(nota_raw) and nota_raw != '-':
                     peca['qualidade']['transporte']['nota'] = int(nota_raw) if isinstance(nota_raw, (int, float)) else nota_raw
                 else:
                     peca['qualidade']['transporte']['nota'] = None
@@ -186,7 +193,7 @@ def main():
                 if peca['qualidade']['transporte']['nota'] is not None and pd.notna(peca['qualidade']['transporte']['nota']) and type(peca['qualidade']['transporte']['nota']) == str:
                     nota = NotaFiscal.query.filter(NotaFiscal.numero_nf==int(peca['qualidade']['transporte']['nota']),NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).first()
                 if nota:
-                    print(f"Nota encontrada: {nota.numero_nf}")
+                   # print(f"Nota encontrada: {nota.numero_nf}")
                     cte = NotaFiscal.query.filter(NotaFiscal.dados_adicionais.like(f'%chave_nf:{nota.chave_acesso}%')).first()
                     if cte:
                         peca['qualidade']['transporte']['cte'] = cte.numero_nf
@@ -206,8 +213,9 @@ def main():
                                                 Peca.numero_sequencial==peca['numero_sequencial'], 
                                                 Peca.tanque_id==peca['tanque_id']).first()
                 if not peca_existe:
-                    print(f"Peça não encontrada: {peca['nome']} {peca['numero_sequencial']} {peca['tanque_id']}")
+                    #print(f"Peça não encontrada: {peca['nome']} {peca['numero_sequencial']} {peca['tanque_id']}")
                     qualidade_serializada = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
+                    log['novas'] += 1
                     peca_dict = Peca(
                         tanque_id=peca['tanque_id'],
                         nome=peca['nome'],
@@ -219,14 +227,18 @@ def main():
                     )
                     peca_dict.save()
                 else:
-                    print(f"Peça já existe: {peca['nome']} {peca['numero_sequencial']} {peca['tanque_id']}")
+                    log['atualizadas'] += 1
+                    #print(f"Peça já existe: {peca['nome']} {peca['numero_sequencial']} {peca['tanque_id']}")
                     peca_existe.qualidade = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
                     peca_existe.data_concretagem = peca['data_concretagem']
                     peca_existe.tipo = peca['tipo']
                     peca_existe.numero_tanque = peca['numero_tanque']
                     peca_existe.save()
                     print(f"Peça atualizada: {peca['nome']} {peca['numero_sequencial']} {peca['tanque_id']}")
-                
+            print(f"Total de peças novas: {log['novas']}")
+            print(f"Total de peças atualizadas: {log['atualizadas']}")
+
+            Logs(local='ler_inspecao_cadastro', data=datetime.datetime.now(), texto=json.dumps(log))
         except Exception as e:
             print(f"Erro ao ler com pandas: {e}")
             

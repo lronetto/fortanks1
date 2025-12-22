@@ -99,6 +99,29 @@
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Lista de Tanques</h6>
             <div>
+                <div class="btn-group me-2" role="group">
+                    <button type="button" class="btn btn-success btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-file-excel"></i> Relatório Excel
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for contrato in contratos %}
+                        <li>
+                            <a class="dropdown-item" href="{{ url_for('tanque.relatorio_projeto_excel', contrato_id=contrato.id) }}">
+                                <i class="fas fa-file-excel"></i> {{ contrato.nome }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <button type="button" class="btn btn-info btn-sm me-2" id="btnAdicionarGrupo" style="display: none;" data-bs-toggle="modal" data-bs-target="#modalAdicionarGrupo">
+                    <i class="fas fa-layer-group"></i> Adicionar a Grupo
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo">
+                    <i class="fas fa-plus"></i> Novo Grupo
+                </button>
+                <a href="{{ url_for('tanque.grupos') }}" class="btn btn-secondary btn-sm me-2">
+                    <i class="fas fa-users"></i> Gerenciar Grupos
+                </a>
                 <button type="button" class="btn btn-success btn-sm" id="btnGerarRelatorio" style="display: none;">
                     <i class="fas fa-file-alt"></i> Gerar Relatório de Materiais
                 </button>
@@ -118,6 +141,7 @@
                             <th>ID</th>
                             <th>Contrato</th>
                             <th>Nome</th>
+                            <th>Grupo</th>
                             <th>Sistema</th>
                             <th>Dimensões</th>
                             <th>Altura Total</th>
@@ -151,6 +175,19 @@
                                 </a>
                             </td>
                             <td>{{ tanque.nome }}</td>
+                            <td>
+                                {% if tanque.grupos %}
+                                    {% for grupo in tanque.grupos %}
+                                        {% set cor_grupo = grupo.cor if grupo.cor else '#007bff' %}
+                                        {% set icone_grupo = grupo.icone if grupo.icone else 'fas fa-water' %}
+                                        <span class="badge" data-cor="{{ cor_grupo }}">
+                                            <i class="{{ icone_grupo }}"></i> {{ grupo.nome }}
+                                        </span>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
                             <td>{{ tanque.sistema }}</td>
                             <td style="max-width: 120px; word-break: break-word;">{{ tanque.dimensoes }}</td>
                             <td>{{ tanque.altura_total }} m</td>
@@ -172,12 +209,20 @@
                                     title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
+                                <button class="btn btn-warning btn-sm btn-duplicar-tanque" 
+                                    data-id="{{ tanque.id }}"
+                                    data-nome="{{ tanque.nome }}"
+                                    data-url="{{ url_for('tanque.duplicar', id=tanque.id) }}"
+                                    title="Duplicar">
+                                    <i class="fas fa-copy"></i>
+                                </button>
                                 <button class="btn btn-success btn-sm" title="Adicionar Peças"
                                     onclick="abrirModalAdicionarPecas('{{ tanque.id }}', '{{ tanque.nome }}')">
                                     <i class="fas fa-plus-circle"></i>
                                 </button>
                                 <form action="{{ url_for('tanque.excluir', id=tanque.id) }}" method="POST"
                                     class="d-inline form-excluir">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
                                         <i class="fas fa-trash"></i>
                                     </button>
@@ -374,6 +419,163 @@
         </div>
     </div>
 </div>
+
+<!-- Modal para Duplicar Tanque -->
+<div class="modal fade" id="modalDuplicarTanque" tabindex="-1" aria-labelledby="modalDuplicarTanqueLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDuplicarTanqueLabel">Duplicar Tanque: <span
+                        id="nomeTanqueDuplicar"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formDuplicarTanque">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="tanqueIdDuplicar" name="tanque_id">
+                    
+                    <div class="mb-3">
+                        <label for="quantidadeDuplicar" class="form-label">Quantidade de cópias</label>
+                        <input type="number" class="form-control" id="quantidadeDuplicar" name="quantidade" 
+                               min="1" max="100" value="1" required>
+                        <small class="form-text text-muted">Quantas cópias deseja criar deste tanque?</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formatoNome" class="form-label">Formato do nome</label>
+                        <select class="form-select" id="formatoNome" name="formato_nome">
+                            <option value="sequencial">Número sequencial na frente (1 - Nome, 2 - Nome, ...)</option>
+                            <option value="nome_zero">Nome com zero à esquerda (Nome 01, Nome 02, ...)</option>
+                            <option value="apenas_numero">Apenas número com zero (01, 02, 03, ...)</option>
+                            <option value="copia">Adicionar (Cópia) no final (Nome (Cópia), Nome (Cópia 2), ...)</option>
+                            <option value="sequencial_copia">Número sequencial + (Cópia) (1 - Nome (Cópia), 2 - Nome (Cópia), ...)</option>
+                        </select>
+                        <small class="form-text text-muted">Como os nomes das cópias serão formatados?</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="numeroInicial" class="form-label">Número inicial</label>
+                        <input type="number" class="form-control" id="numeroInicial" name="numero_inicial" 
+                               min="1" value="1" required>
+                        <small class="form-text text-muted">Número inicial para a sequência</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="renomearOriginal" name="renomear_original" value="1">
+                            <label class="form-check-label" for="renomearOriginal">
+                                Renomear tanque original para o primeiro número
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">Se marcado, o tanque original será renomeado para "Nome 01" e as cópias começarão em "Nome 02"</small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <strong>Prévia:</strong>
+                        <div id="previewNomes" class="mt-2">
+                            <small>As cópias serão criadas com os nomes acima.</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarDuplicar">
+                    <i class="fas fa-copy"></i> Duplicar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Criar Novo Grupo -->
+<div class="modal fade" id="modalNovoGrupo" tabindex="-1" aria-labelledby="modalNovoGrupoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoGrupoLabel">Novo Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formNovoGrupo" method="POST" action="{{ url_for('tanque.grupos') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nomeGrupo" class="form-label">Nome do Grupo *</label>
+                        <input type="text" class="form-control" id="nomeGrupo" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricaoGrupo" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricaoGrupo" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="corGrupo" class="form-label">Cor</label>
+                                <input type="color" class="form-control form-control-color" id="corGrupo" name="cor" value="#007bff">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="iconeGrupo" class="form-label">Ícone (classe FontAwesome)</label>
+                                <input type="text" class="form-control" id="iconeGrupo" name="icone" value="fas fa-water" placeholder="fas fa-water">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Criar Grupo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Tanques a Grupo -->
+<div class="modal fade" id="modalAdicionarGrupo" tabindex="-1" aria-labelledby="modalAdicionarGrupoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarGrupoLabel">Adicionar Tanques a Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAdicionarGrupo" method="POST" action="{{ url_for('tanque.adicionar_tanques_grupo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-3">
+                        <label for="grupoSelecionado" class="form-label">Selecione o Grupo</label>
+                        <select class="form-select" id="grupoSelecionado" name="grupo_id" required>
+                            <option value="">Selecione um grupo...</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo.id }}">{{ grupo.nome }} ({{ grupo.total_tanques }} tanques)</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Ou <a href="#" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo" onclick="document.getElementById('modalAdicionarGrupo').classList.remove('show');">crie um novo grupo</a></small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <strong>Tanques selecionados:</strong>
+                        <div id="tanquesSelecionadosList" class="mt-2">
+                            <small class="text-muted">Nenhum tanque selecionado</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Campos hidden para os IDs dos tanques selecionados serão adicionados via JavaScript -->
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarAdicionarGrupo">
+                    <i class="fas fa-plus"></i> Adicionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -534,15 +736,48 @@
         }
     }
 
-    // Função para atualizar visibilidade do botão de relatório
-    function atualizarBotaoRelatorio() {
+    // Função para atualizar visibilidade dos botões
+    function atualizarBotoes() {
         const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
         const btnRelatorio = document.getElementById('btnGerarRelatorio');
+        const btnAdicionarGrupo = document.getElementById('btnAdicionarGrupo');
+        
         if (checkboxes.length > 0) {
-            btnRelatorio.style.display = 'inline-block';
+            if (btnRelatorio) btnRelatorio.style.display = 'inline-block';
+            if (btnAdicionarGrupo) btnAdicionarGrupo.style.display = 'inline-block';
         } else {
-            btnRelatorio.style.display = 'none';
+            if (btnRelatorio) btnRelatorio.style.display = 'none';
+            if (btnAdicionarGrupo) btnAdicionarGrupo.style.display = 'none';
         }
+        
+        // Atualizar lista de tanques selecionados no modal
+        atualizarListaTanquesSelecionados();
+    }
+    
+    // Função para atualizar lista de tanques selecionados no modal
+    function atualizarListaTanquesSelecionados() {
+        const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
+        const listaDiv = document.getElementById('tanquesSelecionadosList');
+        
+        if (!listaDiv) return;
+        
+        if (checkboxes.length === 0) {
+            listaDiv.innerHTML = '<small class="text-muted">Nenhum tanque selecionado</small>';
+            return;
+        }
+        
+        let html = '<ul class="mb-0">';
+        checkboxes.forEach(checkbox => {
+            const row = checkbox.closest('tr');
+            if (row) {
+                // Nome está na 4ª coluna (após checkbox, ID, Contrato)
+                const nomeCell = row.querySelector('td:nth-child(4)');
+                const nome = nomeCell ? nomeCell.textContent.trim() : 'Tanque';
+                html += `<li><small>${nome}</small></li>`;
+            }
+        });
+        html += '</ul>';
+        listaDiv.innerHTML = html;
     }
 
     // Selecionar/Deselecionar todos
@@ -555,13 +790,13 @@
                 checkboxes.forEach(checkbox => {
                     checkbox.checked = selectAll.checked;
                 });
-                atualizarBotaoRelatorio();
+                atualizarBotoes();
             });
         }
         
         checkboxes.forEach(checkbox => {
             checkbox.addEventListener('change', function() {
-                atualizarBotaoRelatorio();
+                atualizarBotoes();
                 // Atualizar estado do "selecionar todos"
                 const allChecked = Array.from(checkboxes).every(cb => cb.checked);
                 const someChecked = Array.from(checkboxes).some(cb => cb.checked);
@@ -623,6 +858,12 @@
         // Configurar seleção de tanques
         setupSelectAll();
         
+        // Aplicar cores dos badges de grupos
+        document.querySelectorAll('.badge[data-cor]').forEach(badge => {
+            const cor = badge.getAttribute('data-cor');
+            badge.style.backgroundColor = cor;
+        });
+        
         // Botão de gerar relatório
         const btnGerarRelatorio = document.getElementById('btnGerarRelatorio');
         if (btnGerarRelatorio) {
@@ -645,16 +886,17 @@
                     { width: "50px", targets: 1 },  // ID
                     { width: "200px", targets: 2 }, // Contrato
                     { width: "120px", targets: 3 }, // Nome
-                    { width: "80px", targets: 4 },  // Sistema
-                    { width: "120px", targets: 5 }, // Dimensões
-                    { width: "90px", targets: 6 },  // Altura Total
-                    { width: "90px", targets: 7 },  // Altura Útil
-                    { width: "80px", targets: 8 },  // Quantidade
-                    { width: "100px", targets: 9 }, // Placas Normais
-                    { width: "110px", targets: 10 }, // Placas de Fecho
-                    { width: "80px", targets: 11 },  // Bainhas
-                    { width: "80px", targets: 12 },  // Item NF
-                    { width: "120px", targets: 13 }  // Ações
+                    { width: "150px", targets: 4 }, // Grupo
+                    { width: "80px", targets: 5 },  // Sistema
+                    { width: "120px", targets: 6 }, // Dimensões
+                    { width: "90px", targets: 7 },  // Altura Total
+                    { width: "90px", targets: 8 },  // Altura Útil
+                    { width: "80px", targets: 9 },  // Quantidade
+                    { width: "100px", targets: 10 }, // Placas Normais
+                    { width: "110px", targets: 11 }, // Placas de Fecho
+                    { width: "80px", targets: 12 },  // Bainhas
+                    { width: "80px", targets: 13 },  // Item NF
+                    { width: "120px", targets: 14 }  // Ações
                 ]
             });
         } else {
@@ -671,6 +913,166 @@
                 }
             });
         });
+
+        // Função para atualizar prévia dos nomes
+        function atualizarPreviewNomes() {
+            const tanqueNome = document.getElementById('nomeTanqueDuplicar').textContent;
+            const quantidade = parseInt(document.getElementById('quantidadeDuplicar').value) || 1;
+            const formatoNome = document.getElementById('formatoNome').value;
+            const numeroInicial = parseInt(document.getElementById('numeroInicial').value) || 1;
+            const renomearOriginal = document.getElementById('renomearOriginal').checked;
+            
+            const previewDiv = document.getElementById('previewNomes');
+            let previewHTML = '<ul class="mb-0">';
+            
+            // Se renomear original, mostrar primeiro o original renomeado
+            if (renomearOriginal) {
+                const numeroOriginal = numeroInicial;
+                let nomeOriginalFormatado = '';
+                
+                if (formatoNome === 'sequencial') {
+                    nomeOriginalFormatado = `${numeroOriginal} - ${tanqueNome}`;
+                } else if (formatoNome === 'nome_zero') {
+                    const numeroFormatado = numeroOriginal.toString().padStart(2, '0');
+                    nomeOriginalFormatado = `${tanqueNome} ${numeroFormatado}`;
+                } else if (formatoNome === 'apenas_numero') {
+                    const numeroFormatado = numeroOriginal.toString().padStart(2, '0');
+                    nomeOriginalFormatado = numeroFormatado;
+                } else if (formatoNome === 'copia') {
+                    nomeOriginalFormatado = `${tanqueNome} (Cópia ${numeroOriginal})`;
+                } else if (formatoNome === 'sequencial_copia') {
+                    nomeOriginalFormatado = `${numeroOriginal} - ${tanqueNome} (Cópia)`;
+                }
+                
+                previewHTML += `<li><small><strong>Original: ${nomeOriginalFormatado}</strong></small></li>`;
+            }
+            
+            // Mostrar cópias (começando do número inicial + 1 se renomear original)
+            const inicioCopias = renomearOriginal ? numeroInicial + 1 : numeroInicial;
+            const quantidadeCopias = renomearOriginal ? quantidade : quantidade;
+            
+            for (let i = 0; i < quantidadeCopias && i < 10; i++) {
+                const numeroAtual = inicioCopias + i;
+                let nomeFormatado = '';
+                
+                if (formatoNome === 'sequencial') {
+                    nomeFormatado = `${numeroAtual} - ${tanqueNome}`;
+                } else if (formatoNome === 'nome_zero') {
+                    const numeroFormatado = numeroAtual.toString().padStart(2, '0');
+                    nomeFormatado = `${tanqueNome} ${numeroFormatado}`;
+                } else if (formatoNome === 'apenas_numero') {
+                    const numeroFormatado = numeroAtual.toString().padStart(2, '0');
+                    nomeFormatado = numeroFormatado;
+                } else if (formatoNome === 'copia') {
+                    if (quantidade === 1) {
+                        nomeFormatado = `${tanqueNome} (Cópia)`;
+                    } else {
+                        nomeFormatado = `${tanqueNome} (Cópia ${numeroAtual})`;
+                    }
+                } else if (formatoNome === 'sequencial_copia') {
+                    nomeFormatado = `${numeroAtual} - ${tanqueNome} (Cópia)`;
+                }
+                
+                previewHTML += `<li><small>${nomeFormatado}</small></li>`;
+            }
+            
+            if (quantidadeCopias > 10) {
+                previewHTML += `<li><small><em>... e mais ${quantidadeCopias - 10} cópia(s)</em></small></li>`;
+            }
+            
+            previewHTML += '</ul>';
+            previewDiv.innerHTML = previewHTML;
+        }
+
+        // Função para abrir modal de duplicação
+        function abrirModalDuplicarTanque(tanqueId, tanqueNome) {
+            document.getElementById('tanqueIdDuplicar').value = tanqueId;
+            document.getElementById('nomeTanqueDuplicar').textContent = tanqueNome;
+            document.getElementById('quantidadeDuplicar').value = 1;
+            document.getElementById('formatoNome').value = 'sequencial';
+            document.getElementById('numeroInicial').value = 1;
+            document.getElementById('renomearOriginal').checked = false;
+            
+            atualizarPreviewNomes();
+            
+            const modal = new bootstrap.Modal(document.getElementById('modalDuplicarTanque'));
+            modal.show();
+        }
+
+        // Botão de duplicar tanque
+        document.querySelectorAll('.btn-duplicar-tanque').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tanqueId = this.getAttribute('data-id');
+                const tanqueNome = this.getAttribute('data-nome');
+                abrirModalDuplicarTanque(tanqueId, tanqueNome);
+            });
+        });
+
+        // Event listeners para atualizar prévia
+        const quantidadeInput = document.getElementById('quantidadeDuplicar');
+        const formatoSelect = document.getElementById('formatoNome');
+        const numeroInicialInput = document.getElementById('numeroInicial');
+        const renomearOriginalCheck = document.getElementById('renomearOriginal');
+        
+        if (quantidadeInput) {
+            quantidadeInput.addEventListener('input', atualizarPreviewNomes);
+        }
+        if (formatoSelect) {
+            formatoSelect.addEventListener('change', atualizarPreviewNomes);
+        }
+        if (numeroInicialInput) {
+            numeroInicialInput.addEventListener('input', atualizarPreviewNomes);
+        }
+        if (renomearOriginalCheck) {
+            renomearOriginalCheck.addEventListener('change', atualizarPreviewNomes);
+        }
+
+        // Botão de confirmar duplicação
+        const btnConfirmarDuplicar = document.getElementById('btnConfirmarDuplicar');
+        if (btnConfirmarDuplicar) {
+            btnConfirmarDuplicar.addEventListener('click', function() {
+                const form = document.getElementById('formDuplicarTanque');
+                const tanqueId = document.getElementById('tanqueIdDuplicar').value;
+                const quantidade = parseInt(document.getElementById('quantidadeDuplicar').value) || 1;
+                
+                if (quantidade < 1 || quantidade > 100) {
+                    alert('A quantidade deve ser entre 1 e 100.');
+                    return;
+                }
+                
+                // Construir URL usando o padrão das rotas
+                const url = `/tanques/duplicar/${tanqueId}`;
+                
+                // Criar formulário para enviar requisição POST
+                const submitForm = document.createElement('form');
+                submitForm.method = 'POST';
+                submitForm.action = url;
+                
+                // Adicionar CSRF token primeiro (garantir que está presente)
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = getCSRFToken();
+                submitForm.appendChild(csrfInput);
+                
+                // Adicionar todos os campos do formulário
+                const formData = new FormData(form);
+                for (const [key, value] of formData.entries()) {
+                    // Pular csrf_token se já foi adicionado acima
+                    if (key === 'csrf_token') {
+                        continue;
+                    }
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    submitForm.appendChild(input);
+                }
+                
+                document.body.appendChild(submitForm);
+                submitForm.submit();
+            });
+        }
 
         // Alternar entre as abas do modal (adição manual, importação, gerador)
         document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function (button) {
@@ -876,6 +1278,111 @@
             });
         } else {
             // console.warn('Elemento #modalAdicionarPecas não encontrado para listener shown.bs.modal.');
+        }
+        
+        // Botão de adicionar a grupo
+        const btnConfirmarAdicionarGrupo = document.getElementById('btnConfirmarAdicionarGrupo');
+        if (btnConfirmarAdicionarGrupo) {
+            btnConfirmarAdicionarGrupo.addEventListener('click', function() {
+                const form = document.getElementById('formAdicionarGrupo');
+                const grupoId = document.getElementById('grupoSelecionado').value;
+                const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
+                
+                if (!grupoId) {
+                    alert('Por favor, selecione um grupo.');
+                    return;
+                }
+                
+                if (checkboxes.length === 0) {
+                    alert('Por favor, selecione pelo menos um tanque.');
+                    return;
+                }
+                
+                // Limpar campos hidden anteriores
+                const camposAntigos = form.querySelectorAll('input[name="tanque_ids"]');
+                camposAntigos.forEach(campo => campo.remove());
+                
+                // Adicionar IDs dos tanques selecionados ao formulário
+                checkboxes.forEach(checkbox => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'tanque_ids';
+                    input.value = checkbox.value;
+                    form.appendChild(input);
+                });
+                
+                // Enviar formulário
+                form.submit();
+            });
+        }
+        
+        // Atualizar lista quando o modal for aberto
+        const modalAdicionarGrupo = document.getElementById('modalAdicionarGrupo');
+        if (modalAdicionarGrupo) {
+            modalAdicionarGrupo.addEventListener('show.bs.modal', function() {
+                atualizarListaTanquesSelecionados();
+            });
+            
+            // Atualizar lista quando checkboxes mudarem enquanto modal estiver aberto
+            document.querySelectorAll('.tanque-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    if (modalAdicionarGrupo.classList.contains('show')) {
+                        atualizarListaTanquesSelecionados();
+                    }
+                });
+            });
+        }
+        
+        // Criar novo grupo via AJAX
+        const formNovoGrupo = document.getElementById('formNovoGrupo');
+        if (formNovoGrupo) {
+            formNovoGrupo.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(formNovoGrupo);
+                const nome = formData.get('nome');
+                
+                if (!nome) {
+                    alert('O nome do grupo é obrigatório!');
+                    return;
+                }
+                
+                fetch('{{ url_for("tanque.grupos") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Adicionar novo grupo ao select
+                        const select = document.getElementById('grupoSelecionado');
+                        const option = document.createElement('option');
+                        option.value = data.grupo.id;
+                        option.textContent = `${data.grupo.nome} (${data.grupo.total_tanques} tanques)`;
+                        option.selected = true;
+                        select.appendChild(option);
+                        
+                        // Fechar modal de criar grupo
+                        const modalNovoGrupo = bootstrap.Modal.getInstance(document.getElementById('modalNovoGrupo'));
+                        if (modalNovoGrupo) modalNovoGrupo.hide();
+                        
+                        // Abrir modal de adicionar tanques
+                        const modalAdicionarGrupo = new bootstrap.Modal(document.getElementById('modalAdicionarGrupo'));
+                        modalAdicionarGrupo.show();
+                        
+                        alert(data.message);
+                    } else {
+                        alert('Erro ao criar grupo: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao criar grupo:', error);
+                    alert('Erro ao criar grupo. Verifique o console.');
+                });
+            });
         }
     });
 </script>
