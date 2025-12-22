@@ -638,15 +638,16 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
         img = convert_from_bytes(payload, 500)[0]
         
     
-
+    decs = []
     try:
         decs = decode(img)
+        anexo['codbarras']['qtd'] = len(decs)
     except Exception as e:
         logging.error(f"Erro ao decodificar o arquivo {filename}: {e}")
         anexo['codbarras']['erro'].append(str(e))
     
    
-    anexo['codbarras']['qtd'] = len(decs)
+    
     dec1 = None
     tiponf = None
     
