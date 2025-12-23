@@ -77,6 +77,9 @@
 <!-- Modal de Produção -->
 {% include 'produto_composto/modais/producao.html' %}
 
+<!-- Modal de Histórico de Custo -->
+{% include 'produto_composto/modais/historico_custo.html' %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -199,6 +202,9 @@
                     <button class="btn btn-success btn-circle btn-sm btn-produzir" data-id="${produto.id}" data-nome="${produto.nome}" data-estoque="${produto.estoque}" title="Produzir">
                         <i class="fas fa-industry"></i>
                     </button>
+                    <button class="btn btn-primary btn-circle btn-sm btn-historico-custo" data-id="${produto.id}" data-nome="${produto.nome}" title="Histórico de Custo">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
                     <button class="btn btn-info btn-circle btn-sm btn-editar" data-id="${produto.id}" title="Editar">
                         <i class="fas fa-edit"></i>
                     </button>
@@ -232,7 +238,8 @@
         });
     }
     function addEventos() {
-        
+        // Event listener para histórico de custo já está no modal
+        // Não precisa adicionar aqui pois está no script do modal
 
         $('#tabela-produtos-compostos tbody').on('click', '.btn-duplicar', function(e) {
             console.log('btn-duplicar');

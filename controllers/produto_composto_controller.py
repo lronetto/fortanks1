@@ -2,7 +2,7 @@ from datetime import datetime
 from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file, current_app
 from io import BytesIO
 from werkzeug.exceptions import abort
-from models import db, ProdutoComposto, Estoque, Material, ProdutoCompostoItem, MovimentacaoEstoque
+from models import db, ProdutoComposto, Estoque, Material, ProdutoCompostoItem, MovimentacaoEstoque, NotaFiscal, NotaFiscalItem
 from flask_login import login_required, current_user
 import logging
 import base64
@@ -10,6 +10,8 @@ from PIL import Image
 import io
 from sqlalchemy import or_, func, and_
 from sqlalchemy.orm import joinedload
+from decimal import Decimal
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -658,3 +660,258 @@ def api_itens_estoque():
 
     results.sort(key=lambda x: x['text_sort'])
     return jsonify({'results': results})
+
+def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, caminho_atual=None):
+    """
+    Função recursiva para expandir todos os componentes de um produto composto
+    até chegar apenas em materiais, considerando produtos compostos aninhados.
+    Usa caminho_atual para evitar loops infinitos (mesmo produto na mesma cadeia).
+    """
+    if caminho_atual is None:
+        caminho_atual = []
+    
+    # Evitar loops infinitos - se o produto já está no caminho atual, há um ciclo
+    if produto_id in caminho_atual:
+        logger.warning(f"Loop detectado no produto composto {produto_id}. Caminho: {caminho_atual}")
+        return []
+    
+    # Adicionar ao caminho atual
+    novo_caminho = caminho_atual + [produto_id]
+    
+    produto = ProdutoComposto.query.get(produto_id)
+    if not produto:
+        return []
+    
+    componentes_materiais = []
+    
+    for componente in produto.componentes:
+        if not componente.estoque:
+            continue
+            
+        quantidade_componente = float(componente.quantidade) * quantidade_base
+        
+        if componente.estoque.tipo_item == 'material' and componente.estoque.material:
+            # É um material direto
+            componentes_materiais.append({
+                'material_id': componente.estoque.material.id,
+                'material_nome': componente.estoque.material.nome,
+                'quantidade': quantidade_componente,
+                'unidade': componente.estoque.material.unidade_obj.sigla if (componente.estoque.material.unidade_obj and hasattr(componente.estoque.material.unidade_obj, 'sigla')) else ''
+            })
+        elif componente.estoque.tipo_item == 'produto_composto' and componente.estoque.ProdComp_id:
+            # É um produto composto aninhado - processar recursivamente
+            produto_composto_id = componente.estoque.ProdComp_id
+            componentes_aninhados = _expandir_componentes_produto_composto(
+                produto_composto_id, 
+                quantidade_componente,
+                novo_caminho  # Passar o caminho atual para detectar loops
+            )
+            componentes_materiais.extend(componentes_aninhados)
+    
+    return componentes_materiais
+
+@produto_composto_bp.route('/api/historico-custo/<int:id>')
+@login_required
+def api_historico_custo(id):
+    """
+    API que retorna o histórico de custo de um produto composto
+    considerando o preço médio dos materiais vinculados às notas fiscais ao longo do tempo
+    Inclui produtos compostos aninhados recursivamente
+    """
+    try:
+        produto = ProdutoComposto.query.get_or_404(id)
+        data_inicio = request.args.get('data_inicio', type=str)
+        data_fim = request.args.get('data_fim', type=str)
+        
+        # Expandir todos os componentes recursivamente (incluindo produtos compostos aninhados)
+        componentes_materiais_raw = _expandir_componentes_produto_composto(produto.id)
+        
+        # Agrupar materiais por material_id e somar quantidades
+        componentes_agrupados = {}
+        for comp in componentes_materiais_raw:
+            material_id = comp['material_id']
+            if material_id in componentes_agrupados:
+                componentes_agrupados[material_id]['quantidade'] += comp['quantidade']
+            else:
+                componentes_agrupados[material_id] = comp.copy()
+        
+        componentes_materiais = list(componentes_agrupados.values())
+        
+        if not componentes_materiais:
+            return jsonify({
+                'success': True,
+                'produto_nome': produto.nome,
+                'historico': [],
+                'mensagem': 'Este produto composto não possui componentes de material para calcular o histórico de custo.'
+            })
+        
+        # Buscar histórico de preços para cada material
+        historico_por_material = {}
+        for comp in componentes_materiais:
+            material_id = comp['material_id']
+            query = (
+                db.session.query(
+                    NotaFiscalItem.quantidade,
+                    NotaFiscalItem.valor_unitario,
+                    NotaFiscalItem.valor_total,
+                    NotaFiscalItem.unidade.label("unidade_item_nf"),
+                    NotaFiscalItem.fator_conversao_aplicado,
+                    NotaFiscal.data_emissao,
+                    NotaFiscal.numero_nf,
+                    NotaFiscal.nome_emitente,
+                    NotaFiscal.id.label("nota_id"),
+                )
+                .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+                .filter(NotaFiscal.status_processamento != "cancelada")
+                .filter(NotaFiscalItem.material_id == material_id)
+            )
+            
+            if data_inicio:
+                try:
+                    dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+                    query = query.filter(NotaFiscal.data_emissao >= dt_inicio)
+                except ValueError:
+                    pass
+            
+            if data_fim:
+                try:
+                    dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
+                    query = query.filter(NotaFiscal.data_emissao <= dt_fim)
+                except ValueError:
+                    pass
+            
+            historico_cru = query.order_by(NotaFiscal.data_emissao.desc()).all()
+            
+            historico_formatado = []
+            for item in historico_cru:
+                quantidade_final = item.quantidade
+                valor_unitario_final = item.valor_unitario
+                unidade_final = item.unidade_item_nf
+                fator_aplicado = None
+                
+                # SEMPRE aplicar fator de conversão se existir
+                # O fator converte a unidade da NF para a unidade padrão do material
+                if item.fator_conversao_aplicado is not None:
+                    try:
+                        fator = Decimal(str(item.fator_conversao_aplicado))
+                        if fator > 0 and item.quantidade is not None and item.valor_total is not None:
+                            # Quantidade convertida para a unidade padrão do material
+                            quantidade_conv = Decimal(str(item.quantidade)) * fator
+                            if quantidade_conv > 0:
+                                # Valor unitário na unidade padrão do material
+                                valor_unitario_conv = Decimal(str(item.valor_total)) / quantidade_conv
+                                quantidade_final = quantidade_conv
+                                valor_unitario_final = valor_unitario_conv
+                                fator_aplicado = float(fator)
+                    except Exception as e:
+                        logger.warning(f"Erro ao aplicar fator de conversão para material {material_id}: {str(e)}")
+                        # Se falhar, usar valores originais
+                        pass
+                else:
+                    # Se não há fator de conversão, usar valores originais
+                    # Mas garantir que valor_unitario está correto
+                    if item.valor_total is not None and item.quantidade is not None and item.quantidade > 0:
+                        try:
+                            valor_unitario_calculado = Decimal(str(item.valor_total)) / Decimal(str(item.quantidade))
+                            valor_unitario_final = valor_unitario_calculado
+                        except Exception:
+                            pass
+                
+                historico_formatado.append({
+                    "quantidade": float(quantidade_final) if quantidade_final is not None else 0.0,
+                    "valor_unitario": float(valor_unitario_final) if valor_unitario_final is not None else 0.0,
+                    "data_emissao": item.data_emissao.strftime("%Y-%m-%d") if item.data_emissao else None,
+                    "numero_nf": item.numero_nf,
+                    "nome_emitente": item.nome_emitente,
+                    "nota_id": item.nota_id,
+                    "fator_conversao_aplicado": fator_aplicado,
+                    "unidade_original": unidade_final
+                })
+            
+            historico_por_material[material_id] = historico_formatado
+        
+        # Agrupar por data e calcular custo total do produto composto
+        # Usar um dicionário para agrupar por data
+        custo_por_data = defaultdict(lambda: {
+            'data': None,
+            'custo_total': 0.0,
+            'componentes': [],
+            'preco_medio_ponderado': 0.0
+        })
+        
+        # Para cada data, calcular o preço médio de cada material e o custo total
+        todas_datas = set()
+        for material_id, historico in historico_por_material.items():
+            for item in historico:
+                if item['data_emissao']:
+                    todas_datas.add(item['data_emissao'])
+        
+        # Ordenar datas
+        todas_datas = sorted(todas_datas, reverse=True)
+        
+        # Para cada data, calcular o custo usando o preço mais recente disponível até aquela data
+        historico_custo = []
+        precos_anteriores = {}  # material_id -> último preço conhecido
+        
+        for data in todas_datas:
+            custo_total = 0.0
+            componentes_data = []
+            
+            for comp in componentes_materiais:
+                material_id = comp['material_id']
+                quantidade_necessaria = comp['quantidade']
+                
+                # Buscar o preço mais recente até esta data
+                # O valor_unitario já está calculado considerando o fator de conversão aplicado
+                preco_atual = precos_anteriores.get(material_id)
+                historico_material = historico_por_material.get(material_id, [])
+                
+                # Encontrar o preço mais recente até esta data
+                # O valor_unitario retornado já está na unidade padrão do material (após aplicar fator de conversão)
+                for item in historico_material:
+                    if item['data_emissao'] and item['data_emissao'] <= data:
+                        # valor_unitario já considera fator_conversao_aplicado se existir
+                        preco_atual = item['valor_unitario']
+                        precos_anteriores[material_id] = preco_atual
+                        break
+                
+                if preco_atual is not None and preco_atual > 0:
+                    # Cálculo do custo: quantidade_necessaria (já na unidade padrão) × preco_unitario (já convertido)
+                    custo_componente = quantidade_necessaria * preco_atual
+                    custo_total += custo_componente
+                    componentes_data.append({
+                        'material_nome': comp['material_nome'],
+                        'quantidade': quantidade_necessaria,
+                        'preco_unitario': preco_atual,  # Já considera fator de conversão
+                        'custo_componente': custo_componente,
+                        'unidade': comp['unidade']  # Unidade padrão do material
+                    })
+            
+            if custo_total > 0:
+                # Calcular peso percentual de cada componente e ordenar por custo
+                for comp in componentes_data:
+                    comp['peso_percentual'] = round((comp['custo_componente'] / custo_total) * 100, 2) if custo_total > 0 else 0
+                
+                # Ordenar componentes por custo_componente (maior primeiro)
+                componentes_data.sort(key=lambda x: x['custo_componente'], reverse=True)
+                
+                historico_custo.append({
+                    'data': data,
+                    'custo_total': round(custo_total, 2),
+                    'componentes': componentes_data
+                })
+        
+        return jsonify({
+            'success': True,
+            'produto_nome': produto.nome,
+            'produto_id': produto.id,
+            'historico': historico_custo,
+            'componentes': componentes_materiais
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar histórico de custo: {str(e)}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao buscar histórico de custo: {str(e)}'
+        }), 500
