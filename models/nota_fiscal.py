@@ -1200,17 +1200,9 @@ class NotaFiscalItem(db.Model):
         
         if not movimentacoes:
             print(f'Não há movimentações determinadas')
-            # Se não há movimentações determinadas, usar valores padrão
-            sucesso, mensagem, stats = self.importar_para_estoque(
-                usuario_id=usuario_id,
-                centro_custo_id=centro_custo_id,
-                observacao=observacao,
-                local='Estoque Matriz',
-                tipo_movimento='entrada'
-            )
-            estatisticas.update(stats)
-            if sucesso:
-                estatisticas['importado'] = True
+            estatisticas['erro'] = 'Não há movimentações determinadas'
+            sucesso = False
+            mensagem = 'Não há movimentações determinadas'
             return (sucesso, mensagem, estatisticas)
         
         # Processar todas as movimentações
@@ -1232,23 +1224,6 @@ class NotaFiscalItem(db.Model):
             if not sucesso:
                 estatisticas['erro'] = mensagem
                 return (False, mensagem, estatisticas)
-        
-        # Marcar como importado após processar todas as movimentações com sucesso
-        self.importado_estoque = True
-        self.data_importacao_estoque = datetime.now()
-        self.usuario_importacao_id = usuario_id
-        self.status_importacao = 'importado'
-        self.ultima_tentativa_importacao = datetime.now()
-        self.tentativas_importacao += 1
-        if resultados:
-            # Usar o ID da última movimentação
-            from models.estoque import MovimentacaoEstoque
-            ultima_mov = MovimentacaoEstoque.query.filter_by(
-                nota_fiscal_item_id=self.id
-            ).order_by(MovimentacaoEstoque.id.desc()).first()
-            if ultima_mov:
-                self.movimentacao_estoque_id = ultima_mov.id
-        self.save()
         
         estatisticas['importado'] = True
         resultado_final = resultados[-1] if resultados else (True, "Item importado com sucesso", estatisticas)
@@ -1287,18 +1262,7 @@ class NotaFiscalItem(db.Model):
         # Se local e tipo_movimento não foram informados, determinar automaticamente
         # Neste caso, verificar se já foi importado para evitar duplicação
         if local is None or tipo_movimento is None:
-            if self.importado_estoque:
-                estatisticas['ja_importado'] = True
-                return (False, "Item já foi importado para o estoque.", estatisticas)
-            
-            movimentacoes = determinar_movimentacoes_estoque(self.nota_fiscal)
-            if not movimentacoes:
-                # Se não há movimentações determinadas, usar valores padrão
-                local = local or 'Estoque Matriz'
-                tipo_movimento = tipo_movimento or 'entrada'
-            else:
-                # Usar a primeira movimentação determinada
-                local, tipo_movimento = movimentacoes[0]
+            return (False, "Local e tipo de movimento não foram informados.", estatisticas)
         
         try:
             # Buscar estoque existente para o material
@@ -1307,7 +1271,6 @@ class NotaFiscalItem(db.Model):
             # Se não existe estoque para este material, criar um novo
             if not estoque:
                 print(f"Criando novo estoque para o material {self.material_id}")
-
 
                 estoque = Estoque(
                     material_id=self.material_id,
@@ -1334,8 +1297,6 @@ class NotaFiscalItem(db.Model):
             # Registrar a quantidade atual antes da atualização para log
             quantidade_anterior = float(estoque.quantidade) if estoque.quantidade else 0
             
-            # Criar e salvar a movimentação
-            fator = self.fator_conversao_aplicado if self.fator_conversao_aplicado is not None else 1
             # Determinar usuario_id: priorizar o passado como parâmetro, depois current_user, depois None
             usuario_id_final = usuario_id
             if not usuario_id_final:
@@ -1375,22 +1336,16 @@ class NotaFiscalItem(db.Model):
                 estoque.save()
                 quantidade_nova = float(estoque.quantidade)
             
-            # Atualizar status do item apenas se local e tipo_movimento foram especificados
-            # (caso contrário, será marcado em importar_para_estoque_automatico após todas as movimentações)
-            if local is not None and tipo_movimento is not None:
-                # Para movimentações específicas, não marcar como importado aqui
-                # Isso será feito em importar_para_estoque_automatico após todas as movimentações
-                pass
-            else:
-                # Para importação automática (sem local/tipo especificado), marcar como importado
-                self.importado_estoque = True
-                self.data_importacao_estoque = datetime.now()
-                self.usuario_importacao_id = usuario_id
-                self.status_importacao = 'importado'
-                self.ultima_tentativa_importacao = datetime.now()
-                self.tentativas_importacao += 1
-                self.movimentacao_estoque_id = movimentacao.id
-                self.save()
+        
+            # Para importação automática (sem local/tipo especificado), marcar como importado
+            self.importado_estoque = True
+            self.data_importacao_estoque = datetime.now()
+            self.usuario_importacao_id = usuario_id
+            self.status_importacao = 'importado'
+            self.ultima_tentativa_importacao = datetime.now()
+            self.tentativas_importacao += 1
+            self.movimentacao_estoque_id = movimentacao.id
+            self.save()
             fim = datetime.now()
             print(f'tempo de execucao importar_para_estoque: {fim - inicio}')
             # Verificar se o material é da categoria EPI

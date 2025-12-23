@@ -1,37 +1,70 @@
+<!-- Estilos para grupos de vinculações -->
+<style>
+    .table-grupo-tanque-header {
+        background-color: #f8f9fa !important;
+        font-weight: bold;
+        border-top: 3px solid #dee2e6;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .table-group-header {
+        background-color: #e9ecef !important;
+        font-weight: bold;
+        border-top: 2px solid #dee2e6;
+        border-bottom: 2px solid #dee2e6;
+    }
+    .table-sub-header {
+        background-color: #f8f9fa !important;
+        font-weight: 600;
+        font-size: 0.9em;
+        padding-left: 2rem !important;
+    }
+    .table-group-item {
+        background-color: #ffffff;
+    }
+    .table-group-item:hover {
+        background-color: #f8f9fa;
+    }
+    .table-group-item td:first-child {
+        padding-left: 2rem;
+    }
+    .table-sub-header td {
+        padding-left: 2rem !important;
+    }
+</style>
+
 <!-- Modal de Vinculação Tanque - Produto Composto -->
 <div class="modal fade" id="modalVinculacaoProdutoComposto" tabindex="-1" aria-labelledby="modalVinculacaoProdutoCompostoLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="modalVinculacaoProdutoCompostoLabel">
-                    <i class="fas fa-link"></i> Vincular Tanque a Produto Composto
+                    <i class="fas fa-link"></i> Vincular Tanque(s) a Produto Composto
                 </h5>
                 <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
                 <form id="formVinculacaoProdutoComposto">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" id="vinculacao_id" name="vinculacao_id" value="">
                     
-                    <!-- Filtro de Contrato -->
+                    <!-- Seleção de Grupos de Tanques -->
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="filtro_contrato_id" class="form-label">Projeto (Contrato) *</label>
-                            <select class="form-select" id="filtro_contrato_id" name="filtro_contrato_id" required>
-                                <option value="" selected disabled>Selecione um projeto</option>
-                                {% for contrato in contratos %}
-                                <option value="{{ contrato.id }}">{{ contrato.nome }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-
-                    <!-- Filtro de Tanque -->
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label for="tanque_id" class="form-label">Tanque *</label>
-                            <select class="form-select" id="tanque_id" name="tanque_id" required disabled>
-                                <option value="" selected disabled>Primeiro selecione um projeto</option>
-                            </select>
+                            <label class="form-label">Grupos de Tanques *</label>
+                            <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;" id="containerGrupos">
+                                <div class="text-muted text-center">
+                                    <i class="fas fa-spinner fa-spin"></i> Carregando grupos...
+                                </div>
+                            </div>
+                            <small class="form-text text-muted">
+                                Selecione um ou mais grupos. Todos os tanques dos grupos selecionados serão vinculados.
+                                <button type="button" class="btn btn-sm btn-link p-0" id="btnSelecionarTodosGrupos" style="display: none;">
+                                    <i class="fas fa-check-square"></i> Selecionar todos
+                                </button>
+                                <button type="button" class="btn btn-sm btn-link p-0" id="btnDesselecionarTodosGrupos" style="display: none;">
+                                    <i class="fas fa-square"></i> Desselecionar todos
+                                </button>
+                            </small>
                         </div>
                     </div>
 
@@ -39,9 +72,30 @@
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <label for="tipo_peca" class="form-label">Tipo de Peça *</label>
-                            <select class="form-select" id="tipo_peca" name="tipo_peca" required disabled>
-                                <option value="" selected disabled>Primeiro selecione um tanque</option>
-                            </select>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="tipo_peca" name="tipo_peca" 
+                                       placeholder="Digite ou selecione o tipo de peça..." 
+                                       required disabled autocomplete="off" list="listaTiposPeca">
+                                <datalist id="listaTiposPeca">
+                                    <!-- Opções serão carregadas dinamicamente via JavaScript -->
+                                </datalist>
+                                <button class="btn btn-outline-secondary" type="button" id="btnCarregarTiposPeca" title="Carregar tipos sugeridos">
+                                    <i class="fas fa-list"></i>
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">
+                                Digite manualmente ou selecione um tipo sugerido dos tanques selecionados
+                            </small>
+                            
+                            <!-- Lista de Tipos Agrupados -->
+                            <div class="mt-2" id="containerTiposAgrupados" style="display: none;">
+                                <label class="form-label small">Tipos Sugeridos (agrupados):</label>
+                                <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                                    <div id="listaTiposAgrupados" class="d-flex flex-wrap gap-2">
+                                        <!-- Tipos serão carregados aqui via JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -118,6 +172,9 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnCancelarEdicao" style="display: none;">
+                    <i class="fas fa-times"></i> Cancelar Edição
+                </button>
                 <button type="button" class="btn btn-primary" id="btnSalvarVinculacao">
                     <i class="fas fa-save"></i> Salvar Vinculação
                 </button>

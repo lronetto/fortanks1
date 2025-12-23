@@ -1,6 +1,8 @@
+from itertools import groupby
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
 from models import Peca, Tanque, Contrato, TanqueProdutoComposto, ProdutoComposto
 from models import db
+from models.grupo_tanque import GrupoTanque
 from models.estoque import Estoque, MovimentacaoEstoque
 from models.produto_composto import ProdutoCompostoItem
 from flask_wtf.csrf import generate_csrf
@@ -28,6 +30,7 @@ def converter_decimal_para_float(obj):
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
 
 @peca.route('/')
+@login_required
 def index():
     """Lista todas as peças do sistema em uma única tabela com filtros"""
     # Obter filtros da query string
@@ -272,44 +275,203 @@ def api_tanques_por_projeto():
     
     return jsonify({'tanques': tanques_json})
 
+@peca.route('/api/grupos-tanques')
+def api_grupos_tanques():
+    """API para buscar todos os grupos de tanques"""
+    grupos = GrupoTanque.get_all()
+    
+    grupos_json = []
+    for grupo in grupos:
+        grupos_json.append({
+            'id': grupo.id,
+            'nome': grupo.nome,
+            'descricao': grupo.descricao,
+            'cor': grupo.cor or '#6c757d',
+            'icone': grupo.icone or 'fas fa-layer-group',
+            'total_tanques': grupo.total_tanques
+        })
+    
+    return jsonify({'grupos': grupos_json})
+
 @peca.route('/vinculacao-produto-composto', methods=['GET', 'POST'])
 def vinculacao_produto_composto():
-    """Modal e processamento de vinculação de tanque a produto composto"""
+    """Modal e processamento de vinculação de tanque(s) a produto composto"""
     if request.method == 'POST':
         try:
             # O Flask-WTF valida CSRF automaticamente via CSRFProtect
             # O token deve estar em request.form['csrf_token'] ou no header X-CSRFToken
             
-            tanque_id = request.form.get('tanque_id', type=int)
-            tipo_peca = request.form.get('tipo_peca')
-            produto_composto_id = request.form.get('produto_composto_id', type=int)
+            # Verificar se é edição (tem vinculacao_id)
+            vinculacao_id = request.form.get('vinculacao_id', type=int)
             
-            if not tanque_id or not tipo_peca or not produto_composto_id:
-                return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'}), 400
+            if vinculacao_id:
+                # Modo edição - atualizar vinculação existente
+                vinculacao = TanqueProdutoComposto.query.get_or_404(vinculacao_id)
+                
+                # Aceitar tanto tanque_id único quanto lista de tanque_ids
+                tanque_ids = request.form.getlist('tanque_ids[]')
+                if not tanque_ids:
+                    tanque_id = request.form.get('tanque_id', type=int)
+                    if tanque_id:
+                        tanque_ids = [tanque_id]
+                
+                tipo_peca = request.form.get('tipo_peca')
+                produto_composto_id = request.form.get('produto_composto_id', type=int)
+                
+                if not tanque_ids or not tipo_peca or not produto_composto_id:
+                    return jsonify({'success': False, 'message': 'Todos os campos são obrigatórios'}), 400
+                
+                # Converter para inteiros
+                try:
+                    tanque_ids = [int(tid) for tid in tanque_ids if tid]
+                except (ValueError, TypeError):
+                    return jsonify({'success': False, 'message': 'IDs de tanques inválidos'}), 400
+                
+                if not tanque_ids:
+                    return jsonify({'success': False, 'message': 'Selecione pelo menos um tanque'}), 400
+                
+                # Para edição, vamos atualizar apenas o primeiro tanque (comportamento simplificado)
+                # Se houver múltiplos tanques, criar novas vinculações para os adicionais
+                tanque_id_principal = tanque_ids[0]
+                tanques_adicionais = tanque_ids[1:] if len(tanque_ids) > 1 else []
+                
+                # Atualizar vinculação existente
+                vinculacao.tanque_id = tanque_id_principal
+                vinculacao.tipo_peca = tipo_peca
+                vinculacao.produto_composto_id = produto_composto_id
+                vinculacao.save()
+                
+                # Criar vinculações para tanques adicionais se houver
+                vinculacoes_criadas = 0
+                for tanque_id in tanques_adicionais:
+                    # Verificar se já existe
+                    vinculacao_existente = TanqueProdutoComposto.query.filter_by(
+                        tanque_id=tanque_id,
+                        tipo_peca=tipo_peca,
+                        produto_composto_id=produto_composto_id
+                    ).first()
+                    
+                    if not vinculacao_existente:
+                        nova_vinculacao = TanqueProdutoComposto(
+                            tanque_id=tanque_id,
+                            tipo_peca=tipo_peca,
+                            produto_composto_id=produto_composto_id
+                        )
+                        nova_vinculacao.save()
+                        vinculacoes_criadas += 1
+                
+                mensagem = 'Vinculação atualizada com sucesso!'
+                if vinculacoes_criadas > 0:
+                    mensagem += f'\n{vinculacoes_criadas} vinculação(ões) adicional(is) criada(s).'
+                
+                return jsonify({
+                    'success': True,
+                    'message': mensagem,
+                    'vinculacao_atualizada': True,
+                    'vinculacoes_criadas': vinculacoes_criadas
+                })
             
-            # Verificar se já existe vinculação
-            vinculacao_existente = TanqueProdutoComposto.query.filter_by(
-                tanque_id=tanque_id,
-                tipo_peca=tipo_peca,
-                produto_composto_id=produto_composto_id
-            ).first()
-            
-            if vinculacao_existente:
-                return jsonify({'success': False, 'message': 'Vinculação já existe para este tanque e tipo de peça'}), 400
-            
-            # Criar nova vinculação
-            nova_vinculacao = TanqueProdutoComposto(
-                tanque_id=tanque_id,
-                tipo_peca=tipo_peca,
-                produto_composto_id=produto_composto_id
-            )
-            nova_vinculacao.save()
-            
-            return jsonify({'success': True, 'message': 'Vinculação criada com sucesso!'})
+            else:
+                # Modo criação - criar novas vinculações por grupos
+                grupo_ids = request.form.getlist('grupo_ids[]')
+                
+                # Fallback para formato antigo (tanque_ids individuais)
+                if not grupo_ids:
+                    tanque_ids = request.form.getlist('tanque_ids[]')
+                    if not tanque_ids:
+                        tanque_id = request.form.get('tanque_id', type=int)
+                        if tanque_id:
+                            tanque_ids = [tanque_id]
+                else:
+                    tanque_ids = []
+                
+                tipo_peca = request.form.get('tipo_peca')
+                produto_composto_id = request.form.get('produto_composto_id', type=int)
+                
+                if not tipo_peca or not produto_composto_id:
+                    return jsonify({'success': False, 'message': 'Tipo de peça e produto composto são obrigatórios'}), 400
+                
+                # Se grupos foram selecionados, buscar todos os tanques dos grupos
+                if grupo_ids:
+                    try:
+                        grupo_ids = [int(gid) for gid in grupo_ids if gid]
+                    except (ValueError, TypeError):
+                        return jsonify({'success': False, 'message': 'IDs de grupos inválidos'}), 400
+                    
+                    if not grupo_ids:
+                        return jsonify({'success': False, 'message': 'Selecione pelo menos um grupo'}), 400
+                    
+                    # Buscar todos os tanques dos grupos selecionados
+                    tanque_ids = []
+                    grupos_processados = []
+                    for grupo_id in grupo_ids:
+                        grupo = GrupoTanque.query.get(grupo_id)
+                        if grupo:
+                            grupos_processados.append(grupo.nome)
+                            for tanque in grupo.tanques:
+                                if tanque.id not in tanque_ids:
+                                    tanque_ids.append(tanque.id)
+                
+                if not tanque_ids:
+                    return jsonify({'success': False, 'message': 'Nenhum tanque encontrado nos grupos selecionados'}), 400
+                
+                vinculacoes_criadas = 0
+                vinculacoes_existentes = []
+                erros = []
+                
+                # Criar vinculação para cada tanque
+                for tanque_id in tanque_ids:
+                    try:
+                        # Verificar se já existe vinculação
+                        vinculacao_existente = TanqueProdutoComposto.query.filter_by(
+                            tanque_id=tanque_id,
+                            tipo_peca=tipo_peca,
+                            produto_composto_id=produto_composto_id
+                        ).first()
+                        
+                        if vinculacao_existente:
+                            tanque = Tanque.query.get(tanque_id)
+                            vinculacoes_existentes.append(tanque.nome if tanque else f'Tanque ID {tanque_id}')
+                            continue
+                        
+                        # Criar nova vinculação
+                        nova_vinculacao = TanqueProdutoComposto(
+                            tanque_id=tanque_id,
+                            tipo_peca=tipo_peca,
+                            produto_composto_id=produto_composto_id
+                        )
+                        nova_vinculacao.save()
+                        vinculacoes_criadas += 1
+                        
+                    except Exception as e:
+                        tanque = Tanque.query.get(tanque_id)
+                        erros.append({
+                            'tanque': tanque.nome if tanque else f'Tanque ID {tanque_id}',
+                            'erro': str(e)
+                        })
+                        continue
+                
+                # Montar mensagem de resposta
+                mensagem = f'{vinculacoes_criadas} vinculação(ões) criada(s) com sucesso!'
+                if grupos_processados:
+                    mensagem += f'\nGrupos processados: {", ".join(grupos_processados)}'
+                if vinculacoes_existentes:
+                    mensagem += f'\n{len(vinculacoes_existentes)} tanque(s) já possuíam vinculação.'
+                if erros:
+                    mensagem += f'\n{len(erros)} erro(s) durante o processamento.'
+                
+                return jsonify({
+                    'success': True, 
+                    'message': mensagem,
+                    'vinculacoes_criadas': vinculacoes_criadas,
+                    'vinculacoes_existentes': vinculacoes_existentes,
+                    'erros': erros,
+                    'grupos_processados': grupos_processados if grupo_ids else []
+                })
             
         except Exception as e:
             db.session.rollback()
-            return jsonify({'success': False, 'message': f'Erro ao criar vinculação: {str(e)}'}), 500
+            return jsonify({'success': False, 'message': f'Erro ao processar vinculação: {str(e)}'}), 500
     
     # GET: retorna o modal
     contratos = Contrato.query.order_by(Contrato.nome).all()
@@ -337,6 +499,68 @@ def api_tipos_peca_por_tanque():
     tipos_json = [t[0] for t in tipos_peca if t[0]]
     
     return jsonify({'tipos': tipos_json})
+
+@peca.route('/api/tipos-peca-por-grupos')
+def api_tipos_peca_por_grupos():
+    """API para buscar tipos de peças de todos os tanques dos grupos selecionados, agrupados por tipo"""
+    from sqlalchemy import func
+    
+    grupo_ids = request.args.getlist('grupo_ids[]')
+    
+    if not grupo_ids:
+        return jsonify({'tipos': [], 'tipos_agrupados': []})
+    
+    try:
+        grupo_ids = [int(gid) for gid in grupo_ids if gid]
+    except (ValueError, TypeError):
+        return jsonify({'tipos': [], 'tipos_agrupados': []})
+    
+    if not grupo_ids:
+        return jsonify({'tipos': [], 'tipos_agrupados': []})
+    
+    # Buscar todos os tanques dos grupos selecionados
+    tanque_ids = []
+    for grupo_id in grupo_ids:
+        grupo = GrupoTanque.query.get(grupo_id)
+        if grupo:
+            for tanque in grupo.tanques:
+                if tanque.id not in tanque_ids:
+                    tanque_ids.append(tanque.id)
+    
+    if not tanque_ids:
+        return jsonify({'tipos': [], 'tipos_agrupados': []})
+    
+    # Buscar tipos de peças únicos com contagem de tanques por tipo
+    tipos_agrupados = db.session.query(
+        Peca.tipo,
+        func.count(func.distinct(Peca.tanque_id)).label('total_tanques')
+    ).filter(
+        Peca.tanque_id.in_(tanque_ids),
+        Peca.tipo.isnot(None),
+        Peca.tipo != ''
+    ).group_by(
+        Peca.tipo
+    ).order_by(
+        Peca.tipo
+    ).all()
+    
+    # Formatar resposta com tipos agrupados
+    tipos_agrupados_json = []
+    tipos_simples = []
+    
+    for tipo, total_tanques in tipos_agrupados:
+        if tipo:
+            tipos_agrupados_json.append({
+                'tipo': tipo,
+                'total_tanques': total_tanques
+            })
+            tipos_simples.append(tipo)
+    
+    return jsonify({
+        'tipos': tipos_simples,  # Lista simples para compatibilidade com datalist
+        'tipos_agrupados': tipos_agrupados_json,  # Lista agrupada com contagem
+        'total_tanques': len(tanque_ids)
+    })
 
 @peca.route('/api/produtos-compostos')
 def api_produtos_compostos():
@@ -380,11 +604,14 @@ def api_vinculacoes_tanque(tanque_id):
 
 @peca.route('/api/vinculacoes')
 def api_vinculacoes_todas():
-    """API para buscar todas as vinculações com informações completas"""
+    """API para buscar todas as vinculações com informações completas, incluindo grupos de tanques"""
+    from sqlalchemy.orm import joinedload
+    
     vinculacoes = TanqueProdutoComposto.query\
         .join(Tanque, TanqueProdutoComposto.tanque_id == Tanque.id)\
         .outerjoin(Contrato, Tanque.contrato_id == Contrato.id)\
         .join(ProdutoComposto, TanqueProdutoComposto.produto_composto_id == ProdutoComposto.id)\
+        .options(joinedload(TanqueProdutoComposto.tanque).joinedload(Tanque.grupos))\
         .order_by(Tanque.nome, TanqueProdutoComposto.tipo_peca)\
         .all()
     
@@ -395,19 +622,102 @@ def api_vinculacoes_todas():
         produto = v.produto_composto
         contrato = tanque.contrato if tanque else None
         
+        # Buscar grupos do tanque (já carregados via joinedload)
+        grupos_tanque = []
+        if tanque and hasattr(tanque, 'grupos') and tanque.grupos:
+            for grupo in tanque.grupos:
+                grupos_tanque.append({
+                    'id': grupo.id,
+                    'nome': grupo.nome,
+                    'cor': grupo.cor,
+                    'icone': grupo.icone
+                })
+        
+        # Se o tanque não tem grupos, usar "Sem grupo" como padrão
+        grupo_principal = grupos_tanque[0] if grupos_tanque else {
+            'id': None,
+            'nome': 'Sem grupo',
+            'cor': '#6c757d',
+            'icone': 'fas fa-layer-group'
+        }
+        
         vinculacoes_json.append({
             'id': v.id,
             'tanque_id': v.tanque_id,
             'tanque_nome': tanque.nome if tanque else None,
             'tanque_sistema': tanque.sistema if tanque else None,
             'projeto_nome': contrato.nome if contrato else None,
+            'projeto_id': contrato.id if contrato else None,
             'tipo_peca': v.tipo_peca,
             'produto_composto_id': v.produto_composto_id,
             'produto_composto_nome': produto.nome if produto else None,
-            'criado_em': v.criado_em.strftime('%d/%m/%Y %H:%M') if v.criado_em else None
+            'criado_em': v.criado_em.strftime('%d/%m/%Y %H:%M') if v.criado_em else None,
+            'grupo_id': grupo_principal['id'],
+            'grupo_nome': grupo_principal['nome'],
+            'grupo_cor': grupo_principal['cor'],
+            'grupo_icone': grupo_principal['icone'],
+            'grupos_todos': grupos_tanque  # Todos os grupos do tanque
         })
     
     return jsonify({'vinculacoes': vinculacoes_json})
+
+@peca.route('/api/vinculacao/<int:id>')
+def api_vinculacao_por_id(id):
+    """API para buscar uma vinculação específica por ID"""
+    try:
+        from sqlalchemy.orm import joinedload
+        
+        vinculacao = TanqueProdutoComposto.query\
+            .join(Tanque, TanqueProdutoComposto.tanque_id == Tanque.id)\
+            .outerjoin(Contrato, Tanque.contrato_id == Contrato.id)\
+            .join(ProdutoComposto, TanqueProdutoComposto.produto_composto_id == ProdutoComposto.id)\
+            .options(joinedload(TanqueProdutoComposto.tanque).joinedload(Tanque.grupos))\
+            .filter(TanqueProdutoComposto.id == id)\
+            .first_or_404()
+        
+        tanque = vinculacao.tanque
+        produto = vinculacao.produto_composto
+        contrato = tanque.contrato if tanque else None
+        
+        # Buscar grupos do tanque
+        grupos_tanque = []
+        if tanque and hasattr(tanque, 'grupos') and tanque.grupos:
+            for grupo in tanque.grupos:
+                grupos_tanque.append({
+                    'id': grupo.id,
+                    'nome': grupo.nome,
+                    'cor': grupo.cor,
+                    'icone': grupo.icone
+                })
+        
+        # Se o tanque não tem grupos, usar "Sem grupo" como padrão
+        grupo_principal = grupos_tanque[0] if grupos_tanque else {
+            'id': None,
+            'nome': 'Sem grupo',
+            'cor': '#6c757d',
+            'icone': 'fas fa-layer-group'
+        }
+        
+        vinculacao_json = {
+            'id': vinculacao.id,
+            'tanque_id': vinculacao.tanque_id,
+            'tanque_nome': tanque.nome if tanque else None,
+            'tanque_sistema': tanque.sistema if tanque else None,
+            'projeto_nome': contrato.nome if contrato else None,
+            'projeto_id': contrato.id if contrato else None,
+            'tipo_peca': vinculacao.tipo_peca,
+            'produto_composto_id': vinculacao.produto_composto_id,
+            'produto_composto_nome': produto.nome if produto else None,
+            'criado_em': vinculacao.criado_em.strftime('%d/%m/%Y %H:%M') if vinculacao.criado_em else None,
+            'grupo_id': grupo_principal['id'],
+            'grupo_nome': grupo_principal['nome'],
+            'grupo_cor': grupo_principal['cor'],
+            'grupo_icone': grupo_principal['icone']
+        }
+        
+        return jsonify({'success': True, 'vinculacao': vinculacao_json})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao buscar vinculação: {str(e)}'}), 500
 
 @peca.route('/vinculacao-produto-composto/<int:id>/excluir', methods=['POST'])
 def excluir_vinculacao(id):
@@ -537,6 +847,10 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
         quantidade_por_peca = componente.quantidade
         quantidade_total = quantidade_por_peca * quantidade_pecas
         
+        # DEBUG: Verificar cálculo de quantidade
+        if log:
+            print(f"  Componente: estoque_id={estoque_id}, quantidade_por_peca={quantidade_por_peca}, quantidade_pecas={quantidade_pecas}, quantidade_total={quantidade_total}")
+        
         # Buscar o estoque
         estoque = Estoque.query.get(estoque_id)
         if not estoque:
@@ -579,26 +893,24 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
                 movimentacoes_criadas += movimentacoes_aninhadas
                 continue
         
-        # Verificar se já existe movimentação para este grupo
-        pecas_ids = [p.id for p in pecas_grupo]
+        # Verificar se já existe movimentação para este grupo específico
+        # Usar uma combinação de estoque_id, produto_composto_id e data para identificar movimentações do grupo
+        data_para_comparacao = data_dia if isinstance(data_dia, date_type) else data_dia.date() if isinstance(data_dia, datetime) else data_dia
+        
+        # Verificar se já existe movimentação para este estoque, produto composto e data
+        # IMPORTANTE: Esta verificação garante que processamos todas as peças do grupo uma única vez
+        # Cada componente (estoque_id diferente) deve ser processado separadamente
+        # Mas para o mesmo estoque_id, produto_composto_id e data, só processamos uma vez
         movimentacao_existente = MovimentacaoEstoque.query.filter(
             MovimentacaoEstoque.estoque_id == estoque_id,
-            MovimentacaoEstoque.origem_id.in_(pecas_ids),
-            MovimentacaoEstoque.origem_tipo == 'producao_peca'
+            MovimentacaoEstoque.origem_id == produto_composto_id,
+            MovimentacaoEstoque.origem_tipo == 'producao_peca',
+            func.date(MovimentacaoEstoque.data_movimento) == data_para_comparacao
         ).first()
         
-        # Se não encontrou por peça individual, verificar por grupo (método otimizado)
-        if not movimentacao_existente:
-            data_para_comparacao = data_dia if isinstance(data_dia, date_type) else data_dia.date() if isinstance(data_dia, datetime) else data_dia
-            movimentacao_existente = MovimentacaoEstoque.query.filter(
-                MovimentacaoEstoque.estoque_id == estoque_id,
-                MovimentacaoEstoque.origem_id == produto_composto_id,
-                MovimentacaoEstoque.origem_tipo == 'producao_peca',
-                func.date(MovimentacaoEstoque.data_movimento) == data_para_comparacao
-            ).first()
-        
         if movimentacao_existente:
-            # Já foi processado, pular
+            # Já foi processado para este grupo e este componente específico, pular
+            # Mas continuar processando outros componentes do produto composto (com estoque_id diferente)
             continue
         
         # Verificar disponibilidade de estoque
@@ -653,183 +965,293 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
 @peca.route('/processar-producao', methods=['POST'])
 @login_required
 def processar_producao(log=False):
+
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia"""
     try:
-        from collections import defaultdict
-        from datetime import date as date_type
-        
+        print("Processando produção...")
         MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo.like('%producao_peca%')).delete()
-        # Buscar todas as peças com data_concretagem preenchida
-        pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None)).all()
-        
-        if not pecas_concretadas:
-            return jsonify({
-                'success': False, 
-                'message': 'Nenhuma peça com data de concretagem encontrada.'
-            }), 400
-        
-        usuario_id = current_user.id if current_user else 1
-        
-        # Estrutura para agrupar: {(produto_composto_id, data_dia): [lista_de_pecas]}
-        grupos_producao = defaultdict(list)
-        pecas_sem_vinculacao = []
-        
-        # Primeira passada: agrupar peças por produto composto e data
-        for peca in pecas_concretadas:
-            try:
-                # Buscar produto composto vinculado ao tanque e tipo de peça
-                vinculacao = TanqueProdutoComposto.query.filter_by(
-                    tanque_id=peca.tanque_id,
-                    tipo_peca=peca.tipo
-                ).first()
-                
-                if not vinculacao or not vinculacao.produto_composto:
-                    pecas_sem_vinculacao.append({
-                        'peca_id': peca.id,
-                        'peca_nome': peca.nome,
-                        'tanque': peca.tanque.nome,
-                        'tipo': peca.tipo
-                    })
-                    continue
-                
-                # Normalizar data para agrupar por dia (sem hora)
-                data_concretagem = peca.data_concretagem
-                if isinstance(data_concretagem, datetime):
-                    data_dia = data_concretagem.date()
-                else:
-                    data_dia = data_concretagem if isinstance(data_concretagem, date_type) else data_concretagem
-                
-                # Criar chave de agrupamento: (produto_composto_id, data_dia)
-                chave_grupo = (vinculacao.produto_composto_id, data_dia)
-                grupos_producao[chave_grupo].append(peca)
-                
-            except Exception as e:
-                continue
-        
-        # Segunda passada: processar cada grupo otimizado
-        movimentacoes_criadas = 0
-        pecas_processadas = 0
-        pecas_sem_estoque = []
-        erros = []
-        
-        for (produto_composto_id, data_dia), pecas_grupo in grupos_producao.items():
-            try:
-                # Buscar produto composto
-                produto_composto = ProdutoComposto.query.get(produto_composto_id)
-                if not produto_composto:
-                    continue
-                
-                # Quantidade de peças neste grupo
-                quantidade_pecas = len(pecas_grupo)
-                
-                # Converter data_dia para datetime (início do dia)
-                if isinstance(data_dia, date_type):
-                    data_movimento = datetime.combine(data_dia, datetime.min.time())
-                else:
-                    data_movimento = datetime.combine(data_dia, datetime.min.time())
-                
-                # Processar componentes do produto composto (recursivamente se necessário)
-                movimentacoes_grupo = _processar_componentes_recursivo(
-                    produto_composto=produto_composto,
-                    quantidade_pecas=quantidade_pecas,
-                    data_movimento=data_movimento,
-                    produto_composto_id=produto_composto_id,
-                    data_dia=data_dia,
-                    usuario_id=usuario_id,
-                    pecas_grupo=pecas_grupo,
-                    pecas_sem_estoque=pecas_sem_estoque,
-                    produtos_processados=set(),  # Para evitar loops infinitos
-                    log=log
-                )
-                movimentacoes_criadas += movimentacoes_grupo
-                
-                pecas_processadas += quantidade_pecas
-                
-            except Exception as e:
-                erros.append({
-                    'produto_composto_id': produto_composto_id,
-                    'data': data_dia.strftime('%d/%m/%Y') if isinstance(data_dia, date_type) else str(data_dia),
-                    'quantidade_pecas': len(pecas_grupo),
-                    'erro': str(e)
-                })
-                continue
-        
-        # Commit de todas as alterações
         db.session.commit()
-        
-        # Agrupar pecas_sem_estoque por produto composto e data
-        pecas_sem_estoque_agrupadas = {}
-        for item in pecas_sem_estoque:
-            chave = (item.get('produto_composto'), item.get('data'))
-            if chave not in pecas_sem_estoque_agrupadas:
-                pecas_sem_estoque_agrupadas[chave] = {
-                    'produto_composto': item.get('produto_composto'),
-                    'data': item.get('data'),
-                    'quantidade_pecas': item.get('quantidade_pecas', 0),
-                    'materiais': []
-                }
-            else:
-                # Garantir que usamos a maior quantidade de peças (caso haja inconsistência)
-                quantidade_atual = pecas_sem_estoque_agrupadas[chave]['quantidade_pecas']
-                quantidade_item = item.get('quantidade_pecas', 0)
-                if quantidade_item > quantidade_atual:
-                    pecas_sem_estoque_agrupadas[chave]['quantidade_pecas'] = quantidade_item
-            
-            # Adicionar material à lista de materiais do grupo
-            material_info = {}
-            if 'material' in item:
-                material_info['material'] = item['material']
-            if 'estoque_id' in item:
-                material_info['estoque_id'] = item['estoque_id']
-            if 'necessario' in item:
-                material_info['necessario'] = item['necessario']
-            if 'disponivel' in item:
-                material_info['disponivel'] = item['disponivel']
-            if 'nivel' in item:
-                material_info['nivel'] = item['nivel']
-            
-            pecas_sem_estoque_agrupadas[chave]['materiais'].append(material_info)
-        
-        # Converter dicionário agrupado para lista
-        pecas_sem_estoque_final = list(pecas_sem_estoque_agrupadas.values())
-        
-        mensagem = (
-            f'Processamento concluído!\n'
-            f'- {pecas_processadas} peça(s) processada(s)\n'
-            f'- {movimentacoes_criadas} movimentação(ões) de estoque criada(s)\n'
-            f'- {len(grupos_producao)} grupo(s) processado(s)'
-        )
-        
-        if pecas_sem_vinculacao:
-            mensagem += f'\n\n{len(pecas_sem_vinculacao)} peça(s) sem vinculação de produto composto.'
-        
-        if pecas_sem_estoque_final:
-            mensagem += f'\n\n{len(pecas_sem_estoque_final)} grupo(s) com estoque insuficiente.'
-        
-        if erros:
-            mensagem += f'\n\n{len(erros)} erro(s) durante o processamento.'
-        
-        msg = {
+        processar_producao_manual(log=log)
+        return jsonify({
             'success': True,
-            'message': mensagem,
-            'pecas_processadas': pecas_processadas,
-            'movimentacoes_criadas': movimentacoes_criadas,
-            'grupos_processados': len(grupos_producao),
-            'pecas_sem_vinculacao': pecas_sem_vinculacao,
-            'pecas_sem_estoque': pecas_sem_estoque_final,
-            'erros': erros
-        }
-        # Converter Decimal para float antes de serializar para JSON
-        msg_serializavel = converter_decimal_para_float(msg)
-        Logs(local='peca_processar_producao', data=datetime.now(), texto=json.dumps(msg_serializavel))
-        return jsonify(msg_serializavel)
-        
+            'message': 'Produção processada com sucesso!'
+        }), 200
     except Exception as e:
-        db.session.rollback()
         import traceback
         return jsonify({
             'success': False,
             'message': f'Erro ao processar produção: {str(e)}',
             'traceback': traceback.format_exc()
         }), 500
+    if False:
+        try:
+            from collections import defaultdict
+            from datetime import date as date_type
+            
+            MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo.like('%producao_peca%')).delete()
+            # Buscar todas as peças com data_concretagem preenchida
+            pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None),Peca.data_concretagem == '2025-12-09').all()
+            
+            if not pecas_concretadas:
+                return jsonify({
+                    'success': False, 
+                    'message': 'Nenhuma peça com data de concretagem encontrada.'
+                }), 400
+            
+            usuario_id = current_user.id if current_user else 1
+            
+            # Estrutura para agrupar: {(produto_composto_id, data_dia): [lista_de_pecas]}
+            grupos_producao = defaultdict(list)
+            pecas_sem_vinculacao = []
+            
+            # Primeira passada: agrupar peças por produto composto e data
+            for peca in pecas_concretadas:
+                try:
+                    # Buscar produto composto vinculado ao tanque e tipo de peça
+                    vinculacao = TanqueProdutoComposto.query.filter_by(
+                        tanque_id=peca.tanque_id,
+                        tipo_peca=peca.tipo
+                    ).first()
+                    
+                    if not vinculacao or not vinculacao.produto_composto:
+                        pecas_sem_vinculacao.append({
+                            'peca_id': peca.id,
+                            'peca_nome': peca.nome,
+                            'tanque': peca.tanque.nome,
+                            'tipo': peca.tipo
+                        })
+                        continue
+                    
+                    # Normalizar data para agrupar por dia (sem hora)
+                    data_concretagem = peca.data_concretagem
+                    if isinstance(data_concretagem, datetime):
+                        data_dia = data_concretagem.date()
+                    else:
+                        data_dia = data_concretagem if isinstance(data_concretagem, date_type) else data_concretagem
+                    
+                    # Criar chave de agrupamento: (produto_composto_id, data_dia)
+                    chave_grupo = (vinculacao.produto_composto_id, data_dia)
+                    grupos_producao[chave_grupo].append(peca)
+                    
+                except Exception as e:
+                    continue
+            
+            # Segunda passada: processar cada grupo otimizado
+            movimentacoes_criadas = 0
+            pecas_processadas = 0
+            pecas_sem_estoque = []
+            erros = []
+            
+            for (produto_composto_id, data_dia), pecas_grupo in grupos_producao.items():
+                try:
+                    # Buscar produto composto
+                    produto_composto = ProdutoComposto.query.get(produto_composto_id)
+                    if not produto_composto:
+                        continue
+                    
+                    # Quantidade de peças neste grupo
+                    quantidade_pecas = len(pecas_grupo)
+                    
+                    # DEBUG: Verificar se todas as peças estão sendo processadas
+                    if log:
+                        print(f"Processando grupo: produto_composto_id={produto_composto_id}, data={data_dia}, quantidade_pecas={quantidade_pecas}")
+                        print(f"Peças no grupo: {[f'{p.id}:{p.nome}' for p in pecas_grupo]}")
+                    
+                    # Converter data_dia para datetime (início do dia)
+                    if isinstance(data_dia, date_type):
+                        data_movimento = datetime.combine(data_dia, datetime.min.time())
+                    else:
+                        data_movimento = datetime.combine(data_dia, datetime.min.time())
+                    
+                    # Processar componentes do produto composto (recursivamente se necessário)
+                    # IMPORTANTE: quantidade_pecas deve ser o número total de peças no grupo
+                    movimentacoes_grupo = _processar_componentes_recursivo(
+                        produto_composto=produto_composto,
+                        quantidade_pecas=quantidade_pecas,  # Número total de peças no grupo
+                        data_movimento=data_movimento,
+                        produto_composto_id=produto_composto_id,
+                        data_dia=data_dia,
+                        usuario_id=usuario_id,
+                        pecas_grupo=pecas_grupo,  # Lista completa de peças do grupo
+                        pecas_sem_estoque=pecas_sem_estoque,
+                        produtos_processados=set(),  # Para evitar loops infinitos
+                        log=log
+                    )
+                    movimentacoes_criadas += movimentacoes_grupo
+                    
+                    pecas_processadas += quantidade_pecas
+                    
+                except Exception as e:
+                    erros.append({
+                        'produto_composto_id': produto_composto_id,
+                        'data': data_dia.strftime('%d/%m/%Y') if isinstance(data_dia, date_type) else str(data_dia),
+                        'quantidade_pecas': len(pecas_grupo),
+                        'erro': str(e)
+                    })
+                    continue
+            
+            # Commit de todas as alterações
+            db.session.commit()
+            
+            # Agrupar pecas_sem_estoque por produto composto e data
+            pecas_sem_estoque_agrupadas = {}
+            for item in pecas_sem_estoque:
+                chave = (item.get('produto_composto'), item.get('data'))
+                if chave not in pecas_sem_estoque_agrupadas:
+                    pecas_sem_estoque_agrupadas[chave] = {
+                        'produto_composto': item.get('produto_composto'),
+                        'data': item.get('data'),
+                        'quantidade_pecas': item.get('quantidade_pecas', 0),
+                        'materiais': []
+                    }
+                else:
+                    # Garantir que usamos a maior quantidade de peças (caso haja inconsistência)
+                    quantidade_atual = pecas_sem_estoque_agrupadas[chave]['quantidade_pecas']
+                    quantidade_item = item.get('quantidade_pecas', 0)
+                    if quantidade_item > quantidade_atual:
+                        pecas_sem_estoque_agrupadas[chave]['quantidade_pecas'] = quantidade_item
+                
+                # Adicionar material à lista de materiais do grupo
+                material_info = {}
+                if 'material' in item:
+                    material_info['material'] = item['material']
+                if 'estoque_id' in item:
+                    material_info['estoque_id'] = item['estoque_id']
+                if 'necessario' in item:
+                    material_info['necessario'] = item['necessario']
+                if 'disponivel' in item:
+                    material_info['disponivel'] = item['disponivel']
+                if 'nivel' in item:
+                    material_info['nivel'] = item['nivel']
+                
+                pecas_sem_estoque_agrupadas[chave]['materiais'].append(material_info)
+            
+            # Converter dicionário agrupado para lista
+            pecas_sem_estoque_final = list(pecas_sem_estoque_agrupadas.values())
+            
+            mensagem = (
+                f'Processamento concluído!\n'
+                f'- {pecas_processadas} peça(s) processada(s)\n'
+                f'- {movimentacoes_criadas} movimentação(ões) de estoque criada(s)\n'
+                f'- {len(grupos_producao)} grupo(s) processado(s)'
+            )
+            
+            if pecas_sem_vinculacao:
+                mensagem += f'\n\n{len(pecas_sem_vinculacao)} peça(s) sem vinculação de produto composto.'
+            
+            if pecas_sem_estoque_final:
+                mensagem += f'\n\n{len(pecas_sem_estoque_final)} grupo(s) com estoque insuficiente.'
+            
+            if erros:
+                mensagem += f'\n\n{len(erros)} erro(s) durante o processamento.'
+            
+            msg = {
+                'success': True,
+                'message': mensagem,
+                'pecas_processadas': pecas_processadas,
+                'movimentacoes_criadas': movimentacoes_criadas,
+                'grupos_processados': len(grupos_producao),
+                'pecas_sem_vinculacao': pecas_sem_vinculacao,
+                'pecas_sem_estoque': pecas_sem_estoque_final,
+                'erros': erros
+            }
+            # Converter Decimal para float antes de serializar para JSON
+            msg_serializavel = converter_decimal_para_float(msg)
+            Logs(local='peca_processar_producao', data=datetime.now(), texto=json.dumps(msg_serializavel))
+            return jsonify(msg_serializavel)
+            
+        except Exception as e:
+            db.session.rollback()
+            import traceback
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao processar produção: {str(e)}',
+                'traceback': traceback.format_exc()
+            }), 500
+
+    
+def processar_producao_manual(log):
+    """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
+    Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
+    dias = Peca.query.filter(Peca.data_concretagem.isnot(None)).group_by(Peca.data_concretagem).all()
+    print(f"Processando {len(dias)} dias")
+    for dia in dias:
+        dia = dia.data_concretagem
+        pecas_concretadas = Peca.query.filter(
+            Peca.data_concretagem.isnot(None),
+            Peca.data_concretagem == dia
+        ).all()
+        print(f"Processando dia: {dia} - {len(pecas_concretadas)} peças")
+        if not pecas_concretadas:
+            continue
+        
+        # Agrupar peças por tanque_id e tipo para otimizar processamento
+        grupos = {}
+        for peca in pecas_concretadas:
+            chave = (peca.tanque_id, peca.tipo)
+            if chave not in grupos:
+                grupos[chave] = []
+            grupos[chave].append(peca)
+        
+        materiais_necessarios = {}
+        todas_pecas_processadas = []
+        
+        # Processar cada grupo (tanque + tipo) de uma vez
+        for (tanque_id, tipo_peca), pecas_grupo in grupos.items():
+            vinculacao = TanqueProdutoComposto.query.filter_by(
+                tanque_id=tanque_id,
+                tipo_peca=tipo_peca
+            ).first()
+            if not vinculacao:
+                nomes_pecas_grupo = [p.nome or f"Peça {p.id}" for p in pecas_grupo]
+                print(f"Peças {', '.join(nomes_pecas_grupo)} sem vinculação de produto composto (Tanque: {tanque_id}, Tipo: {tipo_peca})")
+                continue
+            
+            produto_composto = ProdutoComposto.query.get(vinculacao.produto_composto_id)
+            if not produto_composto:
+                continue
+            
+            quantidade_grupo = len(pecas_grupo)
+            nomes_pecas_grupo = [p.nome or f"Peça {p.id}" for p in pecas_grupo]
+            todas_pecas_processadas.extend(nomes_pecas_grupo)
+            
+            if log:
+                print(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s)")
+            
+            produtos_processados = set()  # isolado por grupo para não pular composições entre grupos
+            produto_composto.produzir(
+                quantidade=quantidade_grupo, 
+                data_movimento=dia, 
+                usuario_id=current_user.id, 
+                log=log,
+                produtos_processados=produtos_processados,
+                materiais_necessarios=materiais_necessarios
+            )
+
+        print(f"Materiais necessários: {len(materiais_necessarios)}")
+        if materiais_necessarios:
+            # Processar materiais agrupados
+            for info in materiais_necessarios.values():
+                estoque = info['estoque']
+                quantidade_total = info['quantidade']
+                produto_id = info['produto_id']
+                
+                if log:
+                    print(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
+                
+                mov = MovimentacaoEstoque()
+                mov.remover(
+                    quantidade=quantidade_total, 
+                    estoque_id=estoque.id, 
+                    origem_id=produto_id, 
+                    origem_tipo='producao_peca', 
+                    usuario_id=current_user.id,
+                    motivo=f'Produção das peças: {", ".join(todas_pecas_processadas)} - Quantidade total: {quantidade_total}',
+                    log=log
+                )
+                # Definir data_movimento se fornecida
+                mov.data_movimento = dia
+                mov.save()
+    return True
+

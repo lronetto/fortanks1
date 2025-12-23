@@ -8,6 +8,7 @@ from datetime import datetime
 from flask import flash, jsonify, redirect, request, url_for
 from flask_login import current_user
 from flask_login import login_required
+from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
 from models.database import db
@@ -30,6 +31,7 @@ def reprocessar_importacao():
         synchronize_session=False,
     )
     MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo == "NotaFiscal").delete()
+    db.session.commit()
     importar_todas_pendentes()
     return jsonify({"success": True, "message": "Importação reprocessada com sucesso"}), 200
 

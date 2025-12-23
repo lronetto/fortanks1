@@ -260,142 +260,204 @@
         var apiUrlProdutos = '{{ url_for("peca.api_produtos_compostos") }}';
         var apiUrlSalvar = '{{ url_for("peca.vinculacao_produto_composto") }}';
 
-        // Função para carregar tanques por projeto
-        function carregarTanquesPorProjeto(contratoId) {
-            // Usar seletor específico do modal para evitar conflitos
+        // Função para carregar grupos de tanques
+        function carregarGruposTanques() {
             var modal = $('#modalVinculacaoProdutoComposto');
-            var selectTanque = modal.find('#tanque_id');
-            var selectTipoPeca = modal.find('#tipo_peca');
+            var containerGrupos = modal.find('#containerGrupos');
+            var inputTipoPeca = modal.find('#tipo_peca');
+            var btnSelecionarTodos = modal.find('#btnSelecionarTodosGrupos');
+            var btnDesselecionarTodos = modal.find('#btnDesselecionarTodosGrupos');
             
-            console.log('Carregando tanques para projeto:', contratoId);
+            console.log('Carregando grupos de tanques...');
             
-            if (!contratoId) {
-                selectTanque.prop('disabled', true);
-                selectTanque.html('<option value="" selected disabled>Primeiro selecione um projeto</option>');
-                selectTipoPeca.prop('disabled', true);
-                selectTipoPeca.html('<option value="" selected disabled>Primeiro selecione um tanque</option>');
-                return;
-            }
-            
-            selectTanque.prop('disabled', true);
-            selectTanque.html('<option value="">Carregando...</option>');
-            selectTipoPeca.prop('disabled', true);
-            selectTipoPeca.html('<option value="" selected disabled>Primeiro selecione um tanque</option>');
-            
-            console.log('URL da API:', apiUrlTanques);
-            console.log('Enviando requisição com projeto_id:', contratoId);
+            containerGrupos.html('<div class="text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Carregando grupos...</div>');
+            btnSelecionarTodos.hide();
+            btnDesselecionarTodos.hide();
+            inputTipoPeca.prop('disabled', true);
+            inputTipoPeca.val('').attr('placeholder', 'Selecione um ou mais grupos');
+            modal.find('#listaTiposPeca').empty();
             
             $.ajax({
-                url: apiUrlTanques,
+                url: '{{ url_for("peca.api_grupos_tanques") }}',
                 method: 'GET',
-                data: { projeto_id: contratoId },
                 dataType: 'json',
                 success: function(response) {
-                    console.log('Resposta recebida:', response);
-                    selectTanque.html('<option value="" selected disabled>Selecione um tanque</option>');
+                    console.log('Grupos recebidos:', response);
+                    containerGrupos.empty();
                     
-                    if (response.tanques && response.tanques.length > 0) {
-                        response.tanques.forEach(function(tanque) {
-                            selectTanque.append(
-                                $('<option></option>')
-                                    .attr('value', tanque.id)
-                                    .text(tanque.nome + ' (' + tanque.sistema + ')')
-                            );
+                    if (response.grupos && response.grupos.length > 0) {
+                        response.grupos.forEach(function(grupo) {
+                            var checkboxDiv = $('<div class="form-check mb-2"></div>');
+                            var checkbox = $('<input>')
+                                .attr('type', 'checkbox')
+                                .attr('class', 'form-check-input grupo-checkbox')
+                                .attr('id', 'grupo_' + grupo.id)
+                                .attr('value', grupo.id)
+                                .attr('name', 'grupo_ids[]');
+                            
+                            var estiloCor = grupo.cor ? 'color: ' + grupo.cor + ';' : '';
+                            var icone = grupo.icone || 'fas fa-layer-group';
+                            
+                            var label = $('<label>')
+                                .attr('class', 'form-check-label')
+                                .attr('for', 'grupo_' + grupo.id)
+                                .html(
+                                    '<i class="' + icone + '" style="' + estiloCor + '"></i> ' +
+                                    '<strong style="' + estiloCor + '">' + grupo.nome + '</strong> ' +
+                                    '<span class="badge bg-secondary">' + grupo.total_tanques + ' tanque(s)</span>'
+                                );
+                            
+                            checkboxDiv.append(checkbox).append(label);
+                            containerGrupos.append(checkboxDiv);
                         });
-                        console.log('Tanques carregados:', response.tanques.length);
+                        console.log('Grupos carregados:', response.grupos.length);
+                        btnSelecionarTodos.show();
+                        btnDesselecionarTodos.show();
+                        
+                        // Atualizar tipos de peça quando grupos forem selecionados/desselecionados
+                        containerGrupos.find('.grupo-checkbox').on('change', function() {
+                            atualizarTiposPecaPorGruposSelecionados();
+                        });
+                        
+                        // Habilitar campo de tipo de peça
+                        inputTipoPeca.prop('disabled', false);
+                        inputTipoPeca.attr('placeholder', 'Digite ou selecione o tipo de peça...');
                     } else {
-                        selectTanque.append(
-                            $('<option value="" disabled>Nenhum tanque encontrado para este projeto</option>')
-                        );
+                        containerGrupos.html('<div class="text-muted text-center">Nenhum grupo de tanques encontrado</div>');
                     }
-                    selectTanque.prop('disabled', false);
                 },
                 error: function(xhr, status, error) {
-                    console.error('Erro na requisição:', status, error);
-                    console.error('Resposta do servidor:', xhr.responseText);
-                    console.error('Status HTTP:', xhr.status);
-                    selectTanque.html('<option value="">Erro ao carregar tanques</option>');
-                    var errorMsg = 'Erro ao carregar tanques';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        errorMsg += ': ' + xhr.responseJSON.message;
-                    } else if (xhr.status === 0) {
-                        errorMsg += ': Erro de conexão. Verifique sua internet.';
-                    } else {
-                        errorMsg += ': ' + (error || 'Erro desconhecido');
-                    }
-                    alert(errorMsg);
+                    console.error('Erro ao carregar grupos:', status, error);
+                    containerGrupos.html('<div class="text-danger text-center">Erro ao carregar grupos</div>');
+                    alert('Erro ao carregar grupos de tanques. Tente novamente.');
                 }
             });
         }
 
-        // Função para carregar tipos de peças por tanque
-        function carregarTiposPecaPorTanque(tanqueId) {
+        // Função para atualizar tipos de peça baseado nos grupos selecionados
+        function atualizarTiposPecaPorGruposSelecionados() {
             var modal = $('#modalVinculacaoProdutoComposto');
-            var selectTipoPeca = modal.find('#tipo_peca');
+            var inputTipoPeca = modal.find('#tipo_peca');
+            var datalistTipos = modal.find('#listaTiposPeca');
+            var gruposSelecionados = modal.find('.grupo-checkbox:checked');
             
-            console.log('Carregando tipos de peças para tanque:', tanqueId);
-            
-            if (!tanqueId) {
-                selectTipoPeca.prop('disabled', true);
-                selectTipoPeca.html('<option value="" selected disabled>Primeiro selecione um tanque</option>');
+            if (gruposSelecionados.length === 0) {
+                inputTipoPeca.prop('disabled', true);
+                inputTipoPeca.attr('placeholder', 'Primeiro selecione um ou mais grupos');
+                datalistTipos.empty();
+                modal.find('#containerTiposAgrupados').hide();
+                modal.find('#listaTiposAgrupados').empty();
                 return;
             }
             
-            selectTipoPeca.prop('disabled', true);
-            selectTipoPeca.html('<option value="">Carregando...</option>');
+            // Coletar IDs dos grupos selecionados
+            var grupoIds = gruposSelecionados.map(function() {
+                return $(this).val();
+            }).get();
             
-            var apiUrlTipos = '{{ url_for("peca.api_tipos_peca_por_tanque") }}';
-            console.log('URL da API de tipos:', apiUrlTipos);
+            console.log('Buscando tipos de peça para grupos:', grupoIds);
             
+            // Limpar datalist
+            datalistTipos.empty();
+            inputTipoPeca.prop('disabled', true);
+            inputTipoPeca.attr('placeholder', 'Carregando tipos sugeridos...');
+            
+            // Buscar tipos de peça de todos os tanques dos grupos selecionados
             $.ajax({
-                url: apiUrlTipos,
+                url: '{{ url_for("peca.api_tipos_peca_por_grupos") }}',
                 method: 'GET',
-                data: { tanque_id: tanqueId },
+                data: { 'grupo_ids[]': grupoIds },
+                traditional: true,
                 dataType: 'json',
                 success: function(response) {
-                    console.log('Tipos de peças recebidos:', response);
-                    selectTipoPeca.html('<option value="" selected disabled>Selecione o tipo de peça</option>');
+                    console.log('Tipos recebidos:', response);
                     
-                    if (response.tipos && response.tipos.length > 0) {
-                        response.tipos.forEach(function(tipo) {
-                            selectTipoPeca.append(
+                    var tipos = response.tipos || [];
+                    var tiposAgrupados = response.tipos_agrupados || [];
+                    var containerTiposAgrupados = modal.find('#containerTiposAgrupados');
+                    var listaTiposAgrupados = modal.find('#listaTiposAgrupados');
+                    
+                    // Limpar listas
+                    datalistTipos.empty();
+                    listaTiposAgrupados.empty();
+                    
+                    // Adicionar tipos ao datalist (para autocomplete)
+                    tipos.forEach(function(tipo) {
+                        if (tipo) {
+                            datalistTipos.append(
                                 $('<option></option>')
                                     .attr('value', tipo)
-                                    .text(tipo)
                             );
+                        }
+                    });
+                    
+                    // Adicionar tipos agrupados visualmente
+                    if (tiposAgrupados.length > 0) {
+                        tiposAgrupados.forEach(function(item) {
+                            var badge = $('<span></span>')
+                                .addClass('badge bg-primary me-1 mb-1')
+                                .css('cursor', 'pointer')
+                                .attr('title', item.total_tanques + ' tanque(s) com este tipo')
+                                .html(
+                                    '<i class="fas fa-tag"></i> ' + item.tipo + 
+                                    ' <span class="badge bg-light text-dark">' + item.total_tanques + '</span>'
+                                )
+                                .on('click', function() {
+                                    inputTipoPeca.val(item.tipo).focus();
+                                });
+                            
+                            listaTiposAgrupados.append(badge);
                         });
-                        console.log('Tipos de peças carregados:', response.tipos.length);
+                        
+                        containerTiposAgrupados.show();
                     } else {
-                        selectTipoPeca.append(
-                            $('<option value="" disabled>Nenhum tipo de peça encontrado para este tanque</option>')
-                        );
+                        containerTiposAgrupados.hide();
                     }
-                    selectTipoPeca.prop('disabled', false);
+                    
+                    // Habilitar campo
+                    inputTipoPeca.prop('disabled', false);
+                    
+                    if (tipos.length > 0) {
+                        inputTipoPeca.attr('placeholder', 'Digite ou selecione o tipo de peça... (' + tipos.length + ' tipo(s) encontrado(s) em ' + (response.total_tanques || 0) + ' tanque(s))');
+                        console.log('Tipos sugeridos carregados:', tipos.length, 'de', response.total_tanques || 0, 'tanque(s)');
+                    } else {
+                        inputTipoPeca.attr('placeholder', 'Digite o tipo de peça manualmente (nenhum tipo encontrado nos tanques dos grupos)');
+                        containerTiposAgrupados.hide();
+                    }
                 },
                 error: function(xhr, status, error) {
                     console.error('Erro ao carregar tipos de peças:', status, error);
-                    console.error('Resposta do servidor:', xhr.responseText);
-                    selectTipoPeca.html('<option value="">Erro ao carregar tipos de peças</option>');
-                    alert('Erro ao carregar tipos de peças. Tente novamente.');
+                    inputTipoPeca.prop('disabled', false);
+                    inputTipoPeca.attr('placeholder', 'Digite o tipo de peça manualmente');
+                    // Não mostrar alerta, apenas permitir digitação manual
                 }
             });
         }
 
-        // Anexar evento de mudança do contrato (usando delegação de eventos para funcionar mesmo se o modal ainda não estiver no DOM)
-        $(document).on('change', '#filtro_contrato_id', function() {
-            var contratoId = $(this).val();
-            console.log('Evento change disparado para contrato:', contratoId);
-            carregarTanquesPorProjeto(contratoId);
+        // Botões de selecionar/desselecionar todos os grupos
+        $(document).on('click', '#btnSelecionarTodosGrupos', function() {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            modal.find('.grupo-checkbox').prop('checked', true);
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+        
+        $(document).on('click', '#btnDesselecionarTodosGrupos', function() {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            modal.find('.grupo-checkbox').prop('checked', false);
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+        
+        // Atualizar tipos quando grupos forem selecionados/desselecionados (usando delegação)
+        $(document).on('change', '#modalVinculacaoProdutoComposto .grupo-checkbox', function() {
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+        
+        // Botão para carregar tipos sugeridos manualmente
+        $(document).on('click', '#btnCarregarTiposPeca', function() {
+            atualizarTiposPecaPorGruposSelecionados();
         });
 
-        // Anexar evento de mudança do tanque para carregar tipos de peças
-        $(document).on('change', '#modalVinculacaoProdutoComposto #tanque_id', function() {
-            var tanqueId = $(this).val();
-            console.log('Evento change disparado para tanque:', tanqueId);
-            carregarTiposPecaPorTanque(tanqueId);
-        });
-
-        // Função para carregar vinculações existentes
+        // Função para carregar vinculações existentes (agrupadas)
         function carregarVinculacoes() {
             var tbody = $('#tbodyVinculacoes');
             tbody.html('<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
@@ -408,30 +470,195 @@
                     tbody.empty();
                     
                     if (response.vinculacoes && response.vinculacoes.length > 0) {
+                        // Estrutura de agrupamento: Grupo Tanque > Tipo Peça + Produto > Projeto > Tanques
+                        var gruposPorGrupoTanque = {};
+                        
                         response.vinculacoes.forEach(function(v) {
-                            var row = $('<tr></tr>');
-                            row.append($('<td></td>').text(v.projeto_nome || '-'));
-                            row.append($('<td></td>').html(
-                                (v.tanque_nome || 'N/A') + 
-                                (v.tanque_sistema ? ' <span class="badge bg-secondary">' + v.tanque_sistema + '</span>' : '')
-                            ));
-                            row.append($('<td></td>').text(v.tipo_peca || '-'));
-                            row.append($('<td></td>').text(v.produto_composto_nome || '-'));
-                            row.append($('<td></td>').text(v.criado_em || '-'));
+                            var grupoTanqueId = v.grupo_id || 'sem_grupo';
+                            var grupoTanqueNome = v.grupo_nome || 'Sem grupo';
                             
-                            // Botão de excluir
-                            var btnExcluir = $('<button></button>')
-                                .addClass('btn btn-sm btn-danger')
-                                .attr('type', 'button')
-                                .attr('data-vinculacao-id', v.id)
-                                .html('<i class="fas fa-trash"></i>')
-                                .attr('title', 'Excluir vinculação')
-                                .on('click', function() {
-                                    excluirVinculacao(v.id, v.tanque_nome, v.produto_composto_nome);
+                            if (!gruposPorGrupoTanque[grupoTanqueId]) {
+                                gruposPorGrupoTanque[grupoTanqueId] = {
+                                    grupo_id: v.grupo_id,
+                                    grupo_nome: grupoTanqueNome,
+                                    grupo_cor: v.grupo_cor || '#6c757d',
+                                    grupo_icone: v.grupo_icone || 'fas fa-layer-group',
+                                    tipos_produtos: {}
+                                };
+                            }
+                            
+                            // Agrupar por tipo_peca e produto_composto_id dentro do grupo de tanques
+                            var chaveTipoProduto = (v.tipo_peca || 'Sem tipo') + '|' + (v.produto_composto_id || '0') + '|' + (v.produto_composto_nome || 'Sem produto');
+                            
+                            if (!gruposPorGrupoTanque[grupoTanqueId].tipos_produtos[chaveTipoProduto]) {
+                                gruposPorGrupoTanque[grupoTanqueId].tipos_produtos[chaveTipoProduto] = {
+                                    tipo_peca: v.tipo_peca || 'Sem tipo',
+                                    produto_composto_id: v.produto_composto_id,
+                                    produto_composto_nome: v.produto_composto_nome || 'Sem produto',
+                                    vinculacoes: []
+                                };
+                            }
+                            
+                            gruposPorGrupoTanque[grupoTanqueId].tipos_produtos[chaveTipoProduto].vinculacoes.push(v);
+                        });
+                        
+                        // Ordenar grupos de tanques por nome
+                        var gruposTanqueOrdenados = Object.keys(gruposPorGrupoTanque).sort(function(a, b) {
+                            var grupoA = gruposPorGrupoTanque[a];
+                            var grupoB = gruposPorGrupoTanque[b];
+                            
+                            // "Sem grupo" sempre por último
+                            if (a === 'sem_grupo') return 1;
+                            if (b === 'sem_grupo') return -1;
+                            
+                            return grupoA.grupo_nome.localeCompare(grupoB.grupo_nome);
+                        });
+                        
+                        // Renderizar grupos de tanques
+                        gruposTanqueOrdenados.forEach(function(grupoTanqueId) {
+                            var grupoTanque = gruposPorGrupoTanque[grupoTanqueId];
+                            
+                            // Cabeçalho do grupo de tanques
+                            var grupoHeaderRow = $('<tr></tr>').addClass('table-grupo-tanque-header');
+                            var estiloCor = grupoTanque.grupo_cor ? 'color: ' + grupoTanque.grupo_cor + ';' : '';
+                            
+                            grupoHeaderRow.append(
+                                $('<td></td>')
+                                    .attr('colspan', 6)
+                                    .addClass('fw-bold p-2')
+                                    .css('background-color', grupoTanque.grupo_cor ? grupoTanque.grupo_cor + '20' : '#f8f9fa')
+                                    .html(
+                                        '<i class="' + (grupoTanque.grupo_icone || 'fas fa-layer-group') + '" style="' + estiloCor + '"></i> ' +
+                                        '<strong style="' + estiloCor + '">' + grupoTanque.grupo_nome + '</strong>' +
+                                        ' <span class="badge bg-secondary">' + 
+                                        Object.keys(grupoTanque.tipos_produtos).length + ' tipo(s) de peça</span>'
+                                    )
+                            );
+                            tbody.append(grupoHeaderRow);
+                            
+                            // Ordenar tipos_produtos por tipo de peça e produto
+                            var tiposProdutosOrdenados = Object.keys(grupoTanque.tipos_produtos).sort(function(a, b) {
+                                var tipoA = grupoTanque.tipos_produtos[a];
+                                var tipoB = grupoTanque.tipos_produtos[b];
+                                
+                                if (tipoA.tipo_peca !== tipoB.tipo_peca) {
+                                    return tipoA.tipo_peca.localeCompare(tipoB.tipo_peca);
+                                }
+                                
+                                return tipoA.produto_composto_nome.localeCompare(tipoB.produto_composto_nome);
+                            });
+                            
+                            // Renderizar tipos de peça e produtos dentro do grupo de tanques
+                            tiposProdutosOrdenados.forEach(function(chaveTipoProduto) {
+                                var tipoProduto = grupoTanque.tipos_produtos[chaveTipoProduto];
+                                
+                                // Linha de cabeçalho do tipo de peça + produto
+                                var headerRow = $('<tr></tr>').addClass('table-group-header bg-light fw-bold');
+                                
+                                var colTipo = $('<td></td>')
+                                    .html('<i class="fas fa-tag"></i> <strong>Tipo:</strong> ' + tipoProduto.tipo_peca);
+                                
+                                var colProduto = $('<td></td>')
+                                    .html('<i class="fas fa-box"></i> <strong>Produto:</strong> ' + tipoProduto.produto_composto_nome);
+                                
+                                var colTanques = $('<td></td>')
+                                    .html('<i class="fas fa-layer-group"></i> <strong>' + tipoProduto.vinculacoes.length + ' tanque(s)</strong>');
+                                
+                                var colData = $('<td></td>').text('');
+                                var colAcoes = $('<td></td>').text('');
+                                
+                                headerRow.append(colTipo).append(colProduto).append(colTanques).append(colData).append(colAcoes);
+                                tbody.append(headerRow);
+                                
+                                // Agrupar tanques por projeto
+                                var tanquesPorProjeto = {};
+                                tipoProduto.vinculacoes.forEach(function(v) {
+                                    var projetoKey = v.projeto_nome || 'Sem projeto';
+                                    if (!tanquesPorProjeto[projetoKey]) {
+                                        tanquesPorProjeto[projetoKey] = [];
+                                    }
+                                    tanquesPorProjeto[projetoKey].push(v);
                                 });
+                                
+                                // Ordenar projetos
+                                var projetosOrdenados = Object.keys(tanquesPorProjeto).sort();
+                                
+                                projetosOrdenados.forEach(function(projetoNome) {
+                                    var vinculacoesProjeto = tanquesPorProjeto[projetoNome];
+                                    
+                                    // Se houver mais de um projeto, mostrar subcabeçalho
+                                    if (projetosOrdenados.length > 1) {
+                                        var subHeaderRow = $('<tr></tr>').addClass('table-sub-header bg-light-subtle');
+                                        subHeaderRow.append(
+                                            $('<td></td>').html('<i class="fas fa-folder"></i> ' + projetoNome).attr('colspan', 6)
+                                        );
+                                        tbody.append(subHeaderRow);
+                                    }
+                                    
+                                    // Ordenar vinculações por nome do tanque
+                                    vinculacoesProjeto.sort(function(a, b) {
+                                        return (a.tanque_nome || '').localeCompare(b.tanque_nome || '');
+                                    });
+                                    
+                                    // Linhas de vinculações
+                                    vinculacoesProjeto.forEach(function(v) {
+                                        var row = $('<tr></tr>').addClass('table-group-item');
+                                        
+                                        // Mostrar projeto apenas se houver múltiplos projetos
+                                        if (projetosOrdenados.length === 1) {
+                                            row.append($('<td></td>').text(v.projeto_nome || '-'));
+                                        } else {
+                                            row.append($('<td></td>').text(''));
+                                        }
+                                        
+                                        row.append($('<td></td>').html(
+                                            (v.tanque_nome || 'N/A') + 
+                                            (v.tanque_sistema ? ' <span class="badge bg-secondary">' + v.tanque_sistema + '</span>' : '')
+                                        ));
+                                        
+                                        row.append($('<td></td>').addClass('text-muted').html('<small><i class="fas fa-arrow-left"></i></small>'));
+                                        row.append($('<td></td>').addClass('text-muted').html('<small><i class="fas fa-arrow-left"></i></small>'));
+                                        row.append($('<td></td>').text(v.criado_em || '-'));
+                                        
+                                        // Botões de ação
+                                        var btnGroup = $('<div></div>').addClass('btn-group').attr('role', 'group');
+                                        
+                                        var btnEditar = $('<button></button>')
+                                            .addClass('btn btn-sm btn-warning')
+                                            .attr('type', 'button')
+                                            .attr('data-vinculacao-id', v.id)
+                                            .html('<i class="fas fa-edit"></i>')
+                                            .attr('title', 'Editar vinculação')
+                                            .on('click', function() {
+                                                editarVinculacao(v.id);
+                                            });
+                                        
+                                        var btnExcluir = $('<button></button>')
+                                            .addClass('btn btn-sm btn-danger')
+                                            .attr('type', 'button')
+                                            .attr('data-vinculacao-id', v.id)
+                                            .html('<i class="fas fa-trash"></i>')
+                                            .attr('title', 'Excluir vinculação')
+                                            .on('click', function() {
+                                                excluirVinculacao(v.id, v.tanque_nome, v.produto_composto_nome);
+                                            });
+                                        
+                                        btnGroup.append(btnEditar).append(btnExcluir);
+                                        row.append($('<td></td>').append(btnGroup));
+                                        tbody.append(row);
+                                    });
+                                });
+                                
+                                // Linha separadora entre tipos de peça/produto
+                                var separatorRow = $('<tr></tr>');
+                                separatorRow.append($('<td></td>').attr('colspan', 6).addClass('p-0').html('<hr class="my-1">'));
+                                tbody.append(separatorRow);
+                            });
                             
-                            row.append($('<td></td>').append(btnExcluir));
-                            tbody.append(row);
+                            // Linha separadora entre grupos de tanques
+                            var grupoSeparatorRow = $('<tr></tr>');
+                            grupoSeparatorRow.append($('<td></td>').attr('colspan', 6).addClass('p-0').html('<hr class="my-3 border-2">'));
+                            tbody.append(grupoSeparatorRow);
                         });
                     } else {
                         tbody.append(
@@ -455,6 +682,110 @@
             });
         }
 
+        // Função para editar vinculação
+        function editarVinculacao(vinculacaoId) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            
+            // Carregar dados da vinculação
+            $.ajax({
+                url: '/pecas/api/vinculacao/' + vinculacaoId,
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.vinculacao) {
+                        var v = response.vinculacao;
+                        
+                        // Preencher formulário com dados da vinculação
+                        modal.find('#vinculacao_id').val(v.id);
+                        
+                        // Abrir modal primeiro se não estiver aberto
+                        if (!modal.hasClass('show')) {
+                            modal.modal('show');
+                        }
+                        
+                        // Atualizar título do modal
+                        modal.find('.modal-title').html('<i class="fas fa-edit"></i> Editar Vinculação');
+                        
+                        // Mostrar botão de cancelar edição
+                        modal.find('#btnCancelarEdicao').show();
+                        
+                        // Atualizar texto do botão salvar
+                        modal.find('#btnSalvarVinculacao').html('<i class="fas fa-save"></i> Atualizar Vinculação');
+                        
+                        // Carregar grupos primeiro
+                        carregarGruposTanques();
+                        
+                        // Aguardar carregamento dos grupos e selecionar o grupo do tanque
+                        var tentativas = 0;
+                        var intervalo = setInterval(function() {
+                            // Buscar grupo do tanque via API
+                            if (v.grupo_id && tentativas > 5) {
+                                clearInterval(intervalo);
+                                var checkboxGrupo = modal.find('#grupo_' + v.grupo_id);
+                                if (checkboxGrupo.length > 0) {
+                                    checkboxGrupo.prop('checked', true);
+                                    atualizarTiposPecaPorGruposSelecionados();
+                                }
+                                
+                                // Preencher tipo de peça e produto
+                                modal.find('#tipo_peca').val(v.tipo_peca);
+                                buscarProdutosCompostos(v.produto_composto_nome, function() {
+                                    selecionarProduto({
+                                        id: v.produto_composto_id,
+                                        nome: v.produto_composto_nome
+                                    });
+                                });
+                            }
+                            tentativas++;
+                        }, 300);
+                        
+                        // Scroll para o topo do formulário
+                        setTimeout(function() {
+                            modal.find('.modal-body').scrollTop(0);
+                        }, 100);
+                    } else {
+                        alert('Erro ao carregar dados da vinculação');
+                    }
+                },
+                error: function(xhr) {
+                    var response = xhr.responseJSON;
+                    alert('Erro ao carregar vinculação: ' + (response ? response.message : 'Erro desconhecido'));
+                }
+            });
+        }
+        
+        // Função para cancelar edição
+        function cancelarEdicao() {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            
+            // Limpar campo de ID
+            modal.find('#vinculacao_id').val('');
+            
+            // Restaurar título do modal
+            modal.find('.modal-title').html('<i class="fas fa-link"></i> Vincular Tanque(s) a Produto Composto');
+            
+            // Esconder botão de cancelar edição
+            modal.find('#btnCancelarEdicao').hide();
+            
+            // Restaurar texto do botão salvar
+            modal.find('#btnSalvarVinculacao').html('<i class="fas fa-save"></i> Salvar Vinculação');
+            
+            // Limpar formulário
+            $('#formVinculacaoProdutoComposto')[0].reset();
+            modal.find('.grupo-checkbox').prop('checked', false);
+            modal.find('#containerGrupos').html('<div class="text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Carregando grupos...</div>');
+            modal.find('#btnSelecionarTodosGrupos').hide();
+            modal.find('#btnDesselecionarTodosGrupos').hide();
+            modal.find('#tipo_peca').val('').prop('disabled', true).attr('placeholder', 'Selecione um ou mais grupos');
+            modal.find('#listaTiposPeca').empty();
+            modal.find('#containerTiposAgrupados').hide();
+            modal.find('#listaTiposAgrupados').empty();
+            carregarGruposTanques();
+            $('#containerProdutosCompostos').hide();
+            $('#containerProdutoSelecionado').hide();
+            $('#listaProdutosCompostos').empty();
+        }
+        
         // Função para excluir vinculação
         function excluirVinculacao(vinculacaoId, tanqueNome, produtoNome) {
             if (!confirm('Deseja realmente excluir a vinculação entre o tanque "' + tanqueNome + '" e o produto "' + produtoNome + '"?')) {
@@ -495,11 +826,11 @@
         $('#modalVinculacaoProdutoComposto').on('shown.bs.modal', function() {
             console.log('Modal de vinculação aberto');
             
+            // Carregar grupos de tanques
+            carregarGruposTanques();
+            
             // Carregar vinculações existentes
             carregarVinculacoes();
-            
-            // Garantir que o select de tanque está desabilitado inicialmente
-            $('#tanque_id').prop('disabled', true);
 
             // Buscar produtos compostos ao digitar
             $('#busca_produto_composto').off('input').on('input', function() {
@@ -532,6 +863,11 @@
                 modal.find('#busca_produto_composto').val('');
                 modal.find('#containerProdutosCompostos').hide();
             });
+            
+            // Botão cancelar edição
+            $('#btnCancelarEdicao').off('click').on('click', function() {
+                cancelarEdicao();
+            });
 
             // Salvar vinculação
             $('#btnSalvarVinculacao').off('click').on('click', function() {
@@ -539,23 +875,21 @@
                 var form = modal.find('#formVinculacaoProdutoComposto');
                 
                 // Usar seletores específicos do modal
-                var filtroContratoId = modal.find('#filtro_contrato_id').val();
-                var tanqueId = modal.find('#tanque_id').val();
+                var gruposSelecionados = modal.find('.grupo-checkbox:checked');
+                var grupoIds = gruposSelecionados.map(function() {
+                    return $(this).val();
+                }).get();
                 var tipoPeca = modal.find('#tipo_peca').val();
                 var produtoCompostoId = modal.find('#produto_composto_id').val();
                 
-                console.log('Validação - Contrato:', filtroContratoId, typeof filtroContratoId);
-                console.log('Validação - Tanque:', tanqueId, typeof tanqueId);
+                console.log('Validação - Grupos:', grupoIds);
                 console.log('Validação - Tipo Peça:', tipoPeca, typeof tipoPeca);
                 console.log('Validação - Produto Composto:', produtoCompostoId, typeof produtoCompostoId);
                 
                 // Validação completa - verificar se não está vazio, null, undefined ou string vazia
                 var camposFaltando = [];
-                if (!filtroContratoId || filtroContratoId === '' || filtroContratoId === 'null' || filtroContratoId === 'undefined') {
-                    camposFaltando.push('Projeto');
-                }
-                if (!tanqueId || tanqueId === '' || tanqueId === 'null' || tanqueId === 'undefined') {
-                    camposFaltando.push('Tanque');
+                if (!grupoIds || grupoIds.length === 0) {
+                    camposFaltando.push('Grupo(s) de Tanques');
                 }
                 if (!tipoPeca || tipoPeca === '' || tipoPeca === 'null' || tipoPeca === 'undefined') {
                     camposFaltando.push('Tipo de Peça');
@@ -582,23 +916,42 @@
                     return;
                 }
                 
+                // Verificar se está em modo edição
+                var vinculacaoId = modal.find('#vinculacao_id').val();
+                var modoEdicao = vinculacaoId && vinculacaoId !== '';
+                
                 // Montar dados do formulário manualmente para garantir que tudo seja enviado
                 var formData = {
                     csrf_token: csrfToken,
-                    filtro_contrato_id: filtroContratoId,
-                    tanque_id: tanqueId,
                     tipo_peca: tipoPeca,
                     produto_composto_id: produtoCompostoId
                 };
                 
-                console.log('Dados a serem enviados:', {
-                    ...formData,
-                    csrf_token: '[TOKEN OCULTO]' // Não logar o token completo por segurança
+                // Adicionar vinculacao_id se estiver editando
+                if (modoEdicao) {
+                    formData.vinculacao_id = vinculacaoId;
+                }
+                
+                // Adicionar cada grupo_id como grupo_ids[] (jQuery precisa do formato correto)
+                grupoIds.forEach(function(grupoId) {
+                    formData['grupo_ids[]'] = formData['grupo_ids[]'] || [];
+                    formData['grupo_ids[]'].push(grupoId);
                 });
                 
+                console.log('Dados a serem enviados:', {
+                    csrf_token: '[TOKEN OCULTO]',
+                    vinculacao_id: vinculacaoId || 'N/A',
+                    'grupo_ids[]': grupoIds,
+                    tipo_peca: tipoPeca,
+                    produto_composto_id: produtoCompostoId,
+                    modo_edicao: modoEdicao
+                });
+                
+                // Usar traditional: true para enviar arrays corretamente
                 $.ajax({
                     url: '{{ url_for("peca.vinculacao_produto_composto") }}',
                     method: 'POST',
+                    traditional: true,
                     data: formData,
                     headers: {
                         'X-CSRFToken': csrfToken,
@@ -606,17 +959,18 @@
                     },
                     success: function(response) {
                         if (response.success) {
-                            alert('Vinculação criada com sucesso!');
+                            var mensagem = response.message || 'Vinculação criada com sucesso!';
+                            if (response.vinculacoes_criadas !== undefined) {
+                                mensagem = response.vinculacoes_criadas + ' vinculação(ões) criada(s) com sucesso!';
+                                if (response.vinculacoes_existentes && response.vinculacoes_existentes.length > 0) {
+                                    mensagem += '\n\n' + response.vinculacoes_existentes.length + ' tanque(s) já possuíam vinculação.';
+                                }
+                            }
+                            alert(mensagem);
                             // Recarregar tabela de vinculações
                             carregarVinculacoes();
-                            // Limpar formulário
-                            $('#formVinculacaoProdutoComposto')[0].reset();
-                            $('#filtro_contrato_id').val('').trigger('change');
-                            $('#tanque_id').html('<option value="" selected disabled>Primeiro selecione um projeto</option>').prop('disabled', true);
-                            $('#tipo_peca').html('<option value="" selected disabled>Primeiro selecione um tanque</option>').prop('disabled', true);
-                            $('#containerProdutosCompostos').hide();
-                            $('#containerProdutoSelecionado').hide();
-                            $('#listaProdutosCompostos').empty();
+                            // Limpar formulário e sair do modo edição
+                            cancelarEdicao();
                         } else {
                             alert('Erro: ' + response.message);
                         }
@@ -641,7 +995,7 @@
         });
 
         // Função para buscar produtos compostos
-        function buscarProdutosCompostos(termo) {
+        function buscarProdutosCompostos(termo, callback) {
             $.ajax({
                 url: '{{ url_for("peca.api_produtos_compostos") }}',
                 method: 'GET',
@@ -649,6 +1003,9 @@
                 success: function(response) {
                     produtosCarregados = response.produtos;
                     exibirProdutosCompostos(response.produtos);
+                    if (callback && typeof callback === 'function') {
+                        callback();
+                    }
                 },
                 error: function() {
                     alert('Erro ao buscar produtos compostos. Tente novamente.');
@@ -709,13 +1066,7 @@
 
         // Limpar formulário ao fechar o modal
         $('#modalVinculacaoProdutoComposto').on('hidden.bs.modal', function() {
-            $('#formVinculacaoProdutoComposto')[0].reset();
-            $('#filtro_contrato_id').val('').trigger('change');
-            $('#tanque_id').html('<option value="" selected disabled>Primeiro selecione um projeto</option>').prop('disabled', true);
-            $('#tipo_peca').html('<option value="" selected disabled>Primeiro selecione um tanque</option>').prop('disabled', true);
-            $('#containerProdutosCompostos').hide();
-            $('#containerProdutoSelecionado').hide();
-            $('#listaProdutosCompostos').empty();
+            cancelarEdicao();
         });
 
         // Processar produção
