@@ -82,10 +82,23 @@ class GrupoMaterial(db.Model):
     def adicionar_material(self, material):
         """
         Adiciona um material ao grupo
+        Verifica se já existe antes de adicionar para evitar duplicatas
         """
-        if material not in self.materiais:
-            self.materiais.append(material)
-            db.session.commit()
+        # Verificar diretamente no banco de dados para evitar problemas de cache
+        sql_check = "SELECT COUNT(*) FROM materiais_grupos WHERE material_id = :material_id AND grupo_id = :grupo_id"
+        result = db.session.execute(
+            db.text(sql_check),
+            {"material_id": material.id, "grupo_id": self.id}
+        ).fetchone()
+        
+        if result and result[0] > 0:
+            # Material já está no grupo, não fazer nada
+            return False
+        
+        # Adicionar o material
+        self.materiais.append(material)
+        db.session.commit()
+        return True
     
     def remover_material(self, material):
         """

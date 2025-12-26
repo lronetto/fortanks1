@@ -87,7 +87,6 @@
                                     <strong>{{ grupo.nome }}</strong>
                                 </div>
                             </td>
-                            <td>{{ grupo.codigo or '-' }}</td>
                             <td>{{ grupo.descricao or '-' }}</td>
                             <td class="text-center">
                                 <span class="badge badge-info">{{ grupo.total_materiais }}</span>
@@ -105,7 +104,6 @@
                                     <button type="button" class="btn btn-info btn-sm btn-visualizar-grupo" 
                                             data-id="{{ grupo.id }}"
                                             data-nome="{{ grupo.nome }}"
-                                            data-codigo="{{ grupo.codigo or '' }}"
                                             data-descricao="{{ grupo.descricao or '' }}"
                                             data-cor="{{ grupo.cor or '' }}"
                                             data-icone="{{ grupo.icone or '' }}"
@@ -120,7 +118,6 @@
                                     <button type="button" class="btn btn-primary btn-sm btn-editar-grupo" 
                                             data-id="{{ grupo.id }}"
                                             data-nome="{{ grupo.nome }}"
-                                            data-codigo="{{ grupo.codigo or '' }}"
                                             data-descricao="{{ grupo.descricao or '' }}"
                                             data-cor="{{ grupo.cor or '' }}"
                                             data-icone="{{ grupo.icone or '' }}"

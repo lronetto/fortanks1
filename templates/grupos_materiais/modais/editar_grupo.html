@@ -12,18 +12,11 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     
                     <div class="row mb-3">
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                             <div class="form-group">
                                 <label for="edit_nome" class="form-label">Nome do Grupo *</label>
                                 <input type="text" class="form-control" id="edit_nome" name="nome" required>
                                 <small class="form-text text-muted">Nome identificador do grupo</small>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="edit_codigo" class="form-label">Código</label>
-                                <input type="text" class="form-control" id="edit_codigo" name="codigo" maxlength="20">
-                                <small class="form-text text-muted">Código único (opcional)</small>
                             </div>
                         </div>
                     </div>
@@ -87,14 +80,14 @@
                         <div class="mb-3">
                             <label class="form-label">Adicionar Material</label>
                             <div class="input-group">
-                                <select class="form-control" id="select-adicionar-material-editar" style="width: 100%;">
-                                    <option value="">Selecione um material para adicionar...</option>
+                                <select class="form-control" id="select-adicionar-material-editar" multiple style="width: 100%;">
+                                    <option value="">Selecione um ou mais materiais para adicionar...</option>
                                 </select>
                                 <button type="button" class="btn btn-success" id="btn-adicionar-material-editar">
                                     <i class="fas fa-plus"></i> Adicionar
                                 </button>
                             </div>
-                            <small class="form-text text-muted">Apenas materiais em estoque são exibidos</small>
+                            <small class="form-text text-muted">Apenas materiais em estoque são exibidos. Você pode selecionar múltiplos materiais.</small>
                         </div>
                         
                         <!-- Tabela de Materiais -->
@@ -171,7 +164,6 @@ document.addEventListener('DOMContentLoaded', function() {
             window.grupoEditandoId = grupo.id;
             document.getElementById('edit_grupo_id').value = grupo.id || '';
             document.getElementById('edit_nome').value = grupo.nome || '';
-            document.getElementById('edit_codigo').value = grupo.codigo || '';
             document.getElementById('edit_descricao').value = grupo.descricao || '';
             document.getElementById('edit_cor').value = grupo.cor || '#007bff';
             document.getElementById('edit_cor_picker').value = grupo.cor || '#007bff';
@@ -435,7 +427,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const dados = {
             nome: $('#edit_nome').val(),
             descricao: $('#edit_descricao').val(),
-            codigo: $('#edit_codigo').val(),
             cor: $('#edit_cor').val(),
             icone: $('#edit_icone').val(),
             ativo: $('#edit_ativo').is(':checked')

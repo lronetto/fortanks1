@@ -125,7 +125,7 @@
                             </td>
                             <td>
                                 {% set total_itens = inventario.itens|length %}
-                                {% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}
+                                {% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|selectattr('contado_em', 'defined')|list|length %}
                                 {% if total_itens > 0 %}
                                     <div class="progress">
                                         <div class="progress-bar bg-info" role="progressbar" style="width: {{ (itens_contados / total_itens * 100)|int }}%;" 
@@ -148,8 +148,8 @@
                                         data-data-fim="{{ inventario.data_fim.strftime('%d/%m/%Y %H:%M') if inventario.data_fim else '-' }}"
                                         data-responsavel="{{ inventario.criado_por.nome if inventario.criado_por else 'Sistema' }}"
                                         data-total-itens="{{ inventario.itens|length }}"
-                                        data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|list|length }}"
-                                        data-progresso-texto="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
+                                        data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|selectattr('contado_em', 'defined')|list|length }}"
+                                        data-progresso-texto="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|selectattr('contado_em', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
                                         data-diferencas="0"
                                         data-observacoes="{{ inventario.observacoes or '' }}"
                                         data-url-contagem="{{ url_for('inventario.inventario_contagem', id=inventario.id) }}"
@@ -168,7 +168,7 @@
                                             data-url="{{ url_for('inventario.finalizar_inventario', id=inventario.id) }}"
                                             data-id="{{ inventario.id }}"
                                             data-tipo="{{ inventario.tipo_inventario }}"
-                                            data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|list|length }}"
+                                            data-itens-contados="{{ inventario.itens|selectattr('quantidade_contada', 'defined')|selectattr('contado_em', 'defined')|list|length }}"
                                             data-total-itens="{{ inventario.itens|length }}"
                                             title="Finalizar Inventário">
                                         <i class="fas fa-check-double"></i>
@@ -179,7 +179,7 @@
                                             data-id="{{ inventario.id }}"
                                             data-tipo="{{ inventario.tipo_inventario }}"
                                             data-status="{{ inventario.status }}"
-                                            data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
+                                            data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|selectattr('contado_em', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
                                             title="Cancelar e Desfazer Movimentações">
                                         <i class="fas fa-times"></i> Cancelar
                                     </button>
@@ -193,12 +193,18 @@
                                         <i class="fas fa-undo"></i> Reabrir Contagem
                                     </button>
                                     
+                                    <a href="{{ url_for('inventario.inventario_detalhes', id=inventario.id) }}" 
+                                       class="btn btn-info btn-sm" 
+                                       title="Criar grupo de materiais a partir deste inventário">
+                                        <i class="fas fa-layer-group"></i> Criar Grupo
+                                    </a>
+                                    
                                     <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
                                             data-url="{{ url_for('inventario.cancelar_inventario', id=inventario.id) }}"
                                             data-id="{{ inventario.id }}"
                                             data-tipo="{{ inventario.tipo_inventario }}"
                                             data-status="{{ inventario.status }}"
-                                            data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
+                                            data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|selectattr('contado_em', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
                                             title="Cancelar e Desfazer Movimentações">
                                         <i class="fas fa-times"></i> Cancelar
                                     </button>

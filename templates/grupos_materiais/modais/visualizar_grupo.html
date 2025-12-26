@@ -16,10 +16,6 @@
                                 <td id="view_nome">-</td>
                             </tr>
                             <tr>
-                                <td><strong>Código:</strong></td>
-                                <td id="view_codigo">-</td>
-                            </tr>
-                            <tr>
                                 <td><strong>Status:</strong></td>
                                 <td id="view_status">-</td>
                             </tr>
@@ -113,7 +109,6 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Informações básicas
             document.getElementById('view_nome').textContent = grupo.nome || '-';
-            document.getElementById('view_codigo').textContent = grupo.codigo || '-';
             document.getElementById('view_status').innerHTML = grupo.ativo === 'true' || grupo.ativo === true ? 
                 '<span class="badge badge-success">Ativo</span>' : 
                 '<span class="badge badge-secondary">Inativo</span>';
@@ -146,12 +141,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const preview = document.getElementById('preview-grupo');
             const iconeElement = preview.querySelector('i');
             const nomeElement = preview.querySelector('h5');
-            const codigoElement = preview.querySelector('small');
             
             iconeElement.className = `${icone} fa-2x me-3`;
             iconeElement.style.color = cor;
             nomeElement.textContent = grupo.nome || 'Nome do Grupo';
-            codigoElement.textContent = grupo.codigo || 'Código do Grupo';
             
         } catch (error) {
             console.error('Erro ao preencher o modal de visualização:', error);
@@ -166,7 +159,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const grupo = {
                     id: this.dataset.id,
                     nome: this.dataset.nome,
-                    codigo: this.dataset.codigo,
                     descricao: this.dataset.descricao,
                     cor: this.dataset.cor,
                     icone: this.dataset.icone,

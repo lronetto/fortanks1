@@ -1,0 +1,183 @@
+<!-- Modal para Criar Grupo de Materiais a partir do Inventário -->
+<div class="modal fade" id="modalCriarGrupoInventario" tabindex="-1" aria-labelledby="modalCriarGrupoInventarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalCriarGrupoInventarioLabel">
+                    <i class="fas fa-layer-group"></i> Criar Grupo de Materiais do Inventário
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> 
+                    Um novo grupo de materiais será criado com todos os materiais deste inventário.
+                </div>
+                
+                <form id="form-criar-grupo-inventario">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="inventario_id_grupo" name="inventario_id" value="{{ inventario.id }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="nome_grupo_inventario" class="form-label">Nome do Grupo *</label>
+                                <input type="text" class="form-control" id="nome_grupo_inventario" name="nome" required>
+                                <small class="form-text text-muted">Nome identificador do grupo</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="descricao_grupo_inventario" class="form-label">Descrição</label>
+                                <textarea class="form-control" id="descricao_grupo_inventario" name="descricao" rows="3" maxlength="500"></textarea>
+                                <small class="form-text text-muted">Descrição detalhada do grupo (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="cor_grupo_inventario" class="form-label">Cor</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="cor_picker_grupo_inventario" value="#007bff">
+                                    <input type="text" class="form-control" id="cor_grupo_inventario" name="cor" placeholder="#007bff" maxlength="7">
+                                </div>
+                                <small class="form-text text-muted">Cor para identificação visual (opcional)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="icone_grupo_inventario" class="form-label">Ícone</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="icone_grupo_inventario" name="icone" placeholder="fas fa-boxes" maxlength="50">
+                                    <button type="button" class="btn btn-outline-secondary" id="btn-preview-icone-grupo-inventario">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Classe do ícone FontAwesome (opcional)</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="ativo_grupo_inventario" name="ativo" checked>
+                                <label class="form-check-label" for="ativo_grupo_inventario">
+                                    Grupo ativo
+                                </label>
+                                <small class="form-text text-muted d-block">Grupos inativos não aparecem nas opções de inventário</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        <strong>Atenção:</strong> O grupo será criado com <span id="total-materiais-inventario">{{ inventario.itens|length }}</span> material(is) deste inventário.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-grupo-inventario">
+                    <i class="fas fa-save"></i> Criar Grupo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Sincronizar cor do picker com o campo de texto
+    $('#cor_picker_grupo_inventario').on('change', function() {
+        $('#cor_grupo_inventario').val($(this).val());
+    });
+    
+    $('#cor_grupo_inventario').on('input', function() {
+        const cor = $(this).val();
+        if (cor.match(/^#[0-9A-F]{6}$/i)) {
+            $('#cor_picker_grupo_inventario').val(cor);
+        }
+    });
+    
+    // Preview do ícone
+    $('#btn-preview-icone-grupo-inventario').on('click', function() {
+        const icone = $('#icone_grupo_inventario').val();
+        if (icone) {
+            $(this).html(`<i class="${icone}"></i>`);
+        } else {
+            $(this).html('<i class="fas fa-eye"></i>');
+        }
+    });
+    
+    // Preencher nome padrão baseado no inventário
+    $('#modalCriarGrupoInventario').on('show.bs.modal', function() {
+        const inventarioTipo = '{{ inventario.tipo_inventario }}';
+        const inventarioId = '{{ inventario.id }}';
+        const nomePadrao = `Grupo - ${inventarioTipo} #${inventarioId}`;
+        $('#nome_grupo_inventario').val(nomePadrao);
+    });
+    
+    // Criar grupo
+    $('#btn-salvar-grupo-inventario').on('click', function() {
+        const nome = $('#nome_grupo_inventario').val().trim();
+        if (!nome) {
+            alert('O nome do grupo é obrigatório.');
+            $('#nome_grupo_inventario').focus();
+            return;
+        }
+        
+        const dados = {
+            nome: nome,
+            descricao: $('#descricao_grupo_inventario').val(),
+            cor: $('#cor_grupo_inventario').val() || '#007bff',
+            icone: $('#icone_grupo_inventario').val(),
+            ativo: $('#ativo_grupo_inventario').is(':checked'),
+            inventario_id: $('#inventario_id_grupo').val()
+        };
+        
+        const $btn = $(this);
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Criando...');
+        
+        $.ajax({
+            url: "/inventario/{{ inventario.id }}/criar-grupo",
+            type: "POST",
+            data: JSON.stringify(dados),
+            contentType: "application/json",
+            dataType: "json",
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert(response.message);
+                    $('#modalCriarGrupoInventario').modal('hide');
+                    // Opcional: redirecionar para o grupo criado ou recarregar página
+                    if (response.grupo_id) {
+                        window.location.href = '/grupos-materiais/' + response.grupo_id;
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert(response.message || 'Erro ao criar grupo.');
+                    $btn.prop('disabled', false).html('<i class="fas fa-save"></i> Criar Grupo');
+                }
+            },
+            error: function(xhr, status, error) {
+                const message = xhr.responseJSON && xhr.responseJSON.message 
+                    ? xhr.responseJSON.message 
+                    : 'Erro ao criar grupo: ' + error;
+                alert(message);
+                $btn.prop('disabled', false).html('<i class="fas fa-save"></i> Criar Grupo');
+            }
+        });
+    });
+});
+</script>
+

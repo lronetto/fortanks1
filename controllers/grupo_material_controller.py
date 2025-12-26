@@ -307,23 +307,37 @@ def adicionar_material(id):
     try:
         logger.info(f"Tentando adicionar material ao grupo {id}")
         grupo = GrupoMaterial.query.get_or_404(id)
-        material_id = request.json.get('material_id')
+        material_id_raw = request.json.get('material_id')
         
-        logger.info(f"Material ID recebido: {material_id}")
+        logger.info(f"Material ID recebido: {material_id_raw}, tipo: {type(material_id_raw)}")
         
-        if not material_id:
+        if material_id_raw is None:
             return jsonify({'success': False, 'message': 'ID do material não fornecido'})
         
+        # Garantir que material_id seja um inteiro
+        try:
+            material_id = int(material_id_raw)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Erro ao converter material_id: {e}, valor recebido: {material_id_raw}")
+            return jsonify({'success': False, 'message': f'ID do material inválido: {material_id_raw}'})
+        
+        logger.info(f"Material ID convertido: {material_id}")
+        
+        # Buscar o material usando get com o ID inteiro
         material = Material.query.get(material_id)
         if not material:
-            return jsonify({'success': False, 'message': 'Material não encontrado'})
+            logger.warning(f"Material com ID {material_id} não encontrado")
+            return jsonify({'success': False, 'message': f'Material com ID {material_id} não encontrado'})
         
         logger.info(f"Material encontrado: {material.nome}")
         
-        if material in grupo.materiais:
+        # Adicionar o material (o método já verifica duplicatas)
+        material_adicionado = grupo.adicionar_material(material)
+        
+        if not material_adicionado:
+            logger.warning(f"Material {material_id} já está no grupo {id}")
             return jsonify({'success': False, 'message': 'Material já está neste grupo'})
         
-        grupo.adicionar_material(material)
         logger.info(f"Material {material.nome} adicionado ao grupo {grupo.nome}")
         
         return jsonify({
@@ -332,8 +346,21 @@ def adicionar_material(id):
         })
     
     except Exception as e:
-        logger.error(f"Erro ao adicionar material ao grupo {id}: {str(e)}")
-        return jsonify({'success': False, 'message': 'Erro ao adicionar material ao grupo'})
+        db.session.rollback()
+        error_msg = str(e)
+        logger.error(f"Erro ao adicionar material ao grupo {id}: {error_msg}")
+        
+        # Verificar se é erro de duplicata (pode ocorrer em race conditions)
+        if 'Duplicate entry' in error_msg or '1062' in error_msg:
+            return jsonify({
+                'success': False, 
+                'message': 'Material já está neste grupo'
+            })
+        
+        return jsonify({
+            'success': False, 
+            'message': f'Erro ao adicionar material ao grupo: {error_msg}'
+        }), 500
 
 @grupo_material_bp.route('/<int:id>/remover-material', methods=['POST'])
 @login_required

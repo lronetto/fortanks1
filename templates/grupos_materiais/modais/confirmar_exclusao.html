@@ -16,7 +16,6 @@
                     <!-- Informações do grupo que será excluído -->
                     <div class="alert alert-warning mt-3">
                         <strong>Grupo:</strong> <span id="grupo-exclusao-nome">-</span><br>
-                        <strong>Código:</strong> <span id="grupo-exclusao-codigo">-</span><br>
                         <strong>Materiais:</strong> <span id="grupo-exclusao-materiais">-</span>
                     </div>
                     
@@ -54,7 +53,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // Preencher informações do grupo
         if (grupoData) {
             document.getElementById('grupo-exclusao-nome').textContent = grupoData.nome || '-';
-            document.getElementById('grupo-exclusao-codigo').textContent = grupoData.codigo || '-';
             document.getElementById('grupo-exclusao-materiais').textContent = grupoData.total_materiais || '0';
             
             // Verificar se há materiais associados (apenas para exibir aviso informativo)
@@ -88,7 +86,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const url = this.getAttribute('data-url');
             const grupoData = {
                 nome: this.getAttribute('data-nome') || '',
-                codigo: this.getAttribute('data-codigo') || '',
                 total_materiais: this.getAttribute('data-total-materiais') || '0'
             };
             

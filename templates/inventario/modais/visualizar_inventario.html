@@ -108,6 +108,11 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <div id="btn-criar-grupo-container" style="display: none;" class="me-auto">
+                    <a href="#" id="btn-criar-grupo-inventario-modal" class="btn btn-info btn-sm" title="Criar grupo de materiais a partir deste inventário">
+                        <i class="fas fa-layer-group"></i> Criar Grupo de Materiais
+                    </a>
+                </div>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
                 <button type="button" class="btn btn-primary" id="btn-continuar-inventario" style="display: none;">
                     <i class="fas fa-clipboard-check"></i> Continuar Contagem
@@ -161,6 +166,19 @@ document.addEventListener('DOMContentLoaded', function() {
             // Mostrar/ocultar botões baseado no status
             const btnContinuar = document.getElementById('btn-continuar-inventario');
             const btnFinalizar = document.getElementById('btn-finalizar-inventario');
+            const btnCriarGrupoContainer = document.getElementById('btn-criar-grupo-container');
+            const btnCriarGrupo = document.getElementById('btn-criar-grupo-inventario-modal');
+            
+            // Mostrar botão de criar grupo para inventários finalizados/concluídos
+            if (inventario.status === 'Concluído' || inventario.status === 'Finalizado') {
+                if (btnCriarGrupoContainer) btnCriarGrupoContainer.style.display = 'inline-block';
+                if (btnCriarGrupo) {
+                    const urlDetalhes = `/inventario/${inventario.id}`;
+                    btnCriarGrupo.href = urlDetalhes;
+                }
+            } else {
+                if (btnCriarGrupoContainer) btnCriarGrupoContainer.style.display = 'none';
+            }
             
             if (inventario.status === 'Em andamento') {
                 btnContinuar.style.display = 'inline-block';

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_file
 from flask_login import login_required, current_user
 from models.estoque import Estoque, MovimentacaoEstoque
 from models.material import Material
@@ -9,9 +9,14 @@ from forms.estoque_forms import EstoqueForm, MovimentacaoEstoqueForm, FiltroEsto
 from datetime import datetime, date, timedelta
 from models.unidade import Unidade
 from sqlalchemy import or_, func
+from models.grupo_material import GrupoMaterial
 
 from decimal import Decimal
 import logging
+import io
+import pandas as pd
+from weasyprint import HTML, CSS
+import os
 
 from models.produto_composto import ProdutoComposto
 
@@ -1009,4 +1014,300 @@ def sincronizar_estoque(id):
         logger.error(f"Erro ao sincronizar estoque {id}: {str(e)}")
         flash(f'Erro ao sincronizar quantidade: {str(e)}', 'danger')
     
-    return redirect(url_for('estoque.index')) 
+    return redirect(url_for('estoque.index'))
+
+@estoque_bp.route('/relatorio-grupos')
+@login_required
+def relatorio_grupos():
+    """
+    Relatório de estoque agrupado por grupo de material
+    """
+    try:
+        # Parâmetros de filtro
+        data_filtro = request.args.get('data_filtro', '')
+        grupo_id = request.args.get('grupo_id', type=int)
+        
+        # Converter data se fornecida
+        data_filtro_dt = None
+        if data_filtro:
+            try:
+                data_filtro_dt = datetime.strptime(data_filtro, '%Y-%m-%d')
+            except ValueError:
+                data_filtro_dt = None
+        
+        # Buscar todos os grupos de materiais
+        grupos = GrupoMaterial.query.filter_by(ativo=True).order_by(GrupoMaterial.nome).all()
+        
+        # Dados do relatório
+        dados_relatorio = []
+        
+        # Se um grupo específico foi selecionado, filtrar
+        grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
+        
+        for grupo in grupos_filtrados:
+            # Buscar materiais do grupo
+            materiais_grupo = grupo.materiais
+            
+            itens_grupo = []
+            quantidade_total_grupo = Decimal('0.0')
+            
+            for material in materiais_grupo:
+                if not material.ativo:
+                    continue
+                
+                # Buscar estoques do material
+                estoques = Estoque.query.filter_by(
+                    material_id=material.id,
+                    tipo_item='material'
+                ).all()
+                
+                quantidade_total_material = Decimal('0.0')
+                localizacoes = []
+                
+                for estoque in estoques:
+                    # Calcular saldo até a data filtro
+                    if data_filtro_dt:
+                        saldo = estoque.get_saldo_ate_data(data_fim=data_filtro_dt)
+                    else:
+                        saldo = estoque.get_saldo_real()
+                    
+                    quantidade_total_material += saldo
+                    
+                    if estoque.localizacao:
+                        localizacoes.append(estoque.localizacao)
+                
+                if quantidade_total_material > 0 or not data_filtro_dt:
+                    itens_grupo.append({
+                        'material_id': material.id,
+                        'codigo': material.codigo or '',
+                        'nome': material.nome,
+                        'categoria': material.categoria or '',
+                        'unidade': material.get_unidade_nome() or '',
+                        'quantidade': float(quantidade_total_material),
+                        'localizacoes': ', '.join(set(localizacoes)) if localizacoes else 'Não especificado'
+                    })
+                    quantidade_total_grupo += quantidade_total_material
+            
+            if itens_grupo or not grupo_id:
+                dados_relatorio.append({
+                    'grupo_id': grupo.id,
+                    'grupo_nome': grupo.nome,
+                    'grupo_codigo': grupo.codigo or '',
+                    'grupo_cor': grupo.cor or '#6c757d',
+                    'grupo_icone': grupo.icone or 'fas fa-boxes',
+                    'quantidade_total': float(quantidade_total_grupo),
+                    'total_itens': len(itens_grupo),
+                    'itens': itens_grupo
+                })
+        
+        return render_template('estoque/relatorio_grupos.html',
+                             dados_relatorio=dados_relatorio,
+                             grupos=grupos,
+                             data_filtro=data_filtro,
+                             grupo_id=grupo_id)
+    
+    except Exception as e:
+        logger.error(f"Erro ao gerar relatório de grupos: {str(e)}")
+        flash('Erro ao gerar relatório.', 'error')
+        return redirect(url_for('estoque.index'))
+
+@estoque_bp.route('/relatorio-grupos/exportar-excel')
+@login_required
+def relatorio_grupos_exportar_excel():
+    """
+    Exporta relatório de estoque por grupo de material para Excel
+    """
+    try:
+        data_filtro = request.args.get('data_filtro', '')
+        grupo_id = request.args.get('grupo_id', type=int)
+        
+        # Converter data se fornecida
+        data_filtro_dt = None
+        if data_filtro:
+            try:
+                data_filtro_dt = datetime.strptime(data_filtro, '%Y-%m-%d')
+            except ValueError:
+                data_filtro_dt = None
+        
+        # Buscar grupos
+        grupos = GrupoMaterial.query.filter_by(ativo=True).order_by(GrupoMaterial.nome).all()
+        grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
+        
+        # Preparar dados para Excel
+        dados_excel = []
+        
+        for grupo in grupos_filtrados:
+            for material in grupo.materiais:
+                if not material.ativo:
+                    continue
+                
+                estoques = Estoque.query.filter_by(
+                    material_id=material.id,
+                    tipo_item='material'
+                ).all()
+                
+                quantidade_total = Decimal('0.0')
+                localizacoes = []
+                
+                for estoque in estoques:
+                    if data_filtro_dt:
+                        saldo = estoque.get_saldo_ate_data(data_fim=data_filtro_dt)
+                    else:
+                        saldo = estoque.get_saldo_real()
+                    
+                    quantidade_total += saldo
+                    if estoque.localizacao:
+                        localizacoes.append(estoque.localizacao)
+                
+                dados_excel.append({
+                    'Grupo': grupo.nome,
+                    'Código Grupo': grupo.codigo or '',
+                    'Código Material': material.codigo or '',
+                    'Material': material.nome,
+                    'Categoria': material.categoria or '',
+                    'Unidade': material.get_unidade_nome() or '',
+                    'Quantidade': float(quantidade_total),
+                    'Localizações': ', '.join(set(localizacoes)) if localizacoes else 'Não especificado'
+                })
+        
+        # Criar DataFrame
+        df = pd.DataFrame(dados_excel)
+        
+        # Criar buffer Excel
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Estoque por Grupo')
+        
+        excel_buffer.seek(0)
+        
+        # Nome do arquivo
+        nome_arquivo = 'relatorio_estoque_grupos'
+        if data_filtro:
+            nome_arquivo += f'_{data_filtro}'
+        nome_arquivo += '.xlsx'
+        
+        return send_file(
+            excel_buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nome_arquivo
+        )
+    
+    except Exception as e:
+        logger.error(f"Erro ao exportar relatório Excel: {str(e)}")
+        flash('Erro ao exportar relatório para Excel.', 'error')
+        return redirect(url_for('estoque.relatorio_grupos'))
+
+@estoque_bp.route('/relatorio-grupos/exportar-pdf')
+@login_required
+def relatorio_grupos_exportar_pdf():
+    """
+    Exporta relatório de estoque por grupo de material para PDF
+    """
+    try:
+        data_filtro = request.args.get('data_filtro', '')
+        grupo_id = request.args.get('grupo_id', type=int)
+        
+        # Converter data se fornecida
+        data_filtro_dt = None
+        if data_filtro:
+            try:
+                data_filtro_dt = datetime.strptime(data_filtro, '%Y-%m-%d')
+            except ValueError:
+                data_filtro_dt = None
+        
+        # Buscar grupos
+        grupos = GrupoMaterial.query.filter_by(ativo=True).order_by(GrupoMaterial.nome).all()
+        grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
+        
+        # Preparar dados do relatório
+        dados_relatorio = []
+        
+        for grupo in grupos_filtrados:
+            materiais_grupo = grupo.materiais
+            
+            itens_grupo = []
+            quantidade_total_grupo = Decimal('0.0')
+            
+            for material in materiais_grupo:
+                if not material.ativo:
+                    continue
+                
+                estoques = Estoque.query.filter_by(
+                    material_id=material.id,
+                    tipo_item='material'
+                ).all()
+                
+                quantidade_total_material = Decimal('0.0')
+                localizacoes = []
+                
+                for estoque in estoques:
+                    if data_filtro_dt:
+                        saldo = estoque.get_saldo_ate_data(data_fim=data_filtro_dt)
+                    else:
+                        saldo = estoque.get_saldo_real()
+                    
+                    quantidade_total_material += saldo
+                    if estoque.localizacao:
+                        localizacoes.append(estoque.localizacao)
+                
+                if quantidade_total_material > 0 or not data_filtro_dt:
+                    itens_grupo.append({
+                        'material_id': material.id,
+                        'codigo': material.codigo or '',
+                        'nome': material.nome,
+                        'categoria': material.categoria or '',
+                        'unidade': material.get_unidade_nome() or '',
+                        'quantidade': float(quantidade_total_material),
+                        'localizacoes': ', '.join(set(localizacoes)) if localizacoes else 'Não especificado'
+                    })
+                    quantidade_total_grupo += quantidade_total_material
+            
+            if itens_grupo or not grupo_id:
+                dados_relatorio.append({
+                    'grupo_id': grupo.id,
+                    'grupo_nome': grupo.nome,
+                    'grupo_codigo': grupo.codigo or '',
+                    'grupo_cor': grupo.cor or '#6c757d',
+                    'quantidade_total': float(quantidade_total_grupo),
+                    'total_itens': len(itens_grupo),
+                    'itens': itens_grupo
+                })
+        
+        # Caminho da logo
+        logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
+        logo_path_uri = 'file:///' + logo_path.replace('\\', '/')
+        
+        # Renderizar template PDF
+        html = render_template('estoque/relatorio_grupos_pdf.html',
+                             dados_relatorio=dados_relatorio,
+                             data_filtro=data_filtro,
+                             data_filtro_formatada=datetime.strptime(data_filtro, '%Y-%m-%d').strftime('%d/%m/%Y') if data_filtro else 'Atual',
+                             now=datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
+                             logo_path=logo_path_uri)
+        
+        # Gerar PDF
+        pdf_bytes = HTML(string=html).write_pdf(
+            stylesheets=[CSS(string='body { font-family: Arial, sans-serif; }')]
+        )
+        
+        pdf_io = io.BytesIO(pdf_bytes)
+        pdf_io.seek(0)
+        
+        # Nome do arquivo
+        nome_arquivo = 'relatorio_estoque_grupos'
+        if data_filtro:
+            nome_arquivo += f'_{data_filtro}'
+        nome_arquivo += '.pdf'
+        
+        return send_file(
+            pdf_io,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=nome_arquivo
+        )
+    
+    except Exception as e:
+        logger.error(f"Erro ao exportar relatório PDF: {str(e)}")
+        flash('Erro ao exportar relatório para PDF.', 'error')
+        return redirect(url_for('estoque.relatorio_grupos')) 

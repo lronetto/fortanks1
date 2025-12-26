@@ -294,7 +294,7 @@
                             <div class="row mb-3">
                                 <div class="col-md-4">
                                     <label for="filtro-grupo-search" class="form-label">Buscar</label>
-                                    <input type="text" class="form-control" id="filtro-grupo-search" placeholder="Nome, código ou descrição...">
+                                    <input type="text" class="form-control" id="filtro-grupo-search" placeholder="Nome ou descrição...">
                                 </div>
                                 <div class="col-md-3">
                                     <label for="filtro-grupo-status" class="form-label">Status</label>
@@ -317,7 +317,6 @@
                                     <thead>
                                         <tr>
                                             <th>Nome</th>
-                                            <th>Código</th>
                                             <th>Descrição</th>
                                             <th>Materiais</th>
                                             <th>Status</th>
@@ -451,6 +450,30 @@
 
 #modalMateriaisGrupo .select2-dropdown {
     z-index: 9999 !important;
+}
+
+/* Garantir que o Select2 no modal de edição apareça corretamente */
+#modalEditarGrupo .select2-container {
+    z-index: 9999 !important;
+}
+
+#modalEditarGrupo .select2-dropdown {
+    z-index: 9999 !important;
+}
+
+/* Garantir que os itens da lista sejam clicáveis */
+.select2-results__option {
+    cursor: pointer !important;
+    padding: 8px 12px !important;
+}
+
+.select2-results__option:hover {
+    background-color: #f0f0f0 !important;
+}
+
+.select2-results__option--highlighted {
+    background-color: #007bff !important;
+    color: white !important;
 }
 </style>
 
@@ -653,6 +676,9 @@ function carregarHistorico() {
                                                 title="Reabrir contagem e desfazer movimentações">
                                             <i class="fas fa-undo"></i> Reabrir
                                         </button>
+                                        <a href="/inventario/${inv.id}" class="btn btn-sm btn-info" title="Criar grupo de materiais">
+                                            <i class="fas fa-layer-group"></i> Criar Grupo
+                                        </a>
                                         <button class="btn btn-sm btn-info" onclick="gerarRelatorioInventario(${inv.id})">
                                             <i class="fas fa-file-pdf"></i>
                                         </button>` : ''
@@ -810,7 +836,7 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
                 tbody.empty();
                 
                 if (response.grupos.length === 0) {
-                    tbody.append('<tr><td colspan="7" class="text-center">Nenhum grupo encontrado</td></tr>');
+                    tbody.append('<tr><td colspan="6" class="text-center">Nenhum grupo encontrado</td></tr>');
                     return;
                 }
                 
@@ -827,7 +853,6 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
                                     <strong>${grupo.nome}</strong>
                                 </div>
                             </td>
-                            <td>${grupo.codigo || '-'}</td>
                             <td>${grupo.descricao || '-'}</td>
                             <td class="text-center">
                                 <span class="badge badge-info">${grupo.total_materiais}</span>
@@ -841,7 +866,6 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
                                     <button type="button" class="btn btn-info btn-sm btn-visualizar-grupo" 
                                             data-id="${grupo.id}"
                                             data-nome="${grupo.nome}"
-                                            data-codigo="${grupo.codigo || ''}"
                                             data-descricao="${grupo.descricao || ''}"
                                             data-cor="${grupo.cor || ''}"
                                             data-icone="${grupo.icone || ''}"
@@ -856,7 +880,6 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
                                     <button type="button" class="btn btn-primary btn-sm btn-editar-grupo" 
                                             data-id="${grupo.id}"
                                             data-nome="${grupo.nome}"
-                                            data-codigo="${grupo.codigo || ''}"
                                             data-descricao="${grupo.descricao || ''}"
                                             data-cor="${grupo.cor || '#007bff'}"
                                             data-icone="${grupo.icone || ''}"
@@ -921,7 +944,6 @@ function inicializarEventListenersGrupos() {
             // Preencher modal de edição
             $('#edit_grupo_id').val(grupo.id);
             $('#edit_nome').val(grupo.nome);
-            $('#edit_codigo').val(grupo.codigo);
             $('#edit_descricao').val(grupo.descricao);
             $('#edit_cor').val(grupo.cor);
             $('#edit_cor_picker').val(grupo.cor);
@@ -995,13 +1017,11 @@ function inicializarEventListenersGrupos() {
         
         const grupoData = {
             nome: $(this).data('nome') || '',
-            codigo: $(this).data('codigo') || '',
             total_materiais: $(this).data('total-materiais') || '0'
         };
         
         // Preencher modal de confirmação
         $('#grupo-exclusao-nome').text(grupoData.nome);
-        $('#grupo-exclusao-codigo').text(grupoData.codigo || '-');
         $('#grupo-exclusao-materiais').text(grupoData.total_materiais);
         
         // Verificar se há materiais associados (apenas para exibir aviso informativo)
@@ -1069,7 +1089,6 @@ $(document).on('click', '#btn-salvar-edicao-grupo', function() {
     const dados = {
         nome: $('#edit_nome').val(),
         descricao: $('#edit_descricao').val(),
-        codigo: $('#edit_codigo').val(),
         cor: $('#edit_cor').val(),
         icone: $('#edit_icone').val(),
         ativo: $('#edit_ativo').is(':checked')
@@ -1190,7 +1209,6 @@ function carregarMateriaisGrupo(grupoId, search = '') {
                 // Preencher informações do grupo
                 const grupo = response.grupo;
                 $('#grupo-materiais-nome').text(grupo.nome);
-                $('#grupo-materiais-codigo').text(grupo.codigo || '-');
                 $('#grupo-materiais-descricao').text(grupo.descricao || 'Sem descrição');
                 $('#grupo-materiais-total').text(response.total);
                 
@@ -1600,11 +1618,27 @@ window.inicializarSelect2Editar = function(grupoId) {
     const $modal = $('#modalEditarGrupo');
     
     $select.select2({
-        placeholder: 'Digite pelo menos 2 caracteres para buscar...',
+        placeholder: 'Digite pelo menos 2 caracteres para buscar e selecionar materiais...',
         allowClear: true,
+        multiple: true,
         dropdownParent: $modal,
         minimumInputLength: 2,
         width: '100%',
+        closeOnSelect: false, // Não fechar o dropdown ao selecionar um item para permitir múltiplas seleções
+        language: {
+            inputTooShort: function() {
+                return 'Digite pelo menos 2 caracteres';
+            },
+            searching: function() {
+                return 'Buscando...';
+            },
+            noResults: function() {
+                return 'Nenhum material encontrado';
+            },
+            loadingMore: function() {
+                return 'Carregando mais resultados...';
+            }
+        },
         ajax: {
             url: apiUrl,
             dataType: 'json',
@@ -1617,17 +1651,21 @@ window.inicializarSelect2Editar = function(grupoId) {
                 };
             },
             processResults: function(data) {
+                console.log('Dados recebidos da API:', data);
                 if (data && data.success && data.materiais && Array.isArray(data.materiais)) {
                     const results = data.materiais.map(function(material) {
                         const codigo = material.codigo && material.codigo !== 'N/A' ? material.codigo + ' - ' : '';
                         const unidade = material.unidade && material.unidade !== 'N/A' ? ' (' + material.unidade + ')' : '';
                         return {
                             id: material.id,
-                            text: codigo + material.nome + unidade
+                            text: codigo + material.nome + unidade,
+                            material: material // Manter dados completos do material
                         };
                     });
+                    console.log('Resultados processados:', results);
                     return { results: results };
                 }
+                console.warn('Nenhum material encontrado ou formato inválido');
                 return { results: [] };
             },
             error: function(xhr, status, error) {
@@ -1637,13 +1675,63 @@ window.inicializarSelect2Editar = function(grupoId) {
             cache: true
         }
     });
+    
+    // Garantir que o dropdown seja clicável e permita seleção
+    $select.on('select2:open', function() {
+        // Aplicar z-index alto para garantir que o dropdown apareça acima do modal
+        setTimeout(function() {
+            $('.select2-container--open').css('z-index', '9999');
+            $('.select2-dropdown').css('z-index', '9999');
+        }, 50);
+    });
+    
+    // Handler para quando um material é selecionado
+    $select.on('select2:select', function(e) {
+        const data = e.params.data;
+        console.log('Material selecionado:', data);
+        // O valor já está definido, o usuário pode clicar no botão Adicionar
+        if (data && data.id) {
+            console.log('Material ID selecionado:', data.id);
+            // Habilitar o botão de adicionar se necessário
+            $('#btn-adicionar-material-editar').prop('disabled', false);
+        }
+    });
+    
+    // Handler para quando o Select2 é fechado sem seleção
+    $select.on('select2:close', function() {
+        console.log('Select2 fechado');
+    });
+    
+    // Garantir que os resultados sejam clicáveis (Select2 já faz isso, mas garantimos)
+    $(document).on('click', '.select2-results__option', function() {
+        // O Select2 já gerencia isso, mas garantimos que funcione
+        console.log('Item da lista clicado');
+    });
 };
 
-// Adicionar material ao grupo no modal de edição
+// Adicionar materiais ao grupo no modal de edição
 $(document).on('click', '#btn-adicionar-material-editar', function() {
-    const materialId = $('#select-adicionar-material-editar').val();
-    if (!materialId) {
-        alert('Selecione um material para adicionar');
+    let materialIds = $('#select-adicionar-material-editar').val();
+    
+    // Garantir que seja um array
+    if (!materialIds) {
+        alert('Selecione pelo menos um material para adicionar');
+        return;
+    }
+    
+    // Se não for array, converter para array
+    if (!Array.isArray(materialIds)) {
+        materialIds = [materialIds];
+    }
+    
+    // Filtrar valores vazios e converter para números
+    materialIds = materialIds
+        .filter(id => id !== null && id !== undefined && id !== '')
+        .map(id => parseInt(id))
+        .filter(id => !isNaN(id));
+    
+    if (materialIds.length === 0) {
+        alert('Selecione pelo menos um material válido para adicionar');
         return;
     }
     
@@ -1652,34 +1740,77 @@ $(document).on('click', '#btn-adicionar-material-editar', function() {
         return;
     }
     
+    // Adicionar materiais um por um
     const url = `{{ url_for('grupo_material.adicionar_material', id=0) }}`.replace('/0', '/' + window.grupoEditandoId);
+    let adicionados = 0;
+    let erros = 0;
+    let mensagensErro = [];
     
-    $.ajax({
-        url: url,
-        type: 'POST',
-        dataType: 'json',
-        headers: {
-            "X-Requested-With": "XMLHttpRequest",
-            "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
-        },
-        data: JSON.stringify({ material_id: materialId }),
-        contentType: 'application/json',
-        success: function(response) {
-            if (response.success) {
+    // Função para adicionar um material
+    function adicionarMaterial(index) {
+        if (index >= materialIds.length) {
+            // Todos os materiais foram processados
+            if (adicionados > 0) {
+                // Limpar seleção e recarregar
                 $('#select-adicionar-material-editar').val(null).trigger('change');
                 window.carregarMateriaisGrupoEditar(window.grupoEditandoId);
                 window.inicializarSelect2Editar(window.grupoEditandoId);
+                
+                let mensagem = `${adicionados} material(is) adicionado(s) com sucesso!`;
+                if (erros > 0) {
+                    mensagem += `\n${erros} material(is) não puderam ser adicionados.`;
+                    if (mensagensErro.length > 0) {
+                        mensagem += '\n\nErros:\n' + mensagensErro.join('\n');
+                    }
+                }
+                alert(mensagem);
             } else {
-                alert(response.message || 'Erro ao adicionar material');
+                let mensagem = 'Nenhum material foi adicionado.';
+                if (mensagensErro.length > 0) {
+                    mensagem += '\n\nErros:\n' + mensagensErro.join('\n');
+                }
+                alert(mensagem);
             }
-        },
-        error: function(xhr, status, error) {
-            const message = xhr.responseJSON && xhr.responseJSON.message 
-                ? xhr.responseJSON.message 
-                : 'Erro ao adicionar material ao grupo';
-            alert(message);
+            return;
         }
-    });
+        
+        const materialId = materialIds[index];
+        
+        // materialId já é um número (convertido anteriormente)
+        $.ajax({
+            url: url,
+            type: 'POST',
+            dataType: 'json',
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            data: JSON.stringify({ material_id: materialId }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    adicionados++;
+                } else {
+                    erros++;
+                    mensagensErro.push(response.message || `Material ID ${materialId}: Erro desconhecido`);
+                }
+                // Processar próximo material
+                adicionarMaterial(index + 1);
+            },
+            error: function(xhr, status, error) {
+                erros++;
+                const message = xhr.responseJSON && xhr.responseJSON.message 
+                    ? xhr.responseJSON.message 
+                    : `Material ID ${materialId}: Erro ao adicionar`;
+                mensagensErro.push(message);
+                // Processar próximo material mesmo em caso de erro
+                adicionarMaterial(index + 1);
+            }
+        });
+    }
+    
+    // Iniciar processo de adição
+    adicionarMaterial(0);
 });
 
 // Remover material do grupo no modal de edição

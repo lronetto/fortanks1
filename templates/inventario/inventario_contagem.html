@@ -34,7 +34,7 @@
                 <div class="col-md-8">
                     <p class="mb-1"><strong>Progresso da Contagem:</strong></p>
                     {% set total_itens = inventario.itens|length %}
-                    {% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}
+                    {% set itens_contados = contados %}
                     <div class="progress mb-2">
                         <div class="progress-bar bg-info" role="progressbar" 
                              style="width: {{ (itens_contados / total_itens * 100)|int if total_itens > 0 else 0 }}%" 
@@ -771,7 +771,7 @@
                         // Extrair ID e redirecionar
                         const inventarioId = url.match(/\/(\d+)\/finalizar/);
                         if (inventarioId) {
-                            window.location.href = '/estoque/inventario/' + inventarioId[1];
+                            window.location.href = '/inventario/' + inventarioId[1];
                         } else {
                             location.reload();
                         }
@@ -792,7 +792,7 @@
                             // Fallback: extrair ID da URL
                             const inventarioId = url.match(/\/(\d+)\/finalizar/);
                             if (inventarioId) {
-                                window.location.href = '/estoque/inventario/' + inventarioId[1];
+                                window.location.href = '/inventario/' + inventarioId[1];
                             } else {
                                 location.reload();
                             }
@@ -1023,7 +1023,7 @@
             
             const itemId = $(this).attr('data-item-id');
             const inventarioId = $(this).attr('data-inventario-id');
-            const url = `/estoque/inventario/${inventarioId}/item/${itemId}/excluir`;
+            const url = `/inventario/${inventarioId}/item/${itemId}/excluir`;
             
             const itemData = {
                 id: itemId,

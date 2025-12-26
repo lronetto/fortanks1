@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, flash, redirect, url_for,
 from flask_login import login_required, current_user
 from models.estoque import Estoque, MovimentacaoEstoque, InventarioEstoque, ItemInventario
 from models.material import Material
+from models.grupo_material import GrupoMaterial
 from models.database import db
 from forms.estoque_forms import InventarioEstoqueForm
 from datetime import datetime, timedelta
@@ -340,11 +341,17 @@ def api_inventarios_ativos():
         inventarios_data = []
         for inv in inventarios:
             # Contar itens totais e contados
+            # Contar apenas itens que foram salvos com data E quantidade
             total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
             itens_contados = ItemInventario.query.filter_by(
                 inventario_id=inv.id
-            ).filter(ItemInventario.quantidade_contada.isnot(None)).count()
+            ).filter(
+                ItemInventario.quantidade_contada.isnot(None),
+                ItemInventario.contado_em.isnot(None)
+            ).count()
             
+            print("total_itens: ", total_itens)
+            print("itens_contados: ", itens_contados)
             inventarios_data.append({
                 'id': inv.id,
                 'tipo_inventario': inv.tipo_inventario,
@@ -469,11 +476,16 @@ def inventario_contagem(id):
         .order_by(func.coalesce(Material.nome, '').asc())\
         .all()
     
+    contados = 0
     # Atualizar quantidade_sistema para cada item
     for item in itens_ordenados:
         item.quantidade_sistema = item.estoque.get_saldo_ate_data()
         item.save()
-    
+        if item.quantidade_contada is not None and item.contado_em is not None:
+            contados += 1
+        
+    print("contados: ", contados)
+
     # Substituir a lista de itens do inventário pela lista ordenada
     # Isso mantém a compatibilidade com o template que usa inventario.itens
     inventario.itens = itens_ordenados
@@ -484,7 +496,8 @@ def inventario_contagem(id):
         return redirect(url_for('inventario.inventario_detalhes', id=id))
     
     return render_template('inventario/inventario_contagem.html', 
-                          inventario=inventario)
+                          inventario=inventario,
+                          contados=contados)
 
 @inventario_bp.route('/<int:id>/finalizar', methods=['POST'])
 @login_required
@@ -721,8 +734,9 @@ def salvar_contagem_item(inventario_id, item_id):
         item.contar(Decimal(str(quantidade)) if quantidade is not None else None, current_user.id, data_contagem=data_contagem)
         
         # Calcular o progresso atual
+        # Contar apenas itens que foram salvos com data E quantidade
         total_itens = len(inventario.itens)
-        itens_contados = sum(1 for i in inventario.itens if i.quantidade_contada is not None)
+        itens_contados = sum(1 for i in inventario.itens if i.quantidade_contada is not None and i.contado_em is not None)
         percentual = int((itens_contados / total_itens * 100)) if total_itens > 0 else 0
         
         return jsonify({
@@ -999,3 +1013,78 @@ def excluir_item_inventario(inventario_id, item_id):
         flash(error_msg, 'danger')
     
     return redirect(url_for('inventario.inventario_contagem', id=inventario_id))
+
+@inventario_bp.route('/<int:id>/criar-grupo', methods=['POST'])
+@login_required
+def criar_grupo_inventario(id):
+    """
+    Cria um grupo de materiais baseado nos materiais de um inventário
+    """
+    try:
+        inventario = InventarioEstoque.query.get_or_404(id)
+        data = request.get_json()
+        
+        # Validar dados obrigatórios
+        if not data.get('nome'):
+            return jsonify({
+                'success': False,
+                'message': 'Nome do grupo é obrigatório'
+            }), 400
+        
+        # Verificar se já existe um grupo com o mesmo nome
+        grupo_existente = GrupoMaterial.query.filter_by(nome=data.get('nome')).first()
+        if grupo_existente:
+            return jsonify({
+                'success': False,
+                'message': 'Já existe um grupo com este nome'
+            }), 400
+        
+        # Obter todos os materiais únicos do inventário
+        itens = ItemInventario.query.filter_by(inventario_id=id).all()
+        materiais_ids = set()
+        
+        for item in itens:
+            if item.estoque.material_id:
+                materiais_ids.add(item.estoque.material_id)
+        
+        if not materiais_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Este inventário não possui materiais para criar o grupo'
+            }), 400
+        
+        # Criar novo grupo
+        grupo = GrupoMaterial(
+            nome=data.get('nome'),
+            descricao=data.get('descricao', ''),
+            cor=data.get('cor', '#007bff'),
+            icone=data.get('icone', ''),
+            ativo=data.get('ativo', True),
+            criado_por_id=current_user.id
+        )
+        
+        db.session.add(grupo)
+        db.session.flush()  # Para obter o ID do grupo
+        
+        # Associar materiais ao grupo
+        materiais = Material.query.filter(Material.id.in_(materiais_ids)).all()
+        for material in materiais:
+            grupo.materiais.append(material)
+        
+        db.session.commit()
+        
+        logger.info(f"Grupo '{grupo.nome}' criado com {len(materiais)} materiais do inventário {id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Grupo "{grupo.nome}" criado com sucesso com {len(materiais)} material(is)!',
+            'grupo_id': grupo.id
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar grupo do inventário {id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao criar grupo: {str(e)}'
+        }), 500

@@ -11,18 +11,11 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     
                     <div class="row mb-3">
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                             <div class="form-group">
                                 <label for="nome" class="form-label">Nome do Grupo *</label>
                                 <input type="text" class="form-control" id="nome" name="nome" required>
                                 <small class="form-text text-muted">Nome identificador do grupo</small>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="form-group">
-                                <label for="codigo" class="form-label">Código</label>
-                                <input type="text" class="form-control" id="codigo" name="codigo" maxlength="20">
-                                <small class="form-text text-muted">Código único (opcional)</small>
                             </div>
                         </div>
                     </div>
@@ -129,7 +122,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const dados = {
             nome: nome,
             descricao: $('#descricao').val(),
-            codigo: $('#codigo').val(),
             cor: $('#cor').val(),
             icone: $('#icone').val(),
             ativo: $('#ativo').is(':checked')
