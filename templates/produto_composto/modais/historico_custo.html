@@ -299,7 +299,7 @@ $(document).ready(function() {
                 // Preparar dados para o gráfico
                 const labels = historicoOrdenado.map(item => {
                     const dataObj = new Date(item.data + 'T00:00:00');
-                    return dataObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                    return dataObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 });
                 const custos = historicoOrdenado.map(item => item.custo_total);
                 
@@ -428,7 +428,11 @@ $(document).ready(function() {
                     detalhesHtml += '</tbody>';
                     detalhesHtml += '</table>';
                     
-                    const dataFormatada = new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR');
+                    const dataFormatada = new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric'
+                    });
                     const custoTotalFormatado = parseFloat(item.custo_total).toFixed(2);
                     
                     tbody.append(`

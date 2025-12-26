@@ -75,6 +75,51 @@
                         </div>
                     </div>
                 </form>
+                
+                <!-- Seção de Materiais do Grupo -->
+                <hr class="my-4">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0"><i class="fas fa-boxes"></i> Materiais do Grupo</h6>
+                    </div>
+                    <div class="card-body">
+                        <!-- Adicionar Material -->
+                        <div class="mb-3">
+                            <label class="form-label">Adicionar Material</label>
+                            <div class="input-group">
+                                <select class="form-control" id="select-adicionar-material-editar" style="width: 100%;">
+                                    <option value="">Selecione um material para adicionar...</option>
+                                </select>
+                                <button type="button" class="btn btn-success" id="btn-adicionar-material-editar">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Apenas materiais em estoque são exibidos</small>
+                        </div>
+                        
+                        <!-- Tabela de Materiais -->
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-sm table-hover" id="tabela-materiais-editar">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Nome</th>
+                                        <th>Categoria</th>
+                                        <th>Unidade</th>
+                                        <th width="80">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbody-materiais-editar">
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">
+                                            <i class="fas fa-spinner fa-spin"></i> Carregando materiais...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <div id="modal-mensagens"></div>
@@ -112,6 +157,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Variável global para armazenar o ID do grupo sendo editado
+    window.grupoEditandoId = null;
+    
     // Preencher o modal com os dados do grupo
     function preencherModal(grupo) {
         if (!grupo) {
@@ -120,6 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
+            window.grupoEditandoId = grupo.id;
             document.getElementById('edit_grupo_id').value = grupo.id || '';
             document.getElementById('edit_nome').value = grupo.nome || '';
             document.getElementById('edit_codigo').value = grupo.codigo || '';
@@ -128,10 +177,233 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_cor_picker').value = grupo.cor || '#007bff';
             document.getElementById('edit_icone').value = grupo.icone || '';
             document.getElementById('edit_ativo').checked = grupo.ativo === 'true' || grupo.ativo === true;
+            
+            // Carregar materiais do grupo
+            if (grupo.id) {
+                carregarMateriaisGrupoEditar(grupo.id);
+                inicializarSelect2Editar(grupo.id);
+            }
         } catch (error) {
             console.error('Erro ao preencher o modal:', error);
         }
     }
+    
+    // Carregar materiais do grupo (função global)
+    window.carregarMateriaisGrupoEditar = function(grupoId) {
+        const tbody = $('#tbody-materiais-editar');
+        tbody.html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+        
+        const urlTemplate = "{{ url_for('grupo_material.api_materiais', id=0) }}";
+        const url = urlTemplate.replace('/0', '/' + grupoId);
+        
+        $.ajax({
+            url: url,
+            type: 'GET',
+            dataType: 'json',
+            success: function(response) {
+                if (response.success && response.materiais) {
+                    tbody.empty();
+                    
+                    if (response.materiais.length === 0) {
+                        tbody.append('<tr><td colspan="5" class="text-center text-muted">Nenhum material neste grupo.</td></tr>');
+                        return;
+                    }
+                    
+                    response.materiais.forEach(function(material) {
+                        const codigo = material.codigo || '-';
+                        const categoria = material.categoria || '-';
+                        const unidade = material.unidade_sigla || material.unidade || '-';
+                        
+                        const row = `
+                            <tr data-material-id="${material.id}">
+                                <td>${codigo}</td>
+                                <td>${material.nome}</td>
+                                <td>${categoria}</td>
+                                <td>${unidade}</td>
+                                <td>
+                                    <button type="button" class="btn btn-danger btn-sm btn-remover-material-editar" 
+                                            data-material-id="${material.id}" 
+                                            data-material-nome="${material.nome}"
+                                            title="Remover">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.append(row);
+                    });
+                } else {
+                    tbody.html('<tr><td colspan="5" class="text-center text-danger">Erro ao carregar materiais.</td></tr>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao carregar materiais:', error);
+                tbody.html('<tr><td colspan="5" class="text-center text-danger">Erro ao carregar materiais do grupo.</td></tr>');
+            }
+        });
+    };
+    
+    // Inicializar Select2 para buscar materiais (função global)
+    window.inicializarSelect2Editar = function(grupoId) {
+        const $select = $('#select-adicionar-material-editar');
+        
+        // Destruir Select2 se já estiver inicializado
+        if ($select.hasClass('select2-hidden-accessible')) {
+            $select.select2('destroy');
+        }
+        
+        $select.empty();
+        
+        const apiUrl = "{{ url_for('grupo_material.api_buscar_materiais') }}";
+        
+        $select.select2({
+            placeholder: 'Digite pelo menos 2 caracteres para buscar...',
+            allowClear: true,
+            dropdownParent: $('#modalEditarGrupo'),
+            minimumInputLength: 2,
+            width: '100%',
+            ajax: {
+                url: apiUrl,
+                dataType: 'json',
+                delay: 250,
+                data: function(params) {
+                    return {
+                        search: params.term || '',
+                        grupo_id: grupoId || null,
+                        status: 'ativo'
+                    };
+                },
+                processResults: function(data) {
+                    if (data && data.success && data.materiais && Array.isArray(data.materiais)) {
+                        const results = data.materiais.map(function(material) {
+                            const codigo = material.codigo && material.codigo !== 'N/A' ? material.codigo + ' - ' : '';
+                            const unidade = material.unidade && material.unidade !== 'N/A' ? ' (' + material.unidade + ')' : '';
+                            return {
+                                id: material.id,
+                                text: codigo + material.nome + unidade
+                            };
+                        });
+                        return { results: results };
+                    }
+                    return { results: [] };
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro na busca de materiais:', error);
+                    return { results: [] };
+                },
+                cache: true
+            }
+        });
+    };
+    
+    // Adicionar material ao grupo
+    $('#btn-adicionar-material-editar').on('click', function() {
+        const materialId = $('#select-adicionar-material-editar').val();
+        if (!materialId) {
+            alert('Selecione um material para adicionar');
+            return;
+        }
+        
+        if (!window.grupoEditandoId) {
+            alert('ID do grupo não encontrado');
+            return;
+        }
+        
+        adicionarMaterialGrupoEditar(window.grupoEditandoId, materialId);
+    });
+    
+    function adicionarMaterialGrupoEditar(grupoId, materialId) {
+        const url = `{{ url_for('grupo_material.adicionar_material', id=0) }}`.replace('/0', '/' + grupoId);
+        
+        $.ajax({
+            url: url,
+            type: 'POST',
+            dataType: 'json',
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            data: JSON.stringify({ material_id: materialId }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    // Limpar Select2
+                    $('#select-adicionar-material-editar').val(null).trigger('change');
+                    // Recarregar tabela
+                    carregarMateriaisGrupoEditar(grupoId);
+                    // Reinicializar Select2 para atualizar lista
+                    inicializarSelect2Editar(grupoId);
+                } else {
+                    alert(response.message || 'Erro ao adicionar material');
+                }
+            },
+            error: function(xhr, status, error) {
+                const message = xhr.responseJSON && xhr.responseJSON.message 
+                    ? xhr.responseJSON.message 
+                    : 'Erro ao adicionar material ao grupo';
+                alert(message);
+            }
+        });
+    }
+    
+    // Remover material do grupo (usar delegação de eventos)
+    $(document).on('click', '.btn-remover-material-editar', function() {
+        const materialId = $(this).data('material-id');
+        const materialNome = $(this).data('material-nome');
+        
+        if (!window.grupoEditandoId) {
+            alert('ID do grupo não encontrado');
+            return;
+        }
+        
+        if (!confirm(`Deseja realmente remover o material "${materialNome}" deste grupo?`)) {
+            return;
+        }
+        
+        removerMaterialGrupoEditar(window.grupoEditandoId, materialId);
+    });
+    
+    function removerMaterialGrupoEditar(grupoId, materialId) {
+        const url = `{{ url_for('grupo_material.remover_material', id=0) }}`.replace('/0', '/' + grupoId);
+        
+        $.ajax({
+            url: url,
+            type: 'POST',
+            dataType: 'json',
+            headers: {
+                "X-Requested-With": "XMLHttpRequest",
+                "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+            },
+            data: JSON.stringify({ material_id: materialId }),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    // Recarregar tabela
+                    carregarMateriaisGrupoEditar(grupoId);
+                    // Reinicializar Select2 para atualizar lista
+                    inicializarSelect2Editar(grupoId);
+                } else {
+                    alert(response.message || 'Erro ao remover material');
+                }
+            },
+            error: function(xhr, status, error) {
+                const message = xhr.responseJSON && xhr.responseJSON.message 
+                    ? xhr.responseJSON.message 
+                    : 'Erro ao remover material do grupo';
+                alert(message);
+            }
+        });
+    }
+    
+    // Limpar Select2 quando o modal for fechado
+    $('#modalEditarGrupo').on('hidden.bs.modal', function() {
+        const $select = $('#select-adicionar-material-editar');
+        if ($select.hasClass('select2-hidden-accessible')) {
+            $select.select2('destroy');
+        }
+        $select.empty();
+        window.grupoEditandoId = null;
+    });
 
     // Adicionar evento para o botão de editar
     const editButtons = document.querySelectorAll('.btn-editar-grupo');

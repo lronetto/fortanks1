@@ -810,24 +810,25 @@ class InventarioEstoque(db.Model):
 
     def reabrir(self, usuario_id):
         """
-        Reabre um inventário concluído, desfazendo ajustes e retornando para 'Em andamento'
+        Reabre um inventário concluído ou cancelado, desfazendo ajustes e retornando para 'Em andamento'
         """
-        if self.status != 'Concluído':
+        if self.status not in ['Concluído', 'Cancelado']:
             return False
 
-        # Desfazer movimentações de ajuste criadas na finalização
-        movimentacoes = MovimentacaoEstoque.query.filter_by(
-            origem_tipo='InventarioEstoque',
-            origem_id=self.id
-        ).all()
-        itens_por_estoque = {item.estoque_id: item for item in self.itens}
+        # Se o inventário estava concluído, desfazer movimentações de ajuste criadas na finalização
+        if self.status == 'Concluído':
+            movimentacoes = MovimentacaoEstoque.query.filter_by(
+                origem_tipo='InventarioEstoque',
+                origem_id=self.id
+            ).all()
+            itens_por_estoque = {item.estoque_id: item for item in self.itens}
 
-        for movimento in movimentacoes:
-            item_ref = itens_por_estoque.get(movimento.estoque_id)
-            if movimento.estoque and item_ref:
-                movimento.estoque.quantidade = item_ref.quantidade_sistema
-                db.session.add(movimento.estoque)
-            db.session.delete(movimento)
+            for movimento in movimentacoes:
+                item_ref = itens_por_estoque.get(movimento.estoque_id)
+                if movimento.estoque and item_ref:
+                    movimento.estoque.quantidade = item_ref.quantidade_sistema
+                    db.session.add(movimento.estoque)
+                db.session.delete(movimento)
 
         # Voltar para status em andamento para permitir nova contagem
         self.status = 'Em andamento'

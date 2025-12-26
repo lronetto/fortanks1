@@ -3,8 +3,9 @@ from flask_login import login_required, current_user
 from models.database import db
 from models.grupo_material import GrupoMaterial
 from models.material import Material
+from models.estoque import Estoque
 from forms.forms import FormGrupoMaterial
-from sqlalchemy import or_
+from sqlalchemy import or_, and_
 import logging
 
 # Configurar logging
@@ -205,22 +206,41 @@ def excluir(id):
     try:
         grupo = GrupoMaterial.query.get_or_404(id)
         
-        # Verificar se o grupo tem materiais associados
-        if grupo.materiais:
-            return jsonify({
-                'success': False,
-                'message': 'Não é possível excluir um grupo que possui materiais associados'
-            }), 400
+        # Contar materiais antes de excluir para mensagem informativa
+        try:
+            # Usar SQL direto para contar materiais sem carregar o relacionamento
+            sql_count = "SELECT COUNT(*) FROM materiais_grupos WHERE grupo_id = :grupo_id"
+            result = db.session.execute(db.text(sql_count), {'grupo_id': id}).fetchone()
+            total_materiais = result[0] if result else 0
+        except Exception as e:
+            logger.warning(f"Erro ao contar materiais do grupo {id}: {str(e)}")
+            total_materiais = 0
         
-        grupo.delete()
+        # Remover associações com materiais primeiro
+        try:
+            sql_delete = "DELETE FROM materiais_grupos WHERE grupo_id = :grupo_id"
+            db.session.execute(db.text(sql_delete), {'grupo_id': id})
+            db.session.flush()
+        except Exception as e:
+            logger.warning(f"Erro ao remover associações do grupo {id}: {str(e)}")
+            # Continuar mesmo se houver erro (pode não ter associações)
+        
+        # Excluir o grupo
+        db.session.delete(grupo)
+        db.session.commit()
+        
+        mensagem = 'Grupo de materiais excluído com sucesso!'
+        if total_materiais > 0:
+            mensagem += f' {total_materiais} material(is) foram desassociado(s) do grupo.'
         
         return jsonify({
             'success': True,
-            'message': 'Grupo de materiais excluído com sucesso!'
+            'message': mensagem
         })
     
     except Exception as e:
-        logger.error(f"Erro ao excluir grupo {id}: {str(e)}")
+        db.session.rollback()
+        logger.error(f"Erro ao excluir grupo {id}: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Erro ao excluir grupo de materiais: {str(e)}'
@@ -358,14 +378,14 @@ def api_buscar_materiais():
         status = request.args.get('status', '').strip()
         categoria = request.args.get('categoria', '').strip()
         
-        # Query base para materiais
-        query = Material.query
+        # Query base para materiais que estão em estoque
+        # Filtrar apenas materiais que têm registro em estoque com tipo_item = 'material'
+        query = Material.query.join(Estoque, and_(
+            Estoque.material_id == Material.id,
+            Estoque.tipo_item == 'material'
+        )).distinct()
         
-        # Filtrar por status
-        if status == 'ativo':
-            query = query.filter_by(ativo=True)
-        elif status == 'inativo':
-            query = query.filter_by(ativo=False)
+        
         
         # Filtrar por categoria
         if categoria:
@@ -373,16 +393,21 @@ def api_buscar_materiais():
         
         # Se foi fornecido um grupo_id, excluir materiais já no grupo
         if grupo_id:
-            grupo = GrupoMaterial.query.get(grupo_id)
-            if grupo:
-                # Usar SQL direto para excluir materiais já no grupo
-                sql = "SELECT material_id FROM materiais_grupos WHERE grupo_id = :grupo_id"
-                materiais_no_grupo = db.session.execute(
-                    db.text(sql), {'grupo_id': grupo_id}
-                ).fetchall()
-                if materiais_no_grupo:
-                    ids_excluir = [row[0] for row in materiais_no_grupo]
-                    query = query.filter(~Material.id.in_(ids_excluir))
+            try:
+                grupo_id_int = int(grupo_id)
+                grupo = GrupoMaterial.query.get(grupo_id_int)
+                if grupo:
+                    # Usar SQL direto para excluir materiais já no grupo
+                    sql = "SELECT material_id FROM materiais_grupos WHERE grupo_id = :grupo_id"
+                    materiais_no_grupo = db.session.execute(
+                        db.text(sql), {'grupo_id': grupo_id_int}
+                    ).fetchall()
+                    if materiais_no_grupo:
+                        ids_excluir = [row[0] for row in materiais_no_grupo]
+                        query = query.filter(~Material.id.in_(ids_excluir))
+            except (ValueError, TypeError):
+                # Se grupo_id não for um número válido, ignorar
+                pass
         
         # Aplicar busca
         if search:
@@ -394,16 +419,21 @@ def api_buscar_materiais():
                 )
             )
         
+        # Ordenar por nome
+        query = query.order_by(Material.nome)
+        
         materiais = query.limit(100).all()
+        
+        logger.info(f"API buscar-materiais: encontrados {len(materiais)} materiais (search: '{search}', grupo_id: {grupo_id}, status: {status})")
         
         return jsonify({
             'success': True,
             'materiais': [{
                 'id': m.id,
                 'nome': m.nome,
-                'codigo': m.codigo or 'N/A',
-                'categoria': m.categoria or 'N/A',
-                'unidade': m.get_unidade_nome() or 'N/A',
+                'codigo': m.codigo or '',
+                'categoria': m.categoria or '',
+                'unidade': m.get_unidade_nome() or '',
                 'ativo': m.ativo
             } for m in materiais]
         })
@@ -452,3 +482,74 @@ def api_listar_json():
     except Exception as e:
         logger.error(f"Erro na API de listagem de grupos: {str(e)}")
         return jsonify({'success': False, 'message': 'Erro ao listar grupos'})
+
+@grupo_material_bp.route('/api/<int:id>/materiais')
+@login_required
+def api_materiais(id):
+    """
+    API para listar materiais de um grupo em formato JSON
+    """
+    try:
+        grupo = GrupoMaterial.query.get_or_404(id)
+        search = request.args.get('search', '').strip()
+        
+        # Query para materiais do grupo usando SQL direto
+        if search:
+            sql = """
+                SELECT m.id FROM materiais m 
+                INNER JOIN materiais_grupos mg ON m.id = mg.material_id 
+                WHERE mg.grupo_id = :grupo_id 
+                AND (m.nome LIKE :search OR m.codigo LIKE :search OR m.descricao LIKE :search)
+                ORDER BY m.nome
+            """
+            material_ids = db.session.execute(
+                db.text(sql), 
+                {'grupo_id': grupo.id, 'search': f'%{search}%'}
+            ).fetchall()
+        else:
+            sql = """
+                SELECT m.id FROM materiais m 
+                INNER JOIN materiais_grupos mg ON m.id = mg.material_id 
+                WHERE mg.grupo_id = :grupo_id 
+                ORDER BY m.nome
+            """
+            material_ids = db.session.execute(
+                db.text(sql), 
+                {'grupo_id': grupo.id}
+            ).fetchall()
+        
+        # Buscar os materiais pelos IDs
+        if material_ids:
+            ids = [row[0] for row in material_ids]
+            materiais = Material.query.filter(Material.id.in_(ids)).order_by(Material.nome).all()
+        else:
+            materiais = []
+        
+        materiais_data = []
+        for material in materiais:
+            materiais_data.append({
+                'id': material.id,
+                'codigo': material.codigo or '',
+                'nome': material.nome,
+                'categoria': material.categoria or '',
+                'unidade': material.unidade_obj.nome if material.unidade_obj else '',
+                'ativo': material.ativo
+            })
+        
+        return jsonify({
+            'success': True,
+            'grupo': {
+                'id': grupo.id,
+                'nome': grupo.nome,
+                'codigo': grupo.codigo or '',
+                'descricao': grupo.descricao or '',
+                'cor': grupo.cor or '',
+                'icone': grupo.icone or ''
+            },
+            'materiais': materiais_data,
+            'total': len(materiais_data)
+        })
+    
+    except Exception as e:
+        logger.error(f"Erro na API de materiais do grupo {id}: {str(e)}")
+        return jsonify({'success': False, 'message': 'Erro ao listar materiais do grupo'})

@@ -475,7 +475,8 @@ def excluir(id):
         # Excluir movimentações
         MovimentacaoEstoque.query.filter_by(estoque_id=id).delete()
         # Excluir item
-        item.delete()
+        db.session.delete(item)
+        db.session.commit()
         flash('Item excluído com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()

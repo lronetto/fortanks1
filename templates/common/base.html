@@ -239,10 +239,15 @@
    
                    // Auto-abrir o submenu de estoque se estiver em uma página relacionada
                    if (window.location.pathname.includes('/estoque') || 
-                       window.location.pathname.includes('/inventario') ||
                        window.location.pathname.includes('/movimentacoes')) {
                        $('#estoqueSubmenu').addClass('show');
                        $('#estoqueSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+                   
+                   // Auto-abrir o submenu de inventário se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/inventario')) {
+                       $('#inventarioSubmenu').addClass('show');
+                       $('#inventarioSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
    
                    // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em um link
@@ -684,7 +689,7 @@
                 </li>
                 
                 <!-- Módulo de Estoque -->
-                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }} {{ is_active('inventario.inventarios') }}">
+                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }}">
                     <a href="#estoqueSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                         class="dropdown-toggle">
                         <i class="fas fa-warehouse"></i> Estoque
@@ -700,14 +705,20 @@
                                 <i class="fas fa-exchange-alt"></i> Movimentações
                             </a>
                         </li>
-                        <li class="{{ is_active('inventario.inventarios') }}">
-                            <a href="{{ url_for('inventario.inventarios') }}">
-                                <i class="fas fa-clipboard-check"></i> Inventários
-                            </a>
-                        </li>
-                        <li class="{{ is_active('inventario.novo_inventario') }}">
-                            <a href="{{ url_for('inventario.novo_inventario') }}">
-                                <i class="fas fa-plus-circle"></i> Novo Inventário
+                    </ul>
+                </li>
+                
+                <!-- Módulo de Inventário -->
+                <li class="{{ is_active('inventario') }}">
+                    <a href="#inventarioSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-clipboard-check"></i> Inventário
+                    </a>
+                    <ul class="collapse list-unstyled" id="inventarioSubmenu">
+                        
+                        <li class="{{ is_active('inventario') }}">
+                            <a href="{{ url_for('inventario.gerenciar_inventario') }}">
+                                <i class="fas fa-cog"></i> Gerenciar Inventário
                             </a>
                         </li>
                     </ul>

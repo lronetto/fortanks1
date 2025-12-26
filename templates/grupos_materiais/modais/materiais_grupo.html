@@ -1,0 +1,105 @@
+<!-- Modal de Materiais do Grupo -->
+<div class="modal fade" id="modalMateriaisGrupo" tabindex="-1" aria-labelledby="modalMateriaisGrupoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-white">
+                <h5 class="modal-title" id="modalMateriaisGrupoLabel">
+                    <i class="fas fa-boxes"></i> Materiais do Grupo
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Informações do Grupo -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-primary mb-2">
+                                    <span id="grupo-materiais-nome"></span>
+                                    <span id="grupo-materiais-icone" class="ms-2"></span>
+                                </h6>
+                                <p class="text-muted mb-0" id="grupo-materiais-descricao"></p>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <div class="mb-2">
+                                    <strong>Código:</strong> <span id="grupo-materiais-codigo">-</span>
+                                </div>
+                                <div>
+                                    <strong>Total de Materiais:</strong> 
+                                    <span class="badge bg-info" id="grupo-materiais-total">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Adicionar Material -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h6 class="mb-0"><i class="fas fa-plus-circle"></i> Adicionar Material ao Grupo</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-10">
+                                <select class="form-control" id="select-adicionar-material" style="width: 100%;">
+                                    <option value="">Selecione um material para adicionar...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-success w-100" onclick="adicionarMaterialGrupo()">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtro de Busca -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="filtro-materiais-grupo" 
+                               placeholder="Buscar material por nome, código ou descrição...">
+                        <button class="btn btn-primary" type="button" onclick="filtrarMateriaisGrupo()">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                        <button class="btn btn-secondary" type="button" onclick="limparFiltroMateriaisGrupo()">
+                            <i class="fas fa-times"></i> Limpar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tabela de Materiais -->
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-bordered table-hover table-sm">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Código</th>
+                                <th>Nome</th>
+                                <th>Categoria</th>
+                                <th>Unidade</th>
+                                <th>Status</th>
+                                <th width="100">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-materiais-grupo">
+                            <tr>
+                                <td colspan="5" class="text-center">
+                                    <i class="fas fa-spinner fa-spin"></i> Carregando materiais...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+                <a href="#" id="btn-ver-todos-materiais" class="btn btn-primary" target="_blank">
+                    <i class="fas fa-external-link-alt"></i> Ver Todos os Materiais
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+

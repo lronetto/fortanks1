@@ -173,6 +173,16 @@
                                             title="Finalizar Inventário">
                                         <i class="fas fa-check-double"></i>
                                     </button>
+                                    
+                                    <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
+                                            data-url="{{ url_for('inventario.cancelar_inventario', id=inventario.id) }}"
+                                            data-id="{{ inventario.id }}"
+                                            data-tipo="{{ inventario.tipo_inventario }}"
+                                            data-status="{{ inventario.status }}"
+                                            data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
+                                            title="Cancelar e Desfazer Movimentações">
+                                        <i class="fas fa-times"></i> Cancelar
+                                    </button>
                                 {% elif inventario.status == 'Concluído' %}
                                     <button type="button" class="btn btn-warning btn-sm text-dark btn-reabrir-inventario"
                                             data-url="{{ url_for('inventario.reabrir_inventario', id=inventario.id) }}"
@@ -180,19 +190,28 @@
                                             data-tipo="{{ inventario.tipo_inventario }}"
                                             data-status="{{ inventario.status }}"
                                             title="Reabrir contagem e desfazer movimentações">
-                                        <i class="fas fa-undo"></i> Reabrir
+                                        <i class="fas fa-undo"></i> Reabrir Contagem
                                     </button>
-                                {% endif %}
-
-                                <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
+                                    
+                                    <button type="button" class="btn btn-danger btn-sm btn-cancelar-inventario" 
                                             data-url="{{ url_for('inventario.cancelar_inventario', id=inventario.id) }}"
                                             data-id="{{ inventario.id }}"
                                             data-tipo="{{ inventario.tipo_inventario }}"
                                             data-status="{{ inventario.status }}"
                                             data-progresso="{% set itens_contados = inventario.itens|selectattr('quantidade_contada', 'defined')|list|length %}{% set total_itens = inventario.itens|length %}{% if total_itens > 0 %}{{ (itens_contados / total_itens * 100)|int }}%{% else %}0%{% endif %}"
                                             title="Cancelar e Desfazer Movimentações">
-                                        <i class="fas fa-undo"></i> Cancelar
+                                        <i class="fas fa-times"></i> Cancelar
                                     </button>
+                                {% elif inventario.status == 'Cancelado' %}
+                                    <button type="button" class="btn btn-warning btn-sm text-dark btn-reabrir-inventario"
+                                            data-url="{{ url_for('inventario.reabrir_inventario', id=inventario.id) }}"
+                                            data-id="{{ inventario.id }}"
+                                            data-tipo="{{ inventario.tipo_inventario }}"
+                                            data-status="{{ inventario.status }}"
+                                            title="Reabrir contagem">
+                                        <i class="fas fa-redo"></i> Reabrir Contagem
+                                    </button>
+                                {% endif %}
                                
                             </td>
                         </tr>

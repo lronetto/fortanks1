@@ -14,7 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Criar blueprint
-inventario_bp = Blueprint('inventario', __name__, url_prefix='/estoque/inventario')
+inventario_bp = Blueprint('inventario', __name__, url_prefix='/inventario')
 
 # Rotas de Inventário
 @inventario_bp.route('/')
@@ -603,8 +603,8 @@ def reabrir_inventario(id):
 
     inventario = InventarioEstoque.query.get_or_404(id)
 
-    if inventario.status != 'Concluído':
-        error_msg = 'Apenas inventários concluídos podem ser reabertos.'
+    if inventario.status not in ['Concluído', 'Cancelado']:
+        error_msg = 'Apenas inventários concluídos ou cancelados podem ser reabertos.'
         if is_ajax:
             return jsonify({
                 'success': False,
@@ -614,8 +614,13 @@ def reabrir_inventario(id):
         return redirect(url_for('inventario.inventarios'))
 
     try:
+        status_anterior = inventario.status
         inventario.reabrir(current_user.id)
-        success_msg = 'Inventário reaberto com sucesso. As movimentações foram desfeitas.'
+        
+        if status_anterior == 'Concluído':
+            success_msg = 'Inventário reaberto com sucesso. As movimentações foram desfeitas.'
+        else:
+            success_msg = 'Inventário reaberto com sucesso. A contagem pode ser retomada.'
 
         if is_ajax:
             return jsonify({

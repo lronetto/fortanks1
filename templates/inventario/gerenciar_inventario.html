@@ -13,8 +13,8 @@
             <p class="mb-0 text-muted">Controle completo de inventários, grupos de materiais e estoque</p>
         </div>
         <div>
-            <a href="{{ url_for('estoque.index') }}" class="btn btn-secondary btn-sm">
-                <i class="fas fa-arrow-left"></i> Voltar ao Estoque
+            <a href="{{ url_for('inventario.inventarios') }}" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Voltar à Lista
             </a>
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoInventario">
                 <i class="fas fa-plus"></i> Novo Inventário
@@ -421,19 +421,92 @@
 {% include 'inventario/modais/visualizar_inventario.html' %}
 {% include 'inventario/modais/confirmar_finalizacao.html' %}
 {% include 'inventario/modais/confirmar_cancelamento.html' %}
+{% include 'inventario/modais/confirmar_reabertura.html' %}
 
 <!-- Incluir Modais de Grupos de Materiais -->
 {% include 'grupos_materiais/modais/novo_grupo.html' %}
 {% include 'grupos_materiais/modais/editar_grupo.html' %}
 {% include 'grupos_materiais/modais/visualizar_grupo.html' %}
 {% include 'grupos_materiais/modais/confirmar_exclusao.html' %}
+{% include 'grupos_materiais/modais/materiais_grupo.html' %}
 {% endblock %}
 
 {% block scripts %}
 <!-- Chart.js para gráficos -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+<style>
+/* Garantir que o Select2 apareça acima do modal */
+.select2-container--open {
+    z-index: 9999 !important;
+}
+
+.select2-dropdown {
+    z-index: 9999 !important;
+}
+
+#modalMateriaisGrupo .select2-container {
+    z-index: 9999 !important;
+}
+
+#modalMateriaisGrupo .select2-dropdown {
+    z-index: 9999 !important;
+}
+</style>
+
 <script>
+// URLs base para as rotas
+const URL_INVENTARIO_CONTAGEM_TEMPLATE = "{{ url_for('inventario.inventario_contagem', id=0) }}";
+const URL_REABRIR_INVENTARIO_TEMPLATE = "{{ url_for('inventario.reabrir_inventario', id=0) }}";
+
+// Função para gerar URL de reabertura do inventário
+function getUrlReabrirInventario(inventarioId) {
+    // A URL template é /inventario/0/reabrir, substituir /0 por /{id}
+    let url = URL_REABRIR_INVENTARIO_TEMPLATE;
+    if (url.includes('/0/reabrir')) {
+        url = url.replace('/0/reabrir', '/' + inventarioId + '/reabrir');
+    } else if (url.includes('/0')) {
+        url = url.replace('/0', '/' + inventarioId);
+    }
+    return url;
+}
+
+// Função para gerar URL de contagem do inventário
+function getUrlInventarioContagem(inventarioId) {
+    // A URL template é /inventario/0/contagem, substituir /0 por /{id}
+    let url = URL_INVENTARIO_CONTAGEM_TEMPLATE;
+    if (url.includes('/0/contagem')) {
+        url = url.replace('/0/contagem', '/' + inventarioId + '/contagem');
+    } else if (url.includes('/0')) {
+        url = url.replace('/0', '/' + inventarioId);
+    }
+    console.log('URL template:', URL_INVENTARIO_CONTAGEM_TEMPLATE, 'ID:', inventarioId, 'URL gerada:', url);
+    return url;
+}
+const URL_GRUPO_MATERIAIS_TEMPLATE = "{{ url_for('grupo_material.materiais', id=0) }}";
+const URL_GRUPO_EXCLUIR_TEMPLATE = "{{ url_for('grupo_material.excluir', id=0) }}";
+
+// Função para gerar URL de exclusão do grupo
+function getUrlGrupoExcluir(grupoId) {
+    // A URL template é /grupos-materiais/0/excluir, substituir /0 por /{id}
+    // Primeiro tenta substituir /0/ (com barra depois) e depois /0 (sem barra)
+    let url = URL_GRUPO_EXCLUIR_TEMPLATE;
+    if (url.includes('/0/excluir')) {
+        url = url.replace('/0/excluir', '/' + grupoId + '/excluir');
+    } else if (url.includes('/0')) {
+        url = url.replace('/0', '/' + grupoId);
+    }
+    console.log('URL template:', URL_GRUPO_EXCLUIR_TEMPLATE, 'ID:', grupoId, 'URL gerada:', url);
+    return url;
+}
+const URL_GRUPO_EDITAR = "{{ url_for('grupo_material.editar', id=0) }}".replace('/0', '');
+const URL_INVENTARIO_DETALHES = "{{ url_for('inventario.inventario_detalhes', id=0) }}".replace('/0', '');
+
+// Função para gerar URL de materiais do grupo
+function getUrlGrupoMateriais(grupoId) {
+    return URL_GRUPO_MATERIAIS_TEMPLATE.replace('/0', '/' + grupoId);
+}
+
 $(document).ready(function() {
     // Inicializar tooltips
     $('[data-bs-toggle="tooltip"]').tooltip();
@@ -512,7 +585,7 @@ function carregarInventariosAtivos() {
                                     <button class="btn btn-sm btn-primary" onclick="visualizarInventario(${inv.id})">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <a href="/estoque/inventario/${inv.id}/contagem" class="btn btn-sm btn-success">
+                                    <a href="${getUrlInventarioContagem(inv.id)}" class="btn btn-sm btn-success">
                                         <i class="fas fa-play"></i>
                                     </a>
                                 </div>
@@ -571,8 +644,16 @@ function carregarHistorico() {
                                     <button class="btn btn-sm btn-primary" onclick="visualizarInventario(${inv.id})">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    ${inv.status === 'Finalizado' ? 
-                                        `<button class="btn btn-sm btn-info" onclick="gerarRelatorioInventario(${inv.id})">
+                                    ${inv.status === 'Finalizado' || inv.status === 'Concluído' ? 
+                                        `<button type="button" class="btn btn-sm btn-warning text-dark btn-reabrir-inventario-historico"
+                                                data-url="${getUrlReabrirInventario(inv.id)}"
+                                                data-id="${inv.id}"
+                                                data-tipo="${inv.tipo_inventario}"
+                                                data-status="${inv.status}"
+                                                title="Reabrir contagem e desfazer movimentações">
+                                            <i class="fas fa-undo"></i> Reabrir
+                                        </button>
+                                        <button class="btn btn-sm btn-info" onclick="gerarRelatorioInventario(${inv.id})">
                                             <i class="fas fa-file-pdf"></i>
                                         </button>` : ''
                                     }
@@ -598,8 +679,10 @@ function atualizarInventariosAtivos() {
 
 // Função para visualizar inventário
 function visualizarInventario(id) {
-    // Implementar abertura do modal de visualização
-    console.log('Visualizar inventário:', id);
+    // Redirecionar para a página de detalhes do inventário
+    const urlTemplate = "{{ url_for('inventario.inventario_detalhes', id=0) }}";
+    const url = urlTemplate.replace('/0', '/' + id);
+    window.location.href = url;
 }
 
 // Função para gerar relatório
@@ -775,19 +858,23 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
                                             data-nome="${grupo.nome}"
                                             data-codigo="${grupo.codigo || ''}"
                                             data-descricao="${grupo.descricao || ''}"
-                                            data-cor="${grupo.cor || ''}"
+                                            data-cor="${grupo.cor || '#007bff'}"
                                             data-icone="${grupo.icone || ''}"
-                                            data-ativo="${grupo.ativo}"
+                                            data-ativo="${grupo.ativo ? 'true' : 'false'}"
                                             data-bs-toggle="modal" data-bs-target="#modalEditarGrupo"
                                             title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <a href="/grupos-materiais/${grupo.id}/materiais" 
-                                       class="btn btn-warning btn-sm" title="Materiais">
+                                    <button type="button" class="btn btn-warning btn-sm btn-materiais-grupo" 
+                                            data-id="${grupo.id}"
+                                            data-nome="${grupo.nome}"
+                                            data-bs-toggle="modal" data-bs-target="#modalMateriaisGrupo"
+                                            title="Ver Materiais">
                                         <i class="fas fa-boxes"></i>
-                                    </a>
+                                    </button>
                                     <button type="button" class="btn btn-danger btn-sm btn-excluir-grupo" 
-                                            data-url="/grupos-materiais/${grupo.id}/excluir"
+                                            data-id="${grupo.id}"
+                                            data-url="${getUrlGrupoExcluir(grupo.id)}"
                                             data-nome="${grupo.nome}"
                                             data-total-materiais="${grupo.total_materiais}"
                                             title="Excluir">
@@ -802,6 +889,9 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
                 
                 // Atualizar informações de paginação
                 $('#info-paginacao-grupos').text(`Mostrando ${response.grupos.length} grupos`);
+                
+                // Inicializar event listeners após criar os botões
+                inicializarEventListenersGrupos();
             }
         },
         error: function(xhr, status, error) {
@@ -810,6 +900,132 @@ function carregarGruposViaAPI(pagina = 1, filtros = {}) {
             tbody.empty();
             tbody.append('<tr><td colspan="7" class="text-center text-danger">Erro ao carregar grupos</td></tr>');
         }
+    });
+}
+
+// Função para inicializar event listeners dos grupos
+function inicializarEventListenersGrupos() {
+    // Usar delegação de eventos para botões de editar
+    $(document).off('click', '.btn-editar-grupo').on('click', '.btn-editar-grupo', function() {
+        try {
+            const grupo = {
+                id: $(this).data('id'),
+                nome: $(this).data('nome') || '',
+                codigo: $(this).data('codigo') || '',
+                descricao: $(this).data('descricao') || '',
+                cor: $(this).data('cor') || '#007bff',
+                icone: $(this).data('icone') || '',
+                ativo: $(this).data('ativo') === true || $(this).data('ativo') === 'true' || $(this).attr('data-ativo') === 'true'
+            };
+            
+            // Preencher modal de edição
+            $('#edit_grupo_id').val(grupo.id);
+            $('#edit_nome').val(grupo.nome);
+            $('#edit_codigo').val(grupo.codigo);
+            $('#edit_descricao').val(grupo.descricao);
+            $('#edit_cor').val(grupo.cor);
+            $('#edit_cor_picker').val(grupo.cor);
+            $('#edit_icone').val(grupo.icone);
+            $('#edit_ativo').prop('checked', grupo.ativo);
+            
+            // Definir grupoEditandoId
+            window.grupoEditandoId = grupo.id;
+            
+            // Abrir modal primeiro
+            const modalElement = document.getElementById('modalEditarGrupo');
+            const modal = new bootstrap.Modal(modalElement);
+            
+            // Carregar materiais e inicializar Select2 quando o modal abrir
+            $(modalElement).one('shown.bs.modal', function() {
+                // Carregar materiais do grupo
+                if (typeof window.carregarMateriaisGrupoEditar === 'function') {
+                    window.carregarMateriaisGrupoEditar(grupo.id);
+                } else {
+                    console.warn('Função carregarMateriaisGrupoEditar não encontrada');
+                }
+                
+                // Inicializar Select2 após um pequeno delay
+                if (typeof window.inicializarSelect2Editar === 'function') {
+                    setTimeout(function() {
+                        window.inicializarSelect2Editar(grupo.id);
+                    }, 300);
+                } else {
+                    console.warn('Função inicializarSelect2Editar não encontrada');
+                }
+            });
+            
+            modal.show();
+        } catch (error) {
+            console.error('Erro ao abrir modal de edição:', error);
+            alert('Ocorreu um erro ao processar sua solicitação');
+        }
+    });
+    
+    // Usar delegação de eventos para botões de materiais
+    $(document).off('click', '.btn-materiais-grupo').on('click', '.btn-materiais-grupo', function() {
+        const grupoId = $(this).data('id');
+        const grupoNome = $(this).data('nome');
+        
+        // Definir o grupoMateriaisId antes de abrir o modal
+        grupoMateriaisId = grupoId;
+        
+        // Carregar materiais do grupo
+        if (typeof carregarMateriaisGrupo === 'function') {
+            carregarMateriaisGrupo(grupoId);
+        } else {
+            console.error('Função carregarMateriaisGrupo não encontrada');
+        }
+    });
+    
+    // Usar delegação de eventos para botões de excluir
+    $(document).off('click', '.btn-excluir-grupo').on('click', '.btn-excluir-grupo', function(e) {
+        e.preventDefault();
+        
+        let url = $(this).data('url');
+        console.log('URL de exclusão obtida do data-url:', url);
+        
+        // Se a URL não estiver correta, construir manualmente
+        if (!url || url.includes('/excluir/')) {
+            const grupoId = $(this).data('id') || $(this).closest('tr').find('[data-id]').data('id');
+            if (grupoId) {
+                url = getUrlGrupoExcluir(grupoId);
+                console.log('URL corrigida:', url);
+            }
+        }
+        
+        const grupoData = {
+            nome: $(this).data('nome') || '',
+            codigo: $(this).data('codigo') || '',
+            total_materiais: $(this).data('total-materiais') || '0'
+        };
+        
+        // Preencher modal de confirmação
+        $('#grupo-exclusao-nome').text(grupoData.nome);
+        $('#grupo-exclusao-codigo').text(grupoData.codigo || '-');
+        $('#grupo-exclusao-materiais').text(grupoData.total_materiais);
+        
+        // Verificar se há materiais associados (apenas para exibir aviso informativo)
+        const totalMateriais = parseInt(grupoData.total_materiais) || 0;
+        const alertaMateriais = $('#alerta-materiais-associados');
+        const btnConfirmar = $('#btn-confirmar-exclusao');
+        
+        if (totalMateriais > 0) {
+            // Mostrar aviso informativo, mas permitir exclusão
+            alertaMateriais.removeClass('d-none').removeClass('alert-danger').addClass('alert-info');
+            btnConfirmar.prop('disabled', false);
+            btnConfirmar.html('<i class="fas fa-trash"></i> Confirmar Exclusão');
+        } else {
+            alertaMateriais.addClass('d-none');
+            btnConfirmar.prop('disabled', false);
+            btnConfirmar.html('<i class="fas fa-trash"></i> Confirmar Exclusão');
+        }
+        
+        // Definir ação do formulário
+        $('#form-exclusao').attr('action', url);
+        
+        // Abrir modal
+        const modal = new bootstrap.Modal(document.getElementById('modalConfirmarExclusao'));
+        modal.show();
     });
 }
 
@@ -825,7 +1041,778 @@ function atualizarGrupos() {
 
 // Carregar grupos quando a aba for ativada
 $('#grupos-materiais-tab').on('shown.bs.tab', function() {
-    carregarGrupos();
+    console.log('Aba de grupos de materiais ativada');
+    const tbody = $('#tabelaGrupos tbody');
+    // Verificar se a tabela está vazia ou só tem mensagem de erro
+    if (tbody.children().length === 0 || 
+        tbody.text().trim() === '' || 
+        tbody.text().includes('Erro ao carregar') ||
+        tbody.text().includes('Nenhum grupo encontrado')) {
+        console.log('Carregando grupos...');
+        carregarGrupos();
+    } else {
+        console.log('Grupos já carregados, re-inicializando listeners');
+        inicializarEventListenersGrupos();
+    }
+});
+
+// Handler para salvar edição de grupo
+$(document).on('click', '#btn-salvar-edicao-grupo', function() {
+    const grupoId = $('#edit_grupo_id').val();
+    
+    if (!grupoId) {
+        alert('ID do grupo não encontrado');
+        return;
+    }
+    
+    // Preparar dados
+    const dados = {
+        nome: $('#edit_nome').val(),
+        descricao: $('#edit_descricao').val(),
+        codigo: $('#edit_codigo').val(),
+        cor: $('#edit_cor').val(),
+        icone: $('#edit_icone').val(),
+        ativo: $('#edit_ativo').is(':checked')
+    };
+    
+    // Validação básica
+    if (!dados.nome || dados.nome.trim() === '') {
+        alert('O nome do grupo é obrigatório');
+        return;
+    }
+    
+    $.ajax({
+        url: `${URL_GRUPO_EDITAR}/${grupoId}`,
+        type: "POST",
+        data: JSON.stringify(dados),
+        contentType: "application/json",
+        dataType: "json",
+        headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+        },
+        success: function(response) {
+            if (response.success) {
+                alert(response.message || 'Grupo atualizado com sucesso!');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarGrupo'));
+                if (modal) modal.hide();
+                // Recarregar lista
+                carregarGrupos();
+            } else {
+                alert(response.message || 'Erro ao salvar o grupo.');
+            }
+        },
+        error: function(xhr, status, error) {
+            let mensagem = 'Erro ao salvar grupo';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                mensagem = xhr.responseJSON.message;
+            } else if (xhr.responseText) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    mensagem = response.message || mensagem;
+                } catch(e) {
+                    mensagem = mensagem + ': ' + error;
+                }
+            }
+            alert(mensagem);
+        }
+    });
+});
+
+// Handler para formulário de exclusão
+$(document).on('submit', '#form-exclusao', function(e) {
+    e.preventDefault();
+    
+    const url = $(this).attr('action');
+    
+    if (!url) {
+        alert('URL de exclusão não encontrada');
+        return;
+    }
+    
+    $.ajax({
+        url: url,
+        type: "POST",
+        dataType: "json",
+        headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+        },
+        success: function(response) {
+            if (response.success) {
+                alert(response.message || 'Grupo excluído com sucesso!');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalConfirmarExclusao'));
+                if (modal) modal.hide();
+                // Recarregar lista
+                carregarGrupos();
+            } else {
+                alert(response.message || 'Erro ao excluir grupo.');
+            }
+        },
+        error: function(xhr, status, error) {
+            let mensagem = 'Erro ao excluir grupo';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                mensagem = xhr.responseJSON.message;
+            } else if (xhr.responseText) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    mensagem = response.message || mensagem;
+                } catch(e) {
+                    mensagem = mensagem + ': ' + error;
+                }
+            }
+            alert(mensagem);
+        }
+    });
+});
+
+// Variável para armazenar o ID do grupo atual (para modal de materiais)
+let grupoMateriaisId = null;
+
+// Função para carregar materiais do grupo
+function carregarMateriaisGrupo(grupoId, search = '') {
+    grupoMateriaisId = grupoId;
+    const tbody = $('#tbody-materiais-grupo');
+    
+    // Mostrar loading
+    tbody.html('<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando materiais...</td></tr>');
+    
+    // Construir URL correta: /grupos-materiais/api/{id}/materiais
+    const urlTemplate = "{{ url_for('grupo_material.api_materiais', id=0) }}";
+    const url = urlTemplate.replace('/0', '/' + grupoId);
+    
+    $.ajax({
+        url: url,
+        method: 'GET',
+        data: { search: search },
+        success: function(response) {
+            if (response.success) {
+                // Preencher informações do grupo
+                const grupo = response.grupo;
+                $('#grupo-materiais-nome').text(grupo.nome);
+                $('#grupo-materiais-codigo').text(grupo.codigo || '-');
+                $('#grupo-materiais-descricao').text(grupo.descricao || 'Sem descrição');
+                $('#grupo-materiais-total').text(response.total);
+                
+                // Ícone do grupo
+                if (grupo.icone) {
+                    const iconeHtml = `<i class="${grupo.icone}" style="color: ${grupo.cor || '#007bff'}"></i>`;
+                    $('#grupo-materiais-icone').html(iconeHtml);
+                } else {
+                    $('#grupo-materiais-icone').html('');
+                }
+                
+                // URL para ver todos os materiais
+                const urlMateriais = "{{ url_for('grupo_material.materiais', id=0) }}".replace('/0', '') + '/' + grupoId;
+                $('#btn-ver-todos-materiais').attr('href', urlMateriais);
+                
+                // Preencher tabela
+                tbody.empty();
+                
+                if (response.materiais.length === 0) {
+                    tbody.append('<tr><td colspan="6" class="text-center text-muted">Nenhum material encontrado neste grupo.</td></tr>');
+                    return;
+                }
+                
+                // Inicializar Select2 para adicionar materiais após carregar os materiais
+                setTimeout(function() {
+                    inicializarSelect2Materiais();
+                }, 100);
+                
+                response.materiais.forEach(function(material) {
+                    const statusBadge = material.ativo 
+                        ? '<span class="badge bg-success">Ativo</span>'
+                        : '<span class="badge bg-secondary">Inativo</span>';
+                    
+                    const unidade = material.unidade_sigla || material.unidade || '-';
+                    
+                    const row = `
+                        <tr id="material-row-${material.id}">
+                            <td>${material.codigo || '-'}</td>
+                            <td><strong>${material.nome}</strong></td>
+                            <td>${material.categoria || '-'}</td>
+                            <td>${unidade}</td>
+                            <td>${statusBadge}</td>
+                            <td class="text-center">
+                                <button type="button" class="btn btn-danger btn-sm btn-remover-material" 
+                                        data-material-id="${material.id}"
+                                        data-material-nome="${material.nome}"
+                                        title="Remover do grupo">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            } else {
+                tbody.html('<tr><td colspan="6" class="text-center text-danger">Erro ao carregar materiais: ' + (response.message || 'Erro desconhecido') + '</td></tr>');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar materiais do grupo:', error);
+            tbody.html('<tr><td colspan="6" class="text-center text-danger">Erro ao carregar materiais do grupo.</td></tr>');
+        }
+    });
+}
+
+// Função para filtrar materiais
+function filtrarMateriaisGrupo() {
+    const search = $('#filtro-materiais-grupo').val();
+    if (grupoMateriaisId) {
+        carregarMateriaisGrupo(grupoMateriaisId, search);
+    }
+}
+
+// Função para limpar filtro
+function limparFiltroMateriaisGrupo() {
+    $('#filtro-materiais-grupo').val('');
+    if (grupoMateriaisId) {
+        carregarMateriaisGrupo(grupoMateriaisId, '');
+    }
+}
+
+// Permitir busca ao pressionar Enter
+$(document).on('keypress', '#filtro-materiais-grupo', function(e) {
+    if (e.which === 13) {
+        filtrarMateriaisGrupo();
+    }
+});
+
+// Inicializar Select2 para buscar materiais
+function inicializarSelect2Materiais() {
+    const $select = $('#select-adicionar-material');
+    
+    if (!$select.length) {
+        console.error('Elemento #select-adicionar-material não encontrado');
+        return;
+    }
+    
+    // Destruir Select2 se já estiver inicializado
+    if ($select.hasClass('select2-hidden-accessible')) {
+        $select.select2('destroy');
+    }
+    
+    // Limpar o select
+    $select.empty();
+    
+    const apiUrl = "{{ url_for('grupo_material.api_buscar_materiais') }}";
+    console.log('Inicializando Select2 com URL:', apiUrl, 'grupoMateriaisId:', grupoMateriaisId);
+    
+    // Garantir que o modal existe antes de inicializar
+    const $modal = $('#modalMateriaisGrupo');
+    if (!$modal.length) {
+        console.error('Modal #modalMateriaisGrupo não encontrado');
+        return;
+    }
+    
+    $select.select2({
+        placeholder: 'Digite pelo menos 2 caracteres para buscar...',
+        allowClear: true,
+        dropdownParent: $modal, // Importante: definir o parent como o modal
+        language: {
+            noResults: function() {
+                return "Nenhum material encontrado";
+            },
+            searching: function() {
+                return "Buscando...";
+            }
+        },
+        ajax: {
+            url: apiUrl,
+            dataType: 'json',
+            delay: 250,
+            data: function(params) {
+                const data = {
+                    search: params.term || '',
+                    grupo_id: grupoMateriaisId || null,
+                    status: 'ativo'
+                };
+                console.log('Enviando requisição para API com dados:', data);
+                return data;
+            },
+            processResults: function(data) {
+                console.log('Resposta da API de busca:', data);
+                if (data && data.success && data.materiais && Array.isArray(data.materiais)) {
+                    const results = data.materiais.map(function(material) {
+                        const codigo = material.codigo && material.codigo !== 'N/A' ? material.codigo + ' - ' : '';
+                        const unidade = material.unidade && material.unidade !== 'N/A' ? ' (' + material.unidade + ')' : '';
+                        return {
+                            id: material.id,
+                            text: codigo + material.nome + unidade
+                        };
+                    });
+                    console.log('Processados', results.length, 'materiais');
+                    return { results: results };
+                }
+                console.warn('Nenhum resultado encontrado ou formato inválido:', data);
+                return { results: [] };
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro na busca de materiais:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    statusCode: xhr.status
+                });
+                // Retornar array vazio em caso de erro para não quebrar o Select2
+                return { results: [] };
+            },
+            cache: true
+        },
+        minimumInputLength: 2,
+        width: '100%',
+        theme: 'bootstrap4'
+    }).on('select2:open', function() {
+        console.log('Select2 aberto');
+        // Garantir que o dropdown apareça acima do modal
+        setTimeout(function() {
+            const $container = $('.select2-container--open');
+            const $dropdown = $('.select2-dropdown');
+            if ($container.length) {
+                $container.css('z-index', '99999');
+            }
+            if ($dropdown.length) {
+                $dropdown.css('z-index', '99999');
+            }
+            console.log('Z-index aplicado ao Select2');
+        }, 50);
+    }).on('select2:select', function(e) {
+        console.log('Material selecionado:', e.params.data);
+    });
+    
+    console.log('Select2 inicializado com sucesso');
+}
+
+// Função para adicionar material ao grupo
+function adicionarMaterialGrupo() {
+    const materialId = $('#select-adicionar-material').val();
+    
+    if (!materialId) {
+        alert('Selecione um material para adicionar');
+        return;
+    }
+    
+    if (!grupoMateriaisId) {
+        alert('ID do grupo não encontrado');
+        return;
+    }
+    
+    const urlAdicionar = "{{ url_for('grupo_material.adicionar_material', id=0) }}".replace('/0', '') + '/' + grupoMateriaisId;
+    
+    $.ajax({
+        url: urlAdicionar,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ material_id: parseInt(materialId) }),
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
+        },
+        success: function(response) {
+            if (response.success) {
+                // Limpar select
+                $('#select-adicionar-material').val(null).trigger('change');
+                
+                // Recarregar lista de materiais
+                const search = $('#filtro-materiais-grupo').val() || '';
+                carregarMateriaisGrupo(grupoMateriaisId, search);
+                
+                // Mostrar mensagem de sucesso
+                alert(response.message || 'Material adicionado com sucesso!');
+            } else {
+                alert(response.message || 'Erro ao adicionar material');
+            }
+        },
+        error: function(xhr, status, error) {
+            let mensagem = 'Erro ao adicionar material';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                mensagem = xhr.responseJSON.message;
+            }
+            alert(mensagem);
+        }
+    });
+}
+
+// Função para remover material do grupo
+function removerMaterialGrupo(materialId, materialNome) {
+    if (!confirm(`Tem certeza que deseja remover o material "${materialNome}" deste grupo?`)) {
+        return;
+    }
+    
+    if (!grupoMateriaisId) {
+        alert('ID do grupo não encontrado');
+        return;
+    }
+    
+    const urlRemover = "{{ url_for('grupo_material.remover_material', id=0) }}".replace('/0', '') + '/' + grupoMateriaisId;
+    
+    $.ajax({
+        url: urlRemover,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ material_id: parseInt(materialId) }),
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': $('meta[name=csrf-token]').attr('content')
+        },
+        success: function(response) {
+            if (response.success) {
+                // Remover linha da tabela
+                $(`#material-row-${materialId}`).fadeOut(300, function() {
+                    $(this).remove();
+                    
+                    // Verificar se não há mais materiais
+                    const tbody = $('#tbody-materiais-grupo');
+                    if (tbody.children().length === 0) {
+                        tbody.append('<tr><td colspan="6" class="text-center text-muted">Nenhum material encontrado neste grupo.</td></tr>');
+                    }
+                    
+                    // Atualizar total
+                    const totalAtual = parseInt($('#grupo-materiais-total').text()) || 0;
+                    $('#grupo-materiais-total').text(Math.max(0, totalAtual - 1));
+                });
+                
+                // Mostrar mensagem de sucesso
+                alert(response.message || 'Material removido com sucesso!');
+            } else {
+                alert(response.message || 'Erro ao remover material');
+            }
+        },
+        error: function(xhr, status, error) {
+            let mensagem = 'Erro ao remover material';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                mensagem = xhr.responseJSON.message;
+            }
+            alert(mensagem);
+        }
+    });
+}
+
+// Event listener para botão de remover material
+$(document).on('click', '.btn-remover-material', function() {
+    const materialId = $(this).data('material-id');
+    const materialNome = $(this).data('material-nome');
+    removerMaterialGrupo(materialId, materialNome);
+});
+
+// Inicializar Select2 quando o modal for aberto
+$('#modalMateriaisGrupo').on('shown.bs.modal', function() {
+    console.log('Modal de materiais aberto, grupoMateriaisId:', grupoMateriaisId);
+    setTimeout(function() {
+        if (grupoMateriaisId) {
+            console.log('Inicializando Select2 para grupo:', grupoMateriaisId);
+            inicializarSelect2Materiais();
+        } else {
+            console.warn('grupoMateriaisId não está definido ao abrir o modal');
+        }
+    }, 300);
+});
+
+// Limpar Select2 quando o modal for fechado
+$('#modalMateriaisGrupo').on('hidden.bs.modal', function() {
+    const $select = $('#select-adicionar-material');
+    if ($select.hasClass('select2-hidden-accessible')) {
+        $select.select2('destroy');
+    }
+    $select.empty();
+});
+
+// ===== FUNÇÕES PARA MODAL DE EDIÇÃO DE GRUPO =====
+
+// Carregar materiais do grupo no modal de edição
+window.carregarMateriaisGrupoEditar = function(grupoId) {
+    const tbody = $('#tbody-materiais-editar');
+    if (!tbody.length) {
+        console.error('Elemento #tbody-materiais-editar não encontrado');
+        return;
+    }
+    
+    tbody.html('<tr><td colspan="5" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+    
+    const urlTemplate = "{{ url_for('grupo_material.api_materiais', id=0) }}";
+    const url = urlTemplate.replace('/0', '/' + grupoId);
+    
+    $.ajax({
+        url: url,
+        type: 'GET',
+        dataType: 'json',
+        success: function(response) {
+            if (response.success && response.materiais) {
+                tbody.empty();
+                
+                if (response.materiais.length === 0) {
+                    tbody.append('<tr><td colspan="5" class="text-center text-muted">Nenhum material neste grupo.</td></tr>');
+                    return;
+                }
+                
+                response.materiais.forEach(function(material) {
+                    const codigo = material.codigo || '-';
+                    const categoria = material.categoria || '-';
+                    const unidade = material.unidade_sigla || material.unidade || '-';
+                    
+                    const row = `
+                        <tr data-material-id="${material.id}">
+                            <td>${codigo}</td>
+                            <td>${material.nome}</td>
+                            <td>${categoria}</td>
+                            <td>${unidade}</td>
+                            <td>
+                                <button type="button" class="btn btn-danger btn-sm btn-remover-material-editar" 
+                                        data-material-id="${material.id}" 
+                                        data-material-nome="${material.nome}"
+                                        title="Remover">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                    tbody.append(row);
+                });
+            } else {
+                tbody.html('<tr><td colspan="5" class="text-center text-danger">Erro ao carregar materiais.</td></tr>');
+            }
+        },
+        error: function(xhr, status, error) {
+            console.error('Erro ao carregar materiais:', error);
+            tbody.html('<tr><td colspan="5" class="text-center text-danger">Erro ao carregar materiais do grupo.</td></tr>');
+        }
+    });
+};
+
+// Inicializar Select2 para buscar materiais no modal de edição
+window.inicializarSelect2Editar = function(grupoId) {
+    const $select = $('#select-adicionar-material-editar');
+    
+    if (!$select.length) {
+        console.error('Elemento #select-adicionar-material-editar não encontrado');
+        return;
+    }
+    
+    // Destruir Select2 se já estiver inicializado
+    if ($select.hasClass('select2-hidden-accessible')) {
+        $select.select2('destroy');
+    }
+    
+    $select.empty();
+    
+    const apiUrl = "{{ url_for('grupo_material.api_buscar_materiais') }}";
+    const $modal = $('#modalEditarGrupo');
+    
+    $select.select2({
+        placeholder: 'Digite pelo menos 2 caracteres para buscar...',
+        allowClear: true,
+        dropdownParent: $modal,
+        minimumInputLength: 2,
+        width: '100%',
+        ajax: {
+            url: apiUrl,
+            dataType: 'json',
+            delay: 250,
+            data: function(params) {
+                return {
+                    search: params.term || '',
+                    grupo_id: grupoId || null,
+                    status: 'ativo'
+                };
+            },
+            processResults: function(data) {
+                if (data && data.success && data.materiais && Array.isArray(data.materiais)) {
+                    const results = data.materiais.map(function(material) {
+                        const codigo = material.codigo && material.codigo !== 'N/A' ? material.codigo + ' - ' : '';
+                        const unidade = material.unidade && material.unidade !== 'N/A' ? ' (' + material.unidade + ')' : '';
+                        return {
+                            id: material.id,
+                            text: codigo + material.nome + unidade
+                        };
+                    });
+                    return { results: results };
+                }
+                return { results: [] };
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro na busca de materiais:', error);
+                return { results: [] };
+            },
+            cache: true
+        }
+    });
+};
+
+// Adicionar material ao grupo no modal de edição
+$(document).on('click', '#btn-adicionar-material-editar', function() {
+    const materialId = $('#select-adicionar-material-editar').val();
+    if (!materialId) {
+        alert('Selecione um material para adicionar');
+        return;
+    }
+    
+    if (!window.grupoEditandoId) {
+        alert('ID do grupo não encontrado');
+        return;
+    }
+    
+    const url = `{{ url_for('grupo_material.adicionar_material', id=0) }}`.replace('/0', '/' + window.grupoEditandoId);
+    
+    $.ajax({
+        url: url,
+        type: 'POST',
+        dataType: 'json',
+        headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+        },
+        data: JSON.stringify({ material_id: materialId }),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                $('#select-adicionar-material-editar').val(null).trigger('change');
+                window.carregarMateriaisGrupoEditar(window.grupoEditandoId);
+                window.inicializarSelect2Editar(window.grupoEditandoId);
+            } else {
+                alert(response.message || 'Erro ao adicionar material');
+            }
+        },
+        error: function(xhr, status, error) {
+            const message = xhr.responseJSON && xhr.responseJSON.message 
+                ? xhr.responseJSON.message 
+                : 'Erro ao adicionar material ao grupo';
+            alert(message);
+        }
+    });
+});
+
+// Remover material do grupo no modal de edição
+$(document).on('click', '.btn-remover-material-editar', function() {
+    const materialId = $(this).data('material-id');
+    const materialNome = $(this).data('material-nome');
+    
+    if (!window.grupoEditandoId) {
+        alert('ID do grupo não encontrado');
+        return;
+    }
+    
+    if (!confirm(`Deseja realmente remover o material "${materialNome}" deste grupo?`)) {
+        return;
+    }
+    
+    const url = `{{ url_for('grupo_material.remover_material', id=0) }}`.replace('/0', '/' + window.grupoEditandoId);
+    
+    $.ajax({
+        url: url,
+        type: 'POST',
+        dataType: 'json',
+        headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+        },
+        data: JSON.stringify({ material_id: materialId }),
+        contentType: 'application/json',
+        success: function(response) {
+            if (response.success) {
+                window.carregarMateriaisGrupoEditar(window.grupoEditandoId);
+                window.inicializarSelect2Editar(window.grupoEditandoId);
+            } else {
+                alert(response.message || 'Erro ao remover material');
+            }
+        },
+        error: function(xhr, status, error) {
+            const message = xhr.responseJSON && xhr.responseJSON.message 
+                ? xhr.responseJSON.message 
+                : 'Erro ao remover material do grupo';
+            alert(message);
+        }
+    });
+});
+
+// Limpar Select2 quando o modal de edição for fechado
+$('#modalEditarGrupo').on('hidden.bs.modal', function() {
+    const $select = $('#select-adicionar-material-editar');
+    if ($select.hasClass('select2-hidden-accessible')) {
+        $select.select2('destroy');
+    }
+    $select.empty();
+    window.grupoEditandoId = null;
+});
+
+// ===== HANDLER PARA REABRIR INVENTÁRIO NO HISTÓRICO =====
+
+// Handler para botão de reabrir inventário no histórico
+$(document).on('click', '.btn-reabrir-inventario-historico', function(e) {
+    e.preventDefault();
+    
+    const url = $(this).data('url');
+    const inventarioData = {
+        id: $(this).data('id'),
+        tipo: $(this).data('tipo'),
+        status: $(this).data('status')
+    };
+    
+    // Preencher modal de confirmação
+    $('#reabertura-inventario-id').text(inventarioData.id || '-');
+    $('#reabertura-tipo').text(inventarioData.tipo || '-');
+    $('#reabertura-status').text(inventarioData.status || '-');
+    
+    // Definir ação do formulário
+    $('#form-reabertura').attr('action', url);
+    
+    // Abrir modal
+    const modal = new bootstrap.Modal(document.getElementById('modalConfirmarReabertura'));
+    modal.show();
+});
+
+// Handler para formulário de reabertura
+$(document).on('submit', '#form-reabertura', function(e) {
+    e.preventDefault();
+    
+    const url = $(this).attr('action');
+    
+    if (!url) {
+        alert('URL de reabertura não encontrada');
+        return;
+    }
+    
+    $.ajax({
+        url: url,
+        type: "POST",
+        dataType: "json",
+        headers: {
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRFToken": $('meta[name=csrf-token]').attr('content')
+        },
+        success: function(response) {
+            if (response.success) {
+                alert(response.message || 'Inventário reaberto com sucesso!');
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalConfirmarReabertura'));
+                if (modal) modal.hide();
+                // Recarregar histórico
+                carregarHistorico();
+                // Recarregar inventários ativos se necessário
+                carregarInventariosAtivos();
+            } else {
+                alert(response.message || 'Erro ao reabrir inventário.');
+            }
+        },
+        error: function(xhr, status, error) {
+            let mensagem = 'Erro ao reabrir inventário';
+            if (xhr.responseJSON && xhr.responseJSON.message) {
+                mensagem = xhr.responseJSON.message;
+            } else if (xhr.responseText) {
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    mensagem = response.message || mensagem;
+                } catch(e) {
+                    mensagem = mensagem + ': ' + error;
+                }
+            }
+            alert(mensagem);
+        }
+    });
+});
+
+// Inicializar event listeners na carga da página
+$(document).ready(function() {
+    inicializarEventListenersGrupos();
 });
 </script>
 {% endblock %}

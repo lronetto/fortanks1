@@ -20,11 +20,11 @@
                         <strong>Materiais:</strong> <span id="grupo-exclusao-materiais">-</span>
                     </div>
                     
-                    <!-- Alerta se houver materiais associados -->
-                    <div id="alerta-materiais-associados" class="alert alert-danger d-none">
-                        <i class="fas fa-exclamation-circle"></i> 
+                    <!-- Alerta informativo se houver materiais associados -->
+                    <div id="alerta-materiais-associados" class="alert alert-info d-none">
+                        <i class="fas fa-info-circle"></i> 
                         <strong>Atenção:</strong> Este grupo possui materiais associados. 
-                        Remova todos os materiais antes de excluir o grupo.
+                        Todos os materiais serão desassociados automaticamente ao excluir o grupo.
                     </div>
                 </div>
             </div>
@@ -57,15 +57,16 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('grupo-exclusao-codigo').textContent = grupoData.codigo || '-';
             document.getElementById('grupo-exclusao-materiais').textContent = grupoData.total_materiais || '0';
             
-            // Verificar se há materiais associados
+            // Verificar se há materiais associados (apenas para exibir aviso informativo)
             const totalMateriais = parseInt(grupoData.total_materiais) || 0;
             const alertaMateriais = document.getElementById('alerta-materiais-associados');
             const btnConfirmar = document.getElementById('btn-confirmar-exclusao');
             
             if (totalMateriais > 0) {
+                // Mostrar aviso informativo, mas permitir exclusão
                 alertaMateriais.classList.remove('d-none');
-                btnConfirmar.disabled = true;
-                btnConfirmar.innerHTML = '<i class="fas fa-ban"></i> Não é possível excluir';
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = '<i class="fas fa-trash"></i> Confirmar Exclusão';
             } else {
                 alertaMateriais.classList.add('d-none');
                 btnConfirmar.disabled = false;
