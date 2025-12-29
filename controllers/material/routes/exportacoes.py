@@ -9,6 +9,7 @@ import pandas as pd
 from flask import flash, redirect, send_file, url_for
 from flask_login import login_required
 
+from models.estoque import Estoque
 from models.material import Materiais
 from models.nota_fiscal import NotaFiscalItem
 from models.database import db
@@ -57,9 +58,9 @@ def exportar_excel():
                 {
                     "ID": mat.id,
                     "Máscara": mat.mascara,
-                    "Código SOX": mat.codigo,
+ #                   "Código SOX": mat.codigo,
                     "Nome": mat.nome,
-                    "Descrição": mat.descricao,
+ #                   "Descrição": mat.descricao,
                     "Categoria": mat.categoria,
                     "Unidade": mat.unidade_obj.nome if mat.unidade_obj else "",
                     "NCM": (mat.ncm if mat.ncm != "0" else (ncm_unico or "")),
@@ -93,6 +94,69 @@ def exportar_excel():
         flash("Ocorreu um erro ao gerar o arquivo Excel.", "danger")
         return redirect(url_for("material.index"))
 
+@material_bp.route("/exportar-excel1")
+@login_required
+def exportar_excel1():
+    """
+    Exportação completa (legada). Mantida em formato reduzido.
+    """
+    try:
+        materiais = Materiais.query.all()
+        dados_exportacao = []
+        print(f"materiais: {len(materiais)}")
+        i=0
+        for mat in materiais:
+            estoque = Estoque.query.filter_by(material_id=mat.id).first()
+            if estoque:
+                estoque_atual = estoque.get_estoque_atual()
+            else:
+                estoque_atual = 0
+            print(f"material: {i}/{len(materiais)}")
+            i+=1
+            if mat.codigo_erp:
+                codigo_alterdata = str(mat.codigo_erp).replace(".0", "")
+            else:
+                codigo_alterdata = ""
+            dados_exportacao.append(
+                {
+                    "ID": mat.id,
+ #                   "Máscara": mat.mascara,
+ #                   "Código SOX": mat.codigo,
+                    "Nome": mat.nome,
+ #                   "Descrição": mat.descricao,
+ #                   "Categoria": mat.categoria,
+                    "Unidade": mat.unidade_obj.nome if mat.unidade_obj else "",
+ #                   "NCM": (mat.ncm if mat.ncm != "0" else (ncm_unico or "")),
+ #                   "Plano de Conta": mat.plano_conta,
+                    "Código Alterdata": codigo_alterdata,
+                    "estoque": str(estoque_atual).replace(".", ","),
+ #                   "Data Criação": mat.data_criacao.strftime("%Y-%m-%d %H:%M:%S") if mat.data_criacao else "",
+ #                   "Quantidade Importada": len(itens),
+ #                   "ncn iguais": ncm_iguais,
+ #                   "ncm unicos": len(ncms_validos),
+ #                   "ncms unico": ncm_unico,
+ #                   "itens_por_ncm": json.dumps(itens_por_ncm, ensure_ascii=False),
+                }
+            )
+
+        df = pd.DataFrame(dados_exportacao)
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="Materiais")
+        output.seek(0)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"materiais_{timestamp}.xlsx"
+        return send_file(
+            output,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as e:
+        logger.error(f"Erro ao exportar materiais para Excel: {e}")
+        flash("Ocorreu um erro ao gerar o arquivo Excel.", "danger")
+        return redirect(url_for("material.index"))
 
 @material_bp.route("/exportar-mega")
 @login_required

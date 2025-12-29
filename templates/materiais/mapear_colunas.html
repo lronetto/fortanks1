@@ -61,7 +61,7 @@
                         <select class="form-select" id="col_id" name="col_id">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_id') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -70,7 +70,7 @@
                         <select class="form-select" id="col_mascara" name="col_mascara">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_mascara') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -80,7 +80,7 @@
                         <select class="form-select" id="col_ncm" name="col_ncm">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_ncm') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -90,7 +90,7 @@
                         <select class="form-select" id="col_nome" name="col_nome" required>
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_nome') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -101,7 +101,7 @@
                         <select class="form-select" id="col_categoria" name="col_categoria" required>
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_categoria') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -113,7 +113,7 @@
                         <select class="form-select" id="col_codigo_erp" name="col_codigo_erp">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_codigo_erp') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -123,7 +123,7 @@
                         <select class="form-select" id="col_plano_conta" name="col_plano_conta">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_plano_conta') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -133,7 +133,7 @@
                         <select class="form-select" id="col_unidade" name="col_unidade">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}">{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_unidade') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>

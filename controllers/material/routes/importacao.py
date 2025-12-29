@@ -2,15 +2,18 @@ import logging
 import os
 import tempfile
 import uuid
+from datetime import datetime
 from io import BytesIO
 
 import pandas as pd
 from flask import current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import login_required
+from sqlalchemy import or_
 
 from models.database import db
 from models.material import Materiais
 from models.unidade import Unidades
+from models.plano_conta import PlanoConta
 
 from .. import material_bp
 
@@ -20,7 +23,11 @@ logger = logging.getLogger(__name__)
 @material_bp.route("/importar", methods=["GET"])
 @login_required
 def importar():
-    return redirect(url_for("material.index"))
+    """
+    Renderiza a página de importação de materiais.
+    Permite ao usuário fazer upload de um arquivo Excel para importação.
+    """
+    return render_template("materiais/importar.html")
 
 
 @material_bp.route("/importar/upload", methods=["POST"])
@@ -81,6 +88,32 @@ def selecionar_planilha():
         df = pd.read_excel(caminho_completo, sheet_name=planilha)
         colunas = df.columns.tolist()
         preview_data = df.head(5).values.tolist()
+        
+        # Mapeamento automático de colunas com nomes iguais ou similares
+        mapeamento_automatico = {}
+        
+        # Dicionário de mapeamento: campo_sistema -> possíveis_nomes_no_excel
+        campos_mapeamento = {
+            'col_id': ['id', 'ID', 'Id', 'codigo', 'Código', 'CÓDIGO', 'cod', 'COD'],
+            'col_nome': ['nome', 'Nome', 'NOME', 'descricao', 'Descrição', 'DESCRIÇÃO', 'desc', 'DESC', 'material', 'Material', 'MATERIAL'],
+            'col_categoria': ['categoria', 'Categoria', 'CATEGORIA', 'cat', 'CAT', 'tipo', 'Tipo', 'TIPO'],
+            'col_codigo_erp': ['codigo_erp', 'Código ERP', 'CÓDIGO ERP', 'codigo erp', 'Código Erp', 'erp', 'ERP'],
+            'col_plano_conta': ['plano_conta', 'Plano de Conta', 'PLANO DE CONTA', 'plano de conta', 'Plano Conta', 'conta', 'Conta', 'CONTA'],
+            'col_unidade': ['unidade', 'Unidade', 'UNIDADE', 'und', 'UND', 'un', 'UN'],
+            'col_mascara': ['mascara', 'Máscara', 'MÁSCARA', 'masc', 'MASC'],
+            'col_ncm': ['ncm', 'NCM', 'Ncm'],
+        }
+        
+        # Normalizar colunas do Excel (remover espaços, converter para minúsculo)
+        colunas_normalizadas = {col.strip().lower(): col for col in colunas}
+        
+        # Fazer o mapeamento automático
+        for campo, possiveis_nomes in campos_mapeamento.items():
+            for nome_possivel in possiveis_nomes:
+                nome_normalizado = nome_possivel.strip().lower()
+                if nome_normalizado in colunas_normalizadas:
+                    mapeamento_automatico[campo] = colunas_normalizadas[nome_normalizado]
+                    break  # Usa a primeira correspondência encontrada
 
         return render_template(
             "materiais/mapear_colunas.html",
@@ -89,6 +122,7 @@ def selecionar_planilha():
             planilhas=planilhas,
             planilha_atual=planilha,
             preview_data=preview_data,
+            mapeamento_automatico=mapeamento_automatico,
         )
     except Exception as e:
         logger.error(f"Erro ao processar planilha: {str(e)}")
@@ -100,11 +134,239 @@ def selecionar_planilha():
 @login_required
 def confirmar_importacao():
     """
-    Mantém a implementação legada de importação via mapeamento.
-    (Foi reduzida aqui para evitar duplicação enorme; pode ser expandida/refatorada em seguida.)
+    Processa a importação de materiais a partir do arquivo Excel com mapeamento de colunas.
     """
-    flash("Importação via mapeamento: rota mantida, mas precisa ser migrada/refatorada por completo.", "warning")
-    return redirect(url_for("material.index"))
+    try:
+        # Obter dados do formulário
+        temp_file = request.form.get("temp_file")
+        planilha = request.form.get("planilha", "")
+        opcao_atualizacao = request.form.get("opcao_atualizacao") == "atualizar"
+        
+        # Obter mapeamento de colunas
+        col_id = request.form.get("col_id", "").strip()
+        col_nome = request.form.get("col_nome", "").strip()
+        col_categoria = request.form.get("col_categoria", "").strip()
+        col_codigo_erp = request.form.get("col_codigo_erp", "").strip()
+        col_plano_conta = request.form.get("col_plano_conta", "").strip()
+        col_unidade = request.form.get("col_unidade", "").strip()
+        col_mascara = request.form.get("col_mascara", "").strip()
+        col_ncm = request.form.get("col_ncm", "").strip()
+        
+        # Validar campos obrigatórios
+        if not col_nome or not col_categoria:
+            flash("Os campos Nome e Categoria são obrigatórios no mapeamento.", "danger")
+            return redirect(url_for("material.importar"))
+        
+        # Validar arquivo temporário
+        if not temp_file or not os.path.isfile(temp_file):
+            flash("Arquivo temporário não encontrado. Por favor, faça o upload novamente.", "danger")
+            return redirect(url_for("material.importar"))
+        
+        # Ler o arquivo Excel
+        try:
+            df = pd.read_excel(temp_file, sheet_name=planilha if planilha else 0)
+            if df.empty:
+                flash("O arquivo está vazio ou não contém dados válidos.", "danger")
+                return redirect(url_for("material.importar"))
+        except Exception as e:
+            logger.error(f"Erro ao ler arquivo Excel: {str(e)}")
+            flash(f"Erro ao ler o arquivo Excel: {str(e)}", "danger")
+            return redirect(url_for("material.importar"))
+        
+        # Validar se as colunas mapeadas existem no arquivo
+        colunas_arquivo = df.columns.tolist()
+        colunas_obrigatorias = [col_nome, col_categoria]
+        colunas_opcionais = [col for col in [col_id, col_codigo_erp, col_plano_conta, col_unidade, col_mascara, col_ncm] if col]
+        
+        for col in colunas_obrigatorias + colunas_opcionais:
+            if col and col not in colunas_arquivo:
+                flash(f"A coluna '{col}' não foi encontrada no arquivo.", "danger")
+                return redirect(url_for("material.importar"))
+        
+        # Processar importação
+        resultados = {
+            "inseridos": 0,
+            "atualizados": 0,
+            "erros": 0,
+            "detalhes_erros": []
+        }
+        
+        # Processar cada linha
+        for idx, row in df.iterrows():
+            linha_numero = idx + 2  # +2 porque começa em 0 e tem cabeçalho
+            
+            try:
+                # Extrair valores das colunas mapeadas
+                nome = str(row[col_nome]).strip() if pd.notna(row.get(col_nome)) else ""
+                categoria = str(row[col_categoria]).strip() if pd.notna(row.get(col_categoria)) else ""
+                
+                # Validar campos obrigatórios
+                if not nome or not categoria:
+                    resultados["erros"] += 1
+                    resultados["detalhes_erros"].append({
+                        "linha": linha_numero,
+                        "erro": "Nome ou Categoria vazios",
+                        "dados": f"Nome: {nome}, Categoria: {categoria}"
+                    })
+                    continue
+                
+                # Extrair valores opcionais
+                codigo = str(row[col_id]).strip() if col_id and pd.notna(row.get(col_id)) else None
+                codigo_erp = str(row[col_codigo_erp]).strip() if col_codigo_erp and pd.notna(row.get(col_codigo_erp)) else None
+                plano_conta_texto = str(row[col_plano_conta]).strip() if col_plano_conta and pd.notna(row.get(col_plano_conta)) else None
+                unidade_nome = str(row[col_unidade]).strip() if col_unidade and pd.notna(row.get(col_unidade)) else None
+                mascara = str(row[col_mascara]).strip() if col_mascara and pd.notna(row.get(col_mascara)) else None
+                ncm = str(row[col_ncm]).strip() if col_ncm and pd.notna(row.get(col_ncm)) else None
+                
+                # Limpar valores "nan" ou "None"
+                if codigo and codigo.lower() in ["nan", "none", ""]:
+                    codigo = None
+                if codigo_erp and codigo_erp.lower() in ["nan", "none", ""]:
+                    codigo_erp = None
+                if plano_conta_texto and plano_conta_texto.lower() in ["nan", "none", ""]:
+                    plano_conta_texto = None
+                if unidade_nome and unidade_nome.lower() in ["nan", "none", ""]:
+                    unidade_nome = None
+                if mascara and mascara.lower() in ["nan", "none", ""]:
+                    mascara = None
+                if ncm and ncm.lower() in ["nan", "none", ""]:
+                    ncm = None
+                
+                # Buscar ou criar unidade
+                unidade_id = None
+                if unidade_nome:
+                    unidade = Unidades.obter_por_nome(unidade_nome)
+                    if not unidade:
+                        # Tentar criar unidade se não existir
+                        try:
+                            unidade = Unidades(nome=unidade_nome.upper(), descricao=unidade_nome, ativo=True)
+                            db.session.add(unidade)
+                            db.session.flush()
+                            unidade_id = unidade.id
+                        except Exception as e:
+                            logger.warning(f"Erro ao criar unidade '{unidade_nome}': {str(e)}")
+                            unidade_id = None
+                    else:
+                        unidade_id = unidade.id
+                
+                # Buscar plano de conta
+                plano_conta_id = None
+                plano_conta_string = None
+                if plano_conta_texto:
+                    # Tentar buscar por descrição ou índice
+                    plano_conta = PlanoConta.query.filter(
+                        or_(
+                            PlanoConta.descricao.ilike(f"%{plano_conta_texto}%"),
+                            PlanoConta.indice.ilike(f"%{plano_conta_texto}%")
+                        ),
+                        PlanoConta.ativo == True
+                    ).first()
+                    
+                    if plano_conta:
+                        plano_conta_id = plano_conta.id
+                    else:
+                        # Se não encontrar, usar como string
+                        plano_conta_string = plano_conta_texto
+                
+                # Verificar se material já existe (por código ou nome)
+                material_existente = None
+                if codigo:
+                    material_existente = Materiais.query.filter_by(codigo=codigo).first()
+                
+                if not material_existente:
+                    # Tentar buscar por nome exato
+                    material_existente = Materiais.query.filter_by(nome=nome).first()
+                
+                if material_existente:
+                    if opcao_atualizacao:
+                        # Atualizar material existente
+                        material_existente.nome = nome
+                        material_existente.categoria = categoria
+                        if codigo:
+                            material_existente.codigo = codigo
+                        if codigo_erp:
+                            material_existente.codigo_erp = codigo_erp
+                        if plano_conta_id:
+                            material_existente.plano_conta_id = plano_conta_id
+                        if plano_conta_string:
+                            material_existente.plano_conta = plano_conta_string
+                        if unidade_id:
+                            material_existente.unidade_id = unidade_id
+                        if mascara:
+                            material_existente.mascara = mascara
+                        if ncm:
+                            material_existente.ncm = ncm
+                        
+                        db.session.add(material_existente)
+                        resultados["atualizados"] += 1
+                    else:
+                        # Ignorar material existente
+                        continue
+                else:
+                    # Criar novo material
+                    novo_material = Materiais(
+                        codigo=codigo,
+                        nome=nome,
+                        categoria=categoria,
+                        codigo_erp=codigo_erp,
+                        plano_conta=plano_conta_string,
+                        plano_conta_id=plano_conta_id,
+                        unidade_id=unidade_id,
+                        mascara=mascara,
+                        ncm=ncm,
+                        ativo=True
+                    )
+                    db.session.add(novo_material)
+                    resultados["inseridos"] += 1
+                
+            except Exception as e:
+                logger.error(f"Erro ao processar linha {linha_numero}: {str(e)}")
+                resultados["erros"] += 1
+                resultados["detalhes_erros"].append({
+                    "linha": linha_numero,
+                    "erro": str(e),
+                    "dados": str(row.to_dict())
+                })
+        
+        # Commit das alterações
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao salvar importação: {str(e)}")
+            flash(f"Erro ao salvar os dados no banco: {str(e)}", "danger")
+            return redirect(url_for("material.importar"))
+        
+        # Limpar arquivo temporário
+        try:
+            if os.path.isfile(temp_file):
+                os.remove(temp_file)
+        except Exception as e:
+            logger.warning(f"Erro ao remover arquivo temporário: {str(e)}")
+        
+        # Preparar mensagem de sucesso
+        mensagem = f"Importação concluída: {resultados['inseridos']} inseridos"
+        if resultados["atualizados"] > 0:
+            mensagem += f", {resultados['atualizados']} atualizados"
+        if resultados["erros"] > 0:
+            mensagem += f", {resultados['erros']} erros"
+        
+        if resultados["erros"] > 0:
+            flash(mensagem, "warning")
+        else:
+            flash(mensagem, "success")
+        
+        # Retornar para página de importação com resultados
+        return render_template(
+            "materiais/importar.html",
+            resultados=resultados
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao processar importação: {str(e)}", exc_info=True)
+        flash(f"Erro ao processar a importação: {str(e)}", "danger")
+        return redirect(url_for("material.importar"))
 
 
 @material_bp.route("/download-modelo")

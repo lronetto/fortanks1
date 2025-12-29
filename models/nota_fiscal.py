@@ -14,6 +14,8 @@ from utils.gerar_pdf import gerar_pdf_danfe
 import xml.etree.ElementTree as ET
 from decimal import Decimal
 import logging
+from models.estoque import Estoque, EstoqueMovimentacoes
+from models.epi import Epi
 from models.upload import Upload
 from models.arquivei import Arquivei
 from models.logs import Logs
@@ -1273,13 +1275,13 @@ class NotaFiscalItem(db.Model):
         
         try:
             # Buscar estoque existente para o material
-            estoque = Estoques.query.filter_by(material_id=self.material_id,localizacao=local).first()
+            estoque = Estoque.query.filter_by(material_id=self.material_id,localizacao=local).first()
             
             # Se não existe estoque para este material, criar um novo
             if not estoque:
                 print(f"Criando novo estoque para o material {self.material_id}")
 
-                estoque = Estoques(
+                estoque = Estoque(
                     material_id=self.material_id,
                     tipo_item='material',
                     quantidade=float(self.quantidade),
@@ -1357,14 +1359,13 @@ class NotaFiscalItem(db.Model):
             print(f'tempo de execucao importar_para_estoque: {fim - inicio}')
             # Verificar se o material é da categoria EPI
             # Se for, criar automaticamente um registro de EPI para este material
-            from models.epi import EPI
             if self.material and self.material.categoria == 'EPI':
                 # Verificar se já existe um EPI para este material
-                epi_existente = EPI.query.filter_by(material_id=self.material_id).first()
+                epi_existente = Epi.query.filter_by(material_id=self.material_id).first()
                 
                 if not epi_existente:
                     # Criar um novo registro de EPI
-                    epi = EPI()
+                    epi = Epi()
                     epi.material_id = self.material_id
                     epi.estoque_minimo = 1  # Valor padrão
                     epi.usuario_id = usuario_id
