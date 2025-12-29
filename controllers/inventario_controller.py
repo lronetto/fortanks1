@@ -1,12 +1,12 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from models.estoque import Estoque, EstoqueMovimentacoes,EstoqueInventarios,EstoqueInventariosItens
-from models.material import Materiais,MateriaisGrupos
+from models.material import Materiais, MateriaisGrupos, materiais_grupos
 from models.database import db
 from forms.estoque_forms import InventarioEstoqueForm
 from datetime import datetime, timedelta
 from models.unidade import Unidades
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, select, distinct
 from decimal import Decimal
 import logging
 
@@ -162,21 +162,15 @@ def novo_inventario():
                     # Filtrar por grupos de materiais selecionados
                     logger.info(f"Filtrando por grupos: {grupos_selecionados}")
                     
-                    # Construir placeholders para IN clause
-                    placeholders = ','.join([f':grupo_{i}' for i in range(len(grupos_selecionados))])
-                    sql = f"""
-                        SELECT DISTINCT material_id FROM materiais_grupos 
-                        WHERE grupo_id IN ({placeholders})
-                    """
+                    # Converter para inteiros
+                    grupos_ids = [int(grupo_id) for grupo_id in grupos_selecionados if grupo_id]
                     
-                    # Criar dicionário de parâmetros
-                    params = {f'grupo_{i}': int(grupo_id) for i, grupo_id in enumerate(grupos_selecionados)}
-                    logger.info(f"SQL: {sql}")
-                    logger.info(f"Parâmetros: {params}")
+                    # Usar SQLAlchemy ORM para buscar materiais dos grupos através da tabela de associação
+                    subquery = select(distinct(materiais_grupos.c.material_id)).where(
+                        materiais_grupos.c.grupo_id.in_(grupos_ids)
+                    )
                     
-                    materiais_grupo = db.session.execute(
-                        db.text(sql), params
-                    ).fetchall()
+                    materiais_grupo = db.session.execute(subquery).fetchall()
                     if materiais_grupo:
                         ids_materiais = [row[0] for row in materiais_grupo]
                         logger.info(f"Materiais encontrados nos grupos: {ids_materiais}")
