@@ -4,25 +4,24 @@ from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc, case, and_
 from decimal import Decimal
-from models.peca import Peca
+from models import UnidadesConversao
 from models.database import db
-from models.tanque import Tanque
+from models.tanque import Tanques, TanquesGrupos, TanquesPecas, TanquesProdutoComposto
 from models.usuario import Usuario
 from models.nota_fiscal import CNPJS_MATRIZ, NotaFiscal, NotaFiscalItem
-from models.material import Material
+from models.material import Materiais
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
-from models.solicitacao import Solicitacao
-from models.epi import EPI, Colaborador
-from models.estoque import Estoque, MovimentacaoEstoque
-from models.concretagem import Concretagem, ConcretagemTanque
-from models.usinagem_concreto import UsinagemConcreto, UsinagemMaterial, ItemTracoConcreto, TracoConcreto
-from models.unidade import Unidade
-from models.conversao_unidade import ConversaoUnidade
-from models.dados_analiticos import DadoAnalitico, PL_CUSTO, PL_RECOP
-from models.epi import EntregaEPI
-from models.grupo_tanque import GrupoTanque
-
+from models.solicitacao import Solicitacoes, SolicitacoesItens
+from models.estoque import Estoque, EstoqueMovimentacoes
+from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais
+from models.unidade import Unidades
+from models.dados_analiticos import DadoAnalitico
+from models.epi import Epi, EpiEntregas
+from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
+from models.colaborador import Colaborador
+from models.dados_analiticos import PL_CUSTO, PL_RECOP
+from models.plano_conta import PlanoConta
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -150,8 +149,8 @@ def meu_dashboard():
     )
 
 def card_epis_estoque_critico():
-    epis_criticos_tst = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
-        Estoque.quantidade <= EPI.estoque_minimo
+    epis_criticos_tst = Epi.query.join(Estoque, Estoque.material_id == Epi.material_id).filter(
+        Estoque.quantidade <= Epi.estoque_minimo
     ).limit(5).all()
     return epis_criticos_tst
 
@@ -181,19 +180,19 @@ def card_historico_usinagem():
             inicio_periodo = fim_periodo - timedelta(days=6)
 
         # Contagem de concretagens (baseado na data da concretagem)
-        qtd_concretagens = Concretagem.query.filter(
-            Concretagem.data_concretagem >= inicio_periodo,
-            Concretagem.data_concretagem <= fim_periodo
+        qtd_concretagens = ConcretoConcretagens.query.filter(
+            ConcretoConcretagens.data_concretagem >= inicio_periodo,
+            ConcretoConcretagens.data_concretagem <= fim_periodo
         ).count()
         
         # Cálculo do volume usinado (baseado na data da usinagem)
         # Usamos func.date para comparar a parte da data de data_usinagem (DateTime) com inicio_periodo e fim_periodo (date)
         volume_total_periodo_usinagem = db.session.query(
-            func.sum(UsinagemConcreto.volume_produzido)
-        ).filter(
-            func.date(UsinagemConcreto.data_usinagem) >= inicio_periodo,
-            func.date(UsinagemConcreto.data_usinagem) <= fim_periodo
-        ).scalar() or Decimal(0.0)
+            func.sum(ConcretoConcretagens.volume_total)
+        ).join(ConcretoConcretagens, ConcretoConcretagensTanques.concretagem_id == ConcretoConcretagens.id).filter(
+            ConcretoConcretagens.data_concretagem >= inicio_periodo,
+            ConcretoConcretagens.data_concretagem <= fim_periodo
+        ).scalar() or Decimal(0.0) or 0.0
         
         if i == 0:
             rotulo_semana = f"Atual ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
@@ -242,9 +241,9 @@ def card_historico_semanal_concretagens():
             inicio_periodo = fim_periodo - timedelta(days=6)
 
         # Contagem de concretagens (baseado na data da concretagem)
-        qtd_concretagens = Concretagem.query.filter(
-            Concretagem.data_concretagem >= inicio_periodo,
-            Concretagem.data_concretagem <= fim_periodo
+        qtd_concretagens = ConcretoConcretagens.query.filter(
+            ConcretoConcretagens.data_concretagem >= inicio_periodo,
+            ConcretoConcretagens.data_concretagem <= fim_periodo
         ).count()
         
         if i == 0:
@@ -265,15 +264,15 @@ def card_historico_semanal_concretagens():
 
 def card_concretagens_recentes():
     # Concretagens recentes
-    concretagens_recentes_op = Concretagem.query.order_by(
-        desc(Concretagem.data_concretagem)
+    concretagens_recentes_op = ConcretoConcretagens.query.order_by(
+        desc(ConcretoConcretagens.data_concretagem)
     ).limit(5).all()
     
     # Total de peças concretadas nos últimos 30 dias
     # Contar peças do campo JSON 'pecas' das concretagens dos últimos 30 dias
     data_limite = datetime.now().date() - timedelta(days=30)
-    concretagens_recentes = Concretagem.query.filter(
-        Concretagem.data_concretagem >= data_limite
+    concretagens_recentes = ConcretoConcretagens.query.filter(
+        ConcretoConcretagens.data_concretagem >= data_limite
     ).all()
     
     total_pecas_recentes = 0
@@ -287,28 +286,28 @@ def card_concretagens_recentes():
     return dados_especificos
 def card_epis_vencimento():
      # EPIs com estoque crítico
-    epis_criticos_tst = EPI.query.join(Estoque, Estoque.material_id == EPI.material_id).filter(
-        Estoque.quantidade <= EPI.estoque_minimo
+    epis_criticos_tst = Epi.query.join(Estoque, Estoque.material_id == Epi.material_id).filter(
+        Estoque.quantidade <= Epi.estoque_minimo
     ).limit(10).all()
     
     # EPIs próximos ao vencimento (30 dias)
     data_limite = datetime.now().date() + timedelta(days=30)
-    epis_vencimento = EPI.query.filter(
-        EPI.data_validade <= data_limite,
-        EPI.data_validade >= datetime.now().date()
-    ).order_by(EPI.data_validade).limit(10).all()
+    epis_vencimento = Epi.query.filter(
+        Epi.data_validade <= data_limite,
+        Epi.data_validade >= datetime.now().date()
+    ).order_by(Epi.data_validade).limit(10).all()
     
     # Entregas de EPIs recentes
-    entregas_recentes = EntregaEPI.query.order_by(
-        desc(EntregaEPI.data_entrega)
+    entregas_recentes = EpiEntregas.query.order_by(
+        desc(EpiEntregas.data_entrega)
     ).limit(10).all()
     
     # Colaboradores com mais EPIs
     colaboradores_epis = db.session.query(
         Colaborador.id, 
         Colaborador.nome,
-        func.count(EntregaEPI.id).label('total_epis')
-    ).join(EntregaEPI, EntregaEPI.colaborador_id == Colaborador.id
+        func.count(EpiEntregas.id).label('total_epis')
+    ).join(EpiEntregas, EpiEntregas.colaborador_id == Colaborador.id
     ).group_by(Colaborador.id
     ).order_by(desc('total_epis')
     ).limit(5).all()
@@ -323,22 +322,22 @@ def card_epis_vencimento():
 def card_materiais_usinagem():
     materiais_usinagem_estoque_data = []
 
-    subquery_materiais_usados_ids = db.session.query(UsinagemMaterial.material_id).distinct().subquery()
+    subquery_materiais_usados_ids = db.session.query(ConcretoUsinagensMateriais.material_id).distinct().subquery()
     
     # Query principal para buscar nome do material, quantidade em estoque e unidade
     materiais_com_estoque_info = db.session.query(
-        Material.id.label('material_id'),
-        Material.nome.label('material_nome'),
-        Material.unidade_id.label('estoque_unidade_id'),
-        Unidade.nome.label('estoque_unidade_nome'),
+        Materiais.id.label('material_id'),
+        Materiais.nome.label('material_nome'),
+        Materiais.unidade_id.label('estoque_unidade_id'),
+        Unidades.nome.label('estoque_unidade_nome'),
         Estoque.quantidade.label('estoque_quantidade')
-    ).select_from(Material).join(
-        subquery_materiais_usados_ids, Material.id == subquery_materiais_usados_ids.c.material_id
+    ).select_from(Materiais).join(
+        subquery_materiais_usados_ids, Materiais.id == subquery_materiais_usados_ids.c.material_id
     ).join(
-        Estoque, Estoque.material_id == Material.id
+        Estoque, Estoque.material_id == Materiais.id
     ).outerjoin( # Usar outerjoin caso um material não tenha unidade_obj definida, mas tenha unidade_id
-        Unidade, Material.unidade_id == Unidade.id
-    ).order_by(Material.nome).all()
+        Unidades, Materiais.unidade_id == Unidades.id
+    ).order_by(Materiais.nome).all()
     
     for mat_info in materiais_com_estoque_info:
         estoque_atual_decimal = mat_info.estoque_quantidade if mat_info.estoque_quantidade is not None else Decimal(0.0)
@@ -346,24 +345,24 @@ def card_materiais_usinagem():
         # unidade_estoque_nome_val = mat_info.estoque_unidade_nome or '-' # Não usado diretamente na exibição final
 
         item_traco_ref = (db.session.query(
-            ItemTracoConcreto.quantidade.label('traco_consumo_por_m3'),
-            ItemTracoConcreto.unidade_id.label('traco_unidade_id'),
-            Unidade.nome.label('traco_unidade_nome')
-        ).join(Unidade, ItemTracoConcreto.unidade_id == Unidade.id)
-            .join(TracoConcreto, ItemTracoConcreto.traco_id == TracoConcreto.id)
-            .filter(ItemTracoConcreto.material_id == mat_info.material_id)
-            .filter(TracoConcreto.status == 'Ativo')
-            .order_by(TracoConcreto.id.desc()) # Pega de um traço ativo mais recente, se houver múltiplos
+            ConcretoTracosItens.quantidade.label('traco_consumo_por_m3'),
+            ConcretoTracosItens.unidade_id.label('traco_unidade_id'),
+            Unidades.nome.label('traco_unidade_nome')
+        ).join(Unidades, ConcretoTracosItens.unidade_id == Unidades.id)
+            .join(ConcretoTracos, ConcretoTracosItens.traco_id == ConcretoTracos.id)
+            .filter(ConcretoTracosItens.material_id == mat_info.material_id)
+            .filter(ConcretoTracos.status == 'Ativo')
+            .order_by(ConcretoTracos.id.desc()) # Pega de um traço ativo mais recente, se houver múltiplos
             .first())
 
         if not item_traco_ref:
             item_traco_ref = (db.session.query(
-                ItemTracoConcreto.quantidade.label('traco_consumo_por_m3'),
-                ItemTracoConcreto.unidade_id.label('traco_unidade_id'),
-                Unidade.nome.label('traco_unidade_nome')
-            ).join(Unidade, ItemTracoConcreto.unidade_id == Unidade.id)
-                .filter(ItemTracoConcreto.material_id == mat_info.material_id)
-                .order_by(ItemTracoConcreto.traco_id.desc()) # Pega de qualquer traço mais recente
+                ConcretoTracosItens.quantidade.label('traco_consumo_por_m3'),
+                ConcretoTracosItens.unidade_id.label('traco_unidade_id'),
+                Unidades.nome.label('traco_unidade_nome')
+            ).join(Unidades, ConcretoTracosItens.unidade_id == Unidades.id)
+                .filter(ConcretoTracosItens.material_id == mat_info.material_id)
+                .order_by(ConcretoTracosItens.traco_id.desc()) # Pega de qualquer traço mais recente
                 .first())
 
         estoque_na_unidade_traco = Decimal(0.0)
@@ -380,7 +379,7 @@ def card_materiais_usinagem():
                 if unidade_estoque_id_val == unidade_traco_id_val:
                     estoque_na_unidade_traco = estoque_atual_decimal
                 else:
-                    fator = ConversaoUnidade.obter_fator_conversao(
+                    fator = UnidadesConversao.obter_fator_conversao(
                         unidade_origem_id=unidade_estoque_id_val, 
                         unidade_destino_id=unidade_traco_id_val, 
                         material_id=mat_info.material_id
@@ -402,7 +401,7 @@ def card_materiais_usinagem():
         })
     return materiais_usinagem_estoque_data
 def acerto_data_concretagem():
-    concretagens = Concretagem.query.all()
+    concretagens = ConcretoConcretagens.query.all()
     for concretagem in concretagens:
         # Obter peças do campo JSON
         if concretagem.pecas:
@@ -410,9 +409,9 @@ def acerto_data_concretagem():
                 pecas_json = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
                 if isinstance(pecas_json, list):
                     for peca_id in pecas_json:
-                        peca1 = Peca.query.filter_by(id=peca_id).first()
+                        peca1 = TanquesPecas.query.filter_by(id=peca_id).first()
                         if peca1 and (peca1.data_concretagem is None or peca1.data_concretagem == ''):
-                            Peca.query.filter_by(id=peca_id).update({'data_concretagem': concretagem.data_concretagem})
+                            TanquesPecas.query.filter_by(id=peca_id).update({'data_concretagem': concretagem.data_concretagem})
                             db.session.commit()
             except (json.JSONDecodeError, TypeError, AttributeError):
                 continue
@@ -421,7 +420,7 @@ def card_resumo_placas(agrupar_por_grupo=False):
     """
     Gera resumo de placas por tanque ou agrupado por grupo de tanques
     """
-    tanques = Tanque.query.order_by(Tanque.contrato_id, Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.contrato_id, Tanques.nome).all()
     dados_especificos = []
     
     if agrupar_por_grupo:
@@ -454,13 +453,13 @@ def card_resumo_placas(agrupar_por_grupo=False):
         for grupo_id, grupo_data in grupos_dict.items():
             for tanque in grupo_data['tanques']:
                 resultado = db.session.query(
-                    func.count(Peca.id).label('total_pecas'),
+                    func.count(TanquesPecas.id).label('total_pecas'),
                     func.sum(
                         case(
                             (
                                 and_(
-                                    Peca.data_concretagem.isnot(None),
-                                    Peca.data_concretagem != ''
+                                    TanquesPecas.data_concretagem.isnot(None),
+                                    TanquesPecas.data_concretagem != ''
                                 ),
                                 1
                             ),
@@ -471,11 +470,11 @@ def card_resumo_placas(agrupar_por_grupo=False):
                         case(
                             (
                                 and_(
-                                    Peca.qualidade.isnot(None),
-                                    Peca.qualidade != '',
-                                    func.json_extract(Peca.qualidade, '$.acabamento').isnot(None),
-                                    func.json_extract(Peca.qualidade, '$.acabamento') != '',
-                                    func.json_extract(Peca.qualidade, '$.acabamento') != 'null'
+                                    TanquesPecas.qualidade.isnot(None),
+                                    TanquesPecas.qualidade != '',
+                                    func.json_extract(TanquesPecas.qualidade, '$.acabamento').isnot(None),
+                                    func.json_extract(TanquesPecas.qualidade, '$.acabamento') != '',
+                                    func.json_extract(TanquesPecas.qualidade, '$.acabamento') != 'null'
                                 ),
                                 1
                             ),
@@ -486,9 +485,9 @@ def card_resumo_placas(agrupar_por_grupo=False):
                         case(
                             (
                                 and_(
-                                    Peca.qualidade.isnot(None),
-                                    Peca.qualidade != '',
-                                    func.json_extract(Peca.qualidade, '$.transporte.data_transporte') !='null'
+                                    TanquesPecas.qualidade.isnot(None),
+                                    TanquesPecas.qualidade != '',
+                                    func.json_extract(TanquesPecas.qualidade, '$.transporte.data_transporte') !='null'
                                 ),
                                 1
                             ),
@@ -496,7 +495,7 @@ def card_resumo_placas(agrupar_por_grupo=False):
                         )
                     ).label('transportadas')
                 ).filter(
-                    Peca.tanque_id == tanque.id
+                    TanquesPecas.tanque_id == tanque.id
                 ).first()
                 
                 total_pecas = resultado.total_pecas or 0
@@ -511,8 +510,8 @@ def card_resumo_placas(agrupar_por_grupo=False):
                 
                 nfs_emitidas_total = db.session.query(func.sum(NotaFiscalItem.quantidade)).\
                     join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).\
-                    join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
-                    filter(Tanque.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
+                    join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo).\
+                    filter(Tanques.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
                 if nfs_emitidas_total:
                     grupo_data['nfs_emitidas'] += nfs_emitidas_total
             
@@ -534,13 +533,13 @@ def card_resumo_placas(agrupar_por_grupo=False):
         # Processar tanques sem grupo
         for tanque in tanques_sem_grupo:
             resultado = db.session.query(
-                func.count(Peca.id).label('total_pecas'),
+                func.count(TanquesPecas.id).label('total_pecas'),
                 func.sum(
                     case(
                         (
                             and_(
-                                Peca.data_concretagem.isnot(None),
-                                Peca.data_concretagem != ''
+                                TanquesPecas.data_concretagem.isnot(None),
+                                TanquesPecas.data_concretagem != ''
                             ),
                             1
                         ),
@@ -551,11 +550,11 @@ def card_resumo_placas(agrupar_por_grupo=False):
                     case(
                         (
                             and_(
-                                Peca.qualidade.isnot(None),
-                                Peca.qualidade != '',
-                                func.json_extract(Peca.qualidade, '$.acabamento').isnot(None),
-                                func.json_extract(Peca.qualidade, '$.acabamento') != '',
-                                func.json_extract(Peca.qualidade, '$.acabamento') != 'null'
+                                TanquesPecas.qualidade.isnot(None),
+                                TanquesPecas.qualidade != '',
+                                func.json_extract(TanquesPecas.qualidade, '$.acabamento').isnot(None),
+                                func.json_extract(TanquesPecas.qualidade, '$.acabamento') != '',
+                                func.json_extract(TanquesPecas.qualidade, '$.acabamento') != 'null'
                             ),
                             1
                         ),
@@ -566,9 +565,9 @@ def card_resumo_placas(agrupar_por_grupo=False):
                     case(
                         (
                             and_(
-                                Peca.qualidade.isnot(None),
-                                Peca.qualidade != '',
-                                func.json_extract(Peca.qualidade, '$.transporte.data_transporte') !='null'
+                                TanquesPecas.qualidade.isnot(None),
+                                TanquesPecas.qualidade != '',
+                                func.json_extract(TanquesPecas.qualidade, '$.transporte.data_transporte') !='null'
                             ),
                             1
                         ),
@@ -576,7 +575,7 @@ def card_resumo_placas(agrupar_por_grupo=False):
                     )
                 ).label('transportadas')
             ).filter(
-                Peca.tanque_id == tanque.id
+                TanquesPecas.tanque_id == tanque.id
             ).first()
             
             total_pecas = resultado.total_pecas or 0
@@ -588,8 +587,8 @@ def card_resumo_placas(agrupar_por_grupo=False):
             prontas_transportar = acabadas - transportadas
             nfs_emitidas_total = db.session.query(func.sum(NotaFiscalItem.quantidade)).\
                 join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).\
-                join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
-                filter(Tanque.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
+                join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo).\
+                filter(Tanques.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
             if nfs_emitidas_total is None:
                 nfs_emitidas_total = 0
             
@@ -611,13 +610,13 @@ def card_resumo_placas(agrupar_por_grupo=False):
     for tanque in tanques:
         # Query única otimizada: calcular todas as contagens em uma única query
         resultado = db.session.query(
-            func.count(Peca.id).label('total_pecas'),
+            func.count(TanquesPecas.id).label('total_pecas'),
             func.sum(
                 case(
                     (
                         and_(
-                            Peca.data_concretagem.isnot(None),
-                            Peca.data_concretagem != ''
+                            TanquesPecas.data_concretagem.isnot(None),
+                            TanquesPecas.data_concretagem != ''
                         ),
                         1
                     ),
@@ -628,11 +627,11 @@ def card_resumo_placas(agrupar_por_grupo=False):
                 case(
                     (
                         and_(
-                            Peca.qualidade.isnot(None),
-                            Peca.qualidade != '',
-                            func.json_extract(Peca.qualidade, '$.acabamento').isnot(None),
-                            func.json_extract(Peca.qualidade, '$.acabamento') != '',
-                            func.json_extract(Peca.qualidade, '$.acabamento') != 'null'
+                            TanquesPecas.qualidade.isnot(None),
+                            TanquesPecas.qualidade != '',
+                            func.json_extract(TanquesPecas.qualidade, '$.acabamento').isnot(None),
+                            func.json_extract(TanquesPecas.qualidade, '$.acabamento') != '',
+                            func.json_extract(TanquesPecas.qualidade, '$.acabamento') != 'null'
                         ),
                         1
                     ),
@@ -643,9 +642,9 @@ def card_resumo_placas(agrupar_por_grupo=False):
                 case(
                     (
                         and_(
-                            Peca.qualidade.isnot(None),
-                            Peca.qualidade != '',
-                            func.json_extract(Peca.qualidade, '$.transporte.data_transporte') !='null'
+                            TanquesPecas.qualidade.isnot(None),
+                            TanquesPecas.qualidade != '',
+                            func.json_extract(TanquesPecas.qualidade, '$.transporte.data_transporte') !='null'
                         ),
                         1
                     ),
@@ -653,7 +652,7 @@ def card_resumo_placas(agrupar_por_grupo=False):
                 )
             ).label('transportadas')
         ).filter(
-            Peca.tanque_id == tanque.id
+            TanquesPecas.tanque_id == tanque.id
         ).first()
         
         # Extrair valores do resultado (pode ser None se não houver peças)
@@ -666,8 +665,8 @@ def card_resumo_placas(agrupar_por_grupo=False):
         prontas_transportar = acabadas - transportadas
         nfs_emitidas_total = db.session.query(func.sum(NotaFiscalItem.quantidade)).\
             join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).\
-            join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
-            filter(Tanque.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
+            join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo).\
+            filter(Tanques.id==tanque.id,NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).scalar()
         if nfs_emitidas_total is None:
             nfs_emitidas_total = 0
         dados_especificos.append({
@@ -723,8 +722,8 @@ def api_dados_resumo_notas():
                      NotaFiscal.valor_total, 
                      NotaFiscalItem.quantidade,
                      ).join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
-                     join(Tanque, Tanque.item_nf == NotaFiscalItem.codigo).\
-                     join(Contrato, Contrato.id == Tanque.contrato_id).\
+                     join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo).\
+                     join(Contrato, Contrato.id == Tanques.contrato_id).\
                      order_by(NotaFiscal.data_emissao.desc()).\
                      filter(Contrato.id == contrato_id, 
                             NotaFiscal.cnpj_emitente == '27126997000187').all()
@@ -754,19 +753,19 @@ def index1():
     """
     # Estatísticas gerais
     total_usuarios = Usuario.query.count()
-    total_solicitacoes = Solicitacao.query.count()
+    total_solicitacoes = Solicitacoes.query.count()
     total_notas = NotaFiscal.query.count()
-    total_materiais = Material.query.count()
+    total_materiais = Materiais.query.count()
     
     # Estatísticas de solicitações por status
-    total_solicitacoes_aprovadas = Solicitacao.query.filter_by(status='aprovada').count()
-    total_solicitacoes_pendentes = Solicitacao.query.filter_by(status='pendente').count()
-    total_solicitacoes_rejeitadas = Solicitacao.query.filter_by(status='rejeitada').count()
-    total_solicitacoes_finalizadas = Solicitacao.query.filter_by(status='finalizada').count()
+    total_solicitacoes_aprovadas = Solicitacoes.query.filter_by(status='aprovada').count()
+    total_solicitacoes_pendentes = Solicitacoes.query.filter_by(status='pendente').count()
+    total_solicitacoes_rejeitadas = Solicitacoes.query.filter_by(status='rejeitada').count()
+    total_solicitacoes_finalizadas = Solicitacoes.query.filter_by(status='finalizada').count()
     
     # Solicitações recentes
-    solicitacoes_recentes = Solicitacao.query.order_by(
-        desc(Solicitacao.data_solicitacao)
+    solicitacoes_recentes = Solicitacoes.query.order_by(
+        desc(Solicitacoes.data_solicitacao)
     ).limit(5).all()
     
     # Notas fiscais recentes
@@ -826,58 +825,6 @@ def solicitacoes_pendentes():
     
     return redirect(url_for('solicitacao.index'))
 
-# Endpoint de API para obter dados do dashboard
-#@dashboard_bp.route('/api/dados')
-#@login_required
-def api_dados():
-    """
-    Retorna dados para os gráficos do dashboard via API
-    """
-    # Dados básicos para gráficos (nível sistema)
-    solicitacoes_por_status_sistema = {
-        'Pendente': Solicitacao.query.filter_by(status='Pendente').count(),
-        'Aprovada': Solicitacao.query.filter_by(status='Aprovada').count(),
-        'Rejeitada': Solicitacao.query.filter_by(status='Rejeitada').count(),
-        'Cancelada': Solicitacao.query.filter_by(status='Cancelada').count()
-    }
-
-    # Dados de solicitações do usuário logado
-    solicitacoes_usuario_status_api = {
-        'Pendente': Solicitacao.query.filter_by(solicitante_id=current_user.id, status='Pendente').count(),
-        'Aprovada': Solicitacao.query.filter_by(solicitante_id=current_user.id, status='Aprovada').count(),
-        'Rejeitada': Solicitacao.query.filter_by(solicitante_id=current_user.id, status='Rejeitada').count()
-    }
-    
-    # Dados de concretagens e volume usinado nas últimas 8 semanas
-
-    # Dados de estoque de EPIs críticos
-    epis_criticos_api_data = []
-    epis_criticos_query_res = db.session.query(
-        Material.nome,
-        Estoque.quantidade,
-        EPI.estoque_minimo
-    ).join(
-        EPI, EPI.material_id == Material.id
-    ).join(
-        Estoque, Estoque.material_id == Material.id
-    ).filter(
-        Estoque.quantidade <= EPI.estoque_minimo
-    ).limit(10).all()
-    
-    for epi_nome, est_qtd, est_min in epis_criticos_query_res:
-        epis_criticos_api_data.append({
-            'nome': epi_nome,
-            'estoque_atual': float(est_qtd if est_qtd is not None else 0.0), # Assegurar float para JSON
-            'estoque_minimo': float(est_min if est_min is not None else 0.0) # Assegurar float para JSON
-        })
-    
-    return jsonify({
-        'solicitacoes_por_status_sistema': solicitacoes_por_status_sistema, # Renomeado para clareza
-        'solicitacoes_usuario_status': solicitacoes_usuario_status_api, # Adicionado
-        'concretagens_semanais': concretagens_semanais_api,
-        'volume_usinado_semanal': volume_usinado_semanal_api,
-        'epis_criticos': epis_criticos_api_data
-    })
 
 @dashboard_bp.route('/api/dados-analiticos')
 @login_required

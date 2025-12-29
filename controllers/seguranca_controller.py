@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
-from models.epi import EPI, EntregaEPI
-from models.material import Material
+from models.epi import Epi, EpiEntregas
+from models.material import Materiais
 from models.colaborador import Colaborador
 from models.database import db
-from models.estoque import Estoque, MovimentacaoEstoque
+from models.estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
 from utils.ca_scraper import consultar_ca
 from datetime import datetime, timedelta, date
 import json
@@ -46,7 +46,7 @@ def epis_index():
     """
     Lista todos os EPIs cadastrados
     """
-    epis = EPI.query.all()
+    epis = Epi.query.all()
     
     # Classificar por status de estoque e validade
     epis_por_status = {
@@ -66,7 +66,7 @@ def epis_index():
             epis_por_status["normal"].append(epi)
     
     # Buscar materiais para o formulário do modal
-    materiais = Material.query.filter(Material.categoria == 'EPI').all()
+    materiais = Materiais.query.filter(Materiais.categoria == 'EPI').all()
     
     # Buscar colaboradores para o modal de entregas
     colaboradores = Colaborador.query.all()
@@ -112,7 +112,7 @@ def epi_novo():
             return render_template('seguranca/epis/novo.html', materiais=materiais, now1=datetime.now())
 
         # Criar o novo EPI
-        epi = EPI()
+        epi = Epi()
         epi.material_id = material_id
         epi.ca_numero = ca_numero
 
@@ -161,7 +161,7 @@ def epi_novo():
         return redirect(url_for('seguranca.epis_index'))
 
     # Se for GET, renderiza a página com o formulário
-    materiais = Material.query.filter(Material.categoria == 'EPI').all()
+    materiais = Materiais.query.filter(Materiais.categoria == 'EPI').all()
     return render_template('seguranca/epis/novo.html', materiais=materiais, now1=datetime.now())
 
 
@@ -171,8 +171,8 @@ def epi_editar(id):
     """
     Edita um EPI existente
     """
-    epi = EPI.query.get_or_404(id)
-    materiais = Material.query.filter_by(categoria='EPI').all()
+    epi = Epi.query.get_or_404(id)
+    materiais = Materiais.query.filter_by(categoria='EPI').all()
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     if request.method == 'POST':
@@ -265,14 +265,14 @@ def epi_excluir(id):
     if request.method == 'GET':
         data = {
             'success': True,
-            'epi_nome': EPI.query.get_or_404(id).material.nome,
+            'epi_nome': Epi.query.get_or_404(id).material.nome,
             'epi_id': id}
         return jsonify(data)
-    epi = EPI.query.get_or_404(id)
+    epi = Epi.query.get_or_404(id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
     # Verificar se há entregas associadas
-    entregas = EntregaEPI.query.filter_by(epi_id=id).first()
+    entregas = EpiEntregas.query.filter_by(epi_id=id).first()
     if entregas:
         if is_ajax:
             return jsonify({'success': False, 'message': 'Não é possível excluir este EPI pois há entregas associadas.'})
@@ -300,7 +300,7 @@ def epis_json():
     """
     Retorna lista de EPIs em formato JSON para uso em selects
     """
-    epis = EPI.query.all()
+    epis = Epi.query.all()
     resultado = []
     
     for epi in epis:
@@ -325,13 +325,13 @@ def epi_ajustar_estoque(id):
     if request.method == 'GET':
         data = {
             'success': True,
-            'epi_nome': EPI.query.get_or_404(id).material.nome,
+            'epi_nome': Epi.query.get_or_404(id).material.nome,
             'epi_id': id,
-            'estoque_atual': EPI.query.get_or_404(id).getEstoqueAtual()
+            'estoque_atual': Epi.query.get_or_404(id).getEstoqueAtual()
         }
         return jsonify(data)
     print(request.form)
-    epi = EPI.query.get_or_404(id)
+    epi = Epi.query.get_or_404(id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     quantidade = request.form.get('quantidade')
@@ -514,24 +514,24 @@ def entregas_index():
     print(f"Filtro data_fim: {filtro_data_fim_str}")
     print(f"Filtro status: {filtro_status}")
     # Query base com joins para otimizar e permitir filtros
-    query = EntregaEPI.query
+    query = EpiEntregas.query
     
 
     # Aplicar filtros
     if filtro_colaborador_id:
-        query = query.filter(EntregaEPI.colaborador_id == filtro_colaborador_id)
+        query = query.filter(EpiEntregas.colaborador_id == filtro_colaborador_id)
     
     if filtro_epi_id:
-        query = query.filter(EntregaEPI.epi_id == filtro_epi_id)
+        query = query.filter(EpiEntregas.epi_id == filtro_epi_id)
 
     # Filtro de data (assumindo formato YYYY-MM-DD)
     try:
         if filtro_data_inicio_str:
             data_inicio = datetime.strptime(filtro_data_inicio_str, '%Y-%m-%d').date()
-            query = query.filter(EntregaEPI.data_entrega >= data_inicio)
+            query = query.filter(EpiEntregas.data_entrega >= data_inicio)
         if filtro_data_fim_str:
             data_fim = datetime.strptime(filtro_data_fim_str, '%Y-%m-%d').date()
-            query = query.filter(EntregaEPI.data_entrega <= data_fim)
+            query = query.filter(EpiEntregas.data_entrega <= data_fim)
     except ValueError:
         flash('Formato de data inválido. Use AAAA-MM-DD.', 'warning')
         # Resetar datas inválidas para não quebrar a query
@@ -540,12 +540,12 @@ def entregas_index():
         # Poderia redirecionar ou mostrar erro mais proeminente
 
     if filtro_status == 'entregue':
-        query = query.filter(EntregaEPI.data_devolucao.is_(None))
+        query = query.filter(EpiEntregas.data_devolucao.is_(None))
     elif filtro_status == 'devolvido':
-        query = query.filter(EntregaEPI.data_devolucao.isnot(None))
+        query = query.filter(EpiEntregas.data_devolucao.isnot(None))
 
     # Ordenar resultados (ex: data de entrega mais recente primeiro)
-    query = query.order_by(EntregaEPI.data_entrega.desc(), EntregaEPI.id.desc())
+    query = query.order_by(EpiEntregas.data_entrega.desc(), EpiEntregas.id.desc())
     #print(f"Query: {query}")
     # Aplicar paginação
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -553,7 +553,7 @@ def entregas_index():
 
     # Buscar dados para os filtros
     colaboradores = Colaborador.query.order_by(Colaborador.nome).all()
-    epis_disponiveis = EPI.query.join(EPI.material).order_by(Material.nome).all() 
+    epis_disponiveis = Epi.query.join(Epi.material).order_by(Material.nome).all() 
     #print(f"Epis disponíveis: {epis_disponiveis}")
     # Ou buscar apenas materiais com categoria EPI
     # materiais_epi = Material.query.filter(Material.categoria == 'EPI').order_by(Material.nome).all()
@@ -609,7 +609,7 @@ def nova_entrega():
             return redirect(url_for('seguranca.entregas_index'))
         colaborador = Colaborador.query.get(colaborador_id)
         # Verificar estoque
-        epi = EPI.query.get(epi_id)
+        epi = Epi.query.get(epi_id)
         if not epi:
             msg = 'EPI não encontrado'
             if is_ajax:
@@ -641,7 +641,7 @@ def nova_entrega():
         # Verificar se o colaborador já possui este EPI em uso (não devolvido)
         if devolver_antigo:
             print(f"devolver_antigo: {devolver_antigo}")
-            entrega_anterior = EntregaEPI.query.filter_by(
+            entrega_anterior = EpiEntregas.query.filter_by(
                 colaborador_id=colaborador_id, 
                 epi_id=epi_id, 
                 data_devolucao=None
@@ -656,7 +656,7 @@ def nova_entrega():
                 return jsonify({'success': False, 'message': 'Não foi possível encontrar a entrega anterior para o colaborador e o EPI informados.'}), 400        # Criar a nova entrega
         
         print(f"colaborador: {colaborador}")
-        entrega = EntregaEPI()
+        entrega = EpiEntregas()
         db.session.add(entrega)
         print(f"entrega: {entrega}")
         entrega.colaborador = colaborador
@@ -705,7 +705,7 @@ def nova_entrega():
         return redirect(url_for('seguranca.entregas_index'))
     
     # Para requisições AJAX GET, retorna os dados necessários para o modal
-    epis = EPI.query.all()
+    epis = Epi.query.all()
     colaboradores = Colaborador.query.all()
     
     return jsonify({
@@ -725,7 +725,7 @@ def epi_ativor():
         print(f'epiId: {epiId}')
         print(f'colaboradorId: {colaboradorId}')
         try:
-            entrega = EntregaEPI.query.filter_by(colaborador_id=colaboradorId, epi_id=epiId, data_devolucao=None).first()
+            entrega = EpiEntregas.query.filter_by(colaborador_id=colaboradorId, epi_id=epiId, data_devolucao=None).first()
             print(f'entrega: {entrega}')
             if entrega:
                 return jsonify({'success': True, 'message': 'EPI ativo para o colaborador.', 'entrega': entrega.to_dict()})
@@ -920,7 +920,7 @@ def colaborador_epis(id):
     Mostra os EPIs entregues a um colaborador específico
     """
     colaborador = Colaborador.query.get_or_404(id)
-    entregas = EntregaEPI.query.filter_by(colaborador_id=id).order_by(EntregaEPI.data_entrega.desc()).all()
+    entregas = EpiEntregas.query.filter_by(colaborador_id=id).order_by(EpiEntregas.data_entrega.desc()).all()
     
     return render_template('seguranca/colaborador.html',
                           colaborador=colaborador,

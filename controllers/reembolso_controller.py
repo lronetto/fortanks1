@@ -5,10 +5,13 @@ from flask_login import login_required, current_user
 from controllers.nota_fiscal_controller import api_get_dados_notas_fiscais
 from models.nota_fiscal import CFOPS_COMPRA,CNPJS_MATRIZ_FILIAIS,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
-from models import db, Reembolso, ReembolsoDocumento, ReembolsoAnexo, NotaFiscal,NotaFiscalItem ,CentroCusto,Usuario
+from models.reembolso import Reembolsos, ReembolsosDocumentos
+from models.nota_fiscal import NotaFiscal,NotaFiscalItem
+from models.centro_custo import CentroCusto
+from models.usuario import Usuario
+from models.database import db
 from models.colaborador import Colaborador, DadosBancarios
 from models.upload import Upload
-from models.reembolso import ReembolsoAnexo
 from forms.reembolso_forms import ReembolsoForm, DocumentoAvulsoForm
 from sqlalchemy import or_, and_, cast, Date, case, func
 from sqlalchemy.orm import joinedload
@@ -60,7 +63,7 @@ def parse_data_documento(data_str):
 def index():
     page = request.args.get('page', 1, type=int)
     per_page = 20  # Ou defina via config
-    query = Reembolso.query.filter_by(usuario_id=current_user.id).order_by(Reembolso.data.desc())
+    query = Reembolsos.query.filter_by(usuario_id=current_user.id).order_by(Reembolsos.data.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     reembolsos = pagination.items
     form = ReembolsoForm()
@@ -94,7 +97,7 @@ def novo():
             
             
             # Criar reembolso
-            reembolso = Reembolso(
+            reembolso = Reembolsos(
                 usuario_id=current_user.id,
                 data=datetime.utcnow(),
                 valor_total=0,  # Será atualizado após adicionar documentos
@@ -106,7 +109,7 @@ def novo():
             valor_total = 0
             for nota_data in notas_selecionadas:
                 nota = NotaFiscal.query.get_or_404(nota_data['id'])
-                doc = ReembolsoDocumento(
+                doc = ReembolsosDocumentos(
                     reembolso=reembolso,
                     tipo='nota',
                     nota_fiscal_id=nota.id,
@@ -122,7 +125,7 @@ def novo():
             
             # Adicionar documentos avulsos
             for idx, avulso_data in enumerate(avulsos_data):
-                doc = ReembolsoDocumento(
+                doc = ReembolsosDocumentos(
                     reembolso=reembolso,
                     tipo='avulso',
                     descricao=avulso_data['descricao'],
@@ -299,8 +302,8 @@ def nota_fiscal_busca_reembolso():
 @reembolso_bp.route('/<int:reembolso_id>/pdf_template')
 @login_required
 def pdf_template(reembolso_id):
-    reembolso = Reembolso.query.options(
-        joinedload(Reembolso.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
+    reembolso = Reembolsos.query.options(
+        joinedload(Reembolsos.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
     ).get_or_404(reembolso_id)
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
@@ -336,24 +339,24 @@ def dias_desde_1900(data):
 
 @reembolso_bp.route('/exportar_pdf/<int:id>')
 def exportar_pdf(id):
-    reembolso = Reembolso.query.options(
-        joinedload(Reembolso.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
-    ).filter(Reembolso.id==id).first()
+    reembolso = Reembolsos.query.options(
+        joinedload(Reembolsos.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
+    ).filter(Reembolsos.id==id).first()
     if not reembolso:
         abort(404)
     pdf_writer = PdfWriter()
-    CCs = ReembolsoDocumento.query.\
-    filter(ReembolsoDocumento.reembolso_id==id)\
-    .join(CentroCusto, ReembolsoDocumento.centro_custo_id==CentroCusto.id)\
-    .group_by(ReembolsoDocumento.centro_custo_id)\
+    CCs = ReembolsosDocumentos.query.\
+    filter(ReembolsosDocumentos.reembolso_id==id)\
+    .join(CentroCusto, ReembolsosDocumentos.centro_custo_id==CentroCusto.id)\
+    .group_by(ReembolsosDocumentos.centro_custo_id)\
             .order_by(CentroCusto.nome).all()
             
     
     for cc in CCs:
-        docs = ReembolsoDocumento.query.\
-            filter(ReembolsoDocumento.reembolso_id==id, 
-                   ReembolsoDocumento.centro_custo_id==cc.centro_custo_id).\
-                    order_by(ReembolsoDocumento.data_documento.desc()).all()
+        docs = ReembolsosDocumentos.query.\
+            filter(ReembolsosDocumentos.reembolso_id==id, 
+                   ReembolsosDocumentos.centro_custo_id==cc.centro_custo_id).\
+                    order_by(ReembolsosDocumentos.data_documento.desc()).all()
         valor_total = sum(doc.valor for doc in docs)
         # Calcula o número de dias desde 1900
         dias = dias_desde_1900(reembolso.data.date())
@@ -421,7 +424,7 @@ def download_anexo(anexo_id):
         abort(404)
     
     # Buscar documento e reembolso
-    doc = ReembolsoDocumento.query.get_or_404(upload.pai_id)
+    doc = ReembolsosDocumentos.query.get_or_404(upload.pai_id)
     reembolso = doc.reembolso
     
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
@@ -438,7 +441,7 @@ def download_anexo(anexo_id):
 @login_required
 def editar(reembolso_id):
     print(f'reembolso_id: {reembolso_id}')
-    reembolso = Reembolso.query.get_or_404(reembolso_id)
+    reembolso = Reembolsos.query.get_or_404(reembolso_id)
    
     
 
@@ -502,7 +505,7 @@ def editar(reembolso_id):
                     print(f'Erro: Nota fiscal {nota_id} não encontrada, pulando...')
                     continue
                     
-                doc = ReembolsoDocumento(
+                doc = ReembolsosDocumentos(
                     reembolso=reembolso,
                     tipo='nota',
                     nota_fiscal_id=nota.id,
@@ -526,7 +529,7 @@ def editar(reembolso_id):
                 # Se tem ID e não é um timestamp (IDs de timestamp são muito grandes)
                 if avulso_id and isinstance(avulso_id, int) and avulso_id < 1000000000000:
                     # Buscar documento existente
-                    doc_existente = ReembolsoDocumento.query.filter_by(
+                    doc_existente = ReembolsosDocumentos.query.filter_by(
                         id=avulso_id,
                         reembolso_id=reembolso_id,
                         tipo='avulso'
@@ -538,7 +541,7 @@ def editar(reembolso_id):
                         anexos_removidos = avulso_data.get('anexos_removidos', [])
                         uploads_existentes = Upload.query.filter_by(
                             pai_id=doc_existente.id,
-                            pai='ReembolsoDocumento',
+                            pai='ReembolsosDocumentos',
                             tipo=4
                         ).all()
                         anexos_existentes = [u for u in uploads_existentes if u.id not in anexos_removidos]
@@ -561,7 +564,7 @@ def editar(reembolso_id):
                     if anexos_removidos:
                         # Buscar uploads do documento
                         uploads = Upload.query.filter_by(
-                            pai='ReembolsoDocumento',
+                            pai='ReembolsosDocumentos',
                             pai_id=doc.id,
                             tipo=4
                         ).all()
@@ -571,7 +574,7 @@ def editar(reembolso_id):
                                 db.session.delete(upload)
                 else:
                     # Criar novo documento
-                    doc = ReembolsoDocumento(
+                    doc = ReembolsosDocumentos(
                         reembolso=reembolso,
                         tipo='avulso',
                         descricao=avulso_data['descricao'],
@@ -608,7 +611,7 @@ def editar(reembolso_id):
                             # O __init__ retorna True se criou ou False se já existe
                             try:
                                 upload_instance = Upload(
-                                    pai='ReembolsoDocumento',
+                                    pai='ReembolsosDocumentos',
                                     pai_id=doc.id,
                                     tipo=4,
                                     filename=file.filename,
@@ -619,7 +622,7 @@ def editar(reembolso_id):
                                 # O __init__ retorna True/False, mas o objeto self foi modificado
                                 # Buscar o upload criado ou existente
                                 upload = Upload.query.filter_by(
-                                    pai='ReembolsoDocumento',
+                                    pai='ReembolsosDocumentos',
                                     pai_id=doc.id,
                                     tipo=4,
                                     filename=file.filename,
@@ -676,10 +679,10 @@ def editar(reembolso_id):
                 'descricao': doc.descricao,
                 'valor': float(doc.valor),
                 'centro_custo_id': doc.centro_custo_id,
-                'anexos_count': len(Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()),
+                'anexos_count': len(Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()),
                 'anexos': [
                     {'id': upload.id, 'filename': upload.filename}
-                    for upload in Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
+                    for upload in Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
                 ]
             })
         if doc.tipo == 'nota':
@@ -715,7 +718,7 @@ def avulsos_json(reembolso):
     for doc in reembolso.documentos:
         if doc.tipo == 'avulso':
             # Buscar anexos usando modelo Upload
-            uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
+            uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
             avulsos.append({
                 'id': doc.id,
                 'descricao': doc.descricao,
@@ -733,7 +736,7 @@ def avulsos_json(reembolso):
 @login_required
 def fornecedores_avulsos():
     # Buscar documentos avulsos e extrair os nomes dos fornecedores
-    docs = ReembolsoDocumento.query.filter_by(tipo='avulso').group_by(ReembolsoDocumento.fornecedor).all()
+    docs = ReembolsosDocumentos.query.filter_by(tipo='avulso').group_by(ReembolsosDocumentos.fornecedor).all()
     fornecedores = set()
     for doc in docs:
         if doc.fornecedor:
@@ -750,7 +753,7 @@ def fornecedores_avulsos():
 @reembolso_bp.route('/<int:reembolso_id>/apagar', methods=['POST'])
 @login_required
 def apagar(reembolso_id):
-    reembolso = Reembolso.query.get_or_404(reembolso_id)
+    reembolso = Reembolsos.query.get_or_404(reembolso_id)
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         flash('Você não tem permissão para apagar este reembolso.', 'danger')
         return redirect(url_for('reembolso.index'))
@@ -758,7 +761,7 @@ def apagar(reembolso_id):
         # Remover anexos dos documentos avulsos (usando modelo Upload)
         for doc in list(reembolso.documentos):
             if doc.tipo == 'avulso':
-                uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
+                uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
                 for upload in uploads:
                     db.session.delete(upload)
             db.session.delete(doc)
@@ -774,7 +777,7 @@ def apagar(reembolso_id):
 @login_required
 def listar_documentos_nota(nota_id):
     try:
-        documentos = Upload.query.filter(Upload.pai_id==nota_id, Upload.pai=='NotaFiscal').all()
+        documentos = Upload.query.filter(Upload.pai_id==nota_id, Upload.pai=='NotasFiscais').all()
         return jsonify([{
             'id': doc.id,
             'tipo': doc.tipo,
@@ -805,7 +808,7 @@ def adicionar_documentos_nota():
 
                 # Criar upload
                 upload = Upload(
-                    pai='nota_fiscal',
+                    pai='NotasFiscais',
                     pai_id=nota_id,
                     tipo=2,
                     filename=file.filename,

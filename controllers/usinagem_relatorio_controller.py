@@ -1,18 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, make_response
 from flask_login import login_required, current_user
-from models import UsinagemConcreto, TracoConcreto, ItemTracoConcreto, RompimentoCorpoProva, Contrato, Cliente
-from models import Concretagem, ConcretagemTanque, Tanque, Peca
-from datetime import datetime
-import io
-import os
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.pdfgen import canvas
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from sqlalchemy import or_
+from models.concreto import ConcretoUsinagens, ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensRompimentos, ConcretoConcretagens,ConcretoConcretagensTanques
+from models.contrato import Contrato
+from models.cliente import Cliente
+from models.database import db
+from models.tanque import Tanques, TanquesPecas
 
 # Criar o blueprint
 relatorio_usinagem_bp = Blueprint('relatorio_usinagem', __name__, url_prefix='/relatorios-usinagem')
@@ -31,9 +23,9 @@ def por_contrato(contrato_id):
     contrato = Contrato.query.get_or_404(contrato_id)
     
     # Buscar concretagens relacionadas ao contrato (através do centro de custo)
-    concretagens = Concretagem.query.join(ConcretagemTanque).join(Tanque).join(Contrato).filter(
+    concretagens = ConcretoConcretagens.query.join(ConcretoConcretagensTanques).join(Tanques).join(Contrato).filter(
         Contrato.id == contrato_id
-    ).distinct().order_by(Concretagem.data_concretagem.desc()).all()
+    ).distinct().order_by(ConcretoConcretagens.data_concretagem.desc()).all()
     
     # Buscar usinagens relacionadas às concretagens
     usinagens_ids = []
@@ -42,7 +34,7 @@ def por_contrato(contrato_id):
             if cp.usinagem_id and cp.usinagem_id not in usinagens_ids:
                 usinagens_ids.append(cp.usinagem_id)
     
-    usinagens = UsinagemConcreto.query.filter(UsinagemConcreto.id.in_(usinagens_ids)).all()
+    usinagens = ConcretoUsinagens.query.filter(ConcretoUsinagens.id.in_(usinagens_ids)).all()
     
     return render_template('relatorios/usinagem/por_contrato.html', 
                           contrato=contrato,
@@ -53,11 +45,11 @@ def por_contrato(contrato_id):
 @login_required
 def ficha_moldagem_rompimento(usinagem_id):
     """Gera uma ficha de moldagem e rompimento de corpo de prova para uma usinagem específica"""
-    usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
+    usinagem = ConcretoUsinagens.query.get_or_404(usinagem_id)
     
     # Buscar concretagem relacionada a esta usinagem
-    concretagem = Concretagem.query.join(ConcretagemPeca).filter(
-        ConcretagemPeca.usinagem_id == usinagem_id
+    concretagem = ConcretoConcretagens.query.join(ConcretoConcretagensTanques).filter(
+        ConcretoConcretagensTanques.usinagem_id == usinagem_id
     ).first()
     
     if not concretagem:
@@ -65,12 +57,12 @@ def ficha_moldagem_rompimento(usinagem_id):
         return redirect(url_for('relatorio_usinagem.index'))
     
     # Buscar rompimentos desta usinagem
-    rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem_id).order_by(
-        RompimentoCorpoProva.numero_cp
+    rompimentos = ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem_id).order_by(
+        ConcretoUsinagensRompimentos.numero_cp
     ).all()
     
     # Buscar traço relacionado
-    traco = usinagem.traco
+    traco = ConcretoTracos.query.filter_by(usinagem_id=usinagem_id).first()
     
     # Buscar tanque relacionado à concretagem
     tanque = None
@@ -89,9 +81,9 @@ def ficha_moldagem_rompimento(usinagem_id):
 @login_required
 def ficha_moldagem_rompimento_pdf(usinagem_id):
     """Gera um PDF da ficha de moldagem e rompimento para uma usinagem específica, filtrando por tanque se fornecido"""
-    usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
-    concretagem = Concretagem.query.join(ConcretagemPeca).filter(
-        ConcretagemPeca.usinagem_id == usinagem_id,
+    usinagem = ConcretoUsinagens.query.get_or_404(usinagem_id)
+    concretagem = ConcretoConcretagens.query.join(ConcretoConcretagensTanques).filter(
+        ConcretoConcretagensTanques.usinagem_id == usinagem_id,
     ).first()
     if not concretagem:
         flash('Não foi encontrada concretagem relacionada a esta usinagem', 'warning')
@@ -103,8 +95,8 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
         tanque = next((t for t in tanques if t.id == tanque_id), None)
     else:
         tanque = None  # Para exibir todos os tanques/agregado
-    rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem_id).order_by(
-        RompimentoCorpoProva.numero_cp
+    rompimentos = ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem_id).order_by(
+        ConcretoUsinagensRompimentos.numero_cp
     ).all()
     traco = usinagem.traco
     cliente = None
@@ -422,7 +414,7 @@ def ficha_moldagem_rompimento_pdf(usinagem_id):
 def ficha_moldagem_rompimento_modal(usinagem_id):
     """Retorna apenas o conteúdo HTML do relatório para exibir no modal (sem layout base) ou lista de tanques se solicitado"""
     from flask import jsonify
-    usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
+    usinagem = ConcretoUsinagens.query.get_or_404(usinagem_id)
     concretagem = Concretagem.query.join(ConcretagemPeca).filter(
         ConcretagemPeca.usinagem_id == usinagem_id
     ).first()
@@ -439,10 +431,10 @@ def ficha_moldagem_rompimento_modal(usinagem_id):
         tanque = next((t for t in tanques if t.id == tanque_id), None)
     else:
         tanque = None  # Para exibir todos os tanques/agregado
-    rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem_id).order_by(
-        RompimentoCorpoProva.numero_cp
+    rompimentos = ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem_id).order_by(
+        ConcretoUsinagensRompimentos.numero_cp
     ).all()
-    traco = usinagem.traco
+    traco = ConcretoTracos.query.filter_by(usinagem_id=usinagem_id).first()
     return render_template('relatorios/usinagem/_ficha_moldagem_rompimento_modal.html',
                           usinagem=usinagem,
                           concretagem=concretagem,

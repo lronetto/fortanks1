@@ -2,16 +2,16 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, distinct
 from flask_login import login_required, current_user
-from models import db, ConversaoUnidade, Unidade
+from models.unidade import UnidadesConversao, Unidades
 from utils.decorators import role_required
 from datetime import datetime
-
+from models.database import db
 conversao_unidade_bp = Blueprint('conversao_unidade', __name__)
 
 def inserir_conversoes_padrao():
     """Insere conversões padrão no banco de dados se não existirem."""
     # Verificar se já existem conversões
-    if ConversaoUnidade.query.count() > 0:
+    if UnidadesConversao.query.count() > 0:
         return
     
     # Lista de conversões padrão
@@ -28,7 +28,7 @@ def inserir_conversoes_padrao():
     
     # Criar e inserir as conversões
     for nome, entrada, saida, fator in conversoes_padrao:
-        conversao = ConversaoUnidade(
+        conversao = UnidadesConversao(
             nome=nome,
             unidade_entrada=entrada,
             unidade_saida=saida,
@@ -44,17 +44,17 @@ def inserir_conversoes_padrao():
 
 def obter_unidades_unicas():
     """Retorna todas as unidades únicas registradas no sistema."""
-    unidades = db.session.query(Unidade.nome).distinct().all()
+    unidades = db.session.query(Unidades.nome).distinct().all()
     # Busca unidades de entrada únicas
-    unidades_entrada = db.session.query(ConversaoUnidade.unidade_entrada.distinct()).all()
+    unidades_entrada = db.session.query(UnidadesConversao.unidade_entrada.distinct()).all()
     # Busca unidades de saída únicas
-    unidades_saida = db.session.query(ConversaoUnidade.unidade_saida.distinct()).all()
+    unidades_saida = db.session.query(UnidadesConversao.unidade_saida.distinct()).all()
     
     # Combina e remove duplicatas
     unidades = set(u[0] for u in unidades)
     
     # Conjunto de unidades comuns para pré-popular se o banco estiver vazio
-    unidades_comuns = ConversaoUnidade.unidades_padrao
+    unidades_comuns = UnidadesConversao.unidades_padrao
     
     # Se não houver unidades no banco, retorna as unidades comuns
     if not unidades:
@@ -71,7 +71,7 @@ def obter_unidades_unicas():
 @role_required(['admin', 'gerente'])
 def index():
     """Lista todas as conversões de unidades."""
-    conversoes = ConversaoUnidade.query.all()
+    conversoes = UnidadesConversao.query.all()
     unidades = obter_unidades_unicas()
     return render_template('conversao_unidades/index.html', conversoes=conversoes, unidades=unidades)
 
@@ -92,7 +92,7 @@ def novo():
         
         try:
             fator = float(fator)
-            nova_conversao = ConversaoUnidade(
+            nova_conversao = UnidadesConversao(
                 nome=nome,
                 unidade_entrada=unidade_entrada,
                 unidade_saida=unidade_saida,
@@ -115,7 +115,7 @@ def novo():
 @role_required(['admin', 'gerente'])
 def editar(id):
     """Edita uma conversão de unidade existente."""
-    conversao = ConversaoUnidade.query.get_or_404(id)
+    conversao = UnidadesConversao.query.get_or_404(id)
     
     if request.method == 'POST':
         nome = request.form.get('nome')
@@ -150,7 +150,7 @@ def editar(id):
 @role_required(['admin', 'gerente'])
 def excluir(id):
     """Exclui uma conversão de unidade."""
-    conversao = ConversaoUnidade.query.get_or_404(id)
+    conversao = UnidadesConversao.query.get_or_404(id)
     
     try:
         db.session.delete(conversao)
@@ -182,7 +182,7 @@ def obter_conversoes():
     print(f"DEBUG: Todos os parâmetros da requisição: {request.args}")
     
     # Verificar existência de conversões no banco de dados
-    total_conversoes = ConversaoUnidade.query.count()
+    total_conversoes = UnidadesConversao.query.count()
     print(f"DEBUG: Total de conversões no banco de dados: {total_conversoes}")
     
     if total_conversoes == 0:
@@ -199,7 +199,7 @@ def obter_conversoes():
         return jsonify([])
     
     # Buscar conversões diretas (origem -> destino)
-    conversoes_diretas = ConversaoUnidade.query.filter_by(
+    conversoes_diretas = UnidadesConversao.query.filter_by(
         unidade_entrada=unidade_origem,
         unidade_saida=unidade_destino
     ).all()
@@ -209,7 +209,7 @@ def obter_conversoes():
         print(f"DEBUG: Conversão direta: ID={conv.id}, Nome={conv.nome}, {conv.unidade_entrada} -> {conv.unidade_saida}, Fator={conv.fator}")
     
     # Buscar conversões inversas (destino -> origem) para exibir também
-    conversoes_inversas = ConversaoUnidade.query.filter_by(
+    conversoes_inversas = UnidadesConversao.query.filter_by(
         unidade_entrada=unidade_destino,
         unidade_saida=unidade_origem
     ).all()
@@ -259,7 +259,7 @@ def converter():
         unidade_saida = data['para']
         
         # Procura a conversão direta
-        conversao = ConversaoUnidade.query.filter_by(
+        conversao = UnidadesConversao.query.filter_by(
             unidade_entrada=unidade_entrada,
             unidade_saida=unidade_saida
         ).first()
@@ -274,7 +274,7 @@ def converter():
             })
         
         # Verifica se existe a conversão inversa
-        conversao_inversa = ConversaoUnidade.query.filter_by(
+        conversao_inversa = UnidadesConversao.query.filter_by(
             unidade_entrada=unidade_saida,
             unidade_saida=unidade_entrada
         ).first()
@@ -300,7 +300,7 @@ def converter():
 @role_required(['admin', 'gerente'])
 def obter_conversao(id):
     """Retorna os dados de uma conversão específica."""
-    conversao = ConversaoUnidade.query.get_or_404(id)
+    conversao = UnidadesConversao.query.get_or_404(id)
     return jsonify({
         'id': conversao.id,
         'nome': conversao.nome,

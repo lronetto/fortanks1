@@ -1,7 +1,7 @@
 from datetime import datetime
 import pandas as pd
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
-from models.tanque import Tanque
+from models.tanque import Tanques, TanquesPecas
 from models.dados_analiticos import DadoAnalitico
 from datetime import timedelta
 from sqlalchemy import or_
@@ -28,10 +28,10 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
         pd.DataFrame: DataFrame com os dados do relatório
     """
     # Buscar todas as notas fiscais no período
-    query = db.session.query(NotaFiscal,NotaFiscalItem,Tanque,Contrato,CentroCusto)
+    query = db.session.query(NotaFiscal,NotaFiscalItem,Tanques,Contrato,CentroCusto)
     query = query.join(NotaFiscalItem,NotaFiscalItem.nf_id==NotaFiscal.id)
-    query = query.join(Tanque,Tanque.item_nf==NotaFiscalItem.codigo)
-    query = query.join(Contrato,Contrato.id==Tanque.contrato_id)
+    query = query.join(Tanques,Tanques.item_nf==NotaFiscalItem.codigo)
+    query = query.join(Contrato,Contrato.id==Tanques.contrato_id)
     query = query.join(CentroCusto,CentroCusto.id==Contrato.centro_custo_id)
     if centro_custo_ids:
         query = query.filter(CentroCusto.id.in_(centro_custo_ids))

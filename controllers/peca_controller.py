@@ -1,10 +1,10 @@
 from itertools import groupby
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
-from models import Peca, Tanque, Contrato, TanqueProdutoComposto, ProdutoComposto
 from models import db
-from models.grupo_tanque import GrupoTanque
-from models.estoque import Estoque, MovimentacaoEstoque
-from models.produto_composto import ProdutoCompostoItem
+from models.contrato import Contrato
+from models.tanque import TanquesGrupos, Tanques, TanquesPecas, TanquesProdutoComposto
+from models.estoque import Estoque, EstoqueMovimentacoes
+from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
 from flask_wtf.csrf import generate_csrf
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -38,26 +38,26 @@ def index():
     projeto_id = request.args.get('projeto_id', type=int)  # projeto_id = contrato_id
     
     # Query base com join para incluir tanque e contrato
-    query = db.session.query(Peca)\
-        .join(Tanque, Peca.tanque_id == Tanque.id)\
-        .outerjoin(Contrato, Tanque.contrato_id == Contrato.id)
+    query = db.session.query(TanquesPecas)\
+        .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
+        .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
     
     # Aplicar filtros
     if tanque_id:
-        query = query.filter(Peca.tanque_id == tanque_id)
+        query = query.filter(TanquesPecas.tanque_id == tanque_id)
     
     if projeto_id:
-        query = query.filter(Tanque.contrato_id == projeto_id)
+        query = query.filter(Tanques.contrato_id == projeto_id)
     
     # Ordenar por tanque e número sequencial
-    pecas = query.order_by(Tanque.nome, Peca.numero_sequencial).all()
+    pecas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial).all()
     
     # Buscar todos os tanques e contratos para os filtros
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     contratos = Contrato.query.order_by(Contrato.nome).all()
     
     # Buscar tipos de peças únicos das peças cadastradas para o modal
-    tipos_peca = db.session.query(Peca.tipo).distinct().order_by(Peca.tipo).all()
+    tipos_peca = db.session.query(TanquesPecas.tipo).distinct().order_by(TanquesPecas.tipo).all()
     tipos_peca = [t[0] for t in tipos_peca if t[0]]
     
     return render_template('pecas/index.html', 
@@ -71,19 +71,19 @@ def index():
 @peca.route('/tanque/<int:tanque_id>')
 def listar_por_tanque(tanque_id):
     """Lista todas as peças de um tanque específico"""
-    tanque = Tanque.query.get_or_404(tanque_id)
-    pecas = Peca.query.filter_by(tanque_id=tanque_id).order_by(Peca.numero_sequencial).all()
+    tanque = Tanques.query.get_or_404(tanque_id)
+    pecas = TanquesPecas.query.filter_by(tanque_id=tanque_id).order_by(TanquesPecas.numero_sequencial).all()
     
     return render_template('pecas/listar.html', pecas=pecas, tanque=tanque)
 
 @peca.route('/novo/<int:tanque_id>', methods=['GET', 'POST'])
 def novo(tanque_id):
     """Adiciona uma nova peça a um tanque"""
-    tanque = Tanque.query.get_or_404(tanque_id)
+    tanque = Tanques.query.get_or_404(tanque_id)
     
     # Obtém o próximo número sequencial
-    proximo_sequencial = db.session.query(db.func.max(Peca.numero_sequencial))\
-        .filter(Peca.tanque_id == tanque_id).scalar() or 0
+    proximo_sequencial = db.session.query(db.func.max(TanquesPecas.numero_sequencial))\
+        .filter(TanquesPecas.tanque_id == tanque_id).scalar() or 0
     proximo_sequencial += 1
     
     if request.method == 'POST':
@@ -103,7 +103,7 @@ def novo(tanque_id):
                 numero_tanque = None
             
             # Criar nova peça
-            nova_peca = Peca(
+            nova_peca = TanquesPecas(
                 tipo=tipo,
                 nome=nome,
                 numero_tanque=numero_tanque,
@@ -125,7 +125,7 @@ def novo(tanque_id):
 @peca.route('/editar/<int:id>', methods=['GET', 'POST'])
 def editar(id):
     """Edita uma peça existente"""
-    peca = Peca.query.get_or_404(id)
+    peca = TanquesPecas.query.get_or_404(id)
     
     if request.method == 'POST':
         try:
@@ -157,13 +157,13 @@ def editar(id):
 @peca.route('/visualizar/<int:id>')
 def visualizar(id):
     """Visualiza detalhes de uma peça"""
-    peca = Peca.query.get_or_404(id)
+    peca = TanquesPecas.query.get_or_404(id)
     return render_template('pecas/visualizar.html', peca=peca)
 
 @peca.route('/excluir/<int:id>', methods=['POST'])
 def excluir(id):
     """Exclui uma peça"""
-    peca = Peca.query.get_or_404(id)
+    peca = TanquesPecas.query.get_or_404(id)
     tanque_id = peca.tanque_id
     numero_sequencial = peca.numero_sequencial
     
@@ -172,10 +172,10 @@ def excluir(id):
         peca.delete()
         
         # Reordenar as peças restantes
-        pecas_posteriores = Peca.query.filter(
-            Peca.tanque_id == tanque_id,
-            Peca.numero_sequencial > numero_sequencial
-        ).order_by(Peca.numero_sequencial).all()
+        pecas_posteriores = TanquesPecas.query.filter(
+            TanquesPecas.tanque_id == tanque_id,
+            TanquesPecas.numero_sequencial > numero_sequencial
+        ).order_by(TanquesPecas.numero_sequencial).all()
         
         # Atualizar os números sequenciais
         for p in pecas_posteriores:
@@ -200,7 +200,7 @@ def acabamento():
         if not data_acabamento:
             data_acabamento = datetime.now().strftime('%Y-%m-%d')
         try:
-            peca = Peca.query.filter_by(tanque_id=tanque_id, nome=peca_nome).first()
+            peca = TanquesPecas.query.filter_by(tanque_id=tanque_id, nome=peca_nome).first()
             if not peca:
                 return jsonify({'success': False, 'message': 'Peça não encontrada'}), 404
             qualidade = peca.qualidade or '{}'
@@ -215,7 +215,7 @@ def acabamento():
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 500
     # GET: retorna o modal
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
     return render_template('pecas/modais/acabamento.html', tanques=tanques, csrf_token=csrf_token)
 
@@ -233,7 +233,7 @@ def transporte():
         if not data_transporte:
             data_transporte = datetime.now().strftime('%Y-%m-%d')
         try:
-            pecas = Peca.query.filter(Peca.tanque_id.in_(tanque_ids), Peca.nome.in_(peca_nomes)).all()
+            pecas = TanquesPecas.query.filter(TanquesPecas.tanque_id.in_(tanque_ids), TanquesPecas.nome.in_(peca_nomes)).all()
             for peca in pecas:
                 qualidade = peca.qualidade or '{}'
                 qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
@@ -251,7 +251,7 @@ def transporte():
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 500
     # GET: retorna o modal
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
     return render_template('pecas/modais/transporte.html', tanques=tanques, csrf_token=csrf_token)
 
@@ -261,9 +261,9 @@ def api_tanques_por_projeto():
     projeto_id = request.args.get('projeto_id', type=int)
     
     if projeto_id:
-        tanques = Tanque.query.filter_by(contrato_id=projeto_id).order_by(Tanque.nome).all()
+        tanques = Tanques.query.filter_by(contrato_id=projeto_id).order_by(Tanques.nome).all()
     else:
-        tanques = Tanque.query.order_by(Tanque.nome).all()
+        tanques = Tanques.query.order_by(Tanques.nome).all()
     
     tanques_json = []
     for tanque in tanques:
@@ -278,7 +278,7 @@ def api_tanques_por_projeto():
 @peca.route('/api/grupos-tanques')
 def api_grupos_tanques():
     """API para buscar todos os grupos de tanques"""
-    grupos = GrupoTanque.get_all()
+    grupos = TanquesGrupos.get_all()
     
     grupos_json = []
     for grupo in grupos:
@@ -306,7 +306,7 @@ def vinculacao_produto_composto():
             
             if vinculacao_id:
                 # Modo edição - atualizar vinculação existente
-                vinculacao = TanqueProdutoComposto.query.get_or_404(vinculacao_id)
+                vinculacao = TanquesProdutoComposto.query.get_or_404(vinculacao_id)
                 
                 # Aceitar tanto tanque_id único quanto lista de tanque_ids
                 tanque_ids = request.form.getlist('tanque_ids[]')
@@ -345,14 +345,14 @@ def vinculacao_produto_composto():
                 vinculacoes_criadas = 0
                 for tanque_id in tanques_adicionais:
                     # Verificar se já existe
-                    vinculacao_existente = TanqueProdutoComposto.query.filter_by(
+                    vinculacao_existente = TanquesProdutoComposto.query.filter_by(
                         tanque_id=tanque_id,
                         tipo_peca=tipo_peca,
                         produto_composto_id=produto_composto_id
                     ).first()
                     
                     if not vinculacao_existente:
-                        nova_vinculacao = TanqueProdutoComposto(
+                        nova_vinculacao = TanquesProdutoComposto(
                             tanque_id=tanque_id,
                             tipo_peca=tipo_peca,
                             produto_composto_id=produto_composto_id
@@ -405,7 +405,7 @@ def vinculacao_produto_composto():
                     tanque_ids = []
                     grupos_processados = []
                     for grupo_id in grupo_ids:
-                        grupo = GrupoTanque.query.get(grupo_id)
+                        grupo = TanquesGrupos.query.get(grupo_id)
                         if grupo:
                             grupos_processados.append(grupo.nome)
                             for tanque in grupo.tanques:
@@ -423,19 +423,19 @@ def vinculacao_produto_composto():
                 for tanque_id in tanque_ids:
                     try:
                         # Verificar se já existe vinculação
-                        vinculacao_existente = TanqueProdutoComposto.query.filter_by(
+                        vinculacao_existente = TanquesProdutoComposto.query.filter_by(
                             tanque_id=tanque_id,
                             tipo_peca=tipo_peca,
                             produto_composto_id=produto_composto_id
                         ).first()
                         
                         if vinculacao_existente:
-                            tanque = Tanque.query.get(tanque_id)
+                            tanque = Tanques.query.get(tanque_id)
                             vinculacoes_existentes.append(tanque.nome if tanque else f'Tanque ID {tanque_id}')
                             continue
                         
                         # Criar nova vinculação
-                        nova_vinculacao = TanqueProdutoComposto(
+                        nova_vinculacao = TanquesProdutoComposto(
                             tanque_id=tanque_id,
                             tipo_peca=tipo_peca,
                             produto_composto_id=produto_composto_id
@@ -444,7 +444,7 @@ def vinculacao_produto_composto():
                         vinculacoes_criadas += 1
                         
                     except Exception as e:
-                        tanque = Tanque.query.get(tanque_id)
+                        tanque = Tanques.query.get(tanque_id)
                         erros.append({
                             'tanque': tanque.nome if tanque else f'Tanque ID {tanque_id}',
                             'erro': str(e)
@@ -490,10 +490,10 @@ def api_tipos_peca_por_tanque():
         return jsonify({'tipos': []})
     
     # Buscar tipos de peças únicos do tanque
-    tipos_peca = db.session.query(Peca.tipo)\
-        .filter(Peca.tanque_id == tanque_id)\
+    tipos_peca = db.session.query(TanquesPecas.tipo)\
+        .filter(TanquesPecas.tanque_id == tanque_id)\
         .distinct()\
-        .order_by(Peca.tipo)\
+        .order_by(TanquesPecas.tipo)\
         .all()
     
     tipos_json = [t[0] for t in tipos_peca if t[0]]
@@ -532,16 +532,16 @@ def api_tipos_peca_por_grupos():
     
     # Buscar tipos de peças únicos com contagem de tanques por tipo
     tipos_agrupados = db.session.query(
-        Peca.tipo,
-        func.count(func.distinct(Peca.tanque_id)).label('total_tanques')
+        TanquesPecas.tipo,
+        func.count(func.distinct(TanquesPecas.tanque_id)).label('total_tanques')
     ).filter(
-        Peca.tanque_id.in_(tanque_ids),
-        Peca.tipo.isnot(None),
-        Peca.tipo != ''
+        TanquesPecas.tanque_id.in_(tanque_ids),
+        TanquesPecas.tipo.isnot(None),
+        TanquesPecas.tipo != ''
     ).group_by(
-        Peca.tipo
+        TanquesPecas.tipo
     ).order_by(
-        Peca.tipo
+        TanquesPecas.tipo
     ).all()
     
     # Formatar resposta com tipos agrupados
@@ -589,7 +589,7 @@ def api_produtos_compostos():
 @peca.route('/api/vinculacoes/<int:tanque_id>')
 def api_vinculacoes_tanque(tanque_id):
     """API para buscar vinculações de um tanque"""
-    vinculacoes = TanqueProdutoComposto.query.filter_by(tanque_id=tanque_id).all()
+    vinculacoes = TanquesProdutoComposto.query.filter_by(tanque_id=tanque_id).all()
     
     vinculacoes_json = []
     for v in vinculacoes:
@@ -607,12 +607,12 @@ def api_vinculacoes_todas():
     """API para buscar todas as vinculações com informações completas, incluindo grupos de tanques"""
     from sqlalchemy.orm import joinedload
     
-    vinculacoes = TanqueProdutoComposto.query\
-        .join(Tanque, TanqueProdutoComposto.tanque_id == Tanque.id)\
-        .outerjoin(Contrato, Tanque.contrato_id == Contrato.id)\
-        .join(ProdutoComposto, TanqueProdutoComposto.produto_composto_id == ProdutoComposto.id)\
-        .options(joinedload(TanqueProdutoComposto.tanque).joinedload(Tanque.grupos))\
-        .order_by(Tanque.nome, TanqueProdutoComposto.tipo_peca)\
+    vinculacoes = TanquesProdutoComposto.query\
+        .join(Tanques, TanquesProdutoComposto.tanque_id == Tanques.id)\
+        .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)\
+        .join(ProdutoComposto, TanquesProdutoComposto.produto_composto_id == ProdutoComposto.id)\
+        .options(joinedload(TanquesProdutoComposto.tanque).joinedload(Tanques.grupos))\
+        .order_by(Tanques.nome, TanquesProdutoComposto.tipo_peca)\
         .all()
     
     vinculacoes_json = []
@@ -667,12 +667,12 @@ def api_vinculacao_por_id(id):
     try:
         from sqlalchemy.orm import joinedload
         
-        vinculacao = TanqueProdutoComposto.query\
-            .join(Tanque, TanqueProdutoComposto.tanque_id == Tanque.id)\
-            .outerjoin(Contrato, Tanque.contrato_id == Contrato.id)\
-            .join(ProdutoComposto, TanqueProdutoComposto.produto_composto_id == ProdutoComposto.id)\
-            .options(joinedload(TanqueProdutoComposto.tanque).joinedload(Tanque.grupos))\
-            .filter(TanqueProdutoComposto.id == id)\
+        vinculacao = TanquesProdutoComposto.query\
+            .join(Tanques, TanquesProdutoComposto.tanque_id == Tanques.id)\
+            .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)\
+            .join(ProdutoComposto, TanquesProdutoComposto.produto_composto_id == ProdutoComposto.id)\
+            .options(joinedload(TanquesProdutoComposto.tanque).joinedload(Tanques.grupos))\
+            .filter(TanquesProdutoComposto.id == id)\
             .first_or_404()
         
         tanque = vinculacao.tanque
@@ -723,7 +723,7 @@ def api_vinculacao_por_id(id):
 def excluir_vinculacao(id):
     """Exclui uma vinculação"""
     try:
-        vinculacao = TanqueProdutoComposto.query.get_or_404(id)
+        vinculacao = TanquesProdutoComposto.query.get_or_404(id)
         vinculacao.delete()
         return jsonify({'success': True, 'message': 'Vinculação excluída com sucesso!'})
     except Exception as e:
@@ -742,46 +742,46 @@ def api_resumo_concretagem():
         
         # Query base: peças com data_concretagem preenchida
         query = db.session.query(
-            Tanque.nome.label('tanque_nome'),
-            Tanque.sistema.label('tanque_sistema'),
+            Tanques.nome.label('tanque_nome'),
+            Tanques.sistema.label('tanque_sistema'),
             Contrato.nome.label('projeto_nome'),
-            Peca.tipo.label('tipo_peca'),
-            func.count(Peca.id).label('quantidade'),
-            func.min(Peca.data_concretagem).label('primeira_concretagem'),
-            func.max(Peca.data_concretagem).label('ultima_concretagem')
+            TanquesPecas.tipo.label('tipo_peca'),
+            func.count(TanquesPecas.id).label('quantidade'),
+            func.min(TanquesPecas.data_concretagem).label('primeira_concretagem'),
+            func.max(TanquesPecas.data_concretagem).label('ultima_concretagem')
         ).join(
-            Tanque, Peca.tanque_id == Tanque.id
+            Tanques, TanquesPecas.tanque_id == Tanques.id
         ).outerjoin(
-            Contrato, Tanque.contrato_id == Contrato.id
+            Contrato, Tanques.contrato_id == Contrato.id
         ).filter(
-            Peca.data_concretagem.isnot(None)
+            TanquesPecas.data_concretagem.isnot(None)
         )
         
         # Aplicar filtros de data se fornecidos
         if data_inicial:
             try:
                 data_inicial_dt = dt.strptime(data_inicial, '%Y-%m-%d')
-                query = query.filter(func.date(Peca.data_concretagem) >= data_inicial_dt.date())
+                query = query.filter(func.date(TanquesPecas.data_concretagem) >= data_inicial_dt.date())
             except ValueError:
                 pass
         
         if data_final:
             try:
                 data_final_dt = dt.strptime(data_final, '%Y-%m-%d')
-                query = query.filter(func.date(Peca.data_concretagem) <= data_final_dt.date())
+                query = query.filter(func.date(TanquesPecas.data_concretagem) <= data_final_dt.date())
             except ValueError:
                 pass
         
         # Agrupar por tanque e tipo
         query = query.group_by(
-            Tanque.nome,
-            Tanque.sistema,
+            Tanques.nome,
+            Tanques.sistema,
             Contrato.nome,
-            Peca.tipo
+            TanquesPecas.tipo
         ).order_by(
             Contrato.nome,
-            Tanque.nome,
-            Peca.tipo
+            Tanques.nome,
+            TanquesPecas.tipo
         )
         
         resultados = query.all()
@@ -901,11 +901,11 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
         # IMPORTANTE: Esta verificação garante que processamos todas as peças do grupo uma única vez
         # Cada componente (estoque_id diferente) deve ser processado separadamente
         # Mas para o mesmo estoque_id, produto_composto_id e data, só processamos uma vez
-        movimentacao_existente = MovimentacaoEstoque.query.filter(
-            MovimentacaoEstoque.estoque_id == estoque_id,
-            MovimentacaoEstoque.origem_id == produto_composto_id,
-            MovimentacaoEstoque.origem_tipo == 'producao_peca',
-            func.date(MovimentacaoEstoque.data_movimento) == data_para_comparacao
+        movimentacao_existente = EstoqueMovimentacoes.query.filter(
+            EstoqueMovimentacoes.estoque_id == estoque_id,
+            EstoqueMovimentacoes.origem_id == produto_composto_id,
+            EstoqueMovimentacoes.origem_tipo == 'producao_peca',
+            func.date(EstoqueMovimentacoes.data_movimento) == data_para_comparacao
         ).first()
         
         if movimentacao_existente:
@@ -928,7 +928,7 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
             
         
         # Criar uma única movimentação para todo o grupo
-        movimentacao = MovimentacaoEstoque()
+        movimentacao = EstoqueMovimentacoes()
         
         # Criar lista de peças para observação
         nomes_pecas = [f"{p.nome} (Tanque: {p.tanque.nome})" for p in pecas_grupo[:5]]
@@ -970,7 +970,7 @@ def processar_producao(log=False):
     Otimizado para agrupar por vinculação (produto composto) e por dia"""
     try:
         print("Processando produção...")
-        MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo.like('%producao_peca%')).delete()
+        EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
         db.session.commit()
         processar_producao_manual(log=log)
         return jsonify({
@@ -989,7 +989,7 @@ def processar_producao(log=False):
             from collections import defaultdict
             from datetime import date as date_type
             
-            MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo.like('%producao_peca%')).delete()
+            EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
             # Buscar todas as peças com data_concretagem preenchida
             pecas_concretadas = Peca.query.filter(Peca.data_concretagem.isnot(None),Peca.data_concretagem == '2025-12-09').all()
             
@@ -1174,13 +1174,13 @@ def processar_producao(log=False):
 def processar_producao_manual(log):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
-    dias = Peca.query.filter(Peca.data_concretagem.isnot(None)).group_by(Peca.data_concretagem).all()
+    dias = TanquesPecas.query.filter(TanquesPecas.data_concretagem.isnot(None)).group_by(TanquesPecas.data_concretagem).all()
     print(f"Processando {len(dias)} dias")
     for dia in dias:
         dia = dia.data_concretagem
-        pecas_concretadas = Peca.query.filter(
-            Peca.data_concretagem.isnot(None),
-            Peca.data_concretagem == dia
+        pecas_concretadas = TanquesPecas.query.filter(
+            TanquesPecas.data_concretagem.isnot(None),
+            TanquesPecas.data_concretagem == dia
         ).all()
         print(f"Processando dia: {dia} - {len(pecas_concretadas)} peças")
         if not pecas_concretadas:
@@ -1199,7 +1199,7 @@ def processar_producao_manual(log):
         
         # Processar cada grupo (tanque + tipo) de uma vez
         for (tanque_id, tipo_peca), pecas_grupo in grupos.items():
-            vinculacao = TanqueProdutoComposto.query.filter_by(
+            vinculacao = TanquesProdutoComposto.query.filter_by(
                 tanque_id=tanque_id,
                 tipo_peca=tipo_peca
             ).first()
@@ -1240,7 +1240,7 @@ def processar_producao_manual(log):
                 if log:
                     print(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
                 
-                mov = MovimentacaoEstoque()
+                mov = EstoqueMovimentacoes()
                 mov.remover(
                     quantidade=quantidade_total, 
                     estoque_id=estoque.id, 

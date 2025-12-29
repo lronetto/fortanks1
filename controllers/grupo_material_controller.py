@@ -1,8 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
 from models.database import db
-from models.grupo_material import GrupoMaterial
-from models.material import Material
+from models.material import MateriaisGrupos, Materiais
 from models.estoque import Estoque
 from forms.forms import FormGrupoMaterial
 from sqlalchemy import or_, and_
@@ -28,15 +27,15 @@ def index():
         per_page = 20
         
         # Query base
-        query = GrupoMaterial.query
+        query = MateriaisGrupos.query
         
         # Aplicar filtros
         if search:
             query = query.filter(
                 or_(
-                    GrupoMaterial.nome.ilike(f'%{search}%'),
-                    GrupoMaterial.descricao.ilike(f'%{search}%'),
-                    GrupoMaterial.codigo.ilike(f'%{search}%')
+                    MateriaisGrupos.nome.ilike(f'%{search}%'),
+                    MateriaisGrupos.descricao.ilike(f'%{search}%'),
+                    MateriaisGrupos.codigo.ilike(f'%{search}%')
                 )
             )
         
@@ -46,7 +45,7 @@ def index():
             query = query.filter_by(ativo=False)
         
         # Ordenar e paginar
-        grupos = query.order_by(GrupoMaterial.nome).paginate(
+        grupos = query.order_by(MateriaisGrupos.nome).paginate(
             page=page, per_page=per_page, error_out=False
         )
         
@@ -77,10 +76,10 @@ def novo():
             }), 400
         
         # Verificar se já existe um grupo com o mesmo nome ou código
-        grupo_existente = GrupoMaterial.query.filter(
+        grupo_existente = MateriaisGrupos.query.filter(
             or_(
-                GrupoMaterial.nome == data.get('nome'),
-                GrupoMaterial.codigo == data.get('codigo')
+                MateriaisGrupos.nome == data.get('nome'),
+                MateriaisGrupos.codigo == data.get('codigo')
             )
         ).first()
         
@@ -97,7 +96,7 @@ def novo():
                 }), 400
         
         # Criar novo grupo
-        grupo = GrupoMaterial(
+        grupo = MateriaisGrupos(
             nome=data.get('nome'),
             descricao=data.get('descricao', ''),
             codigo=data.get('codigo', ''),
@@ -129,7 +128,7 @@ def detalhes(id):
     Exibe detalhes de um grupo de materiais
     """
     try:
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         return render_template('grupos_materiais/detalhes.html', grupo=grupo)
     
     except Exception as e:
@@ -144,7 +143,7 @@ def editar(id):
     Edita um grupo de materiais via API
     """
     try:
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         data = request.get_json()
         
         # Validar dados obrigatórios
@@ -155,12 +154,12 @@ def editar(id):
             }), 400
         
         # Verificar se já existe outro grupo com o mesmo nome ou código
-        grupo_existente = GrupoMaterial.query.filter(
+        grupo_existente = MateriaisGrupos.query.filter(
             or_(
-                GrupoMaterial.nome == data.get('nome'),
-                GrupoMaterial.codigo == data.get('codigo')
+                MateriaisGrupos.nome == data.get('nome'),
+                MateriaisGrupos.codigo == data.get('codigo')
             )
-        ).filter(GrupoMaterial.id != id).first()
+        ).filter(MateriaisGrupos.id != id).first()
         
         if grupo_existente:
             if grupo_existente.nome == data.get('nome'):
@@ -204,7 +203,7 @@ def excluir(id):
     Exclui um grupo de materiais via API
     """
     try:
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         
         # Contar materiais antes de excluir para mensagem informativa
         try:
@@ -253,7 +252,7 @@ def materiais(id):
     Lista os materiais de um grupo
     """
     try:
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         search = request.args.get('search', '').strip()
         
         # Query para materiais do grupo usando SQL direto
@@ -284,7 +283,7 @@ def materiais(id):
         # Buscar os materiais pelos IDs
         if material_ids:
             ids = [row[0] for row in material_ids]
-            materiais = Material.query.filter(Material.id.in_(ids)).order_by(Material.nome).all()
+            materiais = Materiais.query.filter(Materiais.id.in_(ids)).order_by(Materiais.nome).all()
         else:
             materiais = []
         
@@ -306,7 +305,7 @@ def adicionar_material(id):
     """
     try:
         logger.info(f"Tentando adicionar material ao grupo {id}")
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         material_id_raw = request.json.get('material_id')
         
         logger.info(f"Material ID recebido: {material_id_raw}, tipo: {type(material_id_raw)}")
@@ -324,7 +323,7 @@ def adicionar_material(id):
         logger.info(f"Material ID convertido: {material_id}")
         
         # Buscar o material usando get com o ID inteiro
-        material = Material.query.get(material_id)
+        material = Materiais.query.get(material_id)
         if not material:
             logger.warning(f"Material com ID {material_id} não encontrado")
             return jsonify({'success': False, 'message': f'Material com ID {material_id} não encontrado'})
@@ -332,7 +331,7 @@ def adicionar_material(id):
         logger.info(f"Material encontrado: {material.nome}")
         
         # Adicionar o material (o método já verifica duplicatas)
-        material_adicionado = grupo.adicionar_material(material)
+        material_adicionado = grupo.materiais.append(material)
         
         if not material_adicionado:
             logger.warning(f"Material {material_id} já está no grupo {id}")
@@ -369,20 +368,20 @@ def remover_material(id):
     Remove um material do grupo
     """
     try:
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         material_id = request.json.get('material_id')
         
         if not material_id:
             return jsonify({'success': False, 'message': 'ID do material não fornecido'})
         
-        material = Material.query.get(material_id)
+        material = Materiais.query.get(material_id)
         if not material:
             return jsonify({'success': False, 'message': 'Material não encontrado'})
         
         if material not in grupo.materiais:
             return jsonify({'success': False, 'message': 'Material não está neste grupo'})
         
-        grupo.remover_material(material)
+        grupo.materiais.remove(material)
         
         return jsonify({
             'success': True, 
@@ -407,8 +406,8 @@ def api_buscar_materiais():
         
         # Query base para materiais que estão em estoque
         # Filtrar apenas materiais que têm registro em estoque com tipo_item = 'material'
-        query = Material.query.join(Estoque, and_(
-            Estoque.material_id == Material.id,
+        query = Materiais.query.join(Estoque, and_(
+            Estoque.material_id == Materiais.id,
             Estoque.tipo_item == 'material'
         )).distinct()
         
@@ -416,13 +415,13 @@ def api_buscar_materiais():
         
         # Filtrar por categoria
         if categoria:
-            query = query.filter(Material.categoria.ilike(f'%{categoria}%'))
+            query = query.filter(Materiais.categoria.ilike(f'%{categoria}%'))
         
         # Se foi fornecido um grupo_id, excluir materiais já no grupo
         if grupo_id:
             try:
                 grupo_id_int = int(grupo_id)
-                grupo = GrupoMaterial.query.get(grupo_id_int)
+                grupo = MateriaisGrupos.query.get(grupo_id_int)
                 if grupo:
                     # Usar SQL direto para excluir materiais já no grupo
                     sql = "SELECT material_id FROM materiais_grupos WHERE grupo_id = :grupo_id"
@@ -431,7 +430,7 @@ def api_buscar_materiais():
                     ).fetchall()
                     if materiais_no_grupo:
                         ids_excluir = [row[0] for row in materiais_no_grupo]
-                        query = query.filter(~Material.id.in_(ids_excluir))
+                        query = query.filter(~Materiais.id.in_(ids_excluir))
             except (ValueError, TypeError):
                 # Se grupo_id não for um número válido, ignorar
                 pass
@@ -440,14 +439,14 @@ def api_buscar_materiais():
         if search:
             query = query.filter(
                 or_(
-                    Material.nome.ilike(f'%{search}%'),
-                    Material.codigo.ilike(f'%{search}%'),
-                    Material.descricao.ilike(f'%{search}%')
+                    Materiais.nome.ilike(f'%{search}%'),
+                    Materiais.codigo.ilike(f'%{search}%'),
+                    Materiais.descricao.ilike(f'%{search}%')
                 )
             )
         
         # Ordenar por nome
-        query = query.order_by(Material.nome)
+        query = query.order_by(Materiais.nome)
         
         materiais = query.limit(100).all()
         
@@ -460,7 +459,7 @@ def api_buscar_materiais():
                 'nome': m.nome,
                 'codigo': m.codigo or '',
                 'categoria': m.categoria or '',
-                'unidade': m.get_unidade_nome() or '',
+                'unidade': m.unidade_obj.nome if m.unidade_obj else '',
                 'ativo': m.ativo
             } for m in materiais]
         })
@@ -481,15 +480,15 @@ def api_listar_json():
         status = request.args.get('status', '')
         
         # Query base
-        query = GrupoMaterial.query
+        query = MateriaisGrupos.query
         
         # Aplicar filtros
         if search:
             query = query.filter(
                 or_(
-                    GrupoMaterial.nome.ilike(f'%{search}%'),
-                    GrupoMaterial.descricao.ilike(f'%{search}%'),
-                    GrupoMaterial.codigo.ilike(f'%{search}%')
+                    MateriaisGrupos.nome.ilike(f'%{search}%'),
+                    MateriaisGrupos.descricao.ilike(f'%{search}%'),
+                    MateriaisGrupos.codigo.ilike(f'%{search}%')
                 )
             )
         
@@ -499,7 +498,7 @@ def api_listar_json():
             query = query.filter_by(ativo=False)
         
         # Obter todos os grupos (não apenas ativos)
-        grupos = query.order_by(GrupoMaterial.nome).all()
+        grupos = query.order_by(MateriaisGrupos.nome).all()
         
         return jsonify({
             'success': True,
@@ -517,7 +516,7 @@ def api_materiais(id):
     API para listar materiais de um grupo em formato JSON
     """
     try:
-        grupo = GrupoMaterial.query.get_or_404(id)
+        grupo = MateriaisGrupos.query.get_or_404(id)
         search = request.args.get('search', '').strip()
         
         # Query para materiais do grupo usando SQL direto
@@ -548,7 +547,7 @@ def api_materiais(id):
         # Buscar os materiais pelos IDs
         if material_ids:
             ids = [row[0] for row in material_ids]
-            materiais = Material.query.filter(Material.id.in_(ids)).order_by(Material.nome).all()
+            materiais = Materiais.query.filter(Materiais.id.in_(ids)).order_by(Materiais.nome).all()
         else:
             materiais = []
         

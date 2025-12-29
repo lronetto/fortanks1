@@ -14,7 +14,7 @@ class PlanoConta(db.Model):
     ativo = db.Column(db.Boolean, default=True)
     criado_em = db.Column(db.DateTime, default=datetime.now)
 
-    materiais = relationship('Material', back_populates='plano_conta_obj')
+    materiais = relationship('Materiais', back_populates='plano_conta_obj')
     
     def save(self):
         """

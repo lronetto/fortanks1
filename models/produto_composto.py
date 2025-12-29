@@ -1,11 +1,10 @@
 from datetime import datetime
 from sqlalchemy import Text
 from models.database import db
-from models.peca import Peca
-from models.material import Material
+from models.material import Materiais, MateriaisGrupos
 from decimal import Decimal
 from models.estoque import Estoque
-from models.estoque import MovimentacaoEstoque
+from models.estoque import EstoqueMovimentacoes
 class ProdutoComposto(db.Model):
     """
     Modelo para representar produtos compostos para produção de peças concretadas
@@ -165,8 +164,8 @@ class ProdutoComposto(db.Model):
         # Adicionar este produto ao conjunto de processados
         produtos_processados.add(self.id)
         
-#        if log:
-#            print(f"Produzindo produto composto {self.nome} (ID: {self.id}) - Quantidade: {quantidade}")
+        #        if log:
+        #            print(f"Produzindo produto composto {self.nome} (ID: {self.id}) - Quantidade: {quantidade}")
         
         
         produtos_compostos = []
@@ -258,7 +257,7 @@ class ProdutoCompostoItem(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     produto_id = db.Column(db.Integer, db.ForeignKey('ProdComp.id', ondelete='CASCADE'), nullable=False)
-    estoque_id = db.Column(db.Integer, db.ForeignKey('estoque.id'), nullable=False)
+    estoque_id = db.Column(db.Integer, db.ForeignKey('Estoque.id'), nullable=False)
     quantidade = db.Column(db.Numeric(15, 8), nullable=False)  # Aumentado para 8 casas decimais
     observacao = db.Column(db.Text, nullable=True)
     

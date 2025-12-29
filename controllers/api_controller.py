@@ -1,16 +1,15 @@
 from flask import Blueprint, request, jsonify, send_file
 from models.database import db
-from models.peca import Peca
-from models.tanque import Tanque
+from models.tanque import TanquesPecas, Tanques 
 import pandas as pd
 import io
 import os
 import tempfile
 from datetime import datetime
-from models.solicitacao import Solicitacao, ItemSolicitacao
-from models.unidade import Unidade
+from models.solicitacao import Solicitacoes, SolicitacoesItens
+from models.unidade import Unidades
 from models.centro_custo import CentroCusto
-from models.material import Material
+from models.material import Materiais
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -34,11 +33,11 @@ def proximo_sequencial(tanque_id):
     """Retorna o próximo número sequencial para uma peça em um tanque"""
     try:
         # Verifica se o tanque existe
-        tanque = Tanque.query.get_or_404(tanque_id)
+        tanque = Tanques.query.get_or_404(tanque_id)
         
         # Busca o maior número sequencial para o tanque
-        maior_sequencial = db.session.query(db.func.max(Peca.numero_sequencial))\
-            .filter(Peca.tanque_id == tanque_id).scalar() or 0
+        maior_sequencial = db.session.query(db.func.max(TanquesPecas.numero_sequencial))\
+            .filter(TanquesPecas.tanque_id == tanque_id).scalar() or 0
             
         # Retorna o próximo número sequencial
         return jsonify({
@@ -56,7 +55,7 @@ def adicionar_peca(tanque_id):
     """Adiciona uma nova peça a um tanque"""
     try:
         # Verifica se o tanque existe
-        tanque = Tanque.query.get_or_404(tanque_id)
+        tanque = Tanques.query.get_or_404(tanque_id)
         
         # Obtém os dados do formulário
         tipo = request.form.get('tipo')
@@ -86,7 +85,7 @@ def adicionar_peca(tanque_id):
                 'success': False,
                 'message': 'A quantidade deve ser maior ou igual a 1'
             }), 400
-        if Peca.query.filter_by(nome=nome, tanque_id=tanque_id).count() > 0:
+        if TanquesPecas.query.filter_by(nome=nome, tanque_id=tanque_id).count() > 0:
             return jsonify({
                 'success': False,
                 'message': 'Já existe uma peça com este nome no tanque'
@@ -95,7 +94,7 @@ def adicionar_peca(tanque_id):
         pecas_criadas = 0
         for i in range(quantidade):
             # Criar nova peça
-            peca = Peca(
+            peca = TanquesPecas(
                 tipo=tipo,
                 nome=f"{nome}{' #' + str(i+1) if quantidade > 1 else ''}",
                 tanque_id=tanque_id,
@@ -124,7 +123,7 @@ def importar_pecas(tanque_id):
     """Importa peças de um arquivo Excel para um tanque"""
     try:
         # Verifica se o tanque existe
-        tanque = Tanque.query.get_or_404(tanque_id)
+        tanque = Tanques.query.get_or_404(tanque_id)
         
         # Verifica se um arquivo foi enviado
         if 'arquivo' not in request.files:
@@ -161,8 +160,8 @@ def importar_pecas(tanque_id):
                     }), 400
             
             # Obtém o próximo número sequencial
-            maior_sequencial = db.session.query(db.func.max(Peca.numero_sequencial))\
-                .filter(Peca.tanque_id == tanque_id).scalar() or 0
+            maior_sequencial = db.session.query(db.func.max(TanquesPecas.numero_sequencial))\
+                .filter(TanquesPecas.tanque_id == tanque_id).scalar() or 0
             proximo_sequencial = maior_sequencial + 1
             
             # Processa os dados do Excel
@@ -197,7 +196,7 @@ def importar_pecas(tanque_id):
                     nome_peca = f"{nome}{' #' + str(i+1) if quantidade > 1 else ''}"
                     
                     # Cria a peça
-                    peca = Peca(
+                    peca = TanquesPecas(
                         tipo=tipo,
                         nome=nome_peca,
                         tanque_id=tanque_id,
@@ -277,7 +276,7 @@ def adicionar_lote_pecas(tanque_id):
     """Adiciona um lote de peças a um tanque"""
     try:
         # Verifica se o tanque existe
-        tanque = Tanque.query.get_or_404(tanque_id)
+        tanque = Tanques.query.get_or_404(tanque_id)
         
         # Obtém os dados do JSON
         dados = request.json
@@ -290,8 +289,8 @@ def adicionar_lote_pecas(tanque_id):
         pecas_lista = dados['pecas']
         
         # Obtém o próximo número sequencial
-        maior_sequencial = db.session.query(db.func.max(Peca.numero_sequencial))\
-            .filter(Peca.tanque_id == tanque_id).scalar() or 0
+        maior_sequencial = db.session.query(db.func.max(TanquesPecas.numero_sequencial))\
+            .filter(TanquesPecas.tanque_id == tanque_id).scalar() or 0
         proximo_sequencial = maior_sequencial + 1
         
         # Processa as peças
@@ -315,7 +314,7 @@ def adicionar_lote_pecas(tanque_id):
                 nome_peca = f"{nome}{' #' + str(i+1) if quantidade > 1 else ''}"
                 
                 # Cria a peça
-                peca = Peca(
+                peca = TanquesPecas(
                     tipo=tipo,
                     nome=nome_peca,
                     tanque_id=tanque_id,
@@ -345,22 +344,11 @@ def adicionar_lote_pecas(tanque_id):
 def obter_tanques_grupo(grupo_id):
     """Retorna os tanques de um grupo"""
     try:
-        from models.grupo_tanque import GrupoTanque
-        grupo = GrupoTanque.query.get_or_404(grupo_id)
-        
-        tanques = []
-        for tanque in grupo.tanques:
-            tanques.append({
-                'id': tanque.id,
-                'nome': tanque.nome,
-                'sistema': tanque.sistema,
-                'dimensoes': tanque.dimensoes
-            })
-        
+        tanques = Tanques.query.filter_by(grupo_id=grupo_id).all()
         return jsonify({
             'success': True,
-            'tanques': tanques
-        })
+            'tanques': [tanque.to_dict() for tanque in tanques]
+        })   
     except Exception as e:
         return jsonify({
             'success': False,
@@ -372,7 +360,7 @@ def obter_tanque(tanque_id):
     """Retorna os detalhes de um tanque"""
     try:
         # Verifica se o tanque existe
-        tanque = Tanque.query.get_or_404(tanque_id)
+        tanque = Tanques.query.get_or_404(tanque_id)
         
         # Retorna os dados do tanque
         return jsonify({
@@ -410,11 +398,11 @@ def listar_itens(solicitacao_id):
     """Retorna todos os itens de uma solicitação"""
     try:
         # Verifica se a solicitação existe
-        solicitacao = Solicitacao.query.get_or_404(solicitacao_id)
-        unidades = Unidade.query.all()
+        solicitacao = Solicitacoes.query.get_or_404(solicitacao_id)
+        unidades = Unidades.query.all()
         centros_custo = CentroCusto.query.all()
-        materiais = Material.query.all()
-        itensSolicitacao = ItemSolicitacao.query.filter_by(solicitacao_id=solicitacao_id).all()
+        materiais = Materiais.query.all()
+        itensSolicitacao = SolicitacoesItens.query.filter_by(solicitacao_id=solicitacao_id).all()
         
         # Retorna os itens da solicitação
         return jsonify({

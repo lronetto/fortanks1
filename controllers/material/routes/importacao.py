@@ -9,8 +9,8 @@ from flask import current_app, flash, redirect, render_template, request, send_f
 from flask_login import login_required
 
 from models.database import db
-from models.material import Material
-from models.unidade import Unidade
+from models.material import Materiais
+from models.unidade import Unidades
 
 from .. import material_bp
 

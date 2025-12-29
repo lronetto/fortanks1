@@ -7,7 +7,7 @@ from models.database import db
 from models.usuario import Usuario
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
-from models.material import Material
+from models.material import Materiais
 from models.plano_conta import PlanoConta
 from models.cliente import Cliente
 from models.endereco import Endereco
@@ -32,7 +32,7 @@ def index():
     total_usuarios = Usuario.query.count()
     total_centros_custo = CentroCusto.query.count()
     total_contratos = Contrato.query.count()
-    total_materiais = Material.query.count()
+    total_materiais = Materiais.query.count()
     total_clientes = Cliente.query.count()
     
     # Usuários recentes

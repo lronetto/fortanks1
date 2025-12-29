@@ -3,9 +3,6 @@ import json
 import traceback
 from models.database import db
 from models.logs import Logs
-from models.material import Material
-from models.epi import EPI
-from models.nota_fiscal import NotaFiscalItem
 from models.usuario import Usuario
 from models.centro_custo import CentroCusto
 from decimal import Decimal
@@ -13,15 +10,15 @@ class Estoque(db.Model):
     """
     Modelo para controle unificado de estoque
     """
-    __tablename__ = 'estoque'
+    __tablename__ = 'Estoque'
     
     id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'), nullable=True)
-    material = db.relationship('Material', backref='estoque_items')
+    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'), nullable=True)
+    material = db.relationship('Materiais', backref='estoque_items')
     ProdComp_id = db.Column(db.Integer, db.ForeignKey('ProdComp.id'), nullable=True)
     produto_composto = db.relationship('ProdutoComposto', backref='estoque_items')
-    epi_id = db.Column(db.Integer, db.ForeignKey('epis.id'), nullable=True)
-    epi = db.relationship('EPI', backref='estoque_items')
+    epi_id = db.Column(db.Integer, db.ForeignKey('Epi.id'), nullable=True)
+    epi = db.relationship('Epi', backref='estoque_items')
     tipo_item = db.Column(db.String(20), nullable=False)  # 'material', 'epi', 'usinagem', etc.
     
     quantidade = db.Column(db.Numeric(15, 4), nullable=False, default=0)
@@ -97,12 +94,12 @@ class Estoque(db.Model):
             self.quantidade = self.get_saldo_real()
         else:
             # Se há filtros, processar movimentações no intervalo
-            movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
+            movimentacoes = EstoqueMovimentacoes.query.filter_by(estoque_id = self.id)
             if data_inicio:
-                movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+                movimentacoes = movimentacoes.filter(EstoqueMovimentacoes.data_movimento >= data_inicio)
             if data_fim:
-                movimentacoes = movimentacoes.filter(MovimentacaoEstoque.data_movimento < data_fim)
-            movimentacoes = movimentacoes.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+                movimentacoes = movimentacoes.filter(EstoqueMovimentacoes.data_movimento < data_fim)
+            movimentacoes = movimentacoes.order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
             self.quantidade = Decimal('0.0')
             for movimentacao in movimentacoes:
                 if movimentacao.tipo_movimento == 'entrada':
@@ -122,13 +119,13 @@ class Estoque(db.Model):
     def get_estoque_atual(self):
         return self.get_saldo_ate_data()
     def get_estoque(self,data_fim=None,data_inicio=None):
-        query = MovimentacaoEstoque.query.filter_by(estoque_id = self.id)
+        query = EstoqueMovimentacoes.query.filter_by(estoque_id = self.id)
         if data_inicio:
-            query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+            query = query.filter(EstoqueMovimentacoes.data_movimento >= data_inicio)
         if data_fim is None:
             data_fim = datetime.now()
-        query = query.filter(MovimentacaoEstoque.data_movimento < data_fim)
-        return query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+        query = query.filter(EstoqueMovimentacoes.data_movimento < data_fim)
+        return query.order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
     
     def get_saldo_ate_data(self, data_fim=None):
         """
@@ -223,28 +220,28 @@ class Estoque(db.Model):
         return f'<Estoque {tipo} - {nome_item} - Qtd: {self.quantidade}>'
 
 
-class MovimentacaoEstoque(db.Model):
+class EstoqueMovimentacoes(db.Model):
     """
     Modelo para registrar movimentações de estoque
     """
-    __tablename__ = 'movimentacoes_estoque'
+    __tablename__ = 'EstoqueMovimentacoes'
     
     id = db.Column(db.Integer, primary_key=True)
-    estoque_id = db.Column(db.Integer, db.ForeignKey('estoque.id'), nullable=False)
-    estoque = db.relationship('Estoque', backref='movimentacoes')
+    estoque_id = db.Column(db.Integer, db.ForeignKey('Estoque.id'), nullable=False)
+    estoque = db.relationship('Estoque', backref='EstoqueMovimentacoes')
     
     tipo_movimento = db.Column(db.String(20), nullable=False)  # 'entrada', 'saida', 'ajuste', 'transferencia'
     quantidade = db.Column(db.Numeric(15, 4), nullable=False)
     data_movimento = db.Column(db.DateTime, default=datetime.now, nullable=False)
     
-    nota_fiscal_item_id = db.Column(db.Integer, db.ForeignKey('nf_itens.id'), nullable=True)
-    nota_fiscal_item = db.relationship('NotaFiscalItem', backref='movimentacoes_estoque')
+    nota_fiscal_item_id = db.Column(db.Integer, db.ForeignKey('NotaFiscalItem.id'), nullable=True)
+    nota_fiscal_item = db.relationship('NotaFiscalItem', backref='EstoqueMovimentacoes')
     
     origem_id = db.Column(db.Integer, nullable=True)  # ID do registro de origem (solicitação, entrega EPI, etc)
     origem_tipo = db.Column(db.String(50), nullable=True)  # Tipo do registro de origem
     
     observacao = db.Column(db.Text)
-    entregas_epi = db.relationship('EntregaEPI', back_populates='movimentacao_estoque')
+    entregas_epi = db.relationship('EpiEntregas', back_populates='movimentacao_estoque')
     # Controle de auditoria
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
     usuario = db.relationship('Usuario', backref='movimentacoes_realizadas')
@@ -291,8 +288,8 @@ class MovimentacaoEstoque(db.Model):
         if data_inicio:
             # Buscar todas as movimentações antes da data de início
             movimentacoes_anteriores = cls.query.filter_by(estoque_id=estoque_id).filter(
-                MovimentacaoEstoque.data_movimento < data_inicio
-            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+                EstoqueMovimentacoes.data_movimento < data_inicio
+            ).order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
             
             for mov in movimentacoes_anteriores:
                 if mov.tipo_movimento == 'entrada':
@@ -302,16 +299,16 @@ class MovimentacaoEstoque(db.Model):
                 elif mov.tipo_movimento == 'ajuste':
                     saldo_inicial = mov.quantidade
             
-            query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+            query = query.filter(EstoqueMovimentacoes.data_movimento >= data_inicio)
         
         # Importar datetime e timedelta para uso no método
         from datetime import datetime, timedelta
         
         if data_fim:
             # Adicionar um dia para incluir movimentações no dia final
-            query = query.filter(MovimentacaoEstoque.data_movimento < data_fim + timedelta(days=1))
+            query = query.filter(EstoqueMovimentacoes.data_movimento < data_fim + timedelta(days=1))
 
-        movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+        movimentacoes = query.order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
 
         historico_saldo = []
         saldo_acumulado = saldo_inicial  # Inicia com saldo anterior à data_inicio, se houver
@@ -340,9 +337,9 @@ class MovimentacaoEstoque(db.Model):
                 ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d')
             
             # Verificar se há movimentações após a última data do histórico
-            movimentacoes_posteriores = cls.query.filter_by(estoque_id=estoque_id).filter(
-                MovimentacaoEstoque.data_movimento > ultima_data
-            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            movimentacoes_posteriores = EstoqueMovimentacoes.query.filter_by(estoque_id=estoque_id).filter(
+                EstoqueMovimentacoes.data_movimento > ultima_data
+            ).order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
             
             # Se houver movimentações posteriores, processá-las
             if movimentacoes_posteriores:
@@ -375,7 +372,7 @@ class MovimentacaoEstoque(db.Model):
         # Se não há histórico e não há filtro de data_fim, criar um ponto inicial apenas se não houver movimentações
         elif not data_fim and not historico_saldo:
             # Verificar se realmente não há movimentações
-            total_movimentacoes = cls.query.filter_by(estoque_id=estoque_id).count()
+            total_movimentacoes = EstoqueMovimentacoes.query.filter_by(estoque_id=estoque_id).count()
             if total_movimentacoes == 0:
                 # Se não há movimentações, criar um ponto inicial com o saldo real atual
                 agora = datetime.now()
@@ -391,9 +388,8 @@ class MovimentacaoEstoque(db.Model):
             # Não adicionar ponto artificial após agrupamento - o agrupamento já processou todas as movimentações
         
         return historico_saldo
-    
-    @classmethod
-    def _agrupar_por_semana(cls, historico_saldo):
+
+    def _agrupar_por_semana(cls,    historico_saldo):
         """
         Agrupa o histórico de saldo por semana, usando o último valor de cada semana.
         
@@ -723,11 +719,11 @@ class MovimentacaoEstoque(db.Model):
         return f'<MovimentacaoEstoque {self.tipo_movimento.upper()} - Qtd: {self.quantidade} - Data: {self.data_movimento}>'
 
 
-class InventarioEstoque(db.Model):
+class EstoqueInventarios(db.Model):
     """
     Modelo para registrar inventários de estoque
     """
-    __tablename__ = 'inventarios_estoque'
+    __tablename__ = 'EstoqueInventarios'
     
     id = db.Column(db.Integer, primary_key=True)
     data_inicio = db.Column(db.DateTime, default=datetime.now, nullable=False)
@@ -743,7 +739,7 @@ class InventarioEstoque(db.Model):
     finalizado_por = db.relationship('Usuario', foreign_keys=[finalizado_por_id], backref='inventarios_finalizados')
     
     # Relacionamentos
-    itens = db.relationship('ItemInventario', backref='inventario', cascade='all, delete-orphan')
+    itens = db.relationship('EstoqueInventariosItens', backref='inventario', cascade='all, delete-orphan')
     
     def save(self):
         """
@@ -772,8 +768,8 @@ class InventarioEstoque(db.Model):
             # Ajustar o estoque para cada item do inventário
             for item in self.itens:
                 if item.estoque:
-                  mov=MovimentacaoEstoque()
-                  mov.Ajuste(item.quantidade_contada,item.estoque_id,self.id,"InventarioEstoque",usuario_id,item.contado_em)
+                  mov=EstoqueMovimentacoes()
+                  mov.Ajuste(item.quantidade_contada,item.estoque_id,self.id,"EstoqueInventarios",usuario_id,item.contado_em)
                   mov.save()
             self.save()
             return True
@@ -788,7 +784,7 @@ class InventarioEstoque(db.Model):
 
         if self.status == 'Concluído':
             # Desfazer movimentações criadas na finalização
-            movimentacoes = MovimentacaoEstoque.query.filter_by(
+            movimentacoes = EstoqueMovimentacoes.query.filter_by(
                 origem_tipo='InventarioEstoque',
                 origem_id=self.id
             ).all()
@@ -817,7 +813,7 @@ class InventarioEstoque(db.Model):
 
         # Se o inventário estava concluído, desfazer movimentações de ajuste criadas na finalização
         if self.status == 'Concluído':
-            movimentacoes = MovimentacaoEstoque.query.filter_by(
+            movimentacoes = EstoqueMovimentacoes.query.filter_by(
                 origem_tipo='InventarioEstoque',
                 origem_id=self.id
             ).all()
@@ -845,16 +841,16 @@ class InventarioEstoque(db.Model):
         return f'<InventarioEstoque #{self.id} - {self.status} - {self.data_inicio.strftime("%d/%m/%Y")}>'
 
 
-class ItemInventario(db.Model):
+class EstoqueInventariosItens(db.Model):
     """
     Modelo para itens de inventário
     """
-    __tablename__ = 'itens_inventario'
+    __tablename__ = 'EstoqueInventariosItens'
     
     id = db.Column(db.Integer, primary_key=True)
-    inventario_id = db.Column(db.Integer, db.ForeignKey('inventarios_estoque.id', ondelete='CASCADE'), nullable=False)
-    estoque_id = db.Column(db.Integer, db.ForeignKey('estoque.id'), nullable=False)
-    estoque = db.relationship('Estoque', backref='itens_inventario')
+    inventario_id = db.Column(db.Integer, db.ForeignKey('EstoqueInventarios.id', ondelete='CASCADE'), nullable=False)
+    estoque_id = db.Column(db.Integer, db.ForeignKey('Estoque.id'), nullable=False)
+    estoque = db.relationship('Estoque', backref='EstoqueInventariosItens')
     
     quantidade_sistema = db.Column(db.Numeric(15, 4), nullable=False)
     quantidade_contada = db.Column(db.Numeric(15, 4), nullable=True)
@@ -868,7 +864,7 @@ class ItemInventario(db.Model):
     
     def save(self):
         """
-        Salva o item de inventário no banco de dados
+        Salva o item de EstoqueInventarios no banco de dados
         """
         if not self.id:
             db.session.add(self)

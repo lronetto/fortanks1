@@ -6,8 +6,8 @@ from flask import jsonify, request, url_for
 from flask_login import current_user, login_required
 
 from models.database import db
-from models.material import Material
-from models.unidade import Unidade
+from models.material import Materiais
+from models.unidade import Unidades
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ def register(material_bp):
     @material_bp.route("/listar-json")
     @login_required
     def listar_json():
-        materiais = Material.query.filter_by(ativo=True).all()
+        materiais = Materiais.query.filter_by(ativo=True).all()
         resultado = []
         for material in materiais:
             resultado.append(
@@ -37,7 +37,7 @@ def register(material_bp):
     @material_bp.route("/api/materiais")
     @login_required
     def api_materiais():
-        query = Material.query
+        query = Materiais.query
 
         plano_conta = request.args.get("plano_conta")
         if plano_conta:
@@ -45,15 +45,15 @@ def register(material_bp):
 
         search = request.args.get("q")
         if search:
-            query = query.filter(db.or_(Material.codigo.like(f"%{search}%"), Material.nome.like(f"%{search}%")))
+            query = query.filter(db.or_(Materiais.codigo.like(f"%{search}%"), Materiais.nome.like(f"%{search}%")))
 
         sort_by = request.args.get("sort_by", "codigo")
         sort_dir = request.args.get("sort_dir", "asc")
         if sort_by in ["codigo", "nome", "categoria", "plano_conta"]:
             if sort_dir == "desc":
-                query = query.order_by(db.desc(getattr(Material, sort_by)))
+                query = query.order_by(db.desc(getattr(Materiais, sort_by)))
             else:
-                query = query.order_by(getattr(Material, sort_by))
+                query = query.order_by(getattr(Materiais, sort_by))
 
         limit = request.args.get("limit", 100, type=int)
         query = query.limit(limit)
@@ -93,12 +93,12 @@ def register(material_bp):
             materiais_encontrados = []
 
             if codigo:
-                material_codigo_exato = Material.query.filter_by(codigo=codigo, ativo=True).first()
+                material_codigo_exato = Materiais.query.filter_by(codigo=codigo, ativo=True).first()
                 if material_codigo_exato:
                     materiais_encontrados.append({"material": material_codigo_exato, "pontuacao": 100, "motivo": "Código exato"})
 
                 materiais_codigo_similar = (
-                    Material.query.filter(Material.codigo.ilike(f"%{codigo}%"), Material.codigo != codigo, Material.ativo.is_(True))
+                    Materiais.query.filter(Materiais.codigo.ilike(f"%{codigo}%"), Materiais.codigo != codigo, Materiais.ativo.is_(True))
                     .limit(5)
                     .all()
                 )
@@ -107,7 +107,7 @@ def register(material_bp):
                         materiais_encontrados.append({"material": mat, "pontuacao": 70, "motivo": "Código similar"})
 
             if ncm:
-                materiais_ncm = Material.query.filter(Material.ncm == ncm, Material.ativo.is_(True)).limit(5).all()
+                materiais_ncm = Materiais.query.filter(Materiais.ncm == ncm, Materiais.ativo.is_(True)).limit(5).all()
                 for mat in materiais_ncm:
                     if not any(m["material"].id == mat.id for m in materiais_encontrados):
                         materiais_encontrados.append({"material": mat, "pontuacao": 80, "motivo": "NCM igual"})
@@ -117,9 +117,9 @@ def register(material_bp):
                 for palavra in palavras:
                     if len(palavra) >= 3:
                         materiais_nome = (
-                            Material.query.filter(
-                                db.or_(Material.nome.ilike(f"%{palavra}%"), Material.descricao.ilike(f"%{palavra}%")),
-                                Material.ativo.is_(True),
+                            Materiais.query.filter(
+                                db.or_(Materiais.nome.ilike(f"%{palavra}%"), Materiais.descricao.ilike(f"%{palavra}%")),
+                                Materiais.ativo.is_(True),
                             )
                             .limit(10)
                             .all()
@@ -177,16 +177,16 @@ def register(material_bp):
                 return jsonify({"success": False, "message": "Categoria do material é obrigatória"}), 400
 
             codigo = data.get("codigo")
-            if codigo and Material.query.filter_by(codigo=codigo).first():
+            if codigo and Materiais.query.filter_by(codigo=codigo).first():
                 return jsonify({"success": False, "message": f"Já existe um material com o código {codigo}"}), 400
 
             unidade_id = data.get("unidade_id")
             if not unidade_id and data.get("unidade_nome"):
-                unidade = Unidade.obter_por_nome(data.get("unidade_nome"))
+                unidade = Unidades.obter_por_nome(data.get("unidade_nome"))
                 if unidade:
                     unidade_id = unidade.id
 
-            material = Material(
+            material = Materiais(
                 codigo=codigo,
                 nome=data.get("nome"),
                 descricao=data.get("descricao", ""),
@@ -218,7 +218,7 @@ def register(material_bp):
         """
         Mantido do legado (usado pelo modal). Requer CSRF no POST.
         """
-        material = Material.query.get_or_404(id)
+        material = Materiais.query.get_or_404(id)
 
         if request.method == "POST":
             csrf_token = request.form.get("csrf_token")
@@ -240,7 +240,7 @@ def register(material_bp):
                 return jsonify({"success": False, "message": "Nome e categoria são campos obrigatórios!"})
 
             if codigo and codigo != material.codigo:
-                existente = Material.query.filter_by(codigo=codigo).first()
+                existente = Materiais.query.filter_by(codigo=codigo).first()
                 if existente and existente.id != material.id:
                     return jsonify({"success": False, "message": f"Já existe um material com o código {codigo}!"})
 
@@ -281,7 +281,7 @@ def register(material_bp):
     @material_bp.route("/obter/<int:id>", methods=["GET"])
     @login_required
     def obter_material(id):
-        material = Material.query.get(id)
+        material = Materiais.query.get(id)
         if not material:
             return jsonify({"success": False, "error": "Material não encontrado"})
         response = jsonify(
@@ -307,7 +307,7 @@ def register(material_bp):
     @material_bp.route("/obter-ajax/<int:id>", methods=["GET"])
     @login_required
     def obter_material_ajax(id):
-        material = Material.query.get(id)
+        material = Materiais.query.get(id)
         if not material:
             response = jsonify({"success": False, "error": "Material não encontrado"})
             response.headers["Content-Type"] = "application/json; charset=utf-8"
@@ -338,7 +338,7 @@ def register(material_bp):
     @login_required
     def diagnostico_material(id):
         try:
-            material = Material.query.get(id)
+            material = Materiais.query.get(id)
             if not material:
                 resposta = {"status": "erro", "mensagem": f"Material com ID {id} não encontrado"}
             else:

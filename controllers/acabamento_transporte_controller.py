@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
-from models import Peca, Tanque, db
+from models.concreto import ConcretoConcretagensTanques, ConcretoUsinagens
+from models.database import db
+from models.tanque import Tanques, TanquesPecas
+
 from flask_wtf.csrf import generate_csrf
 from datetime import datetime
 import json
-from models.contrato import Contrato
-from models.centro_custo import CentroCusto
 import pandas as pd
 
 acabamento_transporte_bp  = Blueprint('acabamento_transporte', __name__)
@@ -14,26 +15,26 @@ def get_pecas(filtros):
     page = int(filtros.get('page', 1))
     per_page = 20
     nome_peca = filtros.get('nome_peca', '').strip()
-    pecas_query = Peca.query.join(Tanque)
+    pecas_query = TanquesPecas.query.join(Tanques)
     if nome_peca:
         pecas_query = pecas_query.filter(\
-            Peca.nome.ilike(f'%{nome_peca}%'))
+            TanquesPecas.nome.ilike(f'%{nome_peca}%'))
     if filtro == 'acabadas':
         pecas_query = pecas_query.filter(\
-            Peca.qualidade.isnot(None), \
-            Peca.qualidade.notlike(f'%"acabamento": null%'))
+            TanquesPecas.qualidade.isnot(None), \
+            TanquesPecas.qualidade.notlike(f'%"acabamento": null%'))
     elif filtro == 'transportadas':
         pecas_query = pecas_query.filter(\
-            Peca.qualidade.isnot(None), \
-            Peca.qualidade.notlike(f'%"data_transporte": null%'))
+            TanquesPecas.qualidade.isnot(None), \
+            TanquesPecas.qualidade.notlike(f'%"data_transporte": null%'))
     elif filtro == 'acabada_nao_transportada':
         print('acabada_nao_transportada')
         pecas_query = pecas_query.filter(\
-            Peca.qualidade.isnot(None), \
-            Peca.qualidade.notlike(f'%"acabamento": null%'), \
-            Peca.qualidade.like(f'%"data_transporte": null%'))
+            TanquesPecas.qualidade.isnot(None), \
+            TanquesPecas.qualidade.notlike(f'%"acabamento": null%'), \
+            TanquesPecas.qualidade.like(f'%"data_transporte": null%'))
     pecas_query = pecas_query.all()
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     pecas = []
     for peca in pecas_query:
         qualidade = peca.qualidade or '{}'
@@ -67,7 +68,7 @@ def index():
     pecas = get_pecas(filtros)
     page = int(request.args.get('page', 1))
     per_page = 20
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     # Paginação
     total = len(pecas)
     start = (page - 1) * per_page
@@ -94,7 +95,7 @@ def acabamento():
         if not data_acabamento:
             data_acabamento = datetime.now().strftime('%Y-%m-%d')
         try:
-            pecas = Peca.query.filter(Peca.id.in_(peca_ids), Peca.tanque_id == tanque_id).all()
+            pecas = TanquesPecas.query.filter(TanquesPecas.id.in_(peca_ids), TanquesPecas.tanque_id == tanque_id).all()
             if not pecas:
                 return jsonify({'success': False, 'message': 'Nenhuma peça encontrada'}), 404
             for peca in pecas:
@@ -107,7 +108,7 @@ def acabamento():
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 500
     # GET: retorna o modal
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
     return render_template('acabamento_transporte/modais/acabamento.html', 
                            tanques=tanques, 
@@ -131,7 +132,7 @@ def transporte():
         if not data_transporte:
             data_transporte = datetime.now().strftime('%Y-%m-%d')
         try:
-            pecas = Peca.query.filter(Peca.id.in_(peca_ids)).all()
+            pecas = TanquesPecas.query.filter(TanquesPecas.id.in_(peca_ids)).all()
             for peca in pecas:
                 qualidade = peca.qualidade or '{}'
                 qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
@@ -148,7 +149,7 @@ def transporte():
         except Exception as e:
             return jsonify({'success': False, 'message': str(e)}), 500
     # GET: retorna o modal
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
     return render_template('acabamento_transporte/modais/transporte.html', 
                            tanques=tanques, 
@@ -167,7 +168,7 @@ def api_pecas():
 def api_transportadoras():
     """Retorna transportadoras filtradas por tanques (AJAX)"""
     tanque_ids = request.form.getlist('tanque_ids[]')
-    pecas = Peca.query.all()
+    pecas = TanquesPecas.query.all()
     transportadoras = []
     for p in pecas:
         qualidade = p.qualidade or '{}'
@@ -179,7 +180,7 @@ def api_transportadoras():
 @acabamento_transporte_bp.route('/api/tanques', methods=['GET'])
 def api_tanques():
     """Retorna tanques filtradas por tanques (AJAX)"""
-    tanques = Tanque.query.all()
+    tanques = Tanques.query.all()
     return jsonify([tanque.to_dict() for tanque in tanques])
 
 @acabamento_transporte_bp.route('/exportar_excel')

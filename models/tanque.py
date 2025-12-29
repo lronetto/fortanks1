@@ -1,12 +1,12 @@
 from datetime import datetime
 from models.database import db
+from sqlalchemy.orm import relationship
 
-
-class Tanque(db.Model):
+class Tanques(db.Model):
     """
     Modelo para representar tanques de projetos
     """
-    __tablename__ = 'tanques'
+    __tablename__ = 'Tanques'
     
     id = db.Column(db.Integer, primary_key=True)
     un = db.Column(db.String(50), nullable=False)
@@ -42,7 +42,7 @@ class Tanque(db.Model):
     
     # Relacionamentos
     contrato = db.relationship('Contrato',back_populates='tanques',foreign_keys=[contrato_id])
-    grupos = db.relationship('GrupoTanque', secondary='tanques_grupos', back_populates='tanques')
+    grupos = db.relationship('TanquesGrupos', secondary='TanquesGruposItens', back_populates='tanques')
     
     @property
     def tipo_tanque(self):
@@ -177,3 +177,189 @@ class Tanque(db.Model):
         except (ValueError, IndexError) as e:
             print(f"Erro ao extrair dimensões numéricas para o tanque {self.id}: {str(e)}")
             return False 
+
+class TanquesGrupos(db.Model):
+    """
+    Modelo para representar grupos de tanques
+    """
+    __tablename__ = 'TanquesGrupos'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(100), nullable=False, unique=True)
+    descricao = db.Column(db.Text, nullable=True)
+    cor = db.Column(db.String(7), nullable=True)  # Código hexadecimal da cor
+    icone = db.Column(db.String(50), nullable=True)  # Classe do ícone (ex: fas fa-water)
+    
+    # Campos de auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.now)
+    atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # Relacionamentos
+    tanques = db.relationship('Tanques', secondary='TanquesGruposItens', back_populates='grupos')
+    
+    def __repr__(self):
+        return f'<TanquesGrupos {self.id} - {self.nome}>'
+    
+    def to_dict(self):
+        """
+        Converte o grupo para dicionário
+        """
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'descricao': self.descricao,
+            'cor': self.cor,
+            'icone': self.icone,
+            'criado_em': self.criado_em.isoformat() if self.criado_em else None,
+            'atualizado_em': self.atualizado_em.isoformat() if self.atualizado_em else None,
+            'total_tanques': len(self.tanques) if self.tanques else 0
+        }
+    
+    def save(self):
+        """
+        Salva o grupo no banco de dados
+        """
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete(self):
+        """
+        Remove o grupo do banco de dados
+        """
+        # Remove as associações com tanques primeiro
+        db.session.execute(
+            db.text("DELETE FROM tanques_grupos WHERE grupo_id = :grupo_id"),
+            {"grupo_id": self.id}
+        )
+        db.session.delete(self)
+        db.session.commit()
+    
+    @classmethod
+    def get_all(cls):
+        """
+        Retorna todos os grupos
+        """
+        return cls.query.order_by(cls.nome).all()
+    
+    def adicionar_tanque(self, tanque):
+        """
+        Adiciona um tanque ao grupo
+        """
+        if tanque not in self.tanques:
+            self.tanques.append(tanque)
+            db.session.flush()  # Usar flush ao invés de commit para permitir rollback se necessário
+    
+    def remover_tanque(self, tanque):
+        """
+        Remove um tanque do grupo
+        """
+        if tanque in self.tanques:
+            self.tanques.remove(tanque)
+            db.session.commit()
+    
+    @property
+    def total_tanques(self):
+        """
+        Retorna o total de tanques no grupo
+        """
+        return len(self.tanques) if self.tanques else 0
+
+
+# Tabela de associação entre tanques e grupos
+tanques_grupos = db.Table('TanquesGruposItens',
+    db.Column('id', db.Integer, primary_key=True, autoincrement=True),
+    db.Column('tanque_id', db.Integer, db.ForeignKey('Tanques.id'), primary_key=False),
+    db.Column('grupo_id', db.Integer, db.ForeignKey('TanquesGrupos.id'), primary_key=False),
+    db.Column('data_associacao', db.DateTime, default=datetime.now),
+    db.PrimaryKeyConstraint('id'),
+)
+
+class TanquesPecas(db.Model):
+    __tablename__ = 'TanquesPecas'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    tipo = db.Column(db.String(50), nullable=False)
+    altura = db.Column(db.DECIMAL(10, 2), nullable=True)
+    nome = db.Column(db.String(100), nullable=False)
+    numero_sequencial = db.Column(db.Integer, nullable=False)
+    numero_tanque = db.Column(db.Integer, nullable=True)
+    volume = db.Column(db.DECIMAL(10, 2), nullable=True)
+    data_prevista = db.Column(db.DateTime, nullable=True)
+    data_concretagem = db.Column(db.DateTime, nullable=True)
+    data_entrega = db.Column(db.DateTime, nullable=True)
+    qualidade = db.Column(db.String(1000), nullable=True)
+    
+    # Relacionamento com tanque
+    tanque_id = db.Column(db.Integer, db.ForeignKey('Tanques.id', ondelete='CASCADE'), nullable=False)
+    tanque = db.relationship('Tanques', backref=db.backref('TanquesPecas', lazy=True, cascade='all, delete-orphan'))
+    
+    # Relação com concretagens através da classe de associação    
+    # Campos de auditoria
+    data_cadastro = db.Column(db.DateTime, default=datetime.now)
+    ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def save(self):
+        # Se for uma nova peça, atribui o próximo número sequencial
+        if not self.id and not self.numero_sequencial:
+            # Encontra o maior número sequencial para o tanque atual
+            maior_sequencial = db.session.query(db.func.max(Peca.numero_sequencial))\
+                .filter(Peca.tanque_id == self.tanque_id).scalar() or 0
+            # Incrementa para obter o próximo número
+            self.numero_sequencial = maior_sequencial + 1
+            
+        if not self.id:
+            db.session.add(self)
+        db.session.commit()
+        return self
+    
+    def delete(self):
+        db.session.delete(self)
+        db.session.commit()
+        return self
+    
+    def __repr__(self):
+        return f'<Peca {self.nome} ({self.tipo}) - #{self.numero_sequencial}>' 
+    
+    def is_PF(self):
+        return self.tipo == 'PF'
+
+class TanquesProdutoComposto(db.Model):
+    """
+    Modelo para vincular tanques a produtos compostos
+    Permite associar um produto composto específico a cada tanque
+    """
+    __tablename__ = 'TanquesProdutoComposto'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    tanque_id = db.Column(db.Integer, db.ForeignKey('Tanques.id', ondelete='CASCADE'), nullable=False)
+    tipo_peca = db.Column(db.String(50), nullable=False)
+    produto_composto_id = db.Column(db.Integer, db.ForeignKey('ProdComp.id', ondelete='CASCADE'), nullable=False)
+    
+    # Campos de auditoria
+    criado_em = db.Column(db.DateTime, default=datetime.now)
+    atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    # Relacionamentos
+    tanque = db.relationship('Tanques', backref='produtos_compostos_vinculados')
+    produto_composto = db.relationship('ProdutoComposto', backref='tanques_vinculados')
+    
+    # Constraint único para evitar duplicatas
+    __table_args__ = (
+        db.UniqueConstraint('tanque_id', 'produto_composto_id', name='uq_tanque_produto_composto'),
+    )
+    
+    def save(self):
+        """Salva a vinculação no banco de dados"""
+        db.session.add(self)
+        db.session.commit()
+        return self
+    
+    def delete(self):
+        """Remove a vinculação do banco de dados"""
+        db.session.delete(self)
+        db.session.commit()
+        return self
+    
+    def __repr__(self):
+        return f'<TanqueProdutoComposto Tanque: {self.tanque_id}, Produto: {self.produto_composto_id}>'
+

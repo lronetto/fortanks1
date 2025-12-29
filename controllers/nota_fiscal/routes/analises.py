@@ -6,10 +6,10 @@ from flask import flash, render_template, request
 from flask_login import login_required
 from sqlalchemy import distinct, func, or_
 
-from models.material import Material
+from models.material import Materiais
 from models.database import db
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
-from models.unidade import Unidade
+from models.unidade import Unidades
 
 from .. import nota_fiscal_bp
 
@@ -37,16 +37,16 @@ def analise():
     if agrupar_por == "material":
         query = (
             db.session.query(
-                Material.id.label("material_id"),
-                Material.nome.label("material_nome"),
-                Unidade.nome.label("material_unidade"),
+                Materiais.id.label("material_id"),
+                Materiais.nome.label("material_nome"),
+                Materiais.unidade_obj.nome.label("material_unidade"),
                 func.sum(NotaFiscalItem.quantidade).label("quantidade_total"),
                 func.sum(NotaFiscalItem.valor_total).label("valor_total_agregado"),
                 func.group_concat(distinct(NotaFiscal.nome_emitente)).label("fornecedores"),
             )
-            .join(NotaFiscalItem, Material.id == NotaFiscalItem.material_id)
+            .join(NotaFiscalItem, Materiais.id == NotaFiscalItem.material_id)
             .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
-            .join(Unidade, Unidade.id == Material.unidade_id)
+            .join(Unidades, Unidades.id == Materiais.unidade_id)
             .filter(NotaFiscal.status_processamento != "cancelada")
         )
     else:
@@ -57,11 +57,11 @@ def analise():
                 func.sum(NotaFiscalItem.quantidade).label("quantidade_total"),
                 func.sum(NotaFiscalItem.valor_total).label("valor_total_agregado"),
                 func.group_concat(distinct(NotaFiscal.nome_emitente)).label("fornecedores"),
-                func.group_concat(distinct(NotaFiscalItem.unidade)).label("unidades"),
-                func.group_concat(distinct(Material.nome)).label("materiais_vinculados"),
+                func.group_concat(distinct(Materiais.unidade_obj.nome)).label("unidades"),
+                func.group_concat(distinct(Materiais.nome)).label("materiais_vinculados"),
             )
             .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
-            .outerjoin(Material, Material.id == NotaFiscalItem.material_id)
+            .outerjoin(Materiais, Materiais.id == NotaFiscalItem.material_id)
             .filter(NotaFiscal.status_processamento != "cancelada")
         )
 
@@ -89,13 +89,13 @@ def analise():
 
     if filtro_material:
         material_like = f"%{filtro_material}%"
-        query = query.filter(Material.nome.ilike(material_like))
+        query = query.filter(Materiais.nome.ilike(material_like))
 
     # Total geral (soma dos itens filtrados)
     total_base = (
         db.session.query(func.sum(NotaFiscalItem.valor_total))
         .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
-        .outerjoin(Material, Material.id == NotaFiscalItem.material_id)
+        .outerjoin(Materiais, Materiais.id == NotaFiscalItem.material_id)
         .filter(NotaFiscal.status_processamento != "cancelada")
     )
     if agrupar_por == "material":
@@ -116,14 +116,14 @@ def analise():
         termo_like = f"%{termo_item}%"
         total_base = total_base.filter(or_(NotaFiscalItem.codigo.ilike(termo_like), NotaFiscalItem.descricao.ilike(termo_like)))
     if filtro_material:
-        total_base = total_base.filter(Material.nome.ilike(f"%{filtro_material}%"))
+        total_base = total_base.filter(Materiais.nome.ilike(f"%{filtro_material}%"))
 
     total_geral_scalar = total_base.scalar()
     total_geral = total_geral_scalar if total_geral_scalar is not None else Decimal(0)
 
     # Agrupamento/ordenação
     if agrupar_por == "material":
-        query = query.group_by(Material.id, Material.nome, Material.unidade_id).order_by(func.sum(NotaFiscalItem.valor_total).desc())
+        query = query.group_by(Materiais.id, Materiais.nome, Materiais.unidade_id).order_by(func.sum(NotaFiscalItem.valor_total).desc())
     else:
         query = query.group_by(NotaFiscalItem.codigo, NotaFiscalItem.descricao).order_by(func.sum(NotaFiscalItem.valor_total).desc())
 
@@ -185,11 +185,11 @@ def analise_transferencias():
     cnpjs_destinatarios = [c[0] for c in db.session.query(NotaFiscal.cnpj_destinatario).distinct().order_by(NotaFiscal.cnpj_destinatario).all() if c[0]]
 
     materiais_vinculados = (
-        db.session.query(Material)
-        .join(NotaFiscalItem, Material.id == NotaFiscalItem.material_id)
+        db.session.query(Materiais)
+        .join(NotaFiscalItem, Materiais.id == NotaFiscalItem.material_id)
         .filter(NotaFiscalItem.material_id.isnot(None))
         .distinct()
-        .order_by(Material.nome)
+        .order_by(Materiais.nome)
         .all()
     )
 
@@ -447,7 +447,7 @@ def api_historico_preco():
         if tipo == "material":
             if not material_id:
                 return jsonify({"error": "material_id é obrigatório quando tipo=material"}), 400
-            material = Material.query.get(material_id)
+            material = Materiais.query.get(material_id)
             if not material:
                 return jsonify({"error": "Material não encontrado."}), 404
             unidade_referencia = material.unidade_obj.nome if material.unidade_obj else None

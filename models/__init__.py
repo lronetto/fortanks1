@@ -15,43 +15,36 @@ from .database import db
 
 # Importar os modelos na ordem correta
 # Nota: as importações devem ser feitas aqui para evitar importações circulares
-from .unidade import Unidade
 from .usuario import Usuario
 from .centro_custo import CentroCusto
 from .plano_conta import PlanoConta
 from .contrato import Contrato
 from .cliente import Cliente
 from .endereco import Endereco
-from .tanque import Tanque
-from .grupo_tanque import GrupoTanque
-from .peca import Peca
-from .tipo_peca import TipoPeca
-from .concretagem import Concretagem, ConcretagemTanque
+from .tanque import Tanques, TanquesGrupos, TanquesProdutoComposto, TanquesPecas
 from .equipamento import Equipamento, Manutencao, ChecklistModelo, ChecklistItem, ChecklistEquipamento, ChecklistResposta
 from .colaborador import Colaborador
-from .solicitacao import Solicitacao
+from .solicitacao import Solicitacoes, SolicitacoesItens
 from .cargo import Cargo
 from .departamento import Departamento
 
 # Importamos material e solicitacao explicitamente
-from .material import Material
-from .grupo_material import GrupoMaterial
-from .material_tanque import MaterialTanque
-from .estoque import Estoque, MovimentacaoEstoque
+from .material import Materiais, MateriaisGrupos
+from .estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
 from .nota_fiscal import NotaFiscal, NotaFiscalItem
 
 # Importamos os novos modelos de usinagem de concreto
-from .usinagem_concreto import TracoConcreto, ItemTracoConcreto, UsinagemConcreto, UsinagemEquipamento, UsinagemMaterial, RompimentoCorpoProva
+from .concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagens, ConcretoUsinagensEquipamentos, ConcretoUsinagensMateriais, ConcretoUsinagensRompimentos
+from .concreto import ConcretoConcretagens, ConcretoConcretagensTanques
 
 # Importamos o modelo de conversão de unidades
-from .conversao_unidade import ConversaoUnidade
+from .unidade import UnidadesConversao, Unidades
 
 # Importamos os novos modelos de produto composto
 from .produto_composto import ProdutoComposto, ProdutoCompostoItem
-from .tanque_produto_composto import TanqueProdutoComposto
 from .dados_analiticos import DadoAnalitico
-from .reembolso import Reembolso, ReembolsoDocumento, ReembolsoAnexo
-
+from .reembolso import Reembolsos, ReembolsosDocumentos
+from .epi import Epi, EpiEntregas
 def configure_mappers():
     """
     Configura explicitamente todos os mappers SQLAlchemy
@@ -81,12 +74,20 @@ except Exception as e:
 # Exportar modelos relevantes
 __all__ = [
     'db', 'Usuario', 'CentroCusto', 'PlanoConta', 'Contrato',
-    'Material', 'MaterialTanque', 'ItemSolicitacao', 'Solicitacao','Cargo','Departamento','Colaborador','DadosBancarios',
-    'NotaFiscal', 'NotaFiscalItem', 'Cliente', 'Endereco', 'Tanque', 'Peca', 'TipoPeca',
-    'Concretagem', 'ConcretagemTanque', 'Equipamento', 'Manutencao', 
+    'Materiais', 'MateriaisGrupos', 
+    'Solicitacoes', 'SolicitacoesItens', 
+    'Cargo','Departamento','Colaborador','DadosBancarios', 
+    'Estoque', 'EstoqueMovimentacoes', 'EstoqueInventarios', 'EstoqueInventariosItens',
+    'NotaFiscal', 'NotaFiscalItem', 
+    'Cliente', 'Endereco', 
+    'Tanques', 'TanquesGrupos', 'TanquesPecas',
+    'Equipamento', 'Manutencao', 
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
-    'TracoConcreto', 'ItemTracoConcreto', 'UsinagemConcreto', 'UsinagemEquipamento',
-    'UsinagemMaterial', 'ConversaoUnidade', 'Unidade', 'RompimentoCorpoProva',
-    'Colaborador', 'ProdutoComposto', 'ProdutoCompostoItem', 'TanqueProdutoComposto', 'Estoque', 'MovimentacaoEstoque',
-    'DadoAnalitico', 'configure_mappers', 'Reembolso', 'ReembolsoDocumento', 'ReembolsoAnexo',
+    'ConcretoTracos', 'ConcretoTracosItens', 'ConcretoUsinagens', 'ConcretoUsinagensEquipamentos', 'ConcretoUsinagensMateriais', 'ConcretoUsinagensRompimentos',
+    'ConcretoConcretagens', 'ConcretoConcretagensTanques',
+    'Unidades', 'UnidadesConversao',
+    'ProdutoComposto', 'ProdutoCompostoItem', 'TanquesProdutoComposto',
+    'DadoAnalitico', 'configure_mappers', 
+    'Reembolsos', 'ReembolsosDocumentos',
+    'Epi', 'EpiEntregas',
 ] 

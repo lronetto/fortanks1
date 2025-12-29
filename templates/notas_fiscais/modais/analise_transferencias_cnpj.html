@@ -346,9 +346,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const totalQtd = transferencias.reduce((sum, t) => sum + (parseFloat(t.quantidade) || 0), 0);
         trRodape.appendChild(criarCelula(formatarNumero(totalQtd), 'text-end'));
         
-        // Somatórias por CNPJ
+        // Somatórias por CNPJ - calcular no frontend somando os valores das células
         cnpjs.forEach(cnpj => {
-            const soma = somatorias[cnpj] || 0;
+            let soma = 0;
+            transferencias.forEach(transf => {
+                soma += calcularValorCNPJ(transf, cnpj);
+            });
             const cell = criarCelula(formatarNumero(soma), 'text-end');
             cell.style.fontWeight = 'bold';
             if (soma < 0) {
@@ -369,30 +372,31 @@ document.addEventListener('DOMContentLoaded', function() {
         const is_saida = (transf.tipo_nota === 'Saída' || transf.tipo_nota === 1);
         let valor = 0;
         
-        // Parte 1: Se CNPJ Emitente = CNPJ da coluna
+        // Se o CNPJ da coluna é o mesmo que emitente e destinatário (transferência interna)
+        if (cnpj_emit === cnpj && cnpj_dest === cnpj) {
+            // Transferência interna: não afeta o saldo
+            return 0;
+        }
+        
+        // Se CNPJ Emitente = CNPJ da coluna (o CNPJ está emitindo a nota)
         if (cnpj_emit === cnpj) {
             if (is_saida) {
+                // Saída: o CNPJ está enviando, então diminui o estoque
                 valor -= quantidade;
             } else {
+                // Entrada: o CNPJ está recebendo, então aumenta o estoque
                 valor += quantidade;
             }
         }
         
-        // Parte 2: Se CNPJ Destinatário = CNPJ da coluna
+        // Se CNPJ Destinatário = CNPJ da coluna (o CNPJ está recebendo a nota)
         if (cnpj_dest === cnpj) {
             if (is_saida) {
+                // Saída: o CNPJ está recebendo, então aumenta o estoque
                 valor += quantidade;
             } else {
+                // Entrada: o CNPJ está enviando, então diminui o estoque
                 valor -= quantidade;
-            }
-        }
-        
-        // Parte 3: Se CNPJ Emitente = CNPJ Destinatário E CNPJ Destinatário = CNPJ da coluna
-        if (cnpj_emit === cnpj_dest && cnpj_dest === cnpj) {
-            if (is_saida) {
-                valor -= quantidade;
-            } else {
-                valor += quantidade;
             }
         }
         

@@ -1,14 +1,14 @@
 from datetime import datetime
 from models.database import db
 from models.usuario import Usuario
-from models.material import Material
+from models.material import Materiais
 from models.plano_conta import PlanoConta
 
-class Solicitacao(db.Model):
+class Solicitacoes(db.Model):
     """
     Modelo para representar solicitações de materiais
     """
-    __tablename__ = 'solicitacoes'
+    __tablename__ = 'Solicitacoes'
     
     id = db.Column(db.Integer, primary_key=True)
    
@@ -22,10 +22,10 @@ class Solicitacao(db.Model):
     data_aprovacao = db.Column(db.DateTime, nullable=True)
     
     # Relacionamentos
-    solicitante = db.relationship('Usuario', foreign_keys=[solicitante_id], backref='solicitacoes')
-    aprovador = db.relationship('Usuario', foreign_keys=[aprovador_id])
+    solicitante = db.relationship('Usuario', foreign_keys=[solicitante_id], backref='solicitacoes_criadas')
+    aprovador = db.relationship('Usuario', foreign_keys=[aprovador_id], backref='solicitacoes_aprovadas')
     centro_custo = db.relationship('CentroCusto', backref='solicitacoes')
-    itens = db.relationship('ItemSolicitacao', backref='solicitacoes_itens', cascade='all, delete-orphan')
+    itens = db.relationship('SolicitacoesItens', back_populates='solicitacao', cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -70,23 +70,24 @@ class Solicitacao(db.Model):
         self.save()
     
     def __repr__(self):
-        return f'<Solicitacao {self.numero}>'
+        return f'<Solicitacao {self.id} - {self.status}>'
 
-class ItemSolicitacao(db.Model):
+class SolicitacoesItens(db.Model):
     """
     Modelo para representar itens de uma solicitação de materiais
     """
-    __tablename__ = 'solicitacoes_itens'
+    __tablename__ = 'SolicitacoesItens'
     
     id = db.Column(db.Integer, primary_key=True)
-    solicitacao_id = db.Column(db.Integer, db.ForeignKey('solicitacoes.id', ondelete='CASCADE'), nullable=False)
-    material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'), nullable=False)
+    solicitacao_id = db.Column(db.Integer, db.ForeignKey('Solicitacoes.id', ondelete='CASCADE'), nullable=False)
+    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'), nullable=False)
     quantidade = db.Column(db.Numeric(10, 2), nullable=False)
     unidade = db.Column(db.String(20), nullable=False)
     observacoes = db.Column(db.Text, nullable=True)
     
-    # Relacionamento com material
-    material = db.relationship('Material', back_populates='solicitacoes_itens')
+    # Relacionamentos
+    solicitacao = db.relationship('Solicitacoes', back_populates='itens', foreign_keys=[solicitacao_id])
+    material = db.relationship('Materiais', back_populates='solicitacoes_itens', foreign_keys=[material_id])
     
     def to_dict(self):
         return {

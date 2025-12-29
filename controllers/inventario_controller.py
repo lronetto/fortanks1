@@ -1,12 +1,11 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from flask_login import login_required, current_user
-from models.estoque import Estoque, MovimentacaoEstoque, InventarioEstoque, ItemInventario
-from models.material import Material
-from models.grupo_material import GrupoMaterial
+from models.estoque import Estoque, EstoqueMovimentacoes,EstoqueInventarios,EstoqueInventariosItens
+from models.material import Materiais,MateriaisGrupos
 from models.database import db
 from forms.estoque_forms import InventarioEstoqueForm
 from datetime import datetime, timedelta
-from models.unidade import Unidade
+from models.unidade import Unidades
 from sqlalchemy import or_, func
 from decimal import Decimal
 import logging
@@ -30,31 +29,31 @@ def inventarios():
     localizacao = request.args.get('localizacao', None)
     
     # Consulta base
-    query = InventarioEstoque.query
+    query = EstoqueInventarios.query
     
     # Aplicar filtros
     if tipo:
-        query = query.filter(InventarioEstoque.tipo_inventario == tipo)
+        query = query.filter(EstoqueInventarios.tipo_inventario == tipo)
     
     if status:
-        query = query.filter(InventarioEstoque.status == status)
+        query = query.filter(EstoqueInventarios.status == status)
     
     # Filtro por localização - filtrar inventários que têm itens com a localização especificada
     if localizacao:
         # Encontrar IDs de inventários que têm itens com a localização especificada
-        inventarios_ids = db.session.query(ItemInventario.inventario_id).join(
-            Estoque, ItemInventario.estoque_id == Estoque.id
+        inventarios_ids = db.session.query(EstoqueInventariosItens.inventario_id).join(
+            Estoque, EstoqueInventariosItens.estoque_id == Estoque.id
         ).filter(Estoque.localizacao == localizacao).distinct().all()
         
         if inventarios_ids:
             inventarios_ids_list = [row[0] for row in inventarios_ids]
-            query = query.filter(InventarioEstoque.id.in_(inventarios_ids_list))
+            query = query.filter(EstoqueInventarios.id.in_(inventarios_ids_list))
         else:
             # Se não há inventários com essa localização, retornar query vazia
-            query = query.filter(InventarioEstoque.id == -1)
+            query = query.filter(EstoqueInventarios.id == -1)
     
     # Obter resultados
-    inventarios = query.order_by(InventarioEstoque.id.desc()).all()
+    inventarios = query.order_by(EstoqueInventarios.id.desc()).all()
     
     # Obter lista de localizações únicas para o filtro
     localizacoes = db.session.query(Estoque.localizacao).filter(
@@ -89,9 +88,9 @@ def novo_inventario():
     form = InventarioEstoqueForm()
     
     # Carregar categorias e localizações para filtros
-    categorias = db.session.query(Material.categoria).filter(
-        Material.categoria != None, 
-        Material.categoria != ''
+    categorias = db.session.query(Materiais.categoria).filter(
+        Materiais.categoria != None, 
+        Materiais.categoria != ''
     ).distinct().all()
     categorias = [cat[0] for cat in categorias]
     
@@ -108,7 +107,7 @@ def novo_inventario():
     if form.validate_on_submit():
         try:
             logger.info(f"Criando inventário - Tipo: {form.tipo_inventario.data}")
-            inventario = InventarioEstoque(
+            inventario = EstoqueInventarios(
                 tipo_inventario=form.tipo_inventario.data,
                 observacoes=form.observacoes.data,
                 criado_por_id=current_user.id
@@ -157,7 +156,7 @@ def novo_inventario():
                 
                 if categoria:
                     # Filtrar por categoria do material
-                    query = query.join(Estoque.material).filter(Material.categoria == categoria)
+                    query = query.join(Estoque.material).filter(Materiais.categoria == categoria)
                 
                 if grupos_selecionados:
                     # Filtrar por grupos de materiais selecionados
@@ -207,7 +206,7 @@ def novo_inventario():
             
             # Criar itens de inventário
             for item in estoque_items:
-                item_inventario = ItemInventario(
+                item_inventario = EstoqueInventariosItens(
                     inventario_id=inventario.id,
                     estoque_id=item.id,
                     quantidade_sistema=item.quantidade
@@ -266,8 +265,8 @@ def inventario_detalhes(id):
     """
     Detalhes de um inventário
     """
-    inventario = InventarioEstoque.query.get_or_404(id)
-    itens = ItemInventario.query.filter_by(inventario_id=id).all()
+    inventario = EstoqueInventarios.query.get_or_404(id)
+    itens = EstoqueInventariosItens.query.filter_by(inventario_id=id).all()
     
     return render_template('inventario/inventario_detalhes.html', 
                           inventario=inventario, 
@@ -289,25 +288,25 @@ def api_estatisticas_inventario():
     """
     try:
         # Inventários ativos
-        inventarios_ativos = InventarioEstoque.query.filter_by(status='Em Andamento').count()
+        inventarios_ativos = EstoqueInventarios.query.filter_by(status='Em Andamento').count()
         
         # Itens pendentes de contagem
-        itens_pendentes = db.session.query(ItemInventario).join(InventarioEstoque).filter(
-            InventarioEstoque.status == 'Em Andamento',
-            ItemInventario.quantidade_contada.is_(None)
+        itens_pendentes = db.session.query(EstoqueInventariosItens).join(EstoqueInventarios).filter(
+            EstoqueInventarios.status == 'Em Andamento',
+            EstoqueInventariosItens.quantidade_contada.is_(None)
         ).count()
         
         # Diferenças encontradas
-        diferencas = db.session.query(ItemInventario).join(InventarioEstoque).filter(
-            InventarioEstoque.status == 'Finalizado',
-            ItemInventario.quantidade_contada != ItemInventario.quantidade_sistema
+        diferencas = db.session.query(EstoqueInventariosItens).join(EstoqueInventarios).filter(
+            EstoqueInventarios.status == 'Finalizado',
+            EstoqueInventariosItens.quantidade_contada != EstoqueInventariosItens.quantidade_sistema
         ).count()
         
         # Inventários finalizados nos últimos 30 dias
         data_limite = datetime.now() - timedelta(days=30)
-        finalizados_30_dias = InventarioEstoque.query.filter(
-            InventarioEstoque.status == 'Finalizado',
-            InventarioEstoque.data_fim >= data_limite
+        finalizados_30_dias = EstoqueInventarios.query.filter(
+            EstoqueInventarios.status == 'Finalizado',
+            EstoqueInventarios.data_fim >= data_limite
         ).count()
         
         return jsonify({
@@ -334,20 +333,20 @@ def api_inventarios_ativos():
     API para obter inventários ativos
     """
     try:
-        inventarios = InventarioEstoque.query.filter_by(status='Em Andamento').order_by(
-            InventarioEstoque.data_inicio.desc()
+        inventarios = EstoqueInventarios.query.filter_by(status='Em Andamento').order_by(
+            EstoqueInventarios.data_inicio.desc()
         ).all()
         
         inventarios_data = []
         for inv in inventarios:
             # Contar itens totais e contados
             # Contar apenas itens que foram salvos com data E quantidade
-            total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
-            itens_contados = ItemInventario.query.filter_by(
+            total_itens = EstoqueInventariosItens.query.filter_by(inventario_id=inv.id).count()
+            itens_contados = EstoqueInventariosItens.query.filter_by(
                 inventario_id=inv.id
             ).filter(
-                ItemInventario.quantidade_contada.isnot(None),
-                ItemInventario.contado_em.isnot(None)
+                EstoqueInventariosItens.quantidade_contada.isnot(None),
+                EstoqueInventariosItens.contado_em.isnot(None)
             ).count()
             
             print("total_itens: ", total_itens)
@@ -387,29 +386,29 @@ def api_historico_inventarios():
         data = request.args.get('data', '')
         
         # Query base
-        query = InventarioEstoque.query
+        query = EstoqueInventarios.query
         
         # Aplicar filtros
         if tipo:
-            query = query.filter(InventarioEstoque.tipo_inventario == tipo)
+            query = query.filter(EstoqueInventarios.tipo_inventario == tipo)
         
         if status:
-            query = query.filter(InventarioEstoque.status == status)
+            query = query.filter(EstoqueInventarios.status == status)
         
         if data:
             data_filtro = datetime.strptime(data, '%Y-%m-%d').date()
-            query = query.filter(func.date(InventarioEstoque.data_inicio) == data_filtro)
+            query = query.filter(func.date(EstoqueInventarios.data_inicio) == data_filtro)
         
         # Obter inventários
-        inventarios = query.order_by(InventarioEstoque.data_inicio.desc()).limit(100).all()
+        inventarios = query.order_by(EstoqueInventarios.data_inicio.desc()).limit(100).all()
         
         inventarios_data = []
         for inv in inventarios:
             # Contar itens e diferenças
-            total_itens = ItemInventario.query.filter_by(inventario_id=inv.id).count()
-            diferencas = db.session.query(ItemInventario).filter_by(
+            total_itens = EstoqueInventariosItens.query.filter_by(inventario_id=inv.id).count()
+            diferencas = db.session.query(EstoqueInventariosItens).filter_by(
                 inventario_id=inv.id
-            ).filter(ItemInventario.quantidade_contada != ItemInventario.quantidade_sistema).count()
+            ).filter(EstoqueInventariosItens.quantidade_contada != EstoqueInventariosItens.quantidade_sistema).count()
             
             inventarios_data.append({
                 'id': inv.id,
@@ -465,15 +464,15 @@ def inventario_contagem(id):
     """
     Página de contagem de inventário
     """
-    inventario = InventarioEstoque.query.get_or_404(id)
+    inventario = EstoqueInventarios.query.get_or_404(id)
     
     # Buscar itens ordenados pelo nome do material
     # Fazer join com Estoque e Material para ordenar
-    itens_ordenados = db.session.query(ItemInventario)\
-        .join(Estoque, ItemInventario.estoque_id == Estoque.id)\
-        .outerjoin(Material, Estoque.material_id == Material.id)\
-        .filter(ItemInventario.inventario_id == id)\
-        .order_by(func.coalesce(Material.nome, '').asc())\
+    itens_ordenados = db.session.query(EstoqueInventariosItens)\
+        .join(Estoque, EstoqueInventariosItens.estoque_id == Estoque.id)\
+        .outerjoin(Materiais, Estoque.material_id == Materiais.id)\
+        .filter(EstoqueInventariosItens.inventario_id == id)\
+        .order_by(func.coalesce(Materiais.nome, '').asc())\
         .all()
     
     contados = 0
@@ -508,10 +507,10 @@ def finalizar_inventario(id):
     # Verificar se é uma requisição AJAX
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
-    inventario = InventarioEstoque.query.get_or_404(id)
+    inventario = EstoqueInventarios.query.get_or_404(id)
     
     # Verificar se todos os itens foram contados
-    itens_nao_contados = ItemInventario.query.filter_by(inventario_id=id, quantidade_contada=None).count()
+    itens_nao_contados = EstoqueInventariosItens.query.filter_by(inventario_id=id, quantidade_contada=None).count()
     if itens_nao_contados > 0:
         error_msg = f'Existem {itens_nao_contados} itens não contados. Finalize a contagem antes de encerrar o inventário.'
         if is_ajax:
@@ -560,7 +559,7 @@ def cancelar_inventario(id):
     # Verificar se é uma requisição AJAX
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
-    inventario = InventarioEstoque.query.get_or_404(id)
+    inventario = EstoqueInventarios.query.get_or_404(id)
     
     # Verificar se o inventário pode ser cancelado
     if inventario.status == 'Cancelado':
@@ -614,7 +613,7 @@ def reabrir_inventario(id):
     """
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-    inventario = InventarioEstoque.query.get_or_404(id)
+    inventario = EstoqueInventarios.query.get_or_404(id)
 
     if inventario.status not in ['Concluído', 'Cancelado']:
         error_msg = 'Apenas inventários concluídos ou cancelados podem ser reabertos.'
@@ -701,13 +700,13 @@ def salvar_contagem_item(inventario_id, item_id):
     """
     Salvar contagem de um item
     """
-    inventario = InventarioEstoque.query.get_or_404(inventario_id)
+    inventario = EstoqueInventarios.query.get_or_404(inventario_id)
     
     # Verificar se o inventário está em andamento
     if inventario.status != 'Em andamento':
         return jsonify({'error': 'Este inventário não está em andamento'}), 400
     
-    item = ItemInventario.query.filter_by(inventario_id=inventario_id, id=item_id).first_or_404()
+    item = EstoqueInventariosItens.query.filter_by(inventario_id=inventario_id, id=item_id).first_or_404()
     quantidade = request.form.get('quantidade_contada', type=float)
     data_contagem_str = request.form.get('data_contagem')
     
@@ -760,13 +759,13 @@ def salvar_observacao_item(inventario_id, item_id):
     """
     Salvar observação de um item
     """
-    inventario = InventarioEstoque.query.get_or_404(inventario_id)
+    inventario = EstoqueInventarios.query.get_or_404(inventario_id)
     
     # Verificar se o inventário está em andamento
     if inventario.status != 'Em andamento':
         return jsonify({'error': 'Este inventário não está em andamento'}), 400
     
-    item = ItemInventario.query.filter_by(inventario_id=inventario_id, id=item_id).first_or_404()
+    item = EstoqueInventariosItens.query.filter_by(inventario_id=inventario_id, id=item_id).first_or_404()
     observacoes = request.form.get('observacoes', '')
     
     try:
@@ -795,16 +794,16 @@ def api_buscar_itens():
         # Consulta para itens de material
         query = db.session.query(
             Estoque.id,
-            Material.codigo,
-            Material.nome,
+            Materiais.codigo,
+            Materiais.nome,
             Estoque.tipo_item,
             Estoque.localizacao,
             Estoque.quantidade,
-            Unidade.nome
-        ).join(Material, Estoque.material_id == Material.id).join(Unidade, Material.unidade_id == Unidade.id).filter(
+            Unidades.nome
+        ).join(Materiais, Estoque.material_id == Materiais.id).join(Unidades, Materiais.unidade_id == Unidades.id).filter(
             or_(
-                Material.nome.ilike(termo),
-                Material.codigo.ilike(termo),
+                Materiais.nome.ilike(termo),
+                Materiais.codigo.ilike(termo),
                 Estoque.localizacao.ilike(termo)
             )
         )
@@ -837,7 +836,7 @@ def verificar_itens_nao_contados(id):
     Verificar se existem itens não contados em um inventário
     """
     try:
-        itens_nao_contados = ItemInventario.query.filter_by(inventario_id=id, quantidade_contada=None).count()
+        itens_nao_contados = EstoqueInventariosItens.query.filter_by(inventario_id=id, quantidade_contada=None).count()
         return jsonify({'itens_nao_contados': itens_nao_contados})
     except Exception as e:
         logger.error(f"Erro ao verificar itens não contados: {str(e)}")
@@ -850,7 +849,7 @@ def adicionar_item_inventario(inventario_id):
     Adicionar um ou mais novos itens ao inventário durante a contagem
     Aceita estoque_id (único) ou estoque_ids (lista) para compatibilidade
     """
-    inventario = InventarioEstoque.query.get_or_404(inventario_id)
+    inventario = EstoqueInventarios.query.get_or_404(inventario_id)
     
     # Verificar se o inventário está em andamento
     if inventario.status != 'Em andamento':
@@ -882,7 +881,7 @@ def adicionar_item_inventario(inventario_id):
     try:
         for estoque_id in estoque_ids:
             # Verificar se o item já está no inventário
-            item_existente = ItemInventario.query.filter_by(
+            item_existente = EstoqueInventariosItens.query.filter_by(
                 inventario_id=inventario_id,
                 estoque_id=estoque_id
             ).first()
@@ -904,7 +903,7 @@ def adicionar_item_inventario(inventario_id):
                 continue
             
             # Criar novo item de inventário
-            item_inventario = ItemInventario(
+            item_inventario = EstoqueInventariosItens(
                 inventario_id=inventario_id,
                 estoque_id=estoque_id,
                 quantidade_sistema=estoque.quantidade
@@ -959,7 +958,7 @@ def excluir_item_inventario(inventario_id, item_id):
     # Verificar se é uma requisição AJAX
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
-    inventario = InventarioEstoque.query.get_or_404(inventario_id)
+    inventario = EstoqueInventarios.query.get_or_404(inventario_id)
     
     # Verificar se o inventário está em andamento
     if inventario.status != 'Em andamento':
@@ -972,7 +971,7 @@ def excluir_item_inventario(inventario_id, item_id):
         flash(error_msg, 'warning')
         return redirect(url_for('inventario.inventario_contagem', id=inventario_id))
     
-    item = ItemInventario.query.filter_by(
+    item = EstoqueInventariosItens.query.filter_by(
         inventario_id=inventario_id,
         id=item_id
     ).first_or_404()
@@ -1021,7 +1020,7 @@ def criar_grupo_inventario(id):
     Cria um grupo de materiais baseado nos materiais de um inventário
     """
     try:
-        inventario = InventarioEstoque.query.get_or_404(id)
+        inventario = EstoqueInventarios.query.get_or_404(id)
         data = request.get_json()
         
         # Validar dados obrigatórios
@@ -1040,7 +1039,7 @@ def criar_grupo_inventario(id):
             }), 400
         
         # Obter todos os materiais únicos do inventário
-        itens = ItemInventario.query.filter_by(inventario_id=id).all()
+        itens = EstoqueInventariosItens.query.filter_by(inventario_id=id).all()
         materiais_ids = set()
         
         for item in itens:

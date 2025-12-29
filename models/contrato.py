@@ -35,7 +35,7 @@ class Contrato(db.Model):
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
-    tanques = db.relationship('Tanque', back_populates='contrato')
+    tanques = db.relationship('Tanques', back_populates='contrato')
     cliente_direto = db.relationship('Cliente', foreign_keys=[cliente_direto_id], backref='contratos_como_cliente_direto')
     cliente_final = db.relationship('Cliente', foreign_keys=[cliente_final_id], backref='contratos_como_cliente_final')
     #centro_custo = db.relationship('CentroCusto', foreign_keys=[centro_custo_id], backref='contratos')

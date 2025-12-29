@@ -3,12 +3,18 @@ from datetime import datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app
 from flask_login import current_user, login_required
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 
 from models.database import db
-from models.material import Material
+from models.material import Materiais, MateriaisGrupos
 from models.plano_conta import PlanoConta
-from models.unidade import Unidade
+from models.tanque import TanquesPecas
+from models.unidade import Unidades, UnidadesConversao
+from models.nota_fiscal import NotaFiscalItem
+from models.estoque import Estoque
+from models.orcamento import Orcamento, ItemOrcamento
+from models.concreto import ConcretoUsinagensMateriais
+from models.epi import Epi
 
 from .. import material_bp
 
@@ -23,20 +29,20 @@ def index():
     category_filter = request.args.get("category", "").strip()
     per_page = current_app.config.get("PER_PAGE", 20)
 
-    query = Material.query
+    query = Materiais.query
     if search_term:
         search_pattern = f"%{search_term}%"
-        query = query.filter(or_(Material.nome.ilike(search_pattern), Material.codigo.ilike(search_pattern)))
+        query = query.filter(or_(Materiais.nome.ilike(search_pattern), Materiais.codigo.ilike(search_pattern)))
     if category_filter:
-        query = query.filter(Material.categoria == category_filter)
-    query = query.order_by(Material.nome)
+        query = query.filter(Materiais.categoria == category_filter)
+    query = query.order_by(Materiais.nome)
 
     materiais_paginados = query.paginate(page=page, per_page=per_page, error_out=False)
     materiais = materiais_paginados.items
 
     planos_conta = PlanoConta.query.filter_by(ativo=True).all()
-    unidades = Unidade.query.filter_by(ativo=True).order_by(Unidade.nome).all()
-    todas_categorias = db.session.query(Material.categoria).distinct().order_by(Material.categoria).all()
+    unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
+    todas_categorias = db.session.query(Materiais.categoria).distinct().order_by(Materiais.categoria).all()
     categorias_filtro = [cat[0] for cat in todas_categorias if cat[0]]
 
     return render_template(
@@ -61,7 +67,7 @@ def novo_get():
 @login_required
 def novo():
     planos_conta = PlanoConta.query.filter_by(ativo=True).order_by(PlanoConta.indice).all()
-    unidades = Unidade.query.filter_by(ativo=True).order_by(Unidade.nome).all()
+    unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
 
     try:
         codigo = request.form.get("codigo")
@@ -86,13 +92,13 @@ def novo():
                 return redirect(url_for("material.index"))
             return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
 
-        if codigo and Material.query.filter_by(codigo=codigo).first():
+        if codigo and Materiais.query.filter_by(codigo=codigo).first():
             flash(f"Já existe um material com o código {codigo}!", "danger")
             if from_modal:
                 return redirect(url_for("material.index"))
             return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
 
-        material = Material(
+        material = Materiais(
             codigo=codigo,
             nome=nome,
             descricao=descricao,
@@ -118,8 +124,8 @@ def editar(id):
     """
     Mantém fluxo de página (HTML). A parte AJAX/JSON foi centralizada em `controllers/api/material_api.py`.
     """
-    material = Material.query.get_or_404(id)
-    unidades = Unidade.query.filter_by(ativo=True).order_by(Unidade.nome).all()
+    material = Materiais.query.get_or_404(id)
+    unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
 
     if request.method == "POST":
         try:
@@ -142,7 +148,7 @@ def editar(id):
                     unidades=unidades,
                 )
 
-            if codigo and codigo != material.codigo and Material.query.filter_by(codigo=codigo).first():
+            if codigo and codigo != material.codigo and Materiais.query.filter_by(codigo=codigo).first():
                 flash(f"Já existe um material com o código {codigo}!", "danger")
                 return render_template(
                     "materiais/editar.html",
@@ -180,7 +186,7 @@ def editar(id):
 @material_bp.route("/visualizar/<int:id>")
 @login_required
 def visualizar(id):
-    material = Material.query.get_or_404(id)
+    material = Materiais.query.get_or_404(id)
     return render_template("materiais/visualizar.html", material=material)
 
 
@@ -188,23 +194,104 @@ def visualizar(id):
 @login_required
 def excluir(id):
     try:
-        material = Material.query.get_or_404(id)
-        has_itens = False
+        material = Materiais.query.get_or_404(id)
+        
+        # Verificar todos os relacionamentos que podem impedir a exclusão
+        bloqueios = []
+        
+        # Verificar grupos de materiais (tabela de associação many-to-many)
         try:
-            has_itens = len(material.itens_solicitacao) > 0
+            # Verificar diretamente na tabela de associação
+            result = db.session.execute(
+                text("SELECT COUNT(*) FROM materiais_grupos WHERE material_id = :material_id"),
+                {'material_id': material.id}
+            ).scalar()
+            if result and result > 0:
+                bloqueios.append(f"{result} grupo(s) de material")
+        except Exception as e:
+            logger.warning(f"Erro ao verificar grupos de material: {str(e)}")
+            # Tentar usar o relacionamento como fallback
+            try:
+                if hasattr(material, 'grupos') and material.grupos:
+                    count = len(material.grupos)
+                    if count > 0:
+                        bloqueios.append(f"{count} grupo(s) de material")
+            except Exception:
+                pass
+        # Verificar solicitações
+        try:
+            if hasattr(material, 'solicitacoes_itens') and material.solicitacoes_itens:
+                count = len(material.solicitacoes_itens)
+                if count > 0:
+                    bloqueios.append(f"{count} solicitação(ões)")
         except Exception:
-            has_itens = False
+            pass
+        
+        # Verificar itens de nota fiscal
+        try:
+            itens_nf = NotaFiscalItem.query.filter_by(material_id=material.id).count()
+            if itens_nf > 0:
+                bloqueios.append(f"{itens_nf} item(ns) de nota fiscal")
+        except Exception:
+            pass
+        
+        # Verificar estoque
+        try:
+            estoques = Estoque.query.filter_by(material_id=material.id).count()
+            if estoques > 0:
+                bloqueios.append(f"{estoques} registro(s) de estoque")
+        except Exception:
+            pass
+        
+        # Verificar orçamentos
+        try:
+            orcamentos = Orcamento.query.filter_by(material_id=material.id).count()
+            if orcamentos > 0:
+                bloqueios.append(f"{orcamentos} orçamento(s)")
+        except Exception:
+            pass
+        
+        # Verificar itens de orçamento
+        try:
+            itens_orcamento = Orcamento.query.filter_by(material_id=material.id).count()
+            if orcamentos > 0:
+                bloqueios.append(f"{orcamentos} orçamento(s)")
+        except Exception:
+            pass
+        
+        # Verificar EPIs
+        try:
+            epis = Epi.query.filter_by(material_id=material.id).count()
+            if epis > 0:
+                bloqueios.append(f"{epis} epi(s)")
+        except Exception:
+            pass
+        
+        # Verificar conversões de unidade
+        try:
+            conversoes = UnidadesConversao.query.filter_by(material_id=material.id).count()
+            if conversoes > 0:
+                bloqueios.append(f"{conversoes} conversão(ões)")
+        except Exception:
+            pass
+        
+        # Se houver bloqueios, informar ao usuário
+        if bloqueios:
+            mensagem = f"Este material não pode ser excluído pois está vinculado a: {', '.join(bloqueios)}"
+            flash(mensagem, "danger")
+            return redirect(url_for("material.index"))
 
-        if has_itens:
-            flash("Este material não pode ser excluído pois está vinculado a solicitações!", "danger")
-            return redirect(url_for("material.visualizar", id=material.id))
-
+        # Se não houver bloqueios, remover associações e excluir o material
         nome = material.nome
-        db.session.delete(material)
+        
+
+        # Agora pode excluir o material
+        material.delete()
         db.session.commit()
         flash(f'Material "{nome}" excluído com sucesso!', "success")
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Erro ao excluir material {id}: {str(e)}", exc_info=True)
         flash(f"Erro ao excluir material: {str(e)}", "danger")
     return redirect(url_for("material.index"))
 

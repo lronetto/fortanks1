@@ -12,7 +12,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.utils import secure_filename
 
 from models.database import db
-from models.estoque import MovimentacaoEstoque
+from models.estoque import EstoqueMovimentacoes
 from models.logs import Logs
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.upload import Upload
@@ -30,7 +30,7 @@ def reprocessar_importacao():
         {"importado_estoque": False, "movimentacao_estoque_id": None, "data_importacao_estoque": None},
         synchronize_session=False,
     )
-    MovimentacaoEstoque.query.filter(MovimentacaoEstoque.origem_tipo == "NotaFiscal").delete()
+    EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo == "NotaFiscal").delete()
     db.session.commit()
     importar_todas_pendentes()
     return jsonify({"success": True, "message": "Importação reprocessada com sucesso"}), 200

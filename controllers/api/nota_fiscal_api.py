@@ -8,14 +8,13 @@ from flask_login import current_user, login_required
 from sqlalchemy import Integer, and_, case, exists, func, select
 
 from models.centro_custo import CentroCusto
-from models.conversao_unidade import comparar_unidades, get_conversao_unidade
+from models.unidade import comparar_unidades, get_conversao_unidade, UnidadesConversao, Unidades
 from models.dados_analiticos import DadoAnalitico
 from models.database import db
-from models.estoque import MovimentacaoEstoque
+from models.estoque import EstoqueMovimentacoes
 from models.logs import Logs
-from models.material import Material
+from models.material import Materiais
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
-from models.unidade import Unidade
 from models.upload import Upload
 
 from controllers.nota_fiscal.services.query_notas import api_get_dados_notas_fiscais
@@ -108,7 +107,7 @@ def register(nota_fiscal_bp):
         nota_fiscal = NotaFiscal.query.get_or_404(nf_id)
         items = []
         for item in nota_fiscal.itens:
-            material = Material.query.get(item.material_id) if item.material_id else None
+            material = Materiais.query.get(item.material_id) if item.material_id else None
             items.append(
                 {
                     "id": item.id,
@@ -141,15 +140,15 @@ def register(nota_fiscal_bp):
 
         termo_busca = f"%{termo}%"
         materiais = (
-            Material.query.filter(
-                Material.ativo.is_(True),
+            Materiais.query.filter(
+                Materiais.ativo.is_(True),
                 db.or_(
-                    Material.codigo.ilike(termo_busca),
-                    Material.descricao.ilike(termo_busca),
-                    Material.nome.ilike(termo_busca),
+                    Materiais.codigo.ilike(termo_busca),
+                    Materiais.descricao.ilike(termo_busca),
+                    Materiais.nome.ilike(termo_busca),
                 ),
             )
-            .order_by(Material.nome)
+            .order_by(Materiais.nome)
             .all()
         )
 
@@ -183,7 +182,7 @@ def register(nota_fiscal_bp):
     @nota_fiscal_bp.route("/api/unidades", methods=["GET"])
     @login_required
     def api_unidades():
-        unidades = Unidade.query.order_by(Unidade.nome).all()
+        unidades = Unidades.query.order_by(Unidades.nome).all()
         return jsonify([{"id": u.id, "codigo": u.codigo, "nome": u.nome, "simbolo": u.simbolo} for u in unidades])
 
     @nota_fiscal_bp.route("/api/comparar-unidades", methods=["POST"])
@@ -219,7 +218,7 @@ def register(nota_fiscal_bp):
         except (ValueError, TypeError):
             return jsonify({"success": False, "message": f"ID do material inválido: {material_id_str}"}), 400
 
-        material = Material.query.get(material_id)
+        material = Materiais.query.get(material_id)
         if not material:
             return jsonify({"success": False, "message": f"Material com ID {material_id} não encontrado"}), 404
 
@@ -296,7 +295,7 @@ def register(nota_fiscal_bp):
                 )
                 continue
 
-            material = Material.query.get_or_404(material_id)
+            material = Materiais.query.get_or_404(material_id)
             if not fator_conversao:
                 if comparar_unidades(item.unidade, material.unidade_obj.nome):
                     fator_conversao = 1
@@ -383,7 +382,7 @@ def register(nota_fiscal_bp):
             return jsonify({"success": False, "message": "Item não possui material vinculado"}), 400
 
         if item.movimentacao_estoque_id:
-            mov = MovimentacaoEstoque.query.get(item.movimentacao_estoque_id)
+            mov = EstoqueMovimentacoes.query.get(item.movimentacao_estoque_id)
             if mov:
                 db.session.delete(mov)
 
@@ -470,7 +469,7 @@ def register(nota_fiscal_bp):
             return jsonify({"success": False, "message": "Parâmetros obrigatórios não fornecidos"}), 400
 
         item_original = NotaFiscalItem.query.get_or_404(item_id)
-        material = Material.query.get_or_404(material_id)
+        material = Materiais.query.get_or_404(material_id)
 
         itens_similares = []
         if codigo:
@@ -528,7 +527,7 @@ def register(nota_fiscal_bp):
             return jsonify({"success": False, "message": "Parâmetros obrigatórios não fornecidos"}), 400
 
         item_original = NotaFiscalItem.query.get_or_404(item_id)
-        material = Material.query.get_or_404(material_id)
+        material = Materiais.query.get_or_404(material_id)
 
         q = NotaFiscalItem.query.filter(NotaFiscalItem.id != item_id)
         if codigo:
@@ -585,7 +584,7 @@ def register_api(api_bp):
         nota_fiscal = NotaFiscal.query.get_or_404(nf_id)
         items = []
         for item in nota_fiscal.itens:
-            material = Material.query.get(item.material_id) if item.material_id else None
+            material = Materiais.query.get(item.material_id) if item.material_id else None
             items.append(
                 {
                     "id": item.id,

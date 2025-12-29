@@ -2,8 +2,8 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from datetime import datetime
 from models.database import db
-from models.solicitacao import Solicitacao, ItemSolicitacao
-from models.material import Material
+from models.solicitacao import Solicitacoes, SolicitacoesItens
+from models.material import Materiais
 from models.centro_custo import CentroCusto
 from models.usuario import Usuario
 from models.colaborador import Colaborador
@@ -28,13 +28,13 @@ def index():
     """Lista todas as solicitações"""
     # Se for gerente ou superior, mostra todas as solicitações
     if current_user.is_gerente_ou_superior:
-        solicitacoes = Solicitacao.query.order_by(Solicitacao.data_solicitacao.desc()).all()
+        solicitacoes = Solicitacoes.query.order_by(Solicitacoes.data_solicitacao.desc()).all()
     else:
         # Se não, mostra apenas as próprias solicitações
-        solicitacoes = Solicitacao.query.filter_by(solicitante_id=current_user.id).order_by(Solicitacao.data_solicitacao.desc()).all()
+        solicitacoes = Solicitacoes.query.filter_by(solicitante_id=current_user.id).order_by(Solicitacoes.data_solicitacao.desc()).all()
     
     # Buscar dados para o formulário no modal
-    materiais = Material.query.order_by(Material.nome).all()
+    materiais = Materiais.query.order_by(Materiais.nome).all()
     centros_custo = CentroCusto.query.order_by(CentroCusto.nome).all()
     
     return render_template('solicitacoes/index.html', 
@@ -48,7 +48,7 @@ def novo():
     """Cria uma nova solicitação"""
     try:
         # Criar nova solicitação sem número (será definido após obter o ID)
-        solicitacao = Solicitacao(
+        solicitacao = Solicitacoes(
             data_necessidade=datetime.strptime(request.form.get('nova_data_necessidade'), '%Y-%m-%d').date(),
             centro_custo_id=request.form.get('nova_centro_custo_id'),
             solicitante_id=current_user.id,
@@ -63,7 +63,7 @@ def novo():
         
         for i in range(len(materiais)):
             if materiais[i] and quantidades[i]:
-                item = ItemSolicitacao(
+                item = SolicitacoesItens(
                     material_id=materiais[i],
                     quantidade=quantidades[i],
                     unidade=unidades[i],
@@ -98,7 +98,7 @@ def aprovar(id):
         flash('Você não tem permissão para aprovar solicitações.', 'danger')
         return redirect(url_for('solicitacao.index'))
     
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacoes.query.get_or_404(id)
     solicitacao.aprovar(current_user.id)
     flash('Solicitação aprovada com sucesso!', 'success')
     return redirect(url_for('solicitacao.index'))
@@ -112,7 +112,7 @@ def rejeitar(id):
         flash('Você não tem permissão para rejeitar solicitações.', 'danger')
         return redirect(url_for('solicitacao.index'))
     
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacoes.query.get_or_404(id)
     solicitacao.rejeitar(current_user.id)
     flash('Solicitação rejeitada com sucesso!', 'success')
     return redirect(url_for('solicitacao.index'))
@@ -122,7 +122,7 @@ def rejeitar(id):
 
 def cancelar(id):
     """Cancela uma solicitação"""
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacoes.query.get_or_404(id)
     
     # Verificar permissão
     if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
@@ -137,7 +137,7 @@ def cancelar(id):
 @login_required
 def editar(id):
     """Edita uma solicitação pendente"""
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacoes.query.get_or_404(id)
     
     # Verificar permissão e status
     if not current_user.is_gerente_ou_superior and solicitacao.solicitante_id != current_user.id:
@@ -167,7 +167,7 @@ def editar(id):
         
         for i in range(len(materiais)):
             if materiais[i] and quantidades[i]:
-                item = ItemSolicitacao(
+                item = SolicitacoesItens(
                     solicitacao_id=solicitacao.id,
                     material_id=materiais[i],
                     quantidade=quantidades[i],
@@ -190,19 +190,19 @@ def editar(id):
 @login_required
 def api_materiais():
     """API para retornar materiais em formato JSON"""
-    query = Material.query
+    query = Materiais.query
     
     # Filtro por código ou nome
     search = request.args.get('q')
     if search:
         query = query.filter(
             db.or_(
-                Material.codigo.like(f'%{search}%'),
-                Material.nome.like(f'%{search}%')
+                Materiais.codigo.like(f'%{search}%'),
+                Materiais.nome.like(f'%{search}%')
             )
         )
     
-    materiais = query.order_by(Material.nome).limit(100).all()
+    materiais = query.order_by(Materiais.nome).limit(100).all()
     
     result = []
     for m in materiais:
@@ -224,7 +224,7 @@ def enviar_email_aprovacao(id):
         flash('Você não tem permissão para executar esta ação.', 'danger')
         return redirect(url_for('solicitacao.index'))
 
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacoes.query.get_or_404(id)
 
     # Verificar se a solicitação está aprovada
     if solicitacao.status != 'Aprovada':
@@ -278,10 +278,10 @@ def enviar_email_aprovacao(id):
 @login_required
 def pdf(id):
     """Visualiza uma solicitação"""
-    solicitacao = Solicitacao.query.options(db.joinedload(Solicitacao.solicitante), 
-                                            db.joinedload(Solicitacao.centro_custo),
-                                            db.joinedload(Solicitacao.aprovador),
-                                            db.joinedload(Solicitacao.itens).joinedload(ItemSolicitacao.material)
+    solicitacao = Solicitacoes.query.options(db.joinedload(Solicitacoes.solicitante), 
+                                            db.joinedload(Solicitacoes.centro_custo),
+                                            db.joinedload(Solicitacoes.aprovador),
+                                            db.joinedload(Solicitacoes.itens).joinedload(SolicitacoesItens.material)
                                             ).get_or_404(id)
     try:
         # Renderizar o template HTML para o PDF
@@ -309,10 +309,10 @@ def enviar_pdf_email(id):
         flash('Você não tem permissão para executar esta ação.', 'danger')
         return redirect(url_for('solicitacao.index'))
 
-    solicitacao = Solicitacao.query.options(db.joinedload(Solicitacao.solicitante), 
-                                            db.joinedload(Solicitacao.centro_custo),
-                                            db.joinedload(Solicitacao.aprovador),
-                                            db.joinedload(Solicitacao.itens).joinedload(ItemSolicitacao.material)
+    solicitacao = Solicitacoes.query.options(db.joinedload(Solicitacoes.solicitante), 
+                                            db.joinedload(Solicitacoes.centro_custo),
+                                            db.joinedload(Solicitacoes.aprovador),
+                                            db.joinedload(Solicitacoes.itens).joinedload(SolicitacoesItens.material)
                                             ).get_or_404(id)
 
     # --- Obter Destinatários ---
@@ -395,11 +395,11 @@ def enviar_pdf_email(id):
 @login_required
 def get_dados_solicitacao(id):
     """Retorna os dados de uma solicitação em formato JSON"""
-    solicitacao = Solicitacao.query.options(
-        db.joinedload(Solicitacao.centro_custo),
-        db.joinedload(Solicitacao.aprovador).joinedload(Usuario.colaborador),
-        db.joinedload(Solicitacao.solicitante).joinedload(Usuario.colaborador),
-        db.joinedload(Solicitacao.itens).joinedload(ItemSolicitacao.material).joinedload(Material.unidade_obj)
+    solicitacao = Solicitacoes.query.options(
+        db.joinedload(Solicitacoes.centro_custo),
+        db.joinedload(Solicitacoes.aprovador).joinedload(Usuario.colaborador),
+        db.joinedload(Solicitacoes.solicitante).joinedload(Usuario.colaborador),
+        db.joinedload(Solicitacoes.itens).joinedload(SolicitacoesItens.material).joinedload(Materiais.unidade_obj)
     ).get_or_404(id)
 
     # Verificar permissão
@@ -445,6 +445,6 @@ def get_dados_solicitacao(id):
 @login_required
 def get_emails_predefinidos(id):
     """Retorna os e-mails pré-definidos para uma solicitação"""
-    solicitacao = Solicitacao.query.get_or_404(id)
+    solicitacao = Solicitacoes.query.get_or_404(id)
     emails_predefinidos = current_app.config.get('EMAILS_PDF_SOLICITACAO', '')
     return jsonify({'email_solicitante': solicitacao.solicitante.email if solicitacao.solicitante else '', 'emails_predefinidos': emails_predefinidos})

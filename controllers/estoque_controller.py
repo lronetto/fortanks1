@@ -1,15 +1,14 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_file
 from flask_login import login_required, current_user
-from models.estoque import Estoque, MovimentacaoEstoque
-from models.material import Material
-from models.epi import EPI
+from models.estoque import Estoque, EstoqueMovimentacoes
+from models.material import Materiais,MateriaisGrupos
+from models.epi import Epi,EpiEntregas
 from models.centro_custo import CentroCusto
 from models.database import db
-from forms.estoque_forms import EstoqueForm, MovimentacaoEstoqueForm, FiltroEstoqueForm
+from forms.estoque_forms import EstoqueForm, FiltroEstoqueForm
 from datetime import datetime, date, timedelta
-from models.unidade import Unidade
+from models.unidade import Unidades
 from sqlalchemy import or_, func
-from models.grupo_material import GrupoMaterial
 
 from decimal import Decimal
 import logging
@@ -90,11 +89,11 @@ def index():
     
     if form_filtro.termo_busca.data:
         termo = f"%{form_filtro.termo_busca.data}%"
-        query = query.outerjoin(Material, Estoque.material_id == Material.id).outerjoin(
+        query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id).outerjoin(
             ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id).filter(
             or_(
-                Material.nome.ilike(termo),
-                Material.codigo.ilike(termo),
+                Materiais.nome.ilike(termo),
+                Materiais.codigo.ilike(termo),
                 Estoque.localizacao.ilike(termo),
                 ProdutoComposto.nome.ilike(termo)
             )
@@ -113,7 +112,7 @@ def index():
     # Garantir joins com Material e ProdutoComposto para ordenação
     # Verificar se os joins já foram feitos (quando há termo de busca)
     if not form_filtro.termo_busca.data:
-        query = query.outerjoin(Material, Estoque.material_id == Material.id)\
+        query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id)\
                      .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
     
     # Se o filtro de ignorar localizações estiver ativo, agrupar por material/produto
@@ -139,7 +138,7 @@ def index():
                 joinedload(Estoque.epi)
             )
         # Buscar todos os itens e agrupar em Python
-        all_items = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).all()
+        all_items = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).all()
         logger.info(f"Total de itens encontrados antes do agrupamento: {len(all_items)}")
         
         # Agrupar por material_id ou ProdComp_id
@@ -251,7 +250,7 @@ def index():
         items = PaginatedList(paginated_items, page, per_page, total)
     else:
         # Ordenar pelo nome do material ou pelo nome do produto composto
-        items = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).paginate(page=page, per_page=20, error_out=False)
+        items = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).paginate(page=page, per_page=20, error_out=False)
     
     # Atualizar quantidade de cada item com o saldo real calculado
     for item in items.items:
@@ -273,7 +272,7 @@ def novo():
     
     form = EstoqueForm()
     # Preencher as opções de select
-    form.material_id.choices = [(m.id, f"{m.codigo} - {m.nome}") for m in Material.query.filter_by(ativo=True).all()]
+    form.material_id.choices = [(m.id, f"{m.codigo} - {m.nome}") for m in Materiais.query.filter_by(ativo=True).all()]
     form.material_id.choices.insert(0, (0, 'Selecione um material'))
     
     if form.validate_on_submit():
@@ -291,7 +290,7 @@ def novo():
             
             # Se tiver quantidade inicial, criar movimentação de entrada
             if form.quantidade.data and float(form.quantidade.data) > 0:
-                mov = MovimentacaoEstoque(
+                mov = EstoqueMovimentacoes(
                     estoque_id=item.id,
                     tipo_movimento='entrada',
                     quantidade=form.quantidade.data,
@@ -346,7 +345,7 @@ def editar(id):
     form = EstoqueForm(obj=item)
     
     # Preencher as opções de select
-    form.material_id.choices = [(m.id, f"{m.codigo} - {m.nome}") for m in Material.query.filter_by(ativo=True).all()]
+    form.material_id.choices = [(m.id, f"{m.codigo} - {m.nome}") for m in Materiais.query.filter_by(ativo=True).all()]
     form.material_id.choices.insert(0, (0, 'Selecione um material'))
     
     form.epi_id.choices = [(e.id, f"{e.material.nome} - CA: {e.ca_numero or 'N/A'}") for e in EPI.query.all()]
@@ -388,7 +387,7 @@ def editar(id):
             # Se a quantidade foi alterada, criar movimentação de ajuste
             nova_quantidade = form.quantidade.data
             if nova_quantidade != quantidade_anterior:
-                mov = MovimentacaoEstoque(
+                mov = EstoqueMovimentacoes(
                     estoque_id=item.id,
                     tipo_movimento='ajuste',
                     quantidade=nova_quantidade,  # Quantidade total após ajuste
@@ -420,7 +419,7 @@ def api_listar():
 
     # Query base no Estoque, carregando relacionamentos para evitar N+1 queries
     query = Estoque.query.options(
-        db.joinedload(Estoque.material).joinedload(Material.unidade_obj),
+        db.joinedload(Estoque.material).joinedload(Materiais.unidade_obj),
         db.joinedload(Estoque.produto_composto)
     ).filter(
         db.or_(Estoque.material_id.isnot(None), Estoque.ProdComp_id.isnot(None))
@@ -428,11 +427,11 @@ def api_listar():
 
     # Aplicar filtro de busca se houver
     if search_term:
-        query = query.outerjoin(Material, Estoque.material_id == Material.id)\
+        query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id)\
                      .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)\
                      .filter(
                         db.or_(
-                            Material.nome.ilike(f'%{search_term}%'),
+                            Materiais.nome.ilike(f'%{search_term}%'),
                             ProdutoComposto.nome.ilike(f'%{search_term}%')
                         )
                      )
@@ -465,7 +464,7 @@ def detalhes(id):
     Exibir detalhes de um item do estoque
     """
     estoque = Estoque.query.get_or_404(id)
-    movimentacoes = MovimentacaoEstoque.query.filter_by(estoque_id=id).order_by(MovimentacaoEstoque.data_movimento.desc()).limit(10).all()
+    movimentacoes = EstoqueMovimentacoes.query.filter_by(estoque_id=id).order_by(EstoqueMovimentacoes.data_movimento.desc()).limit(10).all()
     return render_template('estoque/detalhes.html', estoque=estoque, movimentacoes=movimentacoes)
 
 @estoque_bp.route('/excluir/<int:id>', methods=['POST'])
@@ -478,7 +477,7 @@ def excluir(id):
     item = Estoque.query.get_or_404(id)
     try:
         # Excluir movimentações
-        MovimentacaoEstoque.query.filter_by(estoque_id=id).delete()
+        EstoqueMovimentacoes.query.filter_by(estoque_id=id).delete()
         # Excluir item
         db.session.delete(item)
         db.session.commit()
@@ -507,11 +506,11 @@ def movimentacoes():
     observacao = request.args.get('observacao', None)
     
     # Consulta base
-    query = MovimentacaoEstoque.query.join(Estoque)
+    query = EstoqueMovimentacoes.query.join(Estoque)
     
     # Aplicar filtros
     if estoque_id:
-        query = query.filter(MovimentacaoEstoque.estoque_id == estoque_id)
+        query = query.filter(EstoqueMovimentacoes.estoque_id == estoque_id)
     
     # Filtro por material
     if material_id:
@@ -522,11 +521,11 @@ def movimentacoes():
         query = query.filter(Estoque.localizacao == localizacao)
     
     if tipo:
-        query = query.filter(MovimentacaoEstoque.tipo_movimento == tipo)
+        query = query.filter(EstoqueMovimentacoes.tipo_movimento == tipo)
     
     # Filtro por observação
     if observacao:
-        query = query.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao}%'))
+        query = query.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
     
     # Converter datas se fornecidas
     data_inicio_obj = None
@@ -535,7 +534,7 @@ def movimentacoes():
     if data_inicio:
         try:
             data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
-            query = query.filter(func.date(MovimentacaoEstoque.data_movimento) >= data_inicio_obj)
+            query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) >= data_inicio_obj)
         except ValueError:
             flash('Formato de data inválido para Data Início', 'warning')
             data_inicio_obj = None
@@ -543,21 +542,21 @@ def movimentacoes():
     if data_fim:
         try:
             data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
-            query = query.filter(func.date(MovimentacaoEstoque.data_movimento) <= data_fim_obj)
+            query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) <= data_fim_obj)
         except ValueError:
             flash('Formato de data inválido para Data Fim', 'warning')
             data_fim_obj = None
     
     # Obter resultados paginados
-    query = query.order_by(MovimentacaoEstoque.data_movimento.desc())
+    query = query.order_by(EstoqueMovimentacoes.data_movimento.desc())
     movimentacoes = query.paginate(page=page, per_page=20, error_out=False)
     
     # Calcular totais de movimentações (usando a mesma query filtrada, mas sem paginação)
-    query_totais = MovimentacaoEstoque.query.join(Estoque)
+    query_totais = EstoqueMovimentacoes.query.join(Estoque)
     
     # Aplicar os mesmos filtros para os totais
     if estoque_id:
-        query_totais = query_totais.filter(MovimentacaoEstoque.estoque_id == estoque_id)
+        query_totais = query_totais.filter(EstoqueMovimentacoes.estoque_id == estoque_id)
     
     if material_id:
         query_totais = query_totais.filter(Estoque.material_id == material_id)
@@ -566,30 +565,30 @@ def movimentacoes():
         query_totais = query_totais.filter(Estoque.localizacao == localizacao)
     
     if observacao:
-        query_totais = query_totais.filter(MovimentacaoEstoque.observacao.ilike(f'%{observacao}%'))
+        query_totais = query_totais.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
     
     if data_inicio_obj:
-        query_totais = query_totais.filter(func.date(MovimentacaoEstoque.data_movimento) >= data_inicio_obj)
+        query_totais = query_totais.filter(func.date(EstoqueMovimentacoes.data_movimento) >= data_inicio_obj)
     
     if data_fim_obj:
-        query_totais = query_totais.filter(func.date(MovimentacaoEstoque.data_movimento) <= data_fim_obj)
+        query_totais = query_totais.filter(func.date(EstoqueMovimentacoes.data_movimento) <= data_fim_obj)
     
     # Calcular totais por tipo de movimentação
-    total_entradas = query_totais.filter(MovimentacaoEstoque.tipo_movimento == 'entrada').with_entities(
-        func.sum(MovimentacaoEstoque.quantidade)
+    total_entradas = query_totais.filter(EstoqueMovimentacoes.tipo_movimento == 'entrada').with_entities(
+        func.sum(EstoqueMovimentacoes.quantidade)
     ).scalar() or Decimal('0.0')
     
-    total_saidas = query_totais.filter(MovimentacaoEstoque.tipo_movimento == 'saida').with_entities(
-        func.sum(MovimentacaoEstoque.quantidade)
+    total_saidas = query_totais.filter(EstoqueMovimentacoes.tipo_movimento == 'saida').with_entities(
+        func.sum(EstoqueMovimentacoes.quantidade)
     ).scalar() or Decimal('0.0')
     
-    total_ajustes = query_totais.filter(MovimentacaoEstoque.tipo_movimento == 'ajuste').count() or 0
+    total_ajustes = query_totais.filter(EstoqueMovimentacoes.tipo_movimento == 'Ajuste').count() or 0
     
     # Obter todos os itens de estoque para o filtro
     itens_estoque = Estoque.query.all()
     
     # Obter todos os materiais para o filtro
-    materiais = Material.query.filter_by(ativo=True).order_by(Material.nome).all()
+    materiais = Materiais.query.filter_by(ativo=True).order_by(Materiais.nome).all()
     
     # Obter lista de localizações únicas para o filtro
     localizacoes = db.session.query(Estoque.localizacao).filter(
@@ -601,7 +600,7 @@ def movimentacoes():
     # Obter informações do material selecionado, se houver
     material_selecionado = None
     if material_id:
-        material_selecionado = Material.query.get(material_id)
+        material_selecionado = Materiais.query.get(material_id)
     
     # Converter datas de volta para string para o template (se foram convertidas)
     data_inicio_str = data_inicio_obj.strftime('%Y-%m-%d') if data_inicio_obj else data_inicio
@@ -631,7 +630,7 @@ def nova_movimentacao():
     """
     Adicionar nova movimentação ao estoque
     """
-    form = MovimentacaoEstoqueForm()
+    form = EstoqueMovimentacoesForm()
     
     # Preencher opções de estoque
     estoques = Estoque.query.all()
@@ -670,7 +669,7 @@ def nova_movimentacao():
                 flash('Quantidade insuficiente em estoque para esta saída', 'danger')
                 return render_template('estoque/movimentacao_form.html', form=form)
             
-            mov = MovimentacaoEstoque(
+            mov = EstoqueMovimentacoes(
                 estoque_id=form.estoque_id.data,
                 tipo_movimento=tipo_movimento,
                 quantidade=quantidade,
@@ -699,10 +698,10 @@ def excluir_movimentacao(id_movimentacao):
         flash('Acesso negado. Você não tem permissão para excluir movimentações.', 'danger')
         return redirect(url_for('estoque.movimentacoes'))
 
-    movimentacao = MovimentacaoEstoque.query.get_or_404(id_movimentacao)
+    movimentacao = EstoqueMovimentacoes.query.get_or_404(id_movimentacao)
     
     try:
-        # O método delete no modelo MovimentacaoEstoque deve cuidar da reversão do estoque
+        # O método delete no modelo EstoqueMovimentacoes deve cuidar da reversão do estoque
         movimentacao.delete() 
         flash(f'Movimentação ID {id_movimentacao} excluída com sucesso e estoque revertido.', 'success')
     except Exception as e:
@@ -758,7 +757,7 @@ def api_estoque_por_material(material_id):
                 'data': None
             })
         
-        material = Material.query.get(material_id)
+        material = Materiais.query.get(material_id)
         
         return jsonify({
             'success': True,
@@ -823,22 +822,22 @@ def api_historico_saldo_estoque(estoque_id):
         quantidade_total = sum(float(e.get_saldo_real()) for e in estoques_material)
         
         # Buscar todas as movimentações de todos os estoques do material
-        query = MovimentacaoEstoque.query.filter(MovimentacaoEstoque.estoque_id.in_(estoque_ids))
+        query = EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.estoque_id.in_(estoque_ids))
         
         if data_inicio:
-            query = query.filter(MovimentacaoEstoque.data_movimento >= data_inicio)
+            query = query.filter(EstoqueMovimentacoes.data_movimento >= data_inicio)
         if data_fim:
-            query = query.filter(MovimentacaoEstoque.data_movimento < data_fim + timedelta(days=1))
+            query = query.filter(EstoqueMovimentacoes.data_movimento < data_fim + timedelta(days=1))
         
-        movimentacoes = query.order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+        movimentacoes = query.order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
         
         # Calcular saldo inicial (antes da data_inicio, se houver)
         saldo_inicial = Decimal('0.0')
         if data_inicio:
-            movimentacoes_anteriores = MovimentacaoEstoque.query.filter(
-                MovimentacaoEstoque.estoque_id.in_(estoque_ids),
-                MovimentacaoEstoque.data_movimento < data_inicio
-            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            movimentacoes_anteriores = EstoqueMovimentacoes.query.filter(
+                EstoqueMovimentacoes.estoque_id.in_(estoque_ids),
+                EstoqueMovimentacoes.data_movimento < data_inicio
+            ).order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
             
             for mov in movimentacoes_anteriores:
                 if mov.tipo_movimento == 'entrada':
@@ -857,10 +856,10 @@ def api_historico_saldo_estoque(estoque_id):
         # Calcular saldo inicial de cada estoque
         if data_inicio:
             for eid in estoque_ids:
-                movs_ant = MovimentacaoEstoque.query.filter(
-                    MovimentacaoEstoque.estoque_id == eid,
-                    MovimentacaoEstoque.data_movimento < data_inicio
-                ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+                movs_ant = EstoqueMovimentacoes.query.filter(
+                    EstoqueMovimentacoes.estoque_id == eid,
+                    EstoqueMovimentacoes.data_movimento < data_inicio
+                ).order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
                 for mov in movs_ant:
                     if mov.tipo_movimento == 'entrada':
                         saldos_estoques[eid] += mov.quantidade
@@ -907,10 +906,10 @@ def api_historico_saldo_estoque(estoque_id):
                 ultima_data = datetime.strptime(ultima_data_str, '%Y-%m-%d')
             
             # Verificar se há movimentações após a última data do histórico
-            movimentacoes_posteriores = MovimentacaoEstoque.query.filter(
-                MovimentacaoEstoque.estoque_id.in_(estoque_ids),
-                MovimentacaoEstoque.data_movimento > ultima_data
-            ).order_by(MovimentacaoEstoque.data_movimento.asc()).all()
+            movimentacoes_posteriores = EstoqueMovimentacoes.query.filter(
+                EstoqueMovimentacoes.estoque_id.in_(estoque_ids),
+                EstoqueMovimentacoes.data_movimento > ultima_data
+            ).order_by(EstoqueMovimentacoes.data_movimento.asc()).all()
             
             # Se houver movimentações posteriores, processá-las
             if movimentacoes_posteriores:
@@ -946,8 +945,8 @@ def api_historico_saldo_estoque(estoque_id):
         
         # Se não há histórico e não há filtro de data_fim, criar um ponto inicial apenas se não houver movimentações
         elif not data_fim and not historico_data:
-            total_movimentacoes = MovimentacaoEstoque.query.filter(
-                MovimentacaoEstoque.estoque_id.in_(estoque_ids)
+            total_movimentacoes = EstoqueMovimentacoes.query.filter(
+                EstoqueMovimentacoes.estoque_id.in_(estoque_ids)
             ).count()
             if total_movimentacoes == 0:
                 agora = datetime.now()
@@ -958,11 +957,11 @@ def api_historico_saldo_estoque(estoque_id):
         
         # Agrupar por semana se solicitado
         if agrupar_semana and historico_data:
-            historico_data = MovimentacaoEstoque._agrupar_por_semana(historico_data)
+            historico_data = EstoqueMovimentacoes._agrupar_por_semana(historico_data)
             # Não adicionar ponto artificial após agrupamento
     else:
         # Comportamento normal: histórico de um único estoque
-        historico_data = MovimentacaoEstoque.get_historico_saldo_para_grafico(
+        historico_data = EstoqueMovimentacoes.get_historico_saldo_para_grafico(
             estoque_id=item_estoque.id,
             data_inicio=data_inicio,
             data_fim=data_fim,
@@ -1036,7 +1035,7 @@ def relatorio_grupos():
                 data_filtro_dt = None
         
         # Buscar todos os grupos de materiais
-        grupos = GrupoMaterial.query.filter_by(ativo=True).order_by(GrupoMaterial.nome).all()
+        grupos = GrupoMateriais.query.filter_by(ativo=True).order_by(GrupoMateriais.nome).all()
         
         # Dados do relatório
         dados_relatorio = []
@@ -1130,7 +1129,7 @@ def relatorio_grupos_exportar_excel():
                 data_filtro_dt = None
         
         # Buscar grupos
-        grupos = GrupoMaterial.query.filter_by(ativo=True).order_by(GrupoMaterial.nome).all()
+        grupos = GrupoMateriais.query.filter_by(ativo=True).order_by(GrupoMateriais.nome).all()
         grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
         
         # Preparar dados para Excel
@@ -1217,7 +1216,7 @@ def relatorio_grupos_exportar_pdf():
                 data_filtro_dt = None
         
         # Buscar grupos
-        grupos = GrupoMaterial.query.filter_by(ativo=True).order_by(GrupoMaterial.nome).all()
+        grupos = GrupoMateriais.query.filter_by(ativo=True).order_by(GrupoMateriais.nome).all()
         grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
         
         # Preparar dados do relatório
@@ -1310,4 +1309,162 @@ def relatorio_grupos_exportar_pdf():
     except Exception as e:
         logger.error(f"Erro ao exportar relatório PDF: {str(e)}")
         flash('Erro ao exportar relatório para PDF.', 'error')
-        return redirect(url_for('estoque.relatorio_grupos')) 
+        return redirect(url_for('estoque.relatorio_grupos'))
+
+@estoque_bp.route('/exportar-excel')
+@login_required
+def exportar_excel():
+    """
+    Exporta os itens de estoque filtrados para Excel.
+    Considera os mesmos filtros aplicados na listagem principal.
+    """
+    try:
+        # Obter parâmetros de filtro da URL
+        tipo_item = request.args.get('tipo_item', '')
+        status_estoque = request.args.get('status_estoque', '')
+        localizacao = request.args.get('localizacao', '').strip()
+        termo_busca = request.args.get('termo_busca', '')
+        ignorar_localizacoes_param = request.args.get('ignorar_localizacoes', '')
+        ignorar_localizacoes = (ignorar_localizacoes_param == 'on' or 
+                                ignorar_localizacoes_param == 'True' or 
+                                ignorar_localizacoes_param == 'true' or
+                                ignorar_localizacoes_param == '1' or
+                                bool(ignorar_localizacoes_param))
+        
+        # Consulta base
+        query = Estoque.query
+        
+        # Aplicar filtros (mesma lógica da função index)
+        if tipo_item and tipo_item != 'todos':
+            query = query.filter(Estoque.tipo_item == tipo_item)
+        
+        # Aplicar filtro de localização (não aplicar se estiver agrupando por item)
+        if localizacao and localizacao != '' and localizacao != 'None' and not ignorar_localizacoes:
+            query = query.filter(Estoque.localizacao == localizacao)
+        
+        if termo_busca:
+            termo = f"%{termo_busca}%"
+            query = query.outerjoin(Material, Estoque.material_id == Materiais.id).outerjoin(
+                ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id).filter(
+                or_(
+                    Materiais.nome.ilike(termo),
+                    Materiais.codigo.ilike(termo),
+                    Estoque.localizacao.ilike(termo),
+                    ProdutoComposto.nome.ilike(termo)
+                )
+            )
+        
+        # Filtrar por status
+        if status_estoque and status_estoque != 'todos':
+            if status_estoque == 'critico':
+                query = query.filter(Estoque.quantidade <= Estoque.quantidade_minima)
+            elif status_estoque == 'esgotado':
+                query = query.filter(Estoque.quantidade <= 0)
+            elif status_estoque == 'excesso':
+                query = query.filter(Estoque.quantidade >= Estoque.quantidade_maxima)
+        
+        # Garantir joins com Material e ProdutoComposto
+        if not termo_busca:
+            query = query.outerjoin(Material, Estoque.material_id == Materiais.id)\
+                         .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
+        
+        # Se o filtro de ignorar localizações estiver ativo, agrupar por material/produto
+        if ignorar_localizacoes:
+            from sqlalchemy.orm import joinedload
+            if not termo_busca:
+                query = query.options(
+                    joinedload(Estoque.material),
+                    joinedload(Estoque.produto_composto),
+                    joinedload(Estoque.epi)
+                )
+            all_items = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).all()
+            
+            # Agrupar por material_id ou ProdComp_id
+            grouped = {}
+            for item in all_items:
+                if item.material_id:
+                    key = f"material_{item.material_id}"
+                elif item.ProdComp_id:
+                    key = f"produto_{item.ProdComp_id}"
+                else:
+                    key = f"item_{item.id}"
+                
+                if key not in grouped:
+                    grouped_item = Estoque()
+                    grouped_item.id = item.id
+                    grouped_item.material_id = item.material_id
+                    grouped_item.ProdComp_id = item.ProdComp_id
+                    grouped_item.tipo_item = item.tipo_item
+                    grouped_item.quantidade = Decimal(0)
+                    grouped_item.material = item.material
+                    grouped_item.produto_composto = item.produto_composto
+                    grouped[key] = grouped_item
+                
+                saldo_real_item = item.get_saldo_real()
+                grouped[key].quantidade += saldo_real_item
+            
+            items = list(grouped.values())
+            items.sort(key=lambda x: (x.material.nome if x.material else x.produto_composto.nome if x.produto_composto else ""))
+        else:
+            items = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).all()
+        
+        # Preparar dados para Excel
+        dados_excel = []
+        for item in items:
+            # Calcular saldo real
+            saldo_real = item.get_saldo_real()
+            
+            # Obter código do estoque
+            codigo_estoque = item.id
+            
+            # Obter código do material/produto
+            codigo_material = None
+            nome = None
+            codigo_alterdata = None
+            
+            if item.material:
+                codigo_material = item.material.id or item.material.codigo or "N/A"
+                nome = item.material.nome
+                codigo_alterdata = item.material.codigo_erp or "N/A"
+            elif item.produto_composto:
+                codigo_material = item.produto_composto.id or "N/A"
+                nome = item.produto_composto.nome
+                codigo_alterdata = "N/A"
+            else:
+                codigo_material = "N/A"
+                nome = "Item sem descrição"
+                codigo_alterdata = "N/A"
+            
+            dados_excel.append({
+                'Código Estoque': codigo_estoque,
+                'Código Material': codigo_material,
+                'Código Alterdata': codigo_alterdata,
+                'Nome': nome,
+                'Estoque Atual': float(saldo_real)
+            })
+        
+        # Criar DataFrame
+        df = pd.DataFrame(dados_excel)
+        
+        # Criar buffer Excel
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Estoque')
+        
+        excel_buffer.seek(0)
+        
+        # Nome do arquivo com timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_arquivo = f'estoque_export_{timestamp}.xlsx'
+        
+        return send_file(
+            excel_buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nome_arquivo
+        )
+    
+    except Exception as e:
+        logger.error(f"Erro ao exportar estoque para Excel: {str(e)}", exc_info=True)
+        flash('Erro ao exportar estoque para Excel.', 'danger')
+        return redirect(url_for('estoque.index')) 

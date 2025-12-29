@@ -17,16 +17,16 @@ class Orcamento(db.Model):
     usuario = db.relationship('Usuario', backref='orcamentos')
 
 
-    material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'))
-    material = db.relationship('Material', backref='orcamentos')
+    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'))
+    material = db.relationship('Materiais', backref='orcamentos')
 
 class ItemOrcamento(db.Model):
     __tablename__ = 'itens_orcamento'
     id = db.Column(db.Integer, primary_key=True)
     orcamento_id = db.Column(db.Integer, db.ForeignKey('orcamentos.id'))
     orcamento = db.relationship('Orcamento', backref='itens_orcamento')
-    material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'))
-    material = db.relationship('Material', backref='itens_orcamento')
+    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'))
+    material = db.relationship('Materiais', backref='itens_orcamento')
     quantidade = db.Column(db.Integer, nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     criado_em = db.Column(db.DateTime, default=datetime.now)

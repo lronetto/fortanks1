@@ -1,5 +1,4 @@
 from models.database import db
-from models.unidade import Unidade
 from datetime import datetime
 from flask import render_template, current_app
 from io import BytesIO
@@ -9,7 +8,6 @@ from dotenv import load_dotenv
 import os
 import json
 from flask_login import current_user
-from models.conversao_unidade import comparar_unidades
 from flask import Response
 import base64
 from utils.gerar_pdf import gerar_pdf_danfe
@@ -19,7 +17,7 @@ import logging
 from models.upload import Upload
 from models.arquivei import Arquivei
 from models.logs import Logs
-from models.conversao_unidade import get_conversao_unidade
+from models.unidade import UnidadesConversao, get_conversao_unidade, comparar_unidades,Unidades
 import xmltodict
 logger = logging.getLogger(__name__)
 load_dotenv()
@@ -70,7 +68,7 @@ def determinar_movimentacoes_estoque(nota_fiscal):
     elif cnpj_emitente in CNPJS_FILIAIS and cnpj_destinatario in CNPJS_MATRIZ:
         movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "saida"))
         movimentacoes.append(("Estoque Matriz", "entrada"))
-    
+    # Caso 5: Transferência interna para externa
     elif cnpj_emitente in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario not in CNPJS_MATRIZ_FILIAIS:
         if cnpj_emitente in CNPJS_MATRIZ:
             if nota_fiscal.tipo == 1:
@@ -82,7 +80,18 @@ def determinar_movimentacoes_estoque(nota_fiscal):
                 movimentacoes.append(("Estoque Filial {cnpj_emitente}", "saida"))
             else:
                 movimentacoes.append(("Estoque Filial {cnpj_emitente}", "entrada"))
-    
+    # Caso 6: Transferência matriz para matriz
+    elif cnpj_emitente in CNPJS_MATRIZ and cnpj_destinatario in CNPJS_MATRIZ:
+        if nota_fiscal.tipo == 1:
+            movimentacoes.append((f"Estoque Matriz", "saida"))
+        else:
+            movimentacoes.append((f"Estoque Matriz", "entrada"))
+    # Caso 7: Transferência filial para filial
+    elif cnpj_emitente in CNPJS_FILIAIS and cnpj_destinatario in CNPJS_FILIAIS:
+        if nota_fiscal.tipo == 1:
+            movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "saida"))
+        else:
+            movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "entrada"))
     return movimentacoes
 def get_xml_text(element, xpath, ns):
     """
@@ -100,7 +109,7 @@ class NotaFiscal(db.Model):
     """
     Modelo para representar Notas Fiscais
     """
-    __tablename__ = 'nf_notas'
+    __tablename__ = 'NotaFiscal'
     
     id = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.Integer, nullable=False)
@@ -1017,7 +1026,7 @@ class NotaFiscalItem(db.Model):
     """
     Modelo para representar itens de Nota Fiscal
     """
-    __tablename__ = 'nf_itens'
+    __tablename__ = 'NotaFiscalItem'
     
     id = db.Column(db.Integer, primary_key=True)
     codigo = db.Column(db.String(60), nullable=True)
@@ -1032,15 +1041,15 @@ class NotaFiscalItem(db.Model):
     unidade = db.Column(db.String(6), nullable=True)
     
     # Campos para conversão de unidades
-    unidade_id = db.Column(db.Integer, db.ForeignKey('unidades.id'), nullable=True)
-    unidade_rel = db.relationship('Unidade', backref='nf_itens', lazy=True)
+    unidade_id = db.Column(db.Integer, db.ForeignKey('Unidades.id'), nullable=True)
+    unidade_rel = db.relationship('Unidades', back_populates='nf_itens', lazy=True)
     unidade_original = db.Column(db.String(6), nullable=True)
     quantidade_original = db.Column(db.Numeric(15, 4), nullable=True)
     fator_conversao_aplicado = db.Column(db.Numeric(15, 4), nullable=True)
     
     # Vinculação com material do sistema
-    material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'), nullable=True)
-    material = db.relationship('Material', backref='itens_nota_fiscal')
+    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'), nullable=True)
+    material = db.relationship('Materiais', backref='itens_nota_fiscal')
 
     movimentacao_estoque_id = db.Column(db.Integer, nullable=True)
     
@@ -1059,7 +1068,7 @@ class NotaFiscalItem(db.Model):
     dados_adicionais = db.Column(db.Text, nullable=True)
     
     # Chave estrangeira
-    nf_id = db.Column(db.Integer, db.ForeignKey('nf_notas.id', ondelete='CASCADE'), nullable=False)
+    nf_id = db.Column(db.Integer, db.ForeignKey('NotaFiscal.id', ondelete='CASCADE'), nullable=False)
     # Datas de controle
     data_criacao = db.Column(db.DateTime, default=datetime.now)
     data_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -1242,9 +1251,7 @@ class NotaFiscalItem(db.Model):
         Returns:
             tuple: (bool, str, dict) - (Sucesso, Mensagem, Estatísticas)
         """
-        inicio = datetime.now()
-        from models.estoque import Estoque, MovimentacaoEstoque
-        
+        inicio = datetime.now()        
         estatisticas = {
             'processado': True,
             'importado': False,
@@ -1266,13 +1273,13 @@ class NotaFiscalItem(db.Model):
         
         try:
             # Buscar estoque existente para o material
-            estoque = Estoque.query.filter_by(material_id=self.material_id,localizacao=local).first()
+            estoque = Estoques.query.filter_by(material_id=self.material_id,localizacao=local).first()
             
             # Se não existe estoque para este material, criar um novo
             if not estoque:
                 print(f"Criando novo estoque para o material {self.material_id}")
 
-                estoque = Estoque(
+                estoque = Estoques(
                     material_id=self.material_id,
                     tipo_item='material',
                     quantidade=float(self.quantidade),
@@ -1307,7 +1314,7 @@ class NotaFiscalItem(db.Model):
                 except:
                     pass
             
-            movimentacao = MovimentacaoEstoque(
+            movimentacao = EstoqueMovimentacoes(
                 estoque_id=estoque.id,
                 tipo_movimento=tipo_movimento,
                 quantidade=self.quantidade * fator,

@@ -6,7 +6,7 @@ from models.dados_analiticos import DadoAnalitico, PL_RECOP
 from models.nota_fiscal import NotaFiscal, CFOPS_VENDA
 from models.centro_custo import CentroCusto
 from models.plano_conta import PlanoConta
-from models.tanque import Tanque
+from models.tanque import Tanques
 from models.contrato import Contrato
 from models.nota_fiscal import NotaFiscalItem
 from sqlalchemy import func
@@ -58,11 +58,11 @@ def relatorio_semanal():
         NotaFiscalItem,
         NotaFiscalItem.nf_id == NotaFiscal.id
     ).join(
-        Tanque,
-        Tanque.item_nf == NotaFiscalItem.codigo
+        Tanques,
+        Tanques.item_nf == NotaFiscalItem.codigo
     ).join(
         Contrato,
-        Contrato.id == Tanque.contrato_id
+        Contrato.id == Tanques.contrato_id
     ).join(
         CentroCusto,
         CentroCusto.id == Contrato.centro_custo_id
@@ -198,8 +198,8 @@ def relatorio_notas_ajax():
     
     # Calcular quantidade total de placas dos contratos (material)
     query_placas = db.session.query(
-        func.sum((Tanque.placas_normais + Tanque.placas_fecho) * Tanque.quantidade)
-    ).join(Contrato, Contrato.id == Tanque.contrato_id)
+        func.sum((Tanques.placas_normais + Tanques.placas_fecho) * Tanques.quantidade)
+    ).join(Contrato, Contrato.id == Tanques.contrato_id)
     
     if centro_custo_ids_int:
         query_placas = query_placas.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))

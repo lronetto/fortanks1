@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, send_file
 from flask_login import login_required, current_user
-from models import TracoConcreto, ItemTracoConcreto, UsinagemConcreto, RompimentoCorpoProva, UsinagemEquipamento, UsinagemMaterial, Material, Equipamento, Concretagem, Colaborador, RompimentoCorpoProva, db, Unidade
+from models.material import Materiais
+from models.unidade import Unidades, UnidadesConversao
+from models.concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais
 from datetime import datetime, timezone
 from decimal import Decimal
-from models.conversao_unidade import ConversaoUnidade
 import json
 from markupsafe import Markup
 import pandas as pd
@@ -25,7 +26,7 @@ def api_materiais_para_traco():
     """API para obter materiais que podem ser usados em traços de concreto"""
     try:
         # Busca todos os materiais ordenados por nome
-        materiais = Material.query.order_by(Material.nome).all()
+        materiais = Materiais.query.order_by(Materiais.nome).all()
         
         # Transforma em JSON
         result = []
@@ -46,7 +47,7 @@ def api_materiais_para_traco():
 def api_conversoes_unidade():
     """Retorna todas as conversões de unidade cadastradas"""
     try:
-        conversoes = ConversaoUnidade.query.all()
+        conversoes = UnidadesConversao.query.all()
         resultado = []
         
         for conversao in conversoes:
@@ -71,7 +72,7 @@ def api_conversoes_unidade():
 @login_required
 def listar_tracos():
     """Lista todos os traços de concreto cadastrados"""
-    tracos = TracoConcreto.query.order_by(TracoConcreto.nome).all()
+    tracos = ConcretoTracos.query.order_by(ConcretoTracos.nome).all()
     visualizar_id = request.args.get('visualizar_id')
     
     return render_template('usinagem_concreto/tracos/index.html', 
@@ -82,8 +83,8 @@ def listar_tracos():
 @login_required
 def novo_traco():
     """Cria um novo traço de concreto"""
-    materiais = Material.query.order_by(Material.nome).all()
-    conversoes = ConversaoUnidade.query.all()
+    materiais = Materiais.query.order_by(Materiais.nome).all()
+    conversoes = UnidadesConversao.query.all()
     
     # Verificar se a submissão veio do modal
     via_modal = request.args.get('via_modal') or request.form.get('via_modal')
@@ -113,7 +114,7 @@ def novo_traco():
                 return render_template('usinagem_concreto/tracos/novo.html', materiais=materiais, conversoes=conversoes)
             
             # Verificar se já existe traço com o mesmo código
-            if TracoConcreto.query.filter_by(codigo=codigo).first():
+            if ConcretoTracos.query.filter_by(codigo=codigo).first():
                 print(f"ERRO: Já existe um traço com o código {codigo}")
                 flash('Já existe um traço de concreto com este código', 'danger')
                 if via_modal:
@@ -133,7 +134,7 @@ def novo_traco():
                     return render_template('usinagem_concreto/tracos/novo.html', materiais=materiais, conversoes=conversoes)
             
             # Criar novo traço
-            traco = TracoConcreto(
+            traco = ConcretoTracos(
                 codigo=codigo,
                 nome=nome,
                 descricao=descricao,
@@ -190,7 +191,7 @@ def novo_traco():
                     print(f"  - Material {i+1}: ID ou Quantidade vazios, pulando")
                     continue
                     
-                material = Material.query.get(material_id)
+                material = Materiais.query.get(material_id)
                 if not material:
                     print(f"  - Material {i+1}: Material ID={material_id} não encontrado, pulando")
                     continue

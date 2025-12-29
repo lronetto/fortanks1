@@ -3,7 +3,7 @@ Controlador para gerenciar unidades de medida
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from models.database import db
-from models.unidade import Unidade
+from models.unidade import Unidades
 from flask_login import login_required
 import logging
 
@@ -16,7 +16,7 @@ unidade_bp = Blueprint('unidade', __name__, url_prefix='/admin/unidades')
 def listar():
     """Lista todas as unidades"""
     try:
-        unidades = Unidade.query.order_by(Unidade.nome).all()
+        unidades = Unidades.query.order_by(Unidades.nome).all()
         return render_template('unidades/index.html', unidades=unidades)
     except Exception as e:
         logger.error(f"Erro ao listar unidades: {str(e)}")
@@ -38,19 +38,19 @@ def criar():
                 return render_template('unidades/form.html')
             
             # Verifica se já existe uma unidade com o mesmo nome
-            unidade_existente = Unidade.query.filter(Unidade.nome.ilike(nome)).first()
+            unidade_existente = Unidades.query.filter(Unidades.nome.ilike(nome)).first()
             if unidade_existente:
                 flash(f"Já existe uma unidade com o nome {nome}", "warning")
                 return render_template('unidades/form.html')
             
             # Se for definida como padrão, remove o padrão das outras
             if padrao:
-                unidades_padrao = Unidade.query.filter_by(padrao=True).all()
+                unidades_padrao = Unidades.query.filter_by(padrao=True).all()
                 for u in unidades_padrao:
                     u.padrao = False
             
             # Cria a nova unidade
-            unidade = Unidade(
+            unidade = Unidades(
                 nome=nome,
                 descricao=descricao,
                 padrao=padrao
@@ -74,7 +74,7 @@ def criar():
 @login_required
 def editar(id):
     """Edita uma unidade existente"""
-    unidade = Unidade.query.get_or_404(id)
+    unidade = Unidades.query.get_or_404(id)
     
     if request.method == 'POST':
         try:
@@ -88,9 +88,9 @@ def editar(id):
                 return render_template('unidades/form.html', unidade=unidade)
             
             # Verifica se já existe outra unidade com o mesmo nome
-            unidade_existente = Unidade.query.filter(
-                Unidade.nome.ilike(nome), 
-                Unidade.id != id
+            unidade_existente = Unidades.query.filter(
+                Unidades.nome.ilike(nome), 
+                Unidades.id != id
             ).first()
             
             if unidade_existente:
@@ -99,7 +99,7 @@ def editar(id):
             
             # Se for definida como padrão, remove o padrão das outras
             if padrao and not unidade.padrao:
-                unidades_padrao = Unidade.query.filter_by(padrao=True).all()
+                unidades_padrao = Unidades.query.filter_by(padrao=True).all()
                 for u in unidades_padrao:
                     u.padrao = False
             
@@ -127,7 +127,7 @@ def editar(id):
 def excluir(id):
     """Exclui uma unidade"""
     try:
-        unidade = Unidade.query.get_or_404(id)
+        unidade = Unidades.query.get_or_404(id)
         
         # Verifica se a unidade está sendo usada
         if hasattr(unidade, 'materiais') and unidade.materiais:
@@ -156,7 +156,7 @@ def excluir(id):
 def api_todas():
     """API para listar todas as unidades"""
     try:
-        unidades = Unidade.query.filter_by(ativo=True).order_by(Unidade.nome).all()
+        unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
         
         resultado = []
         for unidade in unidades:

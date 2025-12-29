@@ -2,8 +2,13 @@ from datetime import datetime
 from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file, current_app
 from io import BytesIO
 from werkzeug.exceptions import abort
-from models import db, ProdutoComposto, Estoque, Material, ProdutoCompostoItem, MovimentacaoEstoque, NotaFiscal, NotaFiscalItem
+from models.estoque import Estoque,EstoqueMovimentacoes
 from flask_login import login_required, current_user
+from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
+from models.nota_fiscal import NotaFiscal, NotaFiscalItem
+from models.material import Materiais
+
+from models.database import db
 import logging
 import base64
 from PIL import Image
@@ -35,7 +40,7 @@ def _resolver_estoque_id_para_componente(estoque_id_raw):
             raise ValueError("material_id inválido no estoque_id")
         material_id = int(material_id_txt)
 
-        material = Material.query.get_or_404(material_id)
+        material = Materiais.query.get_or_404(material_id)
         estoque = Estoque.query.filter_by(material_id=material.id, tipo_item='material').first()
         if not estoque:
             estoque = Estoque(
@@ -229,7 +234,7 @@ def form(id=None):
     Renderiza o formulário para novo ou edição de produto composto.
     """
     produto = ProdutoComposto.query.get_or_404(id) if id else None
-    itens_estoque = Estoque.query.join(Material).order_by(Material.nome).all()
+    itens_estoque = Estoque.query.join(Materiais).order_by(Materiais.nome).all()
     return render_template('produto_composto/modais/form.html', produto=produto, itens_estoque=itens_estoque)
 
 
@@ -508,7 +513,7 @@ def produzir():
             material.estoque_atual -= quantidade_necessaria
             
             # Registrar movimentação de saída
-            movimentacao = MovimentacaoEstoque(
+            movimentacao = EstoqueMovimentacoes(
                 material_id=material.id,
                 quantidade=-quantidade_necessaria,
                 tipo='saida_producao',
@@ -601,11 +606,11 @@ def api_itens_estoque():
 
     query = (
         Estoque.query.options(
-            joinedload(Estoque.material).joinedload(Material.unidade_obj),
+            joinedload(Estoque.material).joinedload(Materiais.unidade_obj),
             joinedload(Estoque.produto_composto),
         )
         .filter(or_(Estoque.material_id.isnot(None), Estoque.ProdComp_id.isnot(None)))
-        .outerjoin(Material, Estoque.material_id == Material.id)
+        .outerjoin(Materiais, Estoque.material_id == Materiais.id)
         .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
     )
 
@@ -613,13 +618,13 @@ def api_itens_estoque():
         like = f'%{search_term}%'
         query = query.filter(
             or_(
-                Material.nome.ilike(like),
-                Material.codigo.ilike(like),
+                Materiais.nome.ilike(like),
+                Materiais.codigo.ilike(like),
                 ProdutoComposto.nome.ilike(like),
             )
         )
 
-    itens = query.order_by(func.coalesce(Material.nome, ProdutoComposto.nome).asc()).limit(200).all()
+    itens = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).limit(200).all()
 
     results = []
     for item in itens:
@@ -636,12 +641,12 @@ def api_itens_estoque():
 
     # [M] = material em material.py que não está em estoque.py (sem registro em Estoque)
     materiais_query = (
-        Material.query.options(joinedload(Material.unidade_obj))
-        .filter(Material.ativo.is_(True))
+        Materiais.query.options(joinedload(Materiais.unidade_obj))
+        .filter(Materiais.ativo.is_(True))
         .outerjoin(
             Estoque,
             and_(
-                Estoque.material_id == Material.id,
+                Estoque.material_id == Materiais.id,
                 Estoque.tipo_item == 'material',
             ),
         )
@@ -649,11 +654,11 @@ def api_itens_estoque():
     )
     if search_term:
         like = f'%{search_term}%'
-        materiais_query = materiais_query.filter(or_(Material.nome.ilike(like), Material.codigo.ilike(like)))
+        materiais_query = materiais_query.filter(or_(Materiais.nome.ilike(like), Materiais.codigo.ilike(like)))
 
-    materiais_sem_estoque = materiais_query.order_by(Material.nome.asc()).limit(200).all()
+    materiais_sem_estoque = materiais_query.order_by(Materiais.nome.asc()).limit(200).all()
     for material in materiais_sem_estoque:
-        sigla = material.unidade_obj.sigla if (material.unidade_obj and hasattr(material.unidade_obj, "sigla")) else None
+        sigla = material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, "sigla")) else None
         unidade_txt = f" ({sigla})" if sigla else ""
         codigo_txt = f"{material.codigo} - " if material.codigo else ""
         results.append({'id': f"material:{material.id}", 'text_sort': material.nome.lower(), 'text': f"[M] {codigo_txt}{material.nome}{unidade_txt}",'tipo': 'material'})

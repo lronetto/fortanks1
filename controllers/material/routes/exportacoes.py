@@ -9,7 +9,7 @@ import pandas as pd
 from flask import flash, redirect, send_file, url_for
 from flask_login import login_required
 
-from models.material import Material
+from models.material import Materiais
 from models.nota_fiscal import NotaFiscalItem
 from models.database import db
 
@@ -31,7 +31,7 @@ def exportar_excel():
     Exportação completa (legada). Mantida em formato reduzido.
     """
     try:
-        materiais = Material.query.all()
+        materiais = Materiais.query.all()
         dados_exportacao = []
         for mat in materiais:
             itens = NotaFiscalItem.query.filter_by(material_id=mat.id).all()
@@ -110,7 +110,7 @@ def exportar_mega():
         wb = openpyxl.load_workbook(template_path)
         ws = wb.active
 
-        materiais = Material.query.filter_by(ativo=True).order_by(Material.nome).all()
+        materiais = Materiais.query.filter_by(ativo=True).order_by(Materiais.nome).all()
         linha_atual = 7
 
         for material in materiais:

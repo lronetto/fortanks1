@@ -1,6 +1,10 @@
 import logging
 from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify
-from models import Concretagem, Tanque, Peca, Concretagem, ConcretagemTanque, UsinagemConcreto, db, CentroCusto, Contrato
+from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques,ConcretoUsinagens
+from models.tanque import Tanques, TanquesPecas, TanquesProdutoComposto
+from models.contrato import Contrato
+from models.centro_custo import CentroCusto
+from models.database import db
 from flask_login import login_required
 #from flask_wtf.csrf import csrf_exempt
 import json
@@ -17,10 +21,10 @@ concretagem = Blueprint('concretagem', __name__, url_prefix='/concretagens')
 @login_required
 def index():
     """Lista todas as concretagens cadastradas"""
-    concretagens = Concretagem.query.all()
+    concretagens = ConcretoConcretagens.query.all()
     # Buscar dados para o modal de nova concretagem
-    tanques = Tanque.query.join(Contrato).join(CentroCusto).order_by(CentroCusto.nome).all()
-    usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc(),UsinagemConcreto.nbt.desc(),UsinagemConcreto.nota.desc()).all()
+    tanques = Tanques.query.join(Contrato).join(CentroCusto).order_by(CentroCusto.nome).all()
+    usinagens = ConcretoUsinagens.query.order_by(ConcretoUsinagens.data_usinagem.desc(),ConcretoUsinagens.nbt.desc(),ConcretoUsinagens.nota.desc()).all()
     
     return render_template('concretagens/index.html', 
                            concretagens=concretagens,
@@ -31,7 +35,7 @@ def index():
 @login_required
 def novo():
     """Cria uma nova concretagem"""
-    tanques = Tanque.query.order_by(Tanque.nome).all()
+    tanques = Tanques.query.order_by(Tanques.nome).all()
     
     if request.method == 'POST':
         try:
@@ -64,13 +68,13 @@ def novo():
             
             # Adicionar os tanques selecionados
             for tanque_id in tanque_ids:
-                tanque = Tanque.query.get(tanque_id)
+                tanque = Tanques.query.get(tanque_id)
                 if tanque:
                     concretagem.adicionar_tanque(tanque)
             
             # Adicionar peças com suas formas
             for i, peca_id in enumerate(peca_ids):
-                peca = Peca.query.get(peca_id)
+                peca = TanquesPecas.query.get(peca_id)
                 if peca and str(peca.tanque_id) in tanque_ids:
                     # Obter a forma correspondente, se existir
                     forma = formas[i] if i < len(formas) else None
@@ -92,9 +96,9 @@ def novo():
 @login_required
 def editar(id):
     """Edita uma concretagem existente"""
-    concretagem = Concretagem.query.get_or_404(id)
-    tanques = Tanque.query.order_by(Tanque.nome).all()
-    usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc()).all()
+    concretagem = ConcretoConcretagens.query.get_or_404(id)
+    tanques = Tanques.query.order_by(Tanques.nome).all()
+    usinagens = ConcretoUsinagens.query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
     
     if request.method == 'POST':
         try:
@@ -137,7 +141,7 @@ def editar(id):
             
             # Depois adicionamos as novas associações
             for tanque_id in tanque_ids:
-                tanque = Tanque.query.get(tanque_id)
+                tanque = Tanques.query.get(tanque_id)
                 if tanque:
                     concretagem.adicionar_tanque(tanque)
             
@@ -148,16 +152,16 @@ def editar(id):
             
             # Depois adicionamos as novas associações
             for i, peca_id in enumerate(peca_ids):
-                peca = Peca.query.get(peca_id)
+                peca = TanquesPecas.query.get(peca_id)
                 if peca and str(peca.tanque_id) in tanque_ids:
                     # Obter a forma correspondente, se existir
                     forma = formas[i] if i < len(formas) else None
                     
                     # Obter a usinagem correspondente, se existir
                     usinagem_id = usinagem_ids[i] if i < len(usinagem_ids) and usinagem_ids[i] else None
-                    usinagem = UsinagemConcreto.query.get(usinagem_id) if usinagem_id else None
+                    usinagem = ConcretoUsinagens.query.get(usinagem_id) if usinagem_id else None
                     
-                    cp = ConcretagemPeca(
+                    cp = ConcretoConcretagensTanques(
                         concretagem=concretagem, 
                         peca=peca, 
                         forma=forma,
@@ -188,7 +192,7 @@ def editar(id):
 @login_required
 def visualizar(id):
     """Visualiza detalhes de uma concretagem"""
-    concretagem = Concretagem.query.get_or_404(id)
+    concretagem = ConcretoConcretagens.query.get_or_404(id)
     # Obtemos as associações para ter acesso às formas de cada peça e usinagens
     pecas_com_dados = [(cp.peca, cp.forma, cp.usinagem) for cp in concretagem.pecas_associadas]
     # Obtemos os tanques associados
@@ -204,7 +208,7 @@ def excluir(id):
     """Exclui uma concretagem"""
     try:
         print(f"Iniciando exclusão da concretagem {id}")
-        concretagem = Concretagem.query.get_or_404(id)
+        concretagem = ConcretoConcretagens.query.get_or_404(id)
         print(f"Concretagem encontrada: {concretagem}")
         
         # Obter nomes dos tanques para mensagem de confirmação
@@ -250,7 +254,7 @@ def get_pecas_por_tanque(tanque_id):
         logging.info(f"[API] Buscando peças para o tanque ID: {tanque_id}")
         
         # Verificar se o tanque existe
-        tanque = Tanque.query.get(tanque_id)
+        tanque = Tanques.query.get(tanque_id)
         if not tanque:
             print(f"[API] Tanque ID {tanque_id} não encontrado")
             logging.warning(f"[API] Tanque ID {tanque_id} não encontrado")
@@ -261,11 +265,11 @@ def get_pecas_por_tanque(tanque_id):
         print(f"[API] Filtro mostrar_nao_concretadas: {mostrar_nao_concretadas}")
         
         # Obter todas as peças do tanque
-        pecas = Peca.query.filter_by(tanque_id=tanque_id).order_by(Peca.numero_sequencial).all()
+        pecas = TanquesPecas.query.filter_by(tanque_id=tanque_id).order_by(TanquesPecas.numero_sequencial).all()
         print(f"[API] Quantidade de peças encontradas: {len(pecas)}")
         
         # Obter IDs de peças já concretadas
-        pecas_concretadas_ids = db.session.query(ConcretagemPeca.peca_id).distinct().all()
+        pecas_concretadas_ids = db.session.query(ConcretoConcretagensTanques.peca_id).distinct().all()
         pecas_concretadas_ids = [p[0] for p in pecas_concretadas_ids]
         print(f"[API] Peças já concretadas: {len(pecas_concretadas_ids)}")
         
@@ -310,7 +314,7 @@ def get_concretagem_por_id(concretagem_id):
         print(f"[API] Buscando dados da concretagem ID: {concretagem_id}")
         
         # Buscar a concretagem
-        concretagem = Concretagem.query.get_or_404(concretagem_id)
+        concretagem = ConcretoConcretagens.query.get_or_404(concretagem_id)
         
         # Buscar os tanques associados
         tanques = []
@@ -365,7 +369,7 @@ def get_pecas_concretagem(concretagem_id):
         print(f"[API] Buscando peças da concretagem ID: {concretagem_id}")
         
         # Buscar a concretagem
-        concretagem = Concretagem.query.get_or_404(concretagem_id)
+        concretagem = ConcretoConcretagens.query.get_or_404(concretagem_id)
         
         # Buscar as peças associadas
         pecas = []

@@ -26,8 +26,8 @@ from models.colaborador import Colaborador, DadosBancarios
 from models.departamento import Departamento
 from models.cargo import Cargo
 from models.usuario import Usuario
-from models.epi import EntregaEPI, EPI
-from models.usinagem_concreto import UsinagemConcreto
+from models.epi import EpiEntregas, Epi
+from models.concreto import ConcretoUsinagens
 
 colaborador_bp = Blueprint('colaborador', __name__)
 
@@ -248,13 +248,13 @@ def excluir(id):
     # Verifica se o colaborador tem vínculos que impedem a exclusão
     
     # Verificar se o colaborador possui entregas de EPIs
-    entregas_epi = EntregaEPI.query.filter_by(colaborador_id=id).count()
+    entregas_epi = EpiEntregas.query.filter_by(colaborador_id=id).count()
     if entregas_epi > 0:
         flash(f'Não é possível excluir o colaborador {nome_colaborador} pois existem {entregas_epi} entregas de EPIs vinculadas a ele.', 'danger')
         return redirect(url_for('colaborador.index'))
         
     # Verificar se o colaborador é responsável por usinagens de concreto
-    usinagens = UsinagemConcreto.query.filter_by(responsavel_id=id).count()
+    usinagens = ConcretoUsinagens.query.filter_by(responsavel_id=id).count()
     if usinagens > 0:
         flash(f'Não é possível excluir o colaborador {nome_colaborador} pois é responsável por {usinagens} usinagens de concreto.', 'danger')
         return redirect(url_for('colaborador.index'))

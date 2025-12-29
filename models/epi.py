@@ -1,16 +1,15 @@
 from datetime import datetime
 from models.database import db
 from models.colaborador import Colaborador
-from models.material import Material
 from decimal import Decimal
 
 
-class EPI(db.Model):
-    __tablename__ = 'epis'
+class Epi(db.Model):
+    __tablename__ = 'Epi'
     
     id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(db.Integer, db.ForeignKey('materiais.id'), nullable=False)
-    material = db.relationship('Material', backref='epi_materiais')
+    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'), nullable=False)
+    material = db.relationship('Materiais', backref='epi_materiais')
     ca_numero = db.Column(db.String(20))  # Certificado de Aprovação
     data_validade = db.Column(db.Date)
     vida_util_meses = db.Column(db.Integer)
@@ -21,7 +20,7 @@ class EPI(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'))
 
-    entregas_epi = db.relationship('EntregaEPI', back_populates='epi')
+    entregas_epi = db.relationship('EpiEntregas', back_populates='epi')
     
     def to_dict(self):
         return {
@@ -193,14 +192,14 @@ class EPI(db.Model):
         else:
             return "Válido"
 
-class EntregaEPI(db.Model):
-    __tablename__ = 'entregas_epi'
+class EpiEntregas(db.Model):
+    __tablename__ = 'EpiEntregas'
     
     id = db.Column(db.Integer, primary_key=True)
     colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'), nullable=False)
     colaborador = db.relationship('Colaborador', backref='entregas_epi')
-    epi_id = db.Column(db.Integer, db.ForeignKey('epis.id'), nullable=False)
-    epi = db.relationship('EPI', back_populates='entregas_epi',foreign_keys=[epi_id])
+    epi_id = db.Column(db.Integer, db.ForeignKey('Epi.id'), nullable=False)
+    epi = db.relationship('Epi', back_populates='entregas_epi', foreign_keys=[epi_id])
     data_entrega = db.Column(db.Date, nullable=False, default=datetime.now().date())
     data_devolucao = db.Column(db.Date)
     quantidade = db.Column(db.Integer, default=1)
@@ -208,8 +207,8 @@ class EntregaEPI(db.Model):
     assinado = db.Column(db.Boolean, default=False)
     motivo = db.Column(db.String(100))  # Novo, Reposição, etc.
     observacoes = db.Column(db.Text)
-    movimentacao_estoque_id = db.Column(db.Integer, db.ForeignKey('movimentacoes_estoque.id'), nullable=True)
-    movimentacao_estoque = db.relationship('MovimentacaoEstoque', back_populates='entregas_epi',foreign_keys=[movimentacao_estoque_id])
+    movimentacao_estoque_id = db.Column(db.Integer, db.ForeignKey('EstoqueMovimentacoes.id'), nullable=True)
+    movimentacao_estoque = db.relationship('EstoqueMovimentacoes', back_populates='entregas_epi',foreign_keys=[movimentacao_estoque_id])
     
     # Controle de auditoria
     criado_em = db.Column(db.DateTime, default=datetime.now)
@@ -270,9 +269,8 @@ class EntregaEPI(db.Model):
         # Ao excluir uma entrega, restaura o estoque
         if not self.data_devolucao:
             # Garantir que o objeto EPI esteja carregado
-            from models.epi import EPI
             if self.epi_id and not hasattr(self, '_epi') or self.epi is None:
-                self.epi = EPI.query.get(self.epi_id)
+                self.epi = Epi.query.get(self.epi_id)
             
             if self.epi is None:
                 raise ValueError("EPI não encontrado ou não especificado")
@@ -308,9 +306,8 @@ class EntregaEPI(db.Model):
                     
             # Ao registrar uma devolução, aumenta o estoque
             # Garantir que o objeto EPI esteja carregado
-            from models.epi import EPI
             if self.epi_id and not hasattr(self, '_epi') or self.epi is None:
-                self.epi = EPI.query.get(self.epi_id)
+                self.epi = Epi.query.get(self.epi_id)
             
             if self.epi is None:
                 raise ValueError("EPI não encontrado ou não especificado")
