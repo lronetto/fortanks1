@@ -29,9 +29,9 @@ ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 CNPJS_FILIAIS = ['27126997000349','27126997000268','27126997000420']
 CNPJS_MATRIZ = ['27126997000187']
 CNPJS_MATRIZ_FILIAIS = CNPJS_MATRIZ + CNPJS_FILIAIS
-CFOPS_COMPRA = [6101,5101,5405,6105,6401]
-CFOPS_VENDA = [6101,5101,6107]
-CFOPS_TRANSFERENCIA = [5949,6949]
+CFOPS_COMPRA = ['6101','5101','5405','6105','6401']
+CFOPS_VENDA = ['6101','5101','6107']
+CFOPS_TRANSFERENCIA = ['5949','6949']
 
 def determinar_movimentacoes_estoque(nota_fiscal):
     """
@@ -310,9 +310,10 @@ class NotaFiscal(db.Model):
         inseridos=0
         notas_log = []
         if total > 0:
-            
+            notas=[]
             for xml_data in notas.xml_datas:
                 nf = NotaFiscal(xml_data=xml_data,tipo=tipo)
+                notas.append(nf)
                 existente+=(1 if nf.existente else 0)
                 inseridos+=(1 if nf.inserido else 0)
                 i+=1
@@ -328,7 +329,9 @@ class NotaFiscal(db.Model):
             'notas_processadas': i,
             'notas': notas_log
         }
-        Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log, ensure_ascii=False, default=str))      
+        Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log, ensure_ascii=False, default=str)) 
+        for nf in notas:
+            nf.get_pdf()
     def processar_cte(self):
         chave_acesso, dados = self.extrair_dados_xml_cte()
         #print(f'dados: {dados}')

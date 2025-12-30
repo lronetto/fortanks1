@@ -10,7 +10,7 @@ from flask_login import login_required
 from sqlalchemy import or_
 
 from models.database import db
-from models.nota_fiscal import NotaFiscal, NotaFiscalItem
+from models.nota_fiscal import NotaFiscal, NotaFiscalItem, CFOPS_VENDA, CFOPS_TRANSFERENCIA, CNPJS_MATRIZ_FILIAIS
 from models.upload import Upload
 
 from .. import nota_fiscal_bp
@@ -150,30 +150,98 @@ def exportar_zip():
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
-        excel_data = []
+        excel_cte_data = []
+        excel_nfe_data = []
+        excel_nfe_vendas_data = []
+        excel_transfer_data = []
         for row in notas:
             nota = getattr(row, "NotaFiscal", None) or row[0]
+            pagamento = getattr(row, "pagamento", None) or row[1]
             tipo = "NFe" if nota.tipo in [0, 1] else ("CTe" if nota.tipo == 2 else "NFSe")
             xml_bytes = base64.b64decode(nota.xml_data) if nota.xml_data else b""
             data_emissao = nota.data_emissao.strftime("%d_%m_%Y") if nota.data_emissao else ""
             zipf.writestr(f"{tipo} {data_emissao}_{nota.nome_emitente}_{nota.numero_nf}.xml", xml_bytes)
+            upload = Upload.query.filter_by(pai="NotaFiscal", pai_id=nota.id).order_by(Upload.tipo).all()
+            if upload:
+                # Filtra apenas uploads válidos (com blob) e conta por tipo
+                uploads_validos = [u for u in upload if u.blob]
+                contagem_por_tipo = {}
+                for u in uploads_validos:
+                    if u.tipo in [1, 2, 3]:
+                        contagem_por_tipo[u.tipo] = contagem_por_tipo.get(u.tipo, 0) + 1
+                
+                # Contador para evitar nomes duplicados no ZIP
+                pdf_counters = {1: 0, 2: 0, 3: 0}
+                base_name = f"{tipo} {data_emissao}_{nota.nome_emitente}_{nota.numero_nf}"
+                
+                for u in uploads_validos:
+                    if u.tipo not in [1, 2, 3]:
+                        continue
+                    
+                    # Usa o método get_blob() que já faz a decodificação corretamente
+                    blob_bytes = u.get_blob()
+                    if not blob_bytes:
+                        logger.warning(f"Erro ao decodificar blob do upload {u.id} (tipo {u.tipo}) da nota {nota.numero_nf}. Pulando...")
+                        continue
+                    
+                    # Incrementa contador antes de gerar nome
+                    pdf_counters[u.tipo] += 1
+                    
+                    # Gera nome do arquivo com sufixo se houver múltiplos uploads do mesmo tipo
+                    if contagem_por_tipo.get(u.tipo, 0) > 1:
+                        filename = f"{base_name}_{pdf_counters[u.tipo]}.pdf"
+                    else:
+                        filename = f"{base_name}.pdf"
+                    
+                    zipf.writestr(filename, blob_bytes)
+            excel={
+                "Data": nota.data_emissao.strftime("%d/%m/%Y") if nota.data_emissao else "",
+                "Fornecedor": nota.nome_emitente,
+                "Número": nota.numero_nf,
+                "Tipo": tipo ,
+                "Valor": float(nota.valor_total) if nota.valor_total is not None else 0.0,
+                "Chave de Acesso": nota.chave_acesso,
+                "cnpj_emitente": nota.cnpj_emitente,
+                "cnpj_destinatario": nota.cnpj_destinatario,
+                "Protocolo": "sim" if 2 in [u.tipo for u in upload] else "nao",
+                "Pagamento": "sim" if pagamento == 1 else "nao",
+            }
+            if tipo == "CTe":
+                excel_cte_data.append(excel)
+            elif tipo == "NFe":
+                # Verifica se é venda (emitente é matriz/filial e tem CFOP de venda)
+                if nota.cnpj_emitente in CNPJS_MATRIZ_FILIAIS:
+                    tem_cfop_venda = any(i.cfop in CFOPS_VENDA for i in nota.itens)
+                    tem_cfop_transferencia = any(i.cfop in CFOPS_TRANSFERENCIA for i in nota.itens)
+                    
+                    if tem_cfop_venda:
+                        excel_nfe_vendas_data.append(excel)
+                    elif tem_cfop_transferencia or (nota.cnpj_destinatario in CNPJS_MATRIZ_FILIAIS):
+                        # Transferência entre matriz/filiais
+                        excel_transfer_data.append(excel)
+                    else:
+                        # Outros casos (ex: devoluções, etc)
+                        excel_nfe_data.append(excel)
+                else:
+                    # Compra externa
+                    excel_nfe_data.append(excel)
 
-            excel_data.append(
-                {
-                    "Data": nota.data_emissao.strftime("%d/%m/%Y") if nota.data_emissao else "",
-                    "Fornecedor": nota.nome_emitente,
-                    "Número": nota.numero_nf,
-                    "Tipo": "NFe" if nota.tipo in [0, 1] else ("CTE" if nota.tipo == 2 else "NFSe"),
-                    "Valor": float(nota.valor_total) if nota.valor_total is not None else 0.0,
-                    "Chave de Acesso": nota.chave_acesso,
-                    "cnpj_emitente": nota.cnpj_emitente,
-                    "cnpj_destinatario": nota.cnpj_destinatario,
-                }
-            )
-
-        df = pd.DataFrame(excel_data)
+        # Usa ExcelWriter para escrever múltiplas sheets no mesmo arquivo
         excel_buffer = io.BytesIO()
-        df.to_excel(excel_buffer, index=False, sheet_name="Notas Fiscais")
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+            if excel_cte_data:
+                df_cte = pd.DataFrame(excel_cte_data)
+                df_cte.to_excel(writer, index=False, sheet_name="CTE")
+            if excel_nfe_data:
+                df_nfe = pd.DataFrame(excel_nfe_data)
+                df_nfe.to_excel(writer, index=False, sheet_name="NFe")
+            if excel_nfe_vendas_data:
+                df_nfe_vendas = pd.DataFrame(excel_nfe_vendas_data)
+                df_nfe_vendas.to_excel(writer, index=False, sheet_name="NFe Vendas")
+            if excel_transfer_data:
+                df_transfer = pd.DataFrame(excel_transfer_data)
+                df_transfer.to_excel(writer, index=False, sheet_name="Transferência")
+        
         excel_buffer.seek(0)
         zipf.writestr("notas_fiscais.xlsx", excel_buffer.read())
 
