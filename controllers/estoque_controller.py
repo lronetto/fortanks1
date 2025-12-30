@@ -1344,7 +1344,7 @@ def exportar_excel():
         
         if termo_busca:
             termo = f"%{termo_busca}%"
-            query = query.outerjoin(Material, Estoque.material_id == Materiais.id).outerjoin(
+            query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id).outerjoin(
                 ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id).filter(
                 or_(
                     Materiais.nome.ilike(termo),
@@ -1365,7 +1365,7 @@ def exportar_excel():
         
         # Garantir joins com Material e ProdutoComposto
         if not termo_busca:
-            query = query.outerjoin(Material, Estoque.material_id == Materiais.id)\
+            query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id)\
                          .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
         
         # Se o filtro de ignorar localizações estiver ativo, agrupar por material/produto
@@ -1421,26 +1421,29 @@ def exportar_excel():
             codigo_material = None
             nome = None
             codigo_alterdata = None
-            
+            unidade = None
             if item.material:
                 codigo_material = item.material.id or item.material.codigo or "N/A"
                 nome = item.material.nome
-                codigo_alterdata = item.material.codigo_erp or "N/A"
+                codigo_alterdata = str(item.material.codigo_erp).replace(".0", "") if item.material.codigo_erp else "N/A"
+                unidade = item.material.unidade_obj.nome if item.material.unidade_obj else "N/A"
             elif item.produto_composto:
                 codigo_material = item.produto_composto.id or "N/A"
                 nome = item.produto_composto.nome
                 codigo_alterdata = "N/A"
+                unidade = "UN"
             else:
                 codigo_material = "N/A"
                 nome = "Item sem descrição"
                 codigo_alterdata = "N/A"
+                unidade = "N/A"
             
             dados_excel.append({
-                'Código Estoque': codigo_estoque,
-                'Código Material': codigo_material,
                 'Código Alterdata': codigo_alterdata,
                 'Nome': nome,
-                'Estoque Atual': float(saldo_real)
+                'Unidade': unidade,
+                'Estoque Atual': float(saldo_real),
+                'Código Estoque': codigo_estoque
             })
         
         # Criar DataFrame

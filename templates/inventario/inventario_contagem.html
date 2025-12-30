@@ -60,6 +60,9 @@
                         <i class="fas fa-plus"></i> Adicionar Item
                     </button>
                 {% endif %}
+                <button type="button" class="btn btn-warning btn-sm mr-2" id="btnFiltrarNaoContados" title="Mostrar apenas itens não contados">
+                    <i class="fas fa-exclamation-circle"></i> Não Contados
+                </button>
                 <button type="button" class="btn btn-info btn-sm" data-toggle="collapse" data-target="#filtrosCollapse">
                     <i class="fas fa-filter"></i> Filtros
                 </button>
@@ -288,6 +291,33 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block styles %}
+<style>
+    /* Destaque para linhas não contadas */
+    .item-row.nao-contado {
+        background-color: #fff3cd !important;
+    }
+    
+    .item-row.nao-contado:hover {
+        background-color: #ffeaa7 !important;
+    }
+    
+    /* Destaque para linhas contadas (opcional - para contraste) */
+    .item-row.contado {
+        background-color: #ffffff;
+    }
+    
+    .item-row.contado:hover {
+        background-color: #f8f9fa;
+    }
+    
+    /* Destaque para linhas com divergência */
+    .item-row.divergente {
+        border-left: 4px solid #dc3545;
+    }
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -702,9 +732,32 @@
         $('#filtroTipo, #filtroStatus').change(aplicarFiltros);
         $('#filtroBusca').on('input', aplicarFiltros);
         
+        // Botão rápido para filtrar apenas não contados
+        let filtroNaoContadosAtivo = false;
+        $('#btnFiltrarNaoContados').click(function() {
+            filtroNaoContadosAtivo = !filtroNaoContadosAtivo;
+            
+            if (filtroNaoContadosAtivo) {
+                // Ativar filtro de não contados
+                $('#filtroStatus').val('nao-contado');
+                $(this).removeClass('btn-warning').addClass('btn-danger');
+                $(this).html('<i class="fas fa-times-circle"></i> Limpar Filtro');
+            } else {
+                // Limpar filtro
+                $('#filtroStatus').val('');
+                $(this).removeClass('btn-danger').addClass('btn-warning');
+                $(this).html('<i class="fas fa-exclamation-circle"></i> Não Contados');
+            }
+            
+            aplicarFiltros();
+        });
+        
         $('#btnLimparFiltros').click(function() {
             $('#filtroTipo, #filtroStatus').val('');
             $('#filtroBusca').val('');
+            filtroNaoContadosAtivo = false;
+            $('#btnFiltrarNaoContados').removeClass('btn-danger').addClass('btn-warning');
+            $('#btnFiltrarNaoContados').html('<i class="fas fa-exclamation-circle"></i> Não Contados');
             aplicarFiltros();
         });
         

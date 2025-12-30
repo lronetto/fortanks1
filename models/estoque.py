@@ -814,18 +814,13 @@ class EstoqueInventarios(db.Model):
 
         # Se o inventário estava concluído, desfazer movimentações de ajuste criadas na finalização
         if self.status == 'Concluído':
-            movimentacoes = EstoqueMovimentacoes.query.filter_by(
-                origem_tipo='InventarioEstoque',
+            
+            db.session.query(EstoqueMovimentacoes).filter_by(
+                origem_tipo='EstoqueInventarios',
                 origem_id=self.id
-            ).all()
-            itens_por_estoque = {item.estoque_id: item for item in self.itens}
+            ).delete()
 
-            for movimento in movimentacoes:
-                item_ref = itens_por_estoque.get(movimento.estoque_id)
-                if movimento.estoque and item_ref:
-                    movimento.estoque.quantidade = item_ref.quantidade_sistema
-                    db.session.add(movimento.estoque)
-                db.session.delete(movimento)
+            
 
         # Voltar para status em andamento para permitir nova contagem
         self.status = 'Em andamento'

@@ -58,7 +58,7 @@ def determinar_movimentacoes_estoque(nota_fiscal):
         movimentacoes.append(("Estoque Matriz", "entrada"))
     
     # Caso 2: Compra externa para Filial
-    elif cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario in CNPJS_MATRIZ:
+    elif cnpj_emitente not in CNPJS_MATRIZ_FILIAIS and cnpj_destinatario in CNPJS_FILIAIS:
         movimentacoes.append((f"Estoque Filial {cnpj_destinatario}", "entrada"))
     
     # Caso 3: Transferência Matriz -> Filial
@@ -79,9 +79,9 @@ def determinar_movimentacoes_estoque(nota_fiscal):
                 movimentacoes.append(("Estoque Matriz", "entrada"))
         if cnpj_emitente in CNPJS_FILIAIS:
             if nota_fiscal.tipo == 1:
-                movimentacoes.append(("Estoque Filial {cnpj_emitente}", "saida"))
+                movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "saida"))
             else:
-                movimentacoes.append(("Estoque Filial {cnpj_emitente}", "entrada"))
+                movimentacoes.append((f"Estoque Filial {cnpj_emitente}", "entrada"))
     # Caso 6: Transferência matriz para matriz
     elif cnpj_emitente in CNPJS_MATRIZ and cnpj_destinatario in CNPJS_MATRIZ:
         if nota_fiscal.tipo == 1:

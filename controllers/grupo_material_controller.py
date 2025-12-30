@@ -499,10 +499,21 @@ def api_listar_json():
         
         # Obter todos os grupos (não apenas ativos)
         grupos = query.order_by(MateriaisGrupos.nome).all()
-        
+        grupos_data = []
+        for grupo in grupos:
+            grupos_data.append(
+                {
+                'id': grupo.id,
+                'nome': grupo.nome,
+                'codigo': grupo.codigo or '',
+                'descricao': grupo.descricao or '',
+                'cor': grupo.cor or '',
+                'icone': grupo.icone or '',
+                'total_materiais': len(grupo.materiais) if grupo.materiais else 0
+            })
         return jsonify({
             'success': True,
-            'grupos': [grupo.to_dict() for grupo in grupos]
+            'grupos': grupos_data
         })
     
     except Exception as e:
@@ -519,37 +530,24 @@ def api_materiais(id):
         grupo = MateriaisGrupos.query.get_or_404(id)
         search = request.args.get('search', '').strip()
         
-        # Query para materiais do grupo usando SQL direto
-        if search:
-            sql = """
-                SELECT m.id FROM materiais m 
-                INNER JOIN materiais_grupos mg ON m.id = mg.material_id 
-                WHERE mg.grupo_id = :grupo_id 
-                AND (m.nome LIKE :search OR m.codigo LIKE :search OR m.descricao LIKE :search)
-                ORDER BY m.nome
-            """
-            material_ids = db.session.execute(
-                db.text(sql), 
-                {'grupo_id': grupo.id, 'search': f'%{search}%'}
-            ).fetchall()
-        else:
-            sql = """
-                SELECT m.id FROM materiais m 
-                INNER JOIN materiais_grupos mg ON m.id = mg.material_id 
-                WHERE mg.grupo_id = :grupo_id 
-                ORDER BY m.nome
-            """
-            material_ids = db.session.execute(
-                db.text(sql), 
-                {'grupo_id': grupo.id}
-            ).fetchall()
+        # Query para materiais do grupo usando SQLAlchemy ORM
+        # Usa o relacionamento many-to-many através da tabela de associação
+        query = Materiais.query.filter(
+            Materiais.grupos.any(MateriaisGrupos.id == grupo.id)
+        )
         
-        # Buscar os materiais pelos IDs
-        if material_ids:
-            ids = [row[0] for row in material_ids]
-            materiais = Materiais.query.filter(Materiais.id.in_(ids)).order_by(Materiais.nome).all()
-        else:
-            materiais = []
+        # Aplicar filtro de busca se fornecido
+        if search:
+            query = query.filter(
+                or_(
+                    Materiais.nome.ilike(f'%{search}%'),
+                    Materiais.codigo.ilike(f'%{search}%'),
+                    Materiais.descricao.ilike(f'%{search}%')
+                )
+            )
+        
+        # Ordenar por nome
+        materiais = query.order_by(Materiais.nome).all()
         
         materiais_data = []
         for material in materiais:
