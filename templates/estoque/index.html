@@ -88,6 +88,7 @@
                         <tr>
                             <th>Tipo</th>
                             <th>Código</th>
+                            <th>Material</th>
                             <th>Nome / Descrição</th>
                             <th>Quantidade</th>
                             <th>Localização</th>
@@ -99,6 +100,9 @@
                         {% for item in items.items %}
                         <tr>
                             <td>{{ item.tipo_item|capitalize }}</td>
+                            <td>
+                                {{ item.id or "N/A" }}
+                            </td>
                             <td>
                                 {% if item.material %}
                                     {{ item.material.id or "N/A" }}

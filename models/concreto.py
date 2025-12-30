@@ -1,4 +1,6 @@
 from datetime import datetime
+
+from sqlalchemy.sql import func
 from models.database import db
 from sqlalchemy.orm import relationship
 from decimal import Decimal
@@ -28,6 +30,21 @@ class ConcretoConcretagens(db.Model):
     # Relacionamentos
     tanques_associados = db.relationship("ConcretoConcretagensTanques", back_populates="concretagem", cascade="all, delete-orphan")
    
+    def get_volume_total(self,data_inicio=None,data_fim=None):
+        """
+        Retorna o volume total da concretagem
+        """ 
+        query = db.session.query(func.sum(ConcretoUsinagens.volume_produzido)).\
+            join(ConcretoUsinagens, ConcretoUsinagens.concretagem_id == ConcretoConcretagens.id)
+        if data_inicio:
+            query = query.filter(ConcretoConcretagens.data_concretagem >= data_inicio)
+        if data_fim:
+            query = query.filter(ConcretoConcretagens.data_concretagem <= data_fim)
+        if self.id:
+            query = query.filter(ConcretoConcretagens.id == self.id)
+        volume_total = query.scalar() or Decimal(0.0) or 0.0
+        return volume_total
+
     def get_quantidade_pecas_json(self):
         """
         Retorna a quantidade de peças armazenadas no campo JSON 'pecas'

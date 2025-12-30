@@ -18,8 +18,7 @@ from flask import Flask
 from config.config import Config
 from models.database import db
 from models.nota_fiscal import NotaFiscal, CNPJS_MATRIZ
-from models.peca import Peca
-from models.tanque import Tanque
+from models.tanque import TanquesPecas, Tanques
 from models.logs import Logs
 import json
 
@@ -126,7 +125,7 @@ def main():
                 tipo_tanque_raw = row.iloc[4] if len(row) > 4 else None
                 tipo_tanque = str(tipo_tanque_raw).strip() if pd.notna(tipo_tanque_raw) else None
                 peca['tipo_tanque'] = None
-                tanque = Tanque.query.filter(Tanque.nome.like(f'%{tipo_tanque}%')).first()
+                tanque = Tanques.query.filter(Tanques.nome.like(f'%{tipo_tanque}%')).first()
                # print(f"indice: {index} - procurado tanque: {tipo_tanque} - Tanque encontrado: {tanque.nome}")
                 if tanque:
                     peca['tanque_id'] = tanque.id
@@ -209,14 +208,14 @@ def main():
             print(f"Linhas ignoradas: {log['linhas_ignoradas']}")
             #print(f"Peças: {pecas}")
             for peca in pecas:
-                peca_existe = Peca.query.filter(Peca.nome==peca['nome'], 
-                                                Peca.numero_sequencial==peca['numero_sequencial'], 
-                                                Peca.tanque_id==peca['tanque_id']).first()
+                peca_existe = TanquesPecas.query.filter(TanquesPecas.nome==peca['nome'], 
+                                                TanquesPecas.numero_sequencial==peca['numero_sequencial'], 
+                                                TanquesPecas.tanque_id==peca['tanque_id']).first()
                 if not peca_existe:
                     #print(f"Peça não encontrada: {peca['nome']} {peca['numero_sequencial']} {peca['tanque_id']}")
                     qualidade_serializada = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
                     log['novas'] += 1
-                    peca_dict = Peca(
+                    peca_dict = TanquesPecas(
                         tanque_id=peca['tanque_id'],
                         nome=peca['nome'],
                         numero_sequencial=peca['numero_sequencial'],

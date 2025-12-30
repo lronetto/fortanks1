@@ -614,6 +614,33 @@ def buscar_emails_por_uids(env, uids_ordenados, contagem_anexos=None):
     
     return emails_para_processar
 
+def validar_chave_acesso(chave):
+    """
+    Valida se uma string é uma chave de acesso válida de nota fiscal.
+    Uma chave de acesso válida deve ter 44 caracteres e conter apenas dígitos numéricos.
+    Retorna True se válida, False caso contrário.
+    """
+    if not chave:
+        return False
+    
+    # Remove espaços e caracteres especiais
+    chave_limpa = chave.strip()
+    
+    # Verifica se tem exatamente 44 caracteres
+    if len(chave_limpa) != 44:
+        return False
+    
+    # Verifica se contém apenas dígitos numéricos
+    if not chave_limpa.isdigit():
+        return False
+    
+    # Verifica se o tipo (posições 20:22) é válido (55 para NFE ou 57 para CTE)
+    tipo_nf = chave_limpa[20:22]
+    if tipo_nf not in ['55', '57']:
+        return False
+    
+    return True
+
 def processar_anexo_pdf(anexo, filename, payload, tipo):
     """
     Processa um anexo PDF: tenta identificar por código de barras ou nome do arquivo.
@@ -622,7 +649,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
     anexo['codbarras'] = {
         'qtd': 0,
         'codigos': [],
-        'erro': None
+        'erro': []
     }
     # Ignora arquivos que contenham 'protocolo' no nome
     if 'protocolo' in filename.lower():
@@ -671,31 +698,47 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
                 tiponf ='57'
     
     if dec1:
-        logging.info(f"com codigo de barras /qrcode tipo: {tiponf} dec1: {dec1}")
-        nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == dec1).first()
-        anexo['db'].append({
-            'chave_acesso': dec1,
-            'nota': nota.id if nota else None
-        })
-        
-        if nota:
-            processar_upload(anexo, nota, filename, payload, tipo)
+        # Valida se dec1 é uma chave de acesso válida antes de processar
+        if not validar_chave_acesso(dec1):
+            logging.warning(f"Código de barras/QR code decodificado não é uma chave de acesso válida: {dec1} (tamanho: {len(dec1) if dec1 else 0})")
+            anexo['nao_identificados'] += 1
+            # Continua para tentar identificar pelo nome do arquivo
+            dec1 = None
         else:
-            tiponfc = ('nfe' if tiponf == '55' else 'cte' if tiponf == '57' else None)
-            if tiponfc:
-                arquivei = Arquivei(chave_acesso=dec1, tipo=tiponfc)
-                if arquivei.xml_data:
-                    logging.info(f"achado arquivei")
-                    nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
-                    if nota:
-                        logging.info(f"fazendo o upload da nota: {nota}")
-                        processar_upload(anexo, nota, filename, payload, tipo)
-                    return True
+            logging.info(f"com codigo de barras /qrcode tipo: {tiponf} dec1: {dec1}")
+            nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == dec1).first()
+            anexo['db'].append({
+                'chave_acesso': dec1,
+                'nota': nota.id if nota else None
+            })
+            
+            if nota:
+                processar_upload(anexo, nota, filename, payload, tipo)
+                return True
             else:
-                logging.info(f"codBarras nao identificado {dec1}")
-                anexo['nao_identificados'] += 1
-                return False
-    else:
+                tiponfc = ('nfe' if tiponf == '55' else 'cte' if tiponf == '57' else None)
+                if tiponfc:
+                    try:
+                        arquivei = Arquivei(chave_acesso=dec1, tipo=tiponfc)
+                        if arquivei.xml_data:
+                            logging.info(f"achado arquivei")
+                            nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
+                            if nota:
+                                logging.info(f"fazendo o upload da nota: {nota}")
+                                processar_upload(anexo, nota, filename, payload, tipo)
+                            return True
+                    except Exception as e:
+                        logging.error(f"Erro ao buscar no Arquivei com chave {dec1}: {e}")
+                        # Continua para tentar identificar pelo nome do arquivo
+                        dec1 = None
+                else:
+                    logging.info(f"codBarras nao identificado {dec1}")
+                    anexo['nao_identificados'] += 1
+                    # Continua para tentar identificar pelo nome do arquivo
+                    dec1 = None
+    
+    # Se não conseguiu identificar pela chave de acesso, tenta pelo número e fornecedor
+    if not dec1:
         # Tenta pelo número e fornecedor
         logging.info(f"tentando pelo numero e fornecedor {filename}")
         numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)

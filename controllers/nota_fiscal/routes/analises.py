@@ -39,14 +39,14 @@ def analise():
             db.session.query(
                 Materiais.id.label("material_id"),
                 Materiais.nome.label("material_nome"),
-                Materiais.unidade_obj.nome.label("material_unidade"),
+                Unidades.nome.label("material_unidade"),
                 func.sum(NotaFiscalItem.quantidade).label("quantidade_total"),
                 func.sum(NotaFiscalItem.valor_total).label("valor_total_agregado"),
                 func.group_concat(distinct(NotaFiscal.nome_emitente)).label("fornecedores"),
             )
             .join(NotaFiscalItem, Materiais.id == NotaFiscalItem.material_id)
             .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
-            .join(Unidades, Unidades.id == Materiais.unidade_id)
+            .outerjoin(Unidades, Unidades.id == Materiais.unidade_id)
             .filter(NotaFiscal.status_processamento != "cancelada")
         )
     else:
@@ -57,11 +57,12 @@ def analise():
                 func.sum(NotaFiscalItem.quantidade).label("quantidade_total"),
                 func.sum(NotaFiscalItem.valor_total).label("valor_total_agregado"),
                 func.group_concat(distinct(NotaFiscal.nome_emitente)).label("fornecedores"),
-                func.group_concat(distinct(Materiais.unidade_obj.nome)).label("unidades"),
+                func.group_concat(distinct(Unidades.nome)).label("unidades"),
                 func.group_concat(distinct(Materiais.nome)).label("materiais_vinculados"),
             )
             .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
             .outerjoin(Materiais, Materiais.id == NotaFiscalItem.material_id)
+            .outerjoin(Unidades, Unidades.id == Materiais.unidade_id)
             .filter(NotaFiscal.status_processamento != "cancelada")
         )
 

@@ -187,12 +187,7 @@ def card_historico_usinagem():
         
         # Cálculo do volume usinado (baseado na data da usinagem)
         # Usamos func.date para comparar a parte da data de data_usinagem (DateTime) com inicio_periodo e fim_periodo (date)
-        volume_total_periodo_usinagem = db.session.query(
-            func.sum(ConcretoConcretagens.volume_total)
-        ).join(ConcretoConcretagens, ConcretoConcretagensTanques.concretagem_id == ConcretoConcretagens.id).filter(
-            ConcretoConcretagens.data_concretagem >= inicio_periodo,
-            ConcretoConcretagens.data_concretagem <= fim_periodo
-        ).scalar() or Decimal(0.0) or 0.0
+        volume_total_periodo_usinagem = 0
         
         if i == 0:
             rotulo_semana = f"Atual ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"

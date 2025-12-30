@@ -129,10 +129,10 @@
                 <table class="table table-bordered" id="tabelaItens" width="100%" cellspacing="0">
                     <thead>
                         <tr>
-                            <th style="width: 10%">Tipo</th>
                             <th style="width: 10%">Código</th>
-                            <th style="width: 20%">Descrição</th>
                             <th style="width: 10%">Localização</th>
+                            <th style="width: 20%">Descrição</th>
+                            <th style="width: 10%">Unidade</th>
                             <th style="width: 10%">Qtd. Sistema</th>
                             <th style="width: 20%">Qtd. Contada</th>
                             <th style="width: 5%">Diferença</th>
@@ -148,7 +148,6 @@
                             data-id="{{ item.id }}" 
                             data-tipo="{{ item.estoque.tipo_item }}" 
                             data-busca="{{ item.estoque.material.nome if item.estoque.material else '' }} {{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }} {{ item.estoque.material.codigo if item.estoque.material else '' }}">
-                            <td>{{ item.estoque.tipo_item|capitalize }}</td>
                             <td>
                                 {% if item.estoque.material %}
                                     {{ item.estoque.material.codigo or "N/A" }}
@@ -158,6 +157,7 @@
                                     N/A
                                 {% endif %}
                             </td>
+                            <td>{{ item.estoque.localizacao or "Não especificado" }}</td>
                             <td>
                                 {% if item.estoque.material %}
                                     {{ item.estoque.material.nome }}
@@ -167,7 +167,7 @@
                                     Item sem descrição
                                 {% endif %}
                             </td>
-                            <td>{{ item.estoque.localizacao or "Não especificado" }}</td>
+                            <td>{{ item.estoque.material.unidade_obj.nome if item.estoque.material else "" }}</td>
                             <td class="text-right quantidade-sistema" data-estoque-id="{{ item.estoque_id }}">
                                 {{ "%.2f"|format(item.quantidade_sistema|float) }}
                                 {% if item.estoque.material %}

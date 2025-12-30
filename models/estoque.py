@@ -389,7 +389,8 @@ class EstoqueMovimentacoes(db.Model):
         
         return historico_saldo
 
-    def _agrupar_por_semana(cls,    historico_saldo):
+    @staticmethod
+    def _agrupar_por_semana(historico_saldo):
         """
         Agrupa o histórico de saldo por semana, usando o último valor de cada semana.
         
