@@ -64,7 +64,6 @@ from controllers.relatorios.concretagem_pecas_controller import concretagem_peca
 from controllers.relatorios.notas_controller import notas_bp
 from controllers.relatorios.tanques_controller import tanques_bp
 from controllers.relatorios.script_email import relatorio_semanal
-from controllers.relatorios.script_email import enviar_relatorio_semanal
 
 load_dotenv('.env')
 
