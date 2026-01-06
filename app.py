@@ -63,7 +63,8 @@ from controllers.relatorios.acabamento_pecas_controller import acabamento_pecas_
 from controllers.relatorios.concretagem_pecas_controller import concretagem_pecas_bp
 from controllers.relatorios.notas_controller import notas_bp
 from controllers.relatorios.tanques_controller import tanques_bp
-
+from controllers.relatorios.script_email import relatorio_semanal
+from controllers.relatorios.script_email import enviar_relatorio_semanal
 
 load_dotenv('.env')
 
@@ -395,7 +396,9 @@ def job_semanal():
     Job que executa uma vez por semana (todo domingo às 00:00)
     """
     with app.app_context():
+        
         logger.info("Executando job semanal...")
+        relatorio_semanal()
         # Aqui você pode adicionar as funções que deseja executar semanalmente
         # Por exemplo:
         # processar_relatorios_semanais()

@@ -288,43 +288,14 @@ def enviar_relatorios_multiplos_projetos(contrato_ids, destinatarios=None, assun
     return resultados
 
 
-if __name__ == '__main__':
+def relatorio_semanal():
     """
-    Permite executar o script diretamente via linha de comando.
-    
-    Exemplo:
-        python controllers/relatorios/script_email.py --contrato-id 1 --destinatarios email1@example.com,email2@example.com
+    Envia relatórios semanais.
     """
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Enviar relatório Excel de tanques por projeto via email')
-    parser.add_argument('--contrato-id', type=int, required=True, help='ID do contrato/projeto')
-    parser.add_argument('--destinatarios', type=str, help='Lista de emails separados por vírgula')
-    parser.add_argument('--assunto', type=str, help='Assunto do email')
-    parser.add_argument('--mensagem', type=str, default='', help='Mensagem adicional para o email')
-    
-    args = parser.parse_args()
-    
-    # Preparar destinatários
-    destinatarios = None
-    if args.destinatarios:
-        destinatarios = [email.strip() for email in args.destinatarios.split(',') if email.strip()]
-    
-    # Importar app e executar
-    from app import app
-    
-    with app.app_context():
-        sucesso = enviar_relatorio_por_email(
-            contrato_id=args.contrato_id,
-            destinatarios=destinatarios,
-            assunto=args.assunto,
-            mensagem_adicional=args.mensagem
-        )
-        
-        if sucesso:
-            print(f'✅ Relatório enviado com sucesso para o projeto ID {args.contrato_id}')
-            sys.exit(0)
-        else:
-            print(f'❌ Falha ao enviar relatório para o projeto ID {args.contrato_id}')
-            sys.exit(1)
-
+    "Relatorios de tanques por projeto"
+    contrato_ids =[3]
+    destinatarios = ['leandro.netto@fortanks.ind.br', 
+                    'gean.junior@fortanks.ind.br', 
+                    'bruno.lacerda@fortanks.ind.br', 
+                    'marcelo.porto@fortanks.ind.br']
+    enviar_relatorio_por_email(contrato_ids=contrato_ids, destinatarios=destinatarios)
