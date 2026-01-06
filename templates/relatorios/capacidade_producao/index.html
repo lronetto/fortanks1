@@ -1,0 +1,291 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatório de Capacidade de Produção{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .chart-container {
+        position: relative;
+        height: 400px;
+        margin-bottom: 30px;
+    }
+    .card {
+        margin-bottom: 20px;
+    }
+    .filtros-card {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .card-resumo {
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+    }
+    .card-resumo .card-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .card-resumo .card-title {
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+    .card-resumo h3 {
+        font-size: 1.8rem;
+        margin: 0;
+    }
+    .badge-progress {
+        font-size: 0.85rem;
+        padding: 0.4em 0.6em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-industry"></i> Relatório de Análise de Capacidade de Produção</h2>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card filtros-card">
+        <div class="card-body">
+            <form id="formFiltros">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="contrato_id" class="form-label">Projeto</label>
+                        <select class="form-select" id="contrato_id" name="contrato_id">
+                            <option value="">Todos os projetos</option>
+                            {% for contrato in contratos %}
+                            <option value="{{ contrato.id }}" {% if contrato_id == contrato.id %}selected{% endif %}>
+                                {{ contrato.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="tanque_id" class="form-label">Tanque</label>
+                        <select class="form-select" id="tanque_id" name="tanque_id">
+                            <option value="">Todos os tanques</option>
+                            {% for tanque in tanques %}
+                            <option value="{{ tanque.id }}">
+                                {{ tanque.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="btn-group w-100" role="group">
+                            <a href="#" id="btnExportarPdf" class="btn btn-danger">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </a>
+                            <a href="#" id="btnExportarExcel" class="btn btn-success">
+                                <i class="fas fa-file-excel"></i> Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-primary">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">Estoque Atual Total</h5>
+                    <h3 class="text-primary" id="totalEstoqueAtual">{{ total_estoque_atual|replace('.', ',') }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">Quantidade Prevista Total</h5>
+                    <h3 class="text-info" id="totalQuantidadePrevista">{{ total_quantidade_prevista|replace('.', ',') }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">Quantidade Concretada Total</h5>
+                    <h3 class="text-success" id="totalQuantidadeConcretada">{{ total_quantidade_concretada|replace('.', ',') }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-warning">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">Previsto de Uso Futuro</h5>
+                    <h3 class="text-warning" id="totalQuantidadeNecessaria">{{ total_quantidade_necessaria|replace('.', ',') }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Materiais de Estoque - Análise de Capacidade de Produção</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Unidade</th>
+                                    <th>Estoque Atual</th>
+                                    <th>Quantidade Prevista Total</th>
+                                    <th>Quantidade Concretada Total</th>
+                                    <th>Quantidade Restante Total</th>
+                                    <th>Previsto de Uso Futuro</th>
+                                    <th>Estoque Após Uso</th>
+                                    <th>% de Uso</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in dados %}
+                                <tr>
+                                    <td><strong>{{ item.material_nome }}</strong></td>
+                                    <td>{{ item.unidade or '-' }}</td>
+                                    <td class="text-end">{{ item.estoque_atual|replace('.', ',') }}</td>
+                                    <td class="text-end">{{ item.quantidade_prevista_total|replace('.', ',') }}</td>
+                                    <td class="text-end">{{ item.quantidade_concretada_total|replace('.', ',') }}</td>
+                                    <td class="text-end">{{ item.quantidade_restante_total|replace('.', ',') }}</td>
+                                    <td class="text-end"><strong class="text-warning">{{ item.quantidade_necessaria|replace('.', ',') }}</strong></td>
+                                    <td class="text-end {% if item.suficiente %}text-success{% else %}text-danger{% endif %}">
+                                        <strong>{{ item.estoque_disponivel|replace('.', ',') }}</strong>
+                                    </td>
+                                    <td class="text-end">{{ item.percentual_uso }}%</td>
+                                    <td>
+                                        {% if item.suficiente %}
+                                            <span class="badge bg-success">Suficiente</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Insuficiente</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th colspan="2" class="text-end">TOTAL</th>
+                                    <th class="text-end">{{ total_estoque_atual|replace('.', ',') }}</th>
+                                    <th class="text-end">{{ total_quantidade_prevista|replace('.', ',') }}</th>
+                                    <th class="text-end">{{ total_quantidade_concretada|replace('.', ',') }}</th>
+                                    <th class="text-end">{{ total_quantidade_restante|replace('.', ',') }}</th>
+                                    <th class="text-end">{{ total_quantidade_necessaria|replace('.', ',') }}</th>
+                                    <th class="text-end">{{ total_estoque_disponivel|replace('.', ',') }}</th>
+                                    <th colspan="2"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir modal de análise -->
+{% include 'relatorios/capacidade_producao/modais/analise.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Inicializar Select2
+    $('#contrato_id').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Selecione um projeto',
+        allowClear: true
+    });
+
+    $('#tanque_id').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Selecione um tanque',
+        allowClear: true
+    });
+
+    // Atualizar tanques quando projeto mudar
+    $('#contrato_id').on('change', function() {
+        atualizarTanquesPorProjeto();
+    });
+
+    // Filtrar dados
+    $('#btnFiltrar').on('click', function() {
+        filtrarDados();
+    });
+
+    // Atualizar links de exportação
+    atualizarLinksExportacao();
+
+    function atualizarTanquesPorProjeto() {
+        const contratoId = $('#contrato_id').val();
+        
+        $.ajax({
+            url: "{{ url_for('relatorios_capacidade_producao.api_tanques_por_projeto') }}",
+            type: 'GET',
+            data: { contrato_id: contratoId },
+            success: function(response) {
+                $('#tanque_id').empty().append('<option value="">Todos os tanques</option>');
+                response.tanques.forEach(function(tanque) {
+                    $('#tanque_id').append(
+                        $('<option></option>').val(tanque.id).text(tanque.nome)
+                    );
+                });
+                $('#tanque_id').trigger('change');
+            }
+        });
+    }
+
+    function filtrarDados() {
+        // Recarregar a página com os filtros
+        const contratoId = $('#contrato_id').val();
+        const tanqueId = $('#tanque_id').val();
+        
+        let params = new URLSearchParams();
+        if (contratoId) params.append('contrato_id', contratoId);
+        if (tanqueId) params.append('tanque_id', tanqueId);
+        
+        window.location.href = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+    }
+
+    function atualizarLinksExportacao() {
+        const contratoId = $('#contrato_id').val();
+        const tanqueId = $('#tanque_id').val();
+        
+        let params = new URLSearchParams();
+        if (contratoId) params.append('contrato_id', contratoId);
+        if (tanqueId) params.append('tanque_id', tanqueId);
+        
+        const queryString = params.toString();
+        const baseUrl = "{{ url_for('relatorios_capacidade_producao.exportar_pdf') }}";
+        const excelUrl = "{{ url_for('relatorios_capacidade_producao.exportar_excel') }}";
+        
+        $('#btnExportarPdf').attr('href', baseUrl + (queryString ? '?' + queryString : ''));
+        $('#btnExportarExcel').attr('href', excelUrl + (queryString ? '?' + queryString : ''));
+    }
+});
+</script>
+{% endblock %}
+

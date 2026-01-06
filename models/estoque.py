@@ -15,7 +15,7 @@ class Estoque(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'), nullable=True)
     material = db.relationship('Materiais', backref='estoque_items')
-    ProdComp_id = db.Column(db.Integer, db.ForeignKey('ProdComp.id'), nullable=True)
+    ProdComp_id = db.Column(db.Integer, db.ForeignKey('ProdutoComposto.id'), nullable=True)
     produto_composto = db.relationship('ProdutoComposto', backref='estoque_items')
     epi_id = db.Column(db.Integer, db.ForeignKey('Epi.id'), nullable=True)
     epi = db.relationship('Epi', backref='estoque_items')

@@ -1044,15 +1044,15 @@ def relatorio_grupos():
         grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
         
         for grupo in grupos_filtrados:
-            # Buscar materiais do grupo
-            materiais_grupo = grupo.materiais
+            # Buscar materiais do grupo ordenados pelo nome
+            materiais_grupo = sorted(grupo.materiais, key=lambda m: m.nome or '')
             
             itens_grupo = []
             quantidade_total_grupo = Decimal('0.0')
             
             for material in materiais_grupo:
-                if not material.ativo:
-                    continue
+                #if not material.ativo:
+                 #   continue
                 
                 # Buscar estoques do material
                 estoques = Estoque.query.filter_by(
@@ -1078,7 +1078,7 @@ def relatorio_grupos():
                 if quantidade_total_material > 0 or not data_filtro_dt:
                     itens_grupo.append({
                         'material_id': material.id,
-                        'codigo': material.codigo or '',
+                        'codigo': material.codigo_erp or '',
                         'nome': material.nome,
                         'categoria': material.categoria or '',
                         'unidade': material.get_unidade_nome() or '',

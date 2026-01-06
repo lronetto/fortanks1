@@ -333,7 +333,7 @@ class TanquesProdutoComposto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tanque_id = db.Column(db.Integer, db.ForeignKey('Tanques.id', ondelete='CASCADE'), nullable=False)
     tipo_peca = db.Column(db.String(50), nullable=False)
-    produto_composto_id = db.Column(db.Integer, db.ForeignKey('ProdComp.id', ondelete='CASCADE'), nullable=False)
+    produto_composto_id = db.Column(db.Integer, db.ForeignKey('ProdutoComposto.id', ondelete='CASCADE'), nullable=False)
     
     # Campos de auditoria
     criado_em = db.Column(db.DateTime, default=datetime.now)

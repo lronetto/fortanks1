@@ -23,6 +23,7 @@ from flask import current_app
 from models.tanque import TanquesPecas, Tanques
 from models.contrato import Contrato
 from models.database import db
+from models.logs import Logs
 from utils.email_utils import enviar_email, enviar_email_gmail
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, PatternFill
@@ -293,9 +294,17 @@ def relatorio_semanal():
     Envia relatórios semanais.
     """
     "Relatorios de tanques por projeto"
-    contrato_ids =[3]
+    contrato_id = 3
+    destinatarios = []
     destinatarios = ['leandro.netto@fortanks.ind.br', 
                     'gean.junior@fortanks.ind.br', 
-                    'bruno.lacerda@fortanks.ind.br', 
-                    'marcelo.porto@fortanks.ind.br']
-    enviar_relatorio_por_email(contrato_ids=contrato_ids, destinatarios=destinatarios)
+                   'bruno.lacerda@fortanks.ind.br', 
+                   'marcelo.porto@fortanks.ind.br']
+    destinatarios += ['arthur.witzel@fortes.ind.br','joao.faria@fortes.ind.br','joao.carvalho@fortes.ind.br']
+    try:
+        enviar_relatorio_por_email(contrato_id=contrato_id, destinatarios=destinatarios)
+        Logs(local='relatorio_semanal', data=datetime.now(), texto='Relatório de tanques por projeto enviado com sucesso enviado para: ' + ', '.join(destinatarios))
+        return True
+    except Exception as e:
+        Logs(local='relatorio_semanal', data=datetime.now(), texto='Erro ao enviar relatório de tanques por projeto: ' + str(e))
+        raise e

@@ -1,0 +1,446 @@
+<!-- Modal Análise de Capacidade de Produção -->
+<style>
+    #analiseCapacidadeModal .modal-dialog {
+        max-width: 80%;
+        margin: 1rem auto;
+    }
+    
+    #analiseCapacidadeModal .modal-body {
+        overflow: visible;
+    }
+    
+    #tabela-componentes-capacidade {
+        margin-bottom: 0;   
+    }
+    
+    #tabela-componentes-capacidade thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f8f9fa;
+        z-index: 10;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    #tabela-componentes-capacidade tbody td {
+        white-space: nowrap;
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    #tabela-componentes-capacidade thead th {
+        white-space: nowrap;
+        padding: 0.5rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .tabela-componentes-capacidade {
+        max-height: 50vh;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+    }
+    
+    .info-box {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.25rem;
+        margin-bottom: 1rem;
+    }
+    
+    .info-box h6 {
+        margin-bottom: 0.5rem;
+        color: #495057;
+    }
+    
+    .info-box p {
+        margin-bottom: 0.25rem;
+    }
+    
+    @media (max-width: 768px) {
+        #analiseCapacidadeModal .modal-dialog {
+            max-width: 100%;
+            margin: 0.5rem;
+        }
+        
+        .tabela-componentes-capacidade {
+            max-height: 40vh;
+        }
+    }
+</style>
+<div class="modal fade" id="analiseCapacidadeModal" tabindex="-1" role="dialog" aria-labelledby="analiseCapacidadeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="analiseCapacidadeModalLabel">
+                    <i class="fas fa-industry"></i> Análise de Capacidade de Produção
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Informações do Tanque e Projeto -->
+                <div class="info-box">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-water"></i> Informações do Tanque</h6>
+                            <p class="mb-1"><strong>Tanque:</strong> <span id="tanque-nome-analise"></span></p>
+                            <p class="mb-1"><strong>Projeto:</strong> <span id="tanque-projeto-analise"></span></p>
+                            <p class="mb-1"><strong>Sistema:</strong> <span id="tanque-sistema-analise"></span></p>
+                            <p class="mb-1"><strong>Dimensões:</strong> <span id="tanque-dimensoes-analise"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-boxes"></i> Informações de Produção</h6>
+                            <p class="mb-1"><strong>Produto Composto:</strong> <span id="produto-composto-nome-analise"></span></p>
+                            <p class="mb-1"><strong>Quantidade Prevista:</strong> <span id="quantidade-prevista-analise"></span> peças</p>
+                            <p class="mb-1"><strong>Peças Concretadas:</strong> <span id="pecas-concretadas-analise"></span> peças</p>
+                            <p class="mb-1"><strong>Peças Restantes:</strong> <span id="pecas-restantes-analise"></span> peças</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Informações de Capacidade -->
+                <div class="info-box">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <h6><i class="fas fa-clock"></i> Tempo de Produção</h6>
+                            <p class="mb-1"><strong>Tempo por Peça:</strong> <span id="tempo-por-peca-analise"></span> horas</p>
+                            <p class="mb-1"><strong>Tempo Total Estimado:</strong> <span id="tempo-total-estimado-analise"></span> horas</p>
+                            <p class="mb-1"><strong>Tempo Utilizado:</strong> <span id="tempo-utilizado-analise"></span> horas</p>
+                            <p class="mb-1"><strong>Capacidade Restante:</strong> <span id="capacidade-restante-horas-analise"></span> horas</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6><i class="fas fa-chart-pie"></i> Percentuais</h6>
+                            <p class="mb-1"><strong>% Utilização:</strong> <span id="percentual-utilizacao-analise"></span>%</p>
+                            <p class="mb-1"><strong>% Conclusão:</strong> <span id="percentual-conclusao-analise"></span>%</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6><i class="fas fa-calculator"></i> Capacidade em Peças</h6>
+                            <p class="mb-1"><strong>Capacidade Restante:</strong> <span id="capacidade-restante-pecas-analise"></span> peças</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6><i class="fas fa-dollar-sign"></i> Valor Total</h6>
+                            <p class="mb-1"><strong>Valor Total Estimado:</strong> <span id="valor-total-analise"></span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabela de Componentes -->
+                <div class="mb-4">
+                    <h6><i class="fas fa-boxes"></i> Componentes do Produto Composto</h6>
+                    <div class="tabela-componentes-capacidade table-responsive">
+                        <table class="table table-bordered table-sm" id="tabela-componentes-capacidade">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Componente</th>
+                                    <th>Quantidade p/ unidade</th>
+                                    <th>Quantidade Total</th>
+                                    <th>Estoque</th>
+                                    <th>Disponível</th>
+                                    <th>Valor Unitário</th>
+                                    <th>Valor Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Tabela de Materiais de Estoque com Previsto -->
+                <div class="mb-4">
+                    <h6><i class="fas fa-warehouse"></i> Materiais de Estoque - Previsto de Uso Futuro</h6>
+                    <p class="text-muted small">Baseado nas <strong id="pecas-restantes-tabela">0</strong> peças restantes a serem produzidas</p>
+                    <div class="tabela-componentes-capacidade table-responsive">
+                        <table class="table table-bordered table-sm" id="tabela-materiais-estoque">
+                            <thead class="thead-light">
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Unidade</th>
+                                    <th>Estoque Atual</th>
+                                    <th>Previsto de Uso</th>
+                                    <th>Estoque Após Uso</th>
+                                    <th>% de Uso</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="mt-2 text-center">
+                    <button type="button" class="btn btn-success btn-sm" id="btn-exportar-excel-capacidade" title="Exportar para Excel" disabled>
+                        <i class="fas fa-file-excel"></i> Exportar para Excel
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Função para abrir o modal com dados do tanque
+        window.abrirAnaliseCapacidade = function(tanqueId) {
+            carregarDetalhesTanque(tanqueId);
+            const modal = new bootstrap.Modal(document.getElementById('analiseCapacidadeModal'));
+            modal.show();
+        };
+    });
+    
+    function carregarDetalhesTanque(tanqueId) {
+        fetch(`/relatorios/capacidade-producao/api/detalhes-tanque/${tanqueId}`, {
+            headers: {
+                'X-CSRFToken': $('input[name="csrf_token"]').val()
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data);
+            const tbody = document.querySelector('#tabela-componentes-capacidade tbody');
+            const btnExportar = document.getElementById('btn-exportar-excel-capacidade');
+            tbody.innerHTML = '';
+            
+            if (btnExportar) btnExportar.disabled = true;
+            
+            if (data.success) {
+                // Preencher informações do tanque
+                document.getElementById('tanque-nome-analise').textContent = data.tanque.nome;
+                document.getElementById('tanque-projeto-analise').textContent = data.tanque.contrato;
+                document.getElementById('tanque-sistema-analise').textContent = data.tanque.sistema;
+                document.getElementById('tanque-dimensoes-analise').textContent = data.tanque.dimensoes;
+                
+                // Preencher informações de produção
+                document.getElementById('produto-composto-nome-analise').textContent = data.produto_composto.nome;
+                document.getElementById('quantidade-prevista-analise').textContent = data.quantidade_prevista;
+                document.getElementById('pecas-concretadas-analise').textContent = data.pecas_concretadas;
+                document.getElementById('pecas-restantes-analise').textContent = data.pecas_restantes;
+                
+                // Preencher informações de capacidade
+                document.getElementById('tempo-por-peca-analise').textContent = data.tempo_producao_por_peca;
+                document.getElementById('tempo-total-estimado-analise').textContent = data.tempo_total_estimado;
+                document.getElementById('tempo-utilizado-analise').textContent = data.tempo_utilizado;
+                document.getElementById('capacidade-restante-horas-analise').textContent = data.capacidade_restante_horas;
+                document.getElementById('capacidade-restante-pecas-analise').textContent = data.capacidade_restante_pecas;
+                document.getElementById('percentual-utilizacao-analise').textContent = data.percentual_utilizacao;
+                document.getElementById('percentual-conclusao-analise').textContent = data.percentual_conclusao;
+                document.getElementById('valor-total-analise').textContent = formatarMoeda(data.valor_total);
+                
+                // Preencher tabela de componentes
+                if (data.componentes && data.componentes.length > 0) {
+                    data.componentes.forEach(componente => {
+                        tbody.innerHTML += ` 
+                            <tr>
+                                <td>${componente.nome}</td>
+                                <td>${componente.quantidade.replace('.', ',')}</td>
+                                <td>${componente.quantidade_total.replace('.', ',')}</td>
+                                <td>${componente.estoque.replace('.', ',')}</td>
+                                <td>${componente.capacidade.replace('.', ',')}</td>
+                                <td>${formatarMoeda(componente.valor_unitario)}</td>
+                                <td>${formatarMoeda(componente.valor_total)}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    // Adicionar linha de total
+                    tbody.innerHTML += `
+                        <tr class="table-info">
+                            <td colspan="5"><strong>Total:</strong></td>
+                            <td></td>
+                            <td><strong>${formatarMoeda(data.valor_total)}</strong></td>
+                        </tr>
+                    `;
+                    
+                    if (btnExportar) btnExportar.disabled = false;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum componente encontrado ou produto composto não vinculado.</td></tr>';
+                }
+                
+                // Preencher tabela de materiais de estoque
+                const tbodyMateriais = document.querySelector('#tabela-materiais-estoque tbody');
+                const pecasRestantesTabela = document.getElementById('pecas-restantes-tabela');
+                
+                if (pecasRestantesTabela) {
+                    pecasRestantesTabela.textContent = data.pecas_restantes;
+                }
+                
+                if (tbodyMateriais) {
+                    tbodyMateriais.innerHTML = '';
+                    
+                    if (data.materiais_estoque && data.materiais_estoque.length > 0) {
+                        data.materiais_estoque.forEach(material => {
+                            const badgeClass = material.suficiente ? 'bg-success' : 'bg-danger';
+                            const statusText = material.suficiente ? 'Suficiente' : 'Insuficiente';
+                            
+                            tbodyMateriais.innerHTML += `
+                                <tr>
+                                    <td>${material.material_nome}</td>
+                                    <td>${material.unidade || '-'}</td>
+                                    <td class="text-end">${material.estoque_atual.replace('.', ',')}</td>
+                                    <td class="text-end"><strong>${material.quantidade_necessaria.replace('.', ',')}</strong></td>
+                                    <td class="text-end ${material.suficiente ? 'text-success' : 'text-danger'}">
+                                        <strong>${material.estoque_disponivel.replace('.', ',')}</strong>
+                                    </td>
+                                    <td class="text-end">${material.percentual_uso}%</td>
+                                    <td>
+                                        <span class="badge ${badgeClass}">${statusText}</span>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                    } else {
+                        tbodyMateriais.innerHTML = '<tr><td colspan="7" class="text-center">Nenhum material encontrado ou produto composto não vinculado.</td></tr>';
+                    }
+                }
+            } else {
+                alert('Erro ao carregar detalhes: ' + (data.message || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar detalhes do tanque.');
+        });
+    }
+    
+    // Função para exportar tabela para Excel
+    const btnExportarExcel = document.getElementById('btn-exportar-excel-capacidade');
+    if (btnExportarExcel) {
+        btnExportarExcel.addEventListener('click', function() {
+            exportarCapacidadeParaExcel();
+        });
+    }
+    
+    function exportarCapacidadeParaExcel() {
+        const table = document.getElementById('tabela-componentes-capacidade');
+        const tanqueNome = document.getElementById('tanque-nome-analise').textContent || 'Tanque';
+        const projetoNome = document.getElementById('tanque-projeto-analise').textContent || 'Projeto';
+        
+        // Verificar se a tabela tem dados
+        const tbody = table.querySelector('tbody');
+        if (!tbody || tbody.rows.length === 0) {
+            alert('Não há dados para exportar.');
+            return;
+        }
+        
+        // Criar workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Preparar dados para exportação
+        const dados = [];
+        
+        // Adicionar informações do tanque
+        dados.push(['Análise de Capacidade de Produção']);
+        dados.push([]);
+        dados.push(['Tanque:', tanqueNome]);
+        dados.push(['Projeto:', projetoNome]);
+        dados.push(['Sistema:', document.getElementById('tanque-sistema-analise').textContent]);
+        dados.push(['Dimensões:', document.getElementById('tanque-dimensoes-analise').textContent]);
+        dados.push(['Produto Composto:', document.getElementById('produto-composto-nome-analise').textContent]);
+        dados.push([]);
+        
+        // Adicionar informações de capacidade
+        dados.push(['Informações de Capacidade']);
+        dados.push(['Quantidade Prevista:', document.getElementById('quantidade-prevista-analise').textContent + ' peças']);
+        dados.push(['Peças Concretadas:', document.getElementById('pecas-concretadas-analise').textContent + ' peças']);
+        dados.push(['Peças Restantes:', document.getElementById('pecas-restantes-analise').textContent + ' peças']);
+        dados.push(['Tempo por Peça:', document.getElementById('tempo-por-peca-analise').textContent + ' horas']);
+        dados.push(['Tempo Total Estimado:', document.getElementById('tempo-total-estimado-analise').textContent + ' horas']);
+        dados.push(['Tempo Utilizado:', document.getElementById('tempo-utilizado-analise').textContent + ' horas']);
+        dados.push(['Capacidade Restante:', document.getElementById('capacidade-restante-horas-analise').textContent + ' horas']);
+        dados.push(['% Utilização:', document.getElementById('percentual-utilizacao-analise').textContent + '%']);
+        dados.push(['% Conclusão:', document.getElementById('percentual-conclusao-analise').textContent + '%']);
+        dados.push(['Valor Total:', document.getElementById('valor-total-analise').textContent]);
+        dados.push([]);
+        
+        // Adicionar cabeçalhos
+        const headers = [];
+        table.querySelectorAll('thead th').forEach(th => {
+            headers.push(th.textContent.trim());
+        });
+        dados.push(headers);
+        
+        // Adicionar linhas da tabela (exceto a linha de total)
+        tbody.querySelectorAll('tr').forEach(tr => {
+            if (tr.classList.contains('table-info')) return; // Pular linha de total
+            
+            const row = [];
+            let colIndex = 0;
+            tr.querySelectorAll('td').forEach(td => {
+                let valor = td.textContent.trim();
+                
+                // Identificar se é coluna de valor
+                const isValorUnitario = colIndex === headers.length - 2;
+                const isValorTotal = colIndex === headers.length - 1;
+                
+                if (isValorUnitario || isValorTotal) {
+                    // Remover formatação de moeda e converter para número
+                    valor = valor.replace(/[R$\s]/g, '');
+                    valor = valor.replace(/\./g, '').replace(',', '.');
+                    const numValor = parseFloat(valor);
+                    valor = isNaN(numValor) ? valor : numValor;
+                } else {
+                    // Para outras colunas, converter vírgula para ponto se for número
+                    const numValor = parseFloat(valor.replace(',', '.'));
+                    if (!isNaN(numValor)) {
+                        valor = numValor;
+                    }
+                }
+                
+                row.push(valor);
+                colIndex++;
+            });
+            dados.push(row);
+        });
+        
+        // Adicionar linha de total
+        const totalRow = [];
+        totalRow.push('TOTAL');
+        for (let i = 1; i < headers.length - 2; i++) {
+            totalRow.push('');
+        }
+        const valorTotal = document.getElementById('valor-total-analise').textContent;
+        const valorTotalNum = parseFloat(valorTotal.replace(/[R$\s]/g, '').replace(/\./g, '').replace(',', '.'));
+        totalRow.push('');
+        totalRow.push(isNaN(valorTotalNum) ? valorTotal : valorTotalNum);
+        dados.push(totalRow);
+        
+        // Criar worksheet
+        const ws = XLSX.utils.aoa_to_sheet(dados);
+        
+        // Ajustar largura das colunas
+        const colWidths = [];
+        for (let i = 0; i < headers.length; i++) {
+            let maxLength = headers[i].length;
+            dados.forEach((row, idx) => {
+                if (row[i] && idx > 15) { // Pular as linhas de informações iniciais
+                    const cellValue = String(row[i] || '');
+                    if (cellValue.length > maxLength) {
+                        maxLength = cellValue.length;
+                    }
+                }
+            });
+            colWidths.push({ wch: Math.min(maxLength + 2, 50) });
+        }
+        ws['!cols'] = colWidths;
+        
+        // Adicionar worksheet ao workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Capacidade de Produção');
+        
+        // Gerar nome do arquivo
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '').replace('T', '_');
+        const nomeArquivo = `capacidade_producao_${tanqueNome.replace(/[^a-zA-Z0-9]/g, '_')}_${timestamp}.xlsx`;
+        
+        // Exportar arquivo
+        XLSX.writeFile(wb, nomeArquivo);
+    }
+</script>
+{% endblock %}
+

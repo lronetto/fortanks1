@@ -63,6 +63,7 @@ from controllers.relatorios.acabamento_pecas_controller import acabamento_pecas_
 from controllers.relatorios.concretagem_pecas_controller import concretagem_pecas_bp
 from controllers.relatorios.notas_controller import notas_bp
 from controllers.relatorios.tanques_controller import tanques_bp
+from controllers.relatorios.capacidade_producao_controller import capacidade_producao_bp
 from controllers.relatorios.script_email import relatorio_semanal
 
 load_dotenv('.env')
@@ -213,6 +214,7 @@ app.register_blueprint(acabamento_pecas_bp)
 app.register_blueprint(concretagem_pecas_bp)
 app.register_blueprint(notas_bp)
 app.register_blueprint(tanques_bp)
+app.register_blueprint(capacidade_producao_bp)
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
 app.register_blueprint(upload_bp, url_prefix='/uploads')
 logger.info("Blueprints registrados com sucesso!")

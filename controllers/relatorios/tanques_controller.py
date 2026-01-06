@@ -14,7 +14,7 @@ from sqlalchemy import func, outerjoin
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Font, PatternFill, NamedStyle
 from openpyxl.styles.numbers import FORMAT_PERCENTAGE_00
-
+from controllers.relatorios.script_email import relatorio_semanal
 tanques_bp = Blueprint('relatorios_tanques', __name__, url_prefix='/relatorios/tanques')
 
 def get_dados_tanques(contrato_id=None, tanque_id=None):
@@ -118,7 +118,7 @@ def agrupar_por_projeto(dados):
 @login_required
 def teste1():
     """Teste 1"""
-    enviar_relatorio_por_email(contrato_id=3)
+    relatorio_semanal()
     return 'Teste 1'
 
 @tanques_bp.route('/', methods=['GET'])

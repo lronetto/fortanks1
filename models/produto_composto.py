@@ -9,7 +9,7 @@ class ProdutoComposto(db.Model):
     """
     Modelo para representar produtos compostos para produção de peças concretadas
     """
-    __tablename__ = 'ProdComp'
+    __tablename__ = 'ProdutoComposto'
     
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(200), nullable=False)
@@ -253,10 +253,10 @@ class ProdutoCompostoItem(db.Model):
     """
     Modelo para representar componentes de um produto composto
     """
-    __tablename__ = 'ProdComp_Item'
+    __tablename__ = 'ProdutoCompostoItem'
     
     id = db.Column(db.Integer, primary_key=True)
-    produto_id = db.Column(db.Integer, db.ForeignKey('ProdComp.id', ondelete='CASCADE'), nullable=False)
+    produto_id = db.Column(db.Integer, db.ForeignKey('ProdutoComposto.id', ondelete='CASCADE'), nullable=False)
     estoque_id = db.Column(db.Integer, db.ForeignKey('Estoque.id'), nullable=False)
     quantidade = db.Column(db.Numeric(15, 8), nullable=False)  # Aumentado para 8 casas decimais
     observacao = db.Column(db.Text, nullable=True)

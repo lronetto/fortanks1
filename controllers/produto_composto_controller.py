@@ -119,16 +119,16 @@ def get_componentes(id,quantidade):
         produto = ProdutoComposto.query.join(ProdutoCompostoItem).join(Estoque).filter(ProdutoComposto.id == id).first()  
         componentes = []
         for componente in produto.componentes:
-            estoque = componente.estoque
+            estoque = componente.estoque.get_estoque_atual()
             capacidade = 0;
-            if componente.quantidade >0 and componente.estoque.quantidade >0:
-                capacidade = componente.estoque.quantidade / componente.quantidade
+            if componente.quantidade >0 and estoque >0:
+                capacidade = estoque / componente.quantidade
             componentes.append({
                 'estoque_id': componente.estoque_id,
                 'quantidade': format(float(componente.quantidade), '.2f'),
                 'quantidade_total': format(float(componente.quantidade * quantidade), '.2f'),
                 'nome': componente.estoque.material.nome if componente.estoque.material_id else componente.estoque.produto_composto.nome,
-                'estoque': format(float(componente.estoque.quantidade if componente.estoque else 0), '.2f'),
+                'estoque': format(float(estoque if estoque else 0), '.2f'),
                 'capacidade': format(float(capacidade), '.2f'),
                 'valor_unitario': format(float(componente.get_valor_total()), '.2f'),
                 'valor_total': format(float(componente.get_valor_total()*quantidade), '.2f')

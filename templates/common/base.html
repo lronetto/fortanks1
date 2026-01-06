@@ -462,6 +462,11 @@
                                 <i class="fas fa-water"></i> Tanques
                             </a>
                         </li>
+                        <li class="{{ is_active('relatorios_capacidade_producao') }}">
+                            <a href="{{ url_for('relatorios_capacidade_producao.index') }}">
+                                <i class="fas fa-industry"></i> Capacidade de Produção
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 <!-- Módulo Administrativo -->
