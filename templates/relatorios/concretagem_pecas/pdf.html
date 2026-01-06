@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Concretagem de Peças</title>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_path }}" alt="Logo" class="logo">
+        <h1>Relatório de Concretagem de Peças</h1>
+        <p>Período: {{ data_inicio.strftime('%d/%m/%Y') }} até {{ data_fim.strftime('%d/%m/%Y') }}</p>
+        {% if projeto_nome %}
+        <p>Projeto: {{ projeto_nome }}</p>
+        {% endif %}
+        {% if tanque_nome %}
+        <p>Tanque: {{ tanque_nome }}</p>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <div class="section-title">Resumo</div>
+        <p><strong>Total de Peças:</strong> {{ total_pecas }}</p>
+        <p><strong>Total de Metros de Placas:</strong> {{ total_metros_placas|round(2) }} m</p>
+        <p><strong>Data de Geração:</strong> {{ data_geracao }}</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Resumo por Mês</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Mês/Ano</th>
+                    <th>Quantidade</th>
+                    <th>Metros de Placas</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for chave, valor in dados_mes.items() %}
+                <tr>
+                    <td>{% if valor.mes < 10 %}0{% endif %}{{ valor.mes }}/{{ valor.ano }}</td>
+                    <td>{{ valor.quantidade }}</td>
+                    <td>{{ valor.get('metros_placas', 0)|round(2) }} m</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td><strong>Total</strong></td>
+                    <td><strong>{{ total_pecas }}</strong></td>
+                    <td><strong>{{ total_metros_placas|round(2) }} m</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Resumo por Semana</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Semana</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Quantidade</th>
+                    <th>Metros de Placas</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for chave, valor in dados_semana.items() %}
+                <tr>
+                    <td>Sem {{ valor.semana }}/{{ valor.ano }}</td>
+                    <td>{{ valor.inicio_semana.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ valor.fim_semana.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ valor.quantidade }}</td>
+                    <td>{{ valor.get('metros_placas', 0)|round(2) }} m</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3"><strong>Total</strong></td>
+                    <td><strong>{{ total_pecas }}</strong></td>
+                    <td><strong>{{ total_metros_placas|round(2) }} m</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Detalhamento de Peças</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data Concretagem</th>
+                    <th>Projeto</th>
+                    <th>Tanque</th>
+                    <th>Peça</th>
+                    <th>Número Sequencial</th>
+                    <th>Tipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in dados[:100] %}
+                <tr>
+                    <td>{{ item.data_concretagem.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ item.contrato_nome if item.contrato_nome else '-' }}</td>
+                    <td>{{ item.tanque_nome }}</td>
+                    <td>{{ item.nome }}</td>
+                    <td>{{ item.numero_sequencial }}</td>
+                    <td>{{ item.tipo }}</td>
+                </tr>
+                {% endfor %}
+                {% if dados|length > 100 %}
+                <tr>
+                    <td colspan="6" class="text-center">
+                        <em>Mostrando apenas as primeiras 100 peças. Total: {{ total_pecas }} peças.</em>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Relatório gerado em {{ data_geracao }}</p>
+    </div>
+</body>
+</html>
+

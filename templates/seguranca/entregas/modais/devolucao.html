@@ -1,0 +1,173 @@
+<!-- Modal para Devolução de EPI -->
+<div class="modal fade" id="devolucaoModal" tabindex="-1" aria-labelledby="devolucaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="devolucaoModalLabel">Registrar Devolução de EPI</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="loadingDevolucao" class="text-center my-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2">Carregando dados da entrega...</p>
+                </div>
+                <div id="devolucaoContent" style="display: none;">
+                    <h6 id="devolucao_info_epi" class="mb-3"></h6>
+                    <p id="devolucao_info_colaborador" class="text-muted"></p>
+                    
+                    <form id="formDevolucao" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <input type="hidden" id="devolucao_entrega_id" name="entrega_id">
+                        
+                        <div class="mb-3">
+                            <label for="devolucao_data" class="form-label">Data da Devolução</label>
+                            <input type="date" class="form-control" id="devolucao_data" name="data_devolucao" 
+                                value="{{ now1.strftime('%Y-%m-%d') }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="devolucao_observacoes" class="form-label">Observações sobre a Devolução</label>
+                            <textarea class="form-control" id="devolucao_observacoes" name="observacoes_devolucao" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnSalvarDevolucao">Registrar Devolução</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função auxiliar para formatar datas
+function formatarData(dataStringISO) {
+    if (!dataStringISO) return '-';
+    try {
+        const date = new Date(`${dataStringISO}T00:00:00`);
+        if (isNaN(date.getTime())) {
+            return 'Data inválida';
+        }
+        return date.toLocaleDateString('pt-BR');
+    } catch (e) {
+        console.error('Erro ao formatar data:', dataStringISO, e);
+        return 'Erro na data';
+    }
+}
+
+// Função para carregar dados da devolução
+function carregarDadosDevolucao(entregaId, modalEl) {
+    const contentEl = modalEl.querySelector('#devolucaoContent');
+    const loadingEl = modalEl.querySelector('#loadingDevolucao');
+    const formDevolucao = modalEl.querySelector('#formDevolucao');
+    const infoEpiEl = modalEl.querySelector('#devolucao_info_epi');
+    const infoColabEl = modalEl.querySelector('#devolucao_info_colaborador');
+    const entregaIdInput = modalEl.querySelector('#devolucao_entrega_id');
+
+    if (!contentEl || !loadingEl || !formDevolucao || !infoEpiEl || !infoColabEl || !entregaIdInput) return;
+
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    formDevolucao.action = `/seguranca/entregas/devolver/${entregaId}`;
+    entregaIdInput.value = entregaId;
+    formDevolucao.reset();
+    const dataInput = modalEl.querySelector('#devolucao_data');
+    if (dataInput) dataInput.valueAsDate = new Date();
+
+    fetch(`/seguranca/epis/entregas/visualizar/${entregaId}`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => { 
+        if (!response.ok) throw new Error(`Erro ${response.status} ao buscar dados.`);
+        return response.json();
+    })
+    .then(data => {
+        infoEpiEl.textContent = `Devolução de ${data.epi?.nome || 'EPI não encontrado'}`;
+        infoColabEl.textContent = `Entregue a ${data.colaborador?.nome || 'Colaborador não encontrado'} em ${formatarData(data.data_entrega) || '-'}`;
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+    })
+    .catch(error => {
+        console.error('Erro ao carregar dados para devolução:', error);
+        loadingEl.style.display = 'none';
+        contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+        contentEl.style.display = 'block';
+    });
+}
+
+// Função global para abrir modal de devolução (chamada de outros modais)
+function abrirModalDevolucao(entregaId) {
+    const devolucaoModalEl = document.getElementById('devolucaoModal');
+    if (!devolucaoModalEl) return;
+    
+    const devolucaoModal = bootstrap.Modal.getInstance(devolucaoModalEl) || new bootstrap.Modal(devolucaoModalEl);
+    carregarDadosDevolucao(entregaId, devolucaoModalEl);
+    devolucaoModal.show();
+}
+
+// Inicialização do modal de devolução
+document.addEventListener('DOMContentLoaded', function () {
+    const devolucaoModalEl = document.getElementById('devolucaoModal');
+    const btnSalvarDevolucao = document.getElementById('btnSalvarDevolucao');
+    const formDevolucao = document.getElementById('formDevolucao');
+
+    if (!devolucaoModalEl) return;
+
+    // Listener para botões de devolver na tabela
+    document.querySelectorAll('.btn-devolver-entrega').forEach(button => {
+        button.addEventListener('click', function() {
+            const entregaId = this.dataset.id;
+            abrirModalDevolucao(entregaId);
+        });
+    });
+
+    // Listener para submeter o formulário de devolução
+    if (btnSalvarDevolucao && formDevolucao) {
+        btnSalvarDevolucao.addEventListener('click', function() {
+            const dataDevolucaoInput = formDevolucao.querySelector('#devolucao_data');
+            if (!dataDevolucaoInput || !dataDevolucaoInput.value) {
+                showToast('Atenção', 'Informe a data de devolução.', 'warning');
+                dataDevolucaoInput.focus();
+                return;
+            }
+
+            btnSalvarDevolucao.disabled = true;
+            btnSalvarDevolucao.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processando...';
+
+            const formData = new FormData(formDevolucao);
+            const actionUrl = formDevolucao.action;
+
+            fetch(actionUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+            .then(({ ok, status, data }) => {
+                if (ok && data.success) {
+                    showToast('Sucesso', data.message || 'Devolução registrada!', 'success');
+                    const devolucaoModal = bootstrap.Modal.getInstance(devolucaoModalEl);
+                    devolucaoModal?.hide();
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    throw new Error(data.message || `Erro ${status} ao registrar devolução.`);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao registrar devolução:', error);
+                showToast('Erro', error.message || 'Não foi possível registrar a devolução.', 'danger');
+                btnSalvarDevolucao.disabled = false;
+                btnSalvarDevolucao.innerHTML = 'Registrar Devolução';
+            });
+        });
+    }
+});
+</script>
+

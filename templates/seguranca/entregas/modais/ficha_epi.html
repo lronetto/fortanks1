@@ -1,0 +1,66 @@
+<!-- Modal Ficha EPI -->
+<div class="modal fade" id="fichaEpiModal" tabindex="-1" aria-labelledby="fichaEpiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="fichaEpiModalLabel">Ficha de EPI - Carregando...</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="fichaEpiModalBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a href="#" id="btn-download-ficha-pdf" class="btn btn-success no-print" target="_blank">
+                   <i class="fas fa-file-pdf"></i> Baixar PDF
+                </a>
+                <button type="button" class="btn btn-secondary no-print" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Inicialização do modal de ficha EPI
+document.addEventListener('DOMContentLoaded', function () {
+    const fichaEpiModalEl = document.getElementById('fichaEpiModal');
+    const fichaEpiModalBody = document.getElementById('fichaEpiModalBody');
+    const fichaEpiModalLabel = document.getElementById('fichaEpiModalLabel');
+    const btnDownloadFichaPdf = document.getElementById('btn-download-ficha-pdf');
+
+    if (!fichaEpiModalEl) return;
+
+    // Listener para quando o modal é aberto
+    $(fichaEpiModalEl).on('show.bs.modal', function (e) {
+        const colaboradorId = $(e.relatedTarget).data('id');
+        const colaboradorNome = $(e.relatedTarget).data('nome');
+        
+        if (!colaboradorId) return;
+        
+        console.log(`Carregando ficha para Colaborador ID: ${colaboradorId}`);
+        fichaEpiModalLabel.textContent = `Ficha de EPI - ${colaboradorNome || 'Carregando...'}`;
+        fichaEpiModalBody.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>';
+        btnDownloadFichaPdf.href = '#';
+
+        fetch(`/seguranca/${colaboradorId}/ficha_epi_modal`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro ${response.status} ao carregar dados da ficha.`);
+                }
+                return response.text();
+            })
+            .then(html => {
+                fichaEpiModalBody.innerHTML = html;
+                btnDownloadFichaPdf.href = `/colaboradores/${colaboradorId}/ficha_epi_pdf`;
+            })
+            .catch(error => {
+                console.error('Erro ao carregar ficha EPI:', error);
+                fichaEpiModalBody.innerHTML = `<div class="alert alert-danger">${error.message || 'Erro ao carregar ficha. Tente novamente.'}</div>`;
+            });
+    });
+});
+</script>
+

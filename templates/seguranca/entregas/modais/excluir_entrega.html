@@ -1,0 +1,122 @@
+<!-- Modal único para Exclusão de Entrega (reutilizável) -->
+<div class="modal fade" id="excluirEntregaModal" tabindex="-1" aria-labelledby="excluirEntregaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="excluirEntregaModalLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o registro de entrega?</p>
+                <div id="excluir-entrega-info">
+                    <p class="mb-0"><strong>Colaborador:</strong> <span id="excluir-colaborador-nome"></span></p>
+                    <p class="mb-0"><strong>EPI:</strong> <span id="excluir-epi-nome"></span></p>
+                    <p class="mb-0"><strong>Data:</strong> <span id="excluir-data-entrega"></span></p>
+                </div>
+                <p class="text-danger mt-3"><strong>Esta ação não pode ser desfeita.</strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluirEntrega" method="post" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <input type="hidden" id="excluir-entrega-id" name="entrega_id" />
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para abrir modal de exclusão
+function abrirModalExclusao(entregaId, colaboradorNome, epiNome, dataEntrega) {
+    const modalEl = document.getElementById('excluirEntregaModal');
+    if (!modalEl) return;
+
+    // Preencher informações
+    document.getElementById('excluir-colaborador-nome').textContent = colaboradorNome || 'N/A';
+    document.getElementById('excluir-epi-nome').textContent = epiNome || 'N/A';
+    document.getElementById('excluir-data-entrega').textContent = dataEntrega || 'N/A';
+    document.getElementById('excluir-entrega-id').value = entregaId;
+
+    // Definir action do formulário
+    const formExcluir = document.getElementById('formExcluirEntrega');
+    if (formExcluir) {
+        formExcluir.action = `/seguranca/entregas/excluir/${entregaId}`;
+    }
+
+    // Abrir modal
+    const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+    modal.show();
+}
+
+// Inicialização do modal de exclusão
+document.addEventListener('DOMContentLoaded', function () {
+    const modalEl = document.getElementById('excluirEntregaModal');
+    const formExcluir = document.getElementById('formExcluirEntrega');
+
+    if (!modalEl) return;
+
+    // Listener para botões de exclusão na tabela
+    document.querySelectorAll('[data-bs-target="#excluirEntregaModal"]').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const entregaId = this.dataset.id;
+            const colaboradorNome = this.dataset.colaborador;
+            const epiNome = this.dataset.epi;
+            const dataEntrega = this.dataset.data;
+
+            if (entregaId) {
+                abrirModalExclusao(entregaId, colaboradorNome, epiNome, dataEntrega);
+            }
+        });
+    });
+
+    // Submit do formulário via AJAX
+    if (formExcluir) {
+        formExcluir.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const entregaId = document.getElementById('excluir-entrega-id').value;
+            const submitButton = formExcluir.querySelector('button[type="submit"]');
+            
+            if (!entregaId) {
+                showToast('Erro', 'ID da entrega não encontrado.', 'danger');
+                return;
+            }
+
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Excluindo...';
+
+            const formData = new FormData(formExcluir);
+            const actionUrl = formExcluir.action;
+
+            fetch(actionUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data })))
+            .then(({ ok, status, data }) => {
+                if (ok && data.success) {
+                    showToast('Sucesso', data.message || 'Entrega excluída com sucesso!', 'success');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    modal?.hide();
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    throw new Error(data.message || `Erro ${status} ao excluir entrega.`);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao excluir entrega:', error);
+                showToast('Erro', error.message || 'Não foi possível excluir a entrega.', 'danger');
+                submitButton.disabled = false;
+                submitButton.innerHTML = 'Excluir';
+            });
+        });
+    }
+});
+</script>
+

@@ -104,7 +104,11 @@
             <tr>
                 <td>{{ item['Data'] }}</td>
                 <td>{{ item['Centro de Custo'] }}</td>
-                <td>{{ item['Nota Fiscal'] }}</td>
+                <td>
+                    <a href="#" class="link-nota-fiscal text-primary" data-id="{{ item['id'] }}" data-numero="{{ item['Nota Fiscal'] }}" style="text-decoration: underline; cursor: pointer;">
+                        {{ item['Nota Fiscal'] }}
+                    </a>
+                </td>
                 <td>{{ item['Quantidade'] }}</td>
                 <td>R$ {{ format_brl(item['Valor']) }}</td>
                 <td>{{ item['Data Prevista'] }}</td>
@@ -125,9 +129,9 @@
             </tr>
             {% endfor %}
         </tbody>
-        
     </table>
 </div>
 {% else %}
     <div class="alert alert-info mt-4">Nenhuma nota fiscal encontrada para o período selecionado.</div>
-{% endif %} 
+{% endif %}
+

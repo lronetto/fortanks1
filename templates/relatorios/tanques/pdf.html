@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Tanques</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            margin: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header img {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        .header h1 {
+            margin: 10px 0;
+            font-size: 18pt;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .summary {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .summary h3 {
+            margin-top: 0;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        {% if logo_path %}
+        <img src="{{ logo_path }}" alt="Logo">
+        {% endif %}
+        <h1>Relatório de Tanques</h1>
+        {% if projeto_nome %}
+        <p><strong>Projeto:</strong> {{ projeto_nome }}</p>
+        {% endif %}
+        <p><strong>Data de Geração:</strong> {{ now }}</p>
+    </div>
+
+    <div class="summary">
+        <h3>Resumo Geral</h3>
+        <p><strong>Total de Tanques:</strong> {{ total_tanques }}</p>
+        <p><strong>Quantidade Prevista:</strong> {{ total_previsto }} placas</p>
+        <p><strong>Pecas Concretadas:</strong> {{ total_concretadas }} placas</p>
+        <p><strong>Pecas Acabadas:</strong> {{ total_acabadas }} placas</p>
+        <p><strong>Percentual de Conclusão:</strong> {{ percentual_geral }}%</p>
+    </div>
+
+    {% if projetos %}
+    <h3>Resumo por Projeto</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Projeto</th>
+                <th>Quantidade de Tanques</th>
+                <th>Quantidade Prevista</th>
+                <th>Pecas Concretadas</th>
+                <th>Pecas Acabadas</th>
+                <th>% Conclusão</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for projeto_nome, dados_projeto in projetos.items() %}
+            <tr>
+                <td>{{ projeto_nome }}</td>
+                <td class="text-center">{{ dados_projeto['quantidade_tanques'] }}</td>
+                <td class="text-center">{{ dados_projeto['quantidade_prevista'] }}</td>
+                <td class="text-center">{{ dados_projeto['pecas_concretadas'] }}</td>
+                <td class="text-center">{{ dados_projeto['pecas_acabadas'] }}</td>
+                <td class="text-center">{{ dados_projeto['percentual_conclusao'] }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h3>Detalhamento de Tanques</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tanque</th>
+                <th>Projeto</th>
+                <th>Sistema</th>
+                <th>Dimensões</th>
+                <th>Altura Total (m)</th>
+                <th>Altura Útil (m)</th>
+                <th>Quantidade</th>
+                <th>Placas Normais</th>
+                <th>Placas Fecho</th>
+                <th>Quantidade Prevista</th>
+                <th>Pecas Concretadas</th>
+                <th>Pecas Acabadas</th>
+                <th>% Conclusão</th>
+                <th>Bainhas</th>
+                <th>Item NF</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in dados %}
+            <tr>
+                <td class="text-center">{{ item['id'] }}</td>
+                <td>{{ item['nome'] }}</td>
+                <td>{{ item['contrato'] }}</td>
+                <td>{{ item['sistema'] }}</td>
+                <td>{{ item['dimensoes'] }}</td>
+                <td class="text-center">{{ item['altura_total'] }}</td>
+                <td class="text-center">{{ item['altura_util'] }}</td>
+                <td class="text-center">{{ item['quantidade'] }}</td>
+                <td class="text-center">{{ item['placas_normais'] }}</td>
+                <td class="text-center">{{ item['placas_fecho'] }}</td>
+                <td class="text-center">{{ item['quantidade_prevista'] }}</td>
+                <td class="text-center">{{ item['pecas_concretadas'] }}</td>
+                <td class="text-center">{{ item['pecas_acabadas'] }}</td>
+                <td class="text-center">{{ item['percentual_conclusao'] }}%</td>
+                <td class="text-center">{{ item['bainhas'] }}</td>
+                <td class="text-center">{{ item['item_nf'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr style="background-color: #f2f2f2; font-weight: bold;">
+                <td colspan="7" class="text-right">TOTAL</td>
+                <td class="text-center">{{ dados|sum(attribute='quantidade') }}</td>
+                <td class="text-center">{{ dados|sum(attribute='placas_normais') }}</td>
+                <td class="text-center">{{ dados|sum(attribute='placas_fecho') }}</td>
+                <td class="text-center">{{ dados|sum(attribute='quantidade_prevista') }}</td>
+                <td class="text-center">{{ dados|sum(attribute='pecas_concretadas') }}</td>
+                <td class="text-center">{{ dados|sum(attribute='pecas_acabadas') }}</td>
+                <td class="text-center">
+                    {% set total_previsto = dados|sum(attribute='quantidade_prevista') %}
+                    {% set total_concretadas = dados|sum(attribute='pecas_concretadas') %}
+                    {% set percentual_total = (total_concretadas / total_previsto * 100) if total_previsto > 0 else 0 %}
+                    {{ percentual_total|round(2) }}%
+                </td>
+                <td class="text-center">{{ dados|sum(attribute='bainhas') }}</td>
+                <td>-</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="footer">
+        <p>Relatório gerado em {{ now }}</p>
+    </div>
+</body>
+</html>
+

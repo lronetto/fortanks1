@@ -252,7 +252,7 @@ def card_historico_semanal_concretagens():
         })
     
     concretagens_semanais_api.reverse()
-    print("concretagens_semanais_api", concretagens_semanais_api)
+   #print("concretagens_semanais_api", concretagens_semanais_api)
     return {
         'concretagens_semanais': concretagens_semanais_api
     }
@@ -674,7 +674,7 @@ def card_resumo_placas(agrupar_por_grupo=False):
             'prontas_transportar': prontas_transportar,
             'nfs_emitidas': "{:,.0f}".format(nfs_emitidas_total)
         })
-    print(dados_especificos)
+    #print(dados_especificos)
     return dados_especificos
 
 @dashboard_bp.route('/api/resumo-placas')
@@ -710,7 +710,7 @@ def card_resumo_notas():
 @dashboard_bp.route('/api/dados-resumo-notas')
 @login_required
 def api_dados_resumo_notas():
-    print(request.form)
+    #print(request.form)
     contrato_id = request.args.get('contrato_id')
     notas = db.session.query(NotaFiscal.numero_nf, 
                      NotaFiscal.data_emissao, 
@@ -852,8 +852,8 @@ def api_dados_analiticos():
     custo_realizado = query_custo.scalar() or Decimal(0.0)
     receita_realizada = query_receita.scalar() or Decimal(0.0)
 
-    print(f"custo_realizado: {custo_realizado}")
-    print(f"receita_realizada: {receita_realizada}")
+    #print(f"custo_realizado: {custo_realizado}")
+    #print(f"receita_realizada: {receita_realizada}")
 
     return jsonify({
         'custo_realizado': float(custo_realizado),

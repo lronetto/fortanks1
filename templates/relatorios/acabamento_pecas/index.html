@@ -1,0 +1,685 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatório de Acabamento de Peças{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        position: relative;
+        height: 400px;
+        margin-bottom: 30px;
+    }
+    .card {
+        margin-bottom: 20px;
+    }
+    .filtros-card {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .card-resumo {
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+    }
+    .card-resumo .card-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .card-resumo .card-title {
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+    .card-resumo h2 {
+        font-size: 2rem;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-chart-bar"></i> Relatório de Acabamento de Peças</h2>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card filtros-card">
+        <div class="card-body">
+            <form id="formFiltros">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row">
+                    <div class="col-md-2">
+                        <label for="data_inicio" class="form-label">Data Início</label>
+                        <input type="date" class="form-control" id="data_inicio" name="data_inicio" 
+                               value="{{ data_inicio.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="data_fim" class="form-label">Data Fim</label>
+                        <input type="date" class="form-control" id="data_fim" name="data_fim" 
+                               value="{{ data_fim.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="contrato_id" class="form-label">Projeto</label>
+                        <select class="form-select" id="contrato_id" name="contrato_id">
+                            <option value="">Todos os projetos</option>
+                            {% for contrato in contratos %}
+                            <option value="{{ contrato.id }}" {% if contrato_id == contrato.id %}selected{% endif %}>
+                                {{ contrato.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="tanque_id" class="form-label">Tanque</label>
+                        <select class="form-select" id="tanque_id" name="tanque_id">
+                            <option value="">Todos os tanques</option>
+                            {% for tanque in tanques %}
+                            <option value="{{ tanque.id }}" {% if tanque_id == tanque.id %}selected{% endif %}>
+                                {{ tanque.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center card-resumo">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Peças</h5>
+                    <h2 class="text-primary" id="totalPecas">{{ total_pecas }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo">
+                <div class="card-body">
+                    <h5 class="card-title">Total de Metros de Placas</h5>
+                    <h2 class="text-success" id="totalMetrosPlacas">{{ total_metros_placas|round(2) }} m</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo">
+                <div class="card-body">
+                    <h5 class="card-title">Período</h5>
+                    <p class="mb-0" id="periodo">{{ data_inicio.strftime('%d/%m/%Y') }} até {{ data_fim.strftime('%d/%m/%Y') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo">
+                <div class="card-body">
+                    <h5 class="card-title">Exportar</h5>
+                    <div class="btn-group" role="group">
+                        <a href="#" id="btnExportarPdf" class="btn btn-danger">
+                            <i class="fas fa-file-pdf"></i> PDF
+                        </a>
+                        <a href="#" id="btnExportarExcel" class="btn btn-success">
+                            <i class="fas fa-file-excel"></i> Excel
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Mensal - Quantidade -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Quantidade de Peças por Mês</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartMes"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Mensal - Metros de Placas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-area"></i> Metros de Placas por Mês</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartMesMetros"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Semanal - Quantidade -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Quantidade de Peças por Semana</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartSemana"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico Semanal - Metros de Placas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Metros de Placas por Semana</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartSemanaMetros"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela Resumo Mensal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Resumo Mensal</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Mês/Ano</th>
+                                    <th>Quantidade</th>
+                                    <th>Metros de Placas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyResumoMes">
+                                {% for chave, valor in dados_mes.items() %}
+                                <tr>
+                                    <td>{% if valor.mes < 10 %}0{% endif %}{{ valor.mes }}/{{ valor.ano }}</td>
+                                    <td>{{ valor.quantidade }}</td>
+                                    <td>{{ valor.get('metros_placas', 0)|round(2) }} m</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center">Nenhum dado encontrado</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela Resumo Semanal -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Resumo Semanal</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Semana</th>
+                                    <th>Início</th>
+                                    <th>Fim</th>
+                                    <th>Quantidade</th>
+                                    <th>Metros de Placas</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbodyResumoSemana">
+                                {% for chave, valor in dados_semana.items() %}
+                                <tr>
+                                    <td>Sem {{ valor.semana }}/{{ valor.ano }}</td>
+                                    <td>{{ valor.inicio_semana.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ valor.fim_semana.strftime('%d/%m/%Y') }}</td>
+                                    <td>{{ valor.quantidade }}</td>
+                                    <td>{{ valor.get('metros_placas', 0)|round(2) }} m</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">Nenhum dado encontrado</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let chartMes = null;
+    let chartSemana = null;
+    let chartMesMetros = null;
+    let chartSemanaMetros = null;
+
+    $(document).ready(function() {
+        // Inicializar gráficos com dados iniciais
+        inicializarGraficos();
+        
+        // Inicializar links de exportação com filtros iniciais
+        const filtrosIniciais = {
+            data_inicio: $('#data_inicio').val(),
+            data_fim: $('#data_fim').val(),
+            contrato_id: $('#contrato_id').val(),
+            tanque_id: $('#tanque_id').val()
+        };
+        atualizarLinksExportacao(filtrosIniciais);
+        
+        // Evento de filtro
+        $('#btnFiltrar').on('click', function() {
+            filtrarDados();
+        });
+        
+        // Filtrar tanques quando projeto mudar
+        $('#contrato_id').on('change', function() {
+            atualizarTanquesPorProjeto();
+            // Limpar seleção de tanque se não estiver mais na lista
+            const tanqueIdAtual = $('#tanque_id').val();
+            setTimeout(function() {
+                const tanqueAindaExiste = $('#tanque_id option[value="' + tanqueIdAtual + '"]').length > 0;
+                if (tanqueIdAtual && !tanqueAindaExiste) {
+                    $('#tanque_id').val('');
+                }
+                filtrarDados();
+            }, 100);
+        });
+        
+        // Filtrar ao mudar outros campos
+        $('#data_inicio, #data_fim, #tanque_id').on('change', function() {
+            filtrarDados();
+        });
+    });
+
+    function atualizarTanquesPorProjeto() {
+        const contratoId = $('#contrato_id').val();
+        const tanqueSelect = $('#tanque_id');
+        const tanqueIdAtual = tanqueSelect.val();
+        
+        // Limpar select
+        tanqueSelect.empty();
+        tanqueSelect.append('<option value="">Todos os tanques</option>');
+        
+        // Se não há projeto selecionado, carregar todos os tanques
+        if (!contratoId) {
+            carregarTodosTanques(tanqueSelect, tanqueIdAtual);
+            return;
+        }
+        
+        // Buscar tanques do projeto
+        $.ajax({
+            url: '{{ url_for("relatorios_acabamento_pecas.api_tanques_por_projeto") }}',
+            method: 'GET',
+            data: { contrato_id: contratoId },
+            success: function(response) {
+                response.tanques.forEach(function(tanque) {
+                    const option = $('<option></option>')
+                        .attr('value', tanque.id)
+                        .text(tanque.nome);
+                    
+                    // Manter seleção anterior se ainda existir
+                    if (String(tanque.id) === String(tanqueIdAtual)) {
+                        option.attr('selected', true);
+                    }
+                    
+                    tanqueSelect.append(option);
+                });
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao carregar tanques:', error);
+                // Em caso de erro, carregar todos os tanques
+                carregarTodosTanques(tanqueSelect, tanqueIdAtual);
+            }
+        });
+    }
+
+    function carregarTodosTanques(select, tanqueIdAtual) {
+        $.ajax({
+            url: '{{ url_for("relatorios_acabamento_pecas.api_tanques_por_projeto") }}',
+            method: 'GET',
+            data: {},
+            success: function(response) {
+                response.tanques.forEach(function(tanque) {
+                    const option = $('<option></option>')
+                        .attr('value', tanque.id)
+                        .text(tanque.nome);
+                    
+                    if (String(tanque.id) === String(tanqueIdAtual)) {
+                        option.attr('selected', true);
+                    }
+                    
+                    select.append(option);
+                });
+            }
+        });
+    }
+
+    function inicializarGraficos() {
+        // Dados iniciais para os gráficos de quantidade
+        const dadosMes = {
+            labels: {{ labels_mes|tojson }},
+            datasets: [{
+                label: 'Quantidade de Peças',
+                data: {{ valores_mes|tojson }},
+                backgroundColor: 'rgba(58, 114, 171, 0.6)',
+                borderColor: 'rgba(58, 114, 171, 1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        };
+
+        const dadosSemana = {
+            labels: {{ labels_semana|tojson }},
+            datasets: [{
+                label: 'Quantidade de Peças',
+                data: {{ valores_semana|tojson }},
+                backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        };
+
+        // Dados iniciais para os gráficos de metros de placas
+        const dadosMesMetros = {
+            labels: {{ labels_mes|tojson }},
+            datasets: [{
+                label: 'Metros de Placas',
+                data: {{ metros_placas_mes|tojson }},
+                backgroundColor: 'rgba(255, 193, 7, 0.6)',
+                borderColor: 'rgba(255, 193, 7, 1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        };
+
+        const dadosSemanaMetros = {
+            labels: {{ labels_semana|tojson }},
+            datasets: [{
+                label: 'Metros de Placas',
+                data: {{ metros_placas_semana|tojson }},
+                backgroundColor: 'rgba(255, 152, 0, 0.6)',
+                borderColor: 'rgba(255, 152, 0, 1)',
+                borderWidth: 2,
+                fill: true
+            }]
+        };
+
+        // Configuração dos gráficos (Chart.js 2.9.4)
+        const optionsQuantidade = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero: true,
+                        stepSize: 1
+                    }
+                }]
+            },
+            legend: {
+                display: true,
+                position: 'top'
+            },
+            tooltips: {
+                mode: 'index',
+                intersect: false
+            }
+        };
+
+        const optionsMetros = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                yAxes: [{
+                    ticks: {
+                        beginAtZero: true
+                    },
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Metros (m)'
+                    }
+                }]
+            },
+            legend: {
+                display: true,
+                position: 'top'
+            },
+            tooltips: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    label: function(tooltipItem, data) {
+                        return data.datasets[tooltipItem.datasetIndex].label + ': ' + tooltipItem.yLabel.toFixed(2) + ' m';
+                    }
+                }
+            }
+        };
+
+        // Criar gráfico mensal - quantidade
+        const ctxMesEl = document.getElementById('chartMes');
+        if (ctxMesEl) {
+            const ctxMes = ctxMesEl.getContext('2d');
+            chartMes = new Chart(ctxMes, {
+                type: 'line',
+                data: dadosMes,
+                options: optionsQuantidade
+            });
+        }
+
+        // Criar gráfico mensal - metros de placas
+        const ctxMesMetrosEl = document.getElementById('chartMesMetros');
+        if (ctxMesMetrosEl) {
+            const ctxMesMetros = ctxMesMetrosEl.getContext('2d');
+            chartMesMetros = new Chart(ctxMesMetros, {
+                type: 'line',
+                data: dadosMesMetros,
+                options: optionsMetros
+            });
+        }
+
+        // Criar gráfico semanal - quantidade
+        const ctxSemanaEl = document.getElementById('chartSemana');
+        if (ctxSemanaEl) {
+            const ctxSemana = ctxSemanaEl.getContext('2d');
+            chartSemana = new Chart(ctxSemana, {
+                type: 'bar',
+                data: dadosSemana,
+                options: optionsQuantidade
+            });
+        }
+
+        // Criar gráfico semanal - metros de placas
+        const ctxSemanaMetrosEl = document.getElementById('chartSemanaMetros');
+        if (ctxSemanaMetrosEl) {
+            const ctxSemanaMetros = ctxSemanaMetrosEl.getContext('2d');
+            chartSemanaMetros = new Chart(ctxSemanaMetros, {
+                type: 'bar',
+                data: dadosSemanaMetros,
+                options: optionsMetros
+            });
+        }
+    }
+
+    function filtrarDados() {
+        // Mostrar loading
+        $('#btnFiltrar').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Filtrando...');
+        
+        // Coletar dados do formulário
+        const filtros = {
+            data_inicio: $('#data_inicio').val(),
+            data_fim: $('#data_fim').val(),
+            contrato_id: $('#contrato_id').val(),
+            tanque_id: $('#tanque_id').val()
+        };
+        
+        // Fazer requisição AJAX
+        $.ajax({
+            url: '{{ url_for("relatorios_acabamento_pecas.api_dados") }}',
+            method: 'GET',
+            data: filtros,
+            success: function(response) {
+                atualizarGraficos(response);
+                atualizarTabelas(response);
+                atualizarResumo(response, filtros);
+                atualizarLinksExportacao(filtros);
+                
+                // Atualizar URL sem recarregar
+                const params = new URLSearchParams(filtros);
+                window.history.pushState({}, '', '?' + params.toString());
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao filtrar dados:', error);
+                alert('Erro ao filtrar dados. Por favor, tente novamente.');
+            },
+            complete: function() {
+                $('#btnFiltrar').prop('disabled', false).html('<i class="fas fa-search"></i> Filtrar');
+            }
+        });
+    }
+
+    function atualizarGraficos(data) {
+        // Atualizar gráfico mensal - quantidade
+        if (chartMes) {
+            chartMes.data.labels = data.mes.labels;
+            chartMes.data.datasets[0].data = data.mes.valores;
+            chartMes.update();
+        }
+        
+        // Atualizar gráfico mensal - metros de placas
+        if (chartMesMetros) {
+            chartMesMetros.data.labels = data.mes.labels;
+            chartMesMetros.data.datasets[0].data = data.mes.metros_placas;
+            chartMesMetros.update();
+        }
+        
+        // Atualizar gráfico semanal - quantidade
+        if (chartSemana) {
+            chartSemana.data.labels = data.semana.labels;
+            chartSemana.data.datasets[0].data = data.semana.valores;
+            chartSemana.update();
+        }
+        
+        // Atualizar gráfico semanal - metros de placas
+        if (chartSemanaMetros) {
+            chartSemanaMetros.data.labels = data.semana.labels;
+            chartSemanaMetros.data.datasets[0].data = data.semana.metros_placas;
+            chartSemanaMetros.update();
+        }
+    }
+
+    function atualizarTabelas(data) {
+        // Atualizar tabela resumo mensal
+        let htmlMes = '';
+        if (data.resumo_mes.length > 0) {
+            data.resumo_mes.forEach(function(item) {
+                htmlMes += '<tr>';
+                htmlMes += '<td>' + item.mes_ano + '</td>';
+                htmlMes += '<td>' + item.quantidade + '</td>';
+                htmlMes += '<td>' + parseFloat(item.metros_placas || 0).toFixed(2) + ' m</td>';
+                htmlMes += '</tr>';
+            });
+        } else {
+            htmlMes = '<tr><td colspan="3" class="text-center">Nenhum dado encontrado</td></tr>';
+        }
+        $('#tbodyResumoMes').html(htmlMes);
+        
+        // Atualizar tabela resumo semanal
+        let htmlSemana = '';
+        if (data.resumo_semana.length > 0) {
+            data.resumo_semana.forEach(function(item) {
+                htmlSemana += '<tr>';
+                htmlSemana += '<td>' + item.semana + '</td>';
+                htmlSemana += '<td>' + item.inicio + '</td>';
+                htmlSemana += '<td>' + item.fim + '</td>';
+                htmlSemana += '<td>' + item.quantidade + '</td>';
+                htmlSemana += '<td>' + parseFloat(item.metros_placas || 0).toFixed(2) + ' m</td>';
+                htmlSemana += '</tr>';
+            });
+        } else {
+            htmlSemana = '<tr><td colspan="5" class="text-center">Nenhum dado encontrado</td></tr>';
+        }
+        $('#tbodyResumoSemana').html(htmlSemana);
+    }
+
+    function atualizarResumo(responseData, filtros) {
+        // Atualizar total de peças
+        $('#totalPecas').text(responseData.total);
+        
+        // Atualizar total de metros de placas
+        if (responseData.total_metros_placas !== undefined) {
+            $('#totalMetrosPlacas').text(parseFloat(responseData.total_metros_placas).toFixed(2) + ' m');
+        }
+        
+        // Atualizar período
+        if (filtros.data_inicio && filtros.data_fim) {
+            const dataInicio = new Date(filtros.data_inicio);
+            const dataFim = new Date(filtros.data_fim);
+            const formatoData = (dataObj) => {
+                const dia = String(dataObj.getDate()).padStart(2, '0');
+                const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+                const ano = dataObj.getFullYear();
+                return dia + '/' + mes + '/' + ano;
+            };
+            $('#periodo').text(formatoData(dataInicio) + ' até ' + formatoData(dataFim));
+        }
+    }
+
+    function atualizarLinksExportacao(filtros) {
+        // Construir URL base
+        const baseUrlPdf = '{{ url_for("relatorios_acabamento_pecas.exportar_pdf") }}';
+        const baseUrlExcel = '{{ url_for("relatorios_acabamento_pecas.exportar_excel") }}';
+        
+        // Construir query string
+        const params = new URLSearchParams();
+        if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
+        if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
+        if (filtros.contrato_id) params.append('contrato_id', filtros.contrato_id);
+        if (filtros.tanque_id) params.append('tanque_id', filtros.tanque_id);
+        
+        const queryString = params.toString();
+        
+        // Atualizar links
+        $('#btnExportarPdf').attr('href', baseUrlPdf + (queryString ? '?' + queryString : ''));
+        $('#btnExportarExcel').attr('href', baseUrlExcel + (queryString ? '?' + queryString : ''));
+    }
+</script>
+{% endblock %}
+

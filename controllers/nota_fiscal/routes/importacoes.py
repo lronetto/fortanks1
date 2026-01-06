@@ -173,6 +173,23 @@ def importar_todas_pendentes():
         flash(f"Erro ao processar importação automática: {str(e)}", "danger")
         return redirect(url_for("nota_fiscal.index"))
 
+@nota_fiscal_bp.route("/importar-item-estoque-todas-notas/<int:item_id>", methods=["POST"])
+@login_required
+def importar_item_estoque_todas_notas(item_id):
+    item = NotaFiscalItem.query.get_or_404(item_id)
+    if not item.material_id:
+        return jsonify({"success": False, "message": "Este item não está vinculado a um material do sistema"}), 400
+
+    centro_custo_id = request.form.get("centro_custo_id")
+    observacao = request.form.get("observacao")
+    
+    sucesso, mensagem, estatisticas = item.importar_para_estoque_automatico(
+        usuario_id=current_user.id,
+        centro_custo_id=centro_custo_id if centro_custo_id else None,
+        observacao=observacao or f"Importação da NF {item.nota_fiscal.numero_nf if item.nota_fiscal else 'N/A'}",
+    )
+    Logs(local="importar_item_estoque", data=datetime.now(), texto=json.dumps(estatisticas))
+    return jsonify({"success": bool(sucesso), "message": mensagem})
 
 # Rotas de diagnóstico antigas removidas:
 # - /teste, /teste1, /teste2, /teste3

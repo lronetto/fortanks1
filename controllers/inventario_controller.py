@@ -260,7 +260,8 @@ def inventario_detalhes(id):
     Detalhes de um inventário
     """
     inventario = EstoqueInventarios.query.get_or_404(id)
-    itens = EstoqueInventariosItens.query.filter_by(inventario_id=id).all()
+    itens = EstoqueInventariosItens.query.filter_by(inventario_id=id).join(Estoque).join(Materiais).\
+    order_by(Materiais.nome.asc()).all()
     
     return render_template('inventario/inventario_detalhes.html', 
                           inventario=inventario, 
@@ -794,13 +795,14 @@ def api_buscar_itens():
             Estoque.localizacao,
             Estoque.quantidade,
             Unidades.nome
-        ).join(Materiais, Estoque.material_id == Materiais.id).join(Unidades, Materiais.unidade_id == Unidades.id).filter(
+        ).join(Materiais, Estoque.material_id == Materiais.id).\
+        join(Unidades, Materiais.unidade_id == Unidades.id).filter(
             or_(
                 Materiais.nome.ilike(termo),
                 Materiais.codigo.ilike(termo),
                 Estoque.localizacao.ilike(termo)
             )
-        )
+        ).order_by(Materiais.nome.asc())
         
         # Similar para EPIs se necessário
         
@@ -1025,7 +1027,7 @@ def criar_grupo_inventario(id):
             }), 400
         
         # Verificar se já existe um grupo com o mesmo nome
-        grupo_existente = GrupoMaterial.query.filter_by(nome=data.get('nome')).first()
+        grupo_existente = MateriaisGrupos.query.filter_by(nome=data.get('nome')).first()
         if grupo_existente:
             return jsonify({
                 'success': False,
@@ -1047,7 +1049,7 @@ def criar_grupo_inventario(id):
             }), 400
         
         # Criar novo grupo
-        grupo = GrupoMaterial(
+        grupo = MateriaisGrupos(
             nome=data.get('nome'),
             descricao=data.get('descricao', ''),
             cor=data.get('cor', '#007bff'),
@@ -1060,7 +1062,7 @@ def criar_grupo_inventario(id):
         db.session.flush()  # Para obter o ID do grupo
         
         # Associar materiais ao grupo
-        materiais = Material.query.filter(Material.id.in_(materiais_ids)).all()
+        materiais = Materiais.query.filter(Materiais.id.in_(materiais_ids)).all()
         for material in materiais:
             grupo.materiais.append(material)
         

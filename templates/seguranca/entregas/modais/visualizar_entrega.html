@@ -1,0 +1,164 @@
+<!-- Modal para Visualizar Entrega -->
+<div class="modal fade" id="visualizarEntregaModal" tabindex="-1" aria-labelledby="visualizarEntregaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="visualizarEntregaModalLabel">Detalhes da Entrega</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="loadingVisualizarEntrega" class="text-center my-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2">Carregando dados da entrega...</p>
+                </div>
+                <div id="visualizarEntregaContent" style="display: none;">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="fw-bold">Informações da Entrega</h6>
+                            <p><strong>ID da Entrega:</strong> <span id="vis-entrega-id"></span></p>
+                            <p><strong>Data da Entrega:</strong> <span id="vis-data-entrega"></span></p>
+                            <p><strong>Quantidade:</strong> <span id="vis-quantidade"></span></p>
+                            <p><strong>Motivo:</strong> <span id="vis-motivo"></span></p>
+                            <p><strong>Assinado:</strong> <span id="vis-assinado"></span></p>
+                            <p><strong>Status:</strong> <span id="vis-status"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="fw-bold">Informações do EPI</h6>
+                            <p><strong>EPI:</strong> <span id="vis-epi-nome"></span></p>
+                            <p><strong>Código CA:</strong> <span id="vis-epi-ca"></span></p>
+                            <p><strong>Colaborador:</strong> <span id="vis-colaborador"></span></p>
+                            <p><strong>Data de Devolução:</strong> <span id="vis-data-devolucao"></span></p>
+                            <p><strong>Dias em Uso:</strong> <span id="vis-dias-uso"></span></p>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6 class="fw-bold">Observações</h6>
+                            <div class="card">
+                                <div class="card-body" id="vis-observacoes">
+                                    Sem observações
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-warning" id="btnDevolver" style="display: none;">
+                    Registrar Devolução
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função auxiliar para formatar datas
+function formatarData(dataStringISO) {
+    if (!dataStringISO) return '-';
+    try {
+        const date = new Date(`${dataStringISO}T00:00:00`);
+        if (isNaN(date.getTime())) {
+            return 'Data inválida';
+        }
+        return date.toLocaleDateString('pt-BR');
+    } catch (e) {
+        console.error('Erro ao formatar data:', dataStringISO, e);
+        return 'Erro na data';
+    }
+}
+
+// Função para carregar detalhes da entrega
+function carregarDetalhesEntrega(entregaId, modalEl) {
+    const contentEl = modalEl.querySelector('#visualizarEntregaContent');
+    const loadingEl = modalEl.querySelector('#loadingVisualizarEntrega');
+    const btnDevolverModal = modalEl.querySelector('#btnDevolver');
+
+    if (!contentEl || !loadingEl) return;
+
+    loadingEl.style.display = 'block';
+    contentEl.style.display = 'none';
+    if (btnDevolverModal) btnDevolverModal.style.display = 'none';
+
+    fetch(`/seguranca/epis/entregas/visualizar/${entregaId}`, {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) throw new Error(`Erro ${response.status} ao buscar dados.`);
+        return response.json();
+    })
+    .then(data => {
+        modalEl.querySelector('#vis-entrega-id').textContent = data.id;
+        modalEl.querySelector('#vis-data-entrega').textContent = formatarData(data.data_entrega) || '-';
+        modalEl.querySelector('#vis-quantidade').textContent = data.quantidade;
+        modalEl.querySelector('#vis-motivo').textContent = data.motivo || 'Não informado';
+        modalEl.querySelector('#vis-assinado').textContent = data.assinado ? 'Sim' : 'Não';
+        modalEl.querySelector('#vis-epi-nome').textContent = data.epi?.nome || 'N/A';
+        modalEl.querySelector('#vis-epi-ca').textContent = data.epi?.ca_numero || '-';
+        modalEl.querySelector('#vis-colaborador').textContent = data.colaborador?.nome || 'N/A';
+        modalEl.querySelector('#vis-dias-uso').textContent = data.dias_em_uso || '0';
+        modalEl.querySelector('#vis-observacoes').textContent = data.observacoes || 'Sem observações';
+
+        if (data.data_devolucao) {
+            modalEl.querySelector('#vis-status').innerHTML = '<span class="badge bg-success">Devolvido</span>';
+            modalEl.querySelector('#vis-data-devolucao').textContent = formatarData(data.data_devolucao);
+            if (btnDevolverModal) btnDevolverModal.style.display = 'none';
+        } else {
+            modalEl.querySelector('#vis-status').innerHTML = '<span class="badge badge-pendente">Em uso</span>';
+            modalEl.querySelector('#vis-data-devolucao').textContent = 'Pendente';
+            if (btnDevolverModal) {
+                btnDevolverModal.style.display = 'inline-block';
+                btnDevolverModal.dataset.id = data.id;
+            }
+        }
+
+        loadingEl.style.display = 'none';
+        contentEl.style.display = 'block';
+    })
+    .catch(error => {
+        console.error('Erro ao carregar dados da entrega:', error);
+        loadingEl.style.display = 'none';
+        contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+        contentEl.style.display = 'block';
+    });
+}
+
+// Inicialização do modal de visualização
+document.addEventListener('DOMContentLoaded', function () {
+    const visualizarModalEl = document.getElementById('visualizarEntregaModal');
+    
+    if (!visualizarModalEl) return;
+
+    // Listener para botões de visualizar
+    document.querySelectorAll('.btn-visualizar-entrega').forEach(button => {
+        button.addEventListener('click', function() {
+            const entregaId = this.dataset.id;
+            const visualizarModal = bootstrap.Modal.getInstance(visualizarModalEl) || new bootstrap.Modal(visualizarModalEl);
+            carregarDetalhesEntrega(entregaId, visualizarModalEl);
+            visualizarModal.show();
+        });
+    });
+
+    // Listener para botão de devolver dentro do modal
+    const btnDevolverVisualizar = document.getElementById('btnDevolver');
+    if (btnDevolverVisualizar) {
+        btnDevolverVisualizar.addEventListener('click', function() {
+            const entregaId = this.dataset.id;
+            const visualizarModal = bootstrap.Modal.getInstance(visualizarModalEl);
+            visualizarModal?.hide();
+            setTimeout(() => {
+                // Abrir modal de devolução (será implementado no modal de devolução)
+                if (typeof abrirModalDevolucao === 'function') {
+                    abrirModalDevolucao(entregaId);
+                }
+            }, 300); 
+        });
+    }
+});
+</script>
+

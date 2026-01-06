@@ -1,0 +1,859 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatório de Notas Fiscais de Venda{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .card {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        border-width: 2px;
+    }
+    
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .card-title {
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+    
+    .card-body h3 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+    
+    .card-body p {
+        font-size: 0.9rem;
+    }
+    
+    .card-resumo {
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .card-resumo .card-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .card-resumo .card-title {
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+    
+    .card-resumo h3 {
+        font-size: 1.8rem;
+        margin: 0;
+    }
+    
+    .filtros-card {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    
+    .border-primary {
+        border-color: #007bff !important;
+    }
+    
+    .border-success {
+        border-color: #28a745 !important;
+    }
+    
+    .border-warning {
+        border-color: #ffc107 !important;
+    }
+    
+    .border-info {
+        border-color: #17a2b8 !important;
+    }
+    
+    .border-secondary {
+        border-color: #6c757d !important;
+    }
+    
+    .border-danger {
+        border-color: #dc3545 !important;
+    }
+    
+    .text-primary {
+        color: #007bff !important;
+    }
+    
+    .text-success {
+        color: #28a745 !important;
+    }
+    
+    .text-warning {
+        color: #ffc107 !important;
+    }
+    
+    .text-info {
+        color: #17a2b8 !important;
+    }
+    
+    .text-secondary {
+        color: #6c757d !important;
+    }
+    
+    .text-danger {
+        color: #dc3545 !important;
+    }
+    
+    .table-info {
+        background-color: #d1ecf1 !important;
+    }
+    
+    .table-success {
+        background-color: #d4edda !important;
+    }
+    
+    .table-warning {
+        background-color: #fff3cd !important;
+    }
+    
+    .table-primary {
+        background-color: #cce5ff !important;
+    }
+    
+    .table-danger {
+        background-color: #f8d7da !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-file-invoice-dollar"></i> Relatório de Notas Fiscais de Venda por Centro de Custo</h2>
+        </div>
+    </div>
+    <!-- Filtros -->
+    <div class="card filtros-card">
+        <div class="card-body">
+            <form id="filtro-relatorio">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="data_inicio" class="form-label">Data Inicial</label>
+                        <input type="date" class="form-control" id="data_inicio" name="data_inicio">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="data_fim" class="form-label">Data Final</label>
+                        <input type="date" class="form-control" id="data_fim" name="data_fim">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="centro_custo" class="form-label">Centro de Custo</label>
+                        <select class="form-select" id="centro_custo" name="centro_custo" multiple>
+                            {% for cc in centros_custo %}
+                            <option value="{{ cc.id }}">{{ cc.codigo }} - {{ cc.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="status_pagamento" class="form-label">Status de Pagamento</label>
+                        <select class="form-select" id="status_pagamento" name="status_pagamento">
+                            <option value="">Todos</option>
+                            <option value="pago">Pago</option>
+                            <option value="nao_pago">Não Pago</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 align-self-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-md-2">
+                        <button type="button" id="btn-exportar-zip" class="btn btn-info w-100">
+                            <i class="fas fa-file-archive"></i> Exportar ZIP
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" id="btn-exportar-pdf" class="btn btn-danger w-100">
+                            <i class="fas fa-file-pdf"></i> Exportar PDF
+                        </button>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" id="btn-exportar-excel" class="btn btn-success w-100">
+                            <i class="fas fa-file-excel"></i> Exportar Excel
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Cards de Resumo - Material -->
+    <div id="cards-material" class="row mb-4" style="display: none;">
+        <div class="col-12">
+            <h4 class="text-primary mb-3">
+                <i class="fas fa-cubes"></i> Material (Notas Fiscais)
+            </h4>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-info">
+                        <i class="fas fa-file-contract"></i> Total Material
+                    </h5>
+                    <h3 class="text-info" id="valor-total-material">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="total-placas-material">0</span> placas
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-primary card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-primary">
+                        <i class="fas fa-file-invoice-dollar"></i> Faturado
+                    </h5>
+                    <h3 class="text-primary" id="valor-material-faturado">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="percentual-material-faturado">0%</span> do material
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-success">
+                        <i class="fas fa-check-circle"></i> Recebido
+                    </h5>
+                    <h3 class="text-success" id="valor-material-recebido">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="quantidade-material-recebido">0</span> placas - 
+                        <span id="percentual-material-recebido">0%</span> do material
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-warning">
+                        <i class="fas fa-clock"></i> A Faturar
+                    </h5>
+                    <h3 class="text-warning" id="valor-material-a-faturar">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="quantidade-material-a-faturar">0</span> placas - 
+                        <span id="percentual-material-a-faturar">0%</span> do material
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cards de Resumo - Serviço -->
+    <div id="cards-servico" class="row mb-4" style="display: none;">
+        <div class="col-12">
+            <h4 class="text-success mb-3">
+                <i class="fas fa-tools"></i> Serviço (Sem Notas Fiscais)
+            </h4>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-info">
+                        <i class="fas fa-file-contract"></i> Total Serviço
+                    </h5>
+                    <h3 class="text-info" id="valor-total-servico">R$ 0,00</h3>
+                    <p class="text-muted mb-0">Valor total dos serviços</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-secondary card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-secondary">
+                        <i class="fas fa-file-invoice-dollar"></i> Faturado
+                    </h5>
+                    <h3 class="text-secondary" id="valor-servico-faturado">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="percentual-servico-faturado">0%</span> do serviço
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-secondary card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-secondary">
+                        <i class="fas fa-check-circle"></i> Recebido
+                    </h5>
+                    <h3 class="text-secondary" id="valor-servico-recebido">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="percentual-servico-recebido">0%</span> do serviço
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-secondary card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-secondary">
+                        <i class="fas fa-clock"></i> A Faturar
+                    </h5>
+                    <h3 class="text-secondary" id="valor-servico-a-faturar">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="percentual-servico-a-faturar">0%</span> do serviço
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cards de Resumo - Não Faturado -->
+    <div id="cards-nao-faturado" class="row mb-4" style="display: none;">
+        <div class="col-md-6">
+            <div class="card border-warning card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-warning">
+                        <i class="fas fa-exclamation-triangle"></i> Material Não Faturado
+                    </h5>
+                    <h3 class="text-warning" id="valor-material-nao-faturado">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="percentual-material-nao-faturado">0%</span> do material - Ainda não emitido em NFE
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card border-danger card-resumo">
+                <div class="card-body text-center">
+                    <h5 class="card-title text-danger">
+                        <i class="fas fa-exclamation-triangle"></i> Serviço Não Faturado
+                    </h5>
+                    <h3 class="text-danger" id="valor-servico-nao-faturado">R$ 0,00</h3>
+                    <p class="text-muted mb-0">
+                        <span id="percentual-servico-nao-faturado">0%</span> do serviço - Serviços não têm NFE
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="relatorio-tabela"></div>
+</div>
+
+<!-- Modal para Visualizar Documentos -->
+<div class="modal fade" id="modalDocumentos" tabindex="-1" aria-labelledby="modalDocumentosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDocumentosLabel">Documentos da Nota Fiscal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <button type="button" class="btn btn-primary" id="btnAdicionarDocumento">
+                        <i class="fas fa-plus"></i> Adicionar Documento
+                    </button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered" id="tabelaDocumentos">
+                        <thead>
+                            <tr>
+                                <th>Nome do Arquivo</th>
+                                <th>Tipo</th>
+                                <th>Data de Upload</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="listaDocumentos">
+                            <!-- Documentos serão carregados via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Adicionar Documento -->
+<div class="modal fade" id="modalAdicionarDocumento" tabindex="-1" aria-labelledby="modalAdicionarDocumentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarDocumentoLabel">Adicionar Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAdicionarDocumento">
+                    <input type="hidden" id="notaFiscalId" name="nota_fiscal_id">
+                    <div class="mb-3">
+                        <label for="tipoDocumento" class="form-label">Tipo do Documento</label>
+                        <select class="form-select" id="tipoDocumento" name="tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="1">Contrato</option>
+                            <option value="2">Ordem de Compra</option>
+                            <option value="3">Outros</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="arquivo" class="form-label">Arquivo</label>
+                        <input type="file" class="form-control" id="arquivo" name="arquivo" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarDocumento">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Visualizar Documento -->
+<div class="modal fade" id="modalVisualizarDocumento" tabindex="-1" aria-labelledby="modalVisualizarDocumentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarDocumentoLabel">Visualizar Documento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <iframe id="documentoViewer" style="width: 100%; height: 80vh; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#centro_custo').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Selecione um ou mais centros de custo',
+        allowClear: true
+    });
+
+    carregar_relatorio();
+    
+    function formatarMoeda(valor) {
+        return 'R$ ' + valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    
+    function atualizarCards(dados) {
+        // Cards de Material
+        $('#valor-total-material').text(formatarMoeda(dados.totalMaterial || 0));
+        $('#total-placas-material').text((dados.totalPlacasMaterial || 0).toLocaleString('pt-BR'));
+        $('#valor-material-faturado').text(formatarMoeda(dados.materialFaturado || 0));
+        $('#valor-material-recebido').text(formatarMoeda(dados.materialRecebido || 0));
+        $('#valor-material-a-faturar').text(formatarMoeda(dados.materialAFaturar || 0));
+        $('#valor-material-nao-faturar').text(formatarMoeda(dados.materialNaoFaturado || 0));
+        
+        $('#percentual-material-faturado').text((dados.percentualMaterialFaturado || 0).toFixed(1) + '%');
+        $('#quantidade-material-recebido').text((dados.quantidadeMaterialRecebido || 0).toLocaleString('pt-BR'));
+        $('#percentual-material-recebido').text((dados.percentualMaterialRecebido || 0).toFixed(1) + '%');
+        $('#quantidade-material-a-faturar').text((dados.quantidadeMaterialAFaturar || 0).toLocaleString('pt-BR'));
+        $('#percentual-material-a-faturar').text((dados.percentualMaterialAFaturar || 0).toFixed(1) + '%');
+        $('#percentual-material-nao-faturado').text((dados.percentualMaterialNaoFaturado || 0).toFixed(1) + '%');
+        
+        // Cards de Serviço
+        $('#valor-total-servico').text(formatarMoeda(dados.totalServico || 0));
+        $('#valor-servico-faturado').text(formatarMoeda(dados.servicoFaturado || 0));
+        $('#valor-servico-recebido').text(formatarMoeda(dados.servicoRecebido || 0));
+        $('#valor-servico-a-faturar').text(formatarMoeda(dados.servicoAFaturar || 0));
+        $('#valor-servico-nao-faturado').text(formatarMoeda(dados.servicoNaoFaturado || 0));
+        
+        $('#percentual-servico-faturado').text((dados.percentualServicoFaturado || 0).toFixed(1) + '%');
+        $('#percentual-servico-recebido').text((dados.percentualServicoRecebido || 0).toFixed(1) + '%');
+        $('#percentual-servico-a-faturar').text((dados.percentualServicoAFaturar || 0).toFixed(1) + '%');
+        $('#percentual-servico-nao-faturado').text((dados.percentualServicoNaoFaturado || 0).toFixed(1) + '%');
+        
+        // Mostrar cards
+        $('#cards-material').show();
+        $('#cards-servico').show();
+        $('#cards-nao-faturado').show();
+    }
+    
+    function carregar_relatorio(){
+        let data_inicio = $('#data_inicio').val();
+        let data_fim = $('#data_fim').val();
+        let centro_custo = $('#centro_custo').val();
+        let status_pagamento = $('#status_pagamento').val();
+        $.ajax({
+            url: "{{ url_for('relatorios_notas.api_dados') }}",
+            type: 'GET',
+            data: {
+                data_inicio: data_inicio,
+                data_fim: data_fim,
+                centro_custo: centro_custo,
+                status_pagamento: status_pagamento
+            },
+            traditional: true,
+            success: function(response) {
+                $('#relatorio-tabela').html(response);
+                // Extrair dados dos cards do response se existirem
+                var cardsElement = $(response).find('#cards-data');
+                if (cardsElement.length > 0) {
+                    var cardsData = {
+                        // Material
+                        totalMaterial: parseFloat(cardsElement.data('total-material') || 0),
+                        totalPlacasMaterial: parseFloat(cardsElement.data('total-placas-material') || 0),
+                        materialFaturado: parseFloat(cardsElement.data('material-faturado') || 0),
+                        quantidadeMaterialRecebido: parseFloat(cardsElement.data('quantidade-material-recebido') || 0),
+                        quantidadeMaterialAFaturar: parseFloat(cardsElement.data('quantidade-material-a-faturar') || 0),
+                        quantidadeMaterialNaoFaturar: parseFloat(cardsElement.data('quantidade-material-nao-faturar') || 0),
+                        materialRecebido: parseFloat(cardsElement.data('material-recebido') || 0),
+                        materialAFaturar: parseFloat(cardsElement.data('material-a-faturar') || 0),
+                        materialNaoFaturado: parseFloat(cardsElement.data('material-nao-faturado') || 0),
+                        percentualMaterialFaturado: parseFloat(cardsElement.data('percentual-material-faturado') || 0),
+                        percentualMaterialRecebido: parseFloat(cardsElement.data('percentual-material-recebido') || 0),
+                        percentualMaterialAFaturar: parseFloat(cardsElement.data('percentual-material-a-faturar') || 0),
+                        percentualMaterialNaoFaturado: parseFloat(cardsElement.data('percentual-material-nao-faturado') || 0),
+                        
+                        // Serviço
+                        totalServico: parseFloat(cardsElement.data('total-servico') || 0),
+                        servicoFaturado: parseFloat(cardsElement.data('servico-faturado') || 0),
+                        servicoRecebido: parseFloat(cardsElement.data('servico-recebido') || 0),
+                        servicoAFaturar: parseFloat(cardsElement.data('servico-a-faturar') || 0),
+                        servicoNaoFaturado: parseFloat(cardsElement.data('servico-nao-faturado') || 0),
+                        percentualServicoFaturado: parseFloat(cardsElement.data('percentual-servico-faturado') || 0),
+                        percentualServicoRecebido: parseFloat(cardsElement.data('percentual-servico-recebido') || 0),
+                        percentualServicoAFaturar: parseFloat(cardsElement.data('percentual-servico-a-faturar') || 0),
+                        percentualServicoNaoFaturado: parseFloat(cardsElement.data('percentual-servico-nao-faturado') || 0)
+                    };
+                    atualizarCards(cardsData);
+                }
+            },
+            error: function() {
+                alert('Erro ao buscar dados do relatório.');
+            }
+        });
+    }
+    
+    $('#filtro-relatorio').on('submit', function(e) {
+        e.preventDefault();
+        $('#relatorio-tabela').html('Carregando...');
+        carregar_relatorio();
+    });
+
+    function atualizarLinksExportacao() {
+        let data_inicio = $('#data_inicio').val();
+        let data_fim = $('#data_fim').val();
+        let centro_custo = $('#centro_custo').val();
+        let status_pagamento = $('#status_pagamento').val();
+        
+        let params = $.param({
+            data_inicio: data_inicio,
+            data_fim: data_fim,
+            centro_custo: centro_custo,
+            status_pagamento: status_pagamento
+        }, true);
+        
+        $('#btn-exportar-zip').off('click').on('click', function() {
+            let url = "{{ url_for('relatorios_notas.exportar_zip') }}?" + params;
+            window.open(url, '_blank');
+        });
+
+        $('#btn-exportar-pdf').off('click').on('click', function() {
+            let url = "{{ url_for('relatorios_notas.exportar_pdf') }}?" + params;
+            window.open(url, '_blank');
+        });
+
+        $('#btn-exportar-excel').off('click').on('click', function() {
+            let url = "{{ url_for('relatorios_notas.exportar_excel') }}?" + params;
+            window.open(url, '_blank');
+        });
+    }
+    
+    atualizarLinksExportacao();
+    
+    $('#filtro-relatorio').on('submit', function() {
+        setTimeout(atualizarLinksExportacao, 100);
+    });
+    
+    // Abrir modal de documentos ao clicar no número da nota fiscal
+    $(document).on('click', '.link-nota-fiscal', function(e) {
+        e.preventDefault();
+        console.log('Clique no link da nota fiscal detectado');
+        const notaId = $(this).data('id');
+        const numeroNf = $(this).data('numero');
+        console.log('ID da nota:', notaId, 'Número:', numeroNf);
+        
+        // Verificar se o modal existe
+        const modalEl = document.getElementById('modalDocumentos');
+        if (!modalEl) {
+            console.error('Modal modalDocumentos não encontrado no DOM');
+            alert('Erro: Modal de documentos não encontrado. Por favor, recarregue a página.');
+            return;
+        }
+        
+        // Abrir modal de documentos
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+            console.log('Modal aberto via Bootstrap 5');
+        } else if (typeof $.fn.modal !== 'undefined') {
+            $('#modalDocumentos').modal('show');
+            console.log('Modal aberto via jQuery');
+        } else {
+            console.error('Bootstrap Modal não disponível');
+            alert('Erro: Biblioteca de modais não encontrada.');
+            return;
+        }
+        
+        $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
+        $('#notaFiscalId').val(notaId);
+        
+        // Carregar documentos
+        if (typeof carregarDocumentos === 'function') {
+            carregarDocumentos(notaId);
+        } else {
+            console.error('Função carregarDocumentos não encontrada');
+            $('#listaDocumentos').html('<tr><td colspan="4" class="text-center text-danger">Erro: Função de carregamento não encontrada</td></tr>');
+        }
+    });
+    
+    // Funções do modal de documentos (se não estiverem definidas)
+    if (typeof carregarDocumentos === 'undefined') {
+        window.carregarDocumentos = function(notaId) {
+            var tbody = $('#listaDocumentos');
+            tbody.empty();
+            tbody.append('<tr><td colspan="4" class="text-center">Carregando documentos...</td></tr>');
+            $.get(`/notas-fiscais/api/documentos/${notaId}`, function(response) {
+                console.log('Documentos:', response);
+                if (response.documentos && response.documentos.length > 0) {
+                    tbody.empty();
+                    response.documentos.forEach(function(doc) {
+                        var row = `
+                            <tr>
+                                <td>${doc.filename}</td>
+                                <td>${getTipoDocumento(doc.tipo)}</td>
+                                <td>${new Date(doc.uploaded_at).toLocaleDateString()}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary visualizar-pdf" data-id="${doc.id}" title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger excluir-doc" data-id="${doc.id}" title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-primary download" data-id="${doc.id}" data-tipo="${doc.tipo}" title="Download">
+                                        <i class="fas fa-download"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        tbody.append(row);
+                    });
+                } else {
+                    tbody.empty();
+                    tbody.append('<tr><td colspan="4" class="text-center">Nenhum documento encontrado.</td></tr>');
+                }
+            }).fail(function() {
+                tbody.html('<tr><td colspan="4" class="text-center">Erro ao carregar documentos.</td></tr>');
+            });
+        };
+    }
+    
+    if (typeof getTipoDocumento === 'undefined') {
+        window.getTipoDocumento = function(tipo) {
+            const tipos = {
+                1: 'Nota Original',
+                2: 'Nota Carimbadas',
+                3: 'Outros'
+            };
+            return tipos[tipo] || 'Desconhecido';
+        };
+    }
+    
+    if (typeof downloadXmlNota === 'undefined') {
+        window.downloadXmlNota = function(notaId) {
+            $.get(`/notas-fiscais/xml/${notaId}`, function(response) {
+                var url = URL.createObjectURL(new Blob([response.xml], { type: 'application/xml' }));
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = `nf ${notaId}.xml`;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        };
+    }
+    
+    if (typeof downloadPdfNota === 'undefined') {
+        window.downloadPdfNota = function(notaId) {
+            window.location.href = `/notas-fiscais/api/documentos/${notaId}/download`;
+        };
+    }
+    
+    if (typeof abrirPdfNota === 'undefined') {
+        window.abrirPdfNota = function(notaId) {
+            const iframe = document.getElementById('documentoViewer');
+            iframe.src = '';
+            const modalEl = document.getElementById('modalVisualizarDocumento');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+
+            // Remove mensagens/elementos antigos
+            let oldMsg = modalEl.querySelector('.pdf-erro-msg');
+            if (oldMsg) oldMsg.remove();
+            let oldSpinner = modalEl.querySelector('#pdfLoadingSpinner');
+            if (oldSpinner) oldSpinner.remove();
+
+            // Exibe loading
+            iframe.style.display = 'none';
+            let loading = document.createElement('div');
+            loading.id = 'pdfLoadingSpinner';
+            loading.className = 'd-flex justify-content-center align-items-center';
+            loading.style.height = '100%';
+            loading.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando PDF...</span></div>';
+            iframe.parentNode.appendChild(loading);
+
+            fetch(`/notas-fiscais/pdf/${notaId}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Erro ao buscar PDF');
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    iframe.src = url;
+                    iframe.onload = () => {
+                        iframe.style.display = '';
+                        if (loading) loading.remove();
+                    };
+                })
+                .catch(() => {
+                    if (loading) loading.remove();
+                    iframe.style.display = 'none';
+                    let msg = document.createElement('div');
+                    msg.className = 'text-danger text-center mt-3 pdf-erro-msg';
+                    msg.innerText = 'Não foi possível carregar o PDF da nota fiscal.';
+                    iframe.parentNode.appendChild(msg);
+                });
+        };
+    }
+    
+    // Event handlers para ações do modal de documentos
+    $("#tabelaDocumentos").on('click', '.visualizar-pdf', function() {
+        const docId = $(this).data('id');
+        abrirPdfNota(docId);
+    });
+    
+    $("#tabelaDocumentos").on('click', '.download', function() {
+        const docId = $(this).data('id');
+        const tipo = $(this).data('tipo');
+        if (tipo === 10) {
+            downloadXmlNota(docId);
+        } else {
+            downloadPdfNota(docId);
+        }
+    });
+    
+    // Manipular clique no botão de adicionar documento
+    $('#btnAdicionarDocumento').on('click', function() {
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            const modalEl = document.getElementById('modalAdicionarDocumento');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        } else {
+            $('#modalAdicionarDocumento').modal('show');
+        }
+    });
+
+    // Manipular clique no botão de salvar documento
+    $('#btnSalvarDocumento').on('click', function() {
+        var formData = new FormData($('#formAdicionarDocumento')[0]);
+        
+        $.ajax({
+            url: '/notas-fiscais/api/documentos',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso!',
+                        text: 'Documento adicionado com sucesso!'
+                    });
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        const modalEl = document.getElementById('modalAdicionarDocumento');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                    } else {
+                        $('#modalAdicionarDocumento').modal('hide');
+                    }
+                    carregarDocumentos($('#notaFiscalId').val());
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro!',
+                        text: response.message || 'Erro ao adicionar documento.'
+                    });
+                }
+            },
+            error: function() {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro!',
+                    text: 'Erro ao adicionar documento.'
+                });
+            }
+        });
+    });
+    
+    // Manipular clique no botão de excluir documento
+    $(document).on('click', '.excluir-doc', function() {
+        var docId = $(this).data('id');
+        
+        Swal.fire({
+            title: 'Tem certeza?',
+            text: "Esta ação não poderá ser revertida!",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sim, excluir!',
+            cancelButtonText: 'Cancelar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                $.ajax({
+                    url: `/notas-fiscais/api/documentos/${docId}`,
+                    type: 'DELETE',
+                    success: function(response) {
+                        if (response.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Sucesso!',
+                                text: 'Documento excluído com sucesso!'
+                            });
+                            carregarDocumentos($('#notaFiscalId').val());
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Erro!',
+                                text: response.message || 'Erro ao excluir documento.'
+                            });
+                        }
+                    },
+                    error: function() {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Erro!',
+                            text: 'Erro ao excluir documento.'
+                        });
+                    }
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+

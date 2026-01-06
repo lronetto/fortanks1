@@ -45,6 +45,7 @@ class Config:
 
    #EMAILS_PDF_SOLICITACAO = 'leandro.netto@fortanks.ind.br'
     EMAILS_PDF_SOLICITACAO = os.environ.get('EMAILS_PDF_SOLICITACAO') or ''
+    EMAILS_RELATORIO_TANQUES = os.environ.get('EMAILS_RELATORIO_TANQUES') or ''
     
     # Configurações da API do Arquivei
     ARQUIVEI_API_ID = os.environ.get('ARQUIVEI_API_ID') or ''

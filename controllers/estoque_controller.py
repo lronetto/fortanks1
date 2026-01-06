@@ -1035,7 +1035,7 @@ def relatorio_grupos():
                 data_filtro_dt = None
         
         # Buscar todos os grupos de materiais
-        grupos = GrupoMateriais.query.filter_by(ativo=True).order_by(GrupoMateriais.nome).all()
+        grupos = MateriaisGrupos.query.filter_by(ativo=True).order_by(MateriaisGrupos.nome).all()
         
         # Dados do relatório
         dados_relatorio = []
@@ -1129,7 +1129,7 @@ def relatorio_grupos_exportar_excel():
                 data_filtro_dt = None
         
         # Buscar grupos
-        grupos = GrupoMateriais.query.filter_by(ativo=True).order_by(GrupoMateriais.nome).all()
+        grupos = MateriaisGrupos.query.filter_by(ativo=True).order_by(MateriaisGrupos.nome).all()
         grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
         
         # Preparar dados para Excel
@@ -1159,14 +1159,10 @@ def relatorio_grupos_exportar_excel():
                         localizacoes.append(estoque.localizacao)
                 
                 dados_excel.append({
-                    'Grupo': grupo.nome,
-                    'Código Grupo': grupo.codigo or '',
-                    'Código Material': material.codigo or '',
-                    'Material': material.nome,
-                    'Categoria': material.categoria or '',
-                    'Unidade': material.get_unidade_nome() or '',
-                    'Quantidade': float(quantidade_total),
-                    'Localizações': ', '.join(set(localizacoes)) if localizacoes else 'Não especificado'
+                    'codigo_alterdata': str(material.codigo_erp).replace(".0", "") if material.codigo_erp else '',
+                    'nome': material.nome,
+                    'unidade': material.get_unidade_nome() or '',
+                    'estoque': float(quantidade_total),
                 })
         
         # Criar DataFrame
@@ -1216,7 +1212,7 @@ def relatorio_grupos_exportar_pdf():
                 data_filtro_dt = None
         
         # Buscar grupos
-        grupos = GrupoMateriais.query.filter_by(ativo=True).order_by(GrupoMateriais.nome).all()
+        grupos = MateriaisGrupos.query.filter_by(ativo=True).order_by(MateriaisGrupos.nome).all()
         grupos_filtrados = [g for g in grupos if not grupo_id or g.id == grupo_id]
         
         # Preparar dados do relatório

@@ -54,6 +54,10 @@ from dotenv import load_dotenv
 from scripts.processar_email1 import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 from controllers.relatorio_controller import relatorio_bp
+from controllers.relatorios.acabamento_pecas_controller import acabamento_pecas_bp
+from controllers.relatorios.concretagem_pecas_controller import concretagem_pecas_bp
+from controllers.relatorios.notas_controller import notas_bp
+from controllers.relatorios.tanques_controller import tanques_bp
 from controllers.dados_analiticos_controller import executar_importacao_async
 from controllers.upload_controller import upload_bp
 load_dotenv('.env')
@@ -200,6 +204,10 @@ app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(relatorio_usinagem_bp)
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
+app.register_blueprint(acabamento_pecas_bp)
+app.register_blueprint(concretagem_pecas_bp)
+app.register_blueprint(notas_bp)
+app.register_blueprint(tanques_bp)
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
 app.register_blueprint(upload_bp, url_prefix='/uploads')
 logger.info("Blueprints registrados com sucesso!")

@@ -5,6 +5,8 @@ from datetime import datetime
 from flask import flash
 from sqlalchemy import Integer, and_, case, exists, func, or_, select
 
+from models.centro_custo import CentroCusto
+from models.contrato import Contrato
 from models.database import db
 from models.dados_analiticos import DadoAnalitico
 from models.nota_fiscal import (
@@ -17,6 +19,7 @@ from models.nota_fiscal import (
     NotaFiscal,
     NotaFiscalItem,
 )
+from models.tanque import Tanques
 from models.upload import Upload
 
 logger = logging.getLogger(__name__)
@@ -32,12 +35,11 @@ def api_get_dados_notas_fiscais(request):
         json_filtros = request.args
     else:
         json_filtros = request.get_json()
-
     busca = json_filtros.get("busca", "")
     item_nome = json_filtros.get("item_nome", "")
     status_importacao = json_filtros.get("status_importacao", "")
-    emitente = json_filtros.get("emitente", "")
-    destinatario = json_filtros.get("destinatario", "")
+    emitente = json_filtros.get("emitente", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
+    destinatario = json_filtros.get("destinatario", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     status_pagamento = json_filtros.get("status_pagamento", "")
     data_emissao_inicio = json_filtros.get("data_emissao_inicio", "")
     data_emissao_fim = json_filtros.get("data_emissao_fim", "")
@@ -47,18 +49,24 @@ def api_get_dados_notas_fiscais(request):
     remetente = json_filtros.get("remetente", "")
     status_upload = json_filtros.get("status_upload", "")
     tipo_operacao = json_filtros.get("tipo_operacao", "")
+    tipo_operacao = json_filtros.get("tipo_operacao", "") # Venda, Compra, Transferência
     cnpj_emitente = (json_filtros.get("cnpj_emitente", "") or "").strip()
     cnpj_destinatario = (json_filtros.get("cnpj_destinatario", "") or "").strip()
     valor_minimo = json_filtros.get("valor_minimo", "")
     valor_maximo = json_filtros.get("valor_maximo", "")
     valor_exato = json_filtros.get("valor_exato", "")
     notas_selecionadas = json_filtros.get("notas_selecionadas", [])
+    centro_custo_ids = json_filtros.getlist("centro_custo") if hasattr(json_filtros, "getlist") else json_filtros.get("centro_custo", [])
+    if isinstance(centro_custo_ids, str):
+        centro_custo_ids = [centro_custo_ids] if centro_custo_ids else []
+    elif not isinstance(centro_custo_ids, list):
+        centro_custo_ids = [centro_custo_ids] if centro_custo_ids else []
 
-    # Subquery pagamento via EXISTS (evita multiplicação de linhas)
+    # Subquery pagamento - retorna a data de pagamento se houver, NULL caso contrário
     documento_normalizado = func.cast(func.replace(DadoAnalitico.documento, ".", ""), Integer)
     numero_nf_normalizado = func.cast(NotaFiscal.numero_nf, Integer)
-    subquery_pagamento_exists = exists(
-        select(1)
+    pagamento_column = (
+        select(DadoAnalitico.data_pagamento)
         .select_from(DadoAnalitico)
         .where(
             and_(
@@ -67,9 +75,28 @@ def api_get_dados_notas_fiscais(request):
                 documento_normalizado == numero_nf_normalizado,
             )
         )
+        .limit(1)
+        .correlate(NotaFiscal)
+        .scalar_subquery()
+        .label("pagamento")
     )
-    pagamento_column = case((subquery_pagamento_exists, 1), else_=0).label("pagamento")
 
+    # Subquery centro de custo - retorna o ID do centro de custo se houver relação, NULL caso contrário
+    centro_custo_column = (
+        select(CentroCusto.id)
+        .select_from(NotaFiscalItem)
+        .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)
+        .join(Contrato, Contrato.id == Tanques.contrato_id)
+        .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
+        .where(NotaFiscalItem.nf_id == NotaFiscal.id)
+        .limit(1)
+        .correlate(NotaFiscal)
+        .scalar_subquery()
+        .label("centro_custo")
+    )
+
+    # Subquery centro de custo via EXISTS (verifica se item da NF está em Tanques.item_nf)
+   
     # Uploads via EXISTS
     def _upload_exists(tipo=None):
         conditions = [Upload.pai_id == NotaFiscal.id, Upload.pai == "NotaFiscal"]
@@ -110,6 +137,7 @@ def api_get_dados_notas_fiscais(request):
         db.session.query(
             NotaFiscal,
             pagamento_column,
+            centro_custo_column,
             upload_column,
             upload_protocolo_column,
             upload_reembolso_column,
@@ -250,11 +278,17 @@ def api_get_dados_notas_fiscais(request):
     if valor_exato:
         query = query.filter(NotaFiscal.valor_total == valor_exato)
 
+    # Filtro por centro de custo (via subquery)
+    if centro_custo_ids:
+        centro_custo_ids_int = [int(cc_id) for cc_id in centro_custo_ids if cc_id]
+        if centro_custo_ids_int:
+            query = query.filter(centro_custo_column.in_(centro_custo_ids_int))
+
     if status_pagamento:
         if status_pagamento == "pago":
-            query = query.filter(pagamento_column == 1)
+            query = query.filter(pagamento_column.isnot(None))
         elif status_pagamento == "nao_pago":
-            query = query.filter(pagamento_column == 0)
+            query = query.filter(pagamento_column.is_(None))
         elif status_pagamento == "com_faturamento":
             query = query.filter(NotaFiscal.vencimento.isnot(None))
         elif status_pagamento == "vencido":
@@ -265,12 +299,12 @@ def api_get_dados_notas_fiscais(request):
             query = query.filter(
                 NotaFiscal.vencimento.isnot(None),
                 NotaFiscal.vencimento < hoje_str,
-                pagamento_column == 0,
+                pagamento_column.is_(None),
             )
         elif status_pagamento == "apenas_reembolso":
             query = query.filter(upload_reembolso_column == 1)
         elif status_pagamento == "reembolso_e_nao_pago":
-            query = query.filter(upload_reembolso_column == 1, pagamento_column == 0)
+            query = query.filter(upload_reembolso_column == 1, pagamento_column.is_(None))
         elif status_pagamento == "selecionados":
             nsel = [item.get("id") for item in notas_selecionadas if item.get("id")]
             query = query.filter(NotaFiscal.id.in_(nsel))

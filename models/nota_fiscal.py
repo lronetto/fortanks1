@@ -1077,7 +1077,31 @@ class NotaFiscalItem(db.Model):
     # Datas de controle
     data_criacao = db.Column(db.DateTime, default=datetime.now)
     data_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
-    
+    estatisticas = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.estatisticas = {
+            'processados': 0,
+            'itens_processados': [],
+            'vinculacao':{
+                'total': 0,
+                'ja_vinculados': 0,
+                'nao_vinculados': 0,
+                'vinculadosn':0,
+                'vinculados': [],
+                'errosn': 0,
+                'erros': [],
+            },
+            'importacao':{
+                'total': 0,
+                'ja_importados': 0,
+                'nao_importados': 0,
+                'importados': [],
+                'importadosn':0,
+                'errosn': 0,
+                'erros': [],
+            }
+        }
     def save(self):
         """
         Salva o item de nota fiscal no banco de dados
@@ -1130,9 +1154,14 @@ class NotaFiscalItem(db.Model):
         except Exception as e:
             return None
     def vincular(self,fator_conversao_aplicado,material):
-        self.fator_conversao_aplicado = fator_conversao_aplicado
-        self.material_id = material
-        self.save()
+        try:
+            self.fator_conversao_aplicado = fator_conversao_aplicado
+            self.material_id = material
+            self.save()
+            return True
+        except Exception as e:
+            print(f'erro ao vincular: {e}')
+            return False, e
     def vincular_todos(self):
         inicio = datetime.now()
         itens = NotaFiscalItem.query.filter(NotaFiscalItem.codigo==self.codigo,
@@ -1147,31 +1176,43 @@ class NotaFiscalItem(db.Model):
         fim = datetime.now()
         print(f'tempo de execucao vincular_todos: {fim - inicio}')
     def vincular_e_importar_estoque_todos(self):
-        inicio = datetime.now()
+
+        inicio = datetime.now()    
         itens = NotaFiscalItem.query.\
             join(NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id).filter(
                             NotaFiscal.status_processamento!='cancelada',
-                            NotaFiscal.material_id==None,
                             NotaFiscalItem.codigo.like(f'%{self.codigo}%'),
                             NotaFiscalItem.descricao.like(f'%{self.descricao}%'),
                             NotaFiscalItem.nota_fiscal.has(NotaFiscal.cnpj_emitente == self.nota_fiscal.cnpj_emitente),
-                            NotaFiscalItem.unidade.like(f'%{self.unidade}%'),
-                            NotaFiscalItem.material_id==None).all()
-        print(f'itens: {len(itens)}')
-        sucesso, mensagem, estatisticas_item = self.importar_para_estoque()
-        print(f'itens a ser vinculados e importado estoque: {len(itens)}')
-        
+                            NotaFiscalItem.unidade.like(f'%{self.unidade}%')).all()
+        print(f'itens a ser processados: {len(itens)}')
+       
+
         for item in itens:
-            item.vincular(self.fator_conversao_aplicado, self.material_id)
-            item.save()
-            
-            # Determinar movimentações baseado na nota fiscal
-            movimentacoes = determinar_movimentacoes_estoque(item.nota_fiscal)
-            for local, tipo_movimento in movimentacoes:
-                if not item.importado_estoque:
-                    sucesso, mensagem, estatisticas_item = item.importar_para_estoque(local=local, tipo_movimento=tipo_movimento)
+            if item.material_id:
+                item.estatisticas['vinculacao']['ja_vinculados'] += 1
+            else:
+                item.estatisticas['vinculacao']['nao_vinculados'] += 1
+                sucesso, erro = item.vincular(self.fator_conversao_aplicado, self.material_id)
+                if sucesso:
+                    item.estatisticas['vinculacao']['vinculados'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
+                    item.estatisticas['vinculacao']['vinculadosn'] += 1
                 else:
-                    print(f'item {item.id} ja foi importado para o estoque')
+                    item.estatisticas['vinculacao']['errosn'] += 1
+                    item.estatisticas['vinculacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
+                item.save()
+            if item.importado_estoque:
+                item.estatisticas['importacao']['ja_importados'] += 1
+            else:
+                item.estatisticas['importacao']['nao_importados'] += 1
+                sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(usuario_id=current_user.id)
+                if sucesso:
+                    item.estatisticas['importacao']['importados'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
+                    item.estatisticas['importacao']['importadosn'] += 1
+                else:
+                    item.estatisticas['importacao']['errosn'] += 1
+                    item.estatisticas['importacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
+
             
         fim = datetime.now()
         print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')  
@@ -1195,7 +1236,8 @@ class NotaFiscalItem(db.Model):
             'importado': False,
             'nao_vinculado': False,
             'ja_importado': False,
-            'erro': None
+            'erro': None,
+            'movimentacoes': []
         }
         
         # Verificar se já foi importado
@@ -1212,6 +1254,7 @@ class NotaFiscalItem(db.Model):
         # Determinar todas as movimentações necessárias
         movimentacoes = determinar_movimentacoes_estoque(self.nota_fiscal)
         
+        estatisticas['movimentacoes'] = movimentacoes
         if not movimentacoes:
             print(f'Não há movimentações determinadas')
             estatisticas['erro'] = 'Não há movimentações determinadas'

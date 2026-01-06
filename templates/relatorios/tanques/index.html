@@ -1,0 +1,432 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatório de Tanques{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<style>
+    .chart-container {
+        position: relative;
+        height: 400px;
+        margin-bottom: 30px;
+    }
+    .card {
+        margin-bottom: 20px;
+    }
+    .filtros-card {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    .card-resumo {
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+    }
+    .card-resumo .card-body {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .card-resumo .card-title {
+        font-size: 0.9rem;
+        margin-bottom: 10px;
+    }
+    .card-resumo h3 {
+        font-size: 1.8rem;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-water"></i> Relatório de Tanques</h2>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card filtros-card">
+        <div class="card-body">
+            <form id="formFiltros">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="contrato_id" class="form-label">Projeto</label>
+                        <select class="form-select" id="contrato_id" name="contrato_id">
+                            <option value="">Todos os projetos</option>
+                            {% for contrato in contratos %}
+                            <option value="{{ contrato.id }}" {% if contrato_id == contrato.id %}selected{% endif %}>
+                                {{ contrato.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="tanque_id" class="form-label">Tanque</label>
+                        <select class="form-select" id="tanque_id" name="tanque_id">
+                            <option value="">Todos os tanques</option>
+                            {% for tanque in tanques %}
+                            <option value="{{ tanque.id }}">
+                                {{ tanque.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="btn-group w-100" role="group">
+                            <a href="#" id="btnExportarPdf" class="btn btn-danger">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </a>
+                            <a href="#" id="btnExportarExcel" class="btn btn-success">
+                                <i class="fas fa-file-excel"></i> Excel
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="btn-group w-100" role="group">
+                            <button type="button" class="btn btn-info btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-file-excel"></i> Excel por Projeto
+                            </button>
+                            <ul class="dropdown-menu">
+                                {% for contrato in contratos %}
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('relatorios_tanques.relatorio_projeto_excel', contrato_id=contrato.id) }}">
+                                        <i class="fas fa-file-excel"></i> {{ contrato.nome }}
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-primary">
+                <div class="card-body">
+                    <h5 class="card-title text-primary">Total de Tanques</h5>
+                    <h3 class="text-primary" id="totalTanques">{{ total_tanques }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-info">
+                <div class="card-body">
+                    <h5 class="card-title text-info">Quantidade Prevista</h5>
+                    <h3 class="text-info" id="totalPrevisto">{{ total_previsto }}</h3>
+                    <p class="text-muted mb-0">Placas</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-success">
+                <div class="card-body">
+                    <h5 class="card-title text-success">Pecas Concretadas</h5>
+                    <h3 class="text-success" id="totalConcretadas">{{ total_concretadas }}</h3>
+                    <p class="text-muted mb-0">Placas</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center card-resumo border-warning">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">% Conclusão</h5>
+                    <h3 class="text-warning" id="percentualGeral">{{ percentual_geral }}%</h3>
+                    <p class="text-muted mb-0">Geral</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Percentual de Conclusão por Projeto</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartConclusao"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Previsto vs Realizado por Projeto</h5>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartPrevistoRealizado"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-table"></i> Detalhamento de Tanques</h5>
+                </div>
+                <div class="card-body">
+                    <div id="tabela-tanques">
+                        {% include 'relatorios/tanques/tabela.html' %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4/dist/Chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    let chartConclusao = null;
+    let chartPrevistoRealizado = null;
+
+    // Inicializar Select2
+    $('#contrato_id').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Selecione um projeto',
+        allowClear: true
+    });
+
+    $('#tanque_id').select2({
+        theme: 'bootstrap4',
+        placeholder: 'Selecione um tanque',
+        allowClear: true
+    });
+
+    // Inicializar gráficos
+    inicializarGraficos();
+
+    // Atualizar tanques quando projeto mudar
+    $('#contrato_id').on('change', function() {
+        atualizarTanquesPorProjeto();
+    });
+
+    // Filtrar dados
+    $('#btnFiltrar').on('click', function() {
+        filtrarDados();
+    });
+
+    // Atualizar links de exportação
+    atualizarLinksExportacao();
+
+    function inicializarGraficos() {
+        const ctxConclusao = document.getElementById('chartConclusao');
+        const ctxPrevistoRealizado = document.getElementById('chartPrevistoRealizado');
+
+        if (ctxConclusao) {
+            chartConclusao = new Chart(ctxConclusao, {
+                type: 'bar',
+                data: {
+                    labels: {{ labels_projetos|tojson }},
+                    datasets: [{
+                        label: '% Conclusão',
+                        data: {{ valores_conclusao|tojson }},
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true,
+                                max: 100,
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }]
+                    },
+                    tooltips: {
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                return tooltipItem.yLabel + '%';
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        if (ctxPrevistoRealizado) {
+            chartPrevistoRealizado = new Chart(ctxPrevistoRealizado, {
+                type: 'bar',
+                data: {
+                    labels: {{ labels_projetos|tojson }},
+                    datasets: [{
+                        label: 'Previsto',
+                        data: {{ valores_previsto|tojson }},
+                        backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }, {
+                        label: 'Realizado',
+                        data: {{ valores_realizado|tojson }},
+                        backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true
+                            }
+                        }]
+                    }
+                }
+            });
+        }
+    }
+
+    function atualizarTanquesPorProjeto() {
+        const contratoId = $('#contrato_id').val();
+        
+        $.ajax({
+            url: "{{ url_for('relatorios_tanques.api_tanques_por_projeto') }}",
+            type: 'GET',
+            data: { contrato_id: contratoId },
+            success: function(response) {
+                $('#tanque_id').empty().append('<option value="">Todos os tanques</option>');
+                response.tanques.forEach(function(tanque) {
+                    $('#tanque_id').append(
+                        $('<option></option>').val(tanque.id).text(tanque.nome)
+                    );
+                });
+                $('#tanque_id').trigger('change');
+            }
+        });
+    }
+
+    function filtrarDados() {
+        const contratoId = $('#contrato_id').val();
+        const tanqueId = $('#tanque_id').val();
+
+        $.ajax({
+            url: "{{ url_for('relatorios_tanques.api_dados') }}",
+            type: 'GET',
+            data: {
+                contrato_id: contratoId,
+                tanque_id: tanqueId
+            },
+            success: function(response) {
+                atualizarGraficos(response);
+                atualizarTabela(response);
+                atualizarResumo(response);
+                atualizarLinksExportacao();
+            },
+            error: function() {
+                alert('Erro ao buscar dados do relatório.');
+            }
+        });
+    }
+
+    function atualizarGraficos(data) {
+        // Atualizar gráfico de conclusão
+        if (chartConclusao) {
+            chartConclusao.data.labels = data.labels_projetos;
+            chartConclusao.data.datasets[0].data = data.valores_conclusao;
+            chartConclusao.update();
+        }
+
+        // Atualizar gráfico previsto vs realizado
+        if (chartPrevistoRealizado) {
+            chartPrevistoRealizado.data.labels = data.labels_projetos;
+            chartPrevistoRealizado.data.datasets[0].data = data.valores_previsto;
+            chartPrevistoRealizado.data.datasets[1].data = data.valores_realizado;
+            chartPrevistoRealizado.update();
+        }
+    }
+
+    function atualizarTabela(data) {
+        // Atualizar tabela com os dados recebidos
+        let html = '';
+        if (data.dados && data.dados.length > 0) {
+            html = '<div class="table-responsive"><table class="table table-bordered table-hover align-middle"><thead class="table-light"><tr><th>ID</th><th>Tanque</th><th>Projeto</th><th>Sistema</th><th>Dimensões</th><th>Altura Total (m)</th><th>Altura Útil (m)</th><th>Quantidade</th><th>Placas Normais</th><th>Placas Fecho</th><th>Quantidade Prevista</th><th>Pecas Concretadas</th><th>Pecas Acabadas</th><th>% Conclusão</th><th>Bainhas</th><th>Item NF</th></tr></thead><tbody>';
+            
+            let totalQuantidade = 0, totalPlacasNormais = 0, totalPlacasFecho = 0, totalPrevisto = 0, totalConcretadas = 0, totalAcabadas = 0, totalBainhas = 0;
+            
+            data.dados.forEach(function(item) {
+                totalQuantidade += item.quantidade;
+                totalPlacasNormais += item.placas_normais;
+                totalPlacasFecho += item.placas_fecho;
+                totalPrevisto += item.quantidade_prevista;
+                totalConcretadas += item.pecas_concretadas;
+                totalAcabadas += item.pecas_acabadas;
+                totalBainhas += item.bainhas;
+                
+                let badgeClass = 'bg-danger';
+                if (item.percentual_conclusao >= 100) badgeClass = 'bg-success';
+                else if (item.percentual_conclusao >= 50) badgeClass = 'bg-warning text-dark';
+                
+                html += '<tr><td>' + item.id + '</td><td>' + item.nome + '</td><td>' + item.contrato + '</td><td>' + item.sistema + '</td><td>' + item.dimensoes + '</td><td>' + item.altura_total + '</td><td>' + item.altura_util + '</td><td>' + item.quantidade + '</td><td>' + item.placas_normais + '</td><td>' + item.placas_fecho + '</td><td>' + item.quantidade_prevista + '</td><td>' + item.pecas_concretadas + '</td><td>' + item.pecas_acabadas + '</td><td><span class="badge ' + badgeClass + '">' + item.percentual_conclusao + '%</span></td><td>' + item.bainhas + '</td><td>' + item.item_nf + '</td></tr>';
+            });
+            
+            const percentualTotal = totalPrevisto > 0 ? ((totalConcretadas / totalPrevisto) * 100).toFixed(2) : 0;
+            
+            html += '</tbody><tfoot class="table-dark"><tr><th colspan="7" class="text-end">TOTAL</th><th>' + totalQuantidade + '</th><th>' + totalPlacasNormais + '</th><th>' + totalPlacasFecho + '</th><th>' + totalPrevisto + '</th><th>' + totalConcretadas + '</th><th>' + totalAcabadas + '</th><th>' + percentualTotal + '%</th><th>' + totalBainhas + '</th><th>-</th></tr></tfoot></table></div>';
+        } else {
+            html = '<div class="alert alert-info mt-4">Nenhum tanque encontrado para os filtros selecionados.</div>';
+        }
+        
+        $('#tabela-tanques').html(html);
+    }
+
+    function atualizarResumo(data) {
+        $('#totalTanques').text(data.total_tanques);
+        $('#totalPrevisto').text(data.total_previsto);
+        $('#totalConcretadas').text(data.total_concretadas);
+        $('#percentualGeral').text(data.percentual_geral + '%');
+    }
+
+    function atualizarLinksExportacao() {
+        const contratoId = $('#contrato_id').val();
+        const tanqueId = $('#tanque_id').val();
+        
+        let params = new URLSearchParams();
+        if (contratoId) params.append('contrato_id', contratoId);
+        if (tanqueId) params.append('tanque_id', tanqueId);
+        
+        const queryString = params.toString();
+        const baseUrl = "{{ url_for('relatorios_tanques.exportar_pdf') }}";
+        const excelUrl = "{{ url_for('relatorios_tanques.exportar_excel') }}";
+        
+        $('#btnExportarPdf').attr('href', baseUrl + (queryString ? '?' + queryString : ''));
+        $('#btnExportarExcel').attr('href', excelUrl + (queryString ? '?' + queryString : ''));
+    }
+});
+</script>
+{% endblock %}
+

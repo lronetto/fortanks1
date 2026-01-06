@@ -249,6 +249,12 @@
                        $('#inventarioSubmenu').addClass('show');
                        $('#inventarioSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
+                   
+                   // Auto-abrir o submenu de relatórios se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/relatorios')) {
+                       $('#relatoriosSubmenu').addClass('show');
+                       $('#relatoriosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
    
                    // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em um link
                    if (window.innerWidth <= 768) {
@@ -749,6 +755,36 @@
                         <li class="{{ is_active('nota_fiscal.analise_transferencias') }}">
                             <a href="{{ url_for('nota_fiscal.analise_transferencias') }}">
                                 <i class="fas fa-random"></i> Análise de Transferências
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                
+                <!-- Módulo de Relatórios -->
+                <li class="{{ is_active('relatorios_acabamento_pecas') }}">
+                    <a href="#relatoriosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-file-alt"></i> Relatórios
+                    </a>
+                    <ul class="collapse list-unstyled" id="relatoriosSubmenu">
+                        <li class="{{ is_active('relatorios_acabamento_pecas') }}">
+                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}">
+                                <i class="fas fa-paint-roller"></i> Acabamento de Peças
+                            </a>
+                        </li>
+                        <li class="{{ is_active('relatorios_concretagem_pecas') }}">
+                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}">
+                                <i class="fas fa-cube"></i> Concretagem de Peças
+                            </a>
+                        </li>
+                        <li class="{{ is_active('relatorios_notas') }}">
+                            <a href="{{ url_for('relatorios_notas.index') }}">
+                                <i class="fas fa-file-invoice-dollar"></i> Notas Fiscais
+                            </a>
+                        </li>
+                        <li class="{{ is_active('relatorios_tanques') }}">
+                            <a href="{{ url_for('relatorios_tanques.index') }}">
+                                <i class="fas fa-water"></i> Tanques
                             </a>
                         </li>
                     </ul>

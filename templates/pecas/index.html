@@ -16,6 +16,9 @@
             <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalVinculacaoProdutoComposto">
                 <i class="fas fa-link"></i> Vincular Produto Composto
             </button>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalImportacaoInspecao">
+                <i class="fas fa-file-excel"></i> Importar Inspeção
+            </button>
             <a href="{{ url_for('tanque.index') }}" class="btn btn-secondary">
                 <i class="fas fa-water"></i> Ver Todos os Tanques
             </a>
@@ -184,6 +187,9 @@
 
 <!-- Modal de Resumo de Concretagem -->
 {% include 'pecas/modais/resumo_concretagem.html' %}
+
+<!-- Modal de Importação de Inspeção -->
+{% include 'pecas/modais/importacao_inspecao.html' %}
 {% endblock %}
 
 {% block scripts %}

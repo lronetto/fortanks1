@@ -1,0 +1,217 @@
+<!-- Modal de Importação de Inspeção -->
+<div class="modal fade" id="modalImportacaoInspecao" tabindex="-1" aria-labelledby="modalImportacaoInspecaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalImportacaoInspecaoLabel">
+                    <i class="fas fa-file-excel"></i> Importar Arquivo de Inspeção
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formImportacaoInspecao" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-3">
+                        <label for="arquivo_inspecao" class="form-label">
+                            <i class="fas fa-file-upload"></i> Selecione o arquivo Excel (.xlsx)
+                        </label>
+                        <input type="file" class="form-control" id="arquivo_inspecao" name="arquivo" accept=".xlsx,.xls" required>
+                        <div class="form-text">
+                            Selecione o arquivo "INSPEÇÃO DE PISTA.xlsx" com a aba " CADASTRO" para importar as peças.
+                        </div>
+                    </div>
+                    
+                    <div id="alertContainer"></div>
+                    
+                    <div id="progressContainer" style="display: none;">
+                        <div class="progress mb-3">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" 
+                                 style="width: 0%" 
+                                 id="progressBar">
+                                0%
+                            </div>
+                        </div>
+                        <div class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i> Processando arquivo...
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnImportarInspecao">
+                    <i class="fas fa-upload"></i> Importar Arquivo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        var modal = $('#modalImportacaoInspecao');
+        var form = $('#formImportacaoInspecao');
+        var btnImportar = $('#btnImportarInspecao');
+        var alertContainer = $('#alertContainer');
+        var progressContainer = $('#progressContainer');
+        var progressBar = $('#progressBar');
+        
+        // Limpar formulário ao fechar o modal
+        modal.on('hidden.bs.modal', function() {
+            form[0].reset();
+            alertContainer.empty();
+            progressContainer.hide();
+            progressBar.css('width', '0%').text('0%');
+            btnImportar.prop('disabled', false);
+        });
+        
+        // Validação do arquivo
+        $('#arquivo_inspecao').on('change', function() {
+            var arquivo = this.files[0];
+            alertContainer.empty();
+            
+            if (arquivo) {
+                var extensao = arquivo.name.split('.').pop().toLowerCase();
+                if (extensao !== 'xlsx' && extensao !== 'xls') {
+                    alertContainer.html(
+                        '<div class="alert alert-danger">' +
+                        '<i class="fas fa-exclamation-triangle"></i> ' +
+                        'Apenas arquivos Excel (.xlsx ou .xls) são permitidos.' +
+                        '</div>'
+                    );
+                    $(this).val('');
+                    btnImportar.prop('disabled', true);
+                } else {
+                    btnImportar.prop('disabled', false);
+                }
+            }
+        });
+        
+        // Processar importação
+        btnImportar.on('click', function() {
+            var arquivoInput = $('#arquivo_inspecao')[0];
+            
+            if (!arquivoInput.files || arquivoInput.files.length === 0) {
+                alertContainer.html(
+                    '<div class="alert alert-warning">' +
+                    '<i class="fas fa-exclamation-triangle"></i> ' +
+                    'Por favor, selecione um arquivo para importar.' +
+                    '</div>'
+                );
+                return;
+            }
+            
+            var arquivo = arquivoInput.files[0];
+            var formData = new FormData();
+            formData.append('arquivo', arquivo);
+            
+            // Obter token CSRF
+            var csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = form.find('input[name="csrf_token"]').val();
+            }
+            formData.append('csrf_token', csrfToken);
+            
+            // Desabilitar botão e mostrar progresso
+            btnImportar.prop('disabled', true);
+            alertContainer.empty();
+            progressContainer.show();
+            progressBar.css('width', '30%').text('30%');
+            
+            $.ajax({
+                url: '{{ url_for("peca.importar_inspecao") }}',
+                method: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                xhr: function() {
+                    var xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            var percentComplete = (e.loaded / e.total) * 100;
+                            progressBar.css('width', percentComplete + '%').text(Math.round(percentComplete) + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
+                success: function(response) {
+                    progressBar.css('width', '100%').text('100%');
+                    
+                    setTimeout(function() {
+                        if (response.success) {
+                            var mensagem = '<div class="alert alert-success">' +
+                                '<i class="fas fa-check-circle"></i> ' +
+                                '<strong>Importação concluída com sucesso!</strong><br>';
+                            
+                            if (response.total_pecas) {
+                                mensagem += 'Total de peças processadas: ' + response.total_pecas + '<br>';
+                            }
+                            if (response.novas !== undefined) {
+                                mensagem += 'Peças novas: ' + response.novas + '<br>';
+                            }
+                            if (response.atualizadas !== undefined) {
+                                mensagem += 'Peças atualizadas: ' + response.atualizadas + '<br>';
+                            }
+                            if (response.ignoradas && response.ignoradas.quantidade > 0) {
+                                mensagem += 'Peças ignoradas: ' + response.ignoradas.quantidade + '<br>';
+                            }
+                            
+                            mensagem += '</div>';
+                            alertContainer.html(mensagem);
+                            
+                            // Recarregar página após 2 segundos
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else {
+                            alertContainer.html(
+                                '<div class="alert alert-danger">' +
+                                '<i class="fas fa-exclamation-triangle"></i> ' +
+                                '<strong>Erro:</strong> ' + (response.message || 'Erro desconhecido') +
+                                '</div>'
+                            );
+                            btnImportar.prop('disabled', false);
+                        }
+                        
+                        progressContainer.hide();
+                    }, 500);
+                },
+                error: function(xhr) {
+                    progressContainer.hide();
+                    var response = xhr.responseJSON;
+                    var errorMsg = 'Erro ao importar arquivo';
+                    
+                    if (xhr.status === 400 && response && response.message) {
+                        errorMsg = response.message;
+                    } else if (xhr.status === 403) {
+                        errorMsg = 'Erro de autenticação CSRF. Recarregue a página e tente novamente.';
+                    } else if (response && response.message) {
+                        errorMsg = response.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            var errorData = JSON.parse(xhr.responseText);
+                            errorMsg = errorData.message || errorMsg;
+                        } catch (e) {
+                            errorMsg = xhr.responseText.substring(0, 200);
+                        }
+                    }
+                    
+                    alertContainer.html(
+                        '<div class="alert alert-danger">' +
+                        '<i class="fas fa-exclamation-triangle"></i> ' +
+                        '<strong>Erro:</strong> ' + errorMsg +
+                        '</div>'
+                    );
+                    btnImportar.prop('disabled', false);
+                }
+            });
+        });
+    });
+</script>
+

@@ -106,7 +106,7 @@
                     <ul class="dropdown-menu">
                         {% for contrato in contratos %}
                         <li>
-                            <a class="dropdown-item" href="{{ url_for('tanque.relatorio_projeto_excel', contrato_id=contrato.id) }}">
+                            <a class="dropdown-item" href="{{ url_for('relatorios_tanques.relatorio_projeto_excel', contrato_id=contrato.id) }}">
                                 <i class="fas fa-file-excel"></i> {{ contrato.nome }}
                             </a>
                         </li>
@@ -832,7 +832,7 @@
         const tanquesIds = Array.from(checkboxes).map(cb => cb.value);
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '{{ url_for("tanque.relatorio_materiais") }}';
+        form.action = '';
         
         // Adicionar CSRF token
         const csrfInput = document.createElement('input');

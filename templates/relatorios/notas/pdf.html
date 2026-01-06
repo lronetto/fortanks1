@@ -112,7 +112,6 @@
                     <td>{{ item['Quantidade'] }}</td>
                     <td>R$ {{ format_brl(item['Valor']) }}</td>
                     <td>{{ item['Data Prevista'] }}</td>
-
                 </tr>
                 {% endfor %}
             </tbody>
@@ -133,7 +132,3 @@
 </body>
 </html>
 
-{# Macro para formatar valores monetários #}
-{% macro format_brl(value) %}
-    {{ '{:,.2f}'.format(value).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-{% endmacro %} 

@@ -1,0 +1,389 @@
+<!-- Modal para Nova Entrega de EPI -->
+<div class="modal fade" id="novaEntregaModal" tabindex="-1" aria-labelledby="novaEntregaModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="novaEntregaModalLabel">Registrar Entrega de EPI</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNovaEntrega" method="POST" action="{{ url_for('seguranca.nova_entrega') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="colaborador_id" class="form-label">Colaborador <span class="text-danger">*</span></label>
+                            <select class="form-select select2" id="colaborador_id" name="colaborador_id" required>
+                                <option value="">Selecione o colaborador</option>
+                                {% for colaborador in colaboradores %}
+                                <option value="{{ colaborador.id }}">{{ colaborador.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="epi_id" class="form-label">EPI <span class="text-danger">*</span></label>
+                            <select class="form-select select2" id="epi_id_modal" name="epi_id_modal" required>
+                                <option value="">Selecione o EPI</option>
+                                {% for epi in epis_disponiveis %}
+                                <option value="{{ epi.id }}" 
+                                        data-estoque="{{ epi.getEstoqueAtual() }}" 
+                                        data-ca-numero="{{ epi.ca_numero or '' }}">
+                                    {{ epi.material.nome }} ({{ epi.ca_numero or 'Sem CA' }}) - Disponível: {{ epi.getEstoqueAtual() }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="mt-2">
+                                <label for="ca_numero_entrega" class="form-label small">Nº C.A. (Opcional, da etiqueta)</label>
+                                <input type="text" class="form-control form-control-sm" id="ca_numero_entrega" name="ca_numero_entrega" placeholder="Digite o C.A. se diferente do cadastro">
+                                <small id="ca-original-info" class="form-text text-muted d-none"></small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="data_entrega" class="form-label">Data da Entrega</label>
+                            <input type="date" class="form-control" id="data_entrega" name="data_entrega" 
+                                value="{{ now1.strftime('%Y-%m-%d') }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="quantidade" class="form-label">Quantidade</label>
+                            <input type="number" class="form-control" id="quantidade" name="quantidade" min="1" value="1">
+                            <div class="form-text" id="estoque_info"></div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="motivo" class="form-label">Motivo</label>
+                            <select class="form-select" id="motivo" name="motivo">
+                                <option value="Novo">Primeira entrega</option>
+                                <option value="Reposição">Reposição</option>
+                                <option value="Troca">Troca</option>
+                                <option value="Outro">Outro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="observacoes" class="form-label">Observações</label>
+                            <textarea class="form-control" id="observacoes" name="observacoes" rows="2"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="assinado" name="assinado">
+                        <label class="form-check-label" for="assinado">
+                            Entrega assinada pelo colaborador
+                        </label>
+                    </div>
+                    
+                    <div id="epi-ativo-container" class="alert alert-warning mb-3" style="display: none;">
+                        <div class="d-flex align-items-center">
+                            <div class="flex-grow-1">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                <span id="epi-ativo-info">Este colaborador já possui este EPI em uso e não devolvido!</span>
+                            </div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="devolver_antigo" name="devolver_antigo">
+                            <label class="form-check-label" for="devolver_antigo">
+                                <strong>Devolver automaticamente o EPI anterior</strong> e registrar nova entrega
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3 form-check d-none" id="update-ca-container">
+                        <input type="checkbox" class="form-check-input" id="update_epi_ca" name="update_epi_ca" value="yes">
+                        <label class="form-check-label" for="update_epi_ca">Atualizar C.A. no cadastro principal do EPI?</label>
+                    </div>    
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarNovaEntrega">Registrar Entrega</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Função para resetar campos e visibilidade relacionados ao CA
+function resetCaLogic() {
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const caOriginalInfo = document.getElementById('ca-original-info');
+    const updateCaContainer = document.getElementById('update-ca-container');
+    const updateEpiCaCheckbox = document.getElementById('update_epi_ca');
+
+    if (caNumeroEntregaInput) caNumeroEntregaInput.value = '';
+    if (caOriginalInfo) caOriginalInfo.classList.add('d-none');
+    if (updateCaContainer) updateCaContainer.classList.add('d-none');
+    if (updateEpiCaCheckbox) updateEpiCaCheckbox.checked = false;
+}
+
+// Função para lidar com a seleção de EPI (inclui lógica do CA)
+function handleEpiSelectionChange() {
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const caOriginalInfo = document.getElementById('ca-original-info');
+
+    resetCaLogic();
+
+    if (!epiSelectModal) return;
+
+    const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+    const epiId = selectedOption.value;
+    const colabSelectModal = document.getElementById('colaborador_id');
+    const colaboradorId = colabSelectModal.options[colabSelectModal.selectedIndex].value;
+
+    verificarEpiAtivo(colaboradorId, epiId);
+
+    if (selectedOption && selectedOption.value) {
+        const caOriginalEpi = selectedOption.dataset.caNumero || '';
+        if (caNumeroEntregaInput) caNumeroEntregaInput.value = caOriginalEpi;
+
+        if (caOriginalInfo) {
+             caOriginalInfo.textContent = caOriginalEpi ? `C.A. no cadastro: ${caOriginalEpi}` : 'EPI sem C.A. cadastrado.';
+             caOriginalInfo.classList.remove('d-none');
+        }
+    } else {
+         if (caNumeroEntregaInput) caNumeroEntregaInput.value = '';
+         if (caOriginalInfo) caOriginalInfo.classList.add('d-none');
+    }
+
+    verificarEstoqueModal();
+    checkShowUpdateCaOption();
+}
+
+// Função para verificar se mostra a opção de atualizar CA
+function checkShowUpdateCaOption() {
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const updateCaContainer = document.getElementById('update-ca-container');
+    const updateEpiCaCheckbox = document.getElementById('update_epi_ca');
+
+    if (!epiSelectModal || !caNumeroEntregaInput || !updateCaContainer) return;
+      
+    const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+    const caOriginalEpi = selectedOption ? (selectedOption.dataset.caNumero || '') : '';
+    const caDigitado = caNumeroEntregaInput.value.trim();
+
+    if (selectedOption && selectedOption.value && caDigitado && caDigitado !== caOriginalEpi) {
+        updateCaContainer.classList.remove('d-none');
+    } else {
+        updateCaContainer.classList.add('d-none');
+        if (updateEpiCaCheckbox) updateEpiCaCheckbox.checked = false;
+    }
+}
+
+// Função para verificar estoque disponível no modal
+function verificarEstoqueModal() { 
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const quantidadeInputModal = document.getElementById('quantidade');
+    const submitButtonNovaEntrega = document.getElementById('btnSalvarNovaEntrega');
+    const colabSelectModal = document.getElementById('colaborador_id');
+    const avisoEstoque = document.getElementById('estoque_info');
+
+    if (!epiSelectModal || !quantidadeInputModal || !submitButtonNovaEntrega) { 
+        return;
+    }
+
+    const selectedOption = epiSelectModal.options[epiSelectModal.selectedIndex];
+    if (!selectedOption || !selectedOption.value) {
+         if(avisoEstoque) avisoEstoque.classList.add('d-none');
+         submitButtonNovaEntrega.disabled = true;
+         return;
+    }
+    const estoqueDisponivel = parseInt(selectedOption.dataset.estoque || '0', 10);
+    const quantidadeDesejada = parseInt(quantidadeInputModal.value || '1', 10);
+
+    let isEstoqueOk = true;
+    let msgAviso = '';
+
+    if (isNaN(quantidadeDesejada) || quantidadeDesejada <= 0) {
+        msgAviso = 'Quantidade deve ser maior que zero.';
+        isEstoqueOk = false;
+        quantidadeInputModal.value = 1;
+    } else if (quantidadeDesejada > estoqueDisponivel) {
+        msgAviso = `Estoque insuficiente! Disponível: ${estoqueDisponivel}`;
+        isEstoqueOk = false;
+        quantidadeInputModal.value = estoqueDisponivel > 0 ? estoqueDisponivel : 1;
+    }
+
+    if (avisoEstoque) {
+        if (!isEstoqueOk) {
+            avisoEstoque.textContent = msgAviso;
+            avisoEstoque.classList.remove('d-none');
+            avisoEstoque.classList.add('text-danger');
+        } else {
+            avisoEstoque.classList.add('d-none');
+            avisoEstoque.classList.remove('text-danger');
+        }
+    }
+    submitButtonNovaEntrega.disabled = !isEstoqueOk || !(colabSelectModal && colabSelectModal.value);
+}
+
+// Função para verificar se colaborador já tem EPI ativo
+function verificarEpiAtivo(colaboradorId, epiId) { 
+    const epiAtivoContainer = document.getElementById('epi-ativo-container');
+    const epiAtivoInfo = document.getElementById('epi-ativo-info');
+    const devolverAntigoCheckbox = document.getElementById('devolver_antigo');
+
+    if (!colaboradorId || !epiId) {
+        epiAtivoContainer.style.display = 'none';
+        if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = false;
+        return;
+    }
+
+    fetch(`/seguranca/epis/ativo`, {
+            method: "POST",
+            body: new FormData(document.getElementById('formNovaEntrega')),
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const alertText = `<strong>${data.entrega.colaborador.nome}</strong> já possui o EPI <strong>${data.entrega.epi.material.nome}</strong> 
+                                em uso desde <strong>${data.entrega.data_entrega}</strong> (Entrega ID: ${data.entrega.id}).`;
+                 epiAtivoInfo.innerHTML = alertText;
+                epiAtivoContainer.style.display = 'block';
+                if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = true;
+            } else {
+                epiAtivoContainer.style.display = 'none';
+                if(devolverAntigoCheckbox) devolverAntigoCheckbox.checked = false;
+            }
+        });
+}
+
+// Inicialização do modal de nova entrega
+document.addEventListener('DOMContentLoaded', function () {
+    const novaEntregaModalEl = document.getElementById('novaEntregaModal');
+    const epiSelectModal = document.getElementById('epi_id_modal');
+    const colabSelectModal = document.getElementById('colaborador_id');
+    const quantidadeInputModal = document.getElementById('quantidade');
+    const caNumeroEntregaInput = document.getElementById('ca_numero_entrega');
+    const novaEntregaForm = document.getElementById('formNovaEntrega');
+    const submitButtonNovaEntrega = document.getElementById('btnSalvarNovaEntrega');
+    const epiAtivoContainer = document.getElementById('epi-ativo-container');
+    const devolverAntigoCheckbox = document.getElementById('devolver_antigo');
+
+    if (!novaEntregaModalEl) return;
+
+    // Inicialização Select2
+    $(novaEntregaModalEl).on('shown.bs.modal', function () {
+        $(colabSelectModal).select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Selecione o colaborador',
+            dropdownParent: $(novaEntregaModalEl)
+        }).val(null).trigger('change');
+
+        $(epiSelectModal).select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Selecione o EPI',
+            dropdownParent: $(novaEntregaModalEl)
+        }).val(null).trigger('change');
+
+        resetCaLogic();
+        verificarEstoqueModal();
+    });
+
+    $(novaEntregaModalEl).on('hidden.bs.modal', function () {
+         if ($(colabSelectModal).data('select2')) {
+             $(colabSelectModal).select2('destroy');
+         }
+         if ($(epiSelectModal).data('select2')) {
+             $(epiSelectModal).select2('destroy');
+         }
+         if (novaEntregaForm) novaEntregaForm.reset();
+         resetCaLogic();
+         const avisoEstoque = document.getElementById('estoque_info');
+         if(avisoEstoque) {
+              avisoEstoque.textContent = '';
+              avisoEstoque.classList.remove('text-danger');
+          }
+          if(epiAtivoContainer) epiAtivoContainer.style.display = 'none';
+          if(submitButtonNovaEntrega) submitButtonNovaEntrega.disabled = true;
+     });
+
+    // Event Listeners
+    if (epiSelectModal) {
+        $(epiSelectModal).on('change', handleEpiSelectionChange);
+    }
+    if (caNumeroEntregaInput) {
+        caNumeroEntregaInput.addEventListener('input', checkShowUpdateCaOption);
+    }
+    if (quantidadeInputModal) {
+        quantidadeInputModal.addEventListener('input', verificarEstoqueModal);
+    }
+    if (colabSelectModal) {
+        $(colabSelectModal).on('change', function() {
+            console.log('colaborador selecionado', this.value);
+            verificarEstoqueModal();
+            const epiSelectModal = document.getElementById('epi_id_modal');
+            const epiId = epiSelectModal ? epiSelectModal.value : '';
+            verificarEpiAtivo(this.value, epiId);
+        });
+    }
+
+    // Submit do formulário
+    if(novaEntregaForm && submitButtonNovaEntrega) {
+         submitButtonNovaEntrega.addEventListener('click', function(event) {
+              if (!colabSelectModal.value) {
+                 showToast('Atenção', 'Selecione um colaborador.', 'warning');
+                 return;
+              }
+              if (!epiSelectModal.value) {
+                 showToast('Atenção', 'Selecione um EPI.', 'warning');
+                 return;
+              }
+              if (!quantidadeInputModal.value || parseInt(quantidadeInputModal.value) <= 0) {
+                  showToast('Atenção', 'Informe uma quantidade válida.', 'warning');
+                  quantidadeInputModal.focus();
+                  return;
+              }
+   
+              verificarEstoqueModal();
+              if(submitButtonNovaEntrega.disabled) {
+                  showToast('Atenção', 'Verifique a quantidade e o estoque disponível.', 'warning');
+                  return;
+              }
+   
+              submitButtonNovaEntrega.disabled = true;
+              submitButtonNovaEntrega.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processando...';
+   
+              const formData = new FormData(novaEntregaForm);
+              const updateEpiCaCheckbox = document.getElementById('update_epi_ca');
+              formData.append('update_epi_ca', updateEpiCaCheckbox && updateEpiCaCheckbox.checked ? 'yes' : 'no');
+              formData.append('devolver_antigo', devolverAntigoCheckbox && devolverAntigoCheckbox.checked ? 'on' : 'off');
+   
+              const actionUrl = novaEntregaForm.action;
+   
+              fetch(actionUrl, {
+                  method: 'POST',
+                  body: formData,
+                  headers: {
+                      'X-Requested-With': 'XMLHttpRequest'
+                  }
+              })
+              .then(response => response.json().then(data => ({ ok: response.ok, status: response.status, data }))) 
+              .then(({ ok, status, data }) => {
+                  if (ok && data.success) {
+                      showToast('Sucesso', data.message || 'Entrega registrada!', 'success');
+                      bootstrap.Modal.getInstance(novaEntregaModalEl)?.hide(); 
+                      setTimeout(() => window.location.reload(), 1500); 
+                 } else {
+                      throw new Error(data.message || `Erro ${status} ao registrar entrega.`);
+                  }
+             })
+             .catch(error => {
+                  console.error('Erro ao registrar entrega:', error);
+                  showToast('Erro', error.message || 'Não foi possível registrar a entrega.', 'danger');
+                  submitButtonNovaEntrega.disabled = false;
+                  submitButtonNovaEntrega.innerHTML = 'Registrar Entrega';
+              });
+         });
+     }
+});
+</script>
+

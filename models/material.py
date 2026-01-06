@@ -198,11 +198,8 @@ class MateriaisGrupos(db.Model):
         """
         Remove o grupo do banco de dados
         """
-        # Remove as associações com materiais primeiro
-        db.session.execute(
-            db.text("DELETE FROM materiais_grupos WHERE grupo_id = :grupo_id"),
-            {"grupo_id": self.id}
-        )
+        # Remove as associações com materiais primeiro usando SQLAlchemy ORM
+        self.materiais.clear()
         db.session.delete(self)
         db.session.commit()
     
@@ -225,14 +222,8 @@ class MateriaisGrupos(db.Model):
         Adiciona um material ao grupo
         Verifica se já existe antes de adicionar para evitar duplicatas
         """
-        # Verificar diretamente no banco de dados para evitar problemas de cache
-        sql_check = "SELECT COUNT(*) FROM materiais_grupos WHERE material_id = :material_id AND grupo_id = :grupo_id"
-        result = db.session.execute(
-            db.text(sql_check),
-            {"material_id": material.id, "grupo_id": self.id}
-        ).fetchone()
-        
-        if result and result[0] > 0:
+        # Verificar se o material já está no grupo usando SQLAlchemy ORM
+        if material in self.materiais:
             # Material já está no grupo, não fazer nada
             return False
         

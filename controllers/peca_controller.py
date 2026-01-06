@@ -1,5 +1,5 @@
 from itertools import groupby
-from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify
+from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, current_app
 from models import db
 from models.contrato import Contrato
 from models.tanque import TanquesGrupos, Tanques, TanquesPecas, TanquesProdutoComposto
@@ -10,6 +10,8 @@ from flask_login import login_required, current_user
 from datetime import datetime
 from decimal import Decimal
 import json
+import os
+import tempfile
 from models.logs import Logs
 
 # Função auxiliar para converter Decimal para float recursivamente
@@ -1254,4 +1256,243 @@ def processar_producao_manual(log):
                 mov.data_movimento = dia
                 mov.save()
     return True
+
+@peca.route('/importar-inspecao', methods=['POST'])
+@login_required
+def importar_inspecao():
+    """Importa arquivo Excel de inspeção e processa as peças"""
+    try:
+        if 'arquivo' not in request.files:
+            return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
+        
+        arquivo = request.files['arquivo']
+        if arquivo.filename == '':
+            return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'}), 400
+        
+        # Verificar extensão
+        if not arquivo.filename.endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'message': 'Apenas arquivos Excel (.xlsx ou .xls) são permitidos'}), 400
+        
+        # Salvar arquivo temporariamente
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, f'inspecao_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx')
+        arquivo.save(temp_path)
+        
+        try:
+            # Processar arquivo usando a função do script
+            resultado = processar_arquivo_inspecao(temp_path)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Arquivo processado com sucesso',
+                'total_pecas': resultado.get('total_pecas', 0),
+                'novas': resultado.get('novas', 0),
+                'atualizadas': resultado.get('atualizadas', 0),
+                'ignoradas': resultado.get('ignoradas', {})
+            })
+        finally:
+            # Remover arquivo temporário
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+        
+    except Exception as e:
+        import traceback
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao processar arquivo: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
+
+def processar_arquivo_inspecao(xlsx_path):
+    """Processa o arquivo Excel de inspeção e retorna estatísticas"""
+    import pandas as pd
+    import re
+    from models.nota_fiscal import NotaFiscal, CNPJS_MATRIZ
+    
+    log = {
+        'total_pecas': 0,
+        'novas': 0,
+        'atualizadas': 0,
+        'erros': {
+            'quantidade': 0,
+            'lista': []
+        },
+        'ignoradas': {
+            'quantidade': 0,
+            'lista': []
+        },
+        'linhas_ignoradas': []
+    }
+    
+    def serialize_value(value):
+        from datetime import date as date_type
+        if isinstance(value, (pd.Timestamp, datetime, date_type)):
+            if hasattr(value, 'strftime'):
+                return value.strftime('%Y-%m-%d')
+            return str(value)
+        return value
+
+    def serialize_nested(data):
+        if isinstance(data, dict):
+            return {k: serialize_nested(v) for k, v in data.items()}
+        if isinstance(data, list):
+            return [serialize_nested(item) for item in data]
+        return serialize_value(data)
+    
+    # Ler o arquivo Excel na aba ' CADASTRO' (com espaço no início)
+    df = pd.read_excel(xlsx_path, sheet_name=' CADASTRO', engine='openpyxl')
+    
+    pecas = []
+    
+    for index, row in df.iterrows():
+        peca = {
+            'tanque_id': None,
+            'nome': None,
+            'numero_sequencial': None,
+            'numero_tanque': None,
+            'data_concretagem': None,
+            'tipo': None,
+            'qualidade': {
+                'acabamento': None,
+                'chapa': None,
+                'pista': None,
+                'transporte': {
+                    'data_transporte': None,
+                    'nota': None,
+                    'cte': None,
+                    'placa_carreta': None,
+                    'transportadora': None,
+                }
+            },
+        }
+        
+        if row.iloc[5] == '-' or pd.isna(row.iloc[5]) or row.iloc[5] == None:
+            log['ignoradas']['quantidade'] += 1
+            log['ignoradas']['lista'].append(index)
+            continue
+        
+        # Usa iloc para acessar por posição
+        tipo_tanque_raw = row.iloc[4] if len(row) > 4 else None
+        tipo_tanque = str(tipo_tanque_raw).strip() if pd.notna(tipo_tanque_raw) else None
+        peca['tipo_tanque'] = None
+        tanque = Tanques.query.filter(Tanques.nome.like(f'%{tipo_tanque}%')).first()
+        
+        if tanque:
+            peca['tanque_id'] = tanque.id
+        else:
+            log['erros']['quantidade'] += 1
+            log['erros']['lista'].append(index)
+            log['ignoradas']['quantidade'] += 1
+            log['ignoradas']['lista'].append(index)
+            continue
+        
+        # Trata valores nan do pandas
+        nome_part1 = row.iloc[5] if len(row) > 5 and pd.notna(row.iloc[5]) else ''
+        nome_part2 = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ''
+        seq_match = re.search(r'\d+', str(nome_part2)) if nome_part2 != '' else None
+        seq_formatado = seq_match.group(0).zfill(2) if seq_match else (str(nome_part2).strip() if nome_part2 != '' else '')
+        peca['nome'] = f"{str(nome_part1).strip()}-{seq_formatado}"
+        peca['numero_sequencial'] = seq_formatado if seq_formatado else (str(nome_part2).strip() if nome_part2 != '' else None)
+        
+        numerotanque_raw = tipo_tanque if tipo_tanque else None
+        numerotanque_str = str(numerotanque_raw).strip() if numerotanque_raw else ''
+        numero_tanque = None
+        if numerotanque_str:
+            match = re.search(r'(\d+)', numerotanque_str)
+            if match:
+                numero_tanque = int(match.group(1))
+        peca['numero_tanque'] = numero_tanque if numero_tanque is not None else 3
+        
+        data_raw = row.iloc[1] if len(row) > 1 and pd.notna(row.iloc[1]) else None
+        # Converte para datetime object ou None para salvar no MySQL
+        if data_raw and hasattr(data_raw, 'strftime'):
+            peca['data_concretagem'] = data_raw
+        elif data_raw and isinstance(data_raw, str) and data_raw != '-':
+            # Tenta parsear string no formato DD/MM/YYYY
+            try:
+                peca['data_concretagem'] = datetime.strptime(data_raw, '%d/%m/%Y')
+            except:
+                peca['data_concretagem'] = None
+        else:
+            peca['data_concretagem'] = None
+        
+        peca['tipo'] = row.iloc[9] if len(row) > 9 and pd.notna(row.iloc[9]) else None
+        peca['qualidade']['pista'] = row.iloc[18] if len(row) > 18 and pd.notna(row.iloc[18]) else None
+        peca['qualidade']['acabamento'] = row.iloc[17] if len(row) > 17 and pd.notna(row.iloc[17]) else None
+        chapa_valor = row.iloc[16] if len(row) > 16 and pd.notna(row.iloc[16]) else None
+        peca['qualidade']['chapa'] = '' if chapa_valor == 'NÃO TEM CHAPA' else (chapa_valor or '')
+        
+        # Trata data_transporte
+        data_transporte_raw = row.iloc[20] if len(row) > 20 and pd.notna(row.iloc[20]) else None
+        if data_transporte_raw and hasattr(data_transporte_raw, 'strftime'):
+            peca['qualidade']['transporte']['data_transporte'] = data_transporte_raw.strftime('%Y-%m-%d')
+        elif data_transporte_raw and isinstance(data_transporte_raw, str):
+            try:
+                dt = datetime.strptime(data_transporte_raw, '%d/%m/%Y')
+                peca['qualidade']['transporte']['data_transporte'] = dt.strftime('%Y-%m-%d')
+            except:
+                peca['qualidade']['transporte']['data_transporte'] = data_transporte_raw
+        else:
+            peca['qualidade']['transporte']['data_transporte'] = None
+        
+        # Trata nota
+        nota_raw = row.iloc[22] if len(row) > 23 else None
+        if pd.notna(nota_raw) and nota_raw != '-':
+            peca['qualidade']['transporte']['nota'] = int(nota_raw) if isinstance(nota_raw, (int, float)) else nota_raw
+        else:
+            peca['qualidade']['transporte']['nota'] = None
+
+        # Buscar nota se tiver um valor válido
+        nota = None
+        if peca['qualidade']['transporte']['nota'] is not None and pd.notna(peca['qualidade']['transporte']['nota']) and type(peca['qualidade']['transporte']['nota']) == str:
+            nota = NotaFiscal.query.filter(NotaFiscal.numero_nf==int(peca['qualidade']['transporte']['nota']),NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ)).first()
+        if nota:
+            cte = NotaFiscal.query.filter(NotaFiscal.dados_adicionais.like(f'%chave_nf:{nota.chave_acesso}%')).first()
+            if cte:
+                peca['qualidade']['transporte']['cte'] = cte.numero_nf
+                peca['qualidade']['transporte']['transportadora'] = cte.nome_emitente
+
+        peca['qualidade']['transporte']['placa_carreta'] = row.iloc[21] if len(row) > 21 and pd.notna(row.iloc[21]) else None
+        
+        pecas.append(peca)
+        log['total_pecas'] += 1
+    
+    # Processar peças
+    for peca in pecas:
+        peca_existe = TanquesPecas.query.filter(
+            TanquesPecas.nome==peca['nome'], 
+            TanquesPecas.numero_sequencial==peca['numero_sequencial'], 
+            TanquesPecas.tanque_id==peca['tanque_id']
+        ).first()
+        
+        if not peca_existe:
+            qualidade_serializada = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
+            log['novas'] += 1
+            peca_dict = TanquesPecas(
+                tanque_id=peca['tanque_id'],
+                nome=peca['nome'],
+                numero_sequencial=peca['numero_sequencial'],
+                numero_tanque=peca['numero_tanque'],
+                data_concretagem=peca['data_concretagem'],
+                tipo=peca['tipo'],
+                qualidade=qualidade_serializada
+            )
+            peca_dict.save()
+        else:
+            log['atualizadas'] += 1
+            peca_existe.qualidade = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
+            peca_existe.data_concretagem = peca['data_concretagem']
+            peca_existe.tipo = peca['tipo']
+            peca_existe.numero_tanque = peca['numero_tanque']
+            peca_existe.save()
+    
+    # Salvar log
+    Logs(local='importar_inspecao', data=datetime.now(), texto=json.dumps(log))
+    db.session.commit()
+    
+    return log
 

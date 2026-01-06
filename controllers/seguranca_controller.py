@@ -553,7 +553,7 @@ def entregas_index():
 
     # Buscar dados para os filtros
     colaboradores = Colaborador.query.order_by(Colaborador.nome).all()
-    epis_disponiveis = Epi.query.join(Epi.material).order_by(Material.nome).all() 
+    epis_disponiveis = Epi.query.join(Epi.material).order_by(Materiais.nome).all() 
     #print(f"Epis disponíveis: {epis_disponiveis}")
     # Ou buscar apenas materiais com categoria EPI
     # materiais_epi = Material.query.filter(Material.categoria == 'EPI').order_by(Material.nome).all()
@@ -1004,7 +1004,7 @@ def ficha_epi_modal(id):
     """
     Retorna o conteúdo HTML da ficha de EPI para ser carregado em um modal.
     """
-    colaborador = Colaborador.query.options(joinedload(Colaborador.entregas_epi).joinedload(EntregaEPI.epi).joinedload(EPI.material)).get_or_404(id)
+    colaborador = Colaborador.query.options(joinedload(Colaborador.entregas_epi).joinedload(EpiEntregas.epi).joinedload(Epi.material)).get_or_404(id)
     
     # Ordenar entregas, por exemplo, por data de entrega descendente
     entregas_ordenadas = sorted(colaborador.entregas_epi, key=lambda e: e.data_entrega, reverse=True)

@@ -1,0 +1,82 @@
+{% if dados and dados|length > 0 %}
+{% macro format_brl(value) %}
+    {{ '{:,.2f}'.format(value).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+{% endmacro %}
+
+<div class="table-responsive">
+    <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>ID</th>
+                <th>Tanque</th>
+                <th>Projeto</th>
+                <th>Sistema</th>
+                <th>Dimensões</th>
+                <th>Altura Total (m)</th>
+                <th>Altura Útil (m)</th>
+                <th>Quantidade</th>
+                <th>Placas Normais</th>
+                <th>Placas Fecho</th>
+                <th>Quantidade Prevista</th>
+                <th>Pecas Concretadas</th>
+                <th>Pecas Acabadas</th>
+                <th>% Conclusão</th>
+                <th>Bainhas</th>
+                <th>Item NF</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in dados %}
+            <tr>
+                <td>{{ item['id'] }}</td>
+                <td>{{ item['nome'] }}</td>
+                <td>{{ item['contrato'] }}</td>
+                <td>{{ item['sistema'] }}</td>
+                <td>{{ item['dimensoes'] }}</td>
+                <td>{{ item['altura_total'] }}</td>
+                <td>{{ item['altura_util'] }}</td>
+                <td>{{ item['quantidade'] }}</td>
+                <td>{{ item['placas_normais'] }}</td>
+                <td>{{ item['placas_fecho'] }}</td>
+                <td>{{ item['quantidade_prevista'] }}</td>
+                <td>{{ item['pecas_concretadas'] }}</td>
+                <td>{{ item['pecas_acabadas'] }}</td>
+                <td>
+                    {% if item['percentual_conclusao'] >= 100 %}
+                        <span class="badge bg-success">{{ item['percentual_conclusao'] }}%</span>
+                    {% elif item['percentual_conclusao'] >= 50 %}
+                        <span class="badge bg-warning text-dark">{{ item['percentual_conclusao'] }}%</span>
+                    {% else %}
+                        <span class="badge bg-danger">{{ item['percentual_conclusao'] }}%</span>
+                    {% endif %}
+                </td>
+                <td>{{ item['bainhas'] }}</td>
+                <td>{{ item['item_nf'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="table-dark">
+            <tr>
+                <th colspan="7" class="text-end">TOTAL</th>
+                <th>{{ dados|sum(attribute='quantidade') }}</th>
+                <th>{{ dados|sum(attribute='placas_normais') }}</th>
+                <th>{{ dados|sum(attribute='placas_fecho') }}</th>
+                <th>{{ dados|sum(attribute='quantidade_prevista') }}</th>
+                <th>{{ dados|sum(attribute='pecas_concretadas') }}</th>
+                <th>{{ dados|sum(attribute='pecas_acabadas') }}</th>
+                <th>
+                    {% set total_previsto = dados|sum(attribute='quantidade_prevista') %}
+                    {% set total_concretadas = dados|sum(attribute='pecas_concretadas') %}
+                    {% set percentual_total = (total_concretadas / total_previsto * 100) if total_previsto > 0 else 0 %}
+                    {{ percentual_total|round(2) }}%
+                </th>
+                <th>{{ dados|sum(attribute='bainhas') }}</th>
+                <th>-</th>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% else %}
+    <div class="alert alert-info mt-4">Nenhum tanque encontrado para os filtros selecionados.</div>
+{% endif %}
+
