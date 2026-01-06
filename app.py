@@ -54,12 +54,17 @@ from dotenv import load_dotenv
 from scripts.processar_email1 import processar_emails
 from apscheduler.schedulers.background import BackgroundScheduler
 from controllers.relatorio_controller import relatorio_bp
+
+from controllers.dados_analiticos_controller import executar_importacao_async
+from controllers.upload_controller import upload_bp
+
+
 from controllers.relatorios.acabamento_pecas_controller import acabamento_pecas_bp
 from controllers.relatorios.concretagem_pecas_controller import concretagem_pecas_bp
 from controllers.relatorios.notas_controller import notas_bp
 from controllers.relatorios.tanques_controller import tanques_bp
-from controllers.dados_analiticos_controller import executar_importacao_async
-from controllers.upload_controller import upload_bp
+
+
 load_dotenv('.env')
 
 # Configuração de logs
