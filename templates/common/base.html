@@ -435,9 +435,38 @@
                     </a>
                 </li>
 
+                <!-- Módulo de Relatórios -->
+                <li class="{{ is_active('relatorios') }}">
+                    <a href="#relatoriosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-file-alt"></i> Relatórios
+                    </a>
+                    <ul class="collapse list-unstyled" id="relatoriosSubmenu">
+                        <li class="{{ is_active('relatorios_acabamento_pecas') }}">
+                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}">
+                                <i class="fas fa-paint-roller"></i> Acabamento de Peças
+                            </a>
+                        </li>
+                        <li class="{{ is_active('relatorios_concretagem_pecas') }}">
+                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}">
+                                <i class="fas fa-cube"></i> Concretagem de Peças
+                            </a>
+                        </li>
+                        <li class="{{ is_active('relatorios_notas') }}">
+                            <a href="{{ url_for('relatorios_notas.index') }}">
+                                <i class="fas fa-file-invoice-dollar"></i> Notas Fiscais
+                            </a>
+                        </li>
+                        <li class="{{ is_active('relatorios_tanques') }}">
+                            <a href="{{ url_for('relatorios_tanques.index') }}">
+                                <i class="fas fa-water"></i> Tanques
+                            </a>
+                        </li>
+                    </ul>
+                </li>
                 <!-- Módulo Administrativo -->
                 {% if current_user.is_gerente_ou_superior %}
-                <li>
+                <li class="{{ is_active('gerencial') }}">
                     <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
                         <i class="fas fa-cogs"></i> Gerencial
                     </a>
@@ -463,20 +492,13 @@
                                 {% endif %}
                             </ul>
                         </li>
-                        <!-- INÍCIO: Link para Notas Fiscais de Venda por Centro de Custo -->
-                        <li>
-                            <a href="{{ url_for('relatorio.relatorio_notas') }}">
-                                <i class="fas fa-file-invoice-dollar"></i> NF de Venda por Centro de Custo
-                            </a>
-                        </li>
-                        <!-- FIM: Link para Notas Fiscais de Venda por Centro de Custo -->
                         
                     </ul>
                 </li>
                 {% endif %}
 
                 <!-- Novo Módulo de Cadastros -->
-                <li>
+                <li class="{{ is_active('cadastros') }}">
                     <a href="#cadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
                         <i class="fas fa-edit"></i> Cadastros
                     </a>
@@ -566,7 +588,7 @@
 
                 <!-- Módulo Operacional -->
                 {% if current_user.colaborador.departamento_id in [3,4,7] %}
-                    <li>
+                    <li class="{{ is_active('operacional') }}">
                         <a href="#operacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                             class="dropdown-toggle">
                             <i class="fas fa-industry"></i> Operacional
@@ -642,7 +664,7 @@
 
                     <!-- Módulo de Cadastro Operacional -->
                     {% if current_user.colaborador_id == 22 %}
-                    <li>
+                    <li class="{{ is_active('cadastro_operacional') }}">
                         <a href="#cadastroOperacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                             class="dropdown-toggle">
                             <i class="fas fa-clipboard-list"></i> Cadastro Operacional
@@ -760,35 +782,7 @@
                     </ul>
                 </li>
                 
-                <!-- Módulo de Relatórios -->
-                <li class="{{ is_active('relatorios_acabamento_pecas') }}">
-                    <a href="#relatoriosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-file-alt"></i> Relatórios
-                    </a>
-                    <ul class="collapse list-unstyled" id="relatoriosSubmenu">
-                        <li class="{{ is_active('relatorios_acabamento_pecas') }}">
-                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}">
-                                <i class="fas fa-paint-roller"></i> Acabamento de Peças
-                            </a>
-                        </li>
-                        <li class="{{ is_active('relatorios_concretagem_pecas') }}">
-                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}">
-                                <i class="fas fa-cube"></i> Concretagem de Peças
-                            </a>
-                        </li>
-                        <li class="{{ is_active('relatorios_notas') }}">
-                            <a href="{{ url_for('relatorios_notas.index') }}">
-                                <i class="fas fa-file-invoice-dollar"></i> Notas Fiscais
-                            </a>
-                        </li>
-                        <li class="{{ is_active('relatorios_tanques') }}">
-                            <a href="{{ url_for('relatorios_tanques.index') }}">
-                                <i class="fas fa-water"></i> Tanques
-                            </a>
-                        </li>
-                    </ul>
-                </li>
+
             </ul>
 
             <div class="sidebar-footer">
