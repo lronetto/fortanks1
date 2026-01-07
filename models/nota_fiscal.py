@@ -309,11 +309,11 @@ class NotaFiscal(db.Model):
         existente=0
         inseridos=0
         notas_log = []
+        notasn = []
         if total > 0:
-            notas=[]
             for xml_data in notas.xml_datas:
                 nf = NotaFiscal(xml_data=xml_data,tipo=tipo)
-                notas.append(nf)
+                notasn.append(nf)
                 existente+=(1 if nf.existente else 0)
                 inseridos+=(1 if nf.inserido else 0)
                 i+=1
@@ -330,7 +330,7 @@ class NotaFiscal(db.Model):
             'notas': notas_log
         }
         Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log, ensure_ascii=False, default=str)) 
-        for nf in notas:
+        for nf in notasn:
             nf.get_pdf()
     def processar_cte(self):
         chave_acesso, dados = self.extrair_dados_xml_cte()
@@ -1175,7 +1175,7 @@ class NotaFiscalItem(db.Model):
             item.save()
         fim = datetime.now()
         print(f'tempo de execucao vincular_todos: {fim - inicio}')
-    def vincular_e_importar_estoque_todos(self):
+    def vincular_e_importar_estoque_todos(self,usuario_id=None, centro_custo_id=None, observacao=None):
 
         inicio = datetime.now()    
         itens = NotaFiscalItem.query.\
@@ -1189,6 +1189,30 @@ class NotaFiscalItem(db.Model):
        
 
         for item in itens:
+            # Inicializa estatisticas se não estiver inicializado
+            if item.estatisticas is None:
+                item.estatisticas = {
+                    'processados': 0,
+                    'itens_processados': [],
+                    'vinculacao':{
+                        'total': 0,
+                        'ja_vinculados': 0,
+                        'nao_vinculados': 0,
+                        'vinculadosn':0,
+                        'vinculados': [],
+                        'errosn': 0,
+                        'erros': [],
+                    },
+                    'importacao':{
+                        'total': 0,
+                        'ja_importados': 0,
+                        'nao_importados': 0,
+                        'importados': [],
+                        'importadosn':0,
+                        'errosn': 0,
+                        'erros': [],
+                    }
+                }
             if item.material_id:
                 item.estatisticas['vinculacao']['ja_vinculados'] += 1
             else:
@@ -1205,7 +1229,7 @@ class NotaFiscalItem(db.Model):
                 item.estatisticas['importacao']['ja_importados'] += 1
             else:
                 item.estatisticas['importacao']['nao_importados'] += 1
-                sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(usuario_id=current_user.id)
+                sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)
                 if sucesso:
                     item.estatisticas['importacao']['importados'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
                     item.estatisticas['importacao']['importadosn'] += 1
@@ -1213,9 +1237,71 @@ class NotaFiscalItem(db.Model):
                     item.estatisticas['importacao']['errosn'] += 1
                     item.estatisticas['importacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
 
-            
         fim = datetime.now()
-        print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')  
+        print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')
+        
+        # Consolida estatísticas de todos os itens processados
+        estatisticas_finais = {
+            'processados': len(itens),
+            'itens_processados': [],
+            'vinculacao':{
+                'total': 0,
+                'ja_vinculados': 0,
+                'nao_vinculados': 0,
+                'vinculadosn':0,
+                'vinculados': [],
+                'errosn': 0,
+                'erros': [],
+            },
+            'importacao':{
+                'total': 0,
+                'ja_importados': 0,
+                'nao_importados': 0,
+                'importados': [],
+                'importadosn':0,
+                'errosn': 0,
+                'erros': [],
+            }
+        }
+        
+        # Consolida estatísticas de cada item
+        for item in itens:
+            if item.estatisticas:
+                # Consolida estatísticas de vinculação
+                if 'vinculacao' in item.estatisticas:
+                    estatisticas_finais['vinculacao']['ja_vinculados'] += item.estatisticas['vinculacao'].get('ja_vinculados', 0)
+                    estatisticas_finais['vinculacao']['nao_vinculados'] += item.estatisticas['vinculacao'].get('nao_vinculados', 0)
+                    estatisticas_finais['vinculacao']['vinculadosn'] += item.estatisticas['vinculacao'].get('vinculadosn', 0)
+                    estatisticas_finais['vinculacao']['errosn'] += item.estatisticas['vinculacao'].get('errosn', 0)
+                    estatisticas_finais['vinculacao']['vinculados'].extend(item.estatisticas['vinculacao'].get('vinculados', []))
+                    estatisticas_finais['vinculacao']['erros'].extend(item.estatisticas['vinculacao'].get('erros', []))
+                
+                # Consolida estatísticas de importação
+                if 'importacao' in item.estatisticas:
+                    estatisticas_finais['importacao']['ja_importados'] += item.estatisticas['importacao'].get('ja_importados', 0)
+                    estatisticas_finais['importacao']['nao_importados'] += item.estatisticas['importacao'].get('nao_importados', 0)
+                    estatisticas_finais['importacao']['importadosn'] += item.estatisticas['importacao'].get('importadosn', 0)
+                    estatisticas_finais['importacao']['errosn'] += item.estatisticas['importacao'].get('errosn', 0)
+                    estatisticas_finais['importacao']['importados'].extend(item.estatisticas['importacao'].get('importados', []))
+                    estatisticas_finais['importacao']['erros'].extend(item.estatisticas['importacao'].get('erros', []))
+            
+            estatisticas_finais['itens_processados'].append(f'nf:{item.nota_fiscal.id if item.nota_fiscal else "N/A"}:item:{item.id}')
+        
+        # Calcula totais
+        estatisticas_finais['vinculacao']['total'] = estatisticas_finais['vinculacao']['ja_vinculados'] + estatisticas_finais['vinculacao']['nao_vinculados']
+        estatisticas_finais['importacao']['total'] = estatisticas_finais['importacao']['ja_importados'] + estatisticas_finais['importacao']['nao_importados']
+        
+        # Determina sucesso e mensagem
+        total_erros = estatisticas_finais['vinculacao']['errosn'] + estatisticas_finais['importacao']['errosn']
+        sucesso = total_erros == 0 and len(itens) > 0
+        
+        mensagem = f"Processados {estatisticas_finais['processados']} itens. "
+        mensagem += f"Vinculados: {estatisticas_finais['vinculacao']['vinculadosn']}, "
+        mensagem += f"Importados: {estatisticas_finais['importacao']['importadosn']}"
+        if total_erros > 0:
+            mensagem += f". Erros: {total_erros}"
+        
+        return sucesso, mensagem, estatisticas_finais
     def importar_para_estoque_automatico(self, usuario_id=None, centro_custo_id=None, observacao=None):
         """
         Importa o item para o estoque processando todas as movimentações necessárias

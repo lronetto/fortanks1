@@ -8,6 +8,7 @@ from flask_login import current_user, login_required
 from models.database import db
 from models.material import Materiais
 from models.unidade import Unidades
+from models.estoque import Estoque
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,25 @@ def register(material_bp):
     @material_bp.route("/listar-json")
     @login_required
     def listar_json():
-        materiais = Materiais.query.filter_by(ativo=True).all()
+        # Verificar se deve filtrar apenas materiais sem estoque
+        apenas_sem_estoque = request.args.get('sem_estoque', 'false').lower() == 'true'
+        
+        query = Materiais.query.filter_by(ativo=True)
+        
+        if apenas_sem_estoque:
+            # Buscar IDs de materiais que já têm estoque
+            materiais_com_estoque = db.session.query(Estoque.material_id).filter(
+                Estoque.material_id.isnot(None),
+                Estoque.tipo_item == 'material'
+            ).distinct().all()
+            
+            ids_com_estoque = [m[0] for m in materiais_com_estoque]
+            
+            # Filtrar materiais que NÃO estão na lista de materiais com estoque
+            if ids_com_estoque:
+                query = query.filter(~Materiais.id.in_(ids_com_estoque))
+        
+        materiais = query.all()
         resultado = []
         for material in materiais:
             resultado.append(

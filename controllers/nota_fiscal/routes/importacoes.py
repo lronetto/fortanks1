@@ -183,7 +183,7 @@ def importar_item_estoque_todas_notas(item_id):
     centro_custo_id = request.form.get("centro_custo_id")
     observacao = request.form.get("observacao")
     
-    sucesso, mensagem, estatisticas = item.importar_para_estoque_automatico(
+    sucesso, mensagem, estatisticas = item.vincular_e_importar_estoque_todos(
         usuario_id=current_user.id,
         centro_custo_id=centro_custo_id if centro_custo_id else None,
         observacao=observacao or f"Importação da NF {item.nota_fiscal.numero_nf if item.nota_fiscal else 'N/A'}",

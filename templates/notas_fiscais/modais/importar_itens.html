@@ -1140,7 +1140,7 @@
         // Obter token CSRF
         const csrfToken = $('input[name="csrf_token"]').val();
         
-        fetch(`/notas-fiscais/api/importar-item-estoque/${itemId}`, {
+        fetch(`/notas-fiscais/importar-item-estoque-todas-notas/${itemId}`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken,

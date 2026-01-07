@@ -277,14 +277,35 @@ def novo():
     
     if form.validate_on_submit():
         try:
+            # Obter tipo_item do formulário para verificação
+            tipo_item = request.form.get('tipo_item', 'material')
+            if tipo_item not in ['material', 'produto_composto', 'epi']:
+                tipo_item = 'material'  # Default para material se inválido
+            
+            # Verificar se já existe estoque para este material com o mesmo tipo
+            estoque_existente = Estoque.query.filter_by(
+                material_id=form.material_id.data,
+                tipo_item=tipo_item
+            ).first()
+            
+            if estoque_existente:
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Este material já possui um registro de estoque do tipo {tipo_item}.'
+                    })
+                flash(f'Este material já possui um registro de estoque do tipo {tipo_item}.', 'danger')
+                return redirect(url_for('estoque.index'))
+            
             item = Estoque()
-            item.tipo_item = 'material'  # Sempre será material
+            item.tipo_item = tipo_item
             item.material_id = form.material_id.data
             item.quantidade = form.quantidade.data or 0
             item.quantidade_minima = form.quantidade_minima.data
             item.quantidade_maxima = form.quantidade_maxima.data or 0
             item.lote = form.lote.data
             item.data_validade = form.data_validade.data
+            item.localizacao = request.form.get('localizacao')  # Adicionar localização
             item.usuario_id = current_user.id
             item.save()
             

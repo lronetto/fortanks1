@@ -1,22 +1,58 @@
-<!-- Modal para Criar Grupo de Materiais a partir do Inventário -->
+<!-- Modal para Criar/Atualizar Grupo de Materiais a partir do Inventário -->
 <div class="modal fade" id="modalCriarGrupoInventario" tabindex="-1" aria-labelledby="modalCriarGrupoInventarioLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-info text-white">
                 <h5 class="modal-title" id="modalCriarGrupoInventarioLabel">
-                    <i class="fas fa-layer-group"></i> Criar Grupo de Materiais do Inventário
+                    <i class="fas fa-layer-group"></i> <span id="modal-titulo-acao">Criar</span> Grupo de Materiais do Inventário
                 </h5>
                 <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info">
+                <div class="alert alert-info" id="alert-info-criar">
                     <i class="fas fa-info-circle"></i> 
                     Um novo grupo de materiais será criado com todos os materiais deste inventário.
+                </div>
+                <div class="alert alert-warning" id="alert-info-atualizar" style="display: none;">
+                    <i class="fas fa-info-circle"></i> 
+                    Os materiais deste inventário serão adicionados ao grupo selecionado.
                 </div>
                 
                 <form id="form-criar-grupo-inventario">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" id="inventario_id_grupo" name="inventario_id" value="{{ inventario.id }}">
+                    <input type="hidden" id="grupo_id_atualizar" name="grupo_id">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label class="form-label">Ação *</label>
+                                <div class="btn-group w-100" role="group">
+                                    <input type="radio" class="btn-check" name="acao_tipo" id="acao_criar" value="criar" checked>
+                                    <label class="btn btn-outline-primary" for="acao_criar">
+                                        <i class="fas fa-plus-circle"></i> Criar Novo Grupo
+                                    </label>
+                                    
+                                    <input type="radio" class="btn-check" name="acao_tipo" id="acao_atualizar" value="atualizar">
+                                    <label class="btn btn-outline-warning" for="acao_atualizar">
+                                        <i class="fas fa-edit"></i> Atualizar Grupo Existente
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3" id="grupo-selecao-container" style="display: none;">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="grupo_selecionado" class="form-label">Selecionar Grupo *</label>
+                                <select class="form-control" id="grupo_selecionado" name="grupo_selecionado">
+                                    <option value="">Carregando grupos...</option>
+                                </select>
+                                <small class="form-text text-muted">Selecione o grupo que deseja atualizar</small>
+                            </div>
+                        </div>
+                    </div>
                     
                     <div class="row mb-3">
                         <div class="col-md-12">
@@ -77,14 +113,14 @@
                     
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle"></i> 
-                        <strong>Atenção:</strong> O grupo será criado com <span id="total-materiais-inventario">{{ inventario.itens|length }}</span> material(is) deste inventário.
+                        <strong>Atenção:</strong> <span id="texto-atencao">O grupo será criado com</span> <span id="total-materiais-inventario">{{ inventario.itens|length }}</span> material(is) deste inventário.
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="btn-salvar-grupo-inventario">
-                    <i class="fas fa-save"></i> Criar Grupo
+                    <i class="fas fa-save"></i> <span id="btn-texto-acao">Criar Grupo</span>
                 </button>
             </div>
         </div>
@@ -115,25 +151,152 @@ $(document).ready(function() {
         }
     });
     
+    // Carregar grupos disponíveis
+    function carregarGrupos() {
+        $.ajax({
+            url: '/grupos-materiais/api/listar-json',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#grupo_selecionado');
+                    select.empty();
+                    select.append('<option value="">Selecione um grupo...</option>');
+                    
+                    response.grupos.forEach(function(grupo) {
+                        const statusText = grupo.ativo ? ' (Ativo)' : ' (Inativo)';
+                        select.append(`<option value="${grupo.id}" 
+                            data-nome="${grupo.nome}" 
+                            data-descricao="${grupo.descricao || ''}" 
+                            data-cor="${grupo.cor || '#007bff'}" 
+                            data-icone="${grupo.icone || ''}" 
+                            data-ativo="${grupo.ativo}">
+                            ${grupo.nome}${statusText} - ${grupo.total_materiais} material(is)
+                        </option>`);
+                    });
+                }
+            },
+            error: function() {
+                $('#grupo_selecionado').html('<option value="">Erro ao carregar grupos</option>');
+            }
+        });
+    }
+    
+    // Alternar entre criar e atualizar
+    $('input[name="acao_tipo"]').on('change', function() {
+        const acao = $(this).val();
+        const isCriar = acao === 'criar';
+        
+        // Mostrar/ocultar campos
+        $('#grupo-selecao-container').toggle(!isCriar);
+        $('#alert-info-criar').toggle(isCriar);
+        $('#alert-info-atualizar').toggle(!isCriar);
+        
+        // Se for atualizar e não tiver grupo selecionado, ocultar campos de edição
+        if (!isCriar && !$('#grupo_selecionado').val()) {
+            $('#nome_grupo_inventario').closest('.row').hide();
+            $('#descricao_grupo_inventario').closest('.row').hide();
+            $('#cor_grupo_inventario').closest('.row').hide();
+            $('#ativo_grupo_inventario').closest('.row').hide();
+        } else {
+            // Mostrar campos quando criar ou quando grupo já selecionado
+            $('#nome_grupo_inventario').closest('.row').show();
+            $('#descricao_grupo_inventario').closest('.row').show();
+            $('#cor_grupo_inventario').closest('.row').show();
+            $('#ativo_grupo_inventario').closest('.row').show();
+        }
+        
+        // Atualizar textos
+        $('#modal-titulo-acao').text(isCriar ? 'Criar' : 'Atualizar');
+        $('#btn-texto-acao').text(isCriar ? 'Criar Grupo' : 'Atualizar Grupo');
+        $('#texto-atencao').text(isCriar ? 'O grupo será criado com' : 'Serão adicionados');
+        
+        // Validar campos obrigatórios
+        if (!isCriar) {
+            $('#grupo_selecionado').prop('required', true);
+            $('#nome_grupo_inventario').prop('required', false);
+        } else {
+            $('#grupo_selecionado').prop('required', false);
+            $('#nome_grupo_inventario').prop('required', true);
+        }
+    });
+    
+    // Carregar dados do grupo quando selecionado
+    $('#grupo_selecionado').on('change', function() {
+        const option = $(this).find('option:selected');
+        if (option.val()) {
+            // Preencher campos com dados do grupo
+            $('#nome_grupo_inventario').val(option.data('nome'));
+            $('#descricao_grupo_inventario').val(option.data('descricao'));
+            $('#cor_grupo_inventario').val(option.data('cor'));
+            $('#cor_picker_grupo_inventario').val(option.data('cor'));
+            $('#icone_grupo_inventario').val(option.data('icone'));
+            $('#ativo_grupo_inventario').prop('checked', option.data('ativo') === true || option.data('ativo') === 'true');
+            $('#grupo_id_atualizar').val(option.val());
+            
+            // Mostrar campos de edição quando grupo for selecionado
+            $('#nome_grupo_inventario').closest('.row').show();
+            $('#descricao_grupo_inventario').closest('.row').show();
+            $('#cor_grupo_inventario').closest('.row').show();
+            $('#ativo_grupo_inventario').closest('.row').show();
+        } else {
+            // Limpar campos e ocultar se não houver grupo selecionado (modo atualizar)
+            if ($('input[name="acao_tipo"]:checked').val() === 'atualizar') {
+                $('#nome_grupo_inventario').val('');
+                $('#descricao_grupo_inventario').val('');
+                $('#cor_grupo_inventario').val('#007bff');
+                $('#cor_picker_grupo_inventario').val('#007bff');
+                $('#icone_grupo_inventario').val('');
+                $('#ativo_grupo_inventario').prop('checked', true);
+                $('#grupo_id_atualizar').val('');
+                
+                $('#nome_grupo_inventario').closest('.row').hide();
+                $('#descricao_grupo_inventario').closest('.row').hide();
+                $('#cor_grupo_inventario').closest('.row').hide();
+                $('#ativo_grupo_inventario').closest('.row').hide();
+            }
+        }
+    });
+    
     // Preencher nome padrão baseado no inventário
     $('#modalCriarGrupoInventario').on('show.bs.modal', function() {
+        // Resetar formulário
+        $('input[name="acao_tipo"][value="criar"]').prop('checked', true).trigger('change');
+        $('#grupo_selecionado').val('').trigger('change');
+        $('#form-criar-grupo-inventario')[0].reset();
+        
+        // Carregar grupos
+        carregarGrupos();
+        
         const inventarioTipo = '{{ inventario.tipo_inventario }}';
         const inventarioId = '{{ inventario.id }}';
         const nomePadrao = `Grupo - ${inventarioTipo} #${inventarioId}`;
         $('#nome_grupo_inventario').val(nomePadrao);
     });
     
-    // Criar grupo
+    // Criar ou atualizar grupo
     $('#btn-salvar-grupo-inventario').on('click', function() {
-        const nome = $('#nome_grupo_inventario').val().trim();
-        if (!nome) {
-            alert('O nome do grupo é obrigatório.');
-            $('#nome_grupo_inventario').focus();
-            return;
+        const acao = $('input[name="acao_tipo"]:checked').val();
+        const isCriar = acao === 'criar';
+        
+        // Validações
+        if (isCriar) {
+            const nome = $('#nome_grupo_inventario').val().trim();
+            if (!nome) {
+                alert('O nome do grupo é obrigatório.');
+                $('#nome_grupo_inventario').focus();
+                return;
+            }
+        } else {
+            const grupoId = $('#grupo_selecionado').val();
+            if (!grupoId) {
+                alert('Por favor, selecione um grupo para atualizar.');
+                $('#grupo_selecionado').focus();
+                return;
+            }
         }
         
         const dados = {
-            nome: nome,
+            nome: $('#nome_grupo_inventario').val().trim(),
             descricao: $('#descricao_grupo_inventario').val(),
             cor: $('#cor_grupo_inventario').val() || '#007bff',
             icone: $('#icone_grupo_inventario').val(),
@@ -141,11 +304,20 @@ $(document).ready(function() {
             inventario_id: $('#inventario_id_grupo').val()
         };
         
+        if (!isCriar) {
+            dados.grupo_id = $('#grupo_selecionado').val();
+        }
+        
         const $btn = $(this);
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Criando...');
+        const btnText = isCriar ? 'Criando...' : 'Atualizando...';
+        $btn.prop('disabled', true).html(`<i class="fas fa-spinner fa-spin"></i> ${btnText}`);
+        
+        const url = isCriar 
+            ? "/inventario/{{ inventario.id }}/criar-grupo"
+            : "/inventario/{{ inventario.id }}/atualizar-grupo";
         
         $.ajax({
-            url: "/inventario/{{ inventario.id }}/criar-grupo",
+            url: url,
             type: "POST",
             data: JSON.stringify(dados),
             contentType: "application/json",
@@ -158,23 +330,25 @@ $(document).ready(function() {
                 if (response.success) {
                     alert(response.message);
                     $('#modalCriarGrupoInventario').modal('hide');
-                    // Opcional: redirecionar para o grupo criado ou recarregar página
+                    // Opcional: redirecionar para o grupo criado/atualizado ou recarregar página
                     if (response.grupo_id) {
                         window.location.href = '/grupos-materiais/' + response.grupo_id;
                     } else {
                         location.reload();
                     }
                 } else {
-                    alert(response.message || 'Erro ao criar grupo.');
-                    $btn.prop('disabled', false).html('<i class="fas fa-save"></i> Criar Grupo');
+                    alert(response.message || `Erro ao ${isCriar ? 'criar' : 'atualizar'} grupo.`);
+                    const btnTextRestore = isCriar ? 'Criar Grupo' : 'Atualizar Grupo';
+                    $btn.prop('disabled', false).html(`<i class="fas fa-save"></i> ${btnTextRestore}`);
                 }
             },
             error: function(xhr, status, error) {
                 const message = xhr.responseJSON && xhr.responseJSON.message 
                     ? xhr.responseJSON.message 
-                    : 'Erro ao criar grupo: ' + error;
+                    : `Erro ao ${isCriar ? 'criar' : 'atualizar'} grupo: ` + error;
                 alert(message);
-                $btn.prop('disabled', false).html('<i class="fas fa-save"></i> Criar Grupo');
+                const btnTextRestore = isCriar ? 'Criar Grupo' : 'Atualizar Grupo';
+                $btn.prop('disabled', false).html(`<i class="fas fa-save"></i> ${btnTextRestore}`);
             }
         });
     });

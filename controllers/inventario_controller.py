@@ -1083,3 +1083,91 @@ def criar_grupo_inventario(id):
             'success': False,
             'message': f'Erro ao criar grupo: {str(e)}'
         }), 500
+
+@inventario_bp.route('/<int:id>/atualizar-grupo', methods=['POST'])
+@login_required
+def atualizar_grupo_inventario(id):
+    """
+    Atualiza um grupo de materiais existente com os materiais de um inventário
+    """
+    try:
+        inventario = EstoqueInventarios.query.get_or_404(id)
+        data = request.get_json()
+        
+        # Validar dados obrigatórios
+        if not data.get('grupo_id'):
+            return jsonify({
+                'success': False,
+                'message': 'ID do grupo é obrigatório'
+            }), 400
+        
+        grupo_id = data.get('grupo_id')
+        grupo = MateriaisGrupos.query.get_or_404(grupo_id)
+        
+        # Atualizar dados do grupo se fornecidos
+        if data.get('nome'):
+            # Verificar se já existe outro grupo com o mesmo nome
+            grupo_existente = MateriaisGrupos.query.filter(
+                MateriaisGrupos.nome == data.get('nome'),
+                MateriaisGrupos.id != grupo_id
+            ).first()
+            if grupo_existente:
+                return jsonify({
+                    'success': False,
+                    'message': 'Já existe outro grupo com este nome'
+                }), 400
+            grupo.nome = data.get('nome')
+        
+        if 'descricao' in data:
+            grupo.descricao = data.get('descricao', '')
+        if 'cor' in data:
+            grupo.cor = data.get('cor', '#007bff')
+        if 'icone' in data:
+            grupo.icone = data.get('icone', '')
+        if 'ativo' in data:
+            grupo.ativo = data.get('ativo', True)
+        
+        # Obter todos os materiais únicos do inventário
+        itens = EstoqueInventariosItens.query.filter_by(inventario_id=id).all()
+        materiais_ids = set()
+        
+        for item in itens:
+            if item.estoque.material_id:
+                materiais_ids.add(item.estoque.material_id)
+        
+        if not materiais_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Este inventário não possui materiais para atualizar o grupo'
+            }), 400
+        
+        # Adicionar os materiais do inventário ao grupo existente
+        # sem remover os que já estão lá (comportamento de adição)
+        materiais = Materiais.query.filter(Materiais.id.in_(materiais_ids)).all()
+        materiais_adicionados = 0
+        
+        # Adicionar materiais sem fazer commit individual
+        for material in materiais:
+            # Verificar se o material já está no grupo
+            if material not in grupo.materiais:
+                grupo.materiais.append(material)
+                materiais_adicionados += 1
+        
+        # Fazer commit de todas as alterações de uma vez
+        db.session.commit()
+        
+        logger.info(f"Grupo '{grupo.nome}' atualizado com {materiais_adicionados} novos materiais do inventário {id}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Grupo "{grupo.nome}" atualizado com sucesso! {materiais_adicionados} novo(s) material(is) adicionado(s).',
+            'grupo_id': grupo.id
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar grupo do inventário {id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao atualizar grupo: {str(e)}'
+        }), 500

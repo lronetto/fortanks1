@@ -56,14 +56,14 @@
             <h6 class="m-0 font-weight-bold text-primary">Contagem de Itens</h6>
             <div>
                 {% if inventario.status == 'Em andamento' %}
-                    <button type="button" class="btn btn-success btn-sm mr-2" data-toggle="modal" data-target="#modalAdicionarItem">
+                    <button type="button" class="btn btn-success btn-sm mr-2" data-bs-toggle="modal" data-bs-target="#modalAdicionarItem">
                         <i class="fas fa-plus"></i> Adicionar Item
                     </button>
                 {% endif %}
                 <button type="button" class="btn btn-warning btn-sm mr-2" id="btnFiltrarNaoContados" title="Mostrar apenas itens não contados">
                     <i class="fas fa-exclamation-circle"></i> Não Contados
                 </button>
-                <button type="button" class="btn btn-info btn-sm" data-toggle="collapse" data-target="#filtrosCollapse">
+                <button type="button" class="btn btn-info btn-sm" data-bs-toggle="collapse" data-bs-target="#filtrosCollapse">
                     <i class="fas fa-filter"></i> Filtros
                 </button>
             </div>
@@ -112,7 +112,13 @@
                             </select>
                         </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="filtroDescricao">Descrição do Material</label>
+                            <input type="text" id="filtroDescricao" class="form-control" placeholder="Filtrar por descrição...">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
                         <div class="form-group">
                             <label for="filtroBusca">Buscar</label>
                             <input type="text" id="filtroBusca" class="form-control" placeholder="Nome, código...">
@@ -150,7 +156,8 @@
                         <tr class="item-row {{ 'contado' if item.quantidade_contada is not none else 'nao-contado' }} {{ 'divergente' if item.diferenca and item.diferenca != 0 else '' }}" 
                             data-id="{{ item.id }}" 
                             data-tipo="{{ item.estoque.tipo_item }}" 
-                            data-busca="{{ item.estoque.material.nome if item.estoque.material else '' }} {{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }} {{ item.estoque.material.codigo if item.estoque.material else '' }}">
+                            data-busca="{{ item.estoque.material.nome if item.estoque.material else '' }} {{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }} {{ item.estoque.material.codigo if item.estoque.material else '' }}"
+                            data-descricao="{{ item.estoque.material.nome if item.estoque.material else '' }}{{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }}">
                             <td>
                                 {% if item.estoque.material %}
                                     {{ item.estoque.material.codigo or "N/A" }}
@@ -702,6 +709,7 @@
             const tipo = $('#filtroTipo').val();
             const status = $('#filtroStatus').val();
             const busca = $('#filtroBusca').val().toLowerCase();
+            const descricao = $('#filtroDescricao').val().toLowerCase();
             
             $('.item-row').each(function() {
                 let mostrar = true;
@@ -720,6 +728,14 @@
                     mostrar = false;
                 }
                 
+                // Filtro por descrição do material
+                if (descricao) {
+                    const descricaoItem = $(this).data('descricao') || '';
+                    if (!descricaoItem.toLowerCase().includes(descricao)) {
+                        mostrar = false;
+                    }
+                }
+                
                 // Filtro por busca
                 if (busca && !$(this).data('busca').toLowerCase().includes(busca)) {
                     mostrar = false;
@@ -730,7 +746,7 @@
         }
         
         $('#filtroTipo, #filtroStatus').change(aplicarFiltros);
-        $('#filtroBusca').on('input', aplicarFiltros);
+        $('#filtroBusca, #filtroDescricao').on('input', aplicarFiltros);
         
         // Botão rápido para filtrar apenas não contados
         let filtroNaoContadosAtivo = false;
@@ -754,7 +770,7 @@
         
         $('#btnLimparFiltros').click(function() {
             $('#filtroTipo, #filtroStatus').val('');
-            $('#filtroBusca').val('');
+            $('#filtroBusca, #filtroDescricao').val('');
             filtroNaoContadosAtivo = false;
             $('#btnFiltrarNaoContados').removeClass('btn-danger').addClass('btn-warning');
             $('#btnFiltrarNaoContados').html('<i class="fas fa-exclamation-circle"></i> Não Contados');
@@ -876,10 +892,19 @@
         
         // Funcionalidade do modal de adicionar item
         
-        // Garantir que o modal seja aberto quando o botão for clicado
-        $(document).on('click', 'button[data-target="#modalAdicionarItem"]', function(e) {
+        // Garantir que o modal seja aberto quando o botão for clicado (Bootstrap 5)
+        $(document).on('click', 'button[data-bs-target="#modalAdicionarItem"]', function(e) {
             e.preventDefault();
-            $('#modalAdicionarItem').modal('show');
+            const modalElement = document.getElementById('modalAdicionarItem');
+            if (modalElement) {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                } else if (typeof $ !== 'undefined' && $.fn.modal) {
+                    // Fallback para Bootstrap 4/jQuery
+                    $('#modalAdicionarItem').modal('show');
+                }
+            }
         });
         
         // Buscar itens (usando delegação de eventos para garantir que funcione)

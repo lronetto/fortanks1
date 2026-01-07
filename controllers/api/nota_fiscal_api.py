@@ -16,7 +16,6 @@ from models.logs import Logs
 from models.material import Materiais
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.upload import Upload
-
 from controllers.nota_fiscal.services.query_notas import api_get_dados_notas_fiscais
 
 logger = logging.getLogger(__name__)

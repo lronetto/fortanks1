@@ -13,8 +13,8 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="tipo_item" class="form-label">Tipo de Item</label>
-                                <select class="form-select" id="tipo_item" name="tipo_item" required>
+                                <label for="modal_tipo_item" class="form-label">Tipo de Item</label>
+                                <select class="form-select" id="modal_tipo_item" name="tipo_item" required>
                                     <option value="">Selecione o tipo</option>
                                     <option value="material">Material</option>
                                     <option value="produto_composto">Produto Composto</option>
@@ -74,8 +74,8 @@
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <div class="form-group">
-                                <label for="localizacao" class="form-label">Localização</label>
-                                <input type="text" class="form-control" id="localizacao" name="localizacao" placeholder="Localização do item no estoque">
+                                <label for="modal_localizacao" class="form-label">Localização</label>
+                                <input type="text" class="form-control" id="modal_localizacao" name="localizacao" placeholder="Localização do item no estoque">
                             </div>
                         </div>
                     </div>
@@ -103,19 +103,24 @@ document.addEventListener('DOMContentLoaded', function() {
             width: '100%'
         });
         
-        // Carregar materiais
-        $.getJSON("{{ url_for('material.listar_json') }}", function(data) {
+        // Carregar materiais sem estoque
+        $.getJSON("{{ url_for('material.listar_json') }}?sem_estoque=true", function(data) {
             let materialSelect = $('#material_id');
             materialSelect.empty();
             materialSelect.append('<option value="0">Selecione um material</option>');
             
-            $.each(data, function(index, item) {
-                materialSelect.append('<option value="' + item.id + '">' + item.codigo + ' - ' + item.nome + '</option>');
-            });
+            if (data.length === 0) {
+                materialSelect.append('<option value="0" disabled>Todos os materiais já possuem estoque</option>');
+            } else {
+                $.each(data, function(index, item) {
+                    materialSelect.append('<option value="' + item.id + '">' + item.codigo + ' - ' + item.nome + '</option>');
+                });
+            }
             
             materialSelect.trigger('change');
         }).fail(function(jqXHR, textStatus, errorThrown) {
             console.error("Erro ao carregar materiais:", textStatus, errorThrown);
+            alert("Erro ao carregar lista de materiais. Por favor, recarregue a página.");
         });
     }
 
@@ -123,13 +128,55 @@ document.addEventListener('DOMContentLoaded', function() {
     $('#btn-salvar-item').click(function() {
         // Validar formulário
         let valid = true;
+        let errors = [];
         
-        if ($('#material_id').val() == '0') {
-            alert('Selecione um material para este item de estoque.');
+        // Validar tipo de item primeiro
+        let tipoItem = $('#modal_tipo_item').val();
+        if (!tipoItem || tipoItem === '') {
+            errors.push('Selecione o tipo de item.');
+            $('#modal_tipo_item').addClass('is-invalid');
             valid = false;
+        } else {
+            $('#modal_tipo_item').removeClass('is-invalid');
+        }
+        
+        // Validar material
+        let materialId = $('#material_id').val();
+        if (!materialId || materialId == '0' || materialId == 0) {
+            errors.push('Selecione um material para este item de estoque.');
+            $('#material_id').addClass('is-invalid');
+            valid = false;
+        } else {
+            $('#material_id').removeClass('is-invalid');
+        }
+        
+        // Mostrar todos os erros de uma vez
+        if (!valid) {
+            alert('Por favor, corrija os seguintes erros:\n\n' + errors.join('\n'));
+            // Focar no primeiro campo com erro
+            if (errors.length > 0) {
+                if (!$('#modal_tipo_item').val() || $('#modal_tipo_item').val() === '') {
+                    $('#modal_tipo_item').focus();
+                } else if (!$('#material_id').val() || $('#material_id').val() == '0') {
+                    $('#material_id').focus();
+                }
+            }
+            return false;
+        }
+        
+        // Verificar novamente antes de enviar (dupla verificação)
+        tipoItem = $('#modal_tipo_item').val();
+        materialId = $('#material_id').val();
+        
+        if (!tipoItem || tipoItem === '' || !materialId || materialId == '0' || materialId == 0) {
+            alert('Por favor, preencha todos os campos obrigatórios.');
+            return false;
         }
         
         if (valid) {
+            // Desabilitar botão para evitar duplo clique
+            $('#btn-salvar-item').prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Salvando...');
+            
             // Enviar formulário via Ajax
             $.ajax({
                 url: "{{ url_for('estoque.novo') }}",
@@ -142,13 +189,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 success: function(response) {
                     if (response.success) {
                         alert(response.message);
-                        window.location.href = response.redirect;
+                        // Fechar modal e recarregar página
+                        $('#modalNovoItem').modal('hide');
+                        window.location.reload();
                     } else {
-                        alert(response.message + ' ' + response.errors);
+                        alert(response.message || 'Erro ao salvar item.');
+                        $('#btn-salvar-item').prop('disabled', false).html('<i class="fas fa-save"></i> Salvar');
                     }
                 },
                 error: function(xhr, status, error) {
-                    alert("Erro ao salvar item: " + error);
+                    let errorMessage = "Erro ao salvar item.";
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseJSON && xhr.responseJSON.errors) {
+                        let errors = Object.values(xhr.responseJSON.errors).flat().join(', ');
+                        errorMessage = "Erro de validação: " + errors;
+                    }
+                    alert(errorMessage);
+                    $('#btn-salvar-item').prop('disabled', false).html('<i class="fas fa-save"></i> Salvar');
                 }
             });
         }
@@ -156,7 +214,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Carregar opções quando o modal for aberto
     $('#modalNovoItem').on('show.bs.modal', function() {
+        // Limpar formulário e classes de validação
+        $('#form-novo-item')[0].reset();
+        $('#material_id').val('0').trigger('change');
+        $('#modal_tipo_item').val('');
+        $('#modal_tipo_item').removeClass('is-invalid');
+        $('#material_id').removeClass('is-invalid');
         carregarOpcoesSelects();
+    });
+    
+    // Remover classe de erro quando o campo for alterado
+    $('#modal_tipo_item').on('change', function() {
+        $(this).removeClass('is-invalid');
+        // Se tipo_item for selecionado, validar novamente
+        if ($(this).val()) {
+            $(this).removeClass('is-invalid');
+        }
+    });
+    
+    $('#material_id').on('change', function() {
+        $(this).removeClass('is-invalid');
+    });
+    
+    // Validar formulário antes de enviar (prevenir submit padrão)
+    $('#form-novo-item').on('submit', function(e) {
+        e.preventDefault();
+        // Chamar a função de salvar
+        $('#btn-salvar-item').click();
+        return false;
+    });
+    
+    // Resetar botão quando modal for fechado
+    $('#modalNovoItem').on('hidden.bs.modal', function() {
+        $('#btn-salvar-item').prop('disabled', false).html('<i class="fas fa-save"></i> Salvar');
     });
 });
 </script>
