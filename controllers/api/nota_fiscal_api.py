@@ -107,12 +107,24 @@ def register(nota_fiscal_bp):
         items = []
         for item in nota_fiscal.itens:
             material = Materiais.query.get(item.material_id) if item.material_id else None
+            dados_adicionais = json.loads(item.dados_adicionais) if item.dados_adicionais else None
+            if dados_adicionais:
+                xPed = dados_adicionais.get('xPed')
+                nItemPed = dados_adicionais.get('nItemPed')
+                infAdProd = dados_adicionais.get('infAdProd')
+                impostos = dados_adicionais.get('impostos')
+            else:
+                xPed = None
+                nItemPed = None
+                infAdProd = None
+                impostos = None
             items.append(
                 {
                     "id": item.id,
                     "codigo": item.codigo,
                     "cfop": item.cfop,
                     "descricao": item.descricao,
+                    "infAdProd": infAdProd if infAdProd else None,
                     "quantidade": float(item.quantidade) if item.quantidade is not None else 0.0,
                     "unidade": item.unidade,
                     "valor_unitario": float(item.valor_unitario) if item.valor_unitario is not None else 0.0,

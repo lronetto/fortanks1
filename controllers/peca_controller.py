@@ -1281,6 +1281,8 @@ def importar_inspecao():
         try:
             # Processar arquivo usando a função do script
             resultado = processar_arquivo_inspecao(temp_path)
+
+            processar_producao_manual(log=False)
             
             return jsonify({
                 'success': True,
