@@ -112,18 +112,17 @@ def index():
                     if estoque.localizacao:
                         localizacoes_material.append(estoque.localizacao)
                 
-                # Só adicionar item se tiver quantidade ou se não tiver filtro de localização
-                if quantidade_total_material > 0 or not localizacao_filtro:
-                    itens_grupo.append({
-                        'material_id': material.id,
-                        'codigo': material.codigo_erp or '',
-                        'nome': material.nome,
-                        'categoria': material.categoria or '',
-                        'unidade': material.get_unidade_nome() or '',
-                        'quantidade': float(quantidade_total_material),
-                        'localizacoes': ', '.join(set(localizacoes_material)) if localizacoes_material else 'Não especificado'
-                    })
-                    quantidade_total_grupo += quantidade_total_material
+               
+                itens_grupo.append({
+                    'material_id': material.id,
+                    'codigo': material.codigo_erp or '',
+                    'nome': material.nome,
+                    'categoria': material.categoria or '',
+                    'unidade': material.get_unidade_nome() or '',
+                    'quantidade': float(quantidade_total_material),
+                    'localizacoes': ', '.join(set(localizacoes_material)) if localizacoes_material else 'Não especificado'
+                })
+                quantidade_total_grupo += quantidade_total_material
             
             if itens_grupo or not grupo_id:
                 dados_relatorio.append({
