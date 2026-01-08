@@ -214,13 +214,12 @@ def exportar_excel():
                         localizacoes.append(estoque.localizacao)
                 
                 # Só adicionar se tiver quantidade ou se não tiver filtro de localização
-                if quantidade_total > 0 or not localizacao_filtro:
-                    dados_excel.append({
-                        'codigo_alterdata': str(material.codigo_erp).replace(".0", "") if material.codigo_erp else '',
-                        'nome': material.nome,
-                        'unidade': material.get_unidade_nome() or '',
-                        'estoque': float(quantidade_total),
-                    })
+                dados_excel.append({
+                    'codigo_alterdata': str(material.codigo_erp).replace(".0", "") if material.codigo_erp else '',
+                    'nome': material.nome,
+                    'unidade': material.get_unidade_nome() or '',
+                    'estoque': float(quantidade_total),
+                })
         
         # Criar DataFrame
         df = pd.DataFrame(dados_excel)

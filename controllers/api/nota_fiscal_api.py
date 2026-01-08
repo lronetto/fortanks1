@@ -107,7 +107,10 @@ def register(nota_fiscal_bp):
         items = []
         for item in nota_fiscal.itens:
             material = Materiais.query.get(item.material_id) if item.material_id else None
-            dados_adicionais = json.loads(item.dados_adicionais) if item.dados_adicionais else None
+            try:
+                dados_adicionais = json.loads(item.dados_adicionais) if item.dados_adicionais else None
+            except Exception as e:
+                dados_adicionais = None
             if dados_adicionais:
                 xPed = dados_adicionais.get('xPed')
                 nItemPed = dados_adicionais.get('nItemPed')
