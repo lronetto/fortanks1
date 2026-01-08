@@ -1,0 +1,68 @@
+<div id="conteudoRelatorio">
+    {% if dados_relatorio %}
+        {% for grupo_data in dados_relatorio %}
+        <div class="card mb-4 border-left-primary">
+            <div class="card-header" style="background-color: {{ grupo_data.grupo_cor }}20; border-left: 4px solid {{ grupo_data.grupo_cor }};">
+                <h5 class="mb-0">
+                    <i class="{{ grupo_data.grupo_icone }}"></i> 
+                    {{ grupo_data.grupo_nome }}
+                    {% if grupo_data.grupo_codigo %}
+                    <small class="text-muted">({{ grupo_data.grupo_codigo }})</small>
+                    {% endif %}
+                    <span class="badge badge-primary float-right">
+                        {{ grupo_data.total_itens }} item(ns)
+                    </span>
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if grupo_data.itens %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>Código</th>
+                                <th>Material</th>
+                                <th>Categoria</th>
+                                <th>Unidade</th>
+                                <th class="text-right">Quantidade</th>
+                                <th>Localizações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in grupo_data.itens %}
+                            <tr>
+                                <td>{{ item.codigo or '-' }}</td>
+                                <td>{{ item.nome }}</td>
+                                <td>{{ item.categoria or '-' }}</td>
+                                <td>{{ item.unidade }}</td>
+                                <td class="text-right">
+                                    <strong>{{ "%.4f"|format(item.quantidade) }}</strong>
+                                </td>
+                                <td>{{ item.localizacoes }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-info">
+                                <td colspan="4" class="text-right"><strong>Total do Grupo:</strong></td>
+                                <td class="text-right">
+                                    <strong>{{ "%.4f"|format(grupo_data.quantidade_total) }}</strong>
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center mb-0">Nenhum material com estoque neste grupo.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+    <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Nenhum dado encontrado com os filtros aplicados.
+    </div>
+    {% endif %}
+</div>
+

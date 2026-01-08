@@ -467,6 +467,11 @@
                                 <i class="fas fa-industry"></i> Capacidade de Produção
                             </a>
                         </li>
+                        <li class="{{ is_active('relatorios_estoque_grupos.index') }}">
+                            <a href="{{ url_for('relatorios_estoque_grupos.index') }}">
+                                <i class="fas fa-chart-bar"></i> Estoque por Grupo
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 <!-- Módulo Administrativo -->
@@ -736,11 +741,6 @@
                         <li class="{{ is_active('estoque.movimentacoes') }}">
                             <a href="{{ url_for('estoque.movimentacoes') }}">
                                 <i class="fas fa-exchange-alt"></i> Movimentações
-                            </a>
-                        </li>
-                        <li class="{{ is_active('estoque.relatorio_grupos') }}">
-                            <a href="{{ url_for('estoque.relatorio_grupos') }}">
-                                <i class="fas fa-chart-bar"></i> Relatório por Grupo
                             </a>
                         </li>
                     </ul>

@@ -51,6 +51,10 @@
                                 <td>{{ inventario.tipo_inventario }}</td>
                             </tr>
                             <tr>
+                                <th>Localização</th>
+                                <td>{{ inventario.localizacao or "Não especificado" }}</td>
+                            </tr>
+                            <tr>
                                 <th>Status</th>
                                 <td>
                                     {% if inventario.status == 'Em andamento' %}

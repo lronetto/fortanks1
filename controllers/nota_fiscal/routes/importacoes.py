@@ -76,6 +76,7 @@ def importar_xml():
     """
     mensagens = []
     total_importadas = 0
+    total_erros = 0
     try:
         csrf_token = request.form.get("csrf_token")
         if not csrf_token:
@@ -85,6 +86,7 @@ def importar_xml():
         if not arquivos:
             return jsonify({"success": False, "message": "Nenhum arquivo enviado."})
 
+        
         for arquivo in arquivos:
             filename = secure_filename(arquivo.filename)
             if filename.lower().endswith(".zip"):
@@ -106,21 +108,12 @@ def importar_xml():
                 if nf and nf.id:
                     total_importadas += 1
                 else:
-                    mensagens.append(f"Erro ao importar {filename}")
+                    total_erros += 1
             else:
-                mensagens.append(f"Arquivo ignorado: {filename}")
-
-        if total_importadas > 0:
-            return jsonify(
-                {"success": True, "message": f"{total_importadas} nota(s) fiscal(is) importada(s) com sucesso!"},
-            ), 200
-
-        return (
-            jsonify({"success": False, "message": "Nenhuma nota fiscal foi importada.\n" + "\n".join(mensagens)}),
-            400,
-        )
+                total_erros += 1
+        return jsonify({"success": True, "message": f"{total_importadas} nota(s) fiscal(is) importada(s) com sucesso!", "total_erros": total_erros}), 200
     except Exception as e:
-        return jsonify({"success": False, "message": f"Erro ao importar XML: {str(e)}"}), 500
+        return jsonify({"success": False, "message": f"Erro ao importar XML: {str(e)}", "total_erros": 0}), 500
 
 
 @nota_fiscal_bp.route("/importar-todas-pendentes", methods=["GET"])

@@ -1,0 +1,252 @@
+<!-- Modal de Relatório de Estoque por Grupo -->
+<div class="modal fade" id="modalRelatorioGrupos" tabindex="-1" aria-labelledby="modalRelatorioGruposLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalRelatorioGruposLabel">
+                    <i class="fas fa-chart-bar"></i> Relatório de Estoque por Grupo de Material
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Filtros -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-filter"></i> Filtros
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <form method="GET" action="{{ url_for('relatorios_estoque_grupos.index') }}" id="formFiltrosRelatorio">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="row">
+                                <div class="col-md-3 mb-3">
+                                    <label for="data_filtro" class="form-label">Data de Referência</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           id="data_filtro" 
+                                           name="data_filtro" 
+                                           value="{{ data_filtro }}">
+                                    <small class="form-text text-muted">Deixe em branco para usar saldo atual</small>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="grupo_id" class="form-label">Grupo de Material</label>
+                                    <select class="form-control" id="grupo_id" name="grupo_id">
+                                        <option value="">Carregando...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-3">
+                                    <label for="localizacao_filtro" class="form-label">Localização</label>
+                                    <select class="form-control" id="localizacao_filtro" name="localizacao_filtro">
+                                        <option value="">Carregando...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3 mb-3 d-flex align-items-end">
+                                    <button type="button" class="btn btn-primary w-100" id="btnFiltrarRelatorio">
+                                        <i class="fas fa-search"></i> Filtrar
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Botões de Exportação -->
+                <div class="card shadow mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <button type="button" class="btn btn-success w-100" id="btnExportarExcelRelatorio">
+                                    <i class="fas fa-file-excel"></i> Exportar Excel
+                                </button>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <button type="button" class="btn btn-danger w-100" id="btnExportarPDFRelatorio">
+                                    <i class="fas fa-file-pdf"></i> Exportar PDF
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Relatório -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-chart-bar"></i> Relatório
+                            {% if data_filtro %}
+                            <small class="text-muted">(Data de referência: {{ data_filtro }})</small>
+                            {% else %}
+                            <small class="text-muted">(Saldo atual)</small>
+                            {% endif %}
+                        </h6>
+                    </div>
+                    <div class="card-body" id="conteudoRelatorio">
+                        {% if dados_relatorio %}
+                            {% for grupo_data in dados_relatorio %}
+                            <div class="card mb-4 border-left-primary">
+                                <div class="card-header" style="background-color: {{ grupo_data.grupo_cor }}20; border-left: 4px solid {{ grupo_data.grupo_cor }};">
+                                    <h5 class="mb-0">
+                                        <i class="{{ grupo_data.grupo_icone }}"></i> 
+                                        {{ grupo_data.grupo_nome }}
+                                        {% if grupo_data.grupo_codigo %}
+                                        <small class="text-muted">({{ grupo_data.grupo_codigo }})</small>
+                                        {% endif %}
+                                        <span class="badge badge-primary float-right">
+                                            {{ grupo_data.total_itens }} item(ns)
+                                        </span>
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if grupo_data.itens %}
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-sm">
+                                            <thead class="thead-light">
+                                                <tr>
+                                                    <th>Código</th>
+                                                    <th>Material</th>
+                                                    <th>Categoria</th>
+                                                    <th>Unidade</th>
+                                                    <th class="text-right">Quantidade</th>
+                                                    <th>Localizações</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for item in grupo_data.itens %}
+                                                <tr>
+                                                    <td>{{ item.codigo or '-' }}</td>
+                                                    <td>{{ item.nome }}</td>
+                                                    <td>{{ item.categoria or '-' }}</td>
+                                                    <td>{{ item.unidade }}</td>
+                                                    <td class="text-right">
+                                                        <strong>{{ "%.4f"|format(item.quantidade) }}</strong>
+                                                    </td>
+                                                    <td>{{ item.localizacoes }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr class="table-info">
+                                                    <td colspan="4" class="text-right"><strong>Total do Grupo:</strong></td>
+                                                    <td class="text-right">
+                                                        <strong>{{ "%.4f"|format(grupo_data.quantidade_total) }}</strong>
+                                                    </td>
+                                                    <td></td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {% else %}
+                                    <p class="text-muted text-center mb-0">Nenhum material com estoque neste grupo.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> Nenhum dado encontrado com os filtros aplicados.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    let gruposCarregados = false;
+    let localizacoesCarregadas = false;
+
+    // Carregar grupos e localizações ao abrir o modal
+    $('#modalRelatorioGrupos').on('show.bs.modal', function() {
+        if (!gruposCarregados || !localizacoesCarregadas) {
+            carregarFiltros();
+        }
+        carregarRelatorio();
+    });
+
+    // Função para carregar grupos e localizações
+    function carregarFiltros() {
+        $.ajax({
+            url: "{{ url_for('relatorios_estoque_grupos.api_filtros') }}",
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    // Popular select de grupos
+                    let gruposHtml = '<option value="">Todos os grupos</option>';
+                    response.grupos.forEach(function(grupo) {
+                        gruposHtml += `<option value="${grupo.id}">${grupo.nome}</option>`;
+                    });
+                    $('#grupo_id').html(gruposHtml);
+                    gruposCarregados = true;
+                    
+                    // Popular select de localizações
+                    let localizacoesHtml = '<option value="">Todas as localizações</option>';
+                    response.localizacoes.forEach(function(loc) {
+                        localizacoesHtml += `<option value="${loc}">${loc}</option>`;
+                    });
+                    $('#localizacao_filtro').html(localizacoesHtml);
+                    localizacoesCarregadas = true;
+                } else {
+                    console.error('Erro ao carregar filtros:', response.message);
+                    $('#grupo_id').html('<option value="">Erro ao carregar</option>');
+                    $('#localizacao_filtro').html('<option value="">Erro ao carregar</option>');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao carregar filtros:', error);
+                $('#grupo_id').html('<option value="">Erro ao carregar</option>');
+                $('#localizacao_filtro').html('<option value="">Erro ao carregar</option>');
+            }
+        });
+    }
+
+    // Função para carregar o relatório
+    function carregarRelatorio() {
+        const formData = $('#formFiltrosRelatorio').serialize();
+        const url = "{{ url_for('relatorios_estoque_grupos.index') }}?" + formData;
+        
+        $('#conteudoRelatorio').html('<div class="text-center my-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div></div>');
+        
+        $.ajax({
+            url: url,
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            success: function(response) {
+                // O servidor retorna apenas o conteúdo do relatório quando é AJAX
+                $('#conteudoRelatorio').html(response || '<div class="alert alert-info">Nenhum dado encontrado.</div>');
+            },
+            error: function() {
+                $('#conteudoRelatorio').html('<div class="alert alert-danger">Erro ao carregar relatório.</div>');
+            }
+        });
+    }
+
+    // Filtrar relatório
+    $('#btnFiltrarRelatorio').on('click', function() {
+        carregarRelatorio();
+    });
+
+    // Exportar Excel
+    $('#btnExportarExcelRelatorio').on('click', function() {
+        const formData = $('#formFiltrosRelatorio').serialize();
+        const url = "{{ url_for('relatorios_estoque_grupos.exportar_excel') }}?" + formData;
+        window.location.href = url;
+    });
+
+    // Exportar PDF
+    $('#btnExportarPDFRelatorio').on('click', function() {
+        const formData = $('#formFiltrosRelatorio').serialize();
+        const url = "{{ url_for('relatorios_estoque_grupos.exportar_pdf') }}?" + formData;
+        window.open(url, '_blank');
+    });
+});
+</script>
+

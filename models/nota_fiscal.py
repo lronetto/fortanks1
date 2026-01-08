@@ -1158,7 +1158,7 @@ class NotaFiscalItem(db.Model):
             self.fator_conversao_aplicado = fator_conversao_aplicado
             self.material_id = material
             self.save()
-            return True
+            return True, None
         except Exception as e:
             print(f'erro ao vincular: {e}')
             return False, e

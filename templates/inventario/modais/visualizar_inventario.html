@@ -20,6 +20,10 @@
                                 <td id="view_tipo_inventario">-</td>
                             </tr>
                             <tr>
+                                <td><strong>Localização:</strong></td>
+                                <td id="view_localizacao">-</td>
+                            </tr>
+                            <tr>
                                 <td><strong>Status:</strong></td>
                                 <td id="view_status">-</td>
                             </tr>
@@ -139,6 +143,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Informações básicas
             document.getElementById('view_inventario_id').textContent = inventario.id || '-';
             document.getElementById('view_tipo_inventario').textContent = inventario.tipo_inventario || '-';
+            document.getElementById('view_localizacao').textContent = inventario.localizacao || 'Não especificado';
             document.getElementById('view_status').innerHTML = inventario.status_badge || '-';
             document.getElementById('view_data_inicio').textContent = inventario.data_inicio || '-';
             document.getElementById('view_data_fim').textContent = inventario.data_fim || '-';
@@ -270,6 +275,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const inventario = {
                     id: this.dataset.id,
                     tipo_inventario: this.dataset.tipoInventario || '',
+                    localizacao: this.dataset.localizacao || '',
                     status: this.dataset.status || '',
                     status_badge: this.dataset.statusBadge || '',
                     data_inicio: this.dataset.dataInicio || '',

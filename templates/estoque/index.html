@@ -19,6 +19,9 @@
             <a href="{{ url_for('estoque.exportar_excel', tipo_item=form_filtro.tipo_item.data or '', status_estoque=form_filtro.status_estoque.data or '', localizacao=form_filtro.localizacao.data or '', termo_busca=form_filtro.termo_busca.data or '', ignorar_localizacoes='on' if form_filtro.ignorar_localizacoes.data else '') }}" class="btn btn-success btn-sm">
                 <i class="fas fa-file-excel"></i> Exportar Excel
             </a>
+            <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalRelatorioGrupos">
+                <i class="fas fa-chart-bar"></i> Relatório por Grupo
+            </button>
             <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoItem">
                 <i class="fas fa-plus"></i> Novo Item
             </button>
@@ -252,6 +255,7 @@
 {% include 'estoque/modais/visualizar_item.html' %}
 {% include 'estoque/modais/confirmar_exclusao.html' %}
 {% include 'estoque/modais/historico_estoque.html' %}
+{% include 'relatorios/estoque/modais/relatorio_grupos.html' %}
 {% endblock %}
 
 {% block scripts %}

@@ -31,6 +31,20 @@
                                     {% endif %}
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    {{ form.localizacao.label }}
+                                    {{ form.localizacao(class="form-control") }}
+                                    {% if form.localizacao.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {% for error in form.localizacao.errors %}
+                                                {{ error }}
+                                            {% endfor %}
+                                        </div>
+                                    {% endif %}
+                                    <small class="form-text text-muted">Localização física onde será realizado o inventário</small>
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Campos para inventário parcial -->

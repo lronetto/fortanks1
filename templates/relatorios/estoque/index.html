@@ -22,7 +22,7 @@
             </h6>
         </div>
         <div class="card-body">
-            <form method="GET" action="{{ url_for('estoque.relatorio_grupos') }}" id="formFiltros">
+            <form method="GET" action="{{ url_for('relatorios_estoque_grupos.index') }}" id="formFiltros">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row">
                     <div class="col-md-4 mb-3">
@@ -34,7 +34,7 @@
                                value="{{ data_filtro }}">
                         <small class="form-text text-muted">Deixe em branco para usar saldo atual</small>
                     </div>
-                    <div class="col-md-4 mb-3">
+                    <div class="col-md-3 mb-3">
                         <label for="grupo_id" class="form-label">Grupo de Material</label>
                         <select class="form-control" id="grupo_id" name="grupo_id">
                             <option value="">Todos os grupos</option>
@@ -45,7 +45,18 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4 mb-3 d-flex align-items-end">
+                    <div class="col-md-3 mb-3">
+                        <label for="localizacao_filtro" class="form-label">Localização</label>
+                        <select class="form-control" id="localizacao_filtro" name="localizacao_filtro">
+                            <option value="">Todas as localizações</option>
+                            {% for loc in localizacoes %}
+                            <option value="{{ loc[0] }}" {% if localizacao_filtro == loc[0] %}selected{% endif %}>
+                                {{ loc[0] }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="fas fa-search"></i> Filtrar
                         </button>
@@ -160,14 +171,14 @@ $(document).ready(function() {
     // Exportar Excel
     $('#btnExportarExcel').on('click', function() {
         const formData = $('#formFiltros').serialize();
-        const url = "{{ url_for('estoque.relatorio_grupos_exportar_excel') }}?" + formData;
+        const url = "{{ url_for('relatorios_estoque_grupos.exportar_excel') }}?" + formData;
         window.location.href = url;
     });
 
     // Exportar PDF
     $('#btnExportarPDF').on('click', function() {
         const formData = $('#formFiltros').serialize();
-        const url = "{{ url_for('estoque.relatorio_grupos_exportar_pdf') }}?" + formData;
+        const url = "{{ url_for('relatorios_estoque_grupos.exportar_pdf') }}?" + formData;
         window.open(url, '_blank');
     });
 });

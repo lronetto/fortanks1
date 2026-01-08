@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Text
+from sqlalchemy import Text, JSON
 from models.database import db
 from models.material import Materiais, MateriaisGrupos
 from decimal import Decimal
@@ -175,7 +175,64 @@ class ProdutoComposto(db.Model):
             materiais_necessarios = {}
         if log:
             print(f"  -> Componente composto: {self.nome} (ID: {self.id}) - Quantidade: {quantidade}")
+        
+        # Normalizar data_movimento para date se necessário
+        from datetime import date as date_type
+        if data_movimento is None:
+            data_movimento = datetime.now().date()
+        elif isinstance(data_movimento, datetime):
+            data_movimento = data_movimento.date()
+        elif isinstance(data_movimento, date_type):
+            pass  # Já é date
+        else:
+            # Tentar converter string para date
+            try:
+                if isinstance(data_movimento, str):
+                    data_movimento = datetime.strptime(data_movimento, '%Y-%m-%d').date()
+                else:
+                    data_movimento = datetime.now().date()
+            except (ValueError, TypeError):
+                data_movimento = datetime.now().date()
+        
         for componente in self.componentes:
+            if componente.dados_adicionais:
+                try:
+                    datainicio = componente.dados_adicionais.get('data_inicio')
+                    if datainicio:
+                        # Tentar parse da data
+                        if isinstance(datainicio, str):
+                            datainicio = datetime.strptime(datainicio, '%Y-%m-%d').date()
+                        elif isinstance(datainicio, datetime):
+                            datainicio = datainicio.date()
+                        elif isinstance(datainicio, date_type):
+                            pass  # Já é date
+                        else:
+                            datainicio = None
+                        
+                        # Comparar apenas se datainicio foi parseado com sucesso
+                        if datainicio and data_movimento and datainicio > data_movimento:
+                            continue
+                    
+                    datatermino = componente.dados_adicionais.get('data_termino')
+                    if datatermino:
+                        # Tentar parse da data
+                        if isinstance(datatermino, str):
+                            datatermino = datetime.strptime(datatermino, '%Y-%m-%d').date()
+                        elif isinstance(datatermino, datetime):
+                            datatermino = datatermino.date()
+                        elif isinstance(datatermino, date_type):
+                            pass  # Já é date
+                        else:
+                            datatermino = None
+                        
+                        # Comparar apenas se datatermino foi parseado com sucesso
+                        if datatermino and data_movimento and datatermino <= data_movimento:
+                            continue
+                except (ValueError, TypeError) as e:
+                    # Se houver erro no parse, logar e continuar processando o componente
+                    if log:
+                        print(f"  AVISO: Erro ao processar datas do componente {componente.id}: {str(e)}")
+                    pass  # Continuar processando o componente mesmo com erro nas datas
             if componente.estoque.tipo_item == 'material':
                 estoque_id = componente.estoque.id
                 quantidade_total = quantidade * componente.quantidade
@@ -260,6 +317,7 @@ class ProdutoCompostoItem(db.Model):
     estoque_id = db.Column(db.Integer, db.ForeignKey('Estoque.id'), nullable=False)
     quantidade = db.Column(db.Numeric(15, 8), nullable=False)  # Aumentado para 8 casas decimais
     observacao = db.Column(db.Text, nullable=True)
+    dados_adicionais = db.Column(JSON, nullable=True)  # Campo JSON para dados adicionais (datas de início/término)
     
     # Relacionamento com material
     estoque = db.relationship('Estoque')

@@ -36,6 +36,18 @@
                             </small>
                         </div>
                     </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="localizacao">Localização do Inventário</label>
+                            <select name="localizacao" id="localizacao" class="form-control">
+                                <option value="">Selecione uma localização...</option>
+                                {% for localizacao in localizacoes %}
+                                    <option value="{{ localizacao }}">{{ localizacao }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="form-text text-muted">Localização física onde será realizado o inventário</small>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- Opções para inventário parcial - exibido apenas quando o tipo "Parcial" é selecionado -->

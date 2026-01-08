@@ -101,42 +101,6 @@
         </div>
     </div>
 
-    <!-- Resumo -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card text-center card-resumo border-primary">
-                <div class="card-body">
-                    <h5 class="card-title text-primary">Estoque Atual Total</h5>
-                    <h3 class="text-primary" id="totalEstoqueAtual">{{ total_estoque_atual|replace('.', ',') }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center card-resumo border-info">
-                <div class="card-body">
-                    <h5 class="card-title text-info">Quantidade Prevista Total</h5>
-                    <h3 class="text-info" id="totalQuantidadePrevista">{{ total_quantidade_prevista|replace('.', ',') }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center card-resumo border-success">
-                <div class="card-body">
-                    <h5 class="card-title text-success">Quantidade Concretada Total</h5>
-                    <h3 class="text-success" id="totalQuantidadeConcretada">{{ total_quantidade_concretada|replace('.', ',') }}</h3>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card text-center card-resumo border-warning">
-                <div class="card-body">
-                    <h5 class="card-title text-warning">Previsto de Uso Futuro</h5>
-                    <h3 class="text-warning" id="totalQuantidadeNecessaria">{{ total_quantidade_necessaria|replace('.', ',') }}</h3>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Tabela -->
     <div class="row">
         <div class="col-12">
@@ -153,7 +117,7 @@
                                     <th>Unidade</th>
                                     <th>Estoque Atual</th>
                                     <th>Quantidade Prevista Total</th>
-                                    <th>Quantidade Concretada Total</th>
+                                    <th>Quantidade Consumida Total</th>
                                     <th>Quantidade Restante Total</th>
                                     <th>Previsto de Uso Futuro</th>
                                     <th>Estoque Após Uso</th>

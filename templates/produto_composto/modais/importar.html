@@ -1,0 +1,101 @@
+<div class="modal fade" id="importModal" tabindex="-1" role="dialog" aria-labelledby="importModalLabel" style="display: none;">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="importModalLabel">Importar Produtos Compostos do Excel</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="form-importar-excel" method="POST" action="/produto-composto/importar-excel" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Instruções:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>O arquivo Excel deve ter uma aba para cada produto composto</li>
+                            <li>O nome da aba será usado como nome do produto</li>
+                            <li>Cada aba deve ter as colunas: <strong>Material/Produto</strong>, <strong>Quantidade</strong></li>
+                            <li>A coluna "Material/Produto" pode conter o nome do material ou o ID do estoque</li>
+                            <li>Produtos existentes serão atualizados, novos produtos serão criados</li>
+                        </ul>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="arquivo_excel">Selecione o arquivo Excel (.xlsx)</label>
+                        <input type="file" class="form-control-file" id="arquivo_excel" name="arquivo_excel" accept=".xlsx,.xls" required>
+                        <small class="form-text text-muted">Apenas arquivos Excel (.xlsx ou .xls) são permitidos</small>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="sobrescrever" name="sobrescrever" value="1">
+                            <label class="form-check-label" for="sobrescrever">
+                                Sobrescrever produtos existentes (se não marcado, apenas atualiza componentes)
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-enviar-importacao">
+                    <i class="fas fa-upload"></i> Importar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        $('#btn-enviar-importacao').on('click', function(e) {
+            e.preventDefault();
+            
+            const form = document.getElementById('form-importar-excel');
+            const arquivoInput = document.getElementById('arquivo_excel');
+            
+            if (!arquivoInput.files || arquivoInput.files.length === 0) {
+                alert('Por favor, selecione um arquivo Excel.');
+                return;
+            }
+
+            const formData = new FormData(form);
+            
+            // Mostrar loading
+            const btnEnviar = $(this);
+            const textoOriginal = btnEnviar.html();
+            btnEnviar.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+
+            fetch('/produto-composto/importar-excel', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': $('meta[name="csrf-token"]').attr('content') || $('input[name="csrf_token"]').val()
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Importação concluída!\n\nProdutos criados: ${data.criados || 0}\nProdutos atualizados: ${data.atualizados || 0}\nErros: ${data.erros || 0}`);
+                    $('#importModal').modal('hide');
+                    carregarProduto(0);
+                } else {
+                    alert('Erro na importação: ' + (data.message || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao importar:', error);
+                alert('Erro ao importar arquivo. Verifique o console para mais detalhes.');
+            })
+            .finally(() => {
+                btnEnviar.prop('disabled', false).html(textoOriginal);
+            });
+        });
+    });
+</script>
+{% endblock %}
+

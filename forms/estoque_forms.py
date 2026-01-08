@@ -25,6 +25,7 @@ class InventarioEstoqueForm(FlaskForm):
         ('Completo', 'Completo'),
         ('Parcial', 'Parcial')
     ], validators=[DataRequired()])
+    localizacao = SelectField('Localização', choices=[], validators=[Optional()])
     observacoes = StringField('Observações')
 
 class ItemInventarioForm(FlaskForm):

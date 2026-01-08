@@ -76,8 +76,10 @@
                         <thead>
                             <tr>
                                 <th>Item</th>
-                                <th style="width: 25%;">Quantidade</th>
-                                <th style="width: 15%;" class="text-center">Ação</th>
+                                <th style="width: 15%;">Quantidade</th>
+                                <th style="width: 15%;">Data Início</th>
+                                <th style="width: 15%;">Data Término</th>
+                                <th style="width: 10%;" class="text-center">Ação</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -233,7 +235,28 @@
                 inicializarSelect2();
                 $('#tabela-componentes tbody').empty();
                 data.produtos[0].componentes.forEach(componente => {
-                    adicionarLinhaTabela(componente.estoque_id,componente.quantidade,componente.nome);
+                    // Extrair datas do campo dados_adicionais (JSON)
+                    let dataInicio = null;
+                    let dataTermino = null;
+                    if (componente.dados_adicionais) {
+                        try {
+                            const dados = typeof componente.dados_adicionais === 'string' 
+                                ? JSON.parse(componente.dados_adicionais) 
+                                : componente.dados_adicionais;
+                            dataInicio = dados.data_inicio || null;
+                            dataTermino = dados.data_termino || null;
+                        } catch (e) {
+                            console.error('Erro ao parsear dados_adicionais:', e);
+                        }
+                    }
+                    adicionarLinhaTabela(
+                        componente.estoque_id,
+                        componente.quantidade,
+                        componente.nome,
+                        null,
+                        dataInicio,
+                        dataTermino
+                    );
                 });
                
                 
@@ -318,12 +341,18 @@
             reader.readAsDataURL(file);
         }
         
-        function adicionarLinhaTabela(estoqueId,quantidade,nomeItem,tipo) {
+        function adicionarLinhaTabela(estoqueId,quantidade,nomeItem,tipo,dataInicio,dataTermino) {
             console.log('adicionarLinhaTabela');
+            // Formatar datas para exibição (YYYY-MM-DD)
+            const dataInicioFormatada = dataInicio ? new Date(dataInicio).toISOString().split('T')[0] : '';
+            const dataTerminoFormatada = dataTermino ? new Date(dataTermino).toISOString().split('T')[0] : '';
+            
             const newRow = `
                 <tr data-estoque-id="${estoqueId}" data-tipo="${tipo}">
                     <td>${nomeItem}</td>
                     <td><input type="text" class="form-control form-control-sm quantidade-componente" value="${quantidade}"></td>
+                    <td><input type="date" class="form-control form-control-sm data-inicio-componente" value="${dataInicioFormatada}"></td>
+                    <td><input type="date" class="form-control form-control-sm data-termino-componente" value="${dataTerminoFormatada}"></td>
                     <td class="text-center">
                         <button type="button" class="btn btn-danger btn-sm btn-remover-item"><i class="fas fa-trash"></i></button>
                     </td>
@@ -353,7 +382,7 @@
                 return;
             }
             
-            adicionarLinhaTabela(estoqueId,quantidade,nomeItem,tipo);
+            adicionarLinhaTabela(estoqueId,quantidade,nomeItem,tipo,null,null);
 
             // Limpa os campos
             select.val(null).trigger('change');
@@ -376,11 +405,22 @@
                 
                 const estoqueId = row.data('estoque-id');
                 const tipo = row.data('tipo');
+                
+                // Coletar datas
+                const dataInicio = row.find('.data-inicio-componente').val() || null;
+                const dataTermino = row.find('.data-termino-componente').val() || null;
+                
+                // Criar objeto de dados adicionais
+                const dadosAdicionais = {};
+                if (dataInicio) dadosAdicionais.data_inicio = dataInicio;
+                if (dataTermino) dadosAdicionais.data_termino = dataTermino;
+                
                 componentes.push({
                     // Pode ser number (estoque_id) ou string (ex: "material:123")
                     estoque_id: String(estoqueId),
                     quantidade: quantidade,
-                    tipo: tipo
+                    tipo: tipo,
+                    dados_adicionais: Object.keys(dadosAdicionais).length > 0 ? dadosAdicionais : null
                 });
             });
 

@@ -61,6 +61,7 @@ def inventarios():
         Estoque.localizacao != ''
     ).distinct().order_by(Estoque.localizacao).all()
     localizacoes_list = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
+    localizacoes_simples = [loc[0] for loc in localizacoes]  # Lista simples para o modal
     
     # Paginação manual se necessário
     pagination = {
@@ -73,6 +74,7 @@ def inventarios():
                           inventarios=inventarios, 
                           pagination=pagination,
                           localizacoes=localizacoes_list,
+                          localizacoes_modal=localizacoes_simples,  # Para o modal de novo inventário
                           localizacao=localizacao,
                           request=request)
 
@@ -97,8 +99,11 @@ def novo_inventario():
     localizacoes = db.session.query(Estoque.localizacao).filter(
         Estoque.localizacao != None, 
         Estoque.localizacao != ''
-    ).distinct().all()
+    ).distinct().order_by(Estoque.localizacao).all()
     localizacoes = [loc[0] for loc in localizacoes]
+    
+    # Popular choices do SelectField de localização
+    form.localizacao.choices = [('', 'Selecione uma localização...')] + [(loc, loc) for loc in localizacoes]
     
     # Debug: verificar se é AJAX e dados do formulário
     if is_ajax:
@@ -109,6 +114,7 @@ def novo_inventario():
             logger.info(f"Criando inventário - Tipo: {form.tipo_inventario.data}")
             inventario = EstoqueInventarios(
                 tipo_inventario=form.tipo_inventario.data,
+                localizacao=form.localizacao.data if form.localizacao.data else None,
                 observacoes=form.observacoes.data,
                 criado_por_id=current_user.id
             )
@@ -273,7 +279,15 @@ def gerenciar_inventario():
     """
     Página principal para gerenciar inventários
     """
-    return render_template('inventario/gerenciar_inventario.html')
+    # Obter lista de localizações para o modal
+    localizacoes = db.session.query(Estoque.localizacao).filter(
+        Estoque.localizacao != None,
+        Estoque.localizacao != ''
+    ).distinct().order_by(Estoque.localizacao).all()
+    localizacoes_simples = [loc[0] for loc in localizacoes]
+    
+    return render_template('inventario/gerenciar_inventario.html', 
+                          localizacoes_modal=localizacoes_simples)
 
 @inventario_bp.route('/api/estatisticas')
 @login_required
@@ -489,9 +503,25 @@ def inventario_contagem(id):
         flash('Este inventário já foi finalizado ou cancelado', 'warning')
         return redirect(url_for('inventario.inventario_detalhes', id=id))
     
+    # Obter lista de localizações únicas dos itens do inventário para o filtro
+    localizacoes = db.session.query(Estoque.localizacao)\
+        .join(EstoqueInventariosItens, Estoque.id == EstoqueInventariosItens.estoque_id)\
+        .filter(EstoqueInventariosItens.inventario_id == id)\
+        .filter(Estoque.localizacao != None, Estoque.localizacao != '')\
+        .distinct().order_by(Estoque.localizacao).all()
+    localizacoes_list = [loc[0] for loc in localizacoes]
+    
+    # Obter todas as localizações disponíveis no sistema para o select de definição
+    todas_localizacoes = db.session.query(Estoque.localizacao)\
+        .filter(Estoque.localizacao != None, Estoque.localizacao != '')\
+        .distinct().order_by(Estoque.localizacao).all()
+    todas_localizacoes_list = [loc[0] for loc in todas_localizacoes]
+    
     return render_template('inventario/inventario_contagem.html', 
                           inventario=inventario,
-                          contados=contados)
+                          contados=contados,
+                          localizacoes=localizacoes_list,
+                          todas_localizacoes=todas_localizacoes_list)
 
 @inventario_bp.route('/<int:id>/finalizar', methods=['POST'])
 @login_required
@@ -771,6 +801,39 @@ def salvar_observacao_item(inventario_id, item_id):
         db.session.rollback()
         logger.error(f"Erro ao salvar observação: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@inventario_bp.route('/<int:id>/atualizar-localizacao', methods=['POST'])
+@login_required
+def atualizar_localizacao_inventario(id):
+    """
+    Atualizar localização do inventário
+    """
+    inventario = EstoqueInventarios.query.get_or_404(id)
+    
+    # Verificar se o inventário está em andamento
+    if inventario.status != 'Em andamento':
+        return jsonify({
+            'success': False,
+            'message': 'Este inventário não está em andamento'
+        }), 400
+    
+    localizacao = request.form.get('localizacao', '').strip()
+    
+    try:
+        inventario.localizacao = localizacao if localizacao else None
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': 'Localização atualizada com sucesso',
+            'localizacao': inventario.localizacao or 'Não especificado'
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar localização: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao atualizar localização: {str(e)}'
+        }), 500
 
 @inventario_bp.route('/api/buscar-itens')
 @login_required

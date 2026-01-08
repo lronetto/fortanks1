@@ -2,6 +2,7 @@ from datetime import datetime
 from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file, current_app
 from io import BytesIO
 from werkzeug.exceptions import abort
+from werkzeug.utils import secure_filename
 from models.estoque import Estoque,EstoqueMovimentacoes
 from flask_login import login_required, current_user
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
@@ -11,8 +12,13 @@ from models.material import Materiais
 from models.database import db
 import logging
 import base64
+import re
+import json
 from PIL import Image
 import io
+import os
+import tempfile
+import pandas as pd
 from sqlalchemy import or_, func, and_
 from sqlalchemy.orm import joinedload
 from decimal import Decimal
@@ -172,12 +178,16 @@ def get_produto_composto(id):
         for p in produto.componentes:
             estoque = Estoque.query.filter(Estoque.ProdComp_id == p.estoque_id).first()
             nome_material_ou_produto = p.estoque.material.nome if p.estoque.material_id else p.estoque.produto_composto.nome
-            componentes.append({
+            componente_data = {
                 'estoque_id': p.estoque_id,
                 'quantidade': p.quantidade,
                 'nome': '('+str(p.estoque.id)+') '+('[M] '+p.estoque.material.nome if p.estoque.material_id else '[P] '+p.estoque.produto_composto.nome),
                 'nome_ordenacao': nome_material_ou_produto
-            })
+            }
+            # Adicionar dados_adicionais se existir
+            if p.dados_adicionais:
+                componente_data['dados_adicionais'] = p.dados_adicionais
+            componentes.append(componente_data)
         
         # Ordenar componentes pelo nome do material ou produto composto (case-insensitive)
         componentes.sort(key=lambda x: x['nome_ordenacao'].lower())
@@ -318,10 +328,14 @@ def salvar():
                 # Log para debug dos valores de quantidade
                 logger.info(f"Adicionando componente - Estoque ID: {item['estoque_id']}, Quantidade: {item['quantidade']} (tipo: {type(item['quantidade'])})")
                 
-                produto.adicionar_item(
+                componente = produto.adicionar_item(
                     estoque=estoque,
                     quantidade=item['quantidade']
                 )
+                
+                # Salvar dados adicionais (datas) se existirem
+                if item.get('dados_adicionais'):
+                    componente.dados_adicionais = item['dados_adicionais']
         else:
             # Criação
             produto = ProdutoComposto(
@@ -399,10 +413,14 @@ def salvar():
                 # Log para debug dos valores de quantidade
                 logger.info(f"Criando componente - Estoque ID: {item['estoque_id']}, Quantidade: {item['quantidade']} (tipo: {type(item['quantidade'])})")
                 
-                produto.adicionar_item(
+                componente = produto.adicionar_item(
                     estoque=estoque,
                     quantidade=item['quantidade']
                 )
+                
+                # Salvar dados adicionais (datas) se existirem
+                if item.get('dados_adicionais'):
+                    componente.dados_adicionais = item['dados_adicionais']
         estoque = Estoque.query.filter(Estoque.ProdComp_id == produto.id).first()
         if not estoque:
             estoque = Estoque(produto_composto=produto,
@@ -474,7 +492,8 @@ def duplicar(id):
                 produto_id=novo_produto.id,
                 estoque_id=componente.estoque_id,
                 quantidade=componente.quantidade,
-                observacao=componente.observacao
+                observacao=componente.observacao,
+                dados_adicionais=componente.dados_adicionais  # Copiar dados adicionais (datas)
             )
             db.session.add(novo_componente)
         
@@ -665,6 +684,27 @@ def api_itens_estoque():
 
     results.sort(key=lambda x: x['text_sort'])
     return jsonify({'results': results})
+
+def _sanitizar_nome_aba(nome):
+    """
+    Sanitiza o nome para ser usado como nome de aba no Excel.
+    Remove caracteres inválidos e limita o tamanho.
+    """
+    # Remover apóstrofos no início e fim
+    nome = nome.strip().strip("'").strip('"')
+    
+    # Remover caracteres inválidos para nomes de abas do Excel: [ ] * ? : / \
+    nome = re.sub(r'[\[\]:*?/\\]', '', nome)
+    
+    # Limitar a 31 caracteres (limite do Excel)
+    if len(nome) > 31:
+        nome = nome[:28] + '...'
+    
+    # Se ficou vazio após sanitização, usar nome padrão
+    if not nome or nome.strip() == '':
+        nome = 'Produto'
+    
+    return nome
 
 def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, caminho_atual=None):
     """
@@ -919,4 +959,326 @@ def api_historico_custo(id):
         return jsonify({
             'success': False,
             'message': f'Erro ao buscar histórico de custo: {str(e)}'
+        }), 500
+
+@produto_composto_bp.route('/exportar-excel', methods=['POST'])
+@login_required
+def exportar_excel():
+    """
+    Exporta produtos compostos selecionados para Excel
+    Cada produto terá sua própria aba com seus materiais/componentes
+    """
+    try:
+        produto_ids = request.form.getlist('produto_ids')
+        
+        if not produto_ids:
+            flash('Nenhum produto selecionado para exportar.', 'warning')
+            return redirect(url_for('produto_composto.index'))
+        
+        # Converter IDs para inteiros
+        produto_ids = [int(id) for id in produto_ids if id.isdigit()]
+        
+        if not produto_ids:
+            flash('IDs de produtos inválidos.', 'danger')
+            return redirect(url_for('produto_composto.index'))
+        
+        # Buscar produtos
+        produtos = ProdutoComposto.query.filter(ProdutoComposto.id.in_(produto_ids)).all()
+        
+        if not produtos:
+            flash('Nenhum produto encontrado.', 'warning')
+            return redirect(url_for('produto_composto.index'))
+        
+        # Criar arquivo Excel em memória
+        output = BytesIO()
+        
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            for produto in produtos:
+                # Preparar dados dos componentes
+                dados_componentes = []
+                
+                for componente in produto.componentes:
+                    estoque = componente.estoque
+                    if estoque:
+                        if estoque.material:
+                            nome_item = estoque.material.nome
+                            codigo_item = estoque.material.codigo or ''
+                            unidade = estoque.material.unidade_obj.sigla if (estoque.material.unidade_obj and hasattr(estoque.material.unidade_obj, 'sigla')) else ''
+                            tipo = 'Material'
+                        elif estoque.produto_composto:
+                            nome_item = estoque.produto_composto.nome
+                            codigo_item = ''
+                            unidade = ''
+                            tipo = 'Produto Composto'
+                        else:
+                            nome_item = 'Desconhecido'
+                            codigo_item = ''
+                            unidade = ''
+                            tipo = 'Desconhecido'
+                        
+                        dados_componentes.append({
+                            'ID Estoque': estoque.id,
+                            'Tipo': tipo,
+                            'Nome': nome_item,
+                            'Código': codigo_item,
+                            'Quantidade': float(componente.quantidade),
+                            'Unidade': unidade,
+                            'Observação': componente.observacao or ''
+                        })
+                
+                # Ordenar componentes pelo nome do material/produto
+                dados_componentes.sort(key=lambda x: x['Nome'].lower() if x['Nome'] else '')
+                
+                # Criar DataFrame
+                if dados_componentes:
+                    df = pd.DataFrame(dados_componentes)
+                else:
+                    # Se não houver componentes, criar DataFrame vazio com colunas
+                    df = pd.DataFrame(columns=['ID Estoque', 'Tipo', 'Nome', 'Código', 'Quantidade', 'Unidade', 'Observação'])
+                
+                # Sanitizar nome da aba (remover caracteres inválidos)
+                nome_aba = _sanitizar_nome_aba(produto.nome)
+                
+                # Escrever na aba
+                df.to_excel(writer, sheet_name=nome_aba, index=False)
+                
+                # Ajustar largura das colunas
+                worksheet = writer.sheets[nome_aba]
+                worksheet.set_column('A:A', 12)  # ID Estoque
+                worksheet.set_column('B:B', 15)  # Tipo
+                worksheet.set_column('C:C', 30)  # Nome
+                worksheet.set_column('D:D', 15)  # Código
+                worksheet.set_column('E:E', 12)  # Quantidade
+                worksheet.set_column('F:F', 10)  # Unidade
+                worksheet.set_column('G:G', 30)  # Observação
+        
+        output.seek(0)
+        
+        # Nome do arquivo com data
+        data_export = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'produtos_compostos_{data_export}.xlsx'
+        
+        return send_file(
+            output,
+            download_name=filename,
+            as_attachment=True,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        logger.error(f"Erro ao exportar produtos compostos: {str(e)}", exc_info=True)
+        flash(f'Erro ao exportar: {str(e)}', 'danger')
+        return redirect(url_for('produto_composto.index'))
+
+@produto_composto_bp.route('/importar-excel', methods=['POST'])
+@login_required
+def importar_excel():
+    """
+    Importa produtos compostos de um arquivo Excel
+    Cada aba do Excel representa um produto composto
+    """
+    try:
+        if 'arquivo_excel' not in request.files:
+            return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
+        
+        arquivo = request.files['arquivo_excel']
+        
+        if arquivo.filename == '':
+            return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'}), 400
+        
+        if not arquivo.filename.endswith(('.xlsx', '.xls')):
+            return jsonify({'success': False, 'message': 'Apenas arquivos Excel (.xlsx ou .xls) são permitidos'}), 400
+        
+        sobrescrever = request.form.get('sobrescrever') == '1'
+        
+        # Salvar arquivo temporariamente
+        temp_dir = tempfile.gettempdir()
+        filename = secure_filename(arquivo.filename)
+        temp_path = os.path.join(temp_dir, f'import_produtos_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{filename}')
+        arquivo.save(temp_path)
+        
+        try:
+            # Ler todas as abas do Excel
+            excel_file = pd.ExcelFile(temp_path)
+            
+            contador_criados = 0
+            contador_atualizados = 0
+            contador_erros = 0
+            erros_detalhes = []
+            
+            for nome_aba in excel_file.sheet_names:
+                try:
+                    # Ler dados da aba
+                    df = pd.read_excel(excel_file, sheet_name=nome_aba)
+                    
+                    # Verificar colunas necessárias
+                    colunas_necessarias = ['Nome', 'Quantidade']
+                    colunas_opcionais = ['ID Estoque', 'Material/Produto', 'Código', 'Unidade', 'Observação']
+                    
+                    # Tentar mapear colunas (case-insensitive)
+                    colunas_df = [col.lower() for col in df.columns]
+                    
+                    # Mapear colunas
+                    col_nome = None
+                    col_quantidade = None
+                    col_id_estoque = None
+                    col_material_produto = None
+                    
+                    for col in df.columns:
+                        col_lower = col.lower()
+                        if 'nome' in col_lower and not col_nome:
+                            col_nome = col
+                        elif 'quantidade' in col_lower and not col_quantidade:
+                            col_quantidade = col
+                        elif 'id' in col_lower and 'estoque' in col_lower and not col_id_estoque:
+                            col_id_estoque = col
+                        elif ('material' in col_lower or 'produto' in col_lower) and not col_material_produto:
+                            col_material_produto = col
+                    
+                    # Se não encontrou coluna de nome, usar o nome da aba
+                    nome_produto = nome_aba.strip()
+                    if col_nome and not df[col_nome].empty:
+                        # Pegar o primeiro nome não vazio
+                        nomes_validos = df[col_nome].dropna()
+                        if not nomes_validos.empty:
+                            nome_produto = str(nomes_validos.iloc[0]).strip()
+                    
+                    if not nome_produto:
+                        erros_detalhes.append(f"Aba '{nome_aba}': Nome do produto não encontrado")
+                        contador_erros += 1
+                        continue
+                    
+                    # Buscar ou criar produto
+                    produto = ProdutoComposto.query.filter_by(nome=nome_produto).first()
+                    
+                    if produto and sobrescrever:
+                        # Remover componentes existentes
+                        for componente in produto.componentes:
+                            db.session.delete(componente)
+                        db.session.flush()
+                    elif not produto:
+                        # Criar novo produto
+                        produto = ProdutoComposto(
+                            nome=nome_produto,
+                            status='Ativo'
+                        )
+                        db.session.add(produto)
+                        db.session.flush()
+                        
+                        # Criar estoque para o produto
+                        estoque_produto = Estoque(
+                            produto_composto=produto,
+                            quantidade=0,
+                            tipo_item='produto_composto',
+                            localizacao='Estoque Matriz',
+                        )
+                        db.session.add(estoque_produto)
+                        db.session.flush()
+                        contador_criados += 1
+                    else:
+                        contador_atualizados += 1
+                    
+                    # Processar componentes
+                    if col_quantidade:
+                        for index, row in df.iterrows():
+                            try:
+                                quantidade = float(row[col_quantidade]) if pd.notna(row[col_quantidade]) else None
+                                
+                                if quantidade is None or quantidade <= 0:
+                                    continue
+                                
+                                estoque_id = None
+                                
+                                # Tentar obter estoque_id
+                                if col_id_estoque and col_id_estoque in df.columns:
+                                    estoque_id_val = row[col_id_estoque]
+                                    if pd.notna(estoque_id_val):
+                                        try:
+                                            estoque_id = int(estoque_id_val)
+                                        except:
+                                            pass
+                                
+                                # Se não tem estoque_id, tentar buscar por nome
+                                if not estoque_id and col_material_produto and col_material_produto in df.columns:
+                                    nome_item = str(row[col_material_produto]).strip() if pd.notna(row[col_material_produto]) else None
+                                    
+                                    if nome_item:
+                                        # Buscar por material
+                                        material = Materiais.query.filter_by(nome=nome_item).first()
+                                        if material:
+                                            estoque = Estoque.query.filter_by(material_id=material.id, tipo_item='material').first()
+                                            if estoque:
+                                                estoque_id = estoque.id
+                                        
+                                        # Se não encontrou, buscar por produto composto
+                                        if not estoque_id:
+                                            produto_comp = ProdutoComposto.query.filter_by(nome=nome_item).first()
+                                            if produto_comp:
+                                                estoque = Estoque.query.filter_by(ProdComp_id=produto_comp.id, tipo_item='produto_composto').first()
+                                                if estoque:
+                                                    estoque_id = estoque.id
+                                
+                                if not estoque_id:
+                                    erros_detalhes.append(f"Aba '{nome_aba}', linha {index+2}: Não foi possível identificar o estoque/material")
+                                    continue
+                                
+                                estoque = Estoque.query.get(estoque_id)
+                                if not estoque:
+                                    erros_detalhes.append(f"Aba '{nome_aba}', linha {index+2}: Estoque ID {estoque_id} não encontrado")
+                                    continue
+                                
+                                # Adicionar componente
+                                observacao = None
+                                if 'Observação' in df.columns or 'observacao' in df.columns:
+                                    col_obs = 'Observação' if 'Observação' in df.columns else 'observacao'
+                                    if pd.notna(row[col_obs]):
+                                        observacao = str(row[col_obs]).strip()
+                                
+                                produto.adicionar_item(estoque, quantidade)
+                                
+                                if observacao:
+                                    # Atualizar observação do componente
+                                    componente = ProdutoCompostoItem.query.filter_by(
+                                        produto_id=produto.id,
+                                        estoque_id=estoque_id
+                                    ).first()
+                                    if componente:
+                                        componente.observacao = observacao
+                                
+                            except Exception as e:
+                                erros_detalhes.append(f"Aba '{nome_aba}', linha {index+2}: {str(e)}")
+                                contador_erros += 1
+                                continue
+                    
+                    db.session.commit()
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao processar aba '{nome_aba}': {str(e)}", exc_info=True)
+                    erros_detalhes.append(f"Aba '{nome_aba}': {str(e)}")
+                    contador_erros += 1
+                    db.session.rollback()
+                    continue
+            
+            return jsonify({
+                'success': True,
+                'criados': contador_criados,
+                'atualizados': contador_atualizados,
+                'erros': contador_erros,
+                'erros_detalhes': erros_detalhes[:10]  # Limitar a 10 erros
+            })
+            
+        finally:
+            # Remover arquivo temporário
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except:
+                    pass
+        
+    except Exception as e:
+        logger.error(f"Erro ao importar produtos compostos: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erro ao importar: {str(e)}'
         }), 500

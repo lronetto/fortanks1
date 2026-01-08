@@ -142,6 +142,7 @@
                                 <button type="button" class="btn btn-info btn-sm btn-visualizar-inventario" 
                                         data-id="{{ inventario.id }}"
                                         data-tipo-inventario="{{ inventario.tipo_inventario }}"
+                                        data-localizacao="{{ inventario.localizacao or '' }}"
                                         data-status="{{ inventario.status }}"
                                         data-status-badge="{% if inventario.status == 'Em andamento' %}<span class='badge badge-info'>Em andamento</span>{% elif inventario.status == 'Concluído' %}<span class='badge badge-success'>Concluído</span>{% else %}<span class='badge badge-secondary'>Cancelado</span>{% endif %}"
                                         data-data-inicio="{{ inventario.data_inicio.strftime('%d/%m/%Y %H:%M') }}"

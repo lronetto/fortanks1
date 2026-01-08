@@ -29,6 +29,20 @@
             <div class="row">
                 <div class="col-md-4">
                     <p><strong>Tipo:</strong> {{ inventario.tipo_inventario }}</p>
+                    <div class="form-group mb-2">
+                        <label for="localizacaoInventario" class="mb-0"><strong>Localização:</strong></label>
+                        {% if inventario.status == 'Em andamento' %}
+                            <select id="localizacaoInventario" class="form-control form-control-sm mt-1">
+                                <option value="">Selecione uma localização...</option>
+                                {% for localizacao in todas_localizacoes %}
+                                    <option value="{{ localizacao }}" {{ 'selected' if inventario.localizacao == localizacao else '' }}>{{ localizacao }}</option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted d-block mt-1">Clique para definir a localização do inventário</small>
+                        {% else %}
+                            <p class="mb-0 mt-1">{{ inventario.localizacao or "Não especificado" }}</p>
+                        {% endif %}
+                    </div>
                     <p><strong>Data de Início:</strong> {{ inventario.data_inicio.strftime('%d/%m/%Y %H:%M') }}</p>
                 </div>
                 <div class="col-md-8">
@@ -114,6 +128,17 @@
                     </div>
                     <div class="col-md-3">
                         <div class="form-group">
+                            <label for="filtroLocalizacao">Localização</label>
+                            <select id="filtroLocalizacao" class="form-control">
+                                <option value="">Todas</option>
+                                {% for localizacao in localizacoes %}
+                                    <option value="{{ localizacao }}">{{ localizacao }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
                             <label for="filtroDescricao">Descrição do Material</label>
                             <input type="text" id="filtroDescricao" class="form-control" placeholder="Filtrar por descrição...">
                         </div>
@@ -156,6 +181,7 @@
                         <tr class="item-row {{ 'contado' if item.quantidade_contada is not none else 'nao-contado' }} {{ 'divergente' if item.diferenca and item.diferenca != 0 else '' }}" 
                             data-id="{{ item.id }}" 
                             data-tipo="{{ item.estoque.tipo_item }}" 
+                            data-localizacao="{{ item.estoque.localizacao or '' }}"
                             data-busca="{{ item.estoque.material.nome if item.estoque.material else '' }} {{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }} {{ item.estoque.material.codigo if item.estoque.material else '' }}"
                             data-descricao="{{ item.estoque.material.nome if item.estoque.material else '' }}{{ item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else '' }}">
                             <td>
@@ -333,6 +359,50 @@
         // Definir data padrão como hoje
         const hoje = new Date().toISOString().split('T')[0];
         $('#dataPadraoContagem').val(hoje);
+        
+        // Salvar localização do inventário quando o select for alterado
+        $('#localizacaoInventario').on('change', function() {
+            const $select = $(this);
+            const localizacao = $select.val();
+            const inventarioId = {{ inventario.id }};
+            
+            // Desabilitar select durante o salvamento
+            $select.prop('disabled', true);
+            
+            $.ajax({
+                url: "{{ url_for('inventario.atualizar_localizacao_inventario', id=inventario.id) }}",
+                method: 'POST',
+                data: {
+                    localizacao: localizacao,
+                    csrf_token: "{{ csrf_token() }}"
+                },
+                success: function(response) {
+                    if (response.success) {
+                        // Feedback visual
+                        $select.removeClass('border-danger').addClass('border-success');
+                        setTimeout(function() {
+                            $select.removeClass('border-success');
+                        }, 2000);
+                    } else {
+                        alert('Erro ao atualizar localização: ' + (response.message || 'Erro desconhecido'));
+                        // Reverter para valor anterior
+                        $select.val($select.data('valor-anterior') || '');
+                    }
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON ? xhr.responseJSON.message : 'Erro ao atualizar localização';
+                    alert('Erro ao atualizar localização: ' + errorMsg);
+                    // Reverter para valor anterior
+                    $select.val($select.data('valor-anterior') || '');
+                },
+                complete: function() {
+                    $select.prop('disabled', false);
+                }
+            });
+        });
+        
+        // Armazenar valor inicial do select
+        $('#localizacaoInventario').data('valor-anterior', $('#localizacaoInventario').val());
         
         // Função auxiliar para obter data de contagem (individual ou padrão)
         function obterDataContagem($dataInput) {
@@ -708,6 +778,7 @@
         function aplicarFiltros() {
             const tipo = $('#filtroTipo').val();
             const status = $('#filtroStatus').val();
+            const localizacao = $('#filtroLocalizacao').val();
             const busca = $('#filtroBusca').val().toLowerCase();
             const descricao = $('#filtroDescricao').val().toLowerCase();
             
@@ -728,6 +799,14 @@
                     mostrar = false;
                 }
                 
+                // Filtro por localização
+                if (localizacao) {
+                    const localizacaoItem = $(this).data('localizacao') || '';
+                    if (localizacaoItem !== localizacao) {
+                        mostrar = false;
+                    }
+                }
+                
                 // Filtro por descrição do material
                 if (descricao) {
                     const descricaoItem = $(this).data('descricao') || '';
@@ -745,7 +824,7 @@
             });
         }
         
-        $('#filtroTipo, #filtroStatus').change(aplicarFiltros);
+        $('#filtroTipo, #filtroStatus, #filtroLocalizacao').change(aplicarFiltros);
         $('#filtroBusca, #filtroDescricao').on('input', aplicarFiltros);
         
         // Botão rápido para filtrar apenas não contados
@@ -769,7 +848,7 @@
         });
         
         $('#btnLimparFiltros').click(function() {
-            $('#filtroTipo, #filtroStatus').val('');
+            $('#filtroTipo, #filtroStatus, #filtroLocalizacao').val('');
             $('#filtroBusca, #filtroDescricao').val('');
             filtroNaoContadosAtivo = false;
             $('#btnFiltrarNaoContados').removeClass('btn-danger').addClass('btn-warning');

@@ -731,6 +731,7 @@ class EstoqueInventarios(db.Model):
     data_fim = db.Column(db.DateTime, nullable=True)
     status = db.Column(db.String(20), default='Em andamento', nullable=False)  # 'Em andamento', 'Concluído', 'Cancelado'
     tipo_inventario = db.Column(db.String(30), nullable=False)  # 'Geral', 'Parcial', 'Cíclico'
+    localizacao = db.Column(db.String(100), nullable=True)  # Localização do inventário
     observacoes = db.Column(db.Text)
     
     # Controle de auditoria

@@ -7,12 +7,26 @@
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Produtos Compostos</h1>
-        <button class="btn btn-primary btn-icon-split btn-sm" id="btn-novo-produto">
-            <span class="icon text-white-50">
-                <i class="fas fa-plus"></i>
-            </span>
-            <span class="text">Novo Produto Composto</span>
-        </button>
+        <div>
+            <button class="btn btn-success btn-icon-split btn-sm mr-2" id="btn-exportar-excel" title="Exportar produtos selecionados para Excel">
+                <span class="icon text-white-50">
+                    <i class="fas fa-file-excel"></i>
+                </span>
+                <span class="text">Exportar Excel</span>
+            </button>
+            <button class="btn btn-info btn-icon-split btn-sm mr-2" id="btn-importar-excel" title="Importar produtos de arquivo Excel">
+                <span class="icon text-white-50">
+                    <i class="fas fa-file-import"></i>
+                </span>
+                <span class="text">Importar Excel</span>
+            </button>
+            <button class="btn btn-primary btn-icon-split btn-sm" id="btn-novo-produto">
+                <span class="icon text-white-50">
+                    <i class="fas fa-plus"></i>
+                </span>
+                <span class="text">Novo Produto Composto</span>
+            </button>
+        </div>
     </div>
 
     <div class="card shadow mb-4">
@@ -45,6 +59,9 @@
                 <table class="table table-bordered" id="tabela-produtos-compostos" width="100%" cellspacing="0">
                     <thead>
                         <tr>
+                            <th style="width: 3%;">
+                                <input type="checkbox" id="selecionar-todos" title="Selecionar todos">
+                            </th>
                             <th style="width: 5%;" class="order-id sortable" data-sort="id">
                                 ID <i class="fas fa-sort"></i>
                             </th>
@@ -79,6 +96,9 @@
 
 <!-- Modal de Histórico de Custo -->
 {% include 'produto_composto/modais/historico_custo.html' %}
+
+<!-- Modal de Importação -->
+{% include 'produto_composto/modais/importar.html' %}
 
 {% endblock %}
 
@@ -118,6 +138,31 @@
                 ordenarPor(campo);
             });
         });
+
+        // Event listener para selecionar todos
+        const selecionarTodos = document.getElementById('selecionar-todos');
+        if (selecionarTodos) {
+            selecionarTodos.addEventListener('change', function() {
+                const checkboxes = document.querySelectorAll('.checkbox-produto');
+                checkboxes.forEach(cb => cb.checked = this.checked);
+            });
+        }
+
+        // Event listeners para exportação e importação
+        const btnExportar = document.getElementById('btn-exportar-excel');
+        const btnImportar = document.getElementById('btn-importar-excel');
+        
+        if (btnExportar) {
+            btnExportar.addEventListener('click', function() {
+                exportarExcel();
+            });
+        }
+        
+        if (btnImportar) {
+            btnImportar.addEventListener('click', function() {
+                $('#importModal').modal('show');
+            });
+        }
 
         carregarProduto(0);
 
@@ -189,6 +234,9 @@
         produtosFiltrados.forEach(produto => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
+                <td>
+                    <input type="checkbox" class="checkbox-produto" data-id="${produto.id}" data-nome="${produto.nome}">
+                </td>
                 <td>${produto.id}</td>
                 <td>
                     <img src="/produto-composto/imagem/${produto.id}" 
@@ -262,6 +310,66 @@
             $('#deleteModal').modal('show');
         });
        
+    }
+
+    function exportarExcel() {
+        const produtosSelecionados = [];
+        document.querySelectorAll('.checkbox-produto:checked').forEach(cb => {
+            produtosSelecionados.push(cb.dataset.id);
+        });
+
+        if (produtosSelecionados.length === 0) {
+            alert('Selecione pelo menos um produto para exportar.');
+            return;
+        }
+
+        // Criar FormData
+        const formData = new FormData();
+        
+        // Adicionar CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || 
+                         document.querySelector('input[name="csrf_token"]')?.value;
+        
+        if (csrfToken) {
+            formData.append('csrf_token', csrfToken);
+        }
+
+        // Adicionar IDs dos produtos
+        produtosSelecionados.forEach(id => {
+            formData.append('produto_ids', id);
+        });
+
+        // Criar formulário temporário para fazer download
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/produto-composto/exportar-excel';
+        form.style.display = 'none';
+
+        // Adicionar CSRF token ao formulário
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+
+        // Adicionar IDs dos produtos ao formulário
+        produtosSelecionados.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'produto_ids';
+            input.value = id;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        
+        // Remover formulário após um tempo
+        setTimeout(() => {
+            document.body.removeChild(form);
+        }, 1000);
     }
 
    
