@@ -1,0 +1,301 @@
+<!-- Modal Novo Rompimento -->
+<div class="modal fade" id="modalNovoRompimento" tabindex="-1" aria-labelledby="modalNovoRompimentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoRompimentoLabel">Novo Rompimento de Corpo de Prova</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form action="{{ url_for('usinagem_concreto.criar_rompimento') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="numero_serie" class="form-label">Número de Série <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="numero_serie" name="numero_serie" placeholder="Ex: S001, CP-2024-001" required>
+                        <small class="text-muted">Digite o número de série do corpo de prova</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="usinagem_id" class="form-label">Usinagem de Concreto</label>
+                        <select name="usinagem_id" id="usinagem_id" class="form-select">
+                            <option value="">Não vinculado a usinagem</option>
+                            {% for usinagem in usinagens %}
+                            <option value="{{ usinagem.id }}">
+                                Usinagem #{{ usinagem.id }} - {{ usinagem.traco.nome }} ({{ usinagem.data_usinagem.strftime('%d/%m/%Y') }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Opcional: vincule a uma usinagem se aplicável</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_moldagem" class="form-label">Data e Hora de Moldagem</label>
+                        <input type="datetime-local" class="form-control" id="data_moldagem" name="data_moldagem">
+                        <small class="text-muted">Data e hora em que o corpo de prova foi moldado</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="data_rompimento" class="form-label">Data de Rompimento <span class="text-danger">*</span></label>
+                        <input type="datetime-local" class="form-control" id="data_rompimento" name="data_rompimento" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="idade_cp" class="form-label">Idade do CP</label>
+                        <input type="text" class="form-control" id="idade_cp" name="idade_cp" readonly style="background-color: #e9ecef;">
+                        <small class="text-muted">Será calculado automaticamente se houver usinagem ou data de moldagem (ex: 12h ou 5d)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fator_conversao" class="form-label">Fator de Conversão (kg → MPa)</label>
+                        <input type="number" class="form-control" id="fator_conversao" name="fator_conversao" step="0.01" min="0" value="1.2" required>
+                        <small class="text-muted">Fator para converter resultado de kg para MPa (padrão: 1.2)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Resultados dos Rompimentos</label>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm" id="tabelaResultados">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 30%;">Resultado (kg)</th>
+                                        <th style="width: 30%;">Resultado Calculado (MPa)</th>
+                                        <th style="width: 30%;">Tipo de Rompimento</th>
+                                        <th style="width: 10%;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tbodyResultados">
+                                    <!-- Linhas serão adicionadas dinamicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success mt-2" id="btnAdicionarResultado">
+                            <i class="fas fa-plus"></i> Adicionar Resultado
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    var contadorLinhas = 0;
+    
+    // Função para criar uma nova linha na tabela
+    function criarLinhaResultado() {
+        contadorLinhas++;
+        var linhaId = 'linha_' + contadorLinhas;
+        var linha = $('<tr id="' + linhaId + '">' +
+            '<td>' +
+                '<input type="text" class="form-control form-control-sm resultado-kg" name="resultados_kg[]" placeholder="Ex: 25.4">' +
+            '</td>' +
+            '<td>' +
+                '<input type="text" class="form-control form-control-sm resultado-mpa" readonly style="background-color: #e9ecef;">' +
+            '</td>' +
+            '<td>' +
+                '<select class="form-select form-select-sm tipo-rompimento" name="tipos_rompimento[]">' +
+                    '<option value="">Selecione</option>' +
+                    '<option value="cônica">Cônica</option>' +
+                    '<option value="cônica e bipartida">Cônica e Bipartida</option>' +
+                    '<option value="cônica e cisalhada">Cônica e Cisalhada</option>' +
+                    '<option value="cisalhada">Cisalhada</option>' +
+                    '<option value="colunar">Colunar</option>' +
+                '</select>' +
+            '</td>' +
+            '<td class="text-center">' +
+                '<button type="button" class="btn btn-sm btn-danger btn-remover-linha" title="Remover linha">' +
+                    '<i class="fas fa-trash"></i>' +
+                '</button>' +
+            '</td>' +
+        '</tr>');
+        
+        $('#tbodyResultados').append(linha);
+        
+        // Adicionar evento para calcular resultado em MPa quando o valor em kg mudar
+        linha.find('.resultado-kg').on('input', function() {
+            calcularResultadoMPALinha(linhaId);
+        });
+        
+        // Adicionar evento para remover linha
+        linha.find('.btn-remover-linha').on('click', function() {
+            if ($('#tbodyResultados tr').length > 1) {
+                $('#' + linhaId).remove();
+            } else {
+                alert('É necessário ter pelo menos um resultado.');
+            }
+        });
+        
+        return linha;
+    }
+    
+    // Função para calcular resultado em MPa de uma linha específica
+    function calcularResultadoMPALinha(linhaId) {
+        var linha = $('#' + linhaId);
+        var resultadoKgField = linha.find('.resultado-kg');
+        var resultadoMpaField = linha.find('.resultado-mpa');
+        var fatorConversao = parseFloat($('#fator_conversao').val().replace(',', '.')) || 1.2;
+        var resultadoKg = parseFloat(resultadoKgField.val().replace(',', '.')) || 0;
+        
+        if (resultadoKg > 0 && fatorConversao > 0) {
+            var resultadoMpa = resultadoKg * fatorConversao;
+            resultadoMpaField.val(resultadoMpa.toFixed(2));
+        } else {
+            resultadoMpaField.val('');
+        }
+    }
+    
+    // Função para recalcular todos os resultados quando o fator de conversão mudar
+    function recalcularTodosResultados() {
+        $('#tbodyResultados tr').each(function() {
+            var linhaId = $(this).attr('id');
+            if (linhaId) {
+                calcularResultadoMPALinha(linhaId);
+            }
+        });
+    }
+    
+    // Inicializar com 2 linhas padrão
+    criarLinhaResultado();
+    criarLinhaResultado();
+    
+    // Adicionar nova linha quando clicar no botão
+    $('#btnAdicionarResultado').on('click', function() {
+        criarLinhaResultado();
+    });
+    
+    // Recalcular todos os resultados quando o fator de conversão mudar
+    $('#fator_conversao').on('input', function() {
+        recalcularTodosResultados();
+    });
+    
+    // Função para buscar data de moldagem por número de série
+    function buscarDataMoldagemPorSerie(numeroSerie) {
+        var dataMoldagemField = $('#data_moldagem');
+        
+        // Só buscar se o campo de data de moldagem estiver vazio
+        if (dataMoldagemField.val()) {
+            return; // Já tem valor, não sobrescrever
+        }
+        
+        $.ajax({
+            url: '/usinagem-concreto/rompimentos/buscar-por-serie/' + encodeURIComponent(numeroSerie),
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.existe && response.data_moldagem) {
+                    dataMoldagemField.val(response.data_moldagem);
+                    
+                    // Recalcular idade se houver data de rompimento
+                    setTimeout(function() {
+                        calcularIdade();
+                    }, 100);
+                    
+                    // Mostrar mensagem informativa
+                    var mensagem = $('<div class="alert alert-info alert-dismissible fade show mt-2" role="alert">' +
+                        '<i class="fas fa-info-circle"></i> Data de moldagem carregada automaticamente do rompimento anterior desta série.' +
+                        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                        '</div>');
+                    dataMoldagemField.closest('.mb-3').after(mensagem);
+                    
+                    // Remover mensagem após 5 segundos
+                    setTimeout(function() {
+                        mensagem.fadeOut(function() {
+                            $(this).remove();
+                        });
+                    }, 5000);
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao buscar data de moldagem:', error);
+            }
+        });
+    }
+    
+    // Função para calcular idade
+    function calcularIdade() {
+        var idadeField = $('#idade_cp');
+        var dataRompimentoField = $('#data_rompimento');
+        var dataMoldagemField = $('#data_moldagem');
+        var usinagemId = $('#usinagem_id').val();
+        
+        if (!dataRompimentoField.val()) {
+            return;
+        }
+        
+        var dataRompimento = new Date(dataRompimentoField.val());
+        var dataBase = null;
+        
+        // Prioridade: 1) Data de moldagem, 2) Data de usinagem
+        if (dataMoldagemField.val()) {
+            dataBase = new Date(dataMoldagemField.val());
+        } else if (usinagemId) {
+            $.get('/usinagem-concreto/usinagens/' + usinagemId + '/data-usinagem', function(data) {
+                if (data.data_usinagem) {
+                    dataBase = new Date(data.data_usinagem);
+                    calcularIdadeComDataBase(dataBase, dataRompimento, idadeField);
+                }
+            });
+            return;
+        } else {
+            return; // Sem data base para calcular
+        }
+        
+        if (dataBase) {
+            calcularIdadeComDataBase(dataBase, dataRompimento, idadeField);
+        }
+    }
+    
+    function calcularIdadeComDataBase(dataBase, dataRompimento, idadeField) {
+        var diffTime = dataRompimento - dataBase;
+        var diffHours = diffTime / (1000 * 60 * 60);
+        
+        if (diffHours < 0) {
+            idadeField.val('0h');
+        } else if (diffHours < 24) {
+            // Menor que 1 dia: mostrar em horas
+            idadeField.val(Math.floor(diffHours) + 'h');
+        } else {
+            // Maior ou igual a 1 dia: mostrar em dias
+            var diffDays = Math.floor(diffHours / 24);
+            idadeField.val(diffDays + 'd');
+        }
+    }
+    
+    // Buscar data de moldagem quando número de série for digitado
+    var timeoutBuscaSerie = null;
+    $('#numero_serie').on('input', function() {
+        var numeroSerie = $(this).val().trim();
+        
+        // Limpar timeout anterior
+        if (timeoutBuscaSerie) {
+            clearTimeout(timeoutBuscaSerie);
+        }
+        
+        // Aguardar 500ms após parar de digitar para fazer a busca
+        timeoutBuscaSerie = setTimeout(function() {
+            if (numeroSerie && numeroSerie.length > 0) {
+                buscarDataMoldagemPorSerie(numeroSerie);
+            }
+        }, 500);
+    });
+    
+    
+    // Calcular idade quando usinagem for selecionada
+    $('#usinagem_id').on('change', function() {
+        calcularIdade();
+    });
+    
+    // Recalcular idade quando data de moldagem mudar
+    $('#data_moldagem').on('change', function() {
+        calcularIdade();
+    });
+    
+    // Recalcular idade quando data de rompimento mudar
+    $('#data_rompimento').on('change', function() {
+        calcularIdade();
+    });
+});
+</script>
+

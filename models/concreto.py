@@ -661,11 +661,13 @@ class ConcretoUsinagensRompimentos(db.Model):
     __tablename__ = 'ConcretoUsinagensRompimentos'
     
     id = db.Column(db.Integer, primary_key=True)
-    usinagem_id = db.Column(db.Integer, db.ForeignKey('ConcretoUsinagens.id', ondelete='CASCADE'), nullable=False)
-    numero_cp = db.Column(db.Integer, nullable=False)  # Número do CP (1 a 10)
+    usinagem_id = db.Column(db.Integer, db.ForeignKey('ConcretoUsinagens.id', ondelete='CASCADE'), nullable=True)
+    numero_serie = db.Column(db.Integer, nullable=False)  # Número do CP (1 a 10)
+    data_moldagem = db.Column(db.DateTime, nullable=True)  # Data e hora da moldagem do corpo de prova
     data_rompimento = db.Column(db.DateTime, nullable=False)
     resultado = db.Column(db.Numeric(10, 2), nullable=True)  # Resultado do rompimento em MPa
-    idade_cp = db.Column(db.Integer, nullable=False)  # Idade do CP em dias
+    fator_conversao = db.Column(db.Numeric(5, 2), nullable=True, default=1.2)  # Fator de conversão de kg para MPa
+    idade_cp = db.Column(db.Integer, nullable=True)  # Idade do CP em dias
     tipo_rompimento = db.Column(db.String(50), nullable=True)  # Tipo de rompimento (cônica, cônica e bipartida, etc.)
     observacoes = db.Column(db.Text, nullable=True)
     
@@ -690,4 +692,4 @@ class ConcretoUsinagensRompimentos(db.Model):
         return self
     
     def __repr__(self):
-        return f'<RompimentoCorpoProva {self.id} - Usinagem: {self.usinagem_id}, CP: {self.numero_cp}, Idade: {self.idade_cp} dias>' 
+        return f'<RompimentoCorpoProva {self.id} - Usinagem: {self.usinagem_id}, Série: {self.numero_serie}, Idade: {self.idade_cp} dias>' 

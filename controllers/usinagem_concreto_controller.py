@@ -2,8 +2,8 @@ from flask import Blueprint, render_template, redirect, url_for, request, flash,
 from flask_login import login_required, current_user
 from models.material import Materiais
 from models.unidade import Unidades, UnidadesConversao
-from models.concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais
-from datetime import datetime, timezone
+from models.concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais, ConcretoUsinagensRompimentos, ConcretoUsinagens
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import json
 from markupsafe import Markup
@@ -11,6 +11,8 @@ import pandas as pd
 import io
 import xlsxwriter
 import os
+import tempfile
+from werkzeug.utils import secure_filename
 
 
 # Criação do blueprint
@@ -764,8 +766,8 @@ def listar_usinagens():
         usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0  else f"{usinagem.idade.days} dias"
 
         usinagem.rompimento = []
-        if RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
-            for rompimento in RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem.id).all():
+        if ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
+            for rompimento in ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).all():
                 rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
                 rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
                 rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0  else f"{rompimento.idade.days} dias"
@@ -1077,8 +1079,8 @@ def visualizar_usinagem(id):
         usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0  else f"{usinagem.idade.days} dias"
 
         usinagem.rompimentos = []
-        if RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
-            for rompimento in RompimentoCorpoProva.query.filter_by(usinagem_id=usinagem.id).all():
+        if ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
+            for rompimento in ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).all():
                 rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
                 rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
                 rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0  else f"{rompimento.idade.days} dias"
@@ -1492,127 +1494,548 @@ def calcular_materiais_usinagem():
 
     return jsonify({'materiais': resultado_final})
 
+@usinagem_concreto.route('/rompimentos/api')
+@login_required
+def listar_rompimentos_api():
+    """API para listar rompimentos com filtros"""
+    from models.database import db
+    
+    # Verificar se há filtro para séries sem rompimento de 28 dias
+    filtrar_sem_28dias = request.args.get('sem_28dias', 'false') == 'true'
+    
+    if filtrar_sem_28dias:
+        # Buscar todas as séries
+        todas_series = db.session.query(ConcretoUsinagensRompimentos.numero_serie).distinct().all()
+        series_sem_28dias = []
+        
+        for serie_tuple in todas_series:
+            serie = serie_tuple[0]
+            # Buscar todos os rompimentos desta série
+            rompimentos_serie = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=serie).all()
+            
+            # Verificar se tem rompimento de 28 dias
+            tem_28dias = False
+            for romp in rompimentos_serie:
+                if romp.data_moldagem and romp.data_rompimento:
+                    diff_days = (romp.data_rompimento - romp.data_moldagem).total_seconds() / 3600 / 24
+                    # Considerar 27-29 dias como rompimento de 28 dias (pode cair em domingo e ser 29)
+                    if 27 <= diff_days <= 29:
+                        tem_28dias = True
+                        break
+            
+            if not tem_28dias:
+                series_sem_28dias.append(serie)
+        
+        # Buscar rompimentos apenas das séries sem 28 dias
+        if series_sem_28dias:
+            rompimentos = ConcretoUsinagensRompimentos.query.filter(
+                ConcretoUsinagensRompimentos.numero_serie.in_(series_sem_28dias)
+            ).order_by(ConcretoUsinagensRompimentos.numero_serie.asc()).all()
+        else:
+            rompimentos = []
+    else:
+        rompimentos = ConcretoUsinagensRompimentos.query.order_by(ConcretoUsinagensRompimentos.numero_serie.asc()).all()
+    
+    # Converter para JSON
+    rompimentos_data = []
+    for rompimento in rompimentos:
+        # Calcular idade
+        idade_calculada = None
+        diff_hours = None
+        if rompimento.data_moldagem and rompimento.data_rompimento:
+            diff_hours = (rompimento.data_rompimento - rompimento.data_moldagem).total_seconds() / 3600
+            if diff_hours < 24:
+                idade_calculada = f"{int(diff_hours)}h"
+            else:
+                idade_calculada = f"{int(diff_hours / 24)}d"
+        elif rompimento.usinagem and rompimento.usinagem.data_usinagem and rompimento.data_rompimento:
+            diff_hours = (rompimento.data_rompimento - rompimento.usinagem.data_usinagem).total_seconds() / 3600
+            if diff_hours < 24:
+                idade_calculada = f"{int(diff_hours)}h"
+            else:
+                idade_calculada = f"{int(diff_hours / 24)}d"
+        elif rompimento.idade_cp is not None:
+            if rompimento.idade_cp < 24:
+                idade_calculada = f"{rompimento.idade_cp}h"
+            else:
+                idade_calculada = f"{rompimento.idade_cp}d"
+        
+        rompimentos_data.append({
+            'id': rompimento.id,
+            'numero_serie': rompimento.numero_serie,
+            'usinagem_id': rompimento.usinagem_id,
+            'usinagem_traco': rompimento.usinagem.traco.nome if rompimento.usinagem and rompimento.usinagem.traco else None,
+            'data_moldagem': rompimento.data_moldagem.strftime('%d/%m/%Y %H:%M') if rompimento.data_moldagem else None,
+            'data_rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M'),
+            'idade': idade_calculada or 'N/A',
+            'resultado': float(rompimento.resultado) if rompimento.resultado else None,
+            'tipo_rompimento': rompimento.tipo_rompimento,
+            'observacoes': rompimento.observacoes,
+            'fator_conversao': float(rompimento.fator_conversao) if rompimento.fator_conversao else 1.2
+        })
+    
+    return jsonify({
+        'success': True,
+        'rompimentos': rompimentos_data
+    })
+
 @usinagem_concreto.route('/rompimentos')
 @login_required
 def listar_rompimentos():
     """Lista todos os rompimentos de corpo de prova cadastrados"""
-    rompimentos = RompimentoCorpoProva.query.order_by(RompimentoCorpoProva.data_rompimento.desc()).all()
-    usinagens = UsinagemConcreto.query.order_by(UsinagemConcreto.data_usinagem.desc()).all()
+    usinagens = ConcretoUsinagens.query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
     
     return render_template('usinagem_concreto/rompimentos/index.html',
-                          rompimentos=rompimentos,
                           usinagens=usinagens)
 
 @usinagem_concreto.route('/rompimentos/novo', methods=['POST'])
 @login_required
 def criar_rompimento():
     try:
+        from models.database import db
+        
         usinagem_id = request.form.get('usinagem_id')
-        numero_cp = request.form.get('numero_cp')
+        numero_serie = request.form.get('numero_serie')
+        data_moldagem = request.form.get('data_moldagem')
         data_rompimento = request.form.get('data_rompimento')
-        resultado = request.form.get('resultado')
-        tipo_rompimento = request.form.get('tipo_rompimento')
+        resultados_kg = request.form.getlist('resultados_kg[]')  # Array de resultados em kg
+        tipos_rompimento = request.form.getlist('tipos_rompimento[]')  # Array de tipos de rompimento
+        fator_conversao = request.form.get('fator_conversao')
         observacoes = request.form.get('observacoes')
+        idade_cp = request.form.get('idade_cp')
 
         # Validações
-        if not all([usinagem_id, numero_cp, data_rompimento, resultado]):
-            flash('Todos os campos são obrigatórios, exceto tipo de rompimento e observações.', 'error')
-            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        if not numero_serie or not data_rompimento:
+            flash('Número de série e data de rompimento são obrigatórios.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+        
+        # Validar se há pelo menos um resultado
+        resultados_validos = [r for r in resultados_kg if r and r.strip()]
+        if not resultados_validos:
+            flash('É necessário informar pelo menos um resultado.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_rompimentos'))
 
         # Converter valores
-        usinagem_id = int(usinagem_id)
-        numero_cp = int(numero_cp)
-        resultado = float(resultado.replace(',', '.'))
-
-        # Buscar usinagem
-        usinagem = UsinagemConcreto.query.get_or_404(usinagem_id)
+        data_rompimento_dt = datetime.fromisoformat(data_rompimento)
+        data_moldagem_dt = None
+        if data_moldagem:
+            try:
+                data_moldagem_dt = datetime.fromisoformat(data_moldagem)
+            except ValueError:
+                pass
         
-        # Calcular idade do CP
-        data_usinagem = usinagem.data_usinagem
-        data_rompimento = datetime.fromisoformat(data_rompimento)
-        diff_hours = (data_rompimento - data_usinagem).total_seconds() / 3600
-        idade_cp = int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
+        # Processar fator de conversão (padrão: 1.2)
+        fator_conversao_float = Decimal('1.2')
+        if fator_conversao:
+            try:
+                fator_conversao_float = Decimal(str(fator_conversao).replace(',', '.'))
+            except (ValueError, TypeError):
+                pass
 
-        # Verificar se já existe rompimento para este CP nesta usinagem
-        rompimento_existente = RompimentoCorpoProva.query.filter_by(
-            usinagem_id=usinagem_id,
-            numero_cp=numero_cp
-        ).first()
+        # Processar cálculo de idade
+        usinagem_id_int = None
+        idade_cp_int = None
+        
+        # Prioridade: 1) Data de moldagem, 2) Data de usinagem, 3) Idade informada manualmente
+        if data_moldagem_dt:
+            # Calcular idade baseado na data de moldagem
+            diff_hours = (data_rompimento_dt - data_moldagem_dt).total_seconds() / 3600
+            idade_cp_int = int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
+        elif usinagem_id:
+            try:
+                usinagem_id_int = int(usinagem_id)
+                usinagem = ConcretoUsinagens.query.get(usinagem_id_int)
+                
+                if usinagem:
+                    # Calcular idade do CP baseado na data de usinagem
+                    diff_hours = (data_rompimento_dt - usinagem.data_usinagem).total_seconds() / 3600
+                    idade_cp_int = int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
+            except (ValueError, AttributeError):
+                pass
+        
+        # Se idade foi informada manualmente e não calculada, usar a informada
+        if idade_cp and not idade_cp_int:
+            try:
+                # Processar idade no formato "12h" ou "5d"
+                idade_str = str(idade_cp).strip()
+                if idade_str.endswith('h'):
+                    # Idade em horas: converter para dias (salvar como horas no campo)
+                    idade_cp_int = int(idade_str[:-1])
+                elif idade_str.endswith('d'):
+                    # Idade em dias: converter para dias
+                    idade_cp_int = int(idade_str[:-1]) * 24
+                else:
+                    # Tentar converter como número inteiro (assumir dias)
+                    idade_cp_int = int(idade_str)
+            except ValueError:
+                pass
 
-        if rompimento_existente:
-            flash(f'Já existe um rompimento registrado para o CP {numero_cp} nesta usinagem.', 'error')
-            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        # Criar um rompimento para cada resultado informado
+        rompimentos_criados = 0
+        for i, resultado_kg in enumerate(resultados_kg):
+            if not resultado_kg or not resultado_kg.strip():
+                continue  # Pular resultados vazios
+            
+            # Processar resultado: converter de kg para MPa
+            resultado_mpa = None
+            try:
+                resultado_kg_float = Decimal(str(resultado_kg).replace(',', '.'))
+                # Calcular resultado em MPa: kg × fator de conversão
+                resultado_mpa = resultado_kg_float * fator_conversao_float
+            except (ValueError, TypeError):
+                continue  # Pular se não conseguir converter
+            
+            # Obter tipo de rompimento correspondente (se houver)
+            tipo_rompimento = None
+            if i < len(tipos_rompimento):
+                tipo_rompimento = tipos_rompimento[i].strip() if tipos_rompimento[i] else None
 
-        # Criar novo rompimento
-        rompimento = RompimentoCorpoProva(
-            usinagem_id=usinagem_id,
-            numero_cp=numero_cp,
-            idade_cp=idade_cp,
-            data_rompimento=data_rompimento,
-            resultado=resultado,
-            tipo_rompimento=tipo_rompimento,
-            observacoes=observacoes
-        )
+            # Criar novo rompimento
+            rompimento = ConcretoUsinagensRompimentos(
+                usinagem_id=usinagem_id_int,
+                numero_serie=numero_serie,
+                data_moldagem=data_moldagem_dt,
+                idade_cp=idade_cp_int,
+                data_rompimento=data_rompimento_dt,
+                resultado=float(resultado_mpa) if resultado_mpa else None,  # Salvar resultado em MPa
+                fator_conversao=fator_conversao_float,
+                tipo_rompimento=tipo_rompimento,
+                observacoes=observacoes if observacoes else None
+            )
 
-        db.session.add(rompimento)
+            db.session.add(rompimento)
+            rompimentos_criados += 1
+
         db.session.commit()
 
-        flash('Rompimento registrado com sucesso!', 'success')
-        return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        if rompimentos_criados > 0:
+            flash(f'{rompimentos_criados} rompimento(s) registrado(s) com sucesso!', 'success')
+        else:
+            flash('Nenhum rompimento foi registrado. Verifique os dados informados.', 'warning')
+        
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
 
     except ValueError as e:
         flash('Erro ao processar os dados. Verifique se os valores estão corretos.', 'error')
-        return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
     except Exception as e:
-        flash('Erro ao registrar o rompimento.', 'error')
-        return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        db.session.rollback()
+        flash(f'Erro ao registrar o rompimento: {str(e)}', 'error')
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
 
-@usinagem_concreto.route('/rompimentos/editar', methods=['POST'])
+@usinagem_concreto.route('/rompimentos/<int:id>/editar', methods=['POST'])
 @login_required
-def editar_rompimento():
+def editar_rompimento(id):
     try:
-        rompimento_id = request.form.get('id')
-        numero_cp = request.form.get('numero_cp')
+        from models.database import db
+        
+        numero_serie = request.form.get('numero_serie')
+        data_moldagem = request.form.get('data_moldagem')
         idade_cp = request.form.get('idade_cp')
         data_rompimento = request.form.get('data_rompimento')
-        resultado = request.form.get('resultado')
-        tipo_rompimento = request.form.get('tipo_rompimento')
+        resultados_kg = request.form.getlist('resultados_kg[]')  # Array de resultados em kg
+        tipos_rompimento = request.form.getlist('tipos_rompimento[]')  # Array de tipos de rompimento
+        fator_conversao = request.form.get('fator_conversao')
         observacoes = request.form.get('observacoes')
+        usinagem_id = request.form.get('usinagem_id')
 
-        rompimento = RompimentoCorpoProva.query.get_or_404(rompimento_id)
+        rompimento = ConcretoUsinagensRompimentos.query.get_or_404(id)
 
-        # Verifica se já existe outro rompimento para este CP nesta usinagem
-        rompimento_existente = RompimentoCorpoProva.query.filter(
-            RompimentoCorpoProva.usinagem_id == rompimento.usinagem_id,
-            RompimentoCorpoProva.numero_cp == numero_cp,
-            RompimentoCorpoProva.id != rompimento_id
-        ).first()
+        # Validações
+        if not numero_serie or not data_rompimento:
+            flash('Número de série e data de rompimento são obrigatórios.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+        
+        # Validar se há pelo menos um resultado
+        resultados_validos = [r for r in resultados_kg if r and r.strip()]
+        if not resultados_validos:
+            flash('É necessário informar pelo menos um resultado.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_rompimentos'))
 
-        if rompimento_existente:
-            flash(f'Já existe um rompimento registrado para o CP {numero_cp} nesta usinagem.', 'error')
-            return redirect(url_for('usinagem_concreto.visualizar_usinagem', id=rompimento.usinagem_id))
+        # Converter valores
+        data_rompimento_dt = datetime.fromisoformat(data_rompimento)
+        data_moldagem_dt = None
+        if data_moldagem:
+            try:
+                data_moldagem_dt = datetime.fromisoformat(data_moldagem)
+            except ValueError:
+                pass
+        
+        # Processar fator de conversão (padrão: 1.2 ou usar o valor atual se não informado)
+        fator_conversao_float = rompimento.fator_conversao if rompimento.fator_conversao else Decimal('1.2')
+        if fator_conversao:
+            try:
+                fator_conversao_float = Decimal(str(fator_conversao).replace(',', '.'))
+            except (ValueError, TypeError):
+                pass
 
-        rompimento.numero_cp = numero_cp
-        rompimento.idade_cp = idade_cp
-        rompimento.data_rompimento = datetime.strptime(data_rompimento, '%Y-%m-%dT%H:%M')
-        rompimento.resultado = float(resultado) if resultado else None
-        rompimento.tipo_rompimento = tipo_rompimento
-        rompimento.observacoes = observacoes
+        # Processar cálculo de idade
+        usinagem_id_int = None
+        idade_cp_int = None
+        
+        # Prioridade: 1) Data de moldagem, 2) Data de usinagem, 3) Idade informada manualmente
+        if data_moldagem_dt:
+            # Calcular idade baseado na data de moldagem
+            diff_hours = (data_rompimento_dt - data_moldagem_dt).total_seconds() / 3600
+            idade_cp_int = int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
+        elif usinagem_id:
+            try:
+                usinagem_id_int = int(usinagem_id)
+                usinagem = ConcretoUsinagens.query.get(usinagem_id_int)
+                
+                if usinagem:
+                    # Calcular idade do CP baseado na data de usinagem
+                    diff_hours = (data_rompimento_dt - usinagem.data_usinagem).total_seconds() / 3600
+                    idade_cp_int = int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
+            except (ValueError, AttributeError):
+                pass
+        
+        # Se idade foi informada manualmente e não calculada, usar a informada
+        if idade_cp and not idade_cp_int:
+            try:
+                # Processar idade no formato "12h" ou "5d"
+                idade_str = str(idade_cp).strip()
+                if idade_str.endswith('h'):
+                    # Idade em horas: converter para dias (salvar como horas no campo)
+                    idade_cp_int = int(idade_str[:-1])
+                elif idade_str.endswith('d'):
+                    # Idade em dias: converter para dias
+                    idade_cp_int = int(idade_str[:-1]) * 24
+                else:
+                    # Tentar converter como número inteiro (assumir dias)
+                    idade_cp_int = int(idade_str)
+            except ValueError:
+                pass
+        
+        # Atualizar o rompimento existente com o primeiro resultado
+        primeiro_resultado_kg = resultados_kg[0] if resultados_kg else None
+        primeiro_tipo_rompimento = tipos_rompimento[0] if tipos_rompimento else None
+        
+        resultado_mpa = None
+        if primeiro_resultado_kg:
+            try:
+                resultado_kg_float = Decimal(str(primeiro_resultado_kg).replace(',', '.'))
+                resultado_mpa = resultado_kg_float * fator_conversao_float
+            except (ValueError, TypeError):
+                pass
+
+        # Atualizar rompimento existente com o primeiro resultado
+        rompimento.numero_serie = numero_serie
+        rompimento.usinagem_id = usinagem_id_int
+        rompimento.data_moldagem = data_moldagem_dt
+        rompimento.idade_cp = idade_cp_int
+        rompimento.data_rompimento = data_rompimento_dt
+        rompimento.resultado = float(resultado_mpa) if resultado_mpa else None  # Salvar resultado em MPa
+        rompimento.fator_conversao = fator_conversao_float
+        rompimento.tipo_rompimento = primeiro_tipo_rompimento if primeiro_tipo_rompimento else None
+        rompimento.observacoes = observacoes if observacoes else None
+
+        # Criar novos rompimentos para os resultados adicionais (a partir do segundo)
+        rompimentos_criados = 0
+        for i in range(1, len(resultados_kg)):
+            resultado_kg = resultados_kg[i]
+            if not resultado_kg or not resultado_kg.strip():
+                continue  # Pular resultados vazios
+            
+            # Processar resultado: converter de kg para MPa
+            resultado_mpa_adicional = None
+            try:
+                resultado_kg_float = Decimal(str(resultado_kg).replace(',', '.'))
+                resultado_mpa_adicional = resultado_kg_float * fator_conversao_float
+            except (ValueError, TypeError):
+                continue  # Pular se não conseguir converter
+            
+            # Obter tipo de rompimento correspondente (se houver)
+            tipo_rompimento_adicional = None
+            if i < len(tipos_rompimento):
+                tipo_rompimento_adicional = tipos_rompimento[i].strip() if tipos_rompimento[i] else None
+
+            # Criar novo rompimento
+            novo_rompimento = ConcretoUsinagensRompimentos(
+                usinagem_id=usinagem_id_int,
+                numero_serie=numero_serie,
+                data_moldagem=data_moldagem_dt,
+                idade_cp=idade_cp_int,
+                data_rompimento=data_rompimento_dt,
+                resultado=float(resultado_mpa_adicional) if resultado_mpa_adicional else None,
+                fator_conversao=fator_conversao_float,
+                tipo_rompimento=tipo_rompimento_adicional,
+                observacoes=observacoes if observacoes else None
+            )
+
+            db.session.add(novo_rompimento)
+            rompimentos_criados += 1
 
         db.session.commit()
-        flash('Rompimento atualizado com sucesso!', 'success')
+        
+        if rompimentos_criados > 0:
+            flash(f'Rompimento atualizado e {rompimentos_criados} novo(s) rompimento(s) criado(s) com sucesso!', 'success')
+        else:
+            flash('Rompimento atualizado com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao atualizar rompimento: {str(e)}', 'error')
 
-    return redirect(url_for('usinagem_concreto.visualizar_usinagem', id=rompimento.usinagem_id))
+    return redirect(url_for('usinagem_concreto.listar_rompimentos'))
 
-@usinagem_concreto.route('/rompimentos/excluir/<int:id>')
+@usinagem_concreto.route('/rompimentos/series-pendentes-28d')
+@login_required
+def listar_series_pendentes_28d():
+    """Lista séries que completaram 28 dias mas não foram rompidas"""
+    try:
+        from models.database import db
+        from datetime import datetime, timedelta
+        
+        # Buscar todas as séries com data de moldagem
+        todas_series = db.session.query(ConcretoUsinagensRompimentos.numero_serie).filter(
+            ConcretoUsinagensRompimentos.data_moldagem.isnot(None)
+        ).distinct().all()
+        
+        series_pendentes = []
+        hoje = datetime.now()
+        
+        for serie_tuple in todas_series:
+            serie = serie_tuple[0]
+            
+            # Buscar o rompimento mais antigo desta série (para pegar a data de moldagem)
+            primeiro_rompimento = ConcretoUsinagensRompimentos.query.filter_by(
+                numero_serie=serie
+            ).filter(
+                ConcretoUsinagensRompimentos.data_moldagem.isnot(None)
+            ).order_by(ConcretoUsinagensRompimentos.data_moldagem.asc()).first()
+            
+            if not primeiro_rompimento or not primeiro_rompimento.data_moldagem:
+                continue
+            
+            data_moldagem = primeiro_rompimento.data_moldagem
+            
+            # Calcular data prevista de rompimento 28 dias
+            data_prevista_28d = data_moldagem + timedelta(days=28)
+            # Se cair em domingo, adiciona 1 dia
+            if data_prevista_28d.weekday() == 6:  # Domingo
+                data_prevista_28d += timedelta(days=1)
+            
+            # Verificar se já passou a data prevista
+            if hoje < data_prevista_28d:
+                continue  # Ainda não completou 28 dias
+            
+            # Verificar se já tem rompimento de 28 dias
+            tem_rompimento_28d = False
+            rompimentos_serie = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=serie).all()
+            
+            for romp in rompimentos_serie:
+                if romp.data_moldagem and romp.data_rompimento:
+                    diff_days = (romp.data_rompimento - romp.data_moldagem).total_seconds() / 3600 / 24
+                    # Considerar 27-29 dias como rompimento de 28 dias
+                    if 27 <= diff_days <= 29:
+                        tem_rompimento_28d = True
+                        break
+            
+            # Se não tem rompimento de 28 dias e já passou a data prevista
+            if not tem_rompimento_28d:
+                dias_atrasados = (hoje - data_prevista_28d).days
+                quantidade_rompimentos = len(rompimentos_serie)
+                
+                series_pendentes.append({
+                    'numero_serie': serie,
+                    'data_moldagem': data_moldagem.strftime('%d/%m/%Y %H:%M'),
+                    'data_prevista_28d': data_prevista_28d.strftime('%d/%m/%Y'),
+                    'dias_atrasados': dias_atrasados,
+                    'quantidade_rompimentos': quantidade_rompimentos
+                })
+        
+        # Ordenar por dias atrasados (mais atrasadas primeiro)
+        series_pendentes.sort(key=lambda x: x['dias_atrasados'], reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'series': series_pendentes
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@usinagem_concreto.route('/rompimentos/por-serie/<serie>')
+@login_required
+def listar_rompimentos_por_serie(serie):
+    """Lista todos os rompimentos de uma série específica"""
+    try:
+        # Ordenar por data de moldagem (descendente), depois por data de rompimento se não tiver data de moldagem
+        from sqlalchemy import desc
+        rompimentos = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=serie).order_by(
+            ConcretoUsinagensRompimentos.data_moldagem.asc(),
+            desc(ConcretoUsinagensRompimentos.data_rompimento)
+        ).all()
+        
+        # Reordenar manualmente para colocar NULLs por último
+        rompimentos_com_data = [r for r in rompimentos if r.data_moldagem is not None]
+        rompimentos_sem_data = [r for r in rompimentos if r.data_moldagem is None]
+        rompimentos = rompimentos_com_data + rompimentos_sem_data
+        
+        rompimentos_data = []
+        for rompimento in rompimentos:
+            # Calcular idade
+            idade_calculada = None
+            if rompimento.data_moldagem and rompimento.data_rompimento:
+                diff_hours = (rompimento.data_rompimento - rompimento.data_moldagem).total_seconds() / 3600
+                if diff_hours < 24:
+                    idade_calculada = f"{int(diff_hours)}h"
+                else:
+                    idade_calculada = f"{int(diff_hours / 24)}d"
+            elif rompimento.usinagem and rompimento.usinagem.data_usinagem and rompimento.data_rompimento:
+                diff_hours = (rompimento.data_rompimento - rompimento.usinagem.data_usinagem).total_seconds() / 3600
+                if diff_hours < 24:
+                    idade_calculada = f"{int(diff_hours)}h"
+                else:
+                    idade_calculada = f"{int(diff_hours / 24)}d"
+            elif rompimento.idade_cp is not None:
+                if rompimento.idade_cp < 24:
+                    idade_calculada = f"{rompimento.idade_cp}h"
+                else:
+                    idade_calculada = f"{rompimento.idade_cp}d"
+            
+            # Verificar se é rompimento de 28 dias
+            is_28dias = False
+            if rompimento.data_moldagem and rompimento.data_rompimento:
+                diff_days = (rompimento.data_rompimento - rompimento.data_moldagem).total_seconds() / 3600/24
+                # Considerar 27-29 dias como rompimento de 28 dias (pode cair em domingo e ser 29)
+                if 27 <= diff_days <= 29:
+                    is_28dias = True
+            
+            rompimentos_data.append({
+                'id': rompimento.id,
+                'numero_serie': rompimento.numero_serie,
+                'usinagem_id': rompimento.usinagem_id,
+                'usinagem_traco': rompimento.usinagem.traco.nome if rompimento.usinagem and rompimento.usinagem.traco else None,
+                'data_moldagem': rompimento.data_moldagem.strftime('%d/%m/%Y %H:%M') if rompimento.data_moldagem else None,
+                'data_rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M'),
+                'idade': idade_calculada or 'N/A',
+                'resultado': float(rompimento.resultado) if rompimento.resultado else None,
+                'tipo_rompimento': rompimento.tipo_rompimento,
+                'observacoes': rompimento.observacoes,
+                'is_28dias': is_28dias
+            })
+        
+        return jsonify({
+            'success': True,
+            'serie': serie,
+            'rompimentos': rompimentos_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@usinagem_concreto.route('/rompimentos/<int:id>/excluir', methods=['POST'])
 @login_required
 def excluir_rompimento(id):
     try:
-        rompimento = RompimentoCorpoProva.query.get_or_404(id)
-        usinagem_id = rompimento.usinagem_id
+        from models.database import db
+        
+        rompimento = ConcretoUsinagensRompimentos.query.get_or_404(id)
         
         db.session.delete(rompimento)
         db.session.commit()
@@ -1622,7 +2045,7 @@ def excluir_rompimento(id):
         db.session.rollback()
         flash(f'Erro ao excluir rompimento: {str(e)}', 'error')
         
-    return redirect(url_for('usinagem_concreto.visualizar_usinagem', id=usinagem_id))
+    return redirect(url_for('usinagem_concreto.listar_rompimentos'))
 
 @usinagem_concreto.route('/usinagens/<int:id>/rompimentos')
 @login_required
@@ -2026,25 +2449,74 @@ def get_ultima_nota():
         print(f"Erro ao buscar última nota: {str(e)}")
         return jsonify(None)
 
+@usinagem_concreto.route('/rompimentos/buscar-por-serie/<numero_serie>')
+@login_required
+def buscar_rompimento_por_serie(numero_serie):
+    """Busca um rompimento pelo número de série e retorna a data de moldagem"""
+    try:
+        # Tentar converter para inteiro se possível, caso contrário usar como string
+        try:
+            numero_serie_int = int(numero_serie)
+            # Busca o último rompimento com este número de série (mais recente)
+            rompimento = ConcretoUsinagensRompimentos.query.filter_by(
+                numero_serie=numero_serie_int
+            ).order_by(ConcretoUsinagensRompimentos.data_rompimento.desc()).first()
+        except ValueError:
+            # Se não for número, tentar buscar como string (caso o campo seja alterado para String no futuro)
+            # Por enquanto, retornar que não encontrou
+            return jsonify({
+                'success': True,
+                'data_moldagem': None,
+                'existe': False
+            })
+        
+        if rompimento and rompimento.data_moldagem:
+            # Formatar data para o formato datetime-local (YYYY-MM-DDTHH:mm)
+            data_moldagem_formatada = rompimento.data_moldagem.strftime('%Y-%m-%dT%H:%M')
+            return jsonify({
+                'success': True,
+                'data_moldagem': data_moldagem_formatada,
+                'existe': True
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'data_moldagem': None,
+                'existe': False
+            })
+    except Exception as e:
+        print(f"Erro ao buscar rompimento por série: {str(e)}")
+        return jsonify({
+            'success': False,
+            'data_moldagem': None,
+            'existe': False,
+            'error': str(e)
+        }), 500
+
 @usinagem_concreto.route('/rompimentos/<int:id>')
 @login_required
 def get_rompimentos_usinagem(id):
     """Retorna os rompimentos de uma usinagem específica"""
-    usinagem = UsinagemConcreto.query.get_or_404(id)
-    rompimentos = RompimentoCorpoProva.query.filter_by(usinagem_id=id).all()
+    usinagem = ConcretoUsinagens.query.get_or_404(id)
+    rompimentos = ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=id).all()
     if not rompimentos:
         return jsonify({
             'success': False,
             'rompimentos': []
         })
     rompimentos_data = []
-    usinagem = UsinagemConcreto.query.get_or_404(id)
     for rompimento in rompimentos:
         romp = {}
-        idade = rompimento.data_rompimento - usinagem.data_usinagem
-        romp['idade_hours'] = idade.total_seconds() / 3600
-        romp['idade_days'] = idade.days
-        romp['idade_str'] = f"{romp['idade_hours']} horas" if idade.days == 0  else f"{idade.days} dias"
+        if usinagem:
+            idade = rompimento.data_rompimento - usinagem.data_usinagem
+            romp['idade_hours'] = idade.total_seconds() / 3600
+            romp['idade_days'] = idade.days
+            romp['idade_str'] = f"{romp['idade_hours']} horas" if idade.days == 0  else f"{idade.days} dias"
+        else:
+            romp['idade_hours'] = None
+            romp['idade_days'] = rompimento.idade_cp if rompimento.idade_cp else None
+            romp['idade_str'] = f"{romp['idade_days']} dias" if romp['idade_days'] else 'N/A'
+        romp['numero_serie'] = rompimento.numero_serie
         romp['resistencia'] = float(rompimento.resultado) if rompimento.resultado else None
         romp['resistencia_str'] = f"{romp['resistencia']} MPa" if romp['resistencia'] else None
         rompimentos_data.append(romp)
@@ -2053,3 +2525,410 @@ def get_rompimentos_usinagem(id):
         'success': True,
         'rompimentos': rompimentos_data
     })
+def normalizar_data_str(s):
+            """Normaliza string de data removendo espaços extras"""
+            # Remover múltiplos espaços e normalizar
+            import re
+            s = re.sub(r'\s+', ' ', s.strip())
+            return s
+def get_value_datetime(row, col_index,index):
+    """Converte valor do Excel para datetime, preservando horas"""
+    if index < 10:
+        print(f'col_index: {col_index}')
+        print(f'index: {index}')
+        print(f'valor: {row.iloc[col_index]}')
+    try:
+        valor = row.iloc[col_index]
+        if pd.isna(valor) or valor == '' or valor is None:
+            return None
+        
+        # Se já for datetime do pandas, converter diretamente (preserva horas)
+        if isinstance(valor, pd.Timestamp):
+            # Converter preservando horas, minutos e segundos
+            # Usar replace para evitar aviso de nanossegundos
+            py_dt = valor.to_pydatetime()
+            if index < 10:
+                print(f'py_dt1: {py_dt}')
+            return py_dt
+        
+        # Se for datetime do Python, retornar como está
+        if isinstance(valor, datetime):
+            if index < 10:
+                print(f'valor: {valor}')
+            return valor
+        
+        # Se for número (serial do Excel), converter usando cálculo manual
+        # O Excel armazena datas como números seriais desde 1899-12-30
+        # A parte decimal representa as horas (0.5 = meio-dia, 0.25 = 6h, etc)
+        if isinstance(valor, (int, float)) and not pd.isna(valor):
+            try:
+                # Primeiro tentar usar openpyxl que já faz a conversão correta
+                try:
+                    from openpyxl.utils.datetime import from_excel
+                    dt = from_excel(valor)
+                    if isinstance(dt, datetime):
+                        if index < 10:
+                            print(f'dt2: {dt}')
+                        return dt
+                    elif isinstance(dt, pd.Timestamp):
+                        if index < 10:
+                            print(f'dt3: {dt.to_pydatetime()}')
+                        return dt.to_pydatetime()
+                except (ImportError, Exception):
+                    pass
+                
+                # Método alternativo: calcular manualmente a partir do número serial
+                # Excel: base é 1899-12-30 (dia 0), então dia 1 = 1899-12-31
+                base_date = datetime(1899, 12, 30)
+                days = int(valor)
+                fraction = valor - days
+                
+                # Adicionar dias
+                dt = base_date + timedelta(days=days)
+                
+                # Adicionar fração do dia (horas, minutos, segundos)
+                if fraction > 0:
+                    total_seconds = int(fraction * 86400)  # 86400 segundos em um dia
+                    hours = total_seconds // 3600
+                    minutes = (total_seconds % 3600) // 60
+                    seconds = total_seconds % 60
+                    dt = dt.replace(hour=hours, minute=minutes, second=seconds)
+                
+                if index < 10:
+                    print(f'dt4: {dt}')
+                return dt
+            except Exception as e:
+                # Última tentativa: usar pd.to_datetime (pode perder precisão de horas)
+                try:
+                    dt = pd.to_datetime(valor, unit='d', origin='1899-12-30')
+                    if pd.notna(dt):
+                        if index < 10:
+                            print(f'dt5: {dt.to_pydatetime()}')
+                        return dt.to_pydatetime()
+                except:
+                    pass
+        
+        # Converter para string para processar
+        valor_str = str(valor).strip()
+        if not valor_str or valor_str.lower() == 'nan' or valor_str.lower() == 'nat':
+            return None
+        
+        # Função auxiliar para normalizar string de data (remove espaços extras)
+        
+        
+        valor_str = normalizar_data_str(valor_str)
+        
+        # Tentar diferentes formatos de data/hora, priorizando os que têm hora
+        # Incluir formatos com ano de 2 dígitos (formato comum do Excel)
+        date_formats = [
+            '%d/%m/%y %H:%M',         # 26/6/25 7:50 (formato do Excel mostrado)
+            '%d/%m/%y %H:%M:%S',      # 26/6/25 7:50:00
+            '%d/%m/%Y %H:%M',         # 26/06/2025 7:50
+            '%d/%m/%Y %H:%M:%S',      # 26/06/2025 7:50:00
+            '%Y-%m-%d %H:%M:%S',      # 2025-06-26 17:00:00
+            '%Y-%m-%d %H:%M',         # 2025-06-26 17:00
+            '%Y-%m-%dT%H:%M:%S',      # ISO format com hora
+            '%Y-%m-%dT%H:%M',         # ISO format com hora (sem segundos)
+            '%d/%m/%y',                # 26/6/25 (apenas data)
+            '%Y-%m-%d',                # Apenas data (sem hora)
+            '%d/%m/%Y',                # Apenas data (sem hora)
+        ]
+        
+        # Tentar formatos com hora primeiro
+        for fmt in date_formats[:8]:  # Primeiros 8 formatos têm hora
+            try:
+                dt = datetime.strptime(valor_str, fmt)
+                if index < 10:
+                    print(f'dt6: {dt}')
+                return dt
+            except ValueError:
+                continue
+        
+        # Se nenhum formato com hora funcionou, tentar formatos sem hora
+        for fmt in date_formats[8:]:
+            try:
+                dt = datetime.strptime(valor_str, fmt)
+                if index < 10:
+                    print(f'dt7: {dt}')
+                # Se não tinha hora, manter como está (meia-noite)
+                return dt
+            except ValueError:
+                continue
+        
+        # Última tentativa: usar pd.to_datetime com dayfirst=True para datas DD/MM
+        # Isso é mais flexível e pode detectar formatos variados
+        try:
+            dt = pd.to_datetime(valor_str, errors='coerce', dayfirst=True)
+            if pd.notna(dt):
+                # Converter para datetime do Python, preservando horas e minutos
+                py_dt = dt.to_pydatetime()
+                if index < 10:
+                    print(f'py_dt8: {py_dt}')
+                return py_dt
+        except:
+            pass
+        
+        return None
+    except (IndexError, KeyError, Exception) as e:
+        print(f'Erro ao converter datetime col_index {col_index}: {str(e)}, valor: {valor}')
+        return None
+
+# Função auxiliar para validar se é uma data (não deve ser usado como numero_serie)
+def is_date_string(valor_str):
+    """Verifica se a string parece ser uma data"""
+    if not valor_str:
+        return False
+    # Se for Timestamp do pandas, é uma data
+    if isinstance(valor_str, pd.Timestamp) or isinstance(valor_str, datetime):
+        return True
+    # Verificar padrões comuns de data
+    date_patterns = ['%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S', '%d/%m/%Y %H:%M']
+    for pattern in date_patterns:
+        try:
+            datetime.strptime(str(valor_str), pattern)
+            return True
+        except:
+            continue
+def get_value_str(row, col_index):
+        """Converte valor do Excel para string, retornando None se for NaN ou vazio"""
+        try:
+            valor = row.iloc[col_index]
+            if pd.isna(valor) or valor == '' or valor is None:
+                return None
+            return str(valor).strip()
+        except (IndexError, KeyError):
+            return None
+def calcular_data_rompimento_28_dias(data_moldagem_dt):
+    """Calcula data de rompimento 28 dias após a moldagem. Se cair em domingo, adiciona 1 dia."""
+    data_rompimento = data_moldagem_dt + timedelta(days=28)
+    # Verificar se é domingo (weekday() retorna 6 para domingo)
+    if data_rompimento.weekday() == 6:  # Domingo
+        data_rompimento += timedelta(days=1)  # Adiciona 1 dia (vira segunda-feira)
+    return data_rompimento
+@usinagem_concreto.route('/rompimentos/importar-excel', methods=['POST'])
+@login_required
+def importar_rompimentos_excel():
+    """
+    Importa rompimentos de corpo de prova a partir de um arquivo Excel
+    """
+    from models.database import db
+    
+    if 'arquivo_excel' not in request.files:
+        flash('Nenhum arquivo enviado.', 'error')
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+    
+    arquivo = request.files['arquivo_excel']
+    
+    if arquivo.filename == '':
+        flash('Nenhum arquivo selecionado.', 'error')
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+    
+    if not arquivo.filename.endswith(('.xlsx', '.xls')):
+        flash('Formato de arquivo inválido. Use arquivos Excel (.xlsx ou .xls).', 'error')
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+    
+    nome_planilha = request.form.get('nome_planilha', '').strip()
+    primeira_linha_cabecalho = request.form.get('primeira_linha_cabecalho') == 'on'
+    
+    temp_file = None
+    try:
+        # Salvar arquivo temporariamente
+        filename = secure_filename(arquivo.filename)
+        temp_file = os.path.join(tempfile.gettempdir(), f"rompimentos_{filename}")
+        arquivo.save(temp_file)
+        
+        # Ler arquivo Excel sem converter datas automaticamente para preservar horas
+        try:
+            if nome_planilha:
+                df = pd.read_excel(temp_file, sheet_name=nome_planilha, parse_dates=False, header=0 if primeira_linha_cabecalho else None)
+            else:
+                df = pd.read_excel(temp_file, parse_dates=False, header=0 if primeira_linha_cabecalho else None)
+        except Exception as e:
+            flash(f'Erro ao ler o arquivo Excel: {str(e)}', 'error')
+            return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+        
+        if df.empty:
+            flash('O arquivo Excel está vazio ou não contém dados.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+        
+        # Pular as primeiras 4 linhas (começar a partir da linha 5, índice 4)
+        df = df.iloc[4:504].reset_index(drop=True)
+
+        # Função auxiliar para converter valor para datetime preservando horas
+
+        
+        for index, row in df.iterrows():
+            rompimentos = []
+           
+            # Função auxiliar para converter valores do Excel para string ou None
+           
+            # Tentar obter numero_serie - pode estar em diferentes colunas
+            numero_serie = None
+            # Tentar coluna 0 primeiro (primeira coluna de dados)
+            valor_col0 = get_value_str(row, 0)
+            if valor_col0 and not is_date_string(valor_col0):
+                numero_serie = valor_col0
+           
+            
+            data_moldagem_dt = None
+            rompimento5_dt = None
+            rompimento8_dt = None
+            rompimento9_dt = None
+            
+            data_moldagem_dt = get_value_datetime(row, 1,index)
+            rompimento5_dt = get_value_datetime(row, 4,index)
+            rompimento8_dt = get_value_datetime(row, 7,index)
+            rompimento9_dt = get_value_datetime(row, 8,index)
+            
+            resultado10 = get_value_str(row, 9)
+            resultado11 = get_value_str(row, 10)
+            resultado13 = get_value_str(row, 12)
+            resultado17 = get_value_str(row, 16)
+            resultado21 = get_value_str(row, 20)
+            resultado25 = get_value_str(row, 24)
+            tipo15 = get_value_str(row, 14)
+            tipo19 = get_value_str(row, 18)
+            tipo23 = get_value_str(row, 22)
+            tipo27 = get_value_str(row, 26)
+            # Validar numero_serie antes de processar - não pode ser uma data
+            if not numero_serie:
+                print(f'Linha {index+1}: Número de série não encontrado')
+                continue
+            
+            if is_date_string(numero_serie):
+                print(f'Linha {index+1}: Número de série inválido (é uma data): {numero_serie}')
+                continue
+            
+            # Limitar tamanho do numero_serie (o modelo pode ter limitação)
+            if len(str(numero_serie)) > 50:
+                numero_serie = str(numero_serie)[:50]
+            #print(f'linha {index+1}: numero_serie: {numero_serie} data_moldagem_str: {row.iloc[1]} data_moldagem_dt: {data_moldagem_dt} ')
+            #print(f'resultado13: {resultado13} resultado17: {resultado17} resultado21: {resultado21} resultado25: {resultado25}')
+            #print(f'rompimento5_dt: {rompimento5_dt} rompimento8_dt: {rompimento8_dt} rompimento9_dt: {rompimento9_dt}')
+            #print(f'tipo15: {tipo15} tipo19: {tipo19} tipo23: {tipo23} tipo27: {tipo27}')
+            if numero_serie and data_moldagem_dt:
+                if rompimento5_dt:
+                    if not rompimento8_dt:
+                        try:
+                            
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento5_dt,
+                                resultado=resultado13,
+                                tipo_rompimento=tipo15
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento5_dt,
+                                resultado=resultado17,
+                                tipo_rompimento=tipo19
+                            ))
+                        except (ValueError, TypeError) as e:
+                            print(f'Erro ao processar linha {index+2}, primeiro caso: {str(e)}')
+                            continue
+                    elif not rompimento9_dt:
+                        try:
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento5_dt,
+                                resultado=resultado10,
+                                tipo_rompimento=4
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento8_dt,
+                                resultado=resultado13,
+                                tipo_rompimento=tipo15
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento8_dt,
+                                resultado=resultado17,
+                                tipo_rompimento=tipo19
+                            ))
+                        except (ValueError, TypeError) as e:
+                            print(f'Erro ao processar linha {index+2}, segundo caso: {str(e)}')
+                            continue
+                    elif rompimento9_dt:
+                        try:                        
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento5_dt,
+                                resultado=resultado10,
+                                tipo_rompimento=4
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento8_dt,
+                                resultado=resultado11,
+                                tipo_rompimento=4
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento9_dt,
+                                resultado=resultado13,
+                                tipo_rompimento=tipo15
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=rompimento9_dt,
+                                resultado=resultado17,
+                                tipo_rompimento=tipo19
+                            ))
+                        except (ValueError, TypeError) as e:
+                            print(f'Erro ao processar linha {index+2}, terceiro caso: {str(e)}')
+                            continue
+                    
+                    if resultado21:
+                        try:
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=calcular_data_rompimento_28_dias(data_moldagem_dt),
+                                resultado=resultado21,
+                                tipo_rompimento=tipo23
+                            ))
+                            rompimentos.append(ConcretoUsinagensRompimentos(
+                                numero_serie=numero_serie,
+                                data_moldagem=data_moldagem_dt,
+                                data_rompimento=calcular_data_rompimento_28_dias(data_moldagem_dt),
+                                resultado=resultado25,
+                                tipo_rompimento=tipo27
+                            ))
+                        except (ValueError, TypeError) as e:
+                            print(f'Erro ao processar linha {index+2}, quarto caso: {str(e)}')
+                            continue
+            else:
+                print(f'Erro ao processar linha {index+6}, dados incompletos: {numero_serie} e {data_moldagem_dt}')
+
+            # Salvar rompimentos no banco de dados
+            if rompimentos:
+                try:
+                    db.session.add_all(rompimentos)
+                    db.session.commit()
+                    print(f'linha {index+6}: serie {numero_serie} importado(s) com sucesso!')
+                    #print(f'linha {index+1}: {len(rompimentos)} rompimento(s) importado(s) com sucesso!')
+                except (ValueError, TypeError) as e:
+                    print(f'Erro ao processar linha {index+8}, salvar rompimentos: {str(e)}')
+                    continue
+        
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+                    
+    except Exception as e:
+        #flash(f'Erro ao processar o arquivo Excel: {str(e)}', 'error')
+        return redirect(url_for('usinagem_concreto.listar_rompimentos'))
+    finally:
+        if temp_file and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except:
+                pass

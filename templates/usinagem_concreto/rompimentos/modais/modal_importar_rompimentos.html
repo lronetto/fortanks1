@@ -1,0 +1,77 @@
+<!-- Modal Importar Rompimentos -->
+<div class="modal fade" id="modalImportarRompimentos" tabindex="-1" aria-labelledby="modalImportarRompimentosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarRompimentosLabel">
+                    <i class="fas fa-file-excel"></i> Importar Rompimentos de Planilha Excel
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formImportarRompimentos" action="{{ url_for('usinagem_concreto.importar_rompimentos_excel') }}" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> <strong>Instruções:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>O arquivo deve estar no formato Excel (.xlsx ou .xls)</li>
+                            <li>Colunas obrigatórias: <strong>Número de Série</strong>, <strong>Data de Rompimento</strong></li>
+                            <li>Colunas opcionais: Data de Moldagem, Resultado (kg), Fator de Conversão, Tipo de Rompimento, Observações, Usinagem ID</li>
+                            <li>O sistema tentará identificar automaticamente as colunas pelo nome</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="arquivo_excel" class="form-label">Selecione o arquivo Excel</label>
+                        <input type="file" class="form-control" id="arquivo_excel" name="arquivo_excel" accept=".xlsx,.xls">
+                        <small class="text-muted">Formatos aceitos: .xlsx, .xls</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="nome_planilha" class="form-label">Nome da Planilha (opcional)</label>
+                        <input type="text" class="form-control" id="nome_planilha" name="nome_planilha" placeholder="Deixe em branco para usar a primeira planilha">
+                        <small class="text-muted">Se o arquivo tiver múltiplas planilhas, informe o nome da planilha desejada</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="primeira_linha_cabecalho" name="primeira_linha_cabecalho" checked>
+                            <label class="form-check-label" for="primeira_linha_cabecalho">
+                                A primeira linha contém cabeçalhos
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="previewColunas" class="mt-3" style="display: none;">
+                        <h6>Colunas detectadas:</h6>
+                        <div id="listaColunas" class="list-group"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Preview de colunas quando arquivo for selecionado
+   
+    // Submissão do formulário
+    $('#formImportarRompimentos').on('submit', function(e) {
+        
+        // Mostrar loading
+        var btnSubmit = $(this).find('button[type="submit"]');
+        var textoOriginal = btnSubmit.html();
+        btnSubmit.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Importando...');
+        
+        // O formulário será enviado normalmente
+    });
+});
+</script>
+
