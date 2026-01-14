@@ -27,6 +27,7 @@ class Materiais(db.Model):
     
     categoria = db.Column(db.String(50), nullable=True)  # Adicionando campo categoria
     formula_calculo = db.Column(db.String(500), nullable=True)  # Fórmula universal para cálculo de quantidade
+    dados_adicionais = db.Column(db.Text, nullable=True)  # Dados adicionais em formato JSON
     criado_em = db.Column(db.DateTime, default=datetime.now)
 
     #unidade = db.relationship('Unidade', back_populates='materiais', foreign_keys=[unidade_id])
@@ -160,7 +161,7 @@ class MateriaisGrupos(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    
+    dados_adicionais = db.Column(db.Text, nullable=True)
     # Relacionamentos
     criado_por = relationship('Usuario', foreign_keys=[criado_por_id])
 

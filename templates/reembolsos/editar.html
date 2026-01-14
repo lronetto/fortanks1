@@ -215,7 +215,12 @@
                 <h5 class="modal-title" id="modalVisualizarDocumentoLabel">Visualizar Documento</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
-            <div class="modal-body" style="height:80vh;">
+            <div id="spinnerVisualizarDocumento" class="text-center my-3" style="display:none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+            <div class="modal-body" id="bodyVisualizarDocumento" style="height:80vh;">
                 <iframe id="iframeDocumento" src="" style="width:100%;height:100%;border:none;"></iframe>
             </div>
         </div>
@@ -448,7 +453,43 @@ document.addEventListener('DOMContentLoaded', function() {
     $('#documentosAvulsosContainer').on('click', '.btnRemoveDocumentoAvulso', function() {
         $(this).closest('.documento-avulso-item').remove();
     });
+    $(document).on('click', '.link-nota-fiscal', function(e) {
+        e.preventDefault();
+        const notaId = $(this).data('id');
+        console.log('notaId',notaId);
+        abrirModalDocumentos(notaId);
+    });
+    
+    // Event listener para quando o modal de documentos for aberto
+    const modalDocumentosEl = document.getElementById('modalDocumentos');
+    if (modalDocumentosEl) {
+        modalDocumentosEl.addEventListener('show.bs.modal', function() {
+            // Se o modal foi aberto sem passar pelo abrirModalDocumentos, tentar carregar
+            const notaId = document.getElementById('notaIdDocumentos').value;
+            if (notaId && !document.getElementById('listaDocumentos').hasChildNodes()) {
+                carregarDocumentos(notaId);
+            }
+        });
+    }
+    
+    $(document).on('click', '.visualizar-documento', function(e) {
+        e.preventDefault();
+        const documentoId = $(this).data('id');
+        console.log('documentoId',documentoId);
+        visualizarDocumento(documentoId);
+    });
+    $(document).on('click', '.download-documento', function(e) {
+        e.preventDefault();
+        const documentoId = $(this).data('id');
+        downloadDocumento(documentoId);
+    });
+    $(document).on('click', '.excluir-documento', function(e) {
+        e.preventDefault();
+        const documentoId = $(this).data('id');
+        excluirDocumento(documentoId);
+    });
 });
+
 function atualizarTabelaAvulsos() {
   const tbody = document.querySelector('#tabelaAvulsos tbody');
   if (!tbody) return;
@@ -578,7 +619,8 @@ function filtrarNotas(page = 1) {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
-                    <td><a href="#" onclick="abrirModalDocumentos(${nota.id}); return false;">${nota.nome_emitente}</a></td>
+                    <td><a href="#" class="link-nota-fiscal"
+                        data-id="${nota.id}">${nota.nome_emitente}</a></td>
                     <td>${nota.numero_nf}</td>
                     <td>${formatarMoeda(nota.valor_total)}</td>
                     <td>${nota.pagamento ? '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>' : ''}
@@ -744,52 +786,87 @@ function atualizarTotal() {
 
 function abrirModalDocumentos(notaId) {
     modalDocumentos = new bootstrap.Modal(document.getElementById('modalDocumentos'));
-    modalDocumentos.show();
+    document.getElementById('notaIdDocumentos').value = notaId;
     spinnerDocumentos = document.getElementById('spinnerDocumentos');
     bodyDocumentos = document.getElementById('bodyDocumentos');
     spinnerDocumentos.style.display = '';
     bodyDocumentos.style.display = 'none';
-    document.getElementById('notaIdDocumentos').value = notaId;
+    modalDocumentos.show();
     carregarDocumentos(notaId);
 }
 
 function carregarDocumentos(notaId) {
+    console.log('carregarDocumentos',notaId);
+    if (!notaId) {
+        console.error('notaId não fornecido');
+        return;
+    }
+    spinnerDocumentos = document.getElementById('spinnerDocumentos');
+    bodyDocumentos = document.getElementById('bodyDocumentos');
+    const lista = document.getElementById('listaDocumentos');
+    
+    spinnerDocumentos.style.display = '';
+    bodyDocumentos.style.display = 'none';
+    lista.innerHTML = '';
+    
     fetch(`/reembolsos/nota/${notaId}/documentos`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            const lista = document.getElementById('listaDocumentos');
-            lista.innerHTML = '';
-            data.forEach(doc => {
-                const item = document.createElement('div');
-                item.className = 'list-group-item d-flex justify-content-between align-items-center';
-                item.innerHTML = `
-                    <div>
-                        <i class="fas fa-file me-2"></i>
-                        ${doc.filename}
-                    </div>
-                    <div>
-                        <button class="btn btn-sm btn-info me-2" onclick="visualizarDocumento(${doc.id}, '${doc.mimetype}')">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                        <button class="btn btn-sm btn-primary me-2" onclick="downloadDocumento(${doc.id})">
-                            <i class="fas fa-download"></i>
-                        </button>
-                        <button class="btn btn-sm btn-danger" onclick="excluirDocumento(${doc.id})">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                `;
-                lista.appendChild(item);
-            });
+            console.log('Documentos recebidos:', data);
+            if (!Array.isArray(data)) {
+                console.error('Resposta não é um array:', data);
+                lista.innerHTML = '<div class="list-group-item text-center text-muted">Erro ao carregar documentos</div>';
+                spinnerDocumentos.style.display = 'none';
+                bodyDocumentos.style.display = '';
+                return;
+            }
+            
+            if (data.length === 0) {
+                lista.innerHTML = '<div class="list-group-item text-center text-muted">Nenhum documento encontrado</div>';
+            } else {
+                data.forEach(doc => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    item.innerHTML = `
+                        <div>
+                            <i class="fas fa-file me-2"></i>
+                            ${doc.filename || 'Sem nome'}
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-info me-2 visualizar-documento" 
+                                    data-id="${doc.id}" 
+                                    data-mimetype="${doc.mimetype || ''}">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary me-2 download-documento" 
+                                    data-id="${doc.id}">
+                                <i class="fas fa-download"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger excluir-documento" 
+                                    data-id="${doc.id}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    lista.appendChild(item);
+                });
+            }
             spinnerDocumentos.style.display = 'none';
             bodyDocumentos.style.display = '';
         })
         .catch(error => {
             console.error('Erro ao carregar documentos:', error);
-            alert('Erro ao carregar documentos');
+            lista.innerHTML = '<div class="list-group-item text-center text-danger">Erro ao carregar documentos: ' + error.message + '</div>';
+            spinnerDocumentos.style.display = 'none';
+            bodyDocumentos.style.display = '';
         });
 }
-function visualizarDocumento(documentoId, mimetype) {
+function visualizarDocumento(documentoId) {
     const iframe = document.getElementById('iframeDocumento');
     iframe.src = '';
     const modalEl = document.getElementById('modalVisualizarDocumento');
@@ -832,21 +909,83 @@ function downloadDocumento(documentoId) {
     window.open(`/reembolsos/documento/${documentoId}/download`, '_blank');
 }
 function excluirDocumento(documentoId) {
-        if (confirm('Tem certeza que deseja excluir este documento?')) {
-            fetch(`/reembolsos/documento/${documentoId}/delete`, {
-                method: 'DELETE'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    carregarDocumentos(notaId);
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao excluir documento:', error);
-                alert('Erro ao excluir documento');
-            });
-        }
+    if (confirm('Tem certeza que deseja excluir este documento?')) {
+        const notaId = document.getElementById('notaIdDocumentos').value;
+        fetch(`/reembolsos/documento/${documentoId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                carregarDocumentos(notaId);
+            } else {
+                alert(data.message || 'Erro ao excluir documento');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao excluir documento:', error);
+            alert('Erro ao excluir documento');
+        });
     }
+}
+
+function salvarDocumentos() {
+    const notaId = document.getElementById('notaIdDocumentos').value;
+    const anexosInput = document.getElementById('anexos');
+    const arquivos = anexosInput.files;
+    
+    if (!notaId) {
+        alert('ID da nota não encontrado');
+        return;
+    }
+    
+    if (arquivos.length === 0) {
+        alert('Selecione pelo menos um arquivo para enviar');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('nota_id', notaId);
+    
+    for (let i = 0; i < arquivos.length; i++) {
+        formData.append('anexos', arquivos[i]);
+    }
+    
+    // Mostrar loading
+    spinnerDocumentos = document.getElementById('spinnerDocumentos');
+    bodyDocumentos = document.getElementById('bodyDocumentos');
+    spinnerDocumentos.style.display = '';
+    bodyDocumentos.style.display = 'none';
+    
+    fetch('/reembolsos/nota/documentos', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Limpar input de arquivos
+            anexosInput.value = '';
+            // Recarregar lista de documentos
+            carregarDocumentos(notaId);
+        } else {
+            alert(data.error || 'Erro ao salvar documentos');
+            spinnerDocumentos.style.display = 'none';
+            bodyDocumentos.style.display = '';
+        }
+    })
+    .catch(error => {
+        console.error('Erro ao salvar documentos:', error);
+        alert('Erro ao salvar documentos');
+        spinnerDocumentos.style.display = 'none';
+        bodyDocumentos.style.display = '';
+    });
+}
     </script>
 {% endblock %} 

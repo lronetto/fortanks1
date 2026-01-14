@@ -226,15 +226,17 @@ def _gerar_excel_temp(numero_serie):
             order_by(ConcretoUsinagensRompimentos.data_rompimento.asc()).all()
         
         if not rompimentos:
+            print(f'Nenhum rompimento encontrado para a série {numero_serie}')
             return None
         
         # Caminho do arquivo template
         template_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'base/RELATORIO CONCRETAGEM.xlsx'
+            'relatorios\\base\\RELATORIO CONCRETAGEM.xlsx'
         )
         
         if not os.path.exists(template_path):
+            print(f'Template RELATORIO CONCRETAGEM.xlsx não encontrado')
             return None
         
         # Criar uma cópia temporária do arquivo para preservar imagens
@@ -307,7 +309,7 @@ def _gerar_excel_temp(numero_serie):
                         if rompimentos[0].data_moldagem:
                             new_value = new_value.replace('{21}', str(rompimentos[0].data_moldagem.strftime('%H:%M')))
                         #volume
-                        new_value = new_value.replace('{22}', "5,00 m³")
+                        new_value = new_value.replace('{22}', "5,00")
                         #pecas
                         new_value = new_value.replace('{23}', "1")
 

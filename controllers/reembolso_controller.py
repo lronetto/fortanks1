@@ -250,7 +250,7 @@ def nota_fiscal_busca_reembolso():
                 try:
                     nota_fiscal_obj = n.NotaFiscal
                     selecionada = nota_fiscal_obj.id in [item.get('id') for item in notas_selecionadas if item.get('id')]
-                    reembolso_documento = ReembolsoDocumento.query.filter_by(nota_fiscal_id=n.NotaFiscal.id,reembolso_id=reembolso_id).first()
+                    reembolso_documento = ReembolsosDocumentos.query.filter_by(nota_fiscal_id=n.NotaFiscal.id,reembolso_id=reembolso_id).first()
                     # Encontrar o item selecionado correspondente
                     item_selecionado = next((item for item in notas_selecionadas if item.get('id') == nota_fiscal_obj.id), None)
                     # Construir o doc baseado na seleção
@@ -776,8 +776,10 @@ def apagar(reembolso_id):
 @reembolso_bp.route('/nota/<int:nota_id>/documentos', methods=['GET'])
 @login_required
 def listar_documentos_nota(nota_id):
+    print(f'listar_documentos_nota: {nota_id}');
     try:
-        documentos = Upload.query.filter(Upload.pai_id==nota_id, Upload.pai=='NotasFiscais').all()
+        documentos = Upload.query.filter(Upload.pai_id==nota_id, Upload.pai=='NotaFiscal').all()
+        print(f'documentos: {documentos}')
         return jsonify([{
             'id': doc.id,
             'tipo': doc.tipo,

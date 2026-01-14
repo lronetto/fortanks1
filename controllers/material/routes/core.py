@@ -24,10 +24,8 @@ logger = logging.getLogger(__name__)
 @material_bp.route("/")
 @login_required
 def index():
-    page = request.args.get("page", 1, type=int)
     search_term = request.args.get("search", "").strip()
     category_filter = request.args.get("category", "").strip()
-    per_page = current_app.config.get("PER_PAGE", 20)
 
     query = Materiais.query
     if search_term:
@@ -37,8 +35,8 @@ def index():
         query = query.filter(Materiais.categoria == category_filter)
     query = query.order_by(Materiais.nome)
 
-    materiais_paginados = query.paginate(page=page, per_page=per_page, error_out=False)
-    materiais = materiais_paginados.items
+    # Retornar todos os resultados filtrados para o DataTables fazer a paginação client-side
+    materiais = query.all()
 
     planos_conta = PlanoConta.query.filter_by(ativo=True).all()
     unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
@@ -48,7 +46,6 @@ def index():
     return render_template(
         "materiais/index.html",
         materiais=materiais,
-        pagination=materiais_paginados,
         planos_conta=planos_conta,
         unidades=unidades,
         categorias_filtro=categorias_filtro,

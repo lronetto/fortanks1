@@ -152,43 +152,6 @@
                 </table>
             </div>
 
-            <!-- Controles de Paginação (Inline) -->
-            {% if pagination and pagination.pages > 1 %}
-            <nav aria-label="Navegação de página">
-                <ul class="pagination justify-content-center mt-4">
-                    {# Link para a página anterior #}
-                    <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
-                        <a class="page-link" href="{{ url_for('material.index', page=pagination.prev_num, **request.args) }}" aria-label="Anterior">
-                            <span aria-hidden="true">&laquo;</span>
-                        </a>
-                    </li>
-            
-                    {# Links para as páginas #}
-                    {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
-                        {% if page_num %}
-                            {% if page_num != pagination.page %}
-                                <li class="page-item">
-                                    <a class="page-link" href="{{ url_for('material.index', page=page_num, **request.args) }}">{{ page_num }}</a>
-                                </li>
-                            {% else %}
-                                <li class="page-item active" aria-current="page">
-                                    <span class="page-link">{{ page_num }}</span>
-                                </li>
-                            {% endif %}
-                        {% else %}
-                            <li class="page-item disabled"><span class="page-link">...</span></li>
-                        {% endif %}
-                    {% endfor %}
-            
-                    {# Link para a próxima página #}
-                    <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
-                        <a class="page-link" href="{{ url_for('material.index', page=pagination.next_num, **request.args) }}" aria-label="Próxima">
-                            <span aria-hidden="true">&raquo;</span>
-                        </a>
-                    </li>
-                </ul>
-            </nav>
-            {% endif %}
 
         </div>
     </div>
@@ -202,5 +165,37 @@
 {% endblock %}
 
 {% block scripts %}
-
+<script>
+    $(document).ready(function() {
+        // Verificar se DataTables está disponível
+        if (typeof $.fn.DataTable !== 'undefined') {
+            // Inicializar DataTable
+            $('#dataTable').DataTable({
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json'
+                },
+                order: [[3, 'asc']], // Ordenar por nome (coluna 3)
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+                responsive: true,
+                autoWidth: false,
+                columnDefs: [
+                    { 
+                        orderable: false, 
+                        targets: 8 // Desabilitar ordenação na coluna de ações
+                    },
+                    {
+                        type: 'date',
+                        targets: 7 // Coluna de data (Criado em)
+                    }
+                ],
+                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                     "<'row'<'col-sm-12'tr>>" +
+                     "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+            });
+        } else {
+            console.warn('DataTables não está disponível');
+        }
+    });
+</script>
 {% endblock %}

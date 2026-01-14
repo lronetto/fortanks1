@@ -34,7 +34,7 @@ def api_get_dados_notas_fiscais(request):
     if hasattr(request, "args"):
         json_filtros = request.args
     else:
-        json_filtros = request.get_json()
+        json_filtros = request
     busca = json_filtros.get("busca", "")
     item_nome = json_filtros.get("item_nome", "")
     status_importacao = json_filtros.get("status_importacao", "")

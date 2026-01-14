@@ -386,6 +386,7 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
     - 08-06-2025 - NF 2810 - HOLANDA ENGENHARIA LTDA.pdf (Protocolo)
     - 09-06-2025 - FL 3364 - JACKTRACKER GEOPROCESSAMENTO LTDA.pdf (Protocolo)
     - Protocolo 264231708.pdf (Protocolo)
+    - Arquivos separados por página: nome_pagina_X.pdf
     """
     try:
         logging.info(f"Processando arquivo: {nome_arquivo}")
@@ -393,6 +394,8 @@ def extrair_numero_fornecedor_do_nome(nome_arquivo):
         fornecedor = None
         # Remove a extensão .pdf
         nome_sem_ext = nome_arquivo.replace('.pdf', '')
+        # Remove sufixo de página se existir (ex: "_pagina_1")
+        nome_sem_ext = re.sub(r'_pagina_\d+$', '', nome_sem_ext)
         #print(f"Nome sem extensão: {nome_sem_ext}")
         
         # Se for um protocolo simples
@@ -641,9 +644,99 @@ def validar_chave_acesso(chave):
     
     return True
 
+def separar_pdf_por_paginas(payload, filename):
+    """
+    Separa um PDF em múltiplos PDFs, um por página.
+    Retorna lista de tuplas (payload_pagina, filename_pagina).
+    """
+    try:
+        pdf_reader = PdfReader(io.BytesIO(payload))
+        num_paginas = len(pdf_reader.pages)
+        
+        if num_paginas <= 1:
+            return [(payload, filename)]
+        
+        paginas_separadas = []
+        nome_base = filename.replace('.pdf', '')
+        
+        for i in range(num_paginas):
+            pdf_writer = PdfWriter()
+            pdf_writer.add_page(pdf_reader.pages[i])
+            
+            # Cria um novo PDF em memória
+            output_buffer = io.BytesIO()
+            pdf_writer.write(output_buffer)
+            output_buffer.seek(0)
+            payload_pagina = output_buffer.getvalue()
+            
+            # Nome do arquivo com número da página
+            filename_pagina = f"{nome_base}_pagina_{i+1}.pdf"
+            
+            paginas_separadas.append((payload_pagina, filename_pagina))
+            logging.info(f"Página {i+1}/{num_paginas} separada: {filename_pagina}")
+        
+        return paginas_separadas
+    except Exception as e:
+        logging.error(f"Erro ao separar PDF {filename} por páginas: {e}")
+        # Em caso de erro, retorna o PDF original
+        return [(payload, filename)]
+
 def processar_anexo_pdf(anexo, filename, payload, tipo):
     """
     Processa um anexo PDF: tenta identificar por código de barras ou nome do arquivo.
+    Retorna True se processou com sucesso, False caso contrário.
+    """
+    # Se for tipo 3 (Reembolso) e o PDF tiver mais de uma página, separa por páginas
+    if tipo == 3:
+        try:
+            pdf_reader = PdfReader(io.BytesIO(payload))
+            num_paginas = len(pdf_reader.pages)
+            
+            if num_paginas > 1:
+                logging.info(f"PDF de reembolso com {num_paginas} páginas detectado. Separando por páginas...")
+                paginas_separadas = separar_pdf_por_paginas(payload, filename)
+                
+                # Processa cada página separadamente
+                resultados = []
+                for payload_pagina, filename_pagina in paginas_separadas:
+                    # Cria um novo anexo para cada página
+                    anexo_pagina = {
+                        'filename': filename_pagina,
+                        'codbarras': {
+                            'qtd': 0,
+                            'codigos': [],
+                            'erro': []
+                        },
+                        'db': [],
+                        'upload': False,
+                        'nao_identificados': 0
+                    }
+                    
+                    # Processa a página individualmente
+                    resultado = processar_anexo_pdf_pagina(anexo_pagina, filename_pagina, payload_pagina, tipo)
+                    resultados.append(resultado)
+                    
+                    # Adiciona informações da página ao anexo original
+                    anexo['codbarras']['qtd'] += anexo_pagina['codbarras']['qtd']
+                    anexo['codbarras']['codigos'].extend(anexo_pagina['codbarras']['codigos'])
+                    anexo['codbarras']['erro'].extend(anexo_pagina['codbarras']['erro'])
+                    anexo['db'].extend(anexo_pagina['db'])
+                    if anexo_pagina['upload']:
+                        anexo['upload'] = True
+                    anexo['nao_identificados'] += anexo_pagina['nao_identificados']
+                
+                # Retorna True se pelo menos uma página foi processada com sucesso
+                return any(resultados)
+        except Exception as e:
+            logging.error(f"Erro ao verificar/separar páginas do PDF {filename}: {e}")
+            # Continua com o processamento normal em caso de erro
+    
+    # Processamento normal (PDF único ou tipo diferente de 3)
+    return processar_anexo_pdf_pagina(anexo, filename, payload, tipo)
+
+def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
+    """
+    Processa uma página de PDF: tenta identificar por código de barras ou nome do arquivo.
     Retorna True se processou com sucesso, False caso contrário.
     """
     anexo['codbarras'] = {
