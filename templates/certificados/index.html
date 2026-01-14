@@ -1,0 +1,125 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Certificados - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-certificate"></i> Certificados</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoCertificado">
+            <i class="fas fa-plus"></i> Novo Certificado
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Certificados</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                            <th>Data de Vencimento</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for certificado in certificados %}
+                        <tr>
+                            <td>{{ certificado.id }}</td>
+                            <td>{{ certificado.nome }}</td>
+                            <td>{{ certificado.tipo if certificado.tipo else 'N/A' }}</td>
+                            <td>{{ certificado.data.strftime('%d/%m/%Y') if certificado.data else 'N/A' }}</td>
+                            <td>
+                                {% if certificado.data_vencimento %}
+                                    {% set dias_vencimento = (certificado.data_vencimento - hoje).days %}
+                                    {% if dias_vencimento < 0 %}
+                                        <span class="badge bg-danger">{{ certificado.data_vencimento.strftime('%d/%m/%Y') }} (Vencido)</span>
+                                    {% elif dias_vencimento <= 30 %}
+                                        <span class="badge bg-warning">{{ certificado.data_vencimento.strftime('%d/%m/%Y') }} (Próximo do vencimento)</span>
+                                    {% else %}
+                                        {{ certificado.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {% endif %}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if certificado.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-primary" 
+                                            onclick="editarCertificado({{ certificado.id }})" 
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            onclick="visualizarCertificado({{ certificado.id }})" 
+                                            title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <form id="form-excluir-{{ certificado.id }}"
+                                          action="{{ url_for('certificado.excluir', id=certificado.id) }}" 
+                                          method="POST"
+                                          class="d-inline form-excluir">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" 
+                                                data-bs-toggle="tooltip"
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir modais -->
+{% include 'certificados/modais/novo_certificado.html' %}
+{% include 'certificados/modais/editar_certificado.html' %}
+{% include 'certificados/modais/visualizar_certificado.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/certificados.js') }}"></script>
+<script>
+    // Inicializar DataTable
+    $(document).ready(function () {
+        $('#dataTable').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            },
+            order: [[0, 'desc']]
+        });
+
+        // Confirmar exclusão
+        $('.form-excluir').on('submit', function (e) {
+            e.preventDefault();
+            const form = this;
+            const certificadoName = $(this).closest('tr').find('td:nth-child(2)').text();
+
+            if (confirm(`Tem certeza que deseja excluir o certificado "${certificadoName}"?`)) {
+                form.submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -2784,8 +2784,8 @@ def importar_rompimentos_excel():
             resultado11 = get_value_str(row, 10)
             resultado13 = get_value_str(row, 12)
             resultado17 = get_value_str(row, 16)
-            resultado21 = get_value_str(row, 20)
-            resultado25 = get_value_str(row, 24)
+            resultado22 = get_value_str(row, 21)
+            resultado26 = get_value_str(row, 25)
             tipo15 = get_value_str(row, 14)
             tipo19 = get_value_str(row, 18)
             tipo23 = get_value_str(row, 22)
@@ -2888,20 +2888,20 @@ def importar_rompimentos_excel():
                             print(f'Erro ao processar linha {index+2}, terceiro caso: {str(e)}')
                             continue
                     
-                    if resultado21:
+                    if resultado22:
                         try:
                             rompimentos.append(ConcretoUsinagensRompimentos(
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=calcular_data_rompimento_28_dias(data_moldagem_dt),
-                                resultado=resultado21,
+                                resultado=resultado22,
                                 tipo_rompimento=tipo23
                             ))
                             rompimentos.append(ConcretoUsinagensRompimentos(
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=calcular_data_rompimento_28_dias(data_moldagem_dt),
-                                resultado=resultado25,
+                                resultado=resultado26,
                                 tipo_rompimento=tipo27
                             ))
                         except (ValueError, TypeError) as e:

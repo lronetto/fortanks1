@@ -208,7 +208,8 @@
                    }
    
                    // Auto-abrir o submenu de Cadastro Operacional se estiver em uma página relacionada
-                   if (window.location.pathname.includes('/produto-composto')) {
+                   if (window.location.pathname.includes('/produto-composto') ||
+                       window.location.pathname.includes('/certificados')) {
                        $('#cadastroOperacionalSubmenu').addClass('show');
                        $('#cadastroOperacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
@@ -254,6 +255,12 @@
                    if (window.location.pathname.includes('/relatorios')) {
                        $('#relatoriosSubmenu').addClass('show');
                        $('#relatoriosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+                   
+                   // Auto-abrir o submenu de DataBook se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/relatorios/databook')) {
+                       $('#databookSubmenu').addClass('show');
+                       $('#databookSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
    
                    // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em um link
@@ -472,6 +479,24 @@
                                 <i class="fas fa-chart-bar"></i> Estoque por Grupo
                             </a>
                         </li>
+                        <li class="{{ is_active('relatorios_databook') }}">
+                            <a href="#databookSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                                class="dropdown-toggle">
+                                <i class="fas fa-book"></i> DataBook
+                            </a>
+                            <ul class="collapse list-unstyled" id="databookSubmenu">
+                                <li class="{{ is_active('databook_concretagem.index') }}">
+                                    <a href="{{ url_for('databook_concretagem.index') }}">
+                                        <i class="fas fa-clipboard-check"></i> Relatório de Concretagem
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('databook_inspecao.index') }}">
+                                    <a href="{{ url_for('databook_inspecao.index') }}">
+                                        <i class="fas fa-clipboard-list"></i> Relatório de Inspeção
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
                     </ul>
                 </li>
                 <!-- Módulo Administrativo -->
@@ -683,6 +708,11 @@
                             <li class="{{ is_active('produto-composto') }}">
                                 <a href="{{ url_for('produto_composto.index') }}">
                                     <i class="fas fa-boxes"></i> Produtos Compostos
+                                </a>
+                            </li>
+                            <li class="{{ is_active('certificado') }}">
+                                <a href="{{ url_for('certificado.index') }}">
+                                    <i class="fas fa-certificate"></i> Certificados
                                 </a>
                             </li>
                             

@@ -27,9 +27,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from flask import Flask
 from config.config import Config
 from models.database import db
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
-from models.tanque import Tanques, TanquesPecas
-from models.contrato import Contrato
+from models.concretagem import Concretagem, ConcretagemTanque
+from models.peca import Peca
+from models.tanque import Tanque
+
 # Inicializa o app Flask e o contexto
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -256,7 +257,7 @@ def buscar_peca_por_nome(nome_peca, tanque_id=None):
     if tanque_id:
         # Busca no tanque específico
         # Tenta buscar pelo nome exato
-        pecas = TanquesPecas.query.filter_by(tanque_id=tanque_id).all()
+        pecas = Peca.query.filter_by(tanque_id=tanque_id).all()
         for peca in pecas:
             peca_nome_upper = str(peca.nome).upper()
             # Verifica se o nome da peça contém o padrão (PN-001, PN-02, etc.)
@@ -267,7 +268,7 @@ def buscar_peca_por_nome(nome_peca, tanque_id=None):
                 return peca
     else:
         # Busca em todos os tanques
-        pecas = TanquesPecas.query.all()
+        pecas = Peca.query.all()
         for peca in pecas:
             peca_nome_upper = str(peca.nome).upper()
             # Verifica se o nome da peça contém o padrão
@@ -295,14 +296,14 @@ def buscar_peca_por_placa(placa_num, tanque_id=None):
         # Busca no tanque específico
         # Primeiro tenta pelo número sequencial exato
         try:
-            peca = TanquesPecas.query.filter_by(tanque_id=tanque_id, numero_sequencial=int(placa_num_str)).first()
+            peca = Peca.query.filter_by(tanque_id=tanque_id, numero_sequencial=int(placa_num_str)).first()
             if peca:
                 return peca
         except ValueError:
             pass
         
         # Depois tenta pelo nome contendo a placa
-        pecas = TanquesPecas.query.filter_by(tanque_id=tanque_id).all()
+        pecas = Peca.query.filter_by(tanque_id=tanque_id).all()
         for peca in pecas:
             if placa_num_str in str(peca.nome) or placa_num_str in str(peca.numero_sequencial):
                 return peca
@@ -310,14 +311,14 @@ def buscar_peca_por_placa(placa_num, tanque_id=None):
         # Busca em todos os tanques
         # Primeiro tenta pelo número sequencial exato
         try:
-            peca = TanquesPecas.query.filter_by(numero_sequencial=int(placa_num_str)).first()
+            peca = Peca.query.filter_by(numero_sequencial=int(placa_num_str)).first()
             if peca:
                 return peca
         except ValueError:
             pass
         
         # Depois tenta pelo nome contendo a placa
-        pecas = TanquesPecas.query.all()
+        pecas = Peca.query.all()
         for peca in pecas:
             if placa_num_str in str(peca.nome) or placa_num_str in str(peca.numero_sequencial):
                 return peca
@@ -331,12 +332,12 @@ def buscar_tanque_por_numero(numero_tanque):
     O número pode estar no campo nome ou numero_tanque das peças
     """
     # Primeiro tenta buscar pelo ID direto
-    tanque = Tanques.query.get(numero_tanque)
+    tanque = Tanque.query.get(numero_tanque)
     if tanque:
         return tanque
     
     # Busca pelo nome contendo o número
-    tanques = Tanques.query.filter(Tanques.nome.contains(str(numero_tanque))).all()
+    tanques = Tanque.query.filter(Tanque.nome.contains(str(numero_tanque))).all()
     if tanques:
         return tanques[0]
     
@@ -353,7 +354,7 @@ def buscar_tanque_por_descricao(descricao):
     descricao_str = str(descricao).strip()
     
     # Busca pelo nome contendo a descrição
-    tanques = Tanques.query.filter(Tanques.nome.contains(descricao_str)).all()
+    tanques = Tanque.query.filter(Tanque.nome.contains(descricao_str)).all()
     if tanques:
         return tanques[0]
     
@@ -361,7 +362,7 @@ def buscar_tanque_por_descricao(descricao):
     palavras = descricao_str.split()
     for palavra in palavras:
         if len(palavra) > 2:  # Ignora palavras muito curtas
-            tanques = Tanques.query.filter(Tanques.nome.contains(palavra)).all()
+            tanques = Tanque.query.filter(Tanque.nome.contains(palavra)).all()
             if tanques:
                 return tanques[0]
     
@@ -521,13 +522,9 @@ def main():
                             valor_str = str(valor).strip()
                             # Se parece com número de placa
                             forma = formas_cabecalho.get(col_idx)
-                            tanque = TanquesPecas.query.\
-                                join(Tanques, TanquesPecas.tanque_id == Tanques.id).\
-                                join(Contrato, Tanques.contrato_id == Contrato.id).\
-                                filter(TanquesPecas.nome.like(f"%{valor_str}"),Contrato.id==3).first()
                             placas_data.append({
                                 'placa': valor_str,
-                                'tanque': tanque.tanque_id if tanque else None,
+                                'tanque': tanque_id if tanque_id else None,
                                 'forma': forma
                             })
                 
@@ -555,7 +552,7 @@ def main():
                 # Montar JSON de peças
                 pecas_json = placas_data
                
-                concretagem = ConcretoConcretagens(
+                concretagem = Concretagem(
                     data_concretagem=data_concretagem,
                     pista=pista,
                     cordoalhas=json.dumps(cordoalhas_json),

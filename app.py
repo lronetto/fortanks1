@@ -30,6 +30,7 @@ from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
 from controllers.grupo_material_controller import grupo_material_bp
+from controllers.certificado_controller import certificado_bp
 from models.usuario import Usuario
 from models.arquivei import Arquivei
 from models.nota_fiscal import NotaFiscal
@@ -65,6 +66,8 @@ from controllers.relatorios.notas_controller import notas_bp
 from controllers.relatorios.tanques_controller import tanques_bp
 from controllers.relatorios.capacidade_producao_controller import capacidade_producao_bp
 from controllers.relatorios.estoque_grupos_controller import estoque_grupos_bp
+from controllers.relatorios.databook_relatorio_concretagem import databook_concretagem_bp
+from controllers.relatorios.databook_relatorio_inspecao import databook_inspecao_bp
 from controllers.relatorios.script_email import relatorio_semanal
 
 load_dotenv('.env')
@@ -210,6 +213,7 @@ app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(relatorio_usinagem_bp)
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
+app.register_blueprint(certificado_bp, url_prefix='/certificados')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
 app.register_blueprint(acabamento_pecas_bp)
 app.register_blueprint(concretagem_pecas_bp)
@@ -217,6 +221,8 @@ app.register_blueprint(notas_bp)
 app.register_blueprint(tanques_bp)
 app.register_blueprint(capacidade_producao_bp)
 app.register_blueprint(estoque_grupos_bp)
+app.register_blueprint(databook_concretagem_bp)
+app.register_blueprint(databook_inspecao_bp)
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
 app.register_blueprint(upload_bp, url_prefix='/uploads')
 logger.info("Blueprints registrados com sucesso!")

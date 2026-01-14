@@ -1,0 +1,285 @@
+<!-- Modal Editar Certificado -->
+<div class="modal fade" id="modalEditarCertificado" tabindex="-1" aria-labelledby="modalEditarCertificadoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="" id="form-editar-certificado" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="certificado_id_editar" name="id" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalEditarCertificadoLabel"><i class="fas fa-edit"></i> Editar Certificado</h5>
+                    <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="nome_editar" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="nome_editar" name="nome" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="tipo_editar" class="form-label">Tipo</label>
+                            <select class="form-select" id="tipo_editar" name="tipo">
+                                <option value="">Selecione um tipo</option>
+                                <option value="cordoalha nua">Cordoalha Nua</option>
+                                <option value="calibracao prensa hidraulica">Calibração Prensa Hidráulica</option>
+                                <option value="macaco hidraulico">Macaco Hidráulico</option>
+                                <option value="manilhas e cintas">Manilhas e Cintas</option>
+                                <option value="manometros">Manômetros</option>
+                                <option value="acessorios de icamento">Acessórios de Içamento</option>
+                                <option value="materias - aço">Materiais - Aço</option>
+                                <option value="materiais - cordoalha nua">Materiais - Cordoalha Nua</option>
+                                <option value="materias - concreto">Materiais - Concreto</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="data_editar" class="form-label">Data</label>
+                            <input type="date" class="form-control" id="data_editar" name="data">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="data_vencimento_editar" class="form-label">Data de Vencimento</label>
+                            <input type="date" class="form-control" id="data_vencimento_editar" name="data_vencimento">
+                        </div>
+                    </div>
+                    
+                    <!-- Campos específicos para Cordoalha Nua -->
+                    <div id="cordoalha_campos_editar" style="display: none;">
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="nota_fiscal_editar" class="form-label">Nota Fiscal</label>
+                                <input type="text" class="form-control" id="nota_fiscal_editar" name="nota_fiscal" placeholder="Número da nota fiscal">
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label class="form-label">Dados da Cordoalha</label>
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm" id="tabela_cordoalha_editar">
+                                        <thead>
+                                            <tr>
+                                                <th>Número</th>
+                                                <th>Área</th>
+                                                <th>Alongamento 600mm</th>
+                                                <th>Carga 1%</th>
+                                                <th>Carga de Ruptura</th>
+                                                <th>Diâmetro</th>
+                                                <th>Massa</th>
+                                                <th>Módulo de Elasticidade</th>
+                                                <th>Peso Líquido</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbody_cordoalha_editar">
+                                            <!-- Linhas serão adicionadas via JavaScript -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-success mt-2" id="btn_adicionar_linha_cordoalha_editar">
+                                    <i class="fas fa-plus"></i> Adicionar Linha
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">Documentos Anexos Existentes</label>
+                            <div id="documentos_existentes" class="list-group mb-2">
+                                <!-- Documentos serão carregados via JavaScript -->
+                            </div>
+                            <label for="documentos_novos" class="form-label">Adicionar Novos Documentos</label>
+                            <input type="file" class="form-control" id="documentos_novos" name="documento_0" multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png">
+                            <small class="text-muted">Você pode selecionar múltiplos arquivos</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3" id="dados_adicionais_container_editar">
+                        <div class="col-md-12">
+                            <label for="dados_adicionais_editar" class="form-label">Dados Adicionais (JSON)</label>
+                            <textarea class="form-control" id="dados_adicionais_editar" name="dados_adicionais" rows="5" placeholder='{"campo1": "valor1", "campo2": "valor2"}'></textarea>
+                            <small class="text-muted" id="dados_adicionais_help_editar">Informe dados adicionais em formato JSON (opcional)</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Função para adicionar linha na tabela de cordoalha
+    function adicionarLinhaCordoalha() {
+        const tbody = document.getElementById('tbody_cordoalha_editar');
+        const rowIndex = tbody.children.length;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_numero_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_area_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_alongamento_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_1_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_ruptura_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_diametro_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_massa_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_modulo_${rowIndex}"></td>
+            <td><input type="text" class="form-control form-control-sm" name="cordoalha_peso_liquido_${rowIndex}"></td>
+            <td><button type="button" class="btn btn-sm btn-danger" onclick="removerLinhaCordoalhaEditar(this)"><i class="fas fa-trash"></i></button></td>
+        `;
+        tbody.appendChild(row);
+    }
+
+    // Função para remover linha da tabela de cordoalha
+    window.removerLinhaCordoalhaEditar = function(btn) {
+        btn.closest('tr').remove();
+    }
+
+    // Função para formatar dados de cordoalha em JSON
+    function formatarDadosCordoalha() {
+        const notaFiscal = document.getElementById('nota_fiscal_editar')?.value || '';
+        const tbody = document.getElementById('tbody_cordoalha_editar');
+        
+        const dados = {
+            nota_fiscal: notaFiscal,
+            cordoalhas: []
+        };
+        
+        if (tbody) {
+            const rows = tbody.querySelectorAll('tr');
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll('input[type="text"]');
+                if (inputs.length >= 9) {
+                    const linha = {
+                        numero: inputs[0].value || '',
+                        area: inputs[1].value || '',
+                        alongamento_600mm: inputs[2].value || '',
+                        carga_1: inputs[3].value || '',
+                        carga_ruptura: inputs[4].value || '',
+                        diametro: inputs[5].value || '',
+                        massa: inputs[6].value || '',
+                        modulo_elasticidade: inputs[7].value || '',
+                        peso_liquido: inputs[8].value || ''
+                    };
+                    // Só adiciona se pelo menos um campo estiver preenchido
+                    if (Object.values(linha).some(v => v !== '')) {
+                        dados.cordoalhas.push(linha);
+                    }
+                }
+            });
+        }
+        
+        return dados;
+    }
+
+    // Função para carregar dados de cordoalha na tabela
+    function carregarDadosCordoalha(dados) {
+        const notaFiscalInput = document.getElementById('nota_fiscal_editar');
+        const tbody = document.getElementById('tbody_cordoalha_editar');
+        
+        if (notaFiscalInput && dados.nota_fiscal) {
+            notaFiscalInput.value = dados.nota_fiscal;
+        }
+        
+        if (tbody && dados.cordoalhas && Array.isArray(dados.cordoalhas)) {
+            tbody.innerHTML = '';
+            dados.cordoalhas.forEach((cordoalha, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_numero_${index}" value="${(cordoalha.numero || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_area_${index}" value="${(cordoalha.area || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_alongamento_${index}" value="${(cordoalha.alongamento_600mm || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_1_${index}" value="${(cordoalha.carga_1 || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_ruptura_${index}" value="${(cordoalha.carga_ruptura || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_diametro_${index}" value="${(cordoalha.diametro || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_massa_${index}" value="${(cordoalha.massa || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_modulo_${index}" value="${(cordoalha.modulo_elasticidade || '').replace(/"/g, '&quot;')}"></td>
+                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_peso_liquido_${index}" value="${(cordoalha.peso_liquido || '').replace(/"/g, '&quot;')}"></td>
+                    <td><button type="button" class="btn btn-sm btn-danger" onclick="removerLinhaCordoalhaEditar(this)"><i class="fas fa-trash"></i></button></td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+    }
+
+    // Função para mostrar/ocultar campos de cordoalha
+    function toggleCamposCordoalha(tipo) {
+        const camposDiv = document.getElementById('cordoalha_campos_editar');
+        const dadosAdicionaisInput = document.getElementById('dados_adicionais_editar');
+        const dadosAdicionaisHelp = document.getElementById('dados_adicionais_help_editar');
+        const isCordoalha = tipo === 'cordoalha nua' || tipo === 'materiais - cordoalha nua';
+        
+        if (camposDiv) {
+            camposDiv.style.display = isCordoalha ? 'block' : 'none';
+            
+            if (isCordoalha && camposDiv.style.display === 'block') {
+                // Adicionar uma linha inicial se a tabela estiver vazia
+                const tbody = document.getElementById('tbody_cordoalha_editar');
+                if (tbody && tbody.children.length === 0) {
+                    adicionarLinhaCordoalha();
+                }
+                
+                // Tornar o campo de dados adicionais readonly
+                if (dadosAdicionaisInput) {
+                    dadosAdicionaisInput.readOnly = true;
+                }
+                if (dadosAdicionaisHelp) {
+                    dadosAdicionaisHelp.textContent = 'Este campo é preenchido automaticamente quando o tipo é Cordoalha Nua';
+                }
+            } else {
+                // Tornar o campo de dados adicionais editável
+                if (dadosAdicionaisInput) {
+                    dadosAdicionaisInput.readOnly = false;
+                }
+                if (dadosAdicionaisHelp) {
+                    dadosAdicionaisHelp.textContent = 'Informe dados adicionais em formato JSON (opcional)';
+                }
+            }
+        }
+    }
+
+    // Expor função para uso externo
+    window.carregarDadosCordoalhaEditar = carregarDadosCordoalha;
+    window.toggleCamposCordoalhaEditar = toggleCamposCordoalha;
+
+    // Inicializar quando o modal for aberto
+    document.addEventListener('DOMContentLoaded', function() {
+        const tipoSelect = document.getElementById('tipo_editar');
+        if (tipoSelect) {
+            tipoSelect.addEventListener('change', function() {
+                toggleCamposCordoalha(this.value);
+            });
+        }
+        
+        // Botão para adicionar linha na tabela
+        const btnAdicionar = document.getElementById('btn_adicionar_linha_cordoalha_editar');
+        if (btnAdicionar) {
+            btnAdicionar.addEventListener('click', function() {
+                adicionarLinhaCordoalha();
+            });
+        }
+        
+        // Formatar dados antes de enviar formulário
+        const formEditar = document.getElementById('form-editar-certificado');
+        if (formEditar) {
+            formEditar.addEventListener('submit', function(e) {
+                const tipo = tipoSelect.value;
+                if (tipo === 'cordoalha nua' || tipo === 'materiais - cordoalha nua') {
+                    const dadosCordoalha = formatarDadosCordoalha();
+                    const dadosAdicionaisInput = document.getElementById('dados_adicionais_editar');
+                    if (dadosAdicionaisInput) {
+                        dadosAdicionaisInput.value = JSON.stringify(dadosCordoalha);
+                    }
+                }
+            });
+        }
+    });
+})();
+</script>
