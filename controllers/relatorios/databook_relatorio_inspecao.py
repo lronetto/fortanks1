@@ -1,6 +1,7 @@
 from time import time
 from flask import Blueprint, render_template, request, jsonify, send_file
 from flask_login import login_required
+from openpyxl.worksheet.page import PageMargins
 from models import tanque
 from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
 from models.contrato import Contrato
@@ -531,6 +532,27 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                         # Atribuir o valor final à célula apenas uma vez
                         if new_value != original_value:
                             cell.value = new_value
+
+        # Configurar tamanho da página como A4 para todas as planilhas
+        for sheet in wb.worksheets:
+            # A4 = '9' conforme documentação do openpyxl
+            sheet.page_setup.paperSize = 9  # PAPERSIZE_A4
+            sheet.page_setup.orientation = 'portrait'  # ORIENTATION_PORTRAIT
+            
+            # Configurar margens menores (em centímetros, convertido para polegadas)
+            # Margens reduzidas: 0.5cm = ~0.2 polegadas
+            sheet.page_margins = PageMargins(
+                left=0.2,    # 0.5cm
+                right=0.2,   # 0.5cm
+                top=0.3,     # 0.75cm
+                bottom=0.3,  # 0.75cm
+                header=0.1,  # 0.25cm
+                footer=0.1  # 0.25cm
+            )
+            
+            # Ajustar escala para caber em 1 página de largura
+            sheet.page_setup.fitToWidth = 1
+            sheet.page_setup.fitToHeight = 1  # 0 = ajustar automaticamente a altura
         
         # Salvar o arquivo temporário
         try:
