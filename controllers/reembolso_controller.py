@@ -240,6 +240,8 @@ def nota_fiscal_busca_reembolso():
                     json_filtros['status_pagamento'] = 'selecionados'
                 elif pagamento == '5':
                     json_filtros['status_pagamento'] = 'reembolso_e_nao_pago'
+                elif pagamento == '6':
+                    json_filtros['status_pagamento'] = 'reembolso_e_nao_pago_e_nao_selecionados'
             print(f'json_filtros: {json_filtros}')
             query = api_get_dados_notas_fiscais(json_filtros)
             pagination = query.paginate(page=page, per_page=per_page,error_out=False)

@@ -1,0 +1,209 @@
+{% extends "common/base.html" %}
+
+{% block title %}Relatório de Inspeção - DataBook{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-book"></i> Relatório de Inspeção - DataBook</h2>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card filtros-card">
+        <div class="card-body">
+            <form id="formFiltros">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row">
+                    <div class="col-md-5">
+                        <label for="contrato_id" class="form-label">Projeto</label>
+                        <select class="form-select" id="contrato_id" name="contrato_id">
+                            <option value="">Todos os projetos</option>
+                            {% for contrato in contratos %}
+                            <option value="{{ contrato.id }}" {% if contrato_id == contrato.id %}selected{% endif %}>
+                                {{ contrato.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="tanque_id" class="form-label">Tanque</label>
+                        <select class="form-select" id="tanque_id" name="tanque_id">
+                            <option value="">Todos os tanques</option>
+                            {% for tanque in tanques %}
+                            <option value="{{ tanque.id }}" {% if tanque_id == tanque.id %}selected{% endif %}>
+                                {{ tanque.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Dados -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-table me-1"></i>
+            Dados de Inspeção
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-striped" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Número de Série</th>
+                            <th>Data de Moldagem</th>
+                            <th>Projeto</th>
+                            <th>Tanque</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados serão carregados via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filtros-card {
+        background-color: #f8f9fa;
+        padding: 20px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+    $(document).ready(function() {
+        let table = $('#dataTable').DataTable({
+            "processing": true,
+            "serverSide": false,
+            "ajax": {
+                "url": "{{ url_for('relatorios_databook.api_dados') }}",
+                "type": "GET",
+                "data": function(d) {
+                    d.contrato_id = $('#contrato_id').val();
+                    d.tanque_id = $('#tanque_id').val();
+                },
+                "dataSrc": "data"
+            },
+            "columns": [
+                { 
+                    "data": "numero_serie",
+                    "render": function(data, type, row) {
+                        var total = row.total_rompimentos || 1;
+                        return data + ' (' + total + ' rompimento' + (total > 1 ? 's' : '') + ')';
+                    }
+                },
+                { "data": "data_moldagem" },
+                { "data": "projeto_nome" },
+                { "data": "tanque_nome" },
+                { 
+                    "data": null,
+                    "orderable": false,
+                    "searchable": false,
+                    "render": function(data, type, row) {
+                        return '<button class="btn btn-success btn-sm btn-export-excel" data-serie="' + row.numero_serie + '" title="Exportar Excel">' +
+                               '<i class="fas fa-file-excel"></i> Excel</button> ' +
+                               '<button class="btn btn-danger btn-sm btn-export-pdf" data-serie="' + row.numero_serie + '" title="Exportar PDF">' +
+                               '<i class="fas fa-file-pdf"></i> PDF</button>';
+                    }
+                }
+            ],
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+            },
+            "order": [[0, 'asc']],  // Ordenar por número de série
+            "pageLength": 25,
+            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]]
+        });
+
+        // Atualizar tanques quando projeto for alterado
+        $('#contrato_id').on('change', function() {
+            const contratoId = $(this).val();
+            
+            // Limpar seleção de tanque
+            $('#tanque_id').html('<option value="">Todos os tanques</option>');
+            
+            if (contratoId) {
+                // Carregar tanques do projeto selecionado
+                $.ajax({
+                    url: "{{ url_for('relatorios_databook.api_tanques') }}",
+                    method: 'GET',
+                    data: { contrato_id: contratoId },
+                    success: function(response) {
+                        response.tanques.forEach(function(tanque) {
+                            $('#tanque_id').append(
+                                $('<option></option>')
+                                    .attr('value', tanque.id)
+                                    .text(tanque.nome)
+                            );
+                        });
+                    },
+                    error: function(error) {
+                        console.error('Erro ao carregar tanques:', error);
+                    }
+                });
+            } else {
+                // Carregar todos os tanques
+                $.ajax({
+                    url: "{{ url_for('relatorios_databook.api_tanques') }}",
+                    method: 'GET',
+                    success: function(response) {
+                        response.tanques.forEach(function(tanque) {
+                            $('#tanque_id').append(
+                                $('<option></option>')
+                                    .attr('value', tanque.id)
+                                    .text(tanque.nome)
+                            );
+                        });
+                    },
+                    error: function(error) {
+                        console.error('Erro ao carregar tanques:', error);
+                    }
+                });
+            }
+        });
+
+        // Filtrar dados ao clicar no botão
+        $('#btnFiltrar').on('click', function() {
+            table.ajax.reload();
+        });
+
+        // Filtrar ao pressionar Enter nos campos
+        $('#contrato_id, #tanque_id').on('change', function() {
+            table.ajax.reload();
+        });
+
+        // Event handlers para botões de exportação
+        $(document).on('click', '.btn-export-excel', function() {
+            var numeroSerie = $(this).data('serie');
+            // Redirecionar para o endpoint de exportação Excel
+            window.location.href = "{{ url_for('relatorios_databook.exportar_excel', numero_serie=0) }}".replace('0', numeroSerie);
+        });
+
+        $(document).on('click', '.btn-export-pdf', function() {
+            var numeroSerie = $(this).data('serie');
+            // TODO: Implementar exportação PDF para a série
+            alert('Exportação PDF para Série ' + numeroSerie + ' será implementada em breve.');
+        });
+    });
+</script>
+{% endblock %}
+

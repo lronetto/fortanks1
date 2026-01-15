@@ -308,6 +308,9 @@ def api_get_dados_notas_fiscais(request):
         elif status_pagamento == "selecionados":
             nsel = [item.get("id") for item in notas_selecionadas if item.get("id")]
             query = query.filter(NotaFiscal.id.in_(nsel))
+        elif status_pagamento == "reembolso_e_nao_pago_e_nao_selecionados":
+            nsel = [item.get("id") for item in notas_selecionadas if item.get("id")]
+            query = query.filter(upload_reembolso_column == 1, pagamento_column.is_(None), NotaFiscal.id.notin_(nsel))
 
     # Ordenação
     order_by = json_filtros.get("order_by", "data_emissao")
