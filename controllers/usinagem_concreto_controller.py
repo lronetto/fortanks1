@@ -2869,14 +2869,14 @@ def importar_rompimentos_excel():
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=rompimento5_dt,
-                                resultado=resultado13,
+                                resultado=resultado14,
                                 tipo_rompimento=tipo15
                             ))
                             rompimentos.append(ConcretoUsinagensRompimentos(
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=rompimento5_dt,
-                                resultado=resultado17,
+                                resultado=resultado18,
                                 tipo_rompimento=tipo19
                             ))
                         except (ValueError, TypeError) as e:
@@ -2895,14 +2895,14 @@ def importar_rompimentos_excel():
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=rompimento8_dt,
-                                resultado=resultado13,
+                                resultado=resultado14,
                                 tipo_rompimento=tipo15
                             ))
                             rompimentos.append(ConcretoUsinagensRompimentos(
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=rompimento8_dt,
-                                resultado=resultado17,
+                                resultado=resultado18,
                                 tipo_rompimento=tipo19
                             ))
                         except (ValueError, TypeError) as e:
@@ -2928,14 +2928,14 @@ def importar_rompimentos_excel():
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=rompimento9_dt,
-                                resultado=resultado13,
+                                resultado=resultado14,
                                 tipo_rompimento=tipo15
                             ))
                             rompimentos.append(ConcretoUsinagensRompimentos(
                                 numero_serie=numero_serie,
                                 data_moldagem=data_moldagem_dt,
                                 data_rompimento=rompimento9_dt,
-                                resultado=resultado17,
+                                resultado=resultado18,
                                 tipo_rompimento=tipo19
                             ))
                         except (ValueError, TypeError) as e:

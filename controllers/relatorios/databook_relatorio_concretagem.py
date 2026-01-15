@@ -232,7 +232,7 @@ def _gerar_excel_temp(numero_serie):
         # Caminho do arquivo template
         template_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'relatorios\\base\\RELATORIO CONCRETAGEM.xlsx'
+            'relatorios', 'base', 'RELATORIO CONCRETAGEM.xlsx'
         )
         
         if not os.path.exists(template_path):
