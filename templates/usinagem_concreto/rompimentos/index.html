@@ -40,7 +40,6 @@
             <table id="tabelaRompimentos" class="table table-striped table-hover">
                 <thead>
                     <tr>
-                        <th>ID</th>
                         <th>Número de Série</th>
                         <th>Usinagem</th>
                         <th>Data de Moldagem</th>
@@ -53,7 +52,6 @@
                 <tbody>
                     {% for rompimento in rompimentos %}
                     <tr data-serie="{{ rompimento.numero_serie }}" class="rompimento-row">
-                        <td>{{ rompimento.id }}</td>
                         <td>{{ rompimento.numero_serie }}</td>
                         <td>
                             {% if rompimento.usinagem_id %}
@@ -183,229 +181,216 @@
         $('#filtroSem28Dias').prop('checked', true);
         {% endif %}
         
-        // Função para carregar rompimentos via AJAX
-        function carregarRompimentos() {
-            if (table) {
-                table.destroy();
+        // Função para criar linha de rompimento
+        function criarLinhaRompimento(rompimento) {
+            var usinagemHtml = '';
+            if (rompimento.usinagem_id) {
+                usinagemHtml = '<a href="/usinagem-concreto/usinagens/' + rompimento.usinagem_id + '">Usinagem #' + rompimento.usinagem_id + 
+                    (rompimento.usinagem_traco ? ' (' + rompimento.usinagem_traco + ')' : '') + '</a>';
+            } else {
+                usinagemHtml = '<span class="text-muted">Não vinculado</span>';
             }
             
-            // Mostrar loading
-            $('#tabelaRompimentos tbody').html('<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+            var resultadoHtml = rompimento.resultado ? rompimento.resultado.toFixed(2) : 'Não informado';
+            
+            return [
+                rompimento.numero_serie,
+                usinagemHtml,
+                rompimento.data_moldagem || 'N/A',
+                rompimento.data_rompimento,
+                rompimento.idade,
+                resultadoHtml,
+                '<div class="btn-group" role="group">' +
+                    '<button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalEditarRompimento" ' +
+                        'data-id="' + rompimento.id + '" ' +
+                        'data-usinagem="' + (rompimento.usinagem_id || '') + '" ' +
+                        'data-data-moldagem="' + (rompimento.data_moldagem ? rompimento.data_moldagem.replace(' ', 'T') : '') + '" ' +
+                        'data-data="' + rompimento.data_rompimento.replace(' ', 'T') + '" ' +
+                        'data-numero_serie="' + rompimento.numero_serie + '" ' +
+                        'data-resultado="' + (rompimento.resultado || '') + '" ' +
+                        'data-fator-conversao="' + (rompimento.fator_conversao || '1.2') + '" ' +
+                        'data-tipo_rompimento="' + (rompimento.tipo_rompimento || '') + '" ' +
+                        'data-observacoes="' + (rompimento.observacoes || '') + '">' +
+                        '<i class="fas fa-edit"></i>' +
+                    '</button>' +
+                    '<button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirRompimento" ' +
+                        'data-id="' + rompimento.id + '">' +
+                        '<i class="fas fa-trash"></i>' +
+                    '</button>' +
+                '</div>'
+            ];
+        }
+        
+        // Função para criar linha de grupo
+        function criarLinhaGrupo(grupo) {
+            return [
+                '<strong>' + grupo.numero_serie + '</strong> <span class="badge bg-primary ms-2">' + grupo.quantidade + '</span>',
+                '',
+                grupo.data_moldagem,
+                '',
+                '',
+                '',
+                '<button type="button" class="btn btn-sm btn-primary btn-ver-rompimentos" data-serie="' + grupo.numero_serie + '" title="Ver rompimentos da série">' +
+                    '<i class="fas fa-eye"></i> Ver' +
+                '</button>'
+            ];
+        }
+        
+        // Variável para armazenar dados carregados
+        var dadosCarregados = [];
+        var dadosOriginais = []; // Armazenar dados originais para aplicar classes
+        var ultimaResposta = null;
+        
+        // Função para carregar dados do servidor
+        function carregarDados(callback) {
+            var params = {
+                sem_28dias: filtrarSem28Dias ? 'true' : 'false',
+                agrupar: agrupado ? 'true' : 'false'
+            };
             
             $.ajax({
                 url: '{{ url_for("usinagem_concreto.listar_rompimentos_api") }}',
                 method: 'GET',
-                data: {
-                    sem_28dias: filtrarSem28Dias ? 'true' : 'false'
-                },
+                data: params,
                 success: function(response) {
+                    ultimaResposta = response;
+                    
                     if (response.success) {
-                        var tbody = $('#tabelaRompimentos tbody');
-                        tbody.empty();
+                        dadosCarregados = [];
+                        dadosOriginais = [];
                         
-                        if (response.rompimentos.length > 0) {
-                            response.rompimentos.forEach(function(rompimento) {
-                                var row = $('<tr></tr>')
-                                    .addClass('rompimento-row')
-                                    .attr('data-serie', rompimento.numero_serie);
-                                
-                                var usinagemHtml = '';
-                                if (rompimento.usinagem_id) {
-                                    usinagemHtml = '<a href="/usinagem-concreto/usinagens/' + rompimento.usinagem_id + '">Usinagem #' + rompimento.usinagem_id + 
-                                        (rompimento.usinagem_traco ? ' (' + rompimento.usinagem_traco + ')' : '') + '</a>';
-                                } else {
-                                    usinagemHtml = '<span class="text-muted">Não vinculado</span>';
-                                }
-                                
-                                var resultadoHtml = rompimento.resultado ? rompimento.resultado.toFixed(2) : 'Não informado';
-                                
-                                row.html(
-                                    '<td>' + rompimento.id + '</td>' +
-                                    '<td>' + rompimento.numero_serie + '</td>' +
-                                    '<td>' + usinagemHtml + '</td>' +
-                                    '<td>' + (rompimento.data_moldagem || 'N/A') + '</td>' +
-                                    '<td>' + rompimento.data_rompimento + '</td>' +
-                                    '<td>' + rompimento.idade + '</td>' +
-                                    '<td>' + resultadoHtml + '</td>' +
-                                    '<td>' +
-                                        '<div class="btn-group" role="group">' +
-                                            '<button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalEditarRompimento" ' +
-                                                'data-id="' + rompimento.id + '" ' +
-                                                'data-usinagem="' + (rompimento.usinagem_id || '') + '" ' +
-                                                'data-data-moldagem="' + (rompimento.data_moldagem ? rompimento.data_moldagem.replace(' ', 'T') : '') + '" ' +
-                                                'data-data="' + rompimento.data_rompimento.replace(' ', 'T') + '" ' +
-                                                'data-numero_serie="' + rompimento.numero_serie + '" ' +
-                                                'data-resultado="' + (rompimento.resultado || '') + '" ' +
-                                                'data-fator-conversao="' + (rompimento.fator_conversao || '1.2') + '" ' +
-                                                'data-tipo_rompimento="' + (rompimento.tipo_rompimento || '') + '" ' +
-                                                'data-observacoes="' + (rompimento.observacoes || '') + '">' +
-                                                '<i class="fas fa-edit"></i>' +
-                                            '</button>' +
-                                            '<button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirRompimento" ' +
-                                                'data-id="' + rompimento.id + '">' +
-                                                '<i class="fas fa-trash"></i>' +
-                                            '</button>' +
-                                        '</div>' +
-                                    '</td>'
-                                );
-                                tbody.append(row);
+                        if (response.agrupado && response.grupos) {
+                            // Processar grupos
+                            response.grupos.forEach(function(grupo) {
+                                dadosCarregados.push(criarLinhaGrupo(grupo));
+                                dadosOriginais.push({ tipo: 'grupo', dados: grupo });
                             });
-                        } else {
-                            tbody.html('<tr><td colspan="8" class="text-center text-muted">Nenhum rompimento encontrado.</td></tr>');
+                        } else if (response.rompimentos) {
+                            // Processar rompimentos individuais
+                            response.rompimentos.forEach(function(rompimento) {
+                                dadosCarregados.push(criarLinhaRompimento(rompimento));
+                                dadosOriginais.push({ tipo: 'rompimento', dados: rompimento });
+                            });
                         }
                         
-                        // Reinicializar DataTable
-                        table = $('#tabelaRompimentos').DataTable({
-                            language: {
-                                url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
-                            },
-                            order: [[1, 'asc'], [4, 'desc']],
-                            pageLength: 100,
-                            scrollX: true,
-                            autoWidth: false,
-                            columnDefs: [
-                                {
-                                    type: 'datetime',
-                                    targets: [3, 4], // Colunas de Data de Moldagem (índice 3) e Data de Rompimento (índice 4)
-                                    render: function(data, type, row) {
-                                        // Para exibição, retorna o valor original
-                                        if (type === 'display') {
-                                            return data;
-                                        }
-                                        // Para ordenação, converte formato brasileiro DD/MM/YYYY HH:MM para timestamp
-                                        if (type === 'sort' || type === 'type') {
-                                            if (data && data !== 'N/A') {
-                                                try {
-                                                    var parts = data.split(' ');
-                                                    if (parts.length === 2) {
-                                                        var datePart = parts[0].split('/');
-                                                        var timePart = parts[1].split(':');
-                                                        if (datePart.length === 3 && timePart.length >= 2) {
-                                                            // DD/MM/YYYY HH:MM -> timestamp
-                                                            var day = parseInt(datePart[0], 10);
-                                                            var month = parseInt(datePart[1], 10) - 1; // Mês começa em 0
-                                                            var year = parseInt(datePart[2].length === 2 ? '20' + datePart[2] : datePart[2], 10);
-                                                            var hour = parseInt(timePart[0], 10);
-                                                            var minute = parseInt(timePart[1] || '0', 10);
-                                                            var date = new Date(year, month, day, hour, minute);
-                                                            return date.getTime();
-                                                        }
-                                                    }
-                                                } catch (e) {
-                                                    return 0;
-                                                }
-                                            }
-                                            return 0;
-                                        }
-                                        return data;
-                                    }
-                                }
-                            ],
-                            drawCallback: function(settings) {
-                                // Reaplicar agrupamento após redesenhar a tabela
-                                if ($('#btnAgruparPorSerie').hasClass('active')) {
-                                    setTimeout(function() {
-                                        aplicarAgrupamentoPorSerie();
-                                    }, 50);
-                                }
-                            }
-                        });
-                        
-                        // Reaplicar agrupamento se estava ativo
-                        if (agrupado) {
-                            setTimeout(function() {
-                                aplicarAgrupamentoPorSerie();
-                            }, 100);
-                        }
+                        if (callback) callback();
                     }
                 },
                 error: function() {
-                    $('#tabelaRompimentos tbody').html('<tr><td colspan="8" class="text-center text-danger">Erro ao carregar rompimentos.</td></tr>');
+                    dadosCarregados = [];
+                    dadosOriginais = [];
+                    if (callback) callback();
                 }
+            });
+        }
+        
+        // Inicializar DataTable com dados client-side
+        function inicializarDataTable() {
+            if (table) {
+                table.destroy();
+            }
+            
+            // Carregar dados primeiro
+            carregarDados(function() {
+                table = $('#tabelaRompimentos').DataTable({
+                    language: {
+                        url: "https://cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+                    },
+                    data: dadosCarregados,
+                    processing: false,
+                    serverSide: false, // Client-side processing
+                order: [[0, 'desc']],
+                pageLength: 10,
+                scrollX: true,
+                autoWidth: false,
+                columnDefs: [
+                    {
+                        type: 'datetime',
+                        targets: [2, 3],
+                        render: function(data, type, row) {
+                            if (type === 'display') {
+                                return data;
+                            }
+                            if (type === 'sort' || type === 'type') {
+                                if (data && data !== 'N/A') {
+                                    try {
+                                        var parts = data.split(' ');
+                                        if (parts.length === 2) {
+                                            var datePart = parts[0].split('/');
+                                            var timePart = parts[1].split(':');
+                                            if (datePart.length === 3 && timePart.length >= 2) {
+                                                var day = parseInt(datePart[0], 10);
+                                                var month = parseInt(datePart[1], 10) - 1;
+                                                var year = parseInt(datePart[2].length === 2 ? '20' + datePart[2] : datePart[2], 10);
+                                                var hour = parseInt(timePart[0], 10);
+                                                var minute = parseInt(timePart[1] || '0', 10);
+                                                var date = new Date(year, month, day, hour, minute);
+                                                return date.getTime();
+                                            }
+                                        }
+                                    } catch (e) {
+                                        return 0;
+                                    }
+                                }
+                                return 0;
+                            }
+                            return data;
+                        }
+                    }
+                ],
+                    createdRow: function(row, data, dataIndex) {
+                        // Aplicar classes e atributos baseado no tipo de linha
+                        if (dadosOriginais[dataIndex]) {
+                            var item = dadosOriginais[dataIndex];
+                            if (item.tipo === 'grupo') {
+                                $(row).addClass('grupo-serie-header')
+                                      .attr('data-serie', item.dados.numero_serie)
+                                      .css({
+                                          'background-color': '#e9ecef',
+                                          'font-weight': 'bold'
+                                      });
+                            } else if (item.tipo === 'rompimento') {
+                                $(row).addClass('rompimento-row')
+                                      .attr('data-serie', item.dados.numero_serie);
+                            }
+                        }
+                    },
+                    drawCallback: function(settings) {
+                        // Aplicar estilos aos grupos após desenhar
+                        $('.grupo-serie-header').css({
+                            'background-color': '#e9ecef',
+                            'font-weight': 'bold'
+                        });
+                    }
+                });
             });
         }
         
         // Inicializar tabela
-        carregarRompimentos();
+        inicializarDataTable();
         
         // Função para aplicar agrupamento por série
         function aplicarAgrupamentoPorSerie() {
-            // Remover agrupamento anterior se existir
-            $('.grupo-serie-header').remove();
-            $('.rompimento-grupo').removeClass('rompimento-grupo');
-            
-            // Ocultar todas as linhas de rompimentos
-            $('.rompimento-row').hide();
-            
-            // Obter todas as séries únicas
-            var series = {};
-            $('#tabelaRompimentos tbody tr.rompimento-row').each(function() {
-                var serie = $(this).data('serie');
-                if (!series[serie]) {
-                    series[serie] = {
-                        count: 0,
-                        rows: []
-                    };
-                }
-                series[serie].count++;
-                series[serie].rows.push($(this));
-            });
-            
-            // Criar linhas de cabeçalho para cada série
-            var seriesOrdenadas = Object.keys(series).sort();
-            var tbody = $('#tabelaRompimentos tbody');
-            
-            // Limpar tbody e adicionar apenas as séries
-            tbody.empty();
-            
-            seriesOrdenadas.forEach(function(serie) {
-                var grupo = series[serie];
-                
-                // Buscar data de moldagem da primeira linha que tiver
-                var dataMoldagem = 'N/A';
-                if (grupo.rows.length > 0) {
-                    var primeiraLinha = grupo.rows[0];
-                    var dataMoldagemCell = $(primeiraLinha).find('td:eq(3)').text(); // Coluna 3 é Data de Moldagem
-                    if (dataMoldagemCell && dataMoldagemCell !== 'N/A') {
-                        dataMoldagem = dataMoldagemCell;
-                    }
-                }
-                
-                // Criar linha de cabeçalho do grupo
-                var headerRow = $('<tr></tr>')
-                    .addClass('grupo-serie-header')
-                    .attr('data-serie', serie)
-                    .css({
-                        'background-color': '#e9ecef',
-                        'font-weight': 'bold'
-                    });
-                
-                headerRow.html(
-                    '<td></td>'+
-                    '<td colspan="2">' +
-                        '<strong>' + serie + '</strong>' +
-                        ' <span class="badge bg-primary ms-2">' + grupo.count + '</span>' +
-                    '</td>' +
-                    '<td>' + dataMoldagem + '</td>' +
-                    '<td colspan="3" class="text-end">' +
-                        '<button type="button" class="btn btn-sm btn-primary btn-ver-rompimentos" data-serie="' + serie + '" title="Ver rompimentos da série">' +
-                            '<i class="fas fa-eye"></i> Ver' +
-                        '</button>' +
-                    '</td>'
-                );
-                
-                // Adicionar linha de cabeçalho ao tbody
-                tbody.append(headerRow);
-            });
-            
             agrupado = true;
+            carregarDados(function() {
+                if (table) {
+                    table.clear();
+                    table.rows.add(dadosCarregados);
+                    table.draw();
+                }
+            });
         }
         
         // Função para remover agrupamento
         function removerAgrupamentoPorSerie() {
-            $('.grupo-serie-header').remove();
-            $('.rompimento-row').show();
             agrupado = false;
+            carregarDados(function() {
+                if (table) {
+                    table.clear();
+                    table.rows.add(dadosCarregados);
+                    table.draw();
+                }
+            });
         }
         
         // Toggle agrupamento
@@ -422,9 +407,13 @@
         // Filtro para séries sem rompimento de 28 dias
         $('#filtroSem28Dias').on('change', function() {
             filtrarSem28Dias = $(this).is(':checked');
-            agrupado = false; // Resetar agrupamento ao filtrar
-            $('#btnAgruparPorSerie').removeClass('active').html('<i class="fas fa-layer-group"></i> Agrupar por Série');
-            carregarRompimentos();
+            carregarDados(function() {
+                if (table) {
+                    table.clear();
+                    table.rows.add(dadosCarregados);
+                    table.draw();
+                }
+            });
         });
         
         // Carregar rompimentos da série no modal
@@ -478,22 +467,27 @@
         
         // Recarregar tabela após fechar modais de criar/editar/excluir
         $('#modalNovoRompimento, #modalEditarRompimento, #modalExcluirRompimento').on('hidden.bs.modal', function() {
-            // Verificar se houve sucesso (pode ser detectado pela presença de mensagem flash ou por um atributo)
-            // Por enquanto, vamos recarregar sempre que o modal fechar
-            // Em produção, você pode adicionar um atributo data-success="true" no modal após sucesso
             setTimeout(function() {
-                if (!agrupado) {
-                    carregarRompimentos();
-                }
+                carregarDados(function() {
+                    if (table) {
+                        table.clear();
+                        table.rows.add(dadosCarregados);
+                        table.draw();
+                    }
+                });
             }, 500);
         });
         
         // Recarregar após importar Excel
         $('#modalImportarRompimentos').on('hidden.bs.modal', function() {
             setTimeout(function() {
-                if (!agrupado) {
-                    carregarRompimentos();
-                }
+                carregarDados(function() {
+                    if (table) {
+                        table.clear();
+                        table.rows.add(dadosCarregados);
+                        table.draw();
+                    }
+                });
             }, 500);
         });
     });
