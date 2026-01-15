@@ -2494,6 +2494,18 @@ def get_ultima_nota():
 def buscar_rompimento_por_serie(numero_serie):
     """Busca um rompimento pelo número de série e retorna a data de moldagem"""
     try:
+        # Decodificar URL e limpar espaços
+        from urllib.parse import unquote
+        numero_serie = unquote(numero_serie).strip()
+        
+        # Validar entrada
+        if not numero_serie or len(numero_serie) == 0:
+            return jsonify({
+                'success': True,
+                'data_moldagem': None,
+                'existe': False
+            })
+        
         # Tentar converter para inteiro se possível, caso contrário usar como string
         try:
             numero_serie_int = int(numero_serie)
@@ -2525,7 +2537,9 @@ def buscar_rompimento_por_serie(numero_serie):
                 'existe': False
             })
     except Exception as e:
-        print(f"Erro ao buscar rompimento por série: {str(e)}")
+        import traceback
+        print(f"Erro ao buscar rompimento por série '{numero_serie}': {str(e)}")
+        print(traceback.format_exc())
         return jsonify({
             'success': False,
             'data_moldagem': None,

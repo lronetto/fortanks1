@@ -81,8 +81,35 @@
 </div>
 
 <script>
-$(document).ready(function() {
+(function() {
+    // Usar IIFE para evitar conflitos de escopo
     var contadorLinhas = 0;
+    var timeoutBuscaSerie = null;
+    var xhrBuscaSerie = null;
+    var ultimoNumeroSerieBuscado = null; // Armazenar último número de série buscado
+    var dataMoldagemCarregadaAutomaticamente = false; // Flag para indicar se a data foi carregada automaticamente
+    
+    // Função de inicialização que será chamada quando o modal for aberto
+    function inicializarModal() {
+        // Resetar contador de linhas se necessário
+        // (não resetar aqui para manter as linhas ao reabrir)
+        
+        // Limpar qualquer estado anterior
+        if (timeoutBuscaSerie) {
+            clearTimeout(timeoutBuscaSerie);
+            timeoutBuscaSerie = null;
+        }
+        if (xhrBuscaSerie && xhrBuscaSerie.readyState !== 4) {
+            xhrBuscaSerie.abort();
+            xhrBuscaSerie = null;
+        }
+        
+        // Resetar último número de série buscado
+        ultimoNumeroSerieBuscado = null;
+        dataMoldagemCarregadaAutomaticamente = false;
+    }
+    
+    $(document).ready(function() {
     
     // Função para criar uma nova linha na tabela
     function criarLinhaResultado() {
@@ -174,43 +201,154 @@ $(document).ready(function() {
     // Função para buscar data de moldagem por número de série
     function buscarDataMoldagemPorSerie(numeroSerie) {
         var dataMoldagemField = $('#data_moldagem');
+        var numeroSerieField = $('#numero_serie');
         
-        // Só buscar se o campo de data de moldagem estiver vazio
-        if (dataMoldagemField.val()) {
-            return; // Já tem valor, não sobrescrever
+        // Validar número de série
+        if (!numeroSerie || numeroSerie.trim().length === 0) {
+            return;
         }
         
-        $.ajax({
+        // Limpar espaços e caracteres inválidos
+        numeroSerie = numeroSerie.trim();
+        
+        // Se o número de série for o mesmo da última busca, não buscar novamente
+        if (ultimoNumeroSerieBuscado === numeroSerie) {
+            return;
+        }
+        
+        // Se o número de série mudou e havia uma data de moldagem carregada anteriormente,
+        // limpar o campo para permitir nova busca
+        if (ultimoNumeroSerieBuscado !== null && ultimoNumeroSerieBuscado !== numeroSerie) {
+            // Se a data foi carregada automaticamente, limpar para permitir nova busca
+            if (dataMoldagemCarregadaAutomaticamente) {
+                dataMoldagemField.val('');
+                $('.alert-info').remove();
+                dataMoldagemCarregadaAutomaticamente = false;
+            }
+        }
+        
+        // Se ainda tiver valor e não foi carregada automaticamente, não buscar (foi digitado manualmente)
+        if (dataMoldagemField.val() && !dataMoldagemCarregadaAutomaticamente && ultimoNumeroSerieBuscado === null) {
+            return; // Já tem valor digitado manualmente e não houve busca anterior, não sobrescrever
+        }
+        
+        // Cancelar requisição anterior se existir
+        if (xhrBuscaSerie && xhrBuscaSerie.readyState !== 4) {
+            xhrBuscaSerie.abort();
+        }
+        
+        // Remover mensagens de erro anteriores
+        $('.alert-danger').remove();
+        
+        // Adicionar indicador visual de carregamento
+        var loadingIndicator = $('<small class="text-muted d-block mt-1"><i class="fas fa-spinner fa-spin"></i> Buscando...</small>');
+        numeroSerieField.closest('.mb-3').find('small').last().after(loadingIndicator);
+        
+        // Fazer requisição AJAX
+        xhrBuscaSerie = $.ajax({
             url: '/usinagem-concreto/rompimentos/buscar-por-serie/' + encodeURIComponent(numeroSerie),
             method: 'GET',
+            timeout: 10000, // 10 segundos de timeout
             success: function(response) {
-                if (response.success && response.existe && response.data_moldagem) {
-                    dataMoldagemField.val(response.data_moldagem);
+                // Remover indicador de carregamento
+                loadingIndicator.remove();
+                
+                if (response && response.success) {
+                    // Atualizar último número de série buscado
+                    ultimoNumeroSerieBuscado = numeroSerie;
                     
-                    // Recalcular idade se houver data de rompimento
-                    setTimeout(function() {
-                        calcularIdade();
-                    }, 100);
-                    
-                    // Mostrar mensagem informativa
-                    var mensagem = $('<div class="alert alert-info alert-dismissible fade show mt-2" role="alert">' +
-                        '<i class="fas fa-info-circle"></i> Data de moldagem carregada automaticamente do rompimento anterior desta série.' +
+                    if (response.existe && response.data_moldagem) {
+                        dataMoldagemField.val(response.data_moldagem);
+                        dataMoldagemCarregadaAutomaticamente = true; // Marcar como carregada automaticamente
+                        
+                        // Recalcular idade se houver data de rompimento
+                        setTimeout(function() {
+                            calcularIdade();
+                        }, 100);
+                        
+                        // Remover mensagens anteriores
+                        $('.alert-info').remove();
+                        
+                        // Mostrar mensagem informativa
+                        var mensagem = $('<div class="alert alert-info alert-dismissible fade show mt-2" role="alert">' +
+                            '<i class="fas fa-info-circle"></i> Data de moldagem carregada automaticamente do rompimento anterior desta série.' +
+                            '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                            '</div>');
+                        dataMoldagemField.closest('.mb-3').after(mensagem);
+                        
+                        // Remover mensagem após 5 segundos
+                        setTimeout(function() {
+                            mensagem.fadeOut(function() {
+                                $(this).remove();
+                            });
+                        }, 5000);
+                    } else {
+                        // Não encontrou, resetar flag
+                        dataMoldagemCarregadaAutomaticamente = false;
+                    }
+                } else {
+                    // Resposta sem sucesso
+                    console.warn('Busca retornou sem sucesso:', response);
+                    // Ainda assim, atualizar para evitar buscas repetidas
+                    ultimoNumeroSerieBuscado = numeroSerie;
+                }
+            },
+            error: function(xhr, status, error) {
+                // Remover indicador de carregamento
+                loadingIndicator.remove();
+                
+                // Ignorar erros de cancelamento (abort)
+                if (status === 'abort') {
+                    return;
+                }
+                
+                // Log do erro para debug
+                console.error('Erro ao buscar data de moldagem:', {
+                    status: status,
+                    error: error,
+                    responseText: xhr.responseText,
+                    statusCode: xhr.status
+                });
+                
+                // Só mostrar erro se não for 404 (não encontrado é esperado)
+                if (xhr.status !== 404 && xhr.status !== 0) {
+                    var erroMsg = $('<div class="alert alert-warning alert-dismissible fade show mt-2" role="alert">' +
+                        '<i class="fas fa-exclamation-triangle"></i> Erro ao buscar dados. Verifique sua conexão e tente novamente.' +
                         '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
                         '</div>');
-                    dataMoldagemField.closest('.mb-3').after(mensagem);
+                    numeroSerieField.closest('.mb-3').after(erroMsg);
                     
                     // Remover mensagem após 5 segundos
                     setTimeout(function() {
-                        mensagem.fadeOut(function() {
+                        erroMsg.fadeOut(function() {
                             $(this).remove();
                         });
                     }, 5000);
                 }
             },
-            error: function(xhr, status, error) {
-                console.error('Erro ao buscar data de moldagem:', error);
+            complete: function() {
+                // Limpar referência quando a requisição terminar
+                if (xhrBuscaSerie && xhrBuscaSerie.readyState === 4) {
+                    xhrBuscaSerie = null;
+                }
             }
         });
+    }
+    
+    // Função para limpar data de moldagem quando número de série for alterado manualmente
+    function limparDataMoldagemSeNecessario() {
+        var numeroSerieAtual = $('#numero_serie').val().trim();
+        
+        // Se o número de série mudou e havia uma busca anterior com data carregada automaticamente
+        if (ultimoNumeroSerieBuscado !== null && ultimoNumeroSerieBuscado !== numeroSerieAtual) {
+            if (dataMoldagemCarregadaAutomaticamente) {
+                var dataMoldagemField = $('#data_moldagem');
+                dataMoldagemField.val('');
+                $('.alert-info').remove();
+                dataMoldagemCarregadaAutomaticamente = false;
+                // Não resetar ultimoNumeroSerieBuscado aqui, será atualizado na próxima busca
+            }
+        }
     }
     
     // Função para calcular idade
@@ -263,32 +401,81 @@ $(document).ready(function() {
         }
     }
     
+    // Inicializar quando o modal for aberto
+    $('#modalNovoRompimento').on('show.bs.modal', function() {
+        inicializarModal();
+    });
+    
     // Buscar data de moldagem quando número de série for digitado
-    var timeoutBuscaSerie = null;
     $('#numero_serie').on('input', function() {
-        var numeroSerie = $(this).val().trim();
+        var numeroSerie = $(this).val();
+        
+        // Limpar data de moldagem se o número de série mudou
+        limparDataMoldagemSeNecessario();
         
         // Limpar timeout anterior
         if (timeoutBuscaSerie) {
             clearTimeout(timeoutBuscaSerie);
+            timeoutBuscaSerie = null;
         }
         
-        // Aguardar 500ms após parar de digitar para fazer a busca
+        // Cancelar requisição AJAX anterior se ainda estiver em andamento
+        if (xhrBuscaSerie && xhrBuscaSerie.readyState !== 4) {
+            xhrBuscaSerie.abort();
+            xhrBuscaSerie = null;
+        }
+        
+        // Remover indicadores de carregamento anteriores
+        $('.fa-spinner').parent().remove();
+        
+        // Aguardar 800ms após parar de digitar para fazer a busca (aumentado de 500ms)
         timeoutBuscaSerie = setTimeout(function() {
-            if (numeroSerie && numeroSerie.length > 0) {
-                buscarDataMoldagemPorSerie(numeroSerie);
+            var numeroSerieTrim = numeroSerie.trim();
+            if (numeroSerieTrim && numeroSerieTrim.length > 0) {
+                buscarDataMoldagemPorSerie(numeroSerieTrim);
             }
-        }, 500);
+            timeoutBuscaSerie = null;
+        }, 800);
     });
     
+    // Limpar requisições quando o modal for fechado
+    $('#modalNovoRompimento').on('hidden.bs.modal', function() {
+        // Limpar timeout
+        if (timeoutBuscaSerie) {
+            clearTimeout(timeoutBuscaSerie);
+            timeoutBuscaSerie = null;
+        }
+        
+        // Cancelar requisição AJAX se existir
+        if (xhrBuscaSerie && xhrBuscaSerie.readyState !== 4) {
+            xhrBuscaSerie.abort();
+            xhrBuscaSerie = null;
+        }
+        
+        // Limpar campos e mensagens
+        $('#numero_serie').val('');
+        $('#data_moldagem').val('');
+        $('#idade_cp').val('');
+        $('.alert').remove();
+        $('.fa-spinner').parent().remove();
+        
+        // Resetar último número de série buscado
+        ultimoNumeroSerieBuscado = null;
+        dataMoldagemCarregadaAutomaticamente = false;
+    });
     
     // Calcular idade quando usinagem for selecionada
     $('#usinagem_id').on('change', function() {
         calcularIdade();
     });
     
-    // Recalcular idade quando data de moldagem mudar
-    $('#data_moldagem').on('change', function() {
+    // Recalcular idade quando data de moldagem mudar e limpar flag se alterada manualmente
+    $('#data_moldagem').on('input change', function() {
+        // Se o usuário digitar manualmente, não foi carregada automaticamente
+        if (!dataMoldagemCarregadaAutomaticamente || ultimoNumeroSerieBuscado === null) {
+            dataMoldagemCarregadaAutomaticamente = false;
+        }
+        // Recalcular idade
         calcularIdade();
     });
     
@@ -296,6 +483,7 @@ $(document).ready(function() {
     $('#data_rompimento').on('change', function() {
         calcularIdade();
     });
-});
+    }); // Fim do $(document).ready
+})(); // Fim da IIFE
 </script>
 
