@@ -139,7 +139,6 @@ def novo():
                 nome=nome,
                 email=email_usuario,
                 senha=generate_password_hash(senha_padrao),
-                is_admin=False,
                 cargo=cargo.nome if cargo else None,
                 departamento=departamento.nome if departamento else None
             )
