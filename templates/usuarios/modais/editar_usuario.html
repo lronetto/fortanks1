@@ -1,0 +1,44 @@
+<!-- Modal Editar Usuário -->
+<div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-labelledby="modalEditarUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalEditarUsuarioLabel"><i class="fas fa-edit"></i> Editar Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formEditarUsuario" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="usuario_id" id="editar_usuario_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editar_nome" class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="editar_nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_email" class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="editar_email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_departamento" class="form-label">Departamento <span class="text-danger">*</span></label>
+                        <select class="form-select" id="editar_departamento" name="departamento" required>
+                            <option value="">Selecione o departamento</option>
+                            <!-- Opções serão carregadas dinamicamente via JavaScript -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_cargo" class="form-label">Cargo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="editar_cargo" name="cargo" required>
+                            <option value="">Selecione o cargo</option>
+                            <!-- Opções serão carregadas dinamicamente via JavaScript -->
+                        </select>
+                    </div>
+                    <div id="editar_usuario_alert" class="alert d-none" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -397,6 +397,7 @@ class NotaFiscal(db.Model):
                 'valor_total': None,
                 'cnpj_emitente': None,
                 'nome_emitente': None,
+                'estatisticas': [],
             }
         try:
             # Extrair dados do XML
@@ -471,12 +472,20 @@ class NotaFiscal(db.Model):
                 item_fiscal.save()
             self.vincular_automaticamente()
             db.session.refresh(self)
-            self.importar_itens_para_estoque()
-            
+            for item in self.itens:
+                sucesso, mensagem, estatisticas = item.vincular_e_importar_estoque_todos(
+                    usuario_id=current_user.id,
+                    centro_custo_id=None,
+                    observacao= f"Importação da NF {self.numero_nf if self else 'N/A'}",
+                )
+                if not sucesso:
+                    logger.error(f"Erro ao importar item {item.id}: {mensagem}")
+                    log['erro'] = mensagem
+                else:
+                    log['estatisticas'].append(estatisticas)
 
             self.inserido = True
             log['inserido'] = True
-            log['estatisticas'] = self.estatisticas
             self.log_info = log
             
         except Exception as e:

@@ -1,10 +1,12 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 
 from models.database import db
 from models.usuario import Usuario
+from models.cargo import Cargo
+from models.departamento import Departamento
 
 usuario_bp = Blueprint('usuario', __name__)
 
@@ -13,6 +15,9 @@ usuario_bp = Blueprint('usuario', __name__)
 @login_required
 def verificar_permissao():
     if not current_user.is_admin:
+        # Se for requisição AJAX, retornar JSON
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.path.startswith('/usuarios/api/'):
+            return jsonify({'error': 'Acesso restrito. Você não tem permissão para acessar esta área.'}), 403
         flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
         return redirect(url_for('dashboard.index'))
 
@@ -22,8 +27,108 @@ def index():
     """
     Lista todos os usuários
     """
-    usuarios = Usuario.query.all()
-    return render_template('usuarios/index.html', usuarios=usuarios)
+    cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
+    departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
+    return render_template('usuarios/index.html', cargos=cargos, departamentos=departamentos)
+
+@usuario_bp.route('/api/dados')
+@login_required
+def api_dados():
+    """
+    API para retornar dados dos usuários em JSON (para DataTable)
+    """
+    usuarios = Usuario.query.order_by(Usuario.id.desc()).all()
+    print(f"Total de usuários encontrados: {len(usuarios)}")
+    dados = []
+    for usuario in usuarios:
+        # Formatar cargo
+        cargo_badge = ''
+        if usuario.cargo == 'admin':
+            cargo_badge = '<span class="badge bg-danger">Administrador</span>'
+        elif usuario.cargo == 'diretor':
+            cargo_badge = '<span class="badge bg-primary">Diretor</span>'
+        elif usuario.cargo == 'gerente':
+            cargo_badge = '<span class="badge bg-success">Gerente</span>'
+        else:
+            cargo_badge = '<span class="badge bg-secondary">Colaborador</span>'
+        
+        # Formatar último login
+        ultimo_login_str = 'Nunca'
+        if usuario.ultimo_login:
+            ultimo_login_str = usuario.ultimo_login.strftime('%d/%m/%Y %H:%M')
+        
+        # Botões de ação
+        botoes_acao = f'''
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-sm btn-primary btn-editar-usuario" 
+                    data-bs-toggle="tooltip" title="Editar"
+                    data-id="{usuario.id}"
+                    data-nome="{usuario.nome}"
+                    data-email="{usuario.email}"
+                    data-departamento="{usuario.departamento}"
+                    data-cargo="{usuario.cargo}">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-warning btn-resetar-senha" 
+                    data-bs-toggle="tooltip" title="Resetar Senha"
+                    data-id="{usuario.id}"
+                    data-nome="{usuario.nome}">
+                    <i class="fas fa-key"></i>
+                </button>
+        '''
+        
+        # Adicionar botão de excluir apenas se não for o usuário atual
+        if usuario.id != current_user.id:
+            # O CSRF token será adicionado via JavaScript no frontend
+            botoes_acao += f'''
+                <form id="form-excluir-{usuario.id}"
+                    action="{url_for('usuario.excluir', id=usuario.id)}" method="POST"
+                    class="d-inline form-excluir">
+                    <button type="submit" class="btn btn-sm btn-danger" data-bs-toggle="tooltip"
+                        title="Excluir">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            '''
+        
+        botoes_acao += '</div>'
+        
+        dados.append({
+            'id': usuario.id,
+            'nome': usuario.nome or '',
+            'email': usuario.email or '',
+            'departamento': usuario.departamento or '',
+            'cargo': cargo_badge,
+            'cargo_raw': usuario.cargo or '',
+            'ultimo_login': ultimo_login_str,
+            'ultimo_login_raw': usuario.ultimo_login.isoformat() if usuario.ultimo_login else '',
+            'acoes': botoes_acao
+        })
+    
+    print(f"Total de dados preparados: {len(dados)}")
+    response = jsonify({'data': dados})
+    print(f"Response status: {response.status_code}")
+    return response
+
+@usuario_bp.route('/api/cargos')
+@login_required
+def api_cargos():
+    """
+    API para retornar lista de cargos ativos em JSON
+    """
+    cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
+    dados = [{'id': cargo.id, 'nome': cargo.nome} for cargo in cargos]
+    return jsonify({'cargos': dados})
+
+@usuario_bp.route('/api/departamentos')
+@login_required
+def api_departamentos():
+    """
+    API para retornar lista de departamentos ativos em JSON
+    """
+    departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
+    dados = [{'id': dept.id, 'nome': dept.nome} for dept in departamentos]
+    return jsonify({'departamentos': dados})
 
 @usuario_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
@@ -41,13 +146,17 @@ def novo():
         # Validação básica
         if not nome or not email or not senha or not departamento or not cargo:
             flash('Por favor, preencha todos os campos.', 'danger')
-            return render_template('usuarios/novo.html')
+            cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
+            departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
+            return render_template('usuarios/novo.html', cargos=cargos, departamentos=departamentos)
         
         # Verifica se o email já está em uso
         usuario_existente = Usuario.query.filter_by(email=email).first()
         if usuario_existente:
             flash('Este email já está em uso.', 'danger')
-            return render_template('usuarios/novo.html')
+            cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
+            departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
+            return render_template('usuarios/novo.html', cargos=cargos, departamentos=departamentos)
         
         # Cria o novo usuário
         novo_usuario = Usuario(
@@ -73,6 +182,7 @@ def editar(id):
     Edita um usuário existente
     """
     usuario = Usuario.query.get_or_404(id)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if request.method == 'POST':
         nome = request.form.get('nome')
@@ -82,12 +192,16 @@ def editar(id):
         
         # Validação básica
         if not nome or not email or not departamento or not cargo:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'Por favor, preencha todos os campos.'}), 400
             flash('Por favor, preencha todos os campos.', 'danger')
             return render_template('usuarios/editar.html', usuario=usuario)
         
         # Verifica se o email já está em uso por outro usuário
         usuario_existente = Usuario.query.filter_by(email=email).first()
         if usuario_existente and usuario_existente.id != id:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'Este email já está em uso.'}), 400
             flash('Este email já está em uso.', 'danger')
             return render_template('usuarios/editar.html', usuario=usuario)
         
@@ -99,8 +213,23 @@ def editar(id):
         
         db.session.commit()
         
+        if is_ajax:
+            return jsonify({'success': True, 'message': 'Usuário atualizado com sucesso.'})
+        
         flash('Usuário atualizado com sucesso.', 'success')
         return redirect(url_for('usuario.index'))
+    
+    if is_ajax:
+        return jsonify({
+            'success': True,
+            'usuario': {
+                'id': usuario.id,
+                'nome': usuario.nome,
+                'email': usuario.email,
+                'departamento': usuario.departamento,
+                'cargo': usuario.cargo
+            }
+        })
     
     return render_template('usuarios/editar.html', usuario=usuario)
 
@@ -110,6 +239,7 @@ def resetar_senha(id):
     Reseta a senha de um usuário
     """
     usuario = Usuario.query.get_or_404(id)
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if request.method == 'POST':
         nova_senha = request.form.get('nova_senha')
@@ -117,11 +247,22 @@ def resetar_senha(id):
         
         # Validação básica
         if not nova_senha or not confirmar_senha:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'Por favor, preencha todos os campos.'}), 400
             flash('Por favor, preencha todos os campos.', 'danger')
+            return render_template('usuarios/resetar_senha.html', usuario=usuario)
+        
+        # Validação de tamanho mínimo da senha
+        if len(nova_senha) < 6:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'A senha deve ter no mínimo 6 caracteres.'}), 400
+            flash('A senha deve ter no mínimo 6 caracteres.', 'danger')
             return render_template('usuarios/resetar_senha.html', usuario=usuario)
         
         # Verifica se as senhas coincidem
         if nova_senha != confirmar_senha:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'As senhas não coincidem.'}), 400
             flash('As senhas não coincidem.', 'danger')
             return render_template('usuarios/resetar_senha.html', usuario=usuario)
         
@@ -129,8 +270,20 @@ def resetar_senha(id):
         usuario.senha = generate_password_hash(nova_senha)
         db.session.commit()
         
+        if is_ajax:
+            return jsonify({'success': True, 'message': 'Senha resetada com sucesso.'})
+        
         flash('Senha resetada com sucesso.', 'success')
         return redirect(url_for('usuario.index'))
+    
+    if is_ajax:
+        return jsonify({
+            'success': True,
+            'usuario': {
+                'id': usuario.id,
+                'nome': usuario.nome
+            }
+        })
     
     return render_template('usuarios/resetar_senha.html', usuario=usuario)
 

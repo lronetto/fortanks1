@@ -60,6 +60,7 @@
                                           action="{{ url_for('cargo.excluir', id=cargo.id) }}" 
                                           method="POST"
                                           class="d-inline form-excluir">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-sm btn-danger" 
                                                 data-bs-toggle="tooltip"
                                                 title="Excluir">
@@ -82,6 +83,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('cargo.novo') }}" id="form-novo-cargo">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalNovoCargoLabel">Novo Cargo</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -118,6 +120,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <form method="POST" action="{{ url_for('cargo.editar', id=cargo.id) }}" id="form-editar-cargo-{{ cargo.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalEditarCargoLabel{{ cargo.id }}">Editar Cargo</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -193,7 +196,7 @@
 
 {% endblock %}
 
-{% block extra_js %}
+{% block scripts %}
 <script>
     // Inicializar DataTable
     $(document).ready(function () {

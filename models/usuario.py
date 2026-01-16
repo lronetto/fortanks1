@@ -17,8 +17,7 @@ class Usuario(db.Model, UserMixin):
     senha = db.Column(db.String(255), nullable=False)
     colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'),nullable=True)
     departamento = db.Column(db.String(50), nullable=False)
-    cargo = db.Column(db.Enum('colaborador', 'gerente', 'diretor',
-                      'admin', 'Operacional', 'TST'), nullable=False)
+    cargo = db.Column(db.String(100), nullable=False)  # Alterado de Enum para String para suportar cargos dinâmicos
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     ultimo_login = db.Column(db.DateTime)
 
