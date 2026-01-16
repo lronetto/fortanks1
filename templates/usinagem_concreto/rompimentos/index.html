@@ -104,7 +104,7 @@
                                         data-resultado="{{ rompimento.resultado|round(2) if rompimento.resultado else '' }}"
                                         data-fator-conversao="{{ rompimento.fator_conversao|round(2) if rompimento.fator_conversao else '1.2' }}"
                                         data-tipo_rompimento="{{ rompimento.tipo_rompimento if rompimento.tipo_rompimento else '' }}"
-                                        data-observacoes="{{ rompimento.observacoes if rompimento.observacoes else '' }}">
+                                        data-observacoes="{{ rompimento.observacoes|replace('"', '&quot;') if rompimento.observacoes else '' }}">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button type="button" class="btn btn-sm btn-danger"
@@ -181,6 +181,41 @@
         $('#filtroSem28Dias').prop('checked', true);
         {% endif %}
         
+        // Função para converter data do formato brasileiro (dd/mm/yyyy HH:MM) para datetime-local (yyyy-mm-ddTHH:MM)
+        function converterDataParaDatetimeLocal(dataStr) {
+            if (!dataStr || dataStr === 'N/A' || dataStr === '') {
+                return '';
+            }
+            
+            // Se já estiver no formato correto (yyyy-mm-ddTHH:MM), retornar como está
+            if (dataStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+                return dataStr;
+            }
+            
+            // Tentar converter do formato brasileiro (dd/mm/yyyy HH:MM)
+            var match = dataStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+            if (match) {
+                var dia = match[1];
+                var mes = match[2];
+                var ano = match[3];
+                var hora = match[4];
+                var minuto = match[5];
+                return ano + '-' + mes + '-' + dia + 'T' + hora + ':' + minuto;
+            }
+            
+            // Tentar converter do formato brasileiro sem hora (dd/mm/yyyy)
+            match = dataStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+            if (match) {
+                var dia = match[1];
+                var mes = match[2];
+                var ano = match[3];
+                return ano + '-' + mes + '-' + dia + 'T00:00';
+            }
+            
+            // Se não conseguir converter, retornar vazio
+            return '';
+        }
+        
         // Função para criar linha de rompimento
         function criarLinhaRompimento(rompimento) {
             var usinagemHtml = '';
@@ -193,6 +228,10 @@
             
             var resultadoHtml = rompimento.resultado ? rompimento.resultado.toFixed(2) : 'Não informado';
             
+            // Converter datas para o formato datetime-local
+            var dataMoldagemConvertida = converterDataParaDatetimeLocal(rompimento.data_moldagem || '');
+            var dataRompimentoConvertida = converterDataParaDatetimeLocal(rompimento.data_rompimento || '');
+            
             return [
                 rompimento.numero_serie,
                 usinagemHtml,
@@ -204,13 +243,13 @@
                     '<button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalEditarRompimento" ' +
                         'data-id="' + rompimento.id + '" ' +
                         'data-usinagem="' + (rompimento.usinagem_id || '') + '" ' +
-                        'data-data-moldagem="' + (rompimento.data_moldagem ? rompimento.data_moldagem.replace(' ', 'T') : '') + '" ' +
-                        'data-data="' + rompimento.data_rompimento.replace(' ', 'T') + '" ' +
-                        'data-numero_serie="' + rompimento.numero_serie + '" ' +
+                        'data-data-moldagem="' + dataMoldagemConvertida + '" ' +
+                        'data-data="' + dataRompimentoConvertida + '" ' +
+                        'data-numero_serie="' + (rompimento.numero_serie || '') + '" ' +
                         'data-resultado="' + (rompimento.resultado || '') + '" ' +
                         'data-fator-conversao="' + (rompimento.fator_conversao || '1.2') + '" ' +
                         'data-tipo_rompimento="' + (rompimento.tipo_rompimento || '') + '" ' +
-                        'data-observacoes="' + (rompimento.observacoes || '') + '">' +
+                        'data-observacoes="' + (rompimento.observacoes || '').replace(/"/g, '&quot;') + '">' +
                         '<i class="fas fa-edit"></i>' +
                     '</button>' +
                     '<button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#modalExcluirRompimento" ' +

@@ -1,0 +1,63 @@
+<!-- Modal Novo Usuário -->
+<div class="modal fade" id="modalNovoUsuario" tabindex="-1" aria-labelledby="modalNovoUsuarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoUsuarioLabel"><i class="fas fa-user-plus"></i> Novo Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formNovoUsuario" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="colaborador_id" id="novo_colaborador_id">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Buscar Colaborador Existente (Opcional)</label>
+                        <select class="form-select" id="novo_colaborador_select" style="width: 100%;">
+                            <option value="">Selecione um colaborador ou deixe em branco para criar manualmente</option>
+                        </select>
+                        <small class="text-muted">Se selecionar um colaborador, os campos nome, email, departamento e cargo serão preenchidos automaticamente.</small>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="mb-3">
+                        <label for="novo_nome" class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="novo_nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_email" class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" id="novo_email" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_senha" class="form-label">Senha <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="novo_senha" name="senha" required>
+                        <small class="text-muted">A senha deve ter no mínimo 8 caracteres.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_confirmar_senha" class="form-label">Confirmar Senha <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" id="novo_confirmar_senha" name="confirmar_senha" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_departamento" class="form-label">Departamento <span class="text-danger">*</span></label>
+                        <select class="form-select" id="novo_departamento" name="departamento" required>
+                            <option value="">Selecione o departamento</option>
+                            <!-- Opções serão carregadas dinamicamente via JavaScript -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_cargo" class="form-label">Cargo <span class="text-danger">*</span></label>
+                        <select class="form-select" id="novo_cargo" name="cargo" required>
+                            <option value="">Selecione o cargo</option>
+                            <!-- Opções serão carregadas dinamicamente via JavaScript -->
+                        </select>
+                    </div>
+                    <div id="novo_usuario_alert" class="alert d-none" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Criar Usuário</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -130,6 +130,46 @@ def api_departamentos():
     dados = [{'id': dept.id, 'nome': dept.nome} for dept in departamentos]
     return jsonify({'departamentos': dados})
 
+@usuario_bp.route('/api/colaboradores')
+@login_required
+def api_colaboradores():
+    """
+    API para retornar lista de colaboradores sem usuário em JSON
+    """
+    from models.colaborador import Colaborador
+    from sqlalchemy import and_
+    
+    # Buscar IDs de colaboradores que já têm usuário
+    colaboradores_com_usuario_ids = db.session.query(Usuario.colaborador_id).filter(
+        Usuario.colaborador_id.isnot(None)
+    ).distinct().all()
+    
+    ids_com_usuario = [row[0] for row in colaboradores_com_usuario_ids]
+    
+    # Buscar colaboradores ativos que ainda não têm usuário
+    query = Colaborador.query.filter(Colaborador.status == 'Ativo')
+    
+    if ids_com_usuario:
+        query = query.filter(~Colaborador.id.in_(ids_com_usuario))
+    
+    # Busca por termo se fornecido
+    termo = request.args.get('termo', '').strip()
+    if termo:
+        query = query.filter(Colaborador.nome.ilike(f'%{termo}%'))
+    
+    colaboradores = query.order_by(Colaborador.nome).limit(50).all()
+    
+    dados = [{
+        'id': col.id, 
+        'nome': col.nome,
+        'email': col.email or '',
+        'cargo': col.cargo.nome if col.cargo else '',
+        'departamento': col.departamento.nome if col.departamento else ''
+    } for col in colaboradores]
+    
+    print(f"Total de colaboradores encontrados: {len(dados)}")
+    return jsonify({'colaboradores': dados})
+
 @usuario_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
 def novo():
@@ -137,6 +177,10 @@ def novo():
     Cria um novo usuário
     """
     if request.method == 'POST':
+        # Verificar se é requisição AJAX
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        colaborador_id = request.form.get('colaborador_id')
         nome = request.form.get('nome')
         email = request.form.get('email')
         senha = request.form.get('senha')
@@ -145,6 +189,8 @@ def novo():
         
         # Validação básica
         if not nome or not email or not senha or not departamento or not cargo:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'Por favor, preencha todos os campos.'}), 400
             flash('Por favor, preencha todos os campos.', 'danger')
             cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
             departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
@@ -153,10 +199,24 @@ def novo():
         # Verifica se o email já está em uso
         usuario_existente = Usuario.query.filter_by(email=email).first()
         if usuario_existente:
+            if is_ajax:
+                return jsonify({'success': False, 'message': 'Este email já está em uso.'}), 400
             flash('Este email já está em uso.', 'danger')
             cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
             departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
             return render_template('usuarios/novo.html', cargos=cargos, departamentos=departamentos)
+        
+        # Se foi selecionado um colaborador, verificar se já tem usuário
+        if colaborador_id:
+            from models.colaborador import Colaborador
+            colaborador = Colaborador.query.get(colaborador_id)
+            if colaborador and colaborador.usuario:
+                if is_ajax:
+                    return jsonify({'success': False, 'message': 'Este colaborador já possui um usuário.'}), 400
+                flash('Este colaborador já possui um usuário.', 'danger')
+                cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
+                departamentos = Departamento.query.filter_by(status='Ativo').order_by(Departamento.nome).all()
+                return render_template('usuarios/novo.html', cargos=cargos, departamentos=departamentos)
         
         # Cria o novo usuário
         novo_usuario = Usuario(
@@ -164,11 +224,15 @@ def novo():
             email=email,
             senha=generate_password_hash(senha),
             departamento=departamento,
-            cargo=cargo
+            cargo=cargo,
+            colaborador_id=colaborador_id if colaborador_id else None
         )
         
         db.session.add(novo_usuario)
         db.session.commit()
+        
+        if is_ajax:
+            return jsonify({'success': True, 'message': 'Usuário criado com sucesso.'})
         
         flash('Usuário criado com sucesso.', 'success')
         return redirect(url_for('usuario.index'))

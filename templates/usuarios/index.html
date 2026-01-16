@@ -6,9 +6,9 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3"><i class="fas fa-users"></i> Usuários</h1>
-        <a href="{{ url_for('usuario.novo') }}" class="btn btn-primary">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoUsuario">
             <i class="fas fa-plus"></i> Novo Usuário
-        </a>
+        </button>
     </div>
 
     <div class="card shadow mb-4">
@@ -39,6 +39,7 @@
 </div>
 
 <!-- Incluir Modais -->
+{% include 'usuarios/modais/novo_usuario.html' %}
 {% include 'usuarios/modais/editar_usuario.html' %}
 {% include 'usuarios/modais/resetar_senha.html' %}
 {% endblock %}
@@ -87,6 +88,154 @@
                         }));
                     });
                     console.log('✅ Departamentos carregados no modal de edição');
+                },
+                error: function() {
+                    console.error('❌ Erro ao carregar departamentos');
+                }
+            });
+        }
+        
+        // Função para inicializar Select2 de colaboradores
+        function inicializarSelect2Colaboradores() {
+            const $select = $('#novo_colaborador_select');
+            if ($select.length === 0 || typeof $.fn.select2 === 'undefined') {
+                console.error('Select2 não disponível ou elemento não encontrado');
+                return;
+            }
+            
+            // Se já foi inicializado, destruir antes de reinicializar
+            if ($select.hasClass('select2-hidden-accessible')) {
+                $select.select2('destroy');
+            }
+            
+            console.log('Inicializando Select2 para colaboradores...');
+            const apiUrl = "{{ url_for('usuario.api_colaboradores') }}";
+            console.log('URL da API de colaboradores:', apiUrl);
+            
+            const $modal = $('#modalNovoUsuario');
+            
+            $select.select2({
+                theme: 'bootstrap4',
+                placeholder: 'Buscar colaborador...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $modal, // Importante para modais
+                ajax: {
+                    url: apiUrl,
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        console.log('Buscando colaboradores com termo:', params.term);
+                        return {
+                            termo: params.term || ''
+                        };
+                    },
+                    processResults: function (data) {
+                        console.log('Dados recebidos da API:', data);
+                        if (!data || !data.colaboradores) {
+                            console.error('Estrutura de dados inválida:', data);
+                            return { results: [] };
+                        }
+                        const results = data.colaboradores.map(function(col) {
+                            return {
+                                id: col.id,
+                                text: col.nome + (col.cargo ? ' - ' + col.cargo : '') + (col.departamento ? ' (' + col.departamento + ')' : ''),
+                                nome: col.nome,
+                                email: col.email,
+                                cargo: col.cargo,
+                                departamento: col.departamento
+                            };
+                        });
+                        console.log('Resultados processados:', results.length, results);
+                        return { results: results };
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Erro ao buscar colaboradores:', error);
+                        console.error('Status:', status);
+                        console.error('Resposta:', xhr.responseText);
+                        return { results: [] };
+                    },
+                    cache: false
+                },
+                minimumInputLength: 0
+            });
+            
+            // Garantir que o dropdown apareça corretamente no modal
+            $select.on('select2:open', function() {
+                setTimeout(function() {
+                    $('.select2-container--open').css('z-index', '9999');
+                    $('.select2-dropdown').css('z-index', '9999');
+                }, 50);
+            });
+            
+            // Quando um colaborador for selecionado, preencher os campos
+            $select.on('select2:select', function (e) {
+                const data = e.params.data;
+                console.log('Colaborador selecionado:', data);
+                $('#novo_colaborador_id').val(data.id);
+                $('#novo_nome').val(data.nome || '');
+                $('#novo_email').val(data.email || '');
+                if (data.departamento) {
+                    $('#novo_departamento').val(data.departamento);
+                }
+                if (data.cargo) {
+                    $('#novo_cargo').val(data.cargo);
+                }
+            });
+            
+            // Limpar campos quando o colaborador for removido
+            $select.on('select2:clear', function (e) {
+                $('#novo_colaborador_id').val('');
+            });
+        }
+        
+        // Inicializar Select2 quando o modal for aberto
+        $('#modalNovoUsuario').on('shown.bs.modal', function() {
+            console.log('Modal de novo usuário aberto, inicializando Select2...');
+            setTimeout(function() {
+                inicializarSelect2Colaboradores();
+            }, 100);
+        });
+        
+        // Carregar cargos e departamentos no modal de novo usuário
+        const $novoCargoSelect = $('#novo_cargo');
+        const $novoDepartamentoSelect = $('#novo_departamento');
+        
+        // Carregar cargos
+        if ($novoCargoSelect.length > 0) {
+            $.ajax({
+                url: "{{ url_for('usuario.api_cargos') }}",
+                type: 'GET',
+                success: function(response) {
+                    $novoCargoSelect.find('option:not(:first)').remove();
+                    response.cargos.forEach(function(cargo) {
+                        $novoCargoSelect.append($('<option>', {
+                            value: cargo.nome,
+                            text: cargo.nome
+                        }));
+                    });
+                    console.log('✅ Cargos carregados no modal de novo usuário');
+                },
+                error: function() {
+                    console.error('❌ Erro ao carregar cargos');
+                }
+            });
+        }
+        
+        // Carregar departamentos
+        if ($novoDepartamentoSelect.length > 0) {
+            $.ajax({
+                url: "{{ url_for('usuario.api_departamentos') }}",
+                type: 'GET',
+                success: function(response) {
+                    $novoDepartamentoSelect.find('option:not(:first)').remove();
+                    response.departamentos.forEach(function(departamento) {
+                        $novoDepartamentoSelect.append($('<option>', {
+                            value: departamento.nome,
+                            text: departamento.nome
+                        }));
+                    });
+                    console.log('✅ Departamentos carregados no modal de novo usuário');
                 },
                 error: function() {
                     console.error('❌ Erro ao carregar departamentos');
@@ -579,7 +728,90 @@
             });
         });
 
+        // Submeter formulário de novo usuário
+        $('#formNovoUsuario').on('submit', function(e) {
+            e.preventDefault();
+            
+            const form = $(this);
+            const senha = $('#novo_senha').val();
+            const confirmarSenha = $('#novo_confirmar_senha').val();
+            const alertDiv = $('#novo_usuario_alert');
+            const submitBtn = form.find('button[type="submit"]');
+            const originalText = submitBtn.html();
+
+            // Validação client-side
+            if (senha.length < 8) {
+                alertDiv.removeClass('d-none').addClass('alert-danger').html(
+                    '<i class="fas fa-exclamation-circle"></i> A senha deve ter no mínimo 8 caracteres.'
+                );
+                return;
+            }
+
+            if (senha !== confirmarSenha) {
+                alertDiv.removeClass('d-none').addClass('alert-danger').html(
+                    '<i class="fas fa-exclamation-circle"></i> As senhas não coincidem.'
+                );
+                return;
+            }
+
+            // Desabilitar botão e mostrar loading
+            submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Criando...');
+
+            // Limpar alertas anteriores
+            alertDiv.addClass('d-none').removeClass('alert-success alert-danger').text('');
+
+            $.ajax({
+                url: "{{ url_for('usuario.novo') }}",
+                type: 'POST',
+                data: form.serialize(),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alertDiv.removeClass('d-none').addClass('alert-success').html(
+                            '<i class="fas fa-check-circle"></i> ' + response.message
+                        );
+                        setTimeout(function() {
+                            const modal = bootstrap.Modal.getInstance(document.getElementById('modalNovoUsuario'));
+                            if (modal) modal.hide();
+                            recarregarTabela();
+                        }, 1500);
+                    } else {
+                        alertDiv.removeClass('d-none').addClass('alert-danger').html(
+                            '<i class="fas fa-exclamation-circle"></i> ' + (response.message || 'Erro ao criar usuário.')
+                        );
+                        submitBtn.prop('disabled', false).html(originalText);
+                    }
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Erro ao criar usuário.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMessage = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            errorMessage = response.message || errorMessage;
+                        } catch(e) {
+                            errorMessage = 'Erro ao criar usuário.';
+                        }
+                    }
+                    alertDiv.removeClass('d-none').addClass('alert-danger').html(
+                        '<i class="fas fa-exclamation-circle"></i> ' + errorMessage
+                    );
+                    submitBtn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
         // Limpar formulários quando modais forem fechados
+        $('#modalNovoUsuario').on('hidden.bs.modal', function() {
+            $('#formNovoUsuario')[0].reset();
+            $('#novo_colaborador_id').val('');
+            $('#novo_colaborador_select').val(null).trigger('change');
+            $('#novo_usuario_alert').addClass('d-none').removeClass('alert-success alert-danger').text('');
+        });
+
         $('#modalEditarUsuario').on('hidden.bs.modal', function() {
             $('#formEditarUsuario')[0].reset();
             $('#editar_usuario_alert').addClass('d-none').removeClass('alert-success alert-danger').text('');

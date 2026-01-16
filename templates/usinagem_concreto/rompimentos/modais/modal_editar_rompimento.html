@@ -84,6 +84,42 @@
 $(document).ready(function() {
     var contadorLinhasEdit = 0;
     
+    // Função para converter data do formato brasileiro (dd/mm/yyyy HH:MM) para datetime-local (yyyy-mm-ddTHH:MM)
+    function converterDataParaDatetimeLocal(dataStr) {
+        if (!dataStr || dataStr === 'N/A' || dataStr === '') {
+            return '';
+        }
+        
+        // Se já estiver no formato correto (yyyy-mm-ddTHH:MM), retornar como está
+        if (dataStr.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+            return dataStr;
+        }
+        
+        // Tentar converter do formato brasileiro (dd/mm/yyyy HH:MM)
+        var match = dataStr.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+        if (match) {
+            var dia = match[1];
+            var mes = match[2];
+            var ano = match[3];
+            var hora = match[4];
+            var minuto = match[5];
+            return ano + '-' + mes + '-' + dia + 'T' + hora + ':' + minuto;
+        }
+        
+        // Tentar converter do formato brasileiro sem hora (dd/mm/yyyy)
+        match = dataStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+        if (match) {
+            var dia = match[1];
+            var mes = match[2];
+            var ano = match[3];
+            return ano + '-' + mes + '-' + dia + 'T00:00';
+        }
+        
+        // Se não conseguir converter, retornar vazio
+        console.warn('Não foi possível converter a data:', dataStr);
+        return '';
+    }
+    
     // Função para criar uma nova linha na tabela
     function criarLinhaResultadoEdit() {
         contadorLinhasEdit++;
@@ -299,26 +335,31 @@ $(document).ready(function() {
         var id = button.data('id');
         var usinagem = button.data('usinagem') || '';
         var dataMoldagem = button.data('data-moldagem') || '';
-        var data = button.data('data');
+        var data = button.data('data') || '';
         var idade = button.data('idade') || '';
-        var numero_serie = button.data('numero_serie');
+        var numero_serie = button.data('numero_serie') || '';
         var resultadoMpa = button.data('resultado') || '';  // Resultado em MPa (salvo no banco)
         var fatorConversao = button.data('fator-conversao') || '1.2';
         var tipo_rompimento = button.data('tipo_rompimento') || '';
         var observacoes = button.data('observacoes') || '';
         
+        // Converter datas para o formato datetime-local
+        var dataMoldagemConvertida = converterDataParaDatetimeLocal(dataMoldagem);
+        var dataRompimentoConvertida = converterDataParaDatetimeLocal(data);
+        
         var modal = $(this);
         modal.find('#formEditarRompimento').attr('action', '/usinagem-concreto/rompimentos/' + id + '/editar');
         modal.find('#edit_usinagem_id').val(usinagem);
-        modal.find('#edit_data_moldagem').val(dataMoldagem);
-        modal.find('#edit_data_rompimento').val(data);
+        modal.find('#edit_data_moldagem').val(dataMoldagemConvertida);
+        modal.find('#edit_data_rompimento').val(dataRompimentoConvertida);
+        modal.find('#edit_numero_serie').val(numero_serie || '');
+        modal.find('#edit_fator_conversao').val(fatorConversao || '1.2');
+        modal.find('#edit_observacoes').val(observacoes || '');
+        
         // Calcular idade ao abrir o modal
         setTimeout(function() {
             calcularIdade();
         }, 100);
-        modal.find('#edit_numero_serie').val(numero_serie);
-        modal.find('#edit_fator_conversao').val(fatorConversao);
-        modal.find('#edit_observacoes').val(observacoes);
         
         // Limpar tabela de resultados
         $('#editTbodyResultados').empty();
