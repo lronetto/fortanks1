@@ -16,7 +16,7 @@ class Departamento(db.Model):
     
     # Relacionamentos
     colaboradores = db.relationship('Colaborador', backref='departamento', lazy=True)
-    
+    usuarios = db.relationship('Usuario', back_populates='departamento_rel', lazy=True)
     def to_dict(self):
         return {
             'id': self.id,

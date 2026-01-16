@@ -36,6 +36,9 @@ def login():
         
         # Verifica se o usuário existe e se a senha está correta
         if usuario and usuario.verificar_senha(senha):
+            if usuario.colaborador.status != 'Ativo':
+                flash('Colaborador inativo. Por favor, contate o administrador.', 'danger')
+                return redirect(url_for('auth.login'))
             # Realiza o login
             login_user(usuario)
             

@@ -62,7 +62,7 @@
                     $cargoSelect.find('option:not(:first)').remove();
                     response.cargos.forEach(function(cargo) {
                         $cargoSelect.append($('<option>', {
-                            value: cargo.nome,
+                            value: cargo.id,
                             text: cargo.nome
                         }));
                     });
@@ -83,7 +83,7 @@
                     $departamentoSelect.find('option:not(:first)').remove();
                     response.departamentos.forEach(function(departamento) {
                         $departamentoSelect.append($('<option>', {
-                            value: departamento.nome,
+                            value: departamento.id,
                             text: departamento.nome
                         }));
                     });
@@ -175,11 +175,26 @@
                 $('#novo_colaborador_id').val(data.id);
                 $('#novo_nome').val(data.nome || '');
                 $('#novo_email').val(data.email || '');
-                if (data.departamento) {
-                    $('#novo_departamento').val(data.departamento);
+                // Preencher IDs de departamento e cargo
+                if (data.departamento_id) {
+                    $('#novo_departamento').val(data.departamento_id);
+                } else if (data.departamento) {
+                    // Fallback: buscar pelo nome se ID não estiver disponível
+                    $('#novo_departamento option').each(function() {
+                        if ($(this).text() === data.departamento) {
+                            $('#novo_departamento').val($(this).val());
+                        }
+                    });
                 }
-                if (data.cargo) {
-                    $('#novo_cargo').val(data.cargo);
+                if (data.cargo_id) {
+                    $('#novo_cargo').val(data.cargo_id);
+                } else if (data.cargo) {
+                    // Fallback: buscar pelo nome se ID não estiver disponível
+                    $('#novo_cargo option').each(function() {
+                        if ($(this).text() === data.cargo) {
+                            $('#novo_cargo').val($(this).val());
+                        }
+                    });
                 }
             });
             
@@ -444,7 +459,7 @@
             
             // Carregar departamentos se ainda não foram carregados
             const $departamentoSelect = $('#editar_departamento');
-            const departamentoUsuario = departamento || '';
+            const departamentoUsuarioId = departamentoId || '';
             
             if ($departamentoSelect.find('option').length <= 1) {
                 $.ajax({
@@ -454,27 +469,27 @@
                         $departamentoSelect.find('option:not(:first)').remove();
                         response.departamentos.forEach(function(dept) {
                             $departamentoSelect.append($('<option>', {
-                                value: dept.nome,
+                                value: dept.id,
                                 text: dept.nome
                             }));
                         });
                         // Após carregar, selecionar o departamento do usuário
-                        $departamentoSelect.val(departamentoUsuario);
+                        $departamentoSelect.val(departamentoUsuarioId);
                     },
                     error: function() {
                         console.error('Erro ao carregar departamentos');
                         // Mesmo com erro, tentar selecionar o departamento se já existir
-                        $departamentoSelect.val(departamentoUsuario);
+                        $departamentoSelect.val(departamentoUsuarioId);
                     }
                 });
             } else {
                 // Se já foram carregados, apenas selecionar o departamento
-                $departamentoSelect.val(departamentoUsuario);
+                $departamentoSelect.val(departamentoUsuarioId);
             }
             
             // Carregar cargos se ainda não foram carregados
             const $cargoSelect = $('#editar_cargo');
-            const cargoUsuario = cargo || '';
+            const cargoUsuarioId = cargoId || '';
             
             if ($cargoSelect.find('option').length <= 1) {
                 $.ajax({
@@ -484,22 +499,22 @@
                         $cargoSelect.find('option:not(:first)').remove();
                         response.cargos.forEach(function(cargoItem) {
                             $cargoSelect.append($('<option>', {
-                                value: cargoItem.nome,
+                                value: cargoItem.id,
                                 text: cargoItem.nome
                             }));
                         });
                         // Após carregar, selecionar o cargo do usuário
-                        $cargoSelect.val(cargoUsuario);
+                        $cargoSelect.val(cargoUsuarioId);
                     },
                     error: function() {
                         console.error('Erro ao carregar cargos');
                         // Mesmo com erro, tentar selecionar o cargo se já existir
-                        $cargoSelect.val(cargoUsuario);
+                        $cargoSelect.val(cargoUsuarioId);
                     }
                 });
             } else {
                 // Se já foram carregados, apenas selecionar o cargo
-                $cargoSelect.val(cargoUsuario);
+                $cargoSelect.val(cargoUsuarioId);
             }
 
             // Limpar alertas

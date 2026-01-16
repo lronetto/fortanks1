@@ -1925,67 +1925,100 @@ def listar_series_pendentes_28d():
     try:
         from models.database import db
         from datetime import datetime, timedelta
+        from sqlalchemy import func, case, and_, exists, select, text
         
-        # Buscar todas as séries com data de moldagem
-        todas_series = db.session.query(ConcretoUsinagensRompimentos.numero_serie).filter(
-            ConcretoUsinagensRompimentos.data_moldagem.isnot(None)
-        ).distinct().all()
-        
-        series_pendentes = []
         hoje = datetime.now()
         
-        for serie_tuple in todas_series:
-            serie = serie_tuple[0]
-            
-            # Buscar o rompimento mais antigo desta série (para pegar a data de moldagem)
-            primeiro_rompimento = ConcretoUsinagensRompimentos.query.filter_by(
-                numero_serie=serie
-            ).filter(
-                ConcretoUsinagensRompimentos.data_moldagem.isnot(None)
-            ).order_by(ConcretoUsinagensRompimentos.data_moldagem.asc()).first()
-            
-            if not primeiro_rompimento or not primeiro_rompimento.data_moldagem:
-                continue
-            
-            data_moldagem = primeiro_rompimento.data_moldagem
-            
-            # Calcular data prevista de rompimento 28 dias
-            data_prevista_28d = data_moldagem + timedelta(days=28)
-            # Se cair em domingo, adiciona 1 dia
-            if data_prevista_28d.weekday() == 6:  # Domingo
-                data_prevista_28d += timedelta(days=1)
-            
-            # Verificar se já passou a data prevista
-            if hoje < data_prevista_28d:
-                continue  # Ainda não completou 28 dias
-            
-            # Verificar se já tem rompimento de 28 dias
-            tem_rompimento_28d = False
-            rompimentos_serie = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=serie).all()
-            
-            for romp in rompimentos_serie:
-                if romp.data_moldagem and romp.data_rompimento:
-                    diff_days = (romp.data_rompimento - romp.data_moldagem).total_seconds() / 3600 / 24
-                    # Considerar 27-29 dias como rompimento de 28 dias
-                    if 27 <= diff_days <= 29:
-                        tem_rompimento_28d = True
-                        break
-            
-            # Se não tem rompimento de 28 dias e já passou a data prevista
-            if not tem_rompimento_28d:
-                dias_atrasados = (hoje - data_prevista_28d).days
-                quantidade_rompimentos = len(rompimentos_serie)
-                
-                series_pendentes.append({
-                    'numero_serie': serie,
-                    'data_moldagem': data_moldagem.strftime('%d/%m/%Y %H:%M'),
-                    'data_prevista_28d': data_prevista_28d.strftime('%d/%m/%Y'),
-                    'dias_atrasados': dias_atrasados,
-                    'quantidade_rompimentos': quantidade_rompimentos
-                })
+        # Subquery para pegar a primeira data de moldagem por série
+        primeira_moldagem_subq = db.session.query(
+            ConcretoUsinagensRompimentos.numero_serie,
+            func.min(ConcretoUsinagensRompimentos.data_moldagem).label('primeira_data_moldagem')
+        ).filter(
+            ConcretoUsinagensRompimentos.data_moldagem.isnot(None)
+        ).group_by(
+            ConcretoUsinagensRompimentos.numero_serie
+        ).subquery()
         
-        # Ordenar por dias atrasados (mais atrasadas primeiro)
-        series_pendentes.sort(key=lambda x: x['dias_atrasados'], reverse=True)
+        # Subquery para contar quantidade de rompimentos por série
+        quantidade_subq = db.session.query(
+            ConcretoUsinagensRompimentos.numero_serie,
+            func.count(ConcretoUsinagensRompimentos.id).label('quantidade')
+        ).group_by(
+            ConcretoUsinagensRompimentos.numero_serie
+        ).subquery()
+        
+        # Calcular data prevista de 28 dias (ajustando domingo)
+        # Se WEEKDAY(data_moldagem + 28 dias) = 6 (domingo), adiciona 1 dia
+        # Usando text() para SQL puro quando necessário
+        data_prevista_28d_base = func.date_add(
+            primeira_moldagem_subq.c.primeira_data_moldagem,
+            text('INTERVAL 28 DAY')
+        )
+        data_prevista_28d = case(
+            (func.weekday(data_prevista_28d_base) == 6,
+             func.date_add(
+                 primeira_moldagem_subq.c.primeira_data_moldagem,
+                 text('INTERVAL 29 DAY')
+             )),
+            else_=data_prevista_28d_base
+        )
+        
+        # Subquery correlacionada para verificar se existe rompimento de 28 dias (27-29 dias)
+        # Esta será usada com EXISTS na query principal
+        rompimento_28d_exists = exists(
+            select(1).where(
+                and_(
+                    ConcretoUsinagensRompimentos.numero_serie == primeira_moldagem_subq.c.numero_serie,
+                    ConcretoUsinagensRompimentos.data_moldagem.isnot(None),
+                    ConcretoUsinagensRompimentos.data_rompimento.isnot(None),
+                    func.datediff(
+                        ConcretoUsinagensRompimentos.data_rompimento,
+                        ConcretoUsinagensRompimentos.data_moldagem
+                    ) >= 27
+                )
+            )
+        )
+        
+        # Query principal: buscar séries pendentes
+        query = db.session.query(
+            primeira_moldagem_subq.c.numero_serie,
+            primeira_moldagem_subq.c.primeira_data_moldagem,
+            data_prevista_28d.label('data_prevista_28d'),
+            func.datediff(
+                func.curdate(),
+                func.date(data_prevista_28d)
+            ).label('dias_atrasados'),
+            func.coalesce(quantidade_subq.c.quantidade, 0).label('quantidade_rompimentos')
+        ).outerjoin(
+            quantidade_subq,
+            primeira_moldagem_subq.c.numero_serie == quantidade_subq.c.numero_serie
+        ).filter(
+            # Já passou a data prevista
+            func.date(data_prevista_28d) <= func.curdate(),
+            # Não tem rompimento de 28 dias
+            ~rompimento_28d_exists
+        ).order_by(
+            func.datediff(
+                func.curdate(),
+                func.date(data_prevista_28d)
+            ).desc()
+        )
+        
+        resultados = query.all()
+        
+        # Formatar resultados
+        series_pendentes = []
+        for resultado in resultados:
+            data_moldagem = resultado.primeira_data_moldagem
+            data_prevista_28d = resultado.data_prevista_28d
+            
+            series_pendentes.append({
+                'numero_serie': resultado.numero_serie,
+                'data_moldagem': data_moldagem.strftime('%d/%m/%Y %H:%M') if data_moldagem else '',
+                'data_prevista_28d': data_prevista_28d.strftime('%d/%m/%Y') if data_prevista_28d else '',
+                'dias_atrasados': resultado.dias_atrasados or 0,
+                'quantidade_rompimentos': resultado.quantidade_rompimentos or 0
+            })
         
         return jsonify({
             'success': True,

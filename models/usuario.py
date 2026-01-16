@@ -16,13 +16,24 @@ class Usuario(db.Model, UserMixin):
     email = db.Column(db.String(100), unique=True, nullable=False)
     senha = db.Column(db.String(255), nullable=False)
     colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'),nullable=True)
-    departamento = db.Column(db.String(50), nullable=False)
-    cargo = db.Column(db.String(100), nullable=False)  # Alterado de Enum para String para suportar cargos dinâmicos
+    departamento_id = db.Column(db.Integer, db.ForeignKey('departamentos.id'), nullable=False)
+    cargo_id = db.Column(db.Integer, db.ForeignKey('cargos.id'), nullable=False)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
     ultimo_login = db.Column(db.DateTime)
 
-    colaborador = db.relationship('Colaborador', back_populates='usuario',foreign_keys=[colaborador_id])
-
+    colaborador = db.relationship('Colaborador', back_populates='usuario', foreign_keys=[colaborador_id])
+    departamento_rel = db.relationship('Departamento', back_populates='usuarios', foreign_keys=[departamento_id], lazy=True)
+    cargo_rel = db.relationship('Cargo', back_populates='usuarios', foreign_keys=[cargo_id], lazy=True)
+    
+    @property
+    def departamento(self):
+        """Retorna o nome do departamento para compatibilidade"""
+        return self.departamento_rel.nome if self.departamento_rel else ''
+    
+    @property
+    def cargo(self):
+        """Retorna o nome do cargo para compatibilidade"""
+        return self.cargo_rel.nome if self.cargo_rel else ''
     def set_senha(self, senha):
         """Define a senha do usuário com hash"""
         self.senha = generate_password_hash(senha)
@@ -47,27 +58,30 @@ class Usuario(db.Model, UserMixin):
     @property
     def is_admin(self):
         """Verifica se o usuário é administrador"""
-        return self.cargo == 'admin'
+        return self.cargo_rel and self.cargo_rel.nome.lower() == 'admin'
     
     @property
     def is_tst(self):
-        """Verifica se o usuário é administrador"""
-        return self.cargo == 'TST'
+        """Verifica se o usuário é TST"""
+        return self.cargo_rel and self.cargo_rel.nome.upper() == 'TST'
     
     @property
     def is_operacional(self):
-        """Verifica se o usuário é administrador"""
-        return self.cargo in ['admin', 'Operacional']
+        """Verifica se o usuário é operacional"""
+        cargo_nome = self.cargo_rel.nome.lower() if self.cargo_rel else ''
+        return cargo_nome in ['admin', 'operacional']
 
     @property
     def is_gerente_ou_superior(self):
         """Verifica se o usuário é gerente ou superior"""
-        return self.cargo in ['gerente', 'diretor', 'admin',]
+        cargo_nome = self.cargo_rel.nome.lower() if self.cargo_rel else ''
+        return cargo_nome in ['gerente', 'diretor', 'admin']
     
     @property
     def is_tecnico_superior(self):
-        """Verifica se o usuário é gerente ou superior"""
-        return self.cargo in ['gerente', 'diretor', 'admin','']
+        """Verifica se o usuário é técnico superior"""
+        cargo_nome = self.cargo_rel.nome.lower() if self.cargo_rel else ''
+        return cargo_nome in ['gerente', 'diretor', 'admin']
     
     def is_permissao(self, modulo, acao='visualizar'):
         """Verifica se o usuário tem permissão para o módulo informado"""

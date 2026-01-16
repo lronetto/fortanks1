@@ -16,7 +16,7 @@ class Cargo(db.Model):
     
     # Relacionamentos
     colaboradores = db.relationship('Colaborador', backref='cargo', lazy=True)
-    
+    usuarios = db.relationship('Usuario', back_populates='cargo_rel', lazy=True)
     def to_dict(self):
         return {
             'id': self.id,

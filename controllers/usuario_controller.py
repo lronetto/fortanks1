@@ -43,14 +43,15 @@ def api_dados():
     for usuario in usuarios:
         # Formatar cargo
         cargo_badge = ''
-        if usuario.cargo == 'admin':
+        cargo_nome = usuario.cargo_rel.nome if usuario.cargo_rel else ''
+        if cargo_nome.lower() == 'admin':
             cargo_badge = '<span class="badge bg-danger">Administrador</span>'
-        elif usuario.cargo == 'diretor':
+        elif cargo_nome.lower() == 'diretor':
             cargo_badge = '<span class="badge bg-primary">Diretor</span>'
-        elif usuario.cargo == 'gerente':
+        elif cargo_nome.lower() == 'gerente':
             cargo_badge = '<span class="badge bg-success">Gerente</span>'
         else:
-            cargo_badge = '<span class="badge bg-secondary">Colaborador</span>'
+            cargo_badge = f'<span class="badge bg-secondary">{cargo_nome}</span>'
         
         # Formatar último login
         ultimo_login_str = 'Nunca'
@@ -65,8 +66,8 @@ def api_dados():
                     data-id="{usuario.id}"
                     data-nome="{usuario.nome}"
                     data-email="{usuario.email}"
-                    data-departamento="{usuario.departamento}"
-                    data-cargo="{usuario.cargo}">
+                    data-departamento-id="{usuario.departamento_id}"
+                    data-cargo-id="{usuario.cargo_id}">
                     <i class="fas fa-edit"></i>
                 </button>
                 <button type="button" class="btn btn-sm btn-warning btn-resetar-senha" 
@@ -99,7 +100,7 @@ def api_dados():
             'email': usuario.email or '',
             'departamento': usuario.departamento or '',
             'cargo': cargo_badge,
-            'cargo_raw': usuario.cargo or '',
+            'cargo_raw': cargo_nome,
             'ultimo_login': ultimo_login_str,
             'ultimo_login_raw': usuario.ultimo_login.isoformat() if usuario.ultimo_login else '',
             'acoes': botoes_acao
@@ -164,7 +165,9 @@ def api_colaboradores():
         'nome': col.nome,
         'email': col.email or '',
         'cargo': col.cargo.nome if col.cargo else '',
-        'departamento': col.departamento.nome if col.departamento else ''
+        'cargo_id': col.cargo_id if col.cargo else None,
+        'departamento': col.departamento.nome if col.departamento else '',
+        'departamento_id': col.departamento_id if col.departamento else None
     } for col in colaboradores]
     
     print(f"Total de colaboradores encontrados: {len(dados)}")
@@ -184,11 +187,11 @@ def novo():
         nome = request.form.get('nome')
         email = request.form.get('email')
         senha = request.form.get('senha')
-        departamento = request.form.get('departamento')
-        cargo = request.form.get('cargo')
+        departamento_id = request.form.get('departamento_id')
+        cargo_id = request.form.get('cargo_id')
         
         # Validação básica
-        if not nome or not email or not senha or not departamento or not cargo:
+        if not nome or not email or not senha or not departamento_id or not cargo_id:
             if is_ajax:
                 return jsonify({'success': False, 'message': 'Por favor, preencha todos os campos.'}), 400
             flash('Por favor, preencha todos os campos.', 'danger')
@@ -223,9 +226,9 @@ def novo():
             nome=nome,
             email=email,
             senha=generate_password_hash(senha),
-            departamento=departamento,
-            cargo=cargo,
-            colaborador_id=colaborador_id if colaborador_id else None
+            departamento_id=int(departamento_id),
+            cargo_id=int(cargo_id),
+            colaborador_id=int(colaborador_id) if colaborador_id else None
         )
         
         db.session.add(novo_usuario)
@@ -251,11 +254,11 @@ def editar(id):
     if request.method == 'POST':
         nome = request.form.get('nome')
         email = request.form.get('email')
-        departamento = request.form.get('departamento')
-        cargo = request.form.get('cargo')
+        departamento_id = request.form.get('departamento_id')
+        cargo_id = request.form.get('cargo_id')
         
         # Validação básica
-        if not nome or not email or not departamento or not cargo:
+        if not nome or not email or not departamento_id or not cargo_id:
             if is_ajax:
                 return jsonify({'success': False, 'message': 'Por favor, preencha todos os campos.'}), 400
             flash('Por favor, preencha todos os campos.', 'danger')
@@ -272,8 +275,8 @@ def editar(id):
         # Atualiza o usuário
         usuario.nome = nome
         usuario.email = email
-        usuario.departamento = departamento
-        usuario.cargo = cargo
+        usuario.departamento_id = int(departamento_id)
+        usuario.cargo_id = int(cargo_id)
         
         db.session.commit()
         
@@ -291,7 +294,8 @@ def editar(id):
                 'nome': usuario.nome,
                 'email': usuario.email,
                 'departamento': usuario.departamento,
-                'cargo': usuario.cargo
+                'cargo_id': usuario.cargo_id,
+                'departamento_id': usuario.departamento_id
             }
         })
     
