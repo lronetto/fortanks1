@@ -26,7 +26,6 @@ from controllers.inventario_controller import inventario_bp
 from controllers.unidade_controller import unidade_bp
 from controllers.produto_composto_controller import produto_composto_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
-from controllers.usinagem_relatorio_controller import relatorio_usinagem_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
 from controllers.grupo_material_controller import grupo_material_bp
@@ -211,7 +210,6 @@ app.register_blueprint(grupo_material_bp, url_prefix='/grupos-materiais')
 app.register_blueprint(unidade_bp)
 app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
-app.register_blueprint(relatorio_usinagem_bp)
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
 app.register_blueprint(certificado_bp, url_prefix='/certificados')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')

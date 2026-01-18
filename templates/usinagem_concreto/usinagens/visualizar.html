@@ -108,41 +108,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Equipamentos utilizados -->
-        <div class="col-md-6 mb-4">
-            <div class="card shadow h-100">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Equipamentos Utilizados</h6>
-                </div>
-                <div class="card-body">
-                    {% if usinagem.equipamentos %}
-                    <div class="table-responsive">
-                        <table class="table table-bordered">
-                            <thead>
-                                <tr>
-                                    <th>Equipamento</th>
-                                    <th>Função</th>
-                                    <th>Horas Trabalhadas</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in usinagem.equipamentos %}
-                                <tr>
-                                    <td>{{ item.equipamento.nome }}</td>
-                                    <td>{{ item.funcao or '-' }}</td>
-                                    <td>{{ item.horas_trabalhadas or '-' }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <p class="text-center py-3 text-muted">Nenhum equipamento registrado para esta usinagem.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
     </div>
 
     <!-- Rompimentos de Corpo de Prova -->

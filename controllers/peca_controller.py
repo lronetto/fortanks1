@@ -5,6 +5,7 @@ from models.contrato import Contrato
 from models.tanque import TanquesGrupos, Tanques, TanquesPecas, TanquesProdutoComposto
 from models.estoque import Estoque, EstoqueMovimentacoes
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
+from models.concreto import ConcretoUsinagens
 from flask_wtf.csrf import generate_csrf
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -1345,9 +1346,35 @@ def processar_arquivo_inspecao(xlsx_path):
             return [serialize_nested(item) for item in data]
         return serialize_value(data)
     
+    def get_row_value(row, index, default=None):
+        """Acessa valor de uma linha de forma segura, evitando IndexError"""
+        try:
+            if len(row) > index:
+                value = row.iloc[index]
+                return value if pd.notna(value) else default
+            return default
+        except (IndexError, KeyError):
+            return default
+    
     # Ler o arquivo Excel na aba ' CADASTRO' (com espaço no início)
     df = pd.read_excel(xlsx_path, sheet_name=' CADASTRO', engine='openpyxl')
+    df_series = pd.read_excel(xlsx_path, sheet_name='series', engine='openpyxl')
     
+    for index, row in df_series.iterrows():
+        produto_composto = ProdutoComposto.query.\
+            filter(ProdutoComposto.nome.like(f'%{get_row_value(row, 5)}%'),
+            ProdutoComposto.traco==True).first()
+
+        usinagem = ConcretoUsinagens(
+            serie=get_row_value(row, 0),
+            data_usinagem=get_row_value(row, 3),
+            produtoCompostoId=produto_composto.id if produto_composto else None,
+            flow=get_row_value(row, 2),
+            volume=get_row_value(row, 1),
+            nota=get_row_value(row, 4),
+        )
+        usinagem.save()
+   
     pecas = []
     
     for index, row in df.iterrows():
@@ -1368,18 +1395,22 @@ def processar_arquivo_inspecao(xlsx_path):
                     'cte': None,
                     'placa_carreta': None,
                     'transportadora': None,
-                }
+                },
+                'series': []
+
             },
         }
         
-        if row.iloc[5] == '-' or pd.isna(row.iloc[5]) or row.iloc[5] == None:
+        # Verifica se a linha tem dados válidos na coluna 5
+        nome_part1_check = get_row_value(row, 5)
+        if nome_part1_check == '-' or nome_part1_check is None:
             log['ignoradas']['quantidade'] += 1
             log['ignoradas']['lista'].append(index)
             continue
         
-        # Usa iloc para acessar por posição
-        tipo_tanque_raw = row.iloc[4] if len(row) > 4 else None
-        tipo_tanque = str(tipo_tanque_raw).strip() if pd.notna(tipo_tanque_raw) else None
+        # Usa função auxiliar para acessar por posição de forma segura
+        tipo_tanque_raw = get_row_value(row, 4)
+        tipo_tanque = str(tipo_tanque_raw).strip() if tipo_tanque_raw and pd.notna(tipo_tanque_raw) else None
         peca['tipo_tanque'] = None
         tanque = Tanques.query.filter(Tanques.nome.like(f'%{tipo_tanque}%')).first()
         
@@ -1393,8 +1424,8 @@ def processar_arquivo_inspecao(xlsx_path):
             continue
         
         # Trata valores nan do pandas
-        nome_part1 = row.iloc[5] if len(row) > 5 and pd.notna(row.iloc[5]) else ''
-        nome_part2 = row.iloc[7] if len(row) > 7 and pd.notna(row.iloc[7]) else ''
+        nome_part1 = get_row_value(row, 5, '')
+        nome_part2 = get_row_value(row, 7, '')
         seq_match = re.search(r'\d+', str(nome_part2)) if nome_part2 != '' else None
         seq_formatado = seq_match.group(0).zfill(2) if seq_match else (str(nome_part2).strip() if nome_part2 != '' else '')
         peca['nome'] = f"{str(nome_part1).strip()}-{seq_formatado}"
@@ -1409,7 +1440,7 @@ def processar_arquivo_inspecao(xlsx_path):
                 numero_tanque = int(match.group(1))
         peca['numero_tanque'] = numero_tanque if numero_tanque is not None else 3
         
-        data_raw = row.iloc[1] if len(row) > 1 and pd.notna(row.iloc[1]) else None
+        data_raw = get_row_value(row, 1)
         # Converte para datetime object ou None para salvar no MySQL
         if data_raw and hasattr(data_raw, 'strftime'):
             peca['data_concretagem'] = data_raw
@@ -1422,14 +1453,14 @@ def processar_arquivo_inspecao(xlsx_path):
         else:
             peca['data_concretagem'] = None
         
-        peca['tipo'] = row.iloc[9] if len(row) > 9 and pd.notna(row.iloc[9]) else None
-        peca['qualidade']['pista'] = row.iloc[18] if len(row) > 18 and pd.notna(row.iloc[18]) else None
-        peca['qualidade']['acabamento'] = row.iloc[17] if len(row) > 17 and pd.notna(row.iloc[17]) else None
-        chapa_valor = row.iloc[16] if len(row) > 16 and pd.notna(row.iloc[16]) else None
+        peca['tipo'] = get_row_value(row, 9)
+        peca['qualidade']['pista'] = get_row_value(row, 18)
+        peca['qualidade']['acabamento'] = get_row_value(row, 17)
+        chapa_valor = get_row_value(row, 16)
         peca['qualidade']['chapa'] = '' if chapa_valor == 'NÃO TEM CHAPA' else (chapa_valor or '')
         
         # Trata data_transporte
-        data_transporte_raw = row.iloc[20] if len(row) > 20 and pd.notna(row.iloc[20]) else None
+        data_transporte_raw = get_row_value(row, 20)
         if data_transporte_raw and hasattr(data_transporte_raw, 'strftime'):
             peca['qualidade']['transporte']['data_transporte'] = data_transporte_raw.strftime('%Y-%m-%d')
         elif data_transporte_raw and isinstance(data_transporte_raw, str):
@@ -1442,8 +1473,8 @@ def processar_arquivo_inspecao(xlsx_path):
             peca['qualidade']['transporte']['data_transporte'] = None
         
         # Trata nota
-        nota_raw = row.iloc[22] if len(row) > 23 else None
-        if pd.notna(nota_raw) and nota_raw != '-':
+        nota_raw = get_row_value(row, 22)
+        if nota_raw is not None and pd.notna(nota_raw) and nota_raw != '-':
             peca['qualidade']['transporte']['nota'] = int(nota_raw) if isinstance(nota_raw, (int, float)) else nota_raw
         else:
             peca['qualidade']['transporte']['nota'] = None
@@ -1458,7 +1489,16 @@ def processar_arquivo_inspecao(xlsx_path):
                 peca['qualidade']['transporte']['cte'] = cte.numero_nf
                 peca['qualidade']['transporte']['transportadora'] = cte.nome_emitente
 
-        peca['qualidade']['transporte']['placa_carreta'] = row.iloc[21] if len(row) > 21 and pd.notna(row.iloc[21]) else None
+        peca['qualidade']['transporte']['placa_carreta'] = get_row_value(row, 21)
+        
+        # Trata series
+        serie1_raw = get_row_value(row, 28)
+        serie2_raw = get_row_value(row, 29)
+        if serie1_raw and serie1_raw != '-':
+            peca['qualidade']['series'].append(serie1_raw)
+        if serie2_raw and serie2_raw != '-':
+            peca['qualidade']['series'].append(serie2_raw)
+
         
         pecas.append(peca)
         log['total_pecas'] += 1

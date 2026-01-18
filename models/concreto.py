@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy.sql import func
+from sqlalchemy import JSON
 from models.database import db
 from sqlalchemy.orm import relationship
 from decimal import Decimal
@@ -134,7 +135,6 @@ class ConcretoTracos(db.Model):
     
     # Relacionamentos
     itens = db.relationship('ConcretoTracosItens', backref='traco', cascade='all, delete-orphan')
-    usinagens = db.relationship('ConcretoUsinagens', backref='traco', lazy=True)
     
     def adicionar_material(self, material, quantidade, unidade=None, influenciado_umidade=False):
         """Adiciona um material ao traço de concreto"""
@@ -254,57 +254,27 @@ class ConcretoTracosItens(db.Model):
 
 class ConcretoUsinagens(db.Model):
     """
-    Modelo para representar usinagem de concreto
+    Modelo simplificado para representar usinagem de concreto
     """
     __tablename__ = 'ConcretoUsinagens'
     
     id = db.Column(db.Integer, primary_key=True)
-    data_usinagem = db.Column(db.DateTime, nullable=False)
-    volume_produzido = db.Column(db.Numeric(10, 2), nullable=False)  # em m³
-    traco_id = db.Column(db.Integer, db.ForeignKey('ConcretoTracos.id'), nullable=False)
-    local_aplicacao = db.Column(db.String(100), nullable=True)
-    responsavel_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id'), nullable=False)
-    umidade = db.Column(db.Numeric(5, 2), default=0)  # Umidade em porcentagem
-    status = db.Column(db.String(20), default='Concluído')  # Programada, Em andamento, Concluído, Cancelada
-    observacoes = db.Column(db.Text, nullable=True)
-    quantidade_cps = db.Column(db.Integer, default=0)  # Quantidade de corpos de prova a serem moldados
-    status_baixa_estoque = db.Column(db.String(20), default='NAO_EXECUTAR')  # PENDENTE, REALIZADA, ERRO, NAO_EXECUTAR
-    nota = db.Column(db.String(10), nullable=True)
-    fluidez = db.Column(db.String(15), nullable=True)
-    nbt = db.Column(db.String(15), nullable=True)
+    serie = db.Column(db.String(100), unique=True, nullable=False)  # Série única como referência
+    data_usinagem = db.Column(db.DateTime, nullable=False)  # Data/hora da usinagem
+    produtoCompostoId = db.Column(db.Integer, db.ForeignKey('ProdutoComposto.id'), nullable=True)  # Traço (ProdutoComposto onde traco=True)
+    flow = db.Column(db.String(50), nullable=True)  # Fluidez
+    volume = db.Column(db.Numeric(10, 2), nullable=False)  # Volume produzido em m³
+    nota = db.Column(db.String(50), nullable=True)  # Nota fiscal
+    dados_adicionais = db.Column(JSON, nullable=True)  # Campo JSON para dados futuros
 
     # Controle de datas
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
-    equipamentos = db.relationship('ConcretoUsinagensEquipamentos', backref='usinagem', cascade='all, delete-orphan')
+    produto_composto = db.relationship('ProdutoComposto', foreign_keys=[produtoCompostoId])
     materiais = db.relationship('ConcretoUsinagensMateriais', backref='usinagem', cascade='all, delete-orphan')
-    concretagem_id = db.Column(db.Integer, db.ForeignKey('ConcretoConcretagens.id'), nullable=True)
-    #traco = db.relationship('TracoConcreto')
-    concretagem = db.relationship('ConcretoConcretagens')
-    responsavel = db.relationship('Colaborador')
     
-    def adicionar_equipamento(self, equipamento, funcao=None, horas_trabalhadas=None):
-        """Adiciona um equipamento à usinagem"""
-        # Verificar se o equipamento já existe
-        for item in self.equipamentos:
-            if item.equipamento_id == equipamento.id:
-                if funcao:
-                    item.funcao = funcao
-                if horas_trabalhadas is not None:
-                    item.horas_trabalhadas = horas_trabalhadas
-                return item
-        
-        # Criar nova associação
-        item = ConcretoUsinagensEquipamentos(
-            equipamento=equipamento,
-            funcao=funcao,
-            horas_trabalhadas=horas_trabalhadas
-        )
-        self.equipamentos.append(item)
-        return item
-
     def adicionar_material(self, material, quantidade_executada=None, unidade=None, conversao_unidade_id=None):
         """Adiciona um material executado na usinagem"""
         # Verificar se o material já existe
@@ -352,40 +322,23 @@ class ConcretoUsinagens(db.Model):
                 return True
         return False
     
-    def remover_equipamento(self, equipamento_id):
-        """Remove um equipamento da usinagem"""
-        for item in self.equipamentos:
-            if item.equipamento_id == equipamento_id:
-                self.equipamentos.remove(item)
-                return True
-        return False
-    
-    def get_unidade_material(self, material_id):
-        item_traco = ConcretoTracosItens.query.filter_by(traco_id=self.traco_id, material_id=material_id).first()
-        return item_traco.unidade.nome if item_traco and item_traco.unidade else None
-    
     def calcular_materiais(self):
-        """Calcula a quantidade de materiais necessários para o volume de concreto, considerando a umidade"""
+        """Calcula a quantidade de materiais necessários para o volume de concreto baseado no produto composto"""
         resultado = []
-        if not self.traco:
+        if not self.produto_composto:
             return resultado
-            
-        for item in self.traco.itens:
-            quantidade_total = item.quantidade * self.volume_produzido
-            
-            # Aplicar o fator de correção baseado na umidade quando o material é influenciado
-            if item.influenciado_umidade and self.umidade:
-                # A umidade afeta a quantidade em uma proporção de 1:1
-                # Por exemplo, se umidade = 5%, então quantidade aumenta 5%
-                fator_correcao = 1 + (self.umidade / 100)
-                quantidade_total = quantidade_total * fator_correcao
-            
-            resultado.append({
-                'material': item.material,
-                'quantidade': quantidade_total,
-                'unidade': item.unidade.nome if item.unidade else 'N/A', # Usar o nome da unidade
-                'influenciado_umidade': item.influenciado_umidade
-            })
+        
+        # Calcular materiais baseado nos componentes do produto composto
+        for componente in self.produto_composto.componentes:
+            if componente.estoque and componente.estoque.tipo_item == 'material':
+                quantidade_total = Decimal(str(componente.quantidade)) * self.volume
+                
+                resultado.append({
+                    'material': componente.estoque.material,
+                    'quantidade': quantidade_total,
+                    'unidade': componente.estoque.material.unidade_obj.nome if componente.estoque.material and componente.estoque.material.unidade_obj else 'N/A',
+                    'influenciado_umidade': False  # Produto composto não tem controle de umidade
+                })
             
         return resultado
     
@@ -398,10 +351,10 @@ class ConcretoUsinagens(db.Model):
     
     def delete(self):
         """Remove a usinagem do banco de dados"""
-        if self.status_baixa_estoque == 'REALIZADA':
-            materiais = ConcretoUsinagensMateriais.query.filter_by(usinagem_id=self.id).all()
-            for material in materiais:
-                print(f"Material: {material.material_id} - Movimentação: {material.movimentacao_estoque_id}")
+        # Verificar se há movimentações de estoque associadas
+        materiais = ConcretoUsinagensMateriais.query.filter_by(usinagem_id=self.id).all()
+        for material in materiais:
+            if material.movimentacao_estoque_id:
                 movimentacao = EstoqueMovimentacoes.query.filter_by(id=material.movimentacao_estoque_id).first()
                 if movimentacao:
                     movimentacao.delete()
@@ -410,6 +363,7 @@ class ConcretoUsinagens(db.Model):
         return self
     
     def tem_redozagem(self):
+        """Verifica se há redozagem na usinagem"""
         for item in self.materiais:
             if item.redozagem:
                 return True
@@ -417,7 +371,7 @@ class ConcretoUsinagens(db.Model):
     
     def baixar_materiais_estoque(self, usuario_id=None):
         """
-        Baixa os materiais utilizados na usinagem do estoque, considerando a conversão de unidades.
+        Baixa os materiais utilizados na usinagem do estoque.
         
         Args:
             usuario_id: ID do usuário que está realizando a operação
@@ -426,20 +380,12 @@ class ConcretoUsinagens(db.Model):
             list: Lista de tuplas com (status_operacao, mensagem, material_id)
         """
         from models.estoque import Estoque, EstoqueMovimentacoes
-        from models.unidade import UnidadesConversao
         from models.database import db
         from decimal import Decimal
         import traceback
         
         resultados = []
         print(f"============ INÍCIO DA BAIXA DE MATERIAIS - USINAGEM ID: {self.id} ============")
-        
-        # Verificar se a usinagem já está concluída
-        if self.status != 'Concluído':
-            print(f"Usinagem não está concluída. Status atual: {self.status}")
-            return [(False, "A usinagem não está concluída. Materiais não foram baixados do estoque.", None)]
-        
-        print(f"Usinagem concluída. Prosseguindo com a baixa de materiais.")
         print(f"Total de materiais na usinagem: {len(self.materiais)}")
         
         # Iniciar uma transação para garantir consistência
@@ -462,7 +408,6 @@ class ConcretoUsinagens(db.Model):
                     tipo_item='material'
                 ).first()
 
-                
                 # Se não existir no estoque, criar registro
                 if not item_estoque:
                     print(f"Material não encontrado no estoque. Criando novo registro.")
@@ -470,75 +415,40 @@ class ConcretoUsinagens(db.Model):
                         material_id=item_material.material_id,
                         tipo_item='material',
                         quantidade=0,
-                        usuario_id=usuario_id or 1  # Default para o primeiro usuário se não especificado
+                        usuario_id=usuario_id or 1
                     )
                     db.session.add(item_estoque)
-                    db.session.flush()  # Obter ID do item
+                    db.session.flush()
                     print(f"Novo item de estoque criado com ID: {item_estoque.id}")
                 else:
                     print(f"Material encontrado no estoque. ID: {item_estoque.id}, Quantidade atual: {item_estoque.quantidade}")
                 
-                # Verificar se precisa de conversão de unidades
+                # Usar quantidade executada diretamente (já deve estar na unidade correta)
                 quantidade_a_baixar = Decimal(str(item_material.quantidade_executada))
-                materialTraco = ConcretoTracosItens.query.join(Unidades, Unidades.id == ConcretoTracosItens.unidade_id).filter(ConcretoTracosItens.traco_id==self.traco_id, ConcretoTracosItens.material_id==item_material.material_id).first()
-                print(f"Unidade do material na usinagem: {materialTraco.unidade.nome}")
-                print(f"Unidade do material no estoque: {item_estoque.material.unidade_obj.nome}")
-                
-                if materialTraco.unidade.nome != item_estoque.material.unidade_obj.nome:
-                    print(f"Unidades diferentes. Buscando conversão.")
-                    # Buscar conversão entre as unidades
-                    #print(f"fator direto: {item_material.traco.itens.conversao_unidade.fator}")
-                    conversao = UnidadesConversao.query.filter_by(id=materialTraco.conversao_unidade_id).first()
-                    #conversao = ConversaoUnidade.obter_por_unidades(
-                    #    unidade_entrada=item_material.unidade,
-                    #    unidade_saida=item_estoque.material.unidade,
-                    #    material_id=item_material.material_id
-                    #)
-                    
-                    if conversao:
-                        print(f"Conversão encontrada. Fator: {conversao.fator}")
-                        # Aplicar a conversão
-                        if conversao.unidade_entrada == materialTraco.unidade.nome:
-                            f=conversao.fator
-                        else:
-                            f=1/conversao.fator
-                        quantidade_original = quantidade_a_baixar
-                        quantidade_a_baixar = quantidade_a_baixar * Decimal(str(f))
-                        print(f"Conversão aplicada: {quantidade_original} {materialTraco.unidade.nome} = {quantidade_a_baixar} {item_estoque.material.unidade_obj.nome}")
-                    else:
-                        print(f"Nenhuma conversão encontrada.")
-                        # Sem conversão disponível
-                        resultados.append((False, 
-                            f"Não foi possível encontrar conversão de {materialTraco.unidade.nome} para {item_estoque.material.unidade_obj.nome} para o material {item_material.material.nome}", 
-                            item_material.material_id
-                        ))
-                        continue
                 
                 # Verificar se há quantidade suficiente em estoque
                 if item_estoque.quantidade < quantidade_a_baixar:
                     print(f"Quantidade insuficiente em estoque. Necessário: {quantidade_a_baixar}, Disponível: {item_estoque.quantidade}")
                     resultados.append((False, 
-                        f"Quantidade insuficiente de {item_material.material.nome} em estoque. Necessário: {quantidade_a_baixar} {item_estoque.material.unidade.nome}, Disponível: {item_estoque.quantidade} {item_estoque.material.unidade.nome}", 
+                        f"Quantidade insuficiente de {item_material.material.nome} em estoque. Necessário: {quantidade_a_baixar}, Disponível: {item_estoque.quantidade}", 
                         item_material.material_id
                     ))
                     continue
                 
                 # Criar movimentação de estoque
                 try:
-                    
-                    
                     if EstoqueMovimentacoes.query.filter_by(origem_id=self.id, origem_tipo='usinagem_concreto', estoque_id=item_estoque.id).count() == 0:
-                        # Criar movimentação de estoque para usinagem nova
-
-                        print(f"Criando movimentação de estoque com os seguintes dados:")
-                        print(f"  - estoque_id: {item_estoque.id}")
-                        print(f"  - tipo_movimento: saida")
-                        print(f"  - quantidade: {quantidade_a_baixar}")
-                        print(f"  - origem_id: {self.id}")
-                        print(f"  - origem_tipo: usinagem_concreto")
-                        print(f"  - usuario_id: {usuario_id or 1}")
-                        # Usar o método de classe para criar a movimentação
-                        observacao = f"Consumo em usinagem de concreto #{self.id} - Traço: {self.traco.nome if self.traco else 'N/A'}"
+                        observacao = f"Consumo em usinagem de concreto #{self.id} - Série: {self.serie}"
+                        movimentacao = EstoqueMovimentacoes.criar_baixa_usinagem(
+                            estoque_id=item_estoque.id,
+                            quantidade=quantidade_a_baixar,
+                            data_movimento=self.data_usinagem,
+                            origem_id=self.id,
+                            usuario_id=usuario_id or 1,
+                            observacao=observacao
+                        )
+                    elif item_material.redozagem:
+                        observacao = f"Consumo em usinagem de concreto redozado material {item_material.material.id} #{self.id} - Série: {self.serie}"
                         movimentacao = EstoqueMovimentacoes.criar_baixa_usinagem(
                             estoque_id=item_estoque.id,
                             quantidade=quantidade_a_baixar,
@@ -548,30 +458,13 @@ class ConcretoUsinagens(db.Model):
                             observacao=observacao
                         )
                     else:
-                        #movimentação de redozação
-                        if item_material.redozagem==True:
-
-                            print(f"Criando movimentação de estoque com os seguintes dados:")
-                            print(f"  - estoque_id: {item_estoque.id}")
-                            print(f"  - tipo_movimento: saida")
-                            print(f"  - quantidade: {quantidade_a_baixar}")
-                            print(f"  - origem_id: {self.id}")
-                            print(f"  - origem_tipo: usinagem_concreto")
-                            print(f"  - usuario_id: {usuario_id or 1}")
-                            observacao = f"Consumo em usinagem de concreto redozado material {item_material.material.id} #{self.id} - Traço: {self.traco.nome if self.traco else 'N/A'}"
-                            movimentacao = EstoqueMovimentacoes.criar_baixa_usinagem(
-                                estoque_id=item_estoque.id,
-                                quantidade=quantidade_a_baixar,
-                                data_movimento=self.data_usinagem,
-                                origem_id=self.id,
-                                usuario_id=usuario_id or 1,
-                                observacao=observacao
-                            )
+                        continue
+                    
                     print(f"Movimentação criada com ID: {movimentacao.id if movimentacao else 'N/A'}")
                     item_material.movimentacao_estoque_id = movimentacao.id
                     item_material.save()
                     resultados.append((True, 
-                        f"Baixado {quantidade_a_baixar} {item_estoque.material.unidade_obj.nome} de {item_material.material.nome} do estoque", 
+                        f"Baixado {quantidade_a_baixar} de {item_material.material.nome} do estoque", 
                         item_material.material_id
                     ))
                 except Exception as e:
@@ -581,7 +474,6 @@ class ConcretoUsinagens(db.Model):
                         f"Erro ao realizar baixa de {item_material.material.nome}: {str(e)}", 
                         item_material.material_id
                     ))
-                    # Não damos rollback aqui para permitir que outras movimentações funcionem
             
             # Executar o commit para salvar todas as movimentações
             print(f"\nRealizando commit das alterações no banco de dados")
@@ -589,7 +481,6 @@ class ConcretoUsinagens(db.Model):
             print(f"Commit concluído com sucesso")
             
         except Exception as e:
-            # Se ocorrer erro geral, fazemos rollback de tudo
             db.session.rollback()
             print(f"ERRO GERAL ao baixar materiais: {str(e)}")
             print(traceback.format_exc())
@@ -599,25 +490,7 @@ class ConcretoUsinagens(db.Model):
         return resultados
     
     def __repr__(self):
-        return f'<UsinagemConcreto {self.id} - Data: {self.data_usinagem}, Volume: {self.volume_produzido}m³>'
-
-class ConcretoUsinagensEquipamentos(db.Model):
-    """
-    Modelo para representar equipamentos utilizados em uma usinagem
-    """
-    __tablename__ = 'ConcretoUsinagensEquipamentos'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    usinagem_id = db.Column(db.Integer, db.ForeignKey('ConcretoUsinagens.id', ondelete='CASCADE'), nullable=False)
-    equipamento_id = db.Column(db.Integer, db.ForeignKey('equipamentos.id'), nullable=False)
-    funcao = db.Column(db.String(100), nullable=True)
-    horas_trabalhadas = db.Column(db.Numeric(10, 2), nullable=True)
-    
-    # Relacionamento com o equipamento
-    equipamento = db.relationship('Equipamento')
-    
-    def __repr__(self):
-        return f'<UsinagemEquipamento {self.id} - Usinagem: {self.usinagem_id}, Equipamento: {self.equipamento_id}>'
+        return f'<UsinagemConcreto {self.id} - Série: {self.serie}, Data: {self.data_usinagem}, Volume: {self.volume}m³>'
 
 class ConcretoUsinagensMateriais(db.Model):
     """

@@ -34,7 +34,7 @@ from .estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueI
 from .nota_fiscal import NotaFiscal, NotaFiscalItem
 
 # Importamos os novos modelos de usinagem de concreto
-from .concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagens, ConcretoUsinagensEquipamentos, ConcretoUsinagensMateriais, ConcretoUsinagensRompimentos
+from .concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagens, ConcretoUsinagensMateriais, ConcretoUsinagensRompimentos
 from .concreto import ConcretoConcretagens, ConcretoConcretagensTanques
 
 # Importamos o modelo de conversão de unidades
@@ -84,7 +84,7 @@ __all__ = [
     'Tanques', 'TanquesGrupos', 'TanquesPecas',
     'Equipamento', 'Manutencao', 
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
-    'ConcretoTracos', 'ConcretoTracosItens', 'ConcretoUsinagens', 'ConcretoUsinagensEquipamentos', 'ConcretoUsinagensMateriais', 'ConcretoUsinagensRompimentos',
+    'ConcretoTracos', 'ConcretoTracosItens', 'ConcretoUsinagens', 'ConcretoUsinagensMateriais', 'ConcretoUsinagensRompimentos',
     'ConcretoConcretagens', 'ConcretoConcretagensTanques',
     'Unidades', 'UnidadesConversao',
     'ProdutoComposto', 'ProdutoCompostoItem', 'TanquesProdutoComposto',

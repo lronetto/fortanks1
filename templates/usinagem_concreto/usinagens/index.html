@@ -46,36 +46,29 @@
         <div class="card-body">
             {% if usinagens %}
             <div class="table-responsive">
-                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
-                    <thead>
+                <table class="table table-bordered table-striped table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead class="table-light">
                         <tr>
-                            <th>ID</th>
-                            <td>Nota</td>
-                            <th>Data</th>
-                            <th>Volume (m³)</th>
+                            <th>Série</th>
+                            <th>Data/Hora</th>
                             <th>Traço</th>
-                            <th>Idade</th>
-                            <th>Fluidez</th>
-                            <th>Status</th>
+                            <th>Volume (m³)</th>
+                            <th>Flow</th>
+                            <th>NF</th>
+                            <th>Rompimentos</th>
                             <th width="120">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for usinagem in usinagens %}
                         <tr>
-                            <td>{{ usinagem.id }}</td>
-                            <td>{{ usinagem.nota }}</td>
+                            <td>{{ usinagem.serie }}</td>
                             <td data-order="{{ usinagem.data_usinagem.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</td>
-                            <td>{{ usinagem.volume_produzido }}</td>
-                            <td>{{ usinagem.traco.nome }}</td>
-                            <td>{{ usinagem.idade_str }}</td>
-                            <td>{{ usinagem.fluidez or '-' }}</td>
+                            <td>{{ usinagem.produto_composto.nome if usinagem.produto_composto else '-' }}</td>
+                            <td>{{ usinagem.volume }}</td>
+                            <td>{{ usinagem.flow or '-' }}</td>
+                            <td>{{ usinagem.nota or usinagem.nf or '-' }}</td>
                             <td>
-                                {% if usinagem.tem_redozagem() %}
-                                <span class="badge bg-warning">Redozagem</span>   
-                                {% else %}
-                                <span class="badge bg-{{ usinagem.status_badge }}">{{ usinagem.status }}</span>
-                                {% endif %}
                                 {% if usinagem.rompimento %}
                                     {% if usinagem.rompimento_24h %}
                                     <span class="badge bg-success rompimento-badge" 
@@ -90,7 +83,7 @@
                                           data-bs-html="true"
                                           data-usinagem-id="{{ usinagem.id }}"
                                           data-idade="28D">28D</span>
-                                    {% elif usinagem.idade.days <=28 %}
+                                    {% elif usinagem.idade.days <= 28 %}
                                     <span class="badge bg-warning rompimento-badge" 
                                           data-bs-toggle="tooltip" 
                                           data-bs-html="true"
@@ -104,7 +97,7 @@
                                           data-idade="28D">28D</span>
                                     {% endif %}
                                 {% else %}
-                                    {% if usinagem.idade.days <=0  %}
+                                    {% if usinagem.idade.days <= 0 %}
                                     <span class="badge bg-warning rompimento-badge" 
                                           data-bs-toggle="tooltip" 
                                           data-bs-html="true"
@@ -134,26 +127,18 @@
                             </td>
                             <td>
                                 <div class="btn-group">
-                                    <button type="button" class="btn btn-sm btn-info" 
+                                    <button type="button" class="btn btn-sm btn-primary" 
                                             data-bs-toggle="modal" 
-                                            data-bs-target="#modalVisualizarUsinagem" 
-                                            data-usinagem-id="{{ usinagem.id }}" 
-                                            title="Visualizar">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-warning" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#modalRedozagem" 
-                                            data-usinagem-id="{{ usinagem.id }}" 
-                                            data-traco-id="{{ usinagem.traco_id }}" 
-                                            title="Registrar Redozagem">
-                                        <i class="fas fa-plus-circle"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#modalNovoRompimento" data-usinagem-id="{{ usinagem.id }}" title="Adicionar Rompimento">
-                                        <i class="fas fa-flask"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#modalRelatorioUsinagem" data-usinagem-id="{{ usinagem.id }}" title="Gerar Relatório">
-                                        <i class="fas fa-file-alt"></i>
+                                            data-bs-target="#modalEditarUsinagem" 
+                                            data-usinagem-id="{{ usinagem.id }}"
+                                            data-serie="{{ usinagem.serie }}"
+                                            data-data-usinagem="{{ usinagem.data_usinagem.strftime('%Y-%m-%dT%H:%M') }}"
+                                            data-produto-composto-id="{{ usinagem.produtoCompostoId }}"
+                                            data-volume="{{ usinagem.volume }}"
+                                            data-flow="{{ usinagem.flow or '' }}"
+                                            data-nf="{{ usinagem.nota or usinagem.nf or '' }}"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
                                     </button>
                                     <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal-{{ usinagem.id }}" title="Excluir">
                                         <i class="fas fa-trash"></i>
@@ -161,14 +146,12 @@
                                 </div>
 
                                 <!-- Modal de exclusão -->
-                                <div class="modal fade" id="deleteModal-{{ usinagem.id }}" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel-{{ usinagem.id }}" aria-hidden="true">
-                                    <div class="modal-dialog" role="document">
+                                <div class="modal fade" id="deleteModal-{{ usinagem.id }}" tabindex="-1" aria-labelledby="deleteModalLabel-{{ usinagem.id }}" aria-hidden="true">
+                                    <div class="modal-dialog">
                                         <div class="modal-content">
                                             <div class="modal-header">
                                                 <h5 class="modal-title" id="deleteModalLabel-{{ usinagem.id }}">Confirmar Exclusão</h5>
-                                                <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                                                    <span aria-hidden="true">×</span>
-                                                </button>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                             </div>
                                             <div class="modal-body">
                                                 Tem certeza que deseja excluir a usinagem de concreto do dia <strong>{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</strong>?
@@ -176,8 +159,8 @@
                                                 <small class="text-danger">Esta ação não poderá ser desfeita.</small>
                                             </div>
                                             <div class="modal-footer">
-                                                <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancelar</button>
-                                                <form action="{{ url_for('usinagem_concreto.excluir_usinagem', id=usinagem.id) }}" method="post">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <form action="{{ url_for('usinagem_concreto.excluir_usinagem', id=usinagem.id) }}" method="post" style="display: inline;">
                                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                     <button type="submit" class="btn btn-danger">Excluir</button>
                                                 </form>
@@ -206,13 +189,9 @@
 
 
 
-{% include 'usinagem_concreto/usinagens/modais/redozagem.html' %}
-{% include 'usinagem_concreto/usinagens/modais/novo_rompimento.html' %}
 {% include 'usinagem_concreto/usinagens/modais/nova_usinagem.html' %}
+{% include 'usinagem_concreto/usinagens/modais/editar_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/importar_usinagem.html' %}
-{% include 'usinagem_concreto/usinagens/modais/visualizar_usinagem.html' %}
-{% include 'usinagem_concreto/usinagens/modais/rompimento.html' %}
-{% include 'usinagem_concreto/usinagens/modais/relatorio_usinagem.html' %}
 
 
 {% endblock %}
@@ -221,15 +200,18 @@
 <script>
     // Inicializar variáveis JavaScript a partir do JSON passado pelo backend
     var tracosData = JSON.parse('{{ tracos_json|safe }}');
-    var colaboradoresData = JSON.parse('{{ colaboradores_json|safe }}');
-    var equipamentosData = JSON.parse('{{ equipamentos_json|safe }}');
+    var table;
 
     $(document).ready(function() {
+        // Verificar se a tabela existe
+        if ($('#dataTable').length === 0) {
+            return;
+        }
+
         // Inicializar DataTable se disponível
         if (typeof $.fn.DataTable !== 'undefined') {
-            $('#dataTable').DataTable({
+            table = $('#dataTable').DataTable({
                 language: {
-                    // Definir traduções diretamente ao invés de carregar arquivo externo
                     "sEmptyTable": "Nenhum registro encontrado",
                     "sInfo": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
                     "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
@@ -248,13 +230,64 @@
                         "sLast": "Último"
                     }
                 },
-                "order": [[ 2, "desc" ]], // Ordenar pela terceira coluna (Data) em ordem descendente
+                "order": [[ 1, "desc" ]], // Ordenar pela coluna Data em ordem descendente
+                "pageLength": 25,
+                "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+                "responsive": true,
+                "autoWidth": false,
+                "processing": false,
+                "stateSave": true, // Salvar estado (página, ordenação, etc) no localStorage
                 "columnDefs": [
-                    { "type": "date", "targets": 2 } // Informa ao DataTables que a coluna 2 é do tipo data
-                ]
+                    { 
+                        "type": "date", 
+                        "targets": 1,
+                        "render": function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return data;
+                            }
+                            return row[1]; // Retorna o valor formatado para exibição
+                        }
+                    },
+                    { 
+                        "orderable": false, 
+                        "targets": [6, 7] // Desabilitar ordenação nas colunas de Rompimentos e Ações
+                    },
+                    {
+                        "width": "120px",
+                        "targets": 7 // Largura fixa para coluna de Ações
+                    },
+                    {
+                        "className": "text-center",
+                        "targets": [6, 7] // Centralizar colunas de Rompimentos e Ações
+                    }
+                ],
+                "dom": '<"row mb-3"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+                "initComplete": function(settings, json) {
+                    // Inicializar tooltips do Bootstrap após o DataTable carregar
+                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+                },
+                "drawCallback": function(settings) {
+                    // Reinicializar tooltips após cada redesenho da tabela
+                    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+                    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                        // Destruir tooltips existentes antes de criar novos
+                        var existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
+                        if (existingTooltip) {
+                            existingTooltip.dispose();
+                        }
+                        return new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+                }
+            });
+
+            // Recarregar tabela após fechar modais de criação/edição (se necessário)
+            $('#modalNovaUsinagem, #modalEditarUsinagem').on('hidden.bs.modal', function() {
+                // A página já recarrega após sucesso, então não precisa recarregar a tabela aqui
             });
         }
-
     });
 </script>
 {% endblock %} 

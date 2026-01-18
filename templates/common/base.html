@@ -606,11 +606,7 @@
                                 <i class="fas fa-cogs"></i> Peças de Tanques
                             </a>
                         </li>
-                        <li class="{{ is_active('usinagem_concreto.listar_tracos') }}">
-                            <a href="{{ url_for('usinagem_concreto.listar_tracos') }}">
-                                <i class="fas fa-bookmark"></i> Traços
-                            </a>
-                        </li>
+                        
                         {% endif %}
 
                         <li class="{{ is_active('upload') }}">
@@ -652,11 +648,7 @@
                                             <i class="fas fa-chart-line"></i> Rompimentos de CP
                                         </a>
                                     </li>
-                                    <li class="{{ is_active('relatorio_usinagem') }}">
-                                        <a href="{{ url_for('relatorio_usinagem.index') }}">
-                                            <i class="fas fa-file-alt"></i> Relatórios de Usinagem
-                                        </a>
-                                    </li>
+
                                     {% endif %}
                                 </ul>
                             </li>

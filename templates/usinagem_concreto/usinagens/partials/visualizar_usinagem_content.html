@@ -4,43 +4,43 @@
             <h6 class="font-weight-bold">Informações Básicas</h6>
             <table class="table table-sm">
                 <tr>
-                    <th>ID:</th>
-                    <td>{{ usinagem.id }}</td>
+                    <th>Série:</th>
+                    <td>{{ usinagem.serie }}</td>
                 </tr>
                 <tr>
-                    <th>Nota:</th>
-                    <td>{{ usinagem.nota }}</td>
-                </tr>
-                <tr>
-                    <th>Data:</th>
+                    <th>Data/Hora:</th>
                     <td>{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</td>
                 </tr>
                 <tr>
-                    <th>Volume:</th>
-                    <td>{{ usinagem.volume_produzido }} m³</td>
-                </tr>
-                <tr>
                     <th>Traço:</th>
-                    <td>{{ usinagem.traco.nome }}</td>
+                    <td>{{ usinagem.produto_composto.nome if usinagem.produto_composto else '-' }}</td>
                 </tr>
                 <tr>
-                    <th>Fluidez:</th>
-                    <td>{{ usinagem.fluidez or '-' }}</td>
+                    <th>Volume:</th>
+                    <td>{{ usinagem.volume }} m³</td>
                 </tr>
+                <tr>
+                    <th>Flow:</th>
+                    <td>{{ usinagem.flow or '-' }}</td>
+                </tr>
+                <tr>
+                    <th>Nota Fiscal:</th>
+                    <td>{{ usinagem.nf or '-' }}</td>
+                </tr>
+                {% if usinagem.dados_adicionais %}
+                <tr>
+                    <th>Dados Adicionais:</th>
+                    <td><pre class="mb-0">{{ usinagem.dados_adicionais|tojson(indent=2) }}</pre></td>
+                </tr>
+                {% endif %}
             </table>
         </div>
         <div class="col-md-6">
-            <h6 class="font-weight-bold">Status</h6>
+            <h6 class="font-weight-bold">Status dos Rompimentos</h6>
             <table class="table table-sm">
                 <tr>
-                    <th>Status Atual:</th>
-                    <td>
-                        {% if usinagem.tem_redozagem() %}
-                        <span class="badge bg-warning">Redozagem</span>   
-                        {% else %}
-                        <span class="badge bg-{{ usinagem.status_badge }}">{{ usinagem.status }}</span>
-                        {% endif %}
-                    </td>
+                    <th>Idade:</th>
+                    <td>{{ usinagem.idade_str }}</td>
                 </tr>
                 <tr>
                     <th>Teste 24h:</th>
@@ -48,12 +48,16 @@
                         {% if usinagem.rompimento %}
                             {% if usinagem.rompimento_24h %}
                             <span class="badge bg-success">Concluído</span>
+                            {% else %}
+                            <span class="badge bg-warning">Pendente</span>
                             {% endif %}
                         {% else %}
-                            {% if usinagem.idade.days <=0  %}
+                            {% if usinagem.idade.days <= 0 %}
                             <span class="badge bg-warning">Pendente</span>
                             {% elif usinagem.idade.days > 3 %}
                             <span class="badge bg-danger">Atrasado</span>
+                            {% else %}
+                            <span class="badge bg-info">Aguardando</span>
                             {% endif %}
                         {% endif %}
                     </td>
@@ -64,12 +68,16 @@
                         {% if usinagem.rompimento %}
                             {% if usinagem.rompimento_28d %}
                             <span class="badge bg-success">Concluído</span>
+                            {% else %}
+                            <span class="badge bg-warning">Pendente</span>
                             {% endif %}
                         {% else %}
                             {% if usinagem.idade.days < 28 %}
                             <span class="badge bg-warning">Pendente</span>
                             {% elif usinagem.idade.days >= 28 %}
                             <span class="badge bg-danger">Atrasado</span>
+                            {% else %}
+                            <span class="badge bg-info">Aguardando</span>
                             {% endif %}
                         {% endif %}
                     </td>
@@ -83,41 +91,19 @@
         <div class="col-12">
             <h6 class="font-weight-bold">Resultados do Rompimento</h6>
             <table class="table table-sm">
-                <tr>
-                    <th>Data do Teste:</th>
-                    <th>Resistência:</th>
-                    <th>Idade do Teste:</th>
-                </tr>
-                <tr>
-                    {% for rompimento in usinagem.rompimentos %}
-                        <td>{{ rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td>{{ rompimento.resistencia }} MPa</td>
-                        <td>{{ rompimento.idade_str }}</td>
-                    {% endfor %}
-                </tr>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if usinagem.redozagens %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <h6 class="font-weight-bold">Redozagens</h6>
-            <table class="table table-sm">
                 <thead>
                     <tr>
-                        <th>Data</th>
-                        <th>Volume</th>
-                        <th>Traço</th>
+                        <th>Data do Teste</th>
+                        <th>Resistência</th>
+                        <th>Idade do Teste</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for redozagem in usinagem.redozagens %}
+                    {% for rompimento in usinagem.rompimentos %}
                     <tr>
-                        <td>{{ redozagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td>{{ redozagem.volume_produzido }} m³</td>
-                        <td>{{ redozagem.traco.nome }}</td>
+                        <td>{{ rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>{{ rompimento.resultado }} MPa</td>
+                        <td>{{ rompimento.idade_str }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -125,4 +111,30 @@
         </div>
     </div>
     {% endif %}
-</div> 
+
+    {% if usinagem.materiais %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <h6 class="font-weight-bold">Materiais Utilizados</h6>
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Material</th>
+                        <th>Quantidade Executada</th>
+                        <th>Unidade</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for material in usinagem.materiais %}
+                    <tr>
+                        <td>{{ material.material.nome if material.material else '-' }}</td>
+                        <td>{{ material.quantidade_executada }}</td>
+                        <td>{{ material.unidade }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>

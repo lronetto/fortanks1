@@ -1,9 +1,0 @@
-                                <!-- Verificar se está incluindo a conversão de unidade no formulário -->
-                                <select name="conversao_unidade_ids" class="form-control select-conversao-editar" data-index="{{ loop.index0 }}">
-                                    <option value="">Selecione uma conversão (opcional)</option>
-                                    {% for conversao in conversoes %}
-                                    <option value="{{ conversao.id }}" {% if material.conversao_unidade_id == conversao.id %}selected{% endif %}>
-                                        {{ conversao.descricao }} ({{ conversao.unidade_origem }} para {{ conversao.unidade_destino }})
-                                    </option>
-                                    {% endfor %}
-                                </select> 
