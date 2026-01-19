@@ -1,0 +1,289 @@
+<!-- Modal de Redosagem -->
+<div class="modal fade" id="modalRedosagem" tabindex="-1" aria-labelledby="modalRedosagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalRedosagemLabel">Redosagem de Materiais</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Mensagens de erro/sucesso -->
+                <div id="mensagemRedosagem" class="alert d-none" role="alert"></div>
+                
+                <!-- Informações do traço e volume -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Traço:</strong> <span id="redosagemTracoNome">-</span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Volume (m³):</strong> <span id="redosagemVolume">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Tabela de materiais -->
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Material</th>
+                                <th>Quantidade Base (por m³)</th>
+                                <th>Quantidade Total</th>
+                                <th>Unidade</th>
+                                <th>Quantidade Redosada</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabelaMateriaisRedosagem">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i> Carregando materiais...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarRedosagem">
+                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Salvar Redosagem
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    let materiaisRedosagem = [];
+    let volumeAtual = 0;
+    
+    // Função para carregar materiais do traço
+    function carregarMateriaisTraco(produtoCompostoId, volume) {
+        if (!produtoCompostoId || !volume || volume <= 0) {
+            $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-danger');
+            $('#mensagemRedosagem').html('<i class="fas fa-exclamation-circle"></i> Selecione um traço e informe o volume antes de abrir a redosagem.');
+            $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Nenhum material disponível.</td></tr>');
+            return;
+        }
+        
+        volumeAtual = parseFloat(volume) || 0;
+        $('#redosagemVolume').text(volumeAtual.toFixed(2));
+        
+        // Construir URL do endpoint
+        const urlEndpoint = '/usinagem-concreto/api/materiais-traco/' + produtoCompostoId;
+        
+        $.ajax({
+            url: urlEndpoint,
+            method: 'GET',
+            success: function(response) {
+                if (response.success && response.materiais && response.materiais.length > 0) {
+                    materiaisRedosagem = response.materiais;
+                    $('#redosagemTracoNome').text(response.traco_nome || '-');
+                    
+                    // Calcular quantidades totais e renderizar tabela
+                    renderizarTabelaMateriais();
+                } else {
+                    $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-warning');
+                    $('#mensagemRedosagem').html('<i class="fas fa-info-circle"></i> Nenhum material encontrado para este traço.');
+                    $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Nenhum material disponível.</td></tr>');
+                }
+            },
+            error: function(xhr) {
+                var errorMsg = 'Erro ao carregar materiais do traço.';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-danger');
+                $('#mensagemRedosagem').html('<i class="fas fa-exclamation-circle"></i> ' + errorMsg);
+                $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Erro ao carregar materiais.</td></tr>');
+            }
+        });
+    }
+    
+    // Função para renderizar a tabela de materiais
+    function renderizarTabelaMateriais() {
+        if (!materiaisRedosagem || materiaisRedosagem.length === 0) {
+            $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Nenhum material disponível.</td></tr>');
+            return;
+        }
+        
+        let html = '';
+        materiaisRedosagem.forEach(function(material, index) {
+            const quantidadeBase = parseFloat(material.quantidade_base) || 0;
+            const quantidadeTotal = quantidadeBase * volumeAtual;
+            
+            html += `
+                <tr data-material-id="${material.material_id}">
+                    <td>
+                        <strong>${material.material_nome}</strong>
+                        ${material.material_codigo ? '<br><small class="text-muted">' + material.material_codigo + '</small>' : ''}
+                    </td>
+                    <td class="text-end">${quantidadeBase.toFixed(4)}</td>
+                    <td class="text-end">
+                        <strong id="qtdTotal_${material.material_id}">${quantidadeTotal.toFixed(4)}</strong>
+                    </td>
+                    <td>KG</td>
+                    <td>
+                        <input type="number" 
+                               step="0.0001" 
+                               min="0" 
+                               class="form-control form-control-sm quantidade-redosada" 
+                               data-material-id="${material.material_id}"
+                               data-quantidade-base="${quantidadeBase}"
+                               value="${quantidadeTotal.toFixed(4)}"
+                               id="qtdRedosada_${material.material_id}">
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#tabelaMateriaisRedosagem').html(html);
+        
+        // Adicionar listener para recalcular quando o volume mudar
+        $('#volume').on('change', function() {
+            const novoVolume = parseFloat($(this).val()) || 0;
+            if (novoVolume > 0 && materiaisRedosagem.length > 0) {
+                volumeAtual = novoVolume;
+                $('#redosagemVolume').text(volumeAtual.toFixed(2));
+                atualizarQuantidadesTotais();
+            }
+        });
+    }
+    
+    // Função para atualizar quantidades totais quando o volume mudar
+    function atualizarQuantidadesTotais() {
+        materiaisRedosagem.forEach(function(material) {
+            const quantidadeBase = parseFloat(material.quantidade_base) || 0;
+            const quantidadeTotal = quantidadeBase * volumeAtual;
+            $('#qtdTotal_' + material.material_id).text(quantidadeTotal.toFixed(4));
+            
+            // Atualizar o valor do input se não foi alterado manualmente
+            const input = $('#qtdRedosada_' + material.material_id);
+            if (input.data('auto-update') !== false) {
+                input.val(quantidadeTotal.toFixed(4));
+            }
+        });
+    }
+    
+    // Marcar inputs como alterados manualmente quando o usuário editar
+    $(document).on('input', '.quantidade-redosada', function() {
+        $(this).data('auto-update', false);
+    });
+    
+    // Inicializar quando o modal for aberto
+    $('#modalRedosagem').on('show.bs.modal', function() {
+        $('#mensagemRedosagem').addClass('d-none').removeClass('alert-success alert-danger alert-warning');
+        
+        // Obter valores do formulário principal
+        const produtoCompostoId = $('#produto_composto_id').hasClass('select2-hidden-accessible') 
+            ? $('#produto_composto_id').select2('val') 
+            : $('#produto_composto_id').val();
+        const volume = $('#volume').val();
+        
+        if (produtoCompostoId && volume) {
+            carregarMateriaisTraco(produtoCompostoId, volume);
+        } else {
+            $('#mensagemRedosagem').removeClass('d-none').addClass('alert-warning');
+            $('#mensagemRedosagem').html('<i class="fas fa-info-circle"></i> Selecione um traço e informe o volume antes de abrir a redosagem.');
+            $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Nenhum material disponível.</td></tr>');
+        }
+    });
+    
+    // Limpar ao fechar o modal
+    $('#modalRedosagem').on('hidden.bs.modal', function() {
+        materiaisRedosagem = [];
+        volumeAtual = 0;
+        $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando materiais...</td></tr>');
+        $('#mensagemRedosagem').addClass('d-none').removeClass('alert-success alert-danger alert-warning');
+    });
+    
+    // Salvar redosagem
+    $('#btnSalvarRedosagem').on('click', function() {
+        if (!materiaisRedosagem || materiaisRedosagem.length === 0) {
+            $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-danger');
+            $('#mensagemRedosagem').html('<i class="fas fa-exclamation-circle"></i> Nenhum material para salvar.');
+            return;
+        }
+        
+        const btnSalvar = $(this);
+        const spinner = btnSalvar.find('.spinner-border');
+        
+        // Desabilitar botão e mostrar spinner
+        btnSalvar.prop('disabled', true);
+        spinner.removeClass('d-none');
+        
+        // Coletar dados da redosagem
+        const redosagem = {
+            materiais: []
+        };
+        
+        let temErro = false;
+        materiaisRedosagem.forEach(function(material) {
+            const input = $('#qtdRedosada_' + material.material_id);
+            const quantidadeRedosada = parseFloat(input.val()) || 0;
+            
+            if (quantidadeRedosada < 0) {
+                temErro = true;
+                input.addClass('is-invalid');
+            } else {
+                input.removeClass('is-invalid');
+            }
+            
+            redosagem.materiais.push({
+                material_id: material.material_id,
+                material_nome: material.material_nome,
+                quantidade_base: material.quantidade_base,
+                quantidade_total: material.quantidade_base * volumeAtual,
+                quantidade_redosada: quantidadeRedosada,
+                unidade_id: material.unidade_id,
+                unidade_nome: material.unidade_nome,
+                estoque_id: material.estoque_id
+            });
+        });
+        
+        if (temErro) {
+            $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-danger');
+            $('#mensagemRedosagem').html('<i class="fas fa-exclamation-circle"></i> Corrija os valores inválidos antes de salvar.');
+            btnSalvar.prop('disabled', false);
+            spinner.addClass('d-none');
+            return;
+        }
+        
+        // Atualizar o campo dados_adicionais no formulário principal
+        let dadosAdicionais = {};
+        try {
+            const dadosAtuais = $('#dados_adicionais').val();
+            if (dadosAtuais && dadosAtuais.trim()) {
+                dadosAdicionais = JSON.parse(dadosAtuais);
+            }
+        } catch (e) {
+            console.warn('Erro ao parsear dados_adicionais existentes:', e);
+        }
+        
+        dadosAdicionais.redosagem = redosagem;
+        $('#dados_adicionais').val(JSON.stringify(dadosAdicionais));
+        
+        // Mostrar mensagem de sucesso
+        $('#mensagemRedosagem').removeClass('d-none alert-danger').addClass('alert-success');
+        $('#mensagemRedosagem').html('<i class="fas fa-check-circle"></i> Redosagem salva com sucesso! Os dados foram atualizados no formulário.');
+        
+        // Reabilitar botão
+        btnSalvar.prop('disabled', false);
+        spinner.addClass('d-none');
+        
+        // Fechar modal após 1 segundo
+        setTimeout(function() {
+            $('#modalRedosagem').modal('hide');
+        }, 1500);
+    });
+})();
+</script>

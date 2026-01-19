@@ -30,6 +30,14 @@
                                     </select>
                                 </div>
                             </div>
+                            <div class="form-group">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="traco" name="traco">
+                                    <label class="form-check-label" for="traco">
+                                        É Traço
+                                    </label>
+                                </div>
+                            </div>
                              <div class="form-group">
                                 <label for="descricao">Descrição</label>
                                 <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
@@ -119,6 +127,7 @@
             $('#nome').val('');
             $('#tempo_producao').val('');
             $('#status').val('Ativo');
+            $('#traco').prop('checked', false);
             $('#descricao').val('');
             $('#image-preview').attr('src', '/static/img/logo.png');
             $('#remover_imagem_hidden').val('0');
@@ -221,6 +230,10 @@
                 $('#tempo_producao').val(data.produtos[0].tempo_producao);
                 $('#status').val(data.produtos[0].status);
                 $('#descricao').val(data.produtos[0].descricao);
+                
+                // Tratar traco do produto composto (campo direto do banco)
+                const tracoProduto = data.produtos[0].traco === true || data.produtos[0].traco === 1 || data.produtos[0].traco === '1';
+                $('#traco').prop('checked', tracoProduto);
                 
                 // Tratar imagem corretamente
                 if (data.produtos[0].imagem) {
@@ -424,12 +437,16 @@
                 });
             });
 
+            // Coletar traco do produto composto (campo direto do banco)
+            const traco = $('#traco').is(':checked') ? 1 : 0;
+
             const dadosProduto = {
                 id: produtoId || null,
                 nome: $('#nome').val(),
                 descricao: $('#descricao').val(),
                 tempo_producao: $('#tempo_producao').val() || null,
                 status: $('#status').val(),
+                traco: traco,
                 componentes: componentes,
                 imagem: imageDataUrl || null, // Envia a imagem em base64 ou null se não houver
                 remover_imagem: $('#remover_imagem_hidden').val() === '1'

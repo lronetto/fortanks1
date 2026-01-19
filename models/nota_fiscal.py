@@ -436,7 +436,6 @@ class NotaFiscal(db.Model):
                    # print(f'num ={nf.numero_nf} dados_adicionais: {nf.dados_adicionais}')
                     nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
                     nf.save()
-                
                 self.existente = True
                 self.log_info = log
                 return nf   
@@ -893,6 +892,11 @@ class NotaFiscal(db.Model):
                         item.material_id = item_anterior.material_id                      
                     else:
                         item.fator_conversao_aplicado = None
+                    material = Material.query.get(item_anterior.material_id)
+                    if material:
+                        if not material.ncm:
+                            material.ncm = item.ncm
+                            material.save()
                     item.save()
         log={
             "itens": len(self.itens),

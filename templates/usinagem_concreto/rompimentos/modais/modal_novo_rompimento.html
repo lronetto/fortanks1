@@ -20,7 +20,7 @@
                             <option value="">Não vinculado a usinagem</option>
                             {% for usinagem in usinagens %}
                             <option value="{{ usinagem.id }}">
-                                Usinagem #{{ usinagem.id }} - {{ usinagem.traco.nome }} ({{ usinagem.data_usinagem.strftime('%d/%m/%Y') }})
+                                Usinagem #{{ usinagem.id }} - {{ usinagem.produto_composto.nome }} ({{ usinagem.data_usinagem.strftime('%d/%m/%Y') }})
                             </option>
                             {% endfor %}
                         </select>

@@ -1,0 +1,788 @@
+"""
+Rotas relacionadas a usinagens de concreto
+"""
+from flask import render_template, redirect, url_for, request, flash, jsonify, send_file
+from flask_login import login_required, current_user
+from models.material import Materiais
+from models.unidade import Unidades, UnidadesConversao, get_conversao_unidade
+from models.colaborador import Colaborador
+from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens
+from models.produto_composto import ProdutoComposto
+from models.database import db
+from datetime import datetime
+from decimal import Decimal
+import json
+from markupsafe import Markup
+import pandas as pd
+import io
+from . import usinagem_concreto
+
+
+# Rotas para API
+@usinagem_concreto.route('/api/materiais-para-traco')
+@login_required
+def api_materiais_para_traco():
+    """API para obter materiais que podem ser usados em traços de concreto"""
+    try:
+        # Busca todos os materiais ordenados por nome
+        materiais = Materiais.query.order_by(Materiais.nome).all()
+        
+        # Transforma em JSON
+        result = []
+        for m in materiais:
+            result.append({
+                'id': m.id,
+                'codigo': m.codigo,
+                'nome': m.nome,
+                'unidade_id': m.unidade_id
+            })
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@usinagem_concreto.route('/api/conversoes-unidade', methods=['GET'])
+@login_required
+def api_conversoes_unidade():
+    """Retorna todas as conversões de unidade cadastradas"""
+    try:
+        conversoes = UnidadesConversao.query.all()
+        resultado = []
+        
+        for conversao in conversoes:
+            resultado.append({
+                'id': conversao.id,
+                'descricao': conversao.nome,
+                'unidade_origem': conversao.unidade_entrada,
+                'unidade_destino': conversao.unidade_saida,
+                'fator': float(conversao.fator)
+            })
+        
+        return jsonify(resultado)
+    except Exception as e:
+        print(f"Erro ao buscar conversões: {str(e)}")
+        return jsonify([])
+
+
+@usinagem_concreto.route('/api/materiais-traco/<int:produto_composto_id>')
+@login_required
+def api_materiais_traco(produto_composto_id):
+    """API para obter materiais de um traço (produto_composto) com suas quantidades"""
+    try:
+        produto_composto = ProdutoComposto.query.get_or_404(produto_composto_id)
+        
+        if not produto_composto.traco:
+            return jsonify({'error': 'Produto composto não é um traço válido.'}), 400
+        
+        materiais = []
+        for componente in produto_composto.componentes:
+            if componente.estoque and componente.estoque.tipo_item == 'material' and componente.estoque.material:
+                material = componente.estoque.material
+                unidade_nome = material.unidade_obj.nome if material.unidade_obj else 'N/A'
+                conversao = get_conversao_unidade(material_id=material.id, unidade_saida='KG')
+                print(f"material.nome: {material.nome}, conversao: {conversao}")
+                materiais.append({
+                    'material_id': material.id,
+                    'material_nome': material.nome,
+                    'material_codigo': material.codigo or '',
+                    'quantidade_base': float(componente.quantidade) * conversao,  # Quantidade por m³
+                    'unidade_id': material.unidade_id,
+                    'unidade_nome': unidade_nome,
+                    'estoque_id': componente.estoque_id
+                })
+        
+        return jsonify({
+            'success': True,
+            'materiais': materiais,
+            'traco_nome': produto_composto.nome
+        })
+    except Exception as e:
+        print(f"Erro ao buscar materiais do traço: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# Rotas para Usinagens
+@usinagem_concreto.route('/usinagens')
+@login_required
+def listar_usinagens():
+    """Lista todas as usinagens de concreto cadastradas com filtros opcionais de data."""
+    
+    # Obter parâmetros de filtro da URL
+    data_inicial_str = request.args.get('data_inicial')
+    data_final_str = request.args.get('data_final')
+    
+    query = ConcretoUsinagens.query
+    
+    data_inicial = None
+    data_final = None
+
+    if data_inicial_str:
+        try:
+            data_inicial = datetime.strptime(data_inicial_str, '%Y-%m-%d')
+            query = query.filter(ConcretoUsinagens.data_usinagem >= data_inicial)
+        except ValueError:
+            flash('Formato de Data Inicial inválido. Use AAAA-MM-DD.', 'warning')
+            data_inicial = None
+
+    if data_final_str:
+        try:
+            data_final_dt_obj = datetime.strptime(data_final_str, '%Y-%m-%d')
+            data_final_para_query = datetime.combine(data_final_dt_obj.date(), datetime.max.time())
+            query = query.filter(ConcretoUsinagens.data_usinagem <= data_final_para_query)
+            data_final = data_final_dt_obj
+        except ValueError:
+            flash('Formato de Data Final inválido. Use AAAA-MM-DD.', 'warning')
+            data_final = None
+
+    usinagens = query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
+    
+    # Buscar produtos compostos que são traços (traco=True)
+    tracos = ProdutoComposto.query.filter_by(traco=True, status='Ativo').order_by(ProdutoComposto.nome).all()
+    tracos_data = [{'id': t.id, 'nome': t.nome} for t in tracos]
+
+    usinagens_data = []
+    for usinagem in usinagens:
+        idade = (datetime.now() - usinagem.data_usinagem)
+        usinagem.idade = idade
+        usinagem.idade_hours = idade.total_seconds() / 3600
+        usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0 else f"{usinagem.idade.days} dias"
+
+        usinagem.rompimento = []
+        if ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
+            for rompimento in ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).all():
+                rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
+                rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
+                rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
+                usinagem.rompimento.append(rompimento)
+
+        usinagem.rompimento_24h = list(filter(lambda x: x.idade.days <= 3, usinagem.rompimento))
+        usinagem.rompimento_28d = list(filter(lambda x: x.idade.days >= 28, usinagem.rompimento))
+
+        usinagens_data.append(usinagem)
+
+    return render_template(
+        'usinagem_concreto/usinagens/index.html', 
+        now=datetime.now().strftime('%Y-%m-%dT%H:%M'),
+        usinagens=usinagens_data, 
+        tracos=tracos, 
+        tracos_json=Markup(json.dumps(tracos_data)),
+        filtro_data_inicial=data_inicial_str if data_inicial else '',
+        filtro_data_final=data_final_str if data_final else ''
+    )
+
+
+@usinagem_concreto.route('/usinagens/nova', methods=['GET', 'POST'])
+@login_required
+def nova_usinagem():
+    """Nova usinagem de concreto - suporta AJAX e formulário tradicional"""
+    # Buscar produtos compostos que são traços
+    tracos = ProdutoComposto.query.filter_by(traco=True, status='Ativo').order_by(ProdutoComposto.nome).all()
+    
+    if request.method == 'POST':
+        try:
+            # Verificar se é requisição AJAX
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            
+            # Extrair dados do formulário
+            serie = request.form.get('serie', '').strip()
+            data_usinagem_str = request.form.get('data_usinagem', '').strip()
+            produto_composto_id_str = request.form.get('produto_composto_id', '').strip()
+            flow = request.form.get('flow', '').strip()
+            volume_str = request.form.get('volume', '').strip()
+            nf = request.form.get('nf', '').strip()
+            dados_adicionais_str = request.form.get('dados_adicionais', '').strip()
+
+            # Validar campos obrigatórios
+            campos_faltando = []
+            if not serie:
+                campos_faltando.append('Série')
+            if not data_usinagem_str:
+                campos_faltando.append('Data/Hora')
+            if not produto_composto_id_str:
+                campos_faltando.append('Traço')
+            if not volume_str:
+                campos_faltando.append('Volume')
+            
+            if campos_faltando:
+                error_msg = f'Campos obrigatórios não preenchidos: {", ".join(campos_faltando)}'
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': error_msg
+                    }), 400
+                flash(error_msg, 'error')
+                return render_template('usinagem_concreto/usinagens/nova.html', 
+                                     tracos=tracos,
+                                     now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
+
+            # Verificar se série já existe
+            if ConcretoUsinagens.query.filter_by(serie=serie).first():
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Já existe uma usinagem com esta série.'
+                    }), 400
+                flash('Já existe uma usinagem com esta série.', 'error')
+                return render_template('usinagem_concreto/usinagens/nova.html', tracos=tracos)
+
+            # Converter e validar dados
+            try:
+                data_usinagem = datetime.fromisoformat(data_usinagem_str)
+            except ValueError:
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Formato de data/hora inválido. Use o formato: AAAA-MM-DDTHH:MM'
+                    }), 400
+                flash('Formato de data/hora inválido.', 'error')
+                return render_template('usinagem_concreto/usinagens/nova.html', 
+                                     tracos=tracos,
+                                     now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
+            
+            try:
+                volume = Decimal(volume_str.replace(',', '.'))
+                if volume <= 0:
+                    raise ValueError("Volume deve ser maior que zero")
+            except (ValueError, TypeError):
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Volume inválido. Deve ser um número maior que zero.'
+                    }), 400
+                flash('Volume inválido.', 'error')
+                return render_template('usinagem_concreto/usinagens/nova.html', 
+                                     tracos=tracos,
+                                     now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
+            
+            try:
+                produto_composto_id = int(produto_composto_id_str)
+            except (ValueError, TypeError):
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Traço inválido.'
+                    }), 400
+                flash('Traço inválido.', 'error')
+                return render_template('usinagem_concreto/usinagens/nova.html', 
+                                     tracos=tracos,
+                                     now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
+            
+            # Validar produto composto
+            produto_composto = ProdutoComposto.query.get_or_404(produto_composto_id)
+            if not produto_composto or not produto_composto.traco:
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Produto composto selecionado não é um traço válido.'
+                    }), 400
+                flash('Produto composto selecionado não é um traço válido.', 'error')
+                return render_template('usinagem_concreto/usinagens/nova.html', tracos=tracos)
+
+            # Processar dados_adicionais (JSON)
+            dados_adicionais = None
+            if dados_adicionais_str:
+                try:
+                    dados_adicionais = json.loads(dados_adicionais_str)
+                except json.JSONDecodeError:
+                    if is_ajax:
+                        return jsonify({
+                            'success': False,
+                            'error': 'Dados adicionais inválidos (deve ser JSON válido).'
+                        }), 400
+                    flash('Dados adicionais inválidos (deve ser JSON válido).', 'warning')
+
+            # Criar nova usinagem
+            usinagem = ConcretoUsinagens(
+                serie=serie,
+                data_usinagem=data_usinagem,
+                produtoCompostoId=produto_composto_id,
+                flow=flow,
+                volume=volume,
+                nota=nf,
+                dados_adicionais=dados_adicionais
+            )
+            db.session.add(usinagem)
+            db.session.commit()
+            
+            if is_ajax:
+                return jsonify({
+                    'success': True,
+                    'message': 'Usinagem cadastrada com sucesso!',
+                    'usinagem_id': usinagem.id
+                })
+            
+            flash('Usinagem cadastrada com sucesso!', 'success')
+            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Erro geral ao cadastrar usinagem: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': False,
+                    'error': f'Erro ao cadastrar usinagem: {str(e)}'
+                }), 500
+            
+            flash(f'Erro ao cadastrar usinagem: {str(e)}', 'danger')
+            return render_template('usinagem_concreto/usinagens/nova.html', 
+                                   tracos=tracos, 
+                                 now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
+    
+    return render_template('usinagem_concreto/usinagens/nova.html', 
+                           tracos=tracos, 
+                         now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
+
+
+@usinagem_concreto.route('/usinagens/<int:id>/visualizar')
+@login_required
+def visualizar_usinagem(id):
+    """Visualiza detalhes de uma usinagem de concreto"""
+    usinagem = ConcretoUsinagens.query.get_or_404(id)
+    materiais_calculados = usinagem.calcular_materiais()
+    
+    # Se for uma requisição AJAX, retorna apenas o conteúdo do modal
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        idade = (datetime.now() - usinagem.data_usinagem)
+        usinagem.idade = idade
+        usinagem.idade_hours = idade.total_seconds() / 3600
+        usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0 else f"{usinagem.idade.days} dias"
+
+        usinagem.rompimentos = []
+        if ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
+            for rompimento in ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).all():
+                rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
+                rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
+                rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
+                usinagem.rompimentos.append(rompimento)
+        return render_template('usinagem_concreto/usinagens/partials/visualizar_usinagem_content.html',
+                             usinagem=usinagem,
+                             materiais_calculados=materiais_calculados)
+    
+    # Se não for AJAX, retorna a página completa
+    return render_template('usinagem_concreto/usinagens/visualizar.html',
+                          usinagem=usinagem,
+                          materiais_calculados=materiais_calculados)
+
+
+@usinagem_concreto.route('/usinagens/<int:id>/editar', methods=['POST'])
+@login_required
+def editar_usinagem(id):
+    """Edita uma usinagem de concreto - suporta AJAX e formulário tradicional"""
+    usinagem = ConcretoUsinagens.query.get_or_404(id)
+    
+    try:
+        # Verificar se é requisição AJAX
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        # Extrair dados do formulário
+        serie = request.form.get('serie', '').strip()
+        data_usinagem_str = request.form.get('data_usinagem', '').strip()
+        produto_composto_id_str = request.form.get('produto_composto_id', '').strip()
+        flow = request.form.get('flow', '').strip()
+        volume_str = request.form.get('volume', '').strip()
+        nf = request.form.get('nf', '').strip()
+        dados_adicionais_str = request.form.get('dados_adicionais', '').strip()
+
+        # Validar campos obrigatórios
+        campos_faltando = []
+        if not serie:
+            campos_faltando.append('Série')
+        if not data_usinagem_str:
+            campos_faltando.append('Data/Hora')
+        if not produto_composto_id_str:
+            campos_faltando.append('Traço')
+        if not volume_str:
+            campos_faltando.append('Volume')
+        
+        if campos_faltando:
+            error_msg = f'Campos obrigatórios não preenchidos: {", ".join(campos_faltando)}'
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'error': error_msg
+                }), 400
+            flash(error_msg, 'error')
+            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+
+        # Verificar se série já existe (exceto para a própria usinagem)
+        if serie != usinagem.serie:
+            if ConcretoUsinagens.query.filter_by(serie=serie).first():
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Já existe uma usinagem com esta série.'
+                    }), 400
+                flash('Já existe uma usinagem com esta série.', 'error')
+                return redirect(url_for('usinagem_concreto.listar_usinagens'))
+
+        # Converter e validar dados
+        try:
+            data_usinagem = datetime.fromisoformat(data_usinagem_str)
+        except ValueError:
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'error': 'Formato de data/hora inválido. Use o formato: AAAA-MM-DDTHH:MM'
+                }), 400
+            flash('Formato de data/hora inválido.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        
+        try:
+            volume = Decimal(volume_str.replace(',', '.'))
+            if volume <= 0:
+                raise ValueError("Volume deve ser maior que zero")
+        except (ValueError, TypeError):
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'error': 'Volume inválido. Deve ser um número maior que zero.'
+                }), 400
+            flash('Volume inválido.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        
+        try:
+            produto_composto_id = int(produto_composto_id_str)
+        except (ValueError, TypeError):
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'error': 'Traço inválido.'
+                }), 400
+            flash('Traço inválido.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        
+        # Validar produto composto
+        produto_composto = ProdutoComposto.query.get_or_404(produto_composto_id)
+        if not produto_composto or not produto_composto.traco:
+            if is_ajax:
+                return jsonify({
+                    'success': False,
+                    'error': 'Produto composto selecionado não é um traço válido.'
+                }), 400
+            flash('Produto composto selecionado não é um traço válido.', 'error')
+            return redirect(url_for('usinagem_concreto.listar_usinagens'))
+
+        # Processar dados_adicionais (JSON)
+        dados_adicionais = None
+        if dados_adicionais_str:
+            try:
+                dados_adicionais = json.loads(dados_adicionais_str)
+            except json.JSONDecodeError:
+                if is_ajax:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Dados adicionais inválidos (deve ser JSON válido).'
+                    }), 400
+                flash('Dados adicionais inválidos (deve ser JSON válido).', 'warning')
+
+        # Atualizar usinagem
+        usinagem.serie = serie
+        usinagem.data_usinagem = data_usinagem
+        usinagem.produtoCompostoId = produto_composto_id
+        usinagem.flow = flow if flow else None
+        usinagem.volume = volume
+        usinagem.nota = nf if nf else None
+        usinagem.dados_adicionais = dados_adicionais
+        
+        db.session.commit()
+        
+        if is_ajax:
+            return jsonify({
+                'success': True,
+                'message': 'Usinagem atualizada com sucesso!',
+                'usinagem_id': usinagem.id
+            })
+        
+        flash('Usinagem atualizada com sucesso!', 'success')
+        return redirect(url_for('usinagem_concreto.listar_usinagens'))
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro geral ao atualizar usinagem: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({
+                'success': False,
+                'error': f'Erro ao atualizar usinagem: {str(e)}'
+            }), 500
+        
+        flash(f'Erro ao atualizar usinagem: {str(e)}', 'danger')
+        return redirect(url_for('usinagem_concreto.listar_usinagens'))
+
+
+@usinagem_concreto.route('/usinagens/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_usinagem(id):
+    """Exclui uma usinagem de concreto"""
+    usinagem = ConcretoUsinagens.query.get_or_404(id)
+    
+    try:
+        usinagem.delete()
+        flash('Usinagem de concreto excluída com sucesso!', 'success')
+    except Exception as e:
+        flash(f'Erro ao excluir usinagem de concreto: {str(e)}', 'danger')
+    
+    return redirect(url_for('usinagem_concreto.listar_usinagens'))
+
+
+@usinagem_concreto.route('/usinagens/<int:id>/rompimentos')
+@login_required
+def listar_rompimentos_usinagem(id):
+    """Lista todos os rompimentos de corpo de prova de uma usinagem específica"""
+    usinagem = ConcretoUsinagens.query.get_or_404(id)
+
+    return render_template('usinagem_concreto/rompimentos/por_usinagem.html',
+                          usinagem=usinagem)
+
+
+@usinagem_concreto.route('/usinagens/<int:id>/data-usinagem')
+@login_required
+def get_data_usinagem(id):
+    """Retorna a data de usinagem de uma usinagem específica"""
+    usinagem = ConcretoUsinagens.query.get_or_404(id)
+    return jsonify({
+        'data_usinagem': usinagem.data_usinagem.isoformat()
+    })
+
+
+@usinagem_concreto.route('/usinagens/numeros-betoneira')
+@login_required
+def get_numeros_betoneira():
+    """Retorna todos os números de betoneira únicos já cadastrados"""
+    try:
+        # Busca todos os números de betoneira únicos, ordenados
+        numeros = db.session.query(ConcretoUsinagens.nbt).distinct().filter(ConcretoUsinagens.nbt.isnot(None)).order_by(ConcretoUsinagens.nbt).all()
+        
+        # Transforma em lista simples
+        resultado = [numero[0] for numero in numeros if numero[0]]
+        
+        return jsonify(resultado)
+    except Exception as e:
+        print(f"Erro ao buscar números de betoneira: {str(e)}")
+        return jsonify([])
+
+
+@usinagem_concreto.route('/usinagens/ultima-nota')
+@login_required
+def get_ultima_nota():
+    """Retorna a última nota de usinagem"""
+    try:
+        # Busca a última nota de usinagem
+        nota = db.session.query(ConcretoUsinagens.nota).order_by(ConcretoUsinagens.nota.desc()).first()
+        
+        # Transforma em lista simples
+        resultado = nota[0] if nota else None
+        
+        return jsonify(resultado)
+    except Exception as e:
+        print(f"Erro ao buscar última nota: {str(e)}")
+        return jsonify(None)
+@usinagem_concreto.route('/usinagens/download-excel-modelo-usinagem')
+@login_required
+def download_excel_modelo_usinagem():
+    """Retorna o modelo de excel para importação de usinagens"""
+    return send_file('templates/usinagem_concreto/usinagens/modelos/modelo_importacao_usinagem.xlsx', as_attachment=True)
+
+
+@usinagem_concreto.route('/usinagens/importar-excel', methods=['POST'])
+@login_required
+def importar_usinagens_excel():
+    """Importa usinagens de concreto a partir de um arquivo Excel"""
+    if 'arquivo_excel' not in request.files:
+        return jsonify({'success': False, 'errors': ['Nenhum arquivo enviado.']}), 400
+    
+    arquivo = request.files['arquivo_excel']
+    produto_composto_id_str = request.form.get('produto_composto_id')  # Usando produto_composto_id em vez de traco_id
+    responsavel_id_str = request.form.get('responsavel_id')
+
+    if not arquivo or arquivo.filename == '':
+        return jsonify({'success': False, 'errors': ['Nome de arquivo inválido.']}), 400
+    
+    if not produto_composto_id_str:
+        return jsonify({'success': False, 'errors': ['Traço (Produto Composto) é obrigatório.']}), 400
+
+    try:
+        produto_composto_id = int(produto_composto_id_str)
+    except ValueError:
+        return jsonify({'success': False, 'errors': ['ID de Traço inválido.']}), 400
+
+    # Buscar produto composto (traço)
+    produto_composto = ProdutoComposto.query.get(produto_composto_id)
+    if not produto_composto:
+        return jsonify({'success': False, 'errors': [f'Traço com ID {produto_composto_id} não encontrado.']}), 404
+    
+    if not produto_composto.traco:
+        return jsonify({'success': False, 'errors': [f'Produto composto com ID {produto_composto_id} não é um traço.']}), 400
+
+    # Buscar responsável se informado
+    responsavel_id = None
+    if responsavel_id_str:
+        try:
+            responsavel_id = int(responsavel_id_str)
+            responsavel = Colaborador.query.get(responsavel_id)
+            if not responsavel:
+                return jsonify({'success': False, 'errors': [f'Responsável com ID {responsavel_id} não encontrado.']}), 404
+        except ValueError:
+            pass
+
+    map_coluna_material_info = {}
+    try:
+        # Ler a aba de referência primeiro para saber quais colunas de material esperar
+        df_referencia_materiais = pd.read_excel(arquivo, sheet_name='_Referencia_Materiais')
+        for _, row_ref in df_referencia_materiais.iterrows():
+            map_coluna_material_info[row_ref['Nome Coluna Excel']] = {
+                'material_id': row_ref['ID Material'],
+                'unidade_id': row_ref['ID Unidade'],
+                'item_produto_composto_id': row_ref.get('ID ItemProdutoComposto', row_ref.get('ID ItemTracoConcreto'))  # Compatibilidade
+            }
+        
+        df = pd.read_excel(arquivo, sheet_name='Modelo_Importacao_Usinagens')
+
+    except Exception as e:
+        # Captura erros como aba não encontrada ou problema de parsing geral do Excel
+        try:
+            excel_file = pd.ExcelFile(arquivo)
+            if '_Referencia_Materiais' not in excel_file.sheet_names:
+                return jsonify({'success': False, 'errors': ['Aba de referência "_Referencia_Materiais" não encontrada no arquivo. Por favor, use o modelo gerado pelo sistema.']}), 400
+            if 'Modelo_Importacao_Usinagens' not in excel_file.sheet_names:
+                return jsonify({'success': False, 'errors': ['Aba principal "Modelo_Importacao_Usinagens" não encontrada no arquivo.']}), 400
+        except:
+            pass
+        return jsonify({'success': False, 'errors': [f'Erro ao ler o arquivo Excel: {str(e)}.']}), 400
+
+    feedback_erros = []
+    usinagens_importadas_count = 0
+    
+    colunas_fixas_rename_map = {
+        'Data Usinagem (AAAA-MM-DD HH:MM)': 'data_usinagem_raw',
+        'Volume Produzido (m³)': 'volume_produzido_raw',
+        'Umidade (%)': 'umidade_raw',
+        'Nota': 'nota_raw',
+        'Quantidade de CPs': 'quantidade_cps_raw',
+    }
+    # Renomeia apenas as colunas que existem no DF para evitar erros se o usuário remover alguma
+    df.rename(columns={k: v for k, v in colunas_fixas_rename_map.items() if k in df.columns}, inplace=True)
+
+    for index, row in df.iterrows():
+        linha_excel = index + 2  # Para feedback ao usuário (1-indexed + cabeçalho)
+        try:
+            data_usinagem_str = row.get('data_usinagem_raw')
+            volume_produzido_str = row.get('volume_produzido_raw')
+            umidade_str = row.get('umidade_raw')
+            quantidade_cps_str = row.get('quantidade_cps_raw')
+            nota_str = row.get('nota_raw')
+            serie_str = row.get('Série', '').strip() if 'Série' in row else None
+
+            # Validações
+            if pd.isna(data_usinagem_str):
+                feedback_erros.append(f"Linha {linha_excel}: Data de Usinagem não informada.")
+                continue
+            try:
+                if isinstance(data_usinagem_str, datetime):  # Pandas já converteu
+                    data_usinagem = data_usinagem_str
+                else:  # Tenta converter de string
+                    data_usinagem = datetime.strptime(str(data_usinagem_str).split('.')[0].split(' ')[0], '%Y-%m-%d')  # Pega só a data
+                    # Adicionar hora se vier na string:
+                    if ' ' in str(data_usinagem_str):
+                        time_part_str = str(data_usinagem_str).split(' ')[1].split('.')[0]
+                        time_part = datetime.strptime(time_part_str, '%H:%M:%S' if ':' in time_part_str and time_part_str.count(':') == 2 else '%H:%M').time()
+                        data_usinagem = datetime.combine(data_usinagem.date(), time_part)
+            except ValueError:
+                feedback_erros.append(f"Linha {linha_excel}: Data de Usinagem ('{data_usinagem_str}') em formato inválido. Use AAAA-MM-DD ou AAAA-MM-DD HH:MM.")
+                continue
+            
+            if pd.isna(volume_produzido_str):
+                feedback_erros.append(f"Linha {linha_excel}: Volume Produzido não informado.")
+                continue
+            try:
+                volume_produzido = Decimal(str(volume_produzido_str).replace(',', '.'))
+                if volume_produzido <= 0:
+                    raise ValueError("Volume deve ser positivo")
+            except:
+                feedback_erros.append(f"Linha {linha_excel}: Volume Produzido ('{volume_produzido_str}') inválido.")
+                continue
+
+            # Gerar série se não informada
+            if not serie_str or pd.isna(serie_str):
+                # Gerar série automática baseada na data e volume
+                serie_str = f"IMP-{data_usinagem.strftime('%Y%m%d%H%M')}-{index+1}"
+            
+            # Verificar se série já existe
+            if ConcretoUsinagens.query.filter_by(serie=serie_str).first():
+                feedback_erros.append(f"Linha {linha_excel}: Série '{serie_str}' já existe. Pulando esta linha.")
+                continue
+
+            # Criar nova usinagem
+            nova_usinagem = ConcretoUsinagens(
+                serie=serie_str,
+                data_usinagem=data_usinagem,
+                produtoCompostoId=produto_composto_id,
+                volume=volume_produzido,
+                nota=nota_str if not pd.isna(nota_str) and str(nota_str).strip() else None
+            )
+            db.session.add(nova_usinagem)
+            db.session.flush()
+
+            # Processar materiais se houver informações no Excel
+            materiais_para_salvar = []
+            algum_material_informado = False
+            if map_coluna_material_info:
+                from models.concreto import ConcretoUsinagensMateriais
+                for nome_coluna_excel, info_material in map_coluna_material_info.items():
+                    if nome_coluna_excel in df.columns:  # Verifica se a coluna do material existe no arquivo do usuário
+                        quantidade_executada_str = row.get(nome_coluna_excel)
+                        if not pd.isna(quantidade_executada_str) and str(quantidade_executada_str).strip() != '':
+                            algum_material_informado = True
+                            try:
+                                quantidade_executada = Decimal(str(quantidade_executada_str).replace(',', '.'))
+                                if quantidade_executada < 0:
+                                    raise ValueError("Quantidade não pode ser negativa.")
+                                
+                                # Buscar unidade
+                                unidade = Unidades.query.get(info_material['unidade_id'])
+                                if not unidade:
+                                    feedback_erros.append(f"Linha {linha_excel}, Material '{nome_coluna_excel}': Unidade não encontrada.")
+                                    continue
+                                
+                                # Criar registro de material da usinagem
+                                usinagem_material = ConcretoUsinagensMateriais(
+                                    usinagem_id=nova_usinagem.id,
+                                    material_id=info_material['material_id'],
+                                    quantidade_executada=quantidade_executada,
+                                    unidade_id=info_material['unidade_id']
+                                )
+                                materiais_para_salvar.append(usinagem_material)
+                            except Exception as e:
+                                feedback_erros.append(f"Linha {linha_excel}, Material '{nome_coluna_excel}': Quantidade ('{quantidade_executada_str}') inválida. {str(e)}")
+                                continue
+            
+            if materiais_para_salvar:
+                db.session.add_all(materiais_para_salvar)
+                db.session.flush()
+            
+            db.session.commit()
+            usinagens_importadas_count += 1
+
+        except Exception as e_row:
+            db.session.rollback()
+            feedback_erros.append(f"Linha {linha_excel}: Erro inesperado ao processar - {str(e_row)}")
+            import traceback
+            traceback.print_exc()
+
+    if usinagens_importadas_count > 0 and not feedback_erros:
+        flash(f'{usinagens_importadas_count} usinagem(ns) importada(s) com sucesso!', 'success')
+        return jsonify({'success': True, 'message': f'{usinagens_importadas_count} usinagem(ns) importada(s) com sucesso!', 'errors': []})
+    elif usinagens_importadas_count > 0 and feedback_erros:
+        flash(f'{usinagens_importadas_count} usinagem(ns) importada(s). Alguns erros ocorreram (ver detalhes abaixo).', 'warning')
+        return jsonify({'success': True, 'message': f'{usinagens_importadas_count} usinagem(ns) importada(s). Erros em {len(feedback_erros)} linha(s).', 'errors': feedback_erros})
+    else:
+        flash('Nenhuma usinagem foi importada. Verifique os erros.', 'danger')
+        return jsonify({'success': False, 'message': 'Nenhuma usinagem importada.', 'errors': feedback_erros if feedback_erros else ['Nenhuma usinagem válida encontrada no arquivo ou nenhum dado fornecido.']})

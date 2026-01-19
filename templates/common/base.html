@@ -637,11 +637,11 @@
                                         </a>
                                     </li>
                                     {% if current_user.colaborador.departamento_id in [4,7] %}
-                                    <li class="{{ is_active('concretagem') }}">
+                                   <!-- <li class="{{ is_active('concretagem') }}">
                                         <a href="{{ url_for('concretagem.index') }}">
                                             <i class="fas fa-cubes"></i> Concretagens
                                         </a>
-                                    </li>
+                                    </li>-->
                                     
                                     <li class="{{ is_active('usinagem_concreto.listar_rompimentos') }}">
                                         <a href="{{ url_for('usinagem_concreto.listar_rompimentos') }}">
@@ -652,6 +652,7 @@
                                     {% endif %}
                                 </ul>
                             </li>
+                            <!--
                             <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }}">
                                 <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                                     class="dropdown-toggle">
@@ -680,6 +681,7 @@
                                     </li>
                                 </ul>
                             </li>
+                            -->
                             <li>
                                 <a href="{{ url_for('acabamento_transporte.index') }}">
                                     <i class="fas fa-paint-roller"></i> <i class="fas fa-truck"></i> Acabamento/Transporte de Peças

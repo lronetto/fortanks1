@@ -1,4 +1,6 @@
 from datetime import datetime
+import json
+
 from .database import db
 UNIDADES_IGUAIS = [
     ['UN','UND','UNIDADE','UNIDADES','UNID','UNID.','PAR','PR','PC','PA'],
@@ -34,19 +36,66 @@ def normalizar_unidade(unidade):
         if unidade_normalizada in lista_unidades:
             return lista_unidades[0]  # Retorna a primeira unidade da lista
     return unidade_normalizada
-def get_conversao_unidade(unidade_entrada, unidade_saida):
-    unidade_entrada = normalizar_unidade(unidade_entrada)
-    unidade_saida = normalizar_unidade(unidade_saida)
+def get_conversao_unidade(material_id=None,unidade_entrada=None, unidade_saida=None):
+    # Import local para evitar import circular
+    from models.material import Materiais
+    # UnidadesConversao está definido neste mesmo arquivo, não precisa importar
+    
+    if unidade_entrada is not None:
+        unidade_entrada = normalizar_unidade(unidade_entrada)
+    if unidade_saida is not None:
+        unidade_saida = normalizar_unidade(unidade_saida)
+    if unidade_entrada is None and unidade_saida is None:
+        return False
     if unidade_entrada == unidade_saida:
         return 1.0
-    conversao = UnidadeConversao.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida).first()
-    if conversao:
-        return conversao.fator
+    unidade = unidade_entrada or unidade_saida
+    if material_id is not None:
+        material = Materiais.query.filter_by(id=material_id).first()
+        if not material:
+            return False
+        if material.dados_adicionais:
+           
+            dados_adicionais = json.loads(material.dados_adicionais)
+            unidade_material = material.unidade_obj.nome if material.unidade_obj else None
+            if unidade_material == unidade_entrada:
+                return 1.0
+            if dados_adicionais and dados_adicionais.get('conversao'):
+                for conversao in dados_adicionais.get('conversao'):
+                    conversor = UnidadesConversao.query.filter_by(id=conversao).first()
+                    print(f"material.nome: {material.nome}, conversao: {conversao}, conversor.unidade_saida: {conversor.unidade_saida}, conversor.unidade_entrada: {conversor.unidade_entrada}, unidade_saida: {unidade_saida}, unidade_entrada: {unidade_entrada},conversor.fator: {conversor.fator}")
+                    if conversor.unidade_saida == unidade_saida and unidade_saida is not None:
+                        return conversor.fator
+                    elif conversor.unidade_entrada == unidade_entrada and unidade_entrada is not None:
+                        return 1.0 / conversor.fator
+        if unidade_saida is not None:
+            if normalizar_unidade(unidade_saida) == material.unidade_obj.nome:
+                return 1.0
+
+            conversao = UnidadesConversao.query.filter_by(unidade_entrada=material.unidade_obj.nome, unidade_saida=unidade_saida).first()
+            if conversao:
+                return conversao.fator
+            else:
+                return False
+        if unidade_entrada is not None:
+            if normalizar_unidade(unidade_entrada) == material.unidade_obj.nome:
+                return 1.0
+            conversao = UnidadesConversao.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=material.unidade_obj.nome).first()
+            if conversao:
+                return conversao.fator
+            else:
+                return False
+        return False
     else:
-        conversao = UnidadeConversao.query.filter_by(unidade_entrada=unidade_saida, unidade_saida=unidade_entrada).first()
+        conversao = UnidadesConversao.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida).first()
         if conversao:
-            return 1.0 / conversao.fator
-    return False
+            return conversao.fator
+        else:
+            conversao = UnidadesConversao.query.filter_by(unidade_entrada=unidade_saida, unidade_saida=unidade_entrada).first()
+            if conversao:
+                return 1.0 / conversao.fator
+        return False
+
 
 class Unidades(db.Model):
     """Modelo para armazenar unidades de medida."""

@@ -17,6 +17,7 @@ class ProdutoComposto(db.Model):
     tempo_producao = db.Column(db.Numeric(10, 2), nullable=True)  # Tempo estimado de produção em horas
     status = db.Column(db.String(20), default='Ativo')  # Ativo, Inativo
     traco = db.Column(db.Integer, default=False)
+    dados_adicionais = db.Column(JSON, nullable=True)  # Campo JSON para dados adicionais (datas de início/término)
     
     # Campos para armazenar a imagem
     imagem = db.Column(db.Text(length=4294967295), nullable=True)
@@ -317,7 +318,7 @@ class ProdutoCompostoItem(db.Model):
     estoque_id = db.Column(db.Integer, db.ForeignKey('Estoque.id'), nullable=False)
     quantidade = db.Column(db.Numeric(15, 8), nullable=False)  # Aumentado para 8 casas decimais
     observacao = db.Column(db.Text, nullable=True)
-    dados_adicionais = db.Column(JSON, nullable=True)  # Campo JSON para dados adicionais (datas de início/término)
+    dados_adicionais = db.Column(db.Text, nullable=True)  # Campo JSON para dados adicionais (datas de início/término)
     
     # Relacionamento com material
     estoque = db.relationship('Estoque')

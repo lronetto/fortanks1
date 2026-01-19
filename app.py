@@ -15,7 +15,7 @@ from controllers.centro_custo_controller import centro_custo_bp
 from controllers.dashboard_controller import dashboard_bp
 from controllers.admin_controller import admin_bp
 from controllers.auth_controller import auth_bp
-from controllers.usinagem_concreto_controller import usinagem_concreto
+from controllers.usinagem_concreto import usinagem_concreto
 from controllers.conversao_unidade_controller import conversao_unidade_bp
 from controllers.solicitacao_controller import solicitacao_bp
 from controllers.cargo_controller import cargo_bp

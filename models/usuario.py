@@ -74,8 +74,7 @@ class Usuario(db.Model, UserMixin):
     @property
     def is_gerente_ou_superior(self):
         """Verifica se o usuário é gerente ou superior"""
-        cargo_nome = self.cargo_rel.nome.lower() if self.cargo_rel else ''
-        return cargo_nome in ['gerente', 'diretor', 'admin']
+        return True if self.cargo_rel and self.cargo_id in [4, 5, 16] else False
     
     @property
     def is_tecnico_superior(self):

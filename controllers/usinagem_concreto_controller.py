@@ -16,6 +16,7 @@ import xlsxwriter
 import os
 import tempfile
 from werkzeug.utils import secure_filename
+from sqlalchemy import or_, and_
 
 
 # Criação do blueprint
@@ -1417,21 +1418,126 @@ def importar_usinagens_excel():
 @usinagem_concreto.route('/tracos/<int:traco_id>/materiais-para-redozagem')
 @login_required
 def get_materiais_para_redozagem(traco_id):
-    """Retorna os materiais de um traço para o modal de redozagem."""
-    traco = TracoConcreto.query.get_or_404(traco_id)
-    materiais_formatados = []
-    # Considerar apenas itens que não são filhos de outros (material_agrupado_id is None)
-    # Pois a redozagem normalmente é feita em "componentes" principais do traço.
-    # Se precisar permitir redozagem em sub-componentes, a lógica de busca e exibição no modal precisaria mudar.
-    itens_traco = ItemTracoConcreto.query.filter_by(traco_id=traco.id).join(Unidade).join(Material).all()
+    """Retorna os materiais de um traço para o modal de redozagem, convertendo todas as unidades para KG."""
+    try:
+        traco = ConcretoTracos.query.get_or_404(traco_id)
+        materiais_formatados = []
+        
+        # Buscar a unidade KG (tentar diferentes variações)
+        unidade_kg = Unidades.query.filter(
+            or_(
+                Unidades.nome.ilike('KG'),
+                Unidades.nome.ilike('KILO'),
+                Unidades.nome.ilike('KILOS'),
+                Unidades.nome == 'KG',
+                Unidades.nome == 'KILO',
+                Unidades.nome == 'KILOS'
+            )
+        ).first()
+        
+        if not unidade_kg:
+            # Tentar buscar por nome exato
+            unidade_kg = Unidades.query.filter_by(nome='KG').first()
+            if not unidade_kg:
+                return jsonify({'error': 'Unidade KG não encontrada no sistema. Por favor, cadastre a unidade KG.'}), 500
+        
+        print(f"Unidade KG encontrada: ID={unidade_kg.id}, Nome={unidade_kg.nome}")
+        
+        # Buscar todos os itens do traço (incluindo agrupados, se necessário)
+        itens_traco = ConcretoTracosItens.query.filter_by(traco_id=traco.id).all()
+        
+        print(f"Total de itens encontrados no traço: {len(itens_traco)}")
 
-    for item in itens_traco:
-        materiais_formatados.append({
-            'material_id': item.material_id,
-            'material_nome': item.material.nome,
-            'unidade_nome': item.unidade.nome if item.unidade else 'N/A'
-        })
-    return jsonify(materiais_formatados)
+        for item in itens_traco:
+            if not item.material:
+                print(f"Item {item.id} sem material, pulando...")
+                continue
+                
+            material = item.material
+            unidade_original = item.unidade if item.unidade else (material.unidade_obj if material.unidade_obj else None)
+            
+            if not unidade_original:
+                print(f"Material {material.nome} (ID: {material.id}) sem unidade, pulando...")
+                continue
+            
+            # Quantidade original do item (por m³)
+            quantidade_original = float(item.quantidade) if item.quantidade else 0.0
+            
+            # Converter quantidade para KG
+            quantidade_em_kg = quantidade_original
+            foi_convertido = False
+            fator_usado = 1.0
+            
+            # Se a unidade original não for KG, fazer a conversão
+            if unidade_original.id != unidade_kg.id:
+                print(f"Convertendo {material.nome}: {quantidade_original} {unidade_original.nome} (ID: {unidade_original.id}) para KG (ID: {unidade_kg.id})")
+                
+                # Obter fator de conversão da unidade original para KG
+                fator_conversao = UnidadesConversao.obter_fator_conversao(
+                    unidade_origem_id=unidade_original.id,
+                    unidade_destino_id=unidade_kg.id,
+                    material_id=material.id  # Tentar conversão específica para o material primeiro
+                )
+                
+                if fator_conversao is not None and fator_conversao > 0:
+                    quantidade_em_kg = quantidade_original * fator_conversao
+                    foi_convertido = True
+                    fator_usado = fator_conversao
+                    print(f"  ✓ Conversão encontrada: {quantidade_original} × {fator_conversao} = {quantidade_em_kg} KG")
+                else:
+                    # Tentar buscar conversão usando nomes das unidades (fallback)
+                    conversao_por_nome = UnidadesConversao.query.filter(
+                        or_(
+                            and_(
+                                UnidadesConversao.unidade_origem_id == unidade_original.id,
+                                UnidadesConversao.unidade_destino_id == unidade_kg.id
+                            ),
+                            and_(
+                                UnidadesConversao.unidade_origem_id == unidade_kg.id,
+                                UnidadesConversao.unidade_destino_id == unidade_original.id
+                            )
+                        )
+                    ).first()
+                    
+                    if conversao_por_nome:
+                        if conversao_por_nome.unidade_origem_id == unidade_original.id:
+                            fator_conversao = conversao_por_nome.fator
+                        else:
+                            fator_conversao = 1.0 / conversao_por_nome.fator if conversao_por_nome.fator > 0 else None
+                        
+                        if fator_conversao and fator_conversao > 0:
+                            quantidade_em_kg = quantidade_original * fator_conversao
+                            foi_convertido = True
+                            fator_usado = fator_conversao
+                            print(f"  ✓ Conversão encontrada (por nome): {quantidade_original} × {fator_conversao} = {quantidade_em_kg} KG")
+                        else:
+                            print(f"  ✗ Não foi possível converter {unidade_original.nome} para KG para o material {material.nome} (ID: {material.id})")
+                    else:
+                        print(f"  ✗ Conversão não encontrada: {unidade_original.nome} (ID: {unidade_original.id}) para KG (ID: {unidade_kg.id})")
+                        print(f"     Material: {material.nome} (ID: {material.id})")
+                        # Mesmo sem conversão, retornar em KG (assumindo que a quantidade já está em KG ou será tratada manualmente)
+            
+            materiais_formatados.append({
+                'material_id': material.id,
+                'material_nome': material.nome,
+                'unidade_nome': 'KG',  # Sempre KG
+                'quantidade_por_m3_kg': round(quantidade_em_kg, 4),  # Quantidade já convertida para KG
+                'quantidade_original': round(quantidade_original, 4),  # Quantidade original (para referência)
+                'unidade_original_id': unidade_original.id,
+                'unidade_original_nome': unidade_original.nome,
+                'unidade_kg_id': unidade_kg.id,
+                'convertido': foi_convertido,  # Indica se foi necessário converter
+                'fator_conversao': round(fator_usado, 6) if foi_convertido else None
+            })
+        
+        print(f"Total de materiais formatados: {len(materiais_formatados)}")
+        return jsonify(materiais_formatados)
+    
+    except Exception as e:
+        import traceback
+        print(f"ERRO ao buscar materiais para redozagem: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': f'Erro ao buscar materiais: {str(e)}'}), 500
 
 @usinagem_concreto.route('/usinagens/registrar-redozagem', methods=['POST'])
 @login_required

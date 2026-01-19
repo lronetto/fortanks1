@@ -82,15 +82,20 @@ if (modalRedozagem) {
                     materiaisDoTraco.forEach(material => {
                         const materialDiv = document.createElement('div');
                         materialDiv.classList.add('row', 'mb-2', 'align-items-center');
+                        // Sempre exibir KG como unidade, conforme solicitado
+                        const unidadeExibida = 'KG';
                         materialDiv.innerHTML = `
                             <div class="col-md-1">
                                 <input class="form-check-input material-redozagem-checkbox" type="checkbox" name="redozagem_material_ids" value="${material.material_id}" id="mat-redoz-${material.material_id}">
                             </div>
                             <label class="col-md-5 col-form-label" for="mat-redoz-${material.material_id}">
-                                ${material.material_nome} (${material.unidade_nome})
+                                ${material.material_nome} (${unidadeExibida})
                             </label>
                             <div class="col-md-6">
-                                <input type="number" class="form-control quantidade-redozada" name="redozagem_quantidades_${material.material_id}" step="0.01" min="0" placeholder="Qtd. Adicional" disabled>
+                                <div class="input-group">
+                                    <input type="number" class="form-control quantidade-redozada" name="redozagem_quantidades_${material.material_id}" step="0.01" min="0" placeholder="Qtd. Adicional (${unidadeExibida})" disabled>
+                                    <span class="input-group-text">${unidadeExibida}</span>
+                                </div>
                             </div>
                         `;
                         materiaisRedozagemContainer.appendChild(materialDiv);

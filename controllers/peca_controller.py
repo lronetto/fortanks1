@@ -1361,10 +1361,24 @@ def processar_arquivo_inspecao(xlsx_path):
     df_series = pd.read_excel(xlsx_path, sheet_name='series', engine='openpyxl')
     
     for index, row in df_series.iterrows():
+        serie = get_row_value(row, 0)
+        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie==serie).first()
         produto_composto = ProdutoComposto.query.\
-            filter(ProdutoComposto.nome.like(f'%{get_row_value(row, 5)}%'),
+            filter(ProdutoComposto.nome.like(f'%{str(get_row_value(row, 5)).replace(".0", "")}%'),
             ProdutoComposto.traco==True).first()
+        if usinagem:
+            print(f"Usinagem já existe: {serie}")
+            usinagem.data_usinagem = get_row_value(row, 3)
+            usinagem.produtoCompostoId = produto_composto.id if produto_composto else None
+            usinagem.flow = get_row_value(row, 2)
+            usinagem.volume = get_row_value(row, 1)
+            usinagem.nota = get_row_value(row, 4)
+            usinagem.save()
+            continue
+            
 
+        
+        print(f"Produto composto: {str(get_row_value(row, 5)).replace(".0", "")} - {produto_composto}")
         usinagem = ConcretoUsinagens(
             serie=get_row_value(row, 0),
             data_usinagem=get_row_value(row, 3),

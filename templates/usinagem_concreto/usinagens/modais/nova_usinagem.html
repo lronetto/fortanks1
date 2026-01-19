@@ -58,7 +58,12 @@
                         </div>
                         <div class="col-12 col-md-6">
                             <label for="dados_adicionais" class="form-label fw-bold">Dados Adicionais (JSON)</label>
-                            <input type="text" class="form-control" id="dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
+                                <button type="button" class="btn btn-outline-secondary" id="btnAbrirRedosagem" title="Abrir redosagem de materiais">
+                                    <i class="fas fa-calculator"></i> Redosagem
+                                </button>
+                            </div>
                             <small class="form-text text-muted">Opcional: dados em formato JSON para uso futuro</small>
                         </div>
                     </div>
@@ -209,5 +214,32 @@
             }
         });
     });
+    
+    // Abrir modal de redosagem
+    $('#btnAbrirRedosagem').on('click', function() {
+        // Verificar se traço e volume estão preenchidos
+        const produtoCompostoId = $('#produto_composto_id').hasClass('select2-hidden-accessible') 
+            ? $('#produto_composto_id').select2('val') 
+            : $('#produto_composto_id').val();
+        const volume = $('#volume').val();
+        
+        if (!produtoCompostoId) {
+            $('#mensagemNovaUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemNovaUsinagem').html('<i class="fas fa-info-circle"></i> Selecione um traço antes de abrir a redosagem.');
+            return;
+        }
+        
+        if (!volume || parseFloat(volume) <= 0) {
+            $('#mensagemNovaUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemNovaUsinagem').html('<i class="fas fa-info-circle"></i> Informe o volume antes de abrir a redosagem.');
+            return;
+        }
+        
+        // Abrir modal de redosagem
+        $('#modalRedosagem').modal('show');
+    });
 })();
 </script>
+
+<!-- Incluir modal de redosagem -->
+{% include 'usinagem_concreto/usinagens/modais/redosagem.html' %}

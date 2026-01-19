@@ -203,6 +203,7 @@ def get_produto_composto(id):
             'estoque': estoque.quantidade if estoque else 0,
             'status': produto.status,
             'descricao': produto.descricao,
+            'traco': produto.traco if produto.traco else 0,
             'imagem': produto.imagem,
             'imagem_mime_type': produto.imagem_mime_type
         })
@@ -265,6 +266,7 @@ def salvar():
             produto.descricao = data.get('descricao')
             produto.tempo_producao = data.get('tempo_producao') or None
             produto.status = data.get('status', 'Ativo')
+            produto.traco = data.get('traco', 0) or 0
 
             # Lógica para remover imagem
             if data.get('remover_imagem'):
@@ -335,14 +337,19 @@ def salvar():
                 
                 # Salvar dados adicionais (datas) se existirem
                 if item.get('dados_adicionais'):
-                    componente.dados_adicionais = item['dados_adicionais']
+                    # Converter dicionário para string JSON
+                    if isinstance(item['dados_adicionais'], dict):
+                        componente.dados_adicionais = json.dumps(item['dados_adicionais'])
+                    else:
+                        componente.dados_adicionais = item['dados_adicionais']
         else:
             # Criação
             produto = ProdutoComposto(
                 nome=data['nome'],
                 descricao=data.get('descricao'),
                 tempo_producao=data.get('tempo_producao') or None,
-                status='Ativo'
+                status='Ativo',
+                traco=data.get('traco', 0) or 0
             )
             
             # Log para debug - verificar se há dados muito longos
@@ -420,7 +427,11 @@ def salvar():
                 
                 # Salvar dados adicionais (datas) se existirem
                 if item.get('dados_adicionais'):
-                    componente.dados_adicionais = item['dados_adicionais']
+                    # Converter dicionário para string JSON
+                    if isinstance(item['dados_adicionais'], dict):
+                        componente.dados_adicionais = json.dumps(item['dados_adicionais'])
+                    else:
+                        componente.dados_adicionais = item['dados_adicionais']
         estoque = Estoque.query.filter(Estoque.ProdComp_id == produto.id).first()
         if not estoque:
             estoque = Estoque(produto_composto=produto,
@@ -474,6 +485,8 @@ def duplicar(id):
             tempo_producao=produto_original.tempo_producao,
             status='Ativo',
             imagem=produto_original.imagem,
+            traco=produto_original.traco,
+            dados_adicionais=produto_original.dados_adicionais,
             imagem_mime_type=produto_original.imagem_mime_type
         )
         
@@ -996,17 +1009,19 @@ def exportar_excel():
             for produto in produtos:
                 # Preparar dados dos componentes
                 dados_componentes = []
-                
+                mega = ''
                 for componente in produto.componentes:
                     estoque = componente.estoque
                     if estoque:
                         if estoque.material:
                             nome_item = estoque.material.nome
                             codigo_item = estoque.material.codigo or ''
+                            mega = estoque.material.dados_adicionais.get('cod_mega', '')
                             unidade = estoque.material.unidade_obj.sigla if (estoque.material.unidade_obj and hasattr(estoque.material.unidade_obj, 'sigla')) else ''
                             tipo = 'Material'
                         elif estoque.produto_composto:
                             nome_item = estoque.produto_composto.nome
+                            mega = estoque.produto_composto.dados_adicionais.get('cod_mega', '')
                             codigo_item = ''
                             unidade = ''
                             tipo = 'Produto Composto'
@@ -1018,7 +1033,7 @@ def exportar_excel():
                         
                         dados_componentes.append({
                             'ID Estoque': estoque.id,
-                            'Tipo': tipo,
+                            'Material/Produto mega': mega,
                             'Nome': nome_item,
                             'Código': codigo_item,
                             'Quantidade': float(componente.quantidade),
