@@ -1,0 +1,176 @@
+<!-- Modal de Visualização de Rompimentos -->
+<div class="modal fade" id="modalVisualizarRompimentos" tabindex="-1" aria-labelledby="modalVisualizarRompimentosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarRompimentosLabel">
+                    <i class="fas fa-flask"></i> Rompimentos da Usinagem
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body" id="modalVisualizarRompimentosBody">
+                <!-- O conteúdo será carregado via AJAX -->
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Carregando rompimentos...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // Carregar dados dos rompimentos quando o modal for aberto
+    $('#modalVisualizarRompimentos').on('show.bs.modal', function (event) {
+        var button = $(event.relatedTarget);
+        var usinagemId = button.data('usinagem-id');
+        var modalBody = $('#modalVisualizarRompimentosBody');
+        
+        // Mostrar spinner de carregamento
+        modalBody.html(`
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+                <p class="mt-2 text-muted">Carregando rompimentos...</p>
+            </div>
+        `);
+        
+        // Fazer requisição AJAX para carregar os dados
+        $.ajax({
+            url: '/usinagem-concreto/usinagens/' + usinagemId + '/rompimentos',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    renderizarRompimentos(response);
+                } else {
+                    modalBody.html(`
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-circle"></i> Erro ao carregar os rompimentos: ${response.error || 'Erro desconhecido'}
+                        </div>
+                    `);
+                }
+            },
+            error: function(xhr) {
+                var errorMsg = 'Erro ao carregar os rompimentos.';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                modalBody.html(`
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i> ${errorMsg}
+                    </div>
+                `);
+            }
+        });
+    });
+    
+    function renderizarRompimentos(data) {
+        var usinagem = data.usinagem;
+        var rompimentos = data.rompimentos;
+        var total = data.total_rompimentos;
+        
+        var html = `
+            <div class="mb-3">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Série:</strong> ${usinagem.serie}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Data Usinagem:</strong> ${usinagem.data_usinagem}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Traço:</strong> ${usinagem.traco_nome}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Volume:</strong> ${usinagem.volume} m³
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        if (rompimentos && rompimentos.length > 0) {
+            html += `
+                <div class="mb-2">
+                    <h6 class="mb-0">
+                        <span class="badge bg-primary">Total de Rompimentos: ${total}</span>
+                    </h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-striped table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>CP Nº</th>
+                                <th>Data Moldagem</th>
+                                <th>Data Rompimento</th>
+                                <th>Idade</th>
+                                <th>Resultado (MPa)</th>
+                                <th>Tipo Rompimento</th>
+                                <th>Observações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            rompimentos.forEach(function(rompimento) {
+                var resultadoClass = '';
+                var resultadoBadge = '';
+                if (rompimento.resultado !== null && rompimento.resultado !== undefined) {
+                    resultadoBadge = `<span class="badge bg-success">${rompimento.resultado.toFixed(2)}</span>`;
+                } else {
+                    resultadoBadge = '<span class="badge bg-secondary">Não informado</span>';
+                }
+                
+                var idadeBadge = '';
+                if (rompimento.idade_dias !== null && rompimento.idade_dias !== undefined) {
+                    if (rompimento.idade_dias <= 3) {
+                        idadeBadge = `<span class="badge bg-info">${rompimento.idade_str}</span>`;
+                    } else if (rompimento.idade_dias >= 27 && rompimento.idade_dias <= 29) {
+                        idadeBadge = `<span class="badge bg-primary">${rompimento.idade_str}</span>`;
+                    } else {
+                        idadeBadge = `<span class="badge bg-secondary">${rompimento.idade_str}</span>`;
+                    }
+                } else {
+                    idadeBadge = '<span class="badge bg-secondary">-</span>';
+                }
+                
+                html += `
+                    <tr>
+                        <td><strong>${rompimento.numero_cp}</strong></td>
+                        <td>${rompimento.data_moldagem}</td>
+                        <td>${rompimento.data_rompimento}</td>
+                        <td>${idadeBadge}</td>
+                        <td>${resultadoBadge}</td>
+                        <td>${rompimento.tipo_rompimento}</td>
+                        <td><small class="text-muted">${rompimento.observacoes}</small></td>
+                    </tr>
+                `;
+            });
+            
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Nenhum rompimento cadastrado para esta usinagem.
+                </div>
+            `;
+        }
+        
+        $('#modalVisualizarRompimentosBody').html(html);
+    }
+});
+</script>

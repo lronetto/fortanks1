@@ -127,6 +127,13 @@
                             </td>
                             <td>
                                 <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalVisualizarRompimentos" 
+                                            data-usinagem-id="{{ usinagem.id }}"
+                                            title="Visualizar Rompimentos">
+                                        <i class="fas fa-flask"></i>
+                                    </button>
                                     <button type="button" class="btn btn-sm btn-primary" 
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalEditarUsinagem" 
@@ -137,6 +144,7 @@
                                             data-volume="{{ usinagem.volume }}"
                                             data-flow="{{ usinagem.flow or '' }}"
                                             data-nf="{{ usinagem.nota or usinagem.nf or '' }}"
+                                            data-dados-adicionais="{{ usinagem.dados_adicionais | tojson if usinagem.dados_adicionais else '' }}"
                                             title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </button>
@@ -192,6 +200,7 @@
 {% include 'usinagem_concreto/usinagens/modais/nova_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/editar_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/importar_usinagem.html' %}
+{% include 'usinagem_concreto/usinagens/modais/visualizar_rompimentos.html' %}
 
 
 {% endblock %}

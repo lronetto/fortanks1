@@ -68,12 +68,44 @@ def api_conversoes_unidade():
 @usinagem_concreto.route('/api/materiais-traco/<int:produto_composto_id>')
 @login_required
 def api_materiais_traco(produto_composto_id):
-    """API para obter materiais de um traço (produto_composto) com suas quantidades"""
+    """API para obter materiais de um traço (produto_composto) com suas quantidades.
+    Se fornecido usinagem_id, aplica a redosagem dos dados_adicionais."""
     try:
         produto_composto = ProdutoComposto.query.get_or_404(produto_composto_id)
         
         if not produto_composto.traco:
             return jsonify({'error': 'Produto composto não é um traço válido.'}), 400
+        
+        # Verificar se foi fornecido usinagem_id para aplicar redosagem
+        usinagem_id = request.args.get('usinagem_id', type=int)
+        redosagem_map = {}
+        
+        if usinagem_id:
+            # Buscar usinagem e verificar se há redosagem nos dados_adicionais
+            usinagem = ConcretoUsinagens.query.get(usinagem_id)
+            if usinagem and usinagem.dados_adicionais:
+                try:
+                    dados_adicionais = usinagem.dados_adicionais
+                    if isinstance(dados_adicionais, str):
+                        dados_adicionais = json.loads(dados_adicionais)
+                    
+                    if dados_adicionais.get('redosagem') and dados_adicionais['redosagem'].get('materiais'):
+                        # Criar mapa de material_id -> quantidade_redosada
+                        for item in dados_adicionais['redosagem']['materiais']:
+                            material_id = item.get('material_id')
+                            quantidade_redosada = item.get('quantidade_redosada')
+                            if material_id and quantidade_redosada is not None:
+                                redosagem_map[material_id] = float(quantidade_redosada)
+                        print(f"DEBUG api_materiais_traco - Redosagem encontrada para {len(redosagem_map)} materiais")
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    print(f"DEBUG api_materiais_traco - Erro ao processar redosagem: {str(e)}")
+        
+        # Obter volume da usinagem se fornecido
+        volume_usinagem = None
+        if usinagem_id:
+            usinagem = ConcretoUsinagens.query.get(usinagem_id)
+            if usinagem:
+                volume_usinagem = float(usinagem.volume) if usinagem.volume else None
         
         materiais = []
         for componente in produto_composto.componentes:
@@ -81,12 +113,23 @@ def api_materiais_traco(produto_composto_id):
                 material = componente.estoque.material
                 unidade_nome = material.unidade_obj.nome if material.unidade_obj else 'N/A'
                 conversao = get_conversao_unidade(material_id=material.id, unidade_saida='KG')
-                print(f"material.nome: {material.nome}, conversao: {conversao}")
+                
+                # Calcular quantidade base (por m³) - sempre por m³
+                quantidade_base = float(componente.quantidade) * conversao
+                
+                # Se houver redosagem para este material
+                # quantidade_redosada já vem com o volume aplicado (total), não por m³
+                quantidade_redosada_total = None
+                if material.id in redosagem_map:
+                    quantidade_redosada_total = redosagem_map[material.id]
+                    print(f"DEBUG api_materiais_traco - Material {material.nome} (ID {material.id}): quantidade_redosada_total = {quantidade_redosada_total}")
+                
                 materiais.append({
                     'material_id': material.id,
                     'material_nome': material.nome,
                     'material_codigo': material.codigo or '',
-                    'quantidade_base': float(componente.quantidade) * conversao,  # Quantidade por m³
+                    'quantidade_base': quantidade_base,  # Quantidade por m³ (sempre)
+                    'quantidade_redosada_total': quantidade_redosada_total,  # Quantidade total redosada (se houver)
                     'unidade_id': material.unidade_id,
                     'unidade_nome': unidade_nome,
                     'estoque_id': componente.estoque_id
@@ -151,15 +194,15 @@ def listar_usinagens():
         usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0 else f"{usinagem.idade.days} dias"
 
         usinagem.rompimento = []
-        if ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
-            for rompimento in ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).all():
-                rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
-                rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
-                rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
-                usinagem.rompimento.append(rompimento)
+        rompimentos = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=usinagem.serie).all()
+        for rompimento in rompimentos:
+            rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
+            rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
+            rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
+            usinagem.rompimento.append(rompimento)
 
         usinagem.rompimento_24h = list(filter(lambda x: x.idade.days <= 3, usinagem.rompimento))
-        usinagem.rompimento_28d = list(filter(lambda x: x.idade.days >= 28, usinagem.rompimento))
+        usinagem.rompimento_28d = list(filter(lambda x: x.idade.days >= 27, usinagem.rompimento))
 
         usinagens_data.append(usinagem)
 
@@ -283,18 +326,25 @@ def nova_usinagem():
 
             # Processar dados_adicionais (JSON)
             dados_adicionais = None
+            print(f"DEBUG nova_usinagem - dados_adicionais_str recebido: {dados_adicionais_str}")
             if dados_adicionais_str:
                 try:
+                    print(f"DEBUG nova_usinagem - dados_adicionais_str: {dados_adicionais_str}")
                     dados_adicionais = json.loads(dados_adicionais_str)
-                except json.JSONDecodeError:
+                    print(f"DEBUG nova_usinagem - dados_adicionais parseado com sucesso: {dados_adicionais}")
+                except json.JSONDecodeError as e:
+                    print(f"DEBUG nova_usinagem - Erro ao parsear JSON: {str(e)}")
                     if is_ajax:
                         return jsonify({
                             'success': False,
                             'error': 'Dados adicionais inválidos (deve ser JSON válido).'
                         }), 400
                     flash('Dados adicionais inválidos (deve ser JSON válido).', 'warning')
+            else:
+                print("DEBUG nova_usinagem - dados_adicionais_str está vazio")
 
             # Criar nova usinagem
+            print(f"DEBUG nova_usinagem - Criando usinagem com dados_adicionais: {dados_adicionais}")
             usinagem = ConcretoUsinagens(
                 serie=serie,
                 data_usinagem=data_usinagem,
@@ -305,7 +355,10 @@ def nova_usinagem():
                 dados_adicionais=dados_adicionais
             )
             db.session.add(usinagem)
+            db.session.flush()  # Flush para obter o ID antes do commit
+            print(f"DEBUG nova_usinagem - Usinagem criada com ID: {usinagem.id}, dados_adicionais: {usinagem.dados_adicionais}")
             db.session.commit()
+            print(f"DEBUG nova_usinagem - Commit realizado. dados_adicionais após commit: {usinagem.dados_adicionais}")
             
             if is_ajax:
                 return jsonify({
@@ -354,12 +407,14 @@ def visualizar_usinagem(id):
         usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0 else f"{usinagem.idade.days} dias"
 
         usinagem.rompimentos = []
-        if ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).count() > 0:   
-            for rompimento in ConcretoUsinagensRompimentos.query.filter_by(usinagem_id=usinagem.id).all():
+        # Buscar rompimentos pela série (conforme mudança feita pelo usuário)
+        rompimentos = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=usinagem.serie).all()
+        for rompimento in rompimentos:
+            if rompimento.data_rompimento and usinagem.data_usinagem:
                 rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
                 rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
                 rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
-                usinagem.rompimentos.append(rompimento)
+            usinagem.rompimentos.append(rompimento)
         return render_template('usinagem_concreto/usinagens/partials/visualizar_usinagem_content.html',
                              usinagem=usinagem,
                              materiais_calculados=materiais_calculados)
@@ -368,6 +423,63 @@ def visualizar_usinagem(id):
     return render_template('usinagem_concreto/usinagens/visualizar.html',
                           usinagem=usinagem,
                           materiais_calculados=materiais_calculados)
+
+
+@usinagem_concreto.route('/usinagens/<int:id>/rompimentos')
+@login_required
+def visualizar_rompimentos_usinagem(id):
+    """API para visualizar rompimentos de uma usinagem - retorna JSON"""
+    try:
+        usinagem = ConcretoUsinagens.query.get_or_404(id)
+        
+        # Buscar rompimentos pela série
+        rompimentos = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=usinagem.serie).order_by(
+            ConcretoUsinagensRompimentos.data_rompimento.desc()
+        ).all()
+        
+        rompimentos_data = []
+        for rompimento in rompimentos:
+            # Calcular idade do rompimento
+            idade_str = '-'
+            idade_dias = None
+            if rompimento.data_rompimento and usinagem.data_usinagem:
+                idade = rompimento.data_rompimento - usinagem.data_usinagem
+                idade_hours = idade.total_seconds() / 3600
+                idade_dias = idade.days
+                idade_str = f"{idade_hours:.1f} horas" if idade.days == 0 else f"{idade.days} dias"
+            
+            rompimentos_data.append({
+                'id': rompimento.id,
+                'data_rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') if rompimento.data_rompimento else '-',
+                'data_moldagem': rompimento.data_moldagem.strftime('%d/%m/%Y %H:%M') if rompimento.data_moldagem else '-',
+                'numero_cp': str(rompimento.numero_serie) if rompimento.numero_serie else '-',
+                'resultado': float(rompimento.resultado) if rompimento.resultado else None,
+                'idade_str': idade_str,
+                'idade_dias': idade_dias,
+                'tipo_rompimento': rompimento.tipo_rompimento or '-',
+                'observacoes': rompimento.observacoes or '-'
+            })
+        
+        return jsonify({
+            'success': True,
+            'usinagem': {
+                'id': usinagem.id,
+                'serie': usinagem.serie,
+                'data_usinagem': usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') if usinagem.data_usinagem else '-',
+                'traco_nome': usinagem.produto_composto.nome if usinagem.produto_composto else '-',
+                'volume': float(usinagem.volume) if usinagem.volume else 0
+            },
+            'rompimentos': rompimentos_data,
+            'total_rompimentos': len(rompimentos_data)
+        })
+    except Exception as e:
+        print(f"Erro ao buscar rompimentos da usinagem: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @usinagem_concreto.route('/usinagens/<int:id>/editar', methods=['POST'])
@@ -411,8 +523,15 @@ def editar_usinagem(id):
             return redirect(url_for('usinagem_concreto.listar_usinagens'))
 
         # Verificar se série já existe (exceto para a própria usinagem)
+        # Só verifica se a série foi alterada
         if serie != usinagem.serie:
-            if ConcretoUsinagens.query.filter_by(serie=serie).first():
+            # Verificar se existe outra usinagem com a mesma série (excluindo a atual que está sendo editada)
+            usinagem_existente = ConcretoUsinagens.query.filter(
+                ConcretoUsinagens.serie == serie,
+                ConcretoUsinagens.id != usinagem.id  # Excluir a própria usinagem que está sendo editada
+            ).first()
+            
+            if usinagem_existente:
                 if is_ajax:
                     return jsonify({
                         'success': False,
@@ -470,18 +589,113 @@ def editar_usinagem(id):
 
         # Processar dados_adicionais (JSON)
         dados_adicionais = None
-        if dados_adicionais_str:
-            try:
-                dados_adicionais = json.loads(dados_adicionais_str)
-            except json.JSONDecodeError:
-                if is_ajax:
-                    return jsonify({
-                        'success': False,
-                        'error': 'Dados adicionais inválidos (deve ser JSON válido).'
-                    }), 400
-                flash('Dados adicionais inválidos (deve ser JSON válido).', 'warning')
+        print(f"DEBUG editar_usinagem - dados_adicionais_str recebido: '{dados_adicionais_str}'")
+        print(f"DEBUG editar_usinagem - Tipo: {type(dados_adicionais_str)}")
+        print(f"DEBUG editar_usinagem - Tamanho da string: {len(dados_adicionais_str) if dados_adicionais_str else 0}")
+        
+        # Sempre processar se foi enviado
+        if dados_adicionais_str is not None:
+            dados_adicionais_str = dados_adicionais_str.strip()
+            
+            # Remover aspas duplas extras se houver (caso venha como '"{"')
+            if dados_adicionais_str.startswith('"') and dados_adicionais_str.endswith('"'):
+                try:
+                    # Tentar fazer unescape da string JSON
+                    dados_adicionais_str = json.loads(dados_adicionais_str)
+                    print(f"DEBUG editar_usinagem - Removidas aspas extras, nova string: '{dados_adicionais_str}'")
+                except:
+                    # Se não conseguir, remover aspas manualmente
+                    dados_adicionais_str = dados_adicionais_str[1:-1]
+                    print(f"DEBUG editar_usinagem - Removidas aspas manualmente, nova string: '{dados_adicionais_str}'")
+            
+            # Se for string vazia ou None, manter dados existentes
+            if not dados_adicionais_str or dados_adicionais_str == '{}' or dados_adicionais_str == '{':
+                print("DEBUG editar_usinagem - String vazia, objeto vazio ou incompleto recebido, mantendo dados existentes")
+                if usinagem.dados_adicionais:
+                    dados_adicionais = usinagem.dados_adicionais
+                    print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes: {dados_adicionais}")
+                else:
+                    dados_adicionais = None
+            else:
+                # Verificar se a string parece estar incompleta (começa com "{" mas não termina)
+                if dados_adicionais_str.startswith('{') and not dados_adicionais_str.endswith('}'):
+                    print(f"DEBUG editar_usinagem - ATENÇÃO: JSON parece estar incompleto: '{dados_adicionais_str}'")
+                    # Tentar manter dados existentes se houver
+                    if usinagem.dados_adicionais:
+                        dados_adicionais = usinagem.dados_adicionais
+                        print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes devido a JSON incompleto")
+                    else:
+                        dados_adicionais = None
+                else:
+                    try:
+                        dados_adicionais = json.loads(dados_adicionais_str)
+                        print(f"DEBUG editar_usinagem - dados_adicionais parseado: {dados_adicionais}")
+                        print(f"DEBUG editar_usinagem - Tipo do objeto: {type(dados_adicionais)}")
+                        
+                        # Verificar se o resultado é uma string (não deveria ser, mas pode acontecer com '"{"')
+                        if isinstance(dados_adicionais, str):
+                            print(f"DEBUG editar_usinagem - ATENÇÃO: Parse retornou string em vez de objeto: '{dados_adicionais}'")
+                            # Se for uma string que parece JSON incompleto, manter dados existentes
+                            if dados_adicionais == '{' or (dados_adicionais.startswith('{') and not dados_adicionais.endswith('}')):
+                                print("DEBUG editar_usinagem - String parece JSON incompleto, mantendo dados existentes")
+                                if usinagem.dados_adicionais:
+                                    dados_adicionais = usinagem.dados_adicionais
+                                    print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes")
+                                else:
+                                    dados_adicionais = None
+                            else:
+                                # Tentar parsear novamente a string
+                                try:
+                                    dados_adicionais = json.loads(dados_adicionais)
+                                    print(f"DEBUG editar_usinagem - Re-parse bem-sucedido: {dados_adicionais}")
+                                except:
+                                    # Se falhar, manter dados existentes
+                                    if usinagem.dados_adicionais:
+                                        dados_adicionais = usinagem.dados_adicionais
+                                        print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes devido a re-parse falhou")
+                                    else:
+                                        dados_adicionais = None
+                        
+                        # Se for objeto vazio {}, manter dados existentes
+                        if isinstance(dados_adicionais, dict) and dados_adicionais == {}:
+                            print("DEBUG editar_usinagem - Objeto vazio {} recebido, mantendo dados existentes")
+                            if usinagem.dados_adicionais:
+                                dados_adicionais = usinagem.dados_adicionais
+                                print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes")
+                            else:
+                                dados_adicionais = None
+                        # Se tiver conteúdo e for um dict válido, usar os novos dados
+                        elif isinstance(dados_adicionais, dict):
+                            print(f"DEBUG editar_usinagem - Usando novos dados_adicionais: {dados_adicionais}")
+                        else:
+                            # Se não for dict, manter dados existentes
+                            print(f"DEBUG editar_usinagem - dados_adicionais não é um dict válido (tipo: {type(dados_adicionais)}), mantendo existentes")
+                            if usinagem.dados_adicionais:
+                                dados_adicionais = usinagem.dados_adicionais
+                            else:
+                                dados_adicionais = None
+                            
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG editar_usinagem - Erro ao parsear JSON: {str(e)}")
+                        print(f"DEBUG editar_usinagem - String recebida (primeiros 200 chars): {dados_adicionais_str[:200]}")
+                        # Se o JSON for inválido, manter os dados existentes
+                        if usinagem.dados_adicionais:
+                            dados_adicionais = usinagem.dados_adicionais
+                            print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes devido a JSON inválido")
+                        else:
+                            dados_adicionais = None
+        else:
+            # Se não foi enviado, manter os dados existentes
+            print("DEBUG editar_usinagem - dados_adicionais_str não foi enviado, mantendo dados existentes")
+            if usinagem.dados_adicionais:
+                dados_adicionais = usinagem.dados_adicionais
+                print(f"DEBUG editar_usinagem - Mantendo dados_adicionais existentes: {dados_adicionais}")
+            else:
+                dados_adicionais = None
+                print("DEBUG editar_usinagem - Não há dados_adicionais existentes, definindo como None")
 
         # Atualizar usinagem
+        print(f"DEBUG editar_usinagem - Atualizando usinagem ID {id} com dados_adicionais: {dados_adicionais}")
         usinagem.serie = serie
         usinagem.data_usinagem = data_usinagem
         usinagem.produtoCompostoId = produto_composto_id
@@ -490,7 +704,10 @@ def editar_usinagem(id):
         usinagem.nota = nf if nf else None
         usinagem.dados_adicionais = dados_adicionais
         
+        db.session.flush()
+        print(f"DEBUG editar_usinagem - Após flush, dados_adicionais: {usinagem.dados_adicionais}")
         db.session.commit()
+        print(f"DEBUG editar_usinagem - Commit realizado. dados_adicionais após commit: {usinagem.dados_adicionais}")
         
         if is_ajax:
             return jsonify({

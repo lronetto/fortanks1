@@ -40,6 +40,10 @@ def exportar_excel():
             ncms_validos = {ncm for ncm in ncms_unicos if ncm is not None}
             ncm_unico = list(ncms_validos)[0] if len(ncms_validos) == 1 else None
             ncm_iguais = "Sim" if len(ncms_validos) <= 1 else "Não"
+            json_obj = json.loads(mat.dados_adicionais) if mat.dados_adicionais else {}
+            mega = json_obj.get('cod_mega', '')
+            if mega:
+                continue
 
             itens_por_ncm = {}
             for item in itens:
@@ -166,7 +170,8 @@ def exportar_mega():
     """
     try:
         base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        template_path = os.path.join(base_path, "CADASTRO DE INSUMOS.xlsx")
+        template_path = os.path.join(base_path, 'templates_excel', 'MATERIAL_CADASTRO_DE_INSUMOS_MEGA.xlsx')
+        print(f"template_path: {template_path}")
         if not os.path.exists(template_path):
             flash("Arquivo template não encontrado. Entre em contato com o administrador.", "danger")
             return redirect(url_for("material.index"))
@@ -178,6 +183,10 @@ def exportar_mega():
         linha_atual = 7
 
         for material in materiais:
+            json_obj = json.loads(material.dados_adicionais) if material.dados_adicionais else {}
+            mega = json_obj.get('cod_mega', '')
+            if mega:
+                continue
             codigo_grupo = material.mascara if material.mascara else ""
             ws.cell(row=linha_atual, column=1, value=codigo_grupo)
             ws.cell(row=linha_atual, column=2, value=material.nome or "")

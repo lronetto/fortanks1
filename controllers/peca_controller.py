@@ -1362,6 +1362,14 @@ def processar_arquivo_inspecao(xlsx_path):
     
     for index, row in df_series.iterrows():
         serie = get_row_value(row, 0)
+        if get_row_value(row, 3) is None:
+            continue
+        if get_row_value(row, 1) is None:
+            continue
+        if get_row_value(row, 2) is None:
+            continue
+        if get_row_value(row, 4) is None:
+            continue
         usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie==serie).first()
         produto_composto = ProdutoComposto.query.\
             filter(ProdutoComposto.nome.like(f'%{str(get_row_value(row, 5)).replace(".0", "")}%'),
@@ -1506,8 +1514,8 @@ def processar_arquivo_inspecao(xlsx_path):
         peca['qualidade']['transporte']['placa_carreta'] = get_row_value(row, 21)
         
         # Trata series
-        serie1_raw = get_row_value(row, 28)
-        serie2_raw = get_row_value(row, 29)
+        serie1_raw = get_row_value(row, 27)
+        serie2_raw = get_row_value(row, 28)
         if serie1_raw and serie1_raw != '-':
             peca['qualidade']['series'].append(serie1_raw)
         if serie2_raw and serie2_raw != '-':

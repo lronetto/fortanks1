@@ -56,15 +56,19 @@
                             <label for="nf" class="form-label fw-bold">Nota Fiscal</label>
                             <input type="text" class="form-control" id="nf" name="nf" maxlength="50">
                         </div>
-                        <div class="col-12 col-md-6">
+                        <div class="col-12 col-md-6 d-none">
                             <label for="dados_adicionais" class="form-label fw-bold">Dados Adicionais (JSON)</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
-                                <button type="button" class="btn btn-outline-secondary" id="btnAbrirRedosagem" title="Abrir redosagem de materiais">
-                                    <i class="fas fa-calculator"></i> Redosagem
+                            <input type="text" class="form-control" id="dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
+                            <small class="form-text text-muted">Opcional: dados em formato JSON para uso futuro</small>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="form-label fw-bold">Redosagem</label>
+                            <div>
+                                <button type="button" class="btn btn-outline-primary" id="btnAbrirRedosagem" title="Abrir redosagem de materiais">
+                                    <i class="fas fa-calculator"></i> Configurar Redosagem
                                 </button>
                             </div>
-                            <small class="form-text text-muted">Opcional: dados em formato JSON para uso futuro</small>
+                            <small class="form-text text-muted">Configure as quantidades de materiais para redozagem</small>
                         </div>
                     </div>
                 </div>
@@ -84,6 +88,44 @@
 (function() {
     // Definir a data e hora atual como padrão para o campo de data de usinagem
     const dataFormatada = '{{ now }}';
+    
+    // Abrir modal de redosagem - usar delegação de eventos para garantir que funcione
+    $(document).on('click', '#btnAbrirRedosagem', function() {
+        // Verificar se traço e volume estão preenchidos
+        const produtoCompostoId = $('#produto_composto_id').hasClass('select2-hidden-accessible') 
+            ? $('#produto_composto_id').select2('val') 
+            : $('#produto_composto_id').val();
+        const volume = $('#volume').val();
+        
+        if (!produtoCompostoId) {
+            $('#mensagemNovaUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemNovaUsinagem').html('<i class="fas fa-info-circle"></i> Selecione um traço antes de abrir a redosagem.');
+            return;
+        }
+        
+        if (!volume || parseFloat(volume) <= 0) {
+            $('#mensagemNovaUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemNovaUsinagem').html('<i class="fas fa-info-circle"></i> Informe o volume antes de abrir a redosagem.');
+            return;
+        }
+        
+        // Abrir modal de redosagem sem adicionar novo backdrop
+        const modalRedosagemEl = document.getElementById('modalRedosagem');
+        if (modalRedosagemEl) {
+            // Usar Bootstrap 5 sem criar novo backdrop
+            let modalRedosagem = bootstrap.Modal.getInstance(modalRedosagemEl);
+            if (!modalRedosagem) {
+                modalRedosagem = new bootstrap.Modal(modalRedosagemEl, {
+                    backdrop: false,  // Não criar novo backdrop
+                    keyboard: true
+                });
+            }
+            modalRedosagem.show();
+            
+            // Ajustar z-index manualmente para garantir que apareça acima
+            $(modalRedosagemEl).css('z-index', '1065');
+        }
+    });
     
     // Inicializar quando o modal for aberto
     $('#modalNovaUsinagem').on('show.bs.modal', function() {
@@ -158,12 +200,19 @@
         // Preparar dados do formulário
         var formData = new FormData(this);
         
+        // Garantir que dados_adicionais seja enviado mesmo se estiver oculto
+        var dadosAdicionais = $('#dados_adicionais').val();
+        if (dadosAdicionais) {
+            formData.set('dados_adicionais', dadosAdicionais);
+        }
+        
         // Debug: log dos dados sendo enviados (remover em produção)
         console.log('Dados do formulário:', {
             serie: serie,
             data_usinagem: dataUsinagem,
             produto_composto_id: produtoCompostoId,
-            volume: volume
+            volume: volume,
+            dados_adicionais: dadosAdicionais
         });
         
         // Enviar via AJAX
@@ -213,30 +262,6 @@
                 spinner.addClass('d-none');
             }
         });
-    });
-    
-    // Abrir modal de redosagem
-    $('#btnAbrirRedosagem').on('click', function() {
-        // Verificar se traço e volume estão preenchidos
-        const produtoCompostoId = $('#produto_composto_id').hasClass('select2-hidden-accessible') 
-            ? $('#produto_composto_id').select2('val') 
-            : $('#produto_composto_id').val();
-        const volume = $('#volume').val();
-        
-        if (!produtoCompostoId) {
-            $('#mensagemNovaUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
-            $('#mensagemNovaUsinagem').html('<i class="fas fa-info-circle"></i> Selecione um traço antes de abrir a redosagem.');
-            return;
-        }
-        
-        if (!volume || parseFloat(volume) <= 0) {
-            $('#mensagemNovaUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
-            $('#mensagemNovaUsinagem').html('<i class="fas fa-info-circle"></i> Informe o volume antes de abrir a redosagem.');
-            return;
-        }
-        
-        // Abrir modal de redosagem
-        $('#modalRedosagem').modal('show');
     });
 })();
 </script>

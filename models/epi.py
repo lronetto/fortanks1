@@ -58,8 +58,8 @@ class Epi(db.Model):
         estoque = Estoque.query.filter_by(material_id=self.material_id, tipo_item='material').first()
         if estoque:
             # Remover movimentações
-            from models.estoque import MovimentacaoEstoque
-            MovimentacaoEstoque.query.filter_by(estoque_id=estoque.id).delete()
+            from models.estoque import EstoqueMovimentacoes
+            EstoqueMovimentacoes.query.filter_by(estoque_id=estoque.id).delete()
             db.session.delete(estoque)
             
         db.session.delete(self)
@@ -99,14 +99,14 @@ class Epi(db.Model):
         """
         Adiciona quantidade ao estoque
         """
-        from models.estoque import Estoque, MovimentacaoEstoque
+        from models.estoque import Estoque, EstoqueMovimentacoes
         estoque = Estoque.query.filter_by(material_id=self.material_id, tipo_item='material').first()
         if not estoque:
             raise ValueError("Não existe estoque para este material")
         
         # Criar movimentação de entrada
         print(f"Adicionando {quantidade} item(s) ao estoque2")
-        mov = MovimentacaoEstoque()
+        mov = EstoqueMovimentacoes()
         db.session.add(mov)
         mov.adicionar(quantidade,estoque.id,self.id,'EPI',usuario_id,motivo)
         mov.save()
@@ -116,7 +116,7 @@ class Epi(db.Model):
         """
         Remove quantidade do estoque
         """
-        from models.estoque import Estoque, MovimentacaoEstoque
+        from models.estoque import Estoque, EstoqueMovimentacoes
         
         if quantidade <= 0:
             raise ValueError("A quantidade deve ser maior que zero")
@@ -126,7 +126,7 @@ class Epi(db.Model):
         if not estoque:
             raise ValueError("Não existe estoque para este material")
         
-        mov = MovimentacaoEstoque.remover(quantidade,estoque.id,self.id,'EPI',usuario_id)
+        mov = EstoqueMovimentacoes.remover(quantidade,estoque.id,self.id,'EPI',usuario_id)
         mov.save()
         
         return True
@@ -135,12 +135,12 @@ class Epi(db.Model):
         """
         Ajusta o estoque do EPI
         """
-        from models.estoque import Estoque,MovimentacaoEstoque
+        from models.estoque import Estoque,EstoqueMovimentacoes
         estoque = Estoque.query.filter_by(material_id=self.material_id).first()
-        movimentacao = MovimentacaoEstoque.query.filter_by(estoque_id=estoque.id).order_by(MovimentacaoEstoque.data_movimento.desc()).first()
+        movimentacao = EstoqueMovimentacoes.query.filter_by(estoque_id=estoque.id).order_by(EstoqueMovimentacoes.data_movimento.desc()).first()
         if not estoque:
             raise ValueError("Não existe estoque para este material")
-        mov = MovimentacaoEstoque.Ajuste(quantidade,estoque.id,self.id,'EPI',usuario_id)
+        mov = EstoqueMovimentacoes.Ajuste(quantidade,estoque.id,self.id,'EPI',usuario_id)
         mov.save()
         return mov
         
@@ -232,7 +232,7 @@ class EpiEntregas(db.Model):
         super().__init__(**kwargs)
         #print(f"kwargs: {kwargs}")
     def save(self):
-        from models.estoque import Estoque,MovimentacaoEstoque
+        from models.estoque import Estoque,EstoqueMovimentacoes
         print(f"EntregaEPI: {self.id}")
         print(f"self.epi: {self.epi}")
         print(f"self.epi.material_id: {self.epi.material_id}")
@@ -252,7 +252,7 @@ class EpiEntregas(db.Model):
         print(f"estoque: {estoque.id}")
         if not estoque:
             raise ValueError("Estoque não encontrado para este material")
-        mov=MovimentacaoEstoque()
+        mov=EstoqueMovimentacoes()
         db.session.add(mov)
         observacao = f'Entrega de EPI para colaborador {self.colaborador.nome}'
         mov.remover(self.quantidade,estoque.id,self.id,'EntregaEPI',self.usuario_id,observacao)
@@ -334,9 +334,9 @@ class EpiEntregas(db.Model):
             return "Devolvido"
         
         # Garantir que o objeto EPI esteja carregado
-        from models.epi import EPI
+        from models.epi import Epi
         if self.epi_id and (not hasattr(self, '_epi') or self.epi is None):
-            self.epi = EPI.query.get(self.epi_id)
+            self.epi = Epi.query.get(self.epi_id)
         
         if self.epi is None:
             return "Erro: EPI não encontrado"

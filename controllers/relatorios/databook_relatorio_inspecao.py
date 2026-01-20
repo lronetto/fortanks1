@@ -279,7 +279,7 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
         # Caminho do arquivo template - RELATORIO INSPECAO.xlsx
         template_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'relatorios','base','RELATORIO INSPECAO.xlsx'
+            'templates_excel', 'RELATORIO_INSPECAO.xlsx'
         )
         
         if not os.path.exists(template_path):

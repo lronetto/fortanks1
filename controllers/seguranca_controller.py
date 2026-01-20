@@ -104,7 +104,7 @@ def epi_novo():
             return redirect(url_for('seguranca.epis_index'))
 
         # Verificar se já existe EPI cadastrado para este material
-        epi_existente = EPI.query.filter_by(material_id=material_id).first()
+        epi_existente = Epi.query.filter_by(material_id=material_id).first()
         if epi_existente:
             if is_ajax:
                 return jsonify({'success': False, 'message': 'Já existe um EPI cadastrado para o material selecionado'})
@@ -568,14 +568,84 @@ def entregas_index():
         'status': filtro_status
     }
 
+    # Calcular estatísticas
+    total_entregas = EpiEntregas.query.count()
+    entregas_pendentes = EpiEntregas.query.filter(EpiEntregas.data_devolucao.is_(None)).count()
+    entregas_devolvidas = EpiEntregas.query.filter(EpiEntregas.data_devolucao.isnot(None)).count()
+    total_colaboradores = Colaborador.query.count()
+
     return render_template('seguranca/entregas/index.html', 
-                           pagination=pagination, 
-                           entregas=entregas, 
                            colaboradores=colaboradores,
                            epis_disponiveis=epis_disponiveis,
-                           filtros_ativos=filtros_ativos,
+                           total_entregas=total_entregas,
+                           entregas_pendentes=entregas_pendentes,
+                           entregas_devolvidas=entregas_devolvidas,
+                           total_colaboradores=total_colaboradores,
                            now1=datetime.now().date())
 
+
+@seguranca_bp.route('/epis/entregas/api/dados', methods=['GET'])
+@login_required
+def entregas_api_dados():
+    """Endpoint AJAX para retornar dados das entregas em formato JSON"""
+    # Obter parâmetros de filtro
+    filtro_colaborador_id = request.args.get('colaborador_id', type=int)
+    filtro_epi_id = request.args.get('epi_id', type=int)
+    filtro_data_inicio_str = request.args.get('data_inicio', '')
+    filtro_data_fim_str = request.args.get('data_fim', '')
+    filtro_status = request.args.get('status', '')
+
+    # Query base
+    query = EpiEntregas.query.options(
+        joinedload(EpiEntregas.colaborador),
+        joinedload(EpiEntregas.epi).joinedload(Epi.material)
+    )
+
+    # Aplicar filtros
+    if filtro_colaborador_id:
+        query = query.filter(EpiEntregas.colaborador_id == filtro_colaborador_id)
+    
+    if filtro_epi_id:
+        query = query.filter(EpiEntregas.epi_id == filtro_epi_id)
+
+    # Filtro de data
+    try:
+        if filtro_data_inicio_str:
+            data_inicio = datetime.strptime(filtro_data_inicio_str, '%Y-%m-%d').date()
+            query = query.filter(EpiEntregas.data_entrega >= data_inicio)
+        if filtro_data_fim_str:
+            data_fim = datetime.strptime(filtro_data_fim_str, '%Y-%m-%d').date()
+            query = query.filter(EpiEntregas.data_entrega <= data_fim)
+    except ValueError:
+        pass
+
+    if filtro_status == 'entregue':
+        query = query.filter(EpiEntregas.data_devolucao.is_(None))
+    elif filtro_status == 'devolvido':
+        query = query.filter(EpiEntregas.data_devolucao.isnot(None))
+
+    # Ordenar resultados
+    query = query.order_by(EpiEntregas.data_entrega.desc(), EpiEntregas.id.desc())
+    
+    # Buscar todas as entregas (sem paginação, o DataTables faz isso client-side)
+    entregas = query.all()
+
+    # Formatar dados para o DataTables
+    dados = []
+    for entrega in entregas:
+        dados.append({
+            'id': entrega.id,
+            'colaborador': entrega.colaborador.nome if entrega.colaborador else '',
+            'colaborador_id': entrega.colaborador_id,
+            'epi': entrega.epi.material.nome if entrega.epi and entrega.epi.material else '',
+            'data_entrega': entrega.data_entrega.strftime('%d/%m/%Y') if entrega.data_entrega else '',
+            'quantidade': entrega.quantidade,
+            'data_devolucao': entrega.data_devolucao.strftime('%d/%m/%Y') if entrega.data_devolucao else None,
+            'status': 'Devolvido' if entrega.data_devolucao else 'Em uso',
+            'tem_devolucao': entrega.data_devolucao is not None
+        })
+
+    return jsonify({'data': dados})
 
 
 @seguranca_bp.route('/entregas/nova', methods=['GET', 'POST'])
@@ -741,7 +811,7 @@ def entrega_visualizar(id):
     """
     Visualiza os detalhes de uma entrega
     """
-    entrega = EntregaEPI.query.get_or_404(id)
+    entrega = EpiEntregas.query.get_or_404(id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if is_ajax:
@@ -775,7 +845,7 @@ def devolver_entrega(id):
     """
     Registra a devolução de um EPI
     """
-    entrega = EntregaEPI.query.get_or_404(id)
+    entrega = EpiEntregas.query.get_or_404(id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     if entrega.data_devolucao:
@@ -824,7 +894,7 @@ def excluir_entrega(id):
     Exclui uma entrega de EPI
     """
     print(f"excluir_entrega: {id}")
-    entrega = EntregaEPI.query.get_or_404(id)
+    entrega = EpiEntregas.query.get_or_404(id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     
     try:
@@ -851,29 +921,29 @@ def relatorios():
     """
     # Calcular estatísticas
     with app.app_context():
-        total_epis = EPI.query.count()
+        total_epis = Epi.query.count()
         # Usar filter_by para verificar quais EPIs têm estoque zero no sistema principal
         epis_criticos = []
-        for epi in EPI.query.all():
+        for epi in Epi.query.all():
             if epi.get_estoque_atual() <= 0:
                 epis_criticos.append(epi.id)
         epis_criticos_count = len(epis_criticos)
         
         # Colaboradores com equipamentos
         total_colaboradores = Colaborador.query.count()
-        colaboradores_com_epi = db.session.query(EntregaEPI.colaborador_id).filter(EntregaEPI.data_devolucao.is_(None)).distinct().count()
+        colaboradores_com_epi = db.session.query(EpiEntregas.colaborador_id).filter(EpiEntregas.data_devolucao.is_(None)).distinct().count()
     
     # Estatísticas de entregas
-    total_entregas = EntregaEPI.query.count()
-    entregas_sem_devolucao = EntregaEPI.query.filter(EntregaEPI.data_devolucao.is_(None)).count()
+    total_entregas = EpiEntregas.query.count()
+    entregas_sem_devolucao = EpiEntregas.query.filter(EpiEntregas.data_devolucao.is_(None)).count()
     
     # Estatísticas por colaborador
     colaboradores = Colaborador.query.filter_by(status='Ativo').all()
     dados_colaboradores = []
     
     for colaborador in colaboradores:
-        entregas = EntregaEPI.query.filter_by(colaborador_id=colaborador.id).all()
-        entregas_ativas = EntregaEPI.query.filter_by(colaborador_id=colaborador.id, data_devolucao=None).count()
+        entregas = EpiEntregas.query.filter_by(colaborador_id=colaborador.id).all()
+        entregas_ativas = EpiEntregas.query.filter_by(colaborador_id=colaborador.id, data_devolucao=None).count()
         
         dados_colaboradores.append({
             'id': colaborador.id,
@@ -889,12 +959,12 @@ def relatorios():
         data = datetime.now() - timedelta(days=30*i)
         mes = data.strftime('%Y-%m')
         
-        entregas = EntregaEPI.query.filter(
-            db.func.strftime('%Y-%m', EntregaEPI.data_entrega) == mes
+        entregas = EpiEntregas.query.filter(
+            db.func.strftime('%Y-%m', EpiEntregas.data_entrega) == mes
         ).count()
         
-        devolucoes = EntregaEPI.query.filter(
-            db.func.strftime('%Y-%m', EntregaEPI.data_devolucao) == mes
+        devolucoes = EpiEntregas.query.filter(
+            db.func.strftime('%Y-%m', EpiEntregas.data_devolucao) == mes
         ).count()
         
         meses.append({

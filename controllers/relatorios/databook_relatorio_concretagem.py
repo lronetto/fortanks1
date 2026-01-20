@@ -1,10 +1,11 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
 from flask_login import login_required
+from models import TanquesPecas
 from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens, ConcretoConcretagens, ConcretoConcretagensTanques
 from models.contrato import Contrato
 from models.tanque import Tanques
 from models.database import db
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from datetime import datetime, timedelta
 import os
 import io
@@ -64,95 +65,62 @@ def api_dados():
     # Converter datas se fornecidas
     data_inicio = None
     data_fim = None
+    
+    usinagens = ConcretoUsinagens.query
     if data_inicio_str:
-        try:
-            data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
-        except ValueError:
-            data_inicio = None
-    
+        usinagens = usinagens.filter(ConcretoUsinagens.data_usinagem >= data_inicio_str)
     if data_fim_str:
+        usinagens = usinagens.filter(ConcretoUsinagens.data_usinagem <= data_fim_str)
+
+    usinagens = usinagens.all()
+    dados = [] 
+    for usinagem in usinagens:
+        # Buscar peças que contêm a série no array 'series' do campo JSON 'qualidade'
+        # O campo qualidade tem estrutura: {"series": [985, 986, ...], ...}
+        # O array contém números, então precisamos converter a série para número
+        # Tentar converter a série para número (pode ser string "985" ou número 985)
         try:
-            data_fim = datetime.strptime(data_fim_str, '%Y-%m-%d').date()
-        except ValueError:
-            data_fim = None
-    
-    # Construir query base - usar outerjoin para não perder rompimentos sem usinagem
-    query = db.session.query(ConcretoUsinagensRompimentos)\
-        .outerjoin(ConcretoUsinagens, ConcretoUsinagensRompimentos.usinagem_id == ConcretoUsinagens.id)\
-        .outerjoin(ConcretoConcretagens, ConcretoUsinagens.concretagem_id == ConcretoConcretagens.id)\
-        .outerjoin(ConcretoConcretagensTanques, ConcretoConcretagens.id == ConcretoConcretagensTanques.concretagem_id)\
-        .outerjoin(Tanques, ConcretoConcretagensTanques.tanque_id == Tanques.id)
-    
-    # Aplicar filtros
-    if tanque_id:
-        query = query.filter(Tanques.id == tanque_id)
-    
-    if contrato_id:
-        query = query.filter(Tanques.contrato_id == contrato_id)
-    
-    # Aplicar filtros de data (filtrar por data de moldagem)
-    if data_inicio:
-        # Converter para datetime para comparação correta
-        data_inicio_dt = datetime.combine(data_inicio, datetime.min.time())
-        query = query.filter(ConcretoUsinagensRompimentos.data_moldagem >= data_inicio_dt)
-    
-    if data_fim:
-        # Converter para datetime e incluir o dia inteiro (até 23:59:59)
-        from datetime import time as dt_time
-        data_fim_dt = datetime.combine(data_fim, dt_time(23, 59, 59))
-        query = query.filter(ConcretoUsinagensRompimentos.data_moldagem <= data_fim_dt)
-    
-    # Executar query e ordenar por série e depois por data de rompimento
-    rompimentos = query.order_by(
-        ConcretoUsinagensRompimentos.numero_serie.asc(),
-        ConcretoUsinagensRompimentos.data_rompimento.desc()
-    ).all()
-    
-    # Agrupar dados por número de série e manter apenas uma linha por série
-    series_unicas = {}
-    for rompimento in rompimentos:
-        numero_serie = rompimento.numero_serie
-        
-        # Se já processamos esta série, pular
-        if numero_serie in series_unicas:
-            continue
-        
-        # Obter data de moldagem do rompimento (primeiro rompimento da série)
-        data_moldagem = rompimento.data_moldagem
-        
-        # Obter informações do tanque (pode haver múltiplos tanques associados)
-        tanques_info = []
-        if rompimento.usinagem and rompimento.usinagem.concretagem:
-            for tanque_assoc in rompimento.usinagem.concretagem.tanques_associados:
-                if tanque_assoc.tanque:
-                    tanques_info.append({
-                        'id': tanque_assoc.tanque.id,
-                        'nome': tanque_assoc.tanque.nome,
-                        'contrato_nome': tanque_assoc.tanque.contrato.nome if tanque_assoc.tanque.contrato else None
-                    })
-        
-        # Contar total de rompimentos desta série
-        total_rompimentos_serie = sum(1 for r in rompimentos if r.numero_serie == numero_serie)
-        
-        # Criar estrutura de dados da série (apenas uma linha por série)
-        series_unicas[numero_serie] = {
-            'id': rompimento.id,
-            'numero_serie': numero_serie,
-            'data_moldagem': data_moldagem.strftime('%d/%m/%Y %H:%M') if data_moldagem else 'N/A',
-            'data_moldagem_raw': data_moldagem.isoformat() if data_moldagem else None,
-            'tanque_nome': ', '.join([t['nome'] for t in tanques_info]) if tanques_info else 'N/A',
-            'projeto_nome': tanques_info[0]['contrato_nome'] if tanques_info and tanques_info[0].get('contrato_nome') else 'N/A',
-            'data_rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') if rompimento.data_rompimento else 'N/A',
-            'resultado': float(rompimento.resultado) if rompimento.resultado else None,
-            'idade_cp': rompimento.idade_cp if rompimento.idade_cp else None,
-            'total_rompimentos': total_rompimentos_serie
-        }
+            serie_numero = int(usinagem.serie)
+            # Se a série é um número, buscar como número no array JSON
+            # JSON_CONTAINS precisa do valor como string JSON válida (número sem aspas externas)
+            # Passamos o número diretamente como string para JSON_CONTAINS
+            pecas = TanquesPecas.query.filter(
+                func.json_contains(
+                    func.json_extract(TanquesPecas.qualidade, '$.series'),
+                    str(serie_numero)
+                ) == 1
+            )
+        except (ValueError, TypeError):
+            # Se não for possível converter para número, buscar como string
+            pecas = TanquesPecas.query.filter(
+                func.json_contains(
+                    func.json_extract(TanquesPecas.qualidade, '$.series'),
+                    func.json_quote(usinagem.serie)
+                ) == 1
+            )
+        if tanque_id:
+            pecas = pecas.filter(TanquesPecas.tanque_id == tanque_id)
+        if contrato_id:
+            pecas = pecas.filter(Tanques.contrato_id == contrato_id)
+        pecas = pecas.all()
+        print(pecas)
+        projetos_unicos = set([peca.tanque.contrato_id for peca in pecas])
+        projetos_str = ", ".join([Contrato.query.filter(Contrato.id == projeto).first().nome for projeto in projetos_unicos])
+        tanques_unicos = set([peca.tanque_id for peca in pecas])
+        tanques_str = ", ".join([Tanques.query.filter(Tanques.id == tanque).first().nome for tanque in tanques_unicos])
+       
     
     # Preparar dados finais (apenas séries únicas)
-    dados = []
-    for numero_serie in sorted(series_unicas.keys()):
-        dados.append(series_unicas[numero_serie])
-    
+        total_rompimentos = ConcretoUsinagensRompimentos.query.filter(ConcretoUsinagensRompimentos.numero_serie == usinagem.serie).count()   
+        dados.append({
+                'numero_serie': usinagem.serie,
+                'projeto_nome': projetos_str,
+                'tanque_nome': tanques_str,
+                'data_moldagem': usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') if usinagem.data_usinagem else 'N/A',
+                'data_moldagem_raw': usinagem.data_usinagem.isoformat() if usinagem.data_usinagem else None,
+                'total_rompimentos': total_rompimentos
+            })
+    print(dados)
     return jsonify({
         'data': dados,
         'recordsTotal': len(dados),
@@ -215,7 +183,7 @@ def mapear_tipo_rompimento(tipo_rompimento, campos_base):
     
     return resultado
 
-def _gerar_excel_temp(numero_serie):
+def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None):
     """
     Função auxiliar que gera o Excel e retorna o caminho do arquivo temporário
     Retorna o caminho do arquivo temporário ou None em caso de erro
@@ -233,7 +201,7 @@ def _gerar_excel_temp(numero_serie):
         # Caminho do arquivo template
         template_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'relatorios', 'base', 'RELATORIO CONCRETAGEM.xlsx'
+            'templates_excel', 'RELATORIO_CONCRETAGEM.xlsx'
         )
         
         if not os.path.exists(template_path):
@@ -312,7 +280,19 @@ def _gerar_excel_temp(numero_serie):
                         #volume
                         new_value = new_value.replace('{22}', "5,00")
                         #pecas
-                        new_value = new_value.replace('{23}', "1")
+                        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.numero_serie == numero_serie).first()
+                        if usinagem:
+                            pecas = TanquesPecas.query.filter(TanquesPecas.data_concretagem>=usinagem.data_usinagem)
+                            if tanque_id:
+                                pecas = pecas.filter(TanquesPecas.tanque_id == tanque_id)
+                            if contrato_id:
+                                pecas = pecas.filter(Tanques.contrato_id == contrato_id)
+                            pecas = pecas.all()
+
+                            pecas_str = [", ".join([peca.nome for peca in pecas])]
+                            new_value = new_value.replace('{23}', ", ".join(pecas_str))
+                        else:
+                            new_value = new_value.replace('{23}', "N/A")
 
                         if (len(rompimentos) >= 4 and 
                             rompimentos[len(rompimentos)-1].data_moldagem and 

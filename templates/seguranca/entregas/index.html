@@ -99,11 +99,6 @@
             font-size: 0.875rem;
         }
         
-        /* Ocultar colunas menos importantes em telas pequenas */
-        .table .mobile-hide {
-            display: none;
-        }
-        
         /* Estilo para tabela responsiva */
         .table-responsive {
             font-size: 0.875rem;
@@ -183,8 +178,6 @@
                 </div>
             </div>
 
-            {% set pendentes = entregas|selectattr('data_devolucao', 'eq', None)|list %}
-            
             <div class="col-6 mb-2">
                 <div class="card border-left-warning shadow h-100 py-1">
                     <div class="card-body py-2">
@@ -192,7 +185,7 @@
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                                     Em Uso</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pendentes|length }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas_pendentes }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-hand-holding fa-lg text-gray-300"></i>
@@ -202,8 +195,6 @@
                 </div>
             </div>
 
-            {% set devolvidos = entregas|selectattr('data_devolucao', 'ne', None)|list %}
-            
             <div class="col-6 mb-2">
                 <div class="card border-left-success shadow h-100 py-1">
                     <div class="card-body py-2">
@@ -211,7 +202,7 @@
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                     Devolvidos</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ devolvidos|length }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas_devolvidas }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-undo fa-lg text-gray-300"></i>
@@ -228,7 +219,7 @@
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                     Colaboradores</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ colaboradores|length }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_colaboradores }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-users fa-lg text-gray-300"></i>
@@ -267,7 +258,7 @@
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
                                     Em Uso / Pendentes</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pendentes|length }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas_pendentes }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-hand-holding fa-2x text-gray-300"></i>
@@ -284,7 +275,7 @@
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                                     Devolvidos</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ devolvidos|length }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ entregas_devolvidas }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-undo fa-2x text-gray-300"></i>
@@ -301,7 +292,7 @@
                             <div class="col mr-2">
                                 <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                     Colaboradores</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ colaboradores|length }}</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_colaboradores }}</div>
                             </div>
                             <div class="col-auto">
                                 <i class="fas fa-users fa-2x text-gray-300"></i>
@@ -368,16 +359,18 @@
     <!-- Filtros e Pesquisa - Versão Desktop -->
     <div class="d-none d-md-block">
         <div class="card shadow mb-4">
-            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <div class="card-header py-3">
                 <h6 class="m-0 font-weight-bold text-primary">Filtrar Entregas</h6>
-                <form method="GET" action="{{ url_for('seguranca.entregas_index') }}" class="row g-2 align-items-end filter-form">
+            </div>
+            <div class="card-body">
+                <div class="row g-2 align-items-end filter-form">
                 <div class="col-md-3 col-lg-3">
                     <label for="filtro_colaborador_id" class="form-label">Colaborador</label>
                     <select class="form-control select2-filtro" id="filtro_colaborador_id" name="colaborador_id">
                         <option value="">Todos</option>
                         {# Preenche com dados do backend e seleciona o ativo #}
                         {% for col in colaboradores %}
-                        <option value="{{ col.id }}" {% if request.args.get('colaborador_id') | int == col.id %}selected{% endif %}>{{ col.nome }}</option>
+                        <option value="{{ col.id }}">{{ col.nome }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -387,39 +380,36 @@
                         <option value="">Todos</option>
                         {# Preenche com dados do backend e seleciona o ativo #}
                         {% for epi in epis_disponiveis %}
-                        <option value="{{ epi.id }}" {% if request.args.get('epi_id') | int == epi.id %}selected{% endif %}>{{ epi.material.nome }} (CA: {{ epi.ca_numero or '-' }})</option>
+                        <option value="{{ epi.id }}">{{ epi.material.nome }} (CA: {{ epi.ca_numero or '-' }})</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-2 col-lg-2">
                     <label for="filtro_data_inicio" class="form-label">Data Entrega (De)</label>
-                    {# Mantém valor do filtro ativo #}
-                    <input type="date" class="form-control" id="filtro_data_inicio" name="data_inicio" value="{{ request.args.get('data_inicio', '') }}">
+                    <input type="date" class="form-control" id="filtro_data_inicio" name="data_inicio">
                 </div>
                 <div class="col-md-2 col-lg-2">
                     <label for="filtro_data_fim" class="form-label">Data Entrega (Até)</label>
-                     {# Mantém valor do filtro ativo #}
-                    <input type="date" class="form-control" id="filtro_data_fim" name="data_fim" value="{{ request.args.get('data_fim', '') }}">
+                    <input type="date" class="form-control" id="filtro_data_fim" name="data_fim">
                 </div>
                 <div class="col-md-1 col-lg-1">
                     <label for="filtro_status" class="form-label">Status</label>
                     <select class="form-select" id="filtro_status" name="status">
-                         {# Mantém valor do filtro ativo #}
-                        <option value="" {% if not request.args.get('status') %}selected{% endif %}>Todos</option>
-                        <option value="entregue" {% if request.args.get('status') == 'entregue' %}selected{% endif %}>Em Uso</option>
-                        <option value="devolvido" {% if request.args.get('status') == 'devolvido' %}selected{% endif %}>Devolvido</option>
+                        <option value="">Todos</option>
+                        <option value="entregue">Em Uso</option>
+                        <option value="devolvido">Devolvido</option>
                     </select>
                 </div>
                 <div class="col-md-1 col-lg-1 d-flex justify-content-start align-items-end">
-                    <button type="submit" class="btn btn-info btn-sm me-1" title="Aplicar Filtros">
+                    <button type="button" class="btn btn-info btn-sm me-1" id="btn-aplicar-filtro-desktop" title="Aplicar Filtros">
                         <i class="fas fa-filter"></i> <span class="d-none d-lg-inline">Filtrar</span>
                     </button>
-                    {# Link para limpar filtros (volta para a URL base sem args) #}
-                    <a href="{{ url_for('seguranca.entregas_index') }}" class="btn btn-secondary btn-sm" title="Limpar Filtros">
+                    {# Link para limpar filtros #}
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-limpar-filtro-desktop" title="Limpar Filtros">
                         <i class="fas fa-eraser"></i>
-                    </a>
+                    </button>
                 </div>
-            </form>
+            </div>
                 </div>
             </div>
             
@@ -435,117 +425,21 @@
                 <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
-                            <th class="mobile-hide">ID</th>
+                            <th>ID</th>
                             <th>Colaborador</th>
                             <th>EPI</th>
-                            <th class="mobile-hide">Data Entrega</th>
-                            <th class="mobile-hide">Quantidade</th>
+                            <th>Data Entrega</th>
+                            <th>Quantidade</th>
                             <th>Devolução</th>
                             <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for entrega in entregas %}
-                        <tr class="entrega-row {% if entrega.data_devolucao %}devolvido{% else %}pendente{% endif %}"
-                            data-colaborador="{{ entrega.colaborador_id }}" data-epi="{{ entrega.epi_id }}"
-                            data-status="{% if entrega.data_devolucao %}devolvido{% else %}pendente{% endif %}">
-                            <td class="mobile-hide">{{ entrega.id }}</td>
-                            <td>
-                                <div data-bs-toggle="modal" data-bs-target="#fichaEpiModal" data-id="{{ entrega.colaborador_id }}" data-nome="{{ entrega.colaborador.nome }}">
-                                        {{ entrega.colaborador.nome }}
-                                </div>
-                            </td>
-                            <td>{{ entrega.epi.material.nome }}</td>
-                            <td class="mobile-hide">{{ entrega.data_entrega.strftime('%d/%m/%Y') }}</td>
-                            <td class="mobile-hide">{{ entrega.quantidade }}</td>
-                            <td>
-                                {% if entrega.data_devolucao %}
-                                {{ entrega.data_devolucao.strftime('%d/%m/%Y') }}
-                                {% else %}
-                                <span class="text-muted">Pendente</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if entrega.data_devolucao %}
-                                <span class="badge bg-success">Devolvido</span>
-                                {% else %}
-                                <span class="badge badge-pendente">Em uso</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="action-buttons">
-                                    <!-- Botão para visualizar detalhes -->
-                                    <button type="button" class="btn btn-sm btn-info btn-visualizar-entrega"
-                                        data-id="{{ entrega.id }}" title="Visualizar">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-
-                                    {% if not entrega.data_devolucao %}
-                                    <!-- Botão para registrar devolução (apenas se não devolvido) -->
-                                    <button type="button" class="btn btn-sm btn-warning btn-devolver-entrega"
-                                        data-id="{{ entrega.id }}" title="Devolver">
-                                        <i class="fas fa-undo"></i>
-                                    </button>
-                                    {% endif %}
-
-                                    <!-- Botão para excluir -->
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                        data-bs-toggle="modal" data-bs-target="#excluirEntregaModal"
-                                        data-id="{{ entrega.id }}"
-                                        data-colaborador="{{ entrega.colaborador.nome }}"
-                                        data-epi="{{ entrega.epi.material.nome }}"
-                                        data-data="{{ entrega.data_entrega.strftime('%d/%m/%Y') }}"
-                                        title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                        <!-- Dados carregados via AJAX -->
                     </tbody>
                 </table>
             </div>
-            <!-- Controles de Paginação -->
-            {% if pagination and pagination.pages > 1 %}
-                <nav aria-label="Page navigation" class="mt-3">
-                    <ul class="pagination justify-content-center flex-wrap">
-                        {# Link para Primeira Página - Endpoint corrigido #}
-                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=1)) }}">&laquo;&laquo;</a>
-                        </li>
-                        {# Link para Página Anterior - Endpoint corrigido #}
-                        <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=pagination.prev_num)) }}">&laquo;</a>
-                        </li>
-                        {# Links das Páginas Vizinhas - Endpoint corrigido #}
-                        {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
-                            {% if page_num %}
-                                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
-                                    <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=page_num)) }}">{{ page_num }}</a>
-                                </li>
-                            {% else %}
-                                <li class="page-item disabled"><span class="page-link">...</span></li>
-                            {% endif %}
-                        {% endfor %}
-                        {# Link para Próxima Página - Endpoint corrigido #}
-                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=pagination.next_num)) }}">&raquo;</a>
-                        </li>
-                         {# Link para Última Página - Endpoint corrigido #}
-                        <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('seguranca.entregas_index', **dict(request.args.to_dict(), page=pagination.pages)) }}">&raquo;&raquo;</a>
-                        </li>
-                    </ul>
-                </nav>
-                <div class="text-center text-muted small mt-2">
-                    Exibindo página {{ pagination.page }} de {{ pagination.pages }} ({{ pagination.total }} registros no total)
-                </div>
-            {% elif pagination and pagination.total > 0 %}
-                 <div class="text-center text-muted small mt-2">
-                    ({{ pagination.total }} registros encontrados)
-                </div>
-            {% endif %}
         </div>
     </div>
 
@@ -598,9 +492,190 @@ document.addEventListener('DOMContentLoaded', function () {
             placeholder: 'Selecione uma opção',
             allowClear: true
         });
+        
+        $('.select2-filtro-mobile').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Selecione uma opção',
+            allowClear: true
+        });
     } catch (e) {
         console.warn("Erro ao inicializar Select2. Verifique se jQuery e Select2 estão carregados corretamente.", e);
     }
+
+    // Inicialização do DataTables com AJAX
+    if (typeof $.fn.DataTable !== 'undefined') {
+        let dataTable = $('#dataTable').DataTable({
+            processing: true,
+            serverSide: false,
+            ajax: {
+                url: '{{ url_for("seguranca.entregas_api_dados") }}',
+                type: 'GET',
+                data: function(d) {
+                    d.colaborador_id = $('#filtro_colaborador_id').val() || $('#filtro-colaborador-mobile').val();
+                    d.epi_id = $('#filtro_epi_id').val() || $('#filtro-epi-mobile').val();
+                    d.status = $('#filtro_status').val() || $('#filtro-status-mobile').val();
+                    d.data_inicio = $('#filtro_data_inicio').val();
+                    d.data_fim = $('#filtro_data_fim').val();
+                },
+                dataSrc: 'data'
+            },
+            columns: [
+                { data: 'id' },
+                { 
+                    data: 'colaborador',
+                    render: function(data, type, row) {
+                        return '<div data-bs-toggle="modal" data-bs-target="#fichaEpiModal" data-id="' + row.colaborador_id + '" data-nome="' + data + '">' + data + '</div>';
+                    }
+                },
+                { data: 'epi' },
+                { 
+                    data: 'data_entrega',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            // Para ordenação, converter DD/MM/YYYY para timestamp
+                            if (!data) return 0;
+                            const partes = data.split('/');
+                            if (partes.length === 3) {
+                                const dia = parseInt(partes[0], 10);
+                                const mes = parseInt(partes[1], 10) - 1;
+                                const ano = parseInt(partes[2], 10);
+                                return new Date(ano, mes, dia).getTime();
+                            }
+                            return 0;
+                        }
+                        // Para exibição, retornar o formato original
+                        return data || '';
+                    }
+                },
+                { data: 'quantidade' },
+                { 
+                    data: 'data_devolucao',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            // Para ordenação, converter DD/MM/YYYY para timestamp
+                            if (!data) return 0;
+                            const partes = data.split('/');
+                            if (partes.length === 3) {
+                                const dia = parseInt(partes[0], 10);
+                                const mes = parseInt(partes[1], 10) - 1;
+                                const ano = parseInt(partes[2], 10);
+                                return new Date(ano, mes, dia).getTime();
+                            }
+                            return 0;
+                        }
+                        // Para exibição
+                        return data ? data : '<span class="text-muted">Pendente</span>';
+                    }
+                },
+                { 
+                    data: 'status',
+                    render: function(data) {
+                        const badgeClass = data === 'Devolvido' ? 'bg-success' : 'badge-pendente';
+                        return '<span class="badge ' + badgeClass + '">' + data + '</span>';
+                    }
+                },
+                { 
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    render: function(data, type, row) {
+                        let html = '<div class="action-buttons">';
+                        html += '<button type="button" class="btn btn-sm btn-info btn-visualizar-entrega" data-id="' + row.id + '" title="Visualizar"><i class="fas fa-eye"></i></button>';
+                        if (!row.tem_devolucao) {
+                            html += '<button type="button" class="btn btn-sm btn-warning btn-devolver-entrega" data-id="' + row.id + '" title="Devolver"><i class="fas fa-undo"></i></button>';
+                        }
+                        html += '<button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#excluirEntregaModal" data-id="' + row.id + '" data-colaborador="' + row.colaborador + '" data-epi="' + row.epi + '" data-data="' + row.data_entrega + '" title="Excluir"><i class="fas fa-trash"></i></button>';
+                        html += '</div>';
+                        return html;
+                    }
+                }
+            ],
+            language: {
+                url: '{{ url_for("static", filename="js/datatables-pt-BR.json") }}'
+            },
+            order: [[3, 'desc']],
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            responsive: true,
+            autoWidth: false,
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+        });
+
+        // Aplicar filtros
+        function recarregarTabela() {
+            dataTable.ajax.reload();
+        }
+
+        $('#btn-aplicar-filtro-desktop, #btn-aplicar-filtro-mobile').on('click', recarregarTabela);
+        
+        $('#btn-limpar-filtro-desktop').on('click', function() {
+            $('#filtro_colaborador_id, #filtro_epi_id, #filtro_status, #filtro_data_inicio, #filtro_data_fim').val('').trigger('change');
+            $('#filtro_colaborador_id, #filtro_epi_id').trigger('change.select2');
+            recarregarTabela();
+        });
+
+        $('#btn-limpar-filtro-mobile').on('click', function() {
+            $('#filtro-colaborador-mobile, #filtro-epi-mobile, #filtro-status-mobile').val('').trigger('change');
+            recarregarTabela();
+        });
+    } else {
+        console.warn('DataTables não está disponível');
+    }
+
+    // Event delegation para botões de ação (funciona mesmo após redraw do DataTables)
+    $(document).on('click', '.btn-visualizar-entrega', function() {
+        const entregaId = $(this).data('id');
+        const visualizarModalEl = document.getElementById('visualizarEntregaModal');
+        if (visualizarModalEl && typeof carregarDetalhesEntrega === 'function') {
+            const visualizarModal = bootstrap.Modal.getInstance(visualizarModalEl) || new bootstrap.Modal(visualizarModalEl);
+            carregarDetalhesEntrega(entregaId, visualizarModalEl);
+            visualizarModal.show();
+        }
+    });
+
+    $(document).on('click', '.btn-devolver-entrega', function() {
+        const entregaId = $(this).data('id');
+        if (typeof abrirModalDevolucao === 'function') {
+            abrirModalDevolucao(entregaId);
+        }
+    });
+
+    // Event delegation para botão de exclusão
+    $(document).on('click', '[data-bs-target="#excluirEntregaModal"]', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Obter dados do atributo data-id (jQuery pode não funcionar corretamente com data-*)
+        const entregaId = $(this).attr('data-id') || $(this).data('id');
+        const colaboradorNome = $(this).attr('data-colaborador') || $(this).data('colaborador') || '';
+        const epiNome = $(this).attr('data-epi') || $(this).data('epi') || '';
+        const dataEntrega = $(this).attr('data-data') || $(this).data('data') || '';
+
+        console.log('Botão de exclusão clicado:', { entregaId, colaboradorNome, epiNome, dataEntrega });
+
+        if (!entregaId) {
+            console.error('ID da entrega não encontrado');
+            showToast('Erro', 'ID da entrega não encontrado.', 'danger');
+            return;
+        }
+
+        // Preencher modal
+        $('#excluir-entrega-id').val(entregaId);
+        $('#excluir-colaborador-nome').text(colaboradorNome || 'N/A');
+        $('#excluir-epi-nome').text(epiNome || 'N/A');
+        $('#excluir-data-entrega').text(dataEntrega || 'N/A');
+        $('#formExcluirEntrega').attr('action', `/seguranca/entregas/excluir/${entregaId}`);
+        
+        // Abrir modal
+        const modalEl = document.getElementById('excluirEntregaModal');
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+    });
 });
 </script>
 {% endblock %} 

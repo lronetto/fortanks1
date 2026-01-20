@@ -28,8 +28,8 @@
 </div>
 
 <script>
-// Função para abrir modal de exclusão
-function abrirModalExclusao(entregaId, colaboradorNome, epiNome, dataEntrega) {
+// Função global para abrir modal de exclusão
+window.abrirModalExclusao = function(entregaId, colaboradorNome, epiNome, dataEntrega) {
     const modalEl = document.getElementById('excluirEntregaModal');
     if (!modalEl) return;
 
@@ -57,20 +57,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (!modalEl) return;
 
-    // Listener para botões de exclusão na tabela
-    document.querySelectorAll('[data-bs-target="#excluirEntregaModal"]').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            const entregaId = this.dataset.id;
-            const colaboradorNome = this.dataset.colaborador;
-            const epiNome = this.dataset.epi;
-            const dataEntrega = this.dataset.data;
-
-            if (entregaId) {
-                abrirModalExclusao(entregaId, colaboradorNome, epiNome, dataEntrega);
-            }
-        });
-    });
+    // Event delegation para botões de exclusão (funciona com elementos dinâmicos)
+    // O listener está no index.html principal para garantir que funcione com DataTables
 
     // Submit do formulário via AJAX
     if (formExcluir) {

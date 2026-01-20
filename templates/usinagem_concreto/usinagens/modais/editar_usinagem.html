@@ -51,17 +51,26 @@
                         </div>
                     </div>
 
-                    <!-- NF e Dados Adicionais -->
+                    <!-- NF e Redosagem -->
                     <div class="row mb-3">
                         <div class="col-12 col-md-6 mb-3 mb-md-0">
                             <label for="edit_nf" class="form-label fw-bold">Nota Fiscal</label>
                             <input type="text" class="form-control" id="edit_nf" name="nf" maxlength="50">
                         </div>
                         <div class="col-12 col-md-6">
-                            <label for="edit_dados_adicionais" class="form-label fw-bold">Dados Adicionais (JSON)</label>
-                            <input type="text" class="form-control" id="edit_dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
-                            <small class="form-text text-muted">Opcional: dados em formato JSON para uso futuro</small>
+                            <label class="form-label fw-bold">Redosagem</label>
+                            <div>
+                                <button type="button" class="btn btn-outline-primary" id="btnAbrirRedosagemEditar" title="Abrir redosagem de materiais">
+                                    <i class="fas fa-calculator"></i> Configurar Redosagem
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Configure as quantidades de materiais para redozagem</small>
                         </div>
+                    </div>
+                    
+                    <!-- Campo oculto para dados adicionais -->
+                    <div class="d-none">
+                        <input type="text" class="form-control" id="edit_dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -88,6 +97,27 @@
         var volume = button.data('volume') || '';
         var flow = button.data('flow') || '';
         var nf = button.data('nf') || '';
+        // Obter dados_adicionais - pode vir como atributo data ou como objeto parseado pelo jQuery
+        var dadosAdicionais = button.data('dados-adicionais');
+        
+        // Se vier vazio/null/undefined, tentar obter diretamente do atributo HTML
+        if (!dadosAdicionais || dadosAdicionais === '' || dadosAdicionais === null) {
+            const dadosAdicionaisAttr = button.attr('data-dados-adicionais');
+            if (dadosAdicionaisAttr && dadosAdicionaisAttr !== '' && dadosAdicionaisAttr !== 'null') {
+                try {
+                    dadosAdicionais = JSON.parse(dadosAdicionaisAttr);
+                } catch (e) {
+                    // Se não conseguir parsear, usar como string se não for vazio
+                    if (dadosAdicionaisAttr.trim() !== '') {
+                        dadosAdicionais = dadosAdicionaisAttr;
+                    } else {
+                        dadosAdicionais = null;
+                    }
+                }
+            } else {
+                dadosAdicionais = null;
+            }
+        }
         
         // Preencher campos do formulário
         $('#usinagem_id').val(usinagemId);
@@ -97,6 +127,51 @@
         $('#edit_volume').val(volume);
         $('#edit_flow').val(flow);
         $('#edit_nf').val(nf);
+        
+        // Preencher dados adicionais (pode ser string JSON ou objeto)
+        console.log('DEBUG editar_usinagem modal - dadosAdicionais recebido:', dadosAdicionais);
+        console.log('DEBUG editar_usinagem modal - Tipo:', typeof dadosAdicionais);
+        
+        if (dadosAdicionais) {
+            let dadosAdicionaisStr = '';
+            if (typeof dadosAdicionais === 'string') {
+                // Se já é string, verificar se é JSON válido
+                try {
+                    JSON.parse(dadosAdicionais);
+                    dadosAdicionaisStr = dadosAdicionais;
+                    console.log('DEBUG editar_usinagem modal - String JSON válida, usando diretamente');
+                } catch (e) {
+                    // Se não for JSON válido, tentar stringify
+                    dadosAdicionaisStr = JSON.stringify(dadosAdicionais);
+                    console.log('DEBUG editar_usinagem modal - String não é JSON válido, convertendo para JSON');
+                }
+            } else {
+                dadosAdicionaisStr = JSON.stringify(dadosAdicionais);
+                console.log('DEBUG editar_usinagem modal - Objeto convertido para JSON string');
+            }
+            
+            console.log('DEBUG editar_usinagem modal - Valor a ser salvo no campo:', dadosAdicionaisStr);
+            $('#edit_dados_adicionais').val(dadosAdicionaisStr);
+            
+            // Verificar se foi salvo corretamente
+            const valorVerificado = $('#edit_dados_adicionais').val();
+            console.log('DEBUG editar_usinagem modal - Valor verificado no campo após salvar:', valorVerificado);
+            
+            // Verificar se há redosagem nos dados
+            try {
+                const dadosParsed = JSON.parse(dadosAdicionaisStr);
+                if (dadosParsed.redosagem) {
+                    console.log('DEBUG editar_usinagem modal - Redosagem encontrada nos dados:', dadosParsed.redosagem);
+                } else {
+                    console.log('DEBUG editar_usinagem modal - Nenhuma redosagem nos dados');
+                }
+            } catch (e) {
+                console.warn('DEBUG editar_usinagem modal - Erro ao verificar redosagem:', e);
+            }
+        } else {
+            $('#edit_dados_adicionais').val('');
+            console.log('DEBUG editar_usinagem modal - dadosAdicionais vazio, campo limpo');
+        }
         
         // Limpar mensagens
         $('#mensagemEditarUsinagem').addClass('d-none').removeClass('alert-success alert-danger');
@@ -165,6 +240,76 @@
         // Preparar dados do formulário
         var formData = new FormData(this);
         
+        // Remover dados_adicionais do FormData se existir (vamos adicionar manualmente apenas se válido)
+        if (formData.has('dados_adicionais')) {
+            formData.delete('dados_adicionais');
+        }
+        
+        // Garantir que dados_adicionais seja enviado mesmo se estiver oculto
+        // Ler o campo diretamente pelo ID para garantir que pegue o valor atual
+        var campoDadosAdicionais = document.getElementById('edit_dados_adicionais');
+        var dadosAdicionais = campoDadosAdicionais ? campoDadosAdicionais.value : '';
+        
+        console.log('DEBUG editar - Campo dados_adicionais encontrado:', !!campoDadosAdicionais);
+        console.log('DEBUG editar - Valor do campo dados_adicionais:', dadosAdicionais);
+        console.log('DEBUG editar - Tipo do valor:', typeof dadosAdicionais);
+        console.log('DEBUG editar - Tamanho do valor:', dadosAdicionais ? dadosAdicionais.length : 0);
+        
+        // Validar e enviar dados_adicionais apenas se for JSON válido
+        if (dadosAdicionais && dadosAdicionais.trim() && dadosAdicionais.trim() !== '{}') {
+            // Verificar se não é JSON incompleto (começa com { mas não termina com })
+            if (dadosAdicionais.trim().startsWith('{') && !dadosAdicionais.trim().endsWith('}')) {
+                console.warn('DEBUG editar - JSON incompleto detectado, não enviando:', dadosAdicionais);
+                // Não enviar, backend manterá existentes
+            } else {
+                // Validar se dados_adicionais é JSON válido antes de enviar
+                try {
+                    // Tentar parsear para validar que é JSON válido
+                    var parsed = JSON.parse(dadosAdicionais);
+                    
+                    // Verificar se é um objeto válido (não string, array, etc)
+                    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                        // Verificar se não é objeto vazio
+                        if (Object.keys(parsed).length > 0 || (parsed.redosagem && parsed.redosagem.materiais && parsed.redosagem.materiais.length > 0)) {
+                            formData.set('dados_adicionais', dadosAdicionais);
+                            console.log('DEBUG editar - Enviando dados_adicionais (JSON válido):', dadosAdicionais);
+                            console.log('DEBUG editar - Objeto parseado:', parsed);
+                        } else {
+                            console.log('DEBUG editar - Objeto vazio, não enviando (backend manterá existentes)');
+                        }
+                    } else {
+                        console.warn('DEBUG editar - dados_adicionais parseado mas não é um objeto válido:', typeof parsed);
+                        // Se não for objeto válido, não enviar (backend manterá existentes)
+                        console.log('DEBUG editar - Não enviando dados_adicionais, backend manterá existentes');
+                    }
+                } catch (e) {
+                    console.error('DEBUG editar - dados_adicionais contém JSON inválido:', e);
+                    console.error('DEBUG editar - Valor problemático:', dadosAdicionais);
+                    // Se for inválido, não enviar (backend manterá existentes)
+                    console.log('DEBUG editar - Não enviando dados_adicionais inválido, backend manterá existentes');
+                }
+            }
+        } else {
+            // Se estiver vazio ou for objeto vazio, não enviar
+            // O backend manterá os dados existentes
+            console.log('DEBUG editar - dados_adicionais vazio ou objeto vazio, não enviando (backend manterá existentes)');
+        }
+        
+        // Verificar se o campo foi adicionado ao FormData
+        console.log('DEBUG editar - FormData contém dados_adicionais:', formData.has('dados_adicionais'));
+        if (formData.has('dados_adicionais')) {
+            console.log('DEBUG editar - Valor no FormData:', formData.get('dados_adicionais'));
+        }
+        
+        // Debug: log dos dados sendo enviados
+        console.log('Dados do formulário de edição:', {
+            serie: serie,
+            data_usinagem: dataUsinagem,
+            produto_composto_id: produtoCompostoId,
+            volume: volume,
+            dados_adicionais: dadosAdicionais
+        });
+        
         // Enviar via AJAX
         $.ajax({
             url: '/usinagem-concreto/usinagens/' + usinagemId + '/editar',
@@ -198,12 +343,22 @@
             error: function(xhr) {
                 var errorMsg = 'Erro ao atualizar usinagem.';
                 
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    errorMsg = xhr.responseJSON.error;
+                console.error('Erro ao editar usinagem:', xhr);
+                
+                if (xhr.responseJSON) {
+                    if (xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    } else if (xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
                 } else if (xhr.status === 400) {
                     errorMsg = 'Dados inválidos. Verifique os campos obrigatórios.';
                 } else if (xhr.status === 500) {
-                    errorMsg = 'Erro interno do servidor. Tente novamente.';
+                    errorMsg = 'Erro interno do servidor. Verifique o console para mais detalhes.';
+                } else if (xhr.status === 0) {
+                    errorMsg = 'Erro de conexão. Verifique sua internet.';
+                } else {
+                    errorMsg = 'Erro ao atualizar usinagem. Status: ' + xhr.status;
                 }
                 
                 mensagem.removeClass('d-none alert-success').addClass('alert-danger');
@@ -213,5 +368,98 @@
             }
         });
     });
+    
+    // Abrir modal de redosagem no modal de edição - usar delegação de eventos
+    $(document).on('click', '#btnAbrirRedosagemEditar', function() {
+        // Verificar se traço e volume estão preenchidos
+        const produtoCompostoId = $('#edit_produto_composto_id').hasClass('select2-hidden-accessible') 
+            ? $('#edit_produto_composto_id').select2('val') 
+            : $('#edit_produto_composto_id').val();
+        const volume = $('#edit_volume').val();
+        
+        if (!produtoCompostoId) {
+            $('#mensagemEditarUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemEditarUsinagem').html('<i class="fas fa-info-circle"></i> Selecione um traço antes de abrir a redosagem.');
+            return;
+        }
+        
+        if (!volume || parseFloat(volume) <= 0) {
+            $('#mensagemEditarUsinagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemEditarUsinagem').html('<i class="fas fa-info-circle"></i> Informe o volume antes de abrir a redosagem.');
+            return;
+        }
+        
+        // Garantir que o campo dados_adicionais esteja preenchido antes de abrir
+        // Ler o campo diretamente pelo ID
+        const campoDadosAdicionais = document.getElementById('edit_dados_adicionais');
+        let valorCampo = campoDadosAdicionais ? campoDadosAdicionais.value : '';
+        
+        console.log('DEBUG btnAbrirRedosagemEditar - Valor atual do campo:', valorCampo);
+        
+        // Se estiver vazio, tentar obter novamente do botão que abriu o modal
+        if (!valorCampo || !valorCampo.trim()) {
+            console.log('DEBUG btnAbrirRedosagemEditar - Campo vazio, tentando obter do botão');
+            // Buscar o botão que abriu o modal de edição
+            const usinagemId = $('#usinagem_id').val();
+            const botaoEditar = $('[data-bs-target="#modalEditarUsinagem"][data-usinagem-id="' + usinagemId + '"]').first();
+            
+            if (botaoEditar.length) {
+                let dadosAdicionais = botaoEditar.data('dados-adicionais') || '';
+                
+                // Se vier vazio, tentar obter diretamente do atributo HTML
+                if (!dadosAdicionais) {
+                    const dadosAdicionaisAttr = botaoEditar.attr('data-dados-adicionais');
+                    console.log('DEBUG btnAbrirRedosagemEditar - Dados do atributo:', dadosAdicionaisAttr);
+                    if (dadosAdicionaisAttr) {
+                        try {
+                            dadosAdicionais = JSON.parse(dadosAdicionaisAttr);
+                        } catch (e) {
+                            dadosAdicionais = dadosAdicionaisAttr;
+                        }
+                    }
+                }
+                
+                if (dadosAdicionais) {
+                    let dadosAdicionaisStr = '';
+                    if (typeof dadosAdicionais === 'string') {
+                        dadosAdicionaisStr = dadosAdicionais;
+                    } else {
+                        dadosAdicionaisStr = JSON.stringify(dadosAdicionais);
+                    }
+                    $('#edit_dados_adicionais').val(dadosAdicionaisStr);
+                    console.log('DEBUG btnAbrirRedosagemEditar - Campo preenchido com:', dadosAdicionaisStr);
+                } else {
+                    console.warn('DEBUG btnAbrirRedosagemEditar - Nenhum dado encontrado no botão');
+                }
+            } else {
+                console.warn('DEBUG btnAbrirRedosagemEditar - Botão de editar não encontrado');
+            }
+        } else {
+            console.log('DEBUG btnAbrirRedosagemEditar - Campo já tem valor, usando esse valor');
+        }
+        
+        // Pequeno delay para garantir que o campo esteja preenchido
+        setTimeout(function() {
+            // Abrir modal de redosagem sem adicionar novo backdrop
+            const modalRedosagemEl = document.getElementById('modalRedosagem');
+            if (modalRedosagemEl) {
+                // Usar Bootstrap 5 sem criar novo backdrop
+                let modalRedosagem = bootstrap.Modal.getInstance(modalRedosagemEl);
+                if (!modalRedosagem) {
+                    modalRedosagem = new bootstrap.Modal(modalRedosagemEl, {
+                        backdrop: false,  // Não criar novo backdrop
+                        keyboard: true
+                    });
+                }
+                modalRedosagem.show();
+                
+                // Ajustar z-index manualmente para garantir que apareça acima
+                $(modalRedosagemEl).css('z-index', '1065');
+            }
+        }, 100);
+    });
 })();
 </script>
+
+<!-- Incluir modal de redosagem -->
+{% include 'usinagem_concreto/usinagens/modais/redosagem.html' %}

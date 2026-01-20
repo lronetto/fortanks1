@@ -58,7 +58,7 @@ class Usuario(db.Model, UserMixin):
     @property
     def is_admin(self):
         """Verifica se o usuário é administrador"""
-        return self.cargo_rel and self.cargo_rel.nome.lower() == 'admin'
+        return self.is_gerente_ou_superior
     
     @property
     def is_tst(self):

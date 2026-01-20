@@ -1,5 +1,28 @@
 <!-- Modal de Redosagem -->
-<div class="modal fade" id="modalRedosagem" tabindex="-1" aria-labelledby="modalRedosagemLabel" aria-hidden="true">
+<style>
+    /* Garantir que o modal de redosagem apareça acima de outros modais sem desabilitá-los */
+    #modalRedosagem {
+        z-index: 1065 !important;
+    }
+    #modalRedosagem.show {
+        z-index: 1065 !important;
+    }
+    body.modal-open #modalRedosagem {
+        z-index: 1065 !important;
+    }
+    /* Não adicionar backdrop adicional - usar o backdrop do modal pai */
+    #modalRedosagem + .modal-backdrop {
+        display: none !important;
+    }
+    /* Garantir que o modal de redosagem seja clicável mesmo com backdrop do modal pai */
+    #modalRedosagem .modal-dialog {
+        pointer-events: auto !important;
+    }
+    #modalRedosagem .modal-content {
+        pointer-events: auto !important;
+    }
+</style>
+<div class="modal fade" id="modalRedosagem" tabindex="-1" aria-labelledby="modalRedosagemLabel" aria-hidden="true" data-bs-backdrop="false">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
@@ -67,7 +90,7 @@
     let volumeAtual = 0;
     
     // Função para carregar materiais do traço
-    function carregarMateriaisTraco(produtoCompostoId, volume) {
+    function carregarMateriaisTraco(produtoCompostoId, volume, usinagemId = null) {
         if (!produtoCompostoId || !volume || volume <= 0) {
             $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-danger');
             $('#mensagemRedosagem').html('<i class="fas fa-exclamation-circle"></i> Selecione um traço e informe o volume antes de abrir a redosagem.');
@@ -78,8 +101,11 @@
         volumeAtual = parseFloat(volume) || 0;
         $('#redosagemVolume').text(volumeAtual.toFixed(2));
         
-        // Construir URL do endpoint
-        const urlEndpoint = '/usinagem-concreto/api/materiais-traco/' + produtoCompostoId;
+        // Construir URL do endpoint com usinagem_id se fornecido
+        let urlEndpoint = '/usinagem-concreto/api/materiais-traco/' + produtoCompostoId;
+        if (usinagemId) {
+            urlEndpoint += '?usinagem_id=' + usinagemId;
+        }
         
         $.ajax({
             url: urlEndpoint,
@@ -89,7 +115,7 @@
                     materiaisRedosagem = response.materiais;
                     $('#redosagemTracoNome').text(response.traco_nome || '-');
                     
-                    // Calcular quantidades totais e renderizar tabela
+                    // Renderizar tabela diretamente (backend já aplicou a redosagem)
                     renderizarTabelaMateriais();
                 } else {
                     $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-warning');
@@ -116,10 +142,21 @@
             return;
         }
         
+        // quantidade_base = quantidade por m³ (sempre do traço)
+        // quantidade_redosada_total = quantidade total já com volume aplicado (se houver redosagem)
         let html = '';
         materiaisRedosagem.forEach(function(material, index) {
-            const quantidadeBase = parseFloat(material.quantidade_base) || 0;
-            const quantidadeTotal = quantidadeBase * volumeAtual;
+            const quantidadeBase = parseFloat(material.quantidade_base) || 0; // Por m³
+            const quantidadeTotalCalculada = quantidadeBase * volumeAtual; // Total calculado do traço
+            
+            // Se houver redosagem, usar a quantidade_redosada_total (já é o total)
+            // Senão, usar a quantidade total calculada
+            const quantidadeTotal = material.quantidade_redosada_total !== null && material.quantidade_redosada_total !== undefined
+                ? parseFloat(material.quantidade_redosada_total)
+                : quantidadeTotalCalculada;
+            
+            // quantidadeInicial é a quantidade total (redosada se houver, senão calculada)
+            const quantidadeInicial = quantidadeTotal;
             
             html += `
                 <tr data-material-id="${material.material_id}">
@@ -129,7 +166,7 @@
                     </td>
                     <td class="text-end">${quantidadeBase.toFixed(4)}</td>
                     <td class="text-end">
-                        <strong id="qtdTotal_${material.material_id}">${quantidadeTotal.toFixed(4)}</strong>
+                        <strong id="qtdTotal_${material.material_id}">${quantidadeTotalCalculada.toFixed(4)}</strong>
                     </td>
                     <td>KG</td>
                     <td>
@@ -139,7 +176,8 @@
                                class="form-control form-control-sm quantidade-redosada" 
                                data-material-id="${material.material_id}"
                                data-quantidade-base="${quantidadeBase}"
-                               value="${quantidadeTotal.toFixed(4)}"
+                               data-quantidade-total="${quantidadeTotalCalculada}"
+                               value="${quantidadeInicial.toFixed(4)}"
                                id="qtdRedosada_${material.material_id}">
                     </td>
                 </tr>
@@ -148,8 +186,8 @@
         
         $('#tabelaMateriaisRedosagem').html(html);
         
-        // Adicionar listener para recalcular quando o volume mudar
-        $('#volume').on('change', function() {
+        // Adicionar listener para recalcular quando o volume mudar (tanto nova quanto edição)
+        $('#volume, #edit_volume').on('change', function() {
             const novoVolume = parseFloat($(this).val()) || 0;
             if (novoVolume > 0 && materiaisRedosagem.length > 0) {
                 volumeAtual = novoVolume;
@@ -166,8 +204,11 @@
             const quantidadeTotal = quantidadeBase * volumeAtual;
             $('#qtdTotal_' + material.material_id).text(quantidadeTotal.toFixed(4));
             
-            // Atualizar o valor do input se não foi alterado manualmente
+            // Atualizar o atributo data-quantidade-total para comparação
             const input = $('#qtdRedosada_' + material.material_id);
+            input.data('quantidade-total', quantidadeTotal);
+            
+            // Atualizar o valor do input se não foi alterado manualmente
             if (input.data('auto-update') !== false) {
                 input.val(quantidadeTotal.toFixed(4));
             }
@@ -179,23 +220,59 @@
         $(this).data('auto-update', false);
     });
     
+    // Função para detectar qual formulário está ativo (nova ou edição)
+    function obterFormularioAtivo() {
+        // Verificar se o modal de edição está visível ou se o campo de edição existe e tem valor
+        const modalEditarVisivel = $('#modalEditarUsinagem').is(':visible') || $('#modalEditarUsinagem').hasClass('show');
+        const campoEditExiste = $('#edit_dados_adicionais').length > 0;
+        const campoEditTemValor = $('#edit_dados_adicionais').val() && $('#edit_dados_adicionais').val().trim() !== '';
+        
+        if (modalEditarVisivel || (campoEditExiste && campoEditTemValor)) {
+            return {
+                tipo: 'editar',
+                produtoCompostoId: $('#edit_produto_composto_id').hasClass('select2-hidden-accessible') 
+                    ? $('#edit_produto_composto_id').select2('val') 
+                    : $('#edit_produto_composto_id').val(),
+                volume: $('#edit_volume').val(),
+                campoDadosAdicionais: '#edit_dados_adicionais'
+            };
+        }
+        // Caso contrário, assume que é o modal de nova usinagem
+        return {
+            tipo: 'nova',
+            produtoCompostoId: $('#produto_composto_id').hasClass('select2-hidden-accessible') 
+                ? $('#produto_composto_id').select2('val') 
+                : $('#produto_composto_id').val(),
+            volume: $('#volume').val(),
+            campoDadosAdicionais: '#dados_adicionais'
+        };
+    }
+    
     // Inicializar quando o modal for aberto
     $('#modalRedosagem').on('show.bs.modal', function() {
         $('#mensagemRedosagem').addClass('d-none').removeClass('alert-success alert-danger alert-warning');
         
-        // Obter valores do formulário principal
-        const produtoCompostoId = $('#produto_composto_id').hasClass('select2-hidden-accessible') 
-            ? $('#produto_composto_id').select2('val') 
-            : $('#produto_composto_id').val();
-        const volume = $('#volume').val();
-        
-        if (produtoCompostoId && volume) {
-            carregarMateriaisTraco(produtoCompostoId, volume);
-        } else {
-            $('#mensagemRedosagem').removeClass('d-none').addClass('alert-warning');
-            $('#mensagemRedosagem').html('<i class="fas fa-info-circle"></i> Selecione um traço e informe o volume antes de abrir a redosagem.');
-            $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Nenhum material disponível.</td></tr>');
-        }
+        // Pequeno delay para garantir que o modal de edição tenha preenchido os campos
+        setTimeout(function() {
+            // Obter valores do formulário principal (nova ou edição)
+            const formulario = obterFormularioAtivo();
+            const produtoCompostoId = formulario.produtoCompostoId;
+            const volume = formulario.volume;
+            
+            // Obter usinagem_id se for edição
+            let usinagemId = null;
+            if (formulario.tipo === 'editar') {
+                usinagemId = $('#usinagem_id').val();
+            }
+            
+            if (produtoCompostoId && volume) {
+                carregarMateriaisTraco(produtoCompostoId, volume, usinagemId);
+            } else {
+                $('#mensagemRedosagem').removeClass('d-none').addClass('alert-warning');
+                $('#mensagemRedosagem').html('<i class="fas fa-info-circle"></i> Selecione um traço e informe o volume antes de abrir a redosagem.');
+                $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted">Nenhum material disponível.</td></tr>');
+            }
+        }, 100); // Pequeno delay para garantir que campos estejam preenchidos
     });
     
     // Limpar ao fechar o modal
@@ -204,6 +281,17 @@
         volumeAtual = 0;
         $('#tabelaMateriaisRedosagem').html('<tr><td colspan="5" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando materiais...</td></tr>');
         $('#mensagemRedosagem').addClass('d-none').removeClass('alert-success alert-danger alert-warning');
+        
+        // Garantir que o modal pai continue funcionando
+        // Verificar se há outro modal aberto e manter o backdrop
+        if ($('#modalNovaUsinagem').hasClass('show') || $('#modalEditarUsinagem').hasClass('show')) {
+            // Garantir que o body tenha a classe modal-open
+            $('body').addClass('modal-open');
+            // Garantir que haja um backdrop (do modal pai)
+            if ($('.modal-backdrop').length === 0) {
+                $('body').append('<div class="modal-backdrop fade show"></div>');
+            }
+        }
     });
     
     // Salvar redosagem
@@ -221,15 +309,48 @@
         btnSalvar.prop('disabled', true);
         spinner.removeClass('d-none');
         
-        // Coletar dados da redosagem
+        // Coletar dados da redosagem - apenas materiais alterados
         const redosagem = {
             materiais: []
         };
+        
+        // Buscar redosagem anterior para comparar corretamente
+        const formularioAtivo = obterFormularioAtivo();
+        const campoDadosAdicionaisAtivo = formularioAtivo.campoDadosAdicionais;
+        let redosagemAnterior = {};
+        
+        try {
+            const dadosAtuais = $(campoDadosAdicionaisAtivo).val();
+            if (dadosAtuais && dadosAtuais.trim()) {
+                const dadosAdicionais = JSON.parse(dadosAtuais);
+                if (dadosAdicionais.redosagem && dadosAdicionais.redosagem.materiais) {
+                    // Criar mapa de material_id -> quantidade_redosada anterior
+                    dadosAdicionais.redosagem.materiais.forEach(function(item) {
+                        redosagemAnterior[item.material_id] = parseFloat(item.quantidade_redosada) || 0;
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Erro ao parsear dados_adicionais para comparar redosagem:', e);
+        }
         
         let temErro = false;
         materiaisRedosagem.forEach(function(material) {
             const input = $('#qtdRedosada_' + material.material_id);
             const quantidadeRedosada = parseFloat(input.val()) || 0;
+            
+            // Obter quantidade total do traço (base * volume)
+            const quantidadeTotalTraco = parseFloat(input.data('quantidade-total')) || (parseFloat(material.quantidade_base) * volumeAtual);
+            
+            // Obter quantidade redosada anterior (se houver)
+            const quantidadeRedosadaAnterior = redosagemAnterior[material.material_id];
+            
+            // Valor de referência para comparação:
+            // - Se houver redosagem anterior, comparar com ela
+            // - Senão, comparar com a quantidade do traço
+            const valorReferencia = quantidadeRedosadaAnterior !== undefined 
+                ? quantidadeRedosadaAnterior 
+                : quantidadeTotalTraco;
             
             if (quantidadeRedosada < 0) {
                 temErro = true;
@@ -238,16 +359,23 @@
                 input.removeClass('is-invalid');
             }
             
-            redosagem.materiais.push({
-                material_id: material.material_id,
-                material_nome: material.material_nome,
-                quantidade_base: material.quantidade_base,
-                quantidade_total: material.quantidade_base * volumeAtual,
-                quantidade_redosada: quantidadeRedosada,
-                unidade_id: material.unidade_id,
-                unidade_nome: material.unidade_nome,
-                estoque_id: material.estoque_id
-            });
+            // Salvar apenas se a quantidade foi alterada em relação ao valor de referência
+            // Usar uma tolerância pequena para comparação de números decimais
+            const diferenca = Math.abs(quantidadeRedosada - valorReferencia);
+            if (diferenca > 0.0001) {
+                // Material foi alterado - salvar apenas ID e quantidade redosada
+                redosagem.materiais.push({
+                    material_id: material.material_id,
+                    quantidade_redosada: quantidadeRedosada
+                });
+            } else if (quantidadeRedosadaAnterior !== undefined) {
+                // Se não foi alterado mas havia redosagem anterior, manter a redosagem anterior
+                // (para não perder a redosagem quando não houver alteração)
+                redosagem.materiais.push({
+                    material_id: material.material_id,
+                    quantidade_redosada: quantidadeRedosadaAnterior
+                });
+            }
         });
         
         if (temErro) {
@@ -258,19 +386,70 @@
             return;
         }
         
-        // Atualizar o campo dados_adicionais no formulário principal
+        // Se não houver materiais alterados, não salvar redosagem
+        if (redosagem.materiais.length === 0) {
+            $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-warning');
+            $('#mensagemRedosagem').html('<i class="fas fa-info-circle"></i> Nenhum material foi alterado. Não há redosagem para salvar.');
+            btnSalvar.prop('disabled', false);
+            spinner.addClass('d-none');
+            return;
+        }
+        
+        // Atualizar o campo dados_adicionais no formulário principal (nova ou edição)
+        // Usar as variáveis já declaradas acima (formularioAtivo e campoDadosAdicionaisAtivo)
+        
         let dadosAdicionais = {};
         try {
-            const dadosAtuais = $('#dados_adicionais').val();
-            if (dadosAtuais && dadosAtuais.trim()) {
-                dadosAdicionais = JSON.parse(dadosAtuais);
+            const dadosAtuais = $(campoDadosAdicionaisAtivo).val();
+            if (dadosAtuais && dadosAtuais.trim() && dadosAtuais.trim() !== '{}') {
+                try {
+                    dadosAdicionais = JSON.parse(dadosAtuais);
+                    // Garantir que é um objeto válido
+                    if (typeof dadosAdicionais !== 'object' || dadosAdicionais === null) {
+                        dadosAdicionais = {};
+                    }
+                } catch (parseError) {
+                    console.warn('Erro ao parsear dados_adicionais existentes, usando objeto vazio:', parseError);
+                    dadosAdicionais = {};
+                }
             }
         } catch (e) {
-            console.warn('Erro ao parsear dados_adicionais existentes:', e);
+            console.warn('Erro ao ler dados_adicionais existentes:', e);
+            dadosAdicionais = {};
+        }
+        
+        // Salvar apenas a redosagem (materiais alterados)
+        // Garantir que redosagem.materiais seja um array válido
+        if (!redosagem.materiais || !Array.isArray(redosagem.materiais)) {
+            console.error('DEBUG redosagem - redosagem.materiais não é um array válido:', redosagem);
+            redosagem.materiais = [];
         }
         
         dadosAdicionais.redosagem = redosagem;
-        $('#dados_adicionais').val(JSON.stringify(dadosAdicionais));
+        
+        // Validar JSON antes de salvar
+        let dadosAdicionaisString = '';
+        try {
+            dadosAdicionaisString = JSON.stringify(dadosAdicionais);
+            // Validar se o JSON é válido tentando parsear novamente
+            JSON.parse(dadosAdicionaisString);
+        } catch (e) {
+            console.error('DEBUG redosagem - Erro ao serializar dados_adicionais:', e);
+            console.error('DEBUG redosagem - dadosAdicionais que causou erro:', dadosAdicionais);
+            $('#mensagemRedosagem').removeClass('d-none alert-success').addClass('alert-danger');
+            $('#mensagemRedosagem').html('<i class="fas fa-exclamation-circle"></i> Erro ao salvar redosagem. Dados inválidos.');
+            btnSalvar.prop('disabled', false);
+            spinner.addClass('d-none');
+            return;
+        }
+        
+        $(campoDadosAdicionaisAtivo).val(dadosAdicionaisString);
+        
+        // Log para debug
+        console.log('DEBUG redosagem - Salvando dados_adicionais no campo:', campoDadosAdicionaisAtivo);
+        console.log('DEBUG redosagem - redosagem.materiais.length:', redosagem.materiais.length);
+        console.log('DEBUG redosagem - Valor salvo:', dadosAdicionaisString);
+        console.log('DEBUG redosagem - Valor verificado no campo:', $(campoDadosAdicionaisAtivo).val());
         
         // Mostrar mensagem de sucesso
         $('#mensagemRedosagem').removeClass('d-none alert-danger').addClass('alert-success');
@@ -280,9 +459,22 @@
         btnSalvar.prop('disabled', false);
         spinner.addClass('d-none');
         
-        // Fechar modal após 1 segundo
+        // Fechar modal após 1 segundo (sem remover backdrop do modal pai)
         setTimeout(function() {
-            $('#modalRedosagem').modal('hide');
+            const modalRedosagemEl = document.getElementById('modalRedosagem');
+            if (modalRedosagemEl) {
+                const modalInstance = bootstrap.Modal.getInstance(modalRedosagemEl);
+                if (modalInstance) {
+                    // Fechar sem remover o backdrop do modal pai
+                    modalInstance.hide();
+                    // Garantir que o body ainda tenha a classe modal-open se houver outro modal aberto
+                    if ($('#modalNovaUsinagem').hasClass('show') || $('#modalEditarUsinagem').hasClass('show')) {
+                        $('body').addClass('modal-open');
+                    }
+                } else {
+                    $('#modalRedosagem').modal('hide');
+                }
+            }
         }, 1500);
     });
 })();
