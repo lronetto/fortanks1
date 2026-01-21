@@ -1262,6 +1262,8 @@ def processar_producao_manual(log):
 @login_required
 def importar_inspecao():
     """Importa arquivo Excel de inspeção e processa as peças"""
+    print("importar_inspecao inicio")
+    tempo_inicio = datetime.now()
     try:
         if 'arquivo' not in request.files:
             return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
@@ -1282,9 +1284,12 @@ def importar_inspecao():
         try:
             # Processar arquivo usando a função do script
             resultado = processar_arquivo_inspecao(temp_path)
-
+            tempo_final = datetime.now()
+            print(f"processar_arquivo_inspecao finalizado em {tempo_final - tempo_inicio}")
+            tempo_inicio = datetime.now()
             processar_producao_manual(log=False)
-            
+            tempo_final = datetime.now()
+            print(f"processar_producao_manual finalizado em {tempo_final - tempo_inicio}")
             return jsonify({
                 'success': True,
                 'message': 'Arquivo processado com sucesso',
