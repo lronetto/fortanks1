@@ -3,7 +3,7 @@ from flask_login import login_required
 from models import TanquesPecas
 from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens, ConcretoConcretagens, ConcretoConcretagensTanques
 from models.contrato import Contrato
-from models.tanque import Tanques
+from models.tanque import Tanques, TanquesGrupos
 from models.database import db
 from sqlalchemy import or_, and_, func
 from datetime import datetime, timedelta
@@ -11,6 +11,7 @@ import os
 import io
 import shutil
 import tempfile
+import zipfile
 import openpyxl
 from openpyxl import load_workbook
 from openpyxl.worksheet.page import PageMargins
@@ -30,12 +31,16 @@ def index():
     # Buscar contratos ativos para o filtro
     contratos = Contrato.query.filter_by(ativo=True).order_by(Contrato.nome).all()
     
+    # Buscar grupos de tanques para o filtro
+    grupos = TanquesGrupos.query.order_by(TanquesGrupos.nome).all()
+    
     # Buscar tanques para o filtro (inicialmente todos)
     tanques = Tanques.query.order_by(Tanques.nome).all()
     
     # Obter filtros da requisição
     contrato_id = request.args.get('contrato_id', type=int)
     tanque_id = request.args.get('tanque_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     data_inicio = request.args.get('data_inicio', '')
     data_fim = request.args.get('data_fim', '')
     
@@ -45,9 +50,11 @@ def index():
     
     return render_template('relatorios/databook/concretagem/index.html', 
                          contratos=contratos, 
+                         grupos=grupos,
                          tanques=tanques,
                          contrato_id=contrato_id,
                          tanque_id=tanque_id,
+                         grupo_id=grupo_id,
                          data_inicio=data_inicio,
                          data_fim=data_fim)
 
@@ -59,13 +66,18 @@ def api_dados():
     """
     contrato_id = request.args.get('contrato_id', type=int)
     tanque_id = request.args.get('tanque_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     data_inicio_str = request.args.get('data_inicio')
     data_fim_str = request.args.get('data_fim')
     
     # Converter datas se fornecidas
     data_inicio = None
     data_fim = None
-    
+    print(f'grupo_id: {grupo_id}')
+    print(f'tanque_id: {tanque_id}')
+    print(f'contrato_id: {contrato_id}')
+    print(f'data_inicio_str: {data_inicio_str}')
+    print(f'data_fim_str: {data_fim_str}')
     usinagens = ConcretoUsinagens.query
     if data_inicio_str:
         usinagens = usinagens.filter(ConcretoUsinagens.data_usinagem >= data_inicio_str)
@@ -84,7 +96,8 @@ def api_dados():
             # Se a série é um número, buscar como número no array JSON
             # JSON_CONTAINS precisa do valor como string JSON válida (número sem aspas externas)
             # Passamos o número diretamente como string para JSON_CONTAINS
-            pecas = TanquesPecas.query.filter(
+            pecas = TanquesPecas.query.join(Tanques).join(Contrato)
+            pecas = pecas.filter(
                 func.json_contains(
                     func.json_extract(TanquesPecas.qualidade, '$.series'),
                     str(serie_numero)
@@ -102,8 +115,14 @@ def api_dados():
             pecas = pecas.filter(TanquesPecas.tanque_id == tanque_id)
         if contrato_id:
             pecas = pecas.filter(Tanques.contrato_id == contrato_id)
+        if grupo_id:
+            # Filtrar por grupo de tanques - buscar IDs dos tanques do grupo
+            grupo = TanquesGrupos.query.get(grupo_id)
+            if grupo and grupo.tanques:
+                tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
+                pecas = pecas.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
         pecas = pecas.all()
-        print(pecas)
+        #print(pecas)
         projetos_unicos = set([peca.tanque.contrato_id for peca in pecas])
         projetos_str = ", ".join([Contrato.query.filter(Contrato.id == projeto).first().nome for projeto in projetos_unicos])
         tanques_unicos = set([peca.tanque_id for peca in pecas])
@@ -112,7 +131,18 @@ def api_dados():
     
     # Preparar dados finais (apenas séries únicas)
         total_rompimentos = ConcretoUsinagensRompimentos.query.filter(ConcretoUsinagensRompimentos.numero_serie == usinagem.serie).count()   
-        dados.append({
+        if grupo_id or tanque_id or contrato_id:
+            if pecas:
+                dados.append({
+                        'numero_serie': usinagem.serie,
+                        'projeto_nome': projetos_str,
+                        'tanque_nome': tanques_str,
+                        'data_moldagem': usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') if usinagem.data_usinagem else 'N/A',
+                        'data_moldagem_raw': usinagem.data_usinagem.isoformat() if usinagem.data_usinagem else None,
+                        'total_rompimentos': total_rompimentos
+                    })
+        else:
+            dados.append({
                 'numero_serie': usinagem.serie,
                 'projeto_nome': projetos_str,
                 'tanque_nome': tanques_str,
@@ -120,32 +150,16 @@ def api_dados():
                 'data_moldagem_raw': usinagem.data_usinagem.isoformat() if usinagem.data_usinagem else None,
                 'total_rompimentos': total_rompimentos
             })
-    print(dados)
+        
+    #print(dados)
     return jsonify({
         'data': dados,
         'recordsTotal': len(dados),
         'recordsFiltered': len(dados)
     })
 
-@databook_concretagem_bp.route('/api/tanques')
-@login_required
-def api_tanques():
-    """
-    API para retornar tanques filtrados por projeto
-    """
-    contrato_id = request.args.get('contrato_id', type=int)
-    
-    if contrato_id:
-        tanques = Tanques.query.filter_by(contrato_id=contrato_id).order_by(Tanques.nome).all()
-    else:
-        tanques = Tanques.query.order_by(Tanques.nome).all()
-    
-    tanques_json = [{
-        'id': tanque.id,
-        'nome': tanque.nome
-    } for tanque in tanques]
-    
-    return jsonify({'tanques': tanques_json})
+# Endpoints api_tanques e api_grupos foram movidos para databook_api_controller.py
+# para evitar duplicação de código
 
 def calcular_data_rompimento_28_dias(data_moldagem_dt):
     """Calcula data de rompimento 28 dias após a moldagem. Se cair em domingo, adiciona 1 dia."""
@@ -160,7 +174,6 @@ def calcular_idade_cp(data_moldagem_dt, data_rompimento_dt):
         return 0
     diff_hours = (data_rompimento_dt - data_moldagem_dt).total_seconds() / 3600
     return int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
-
 def mapear_tipo_rompimento(tipo_rompimento, campos_base):
     """
     Mapeia o tipo de rompimento para os campos correspondentes.
@@ -182,21 +195,60 @@ def mapear_tipo_rompimento(tipo_rompimento, campos_base):
         resultado[campo] = 'X' if i == indice else ''
     
     return resultado
-
-def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None):
+def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=None):
     """
     Função auxiliar que gera o Excel e retorna o caminho do arquivo temporário
     Retorna o caminho do arquivo temporário ou None em caso de erro
     """
     try:
-        # Buscar todos os rompimentos da série
-        rompimentos = db.session.query(ConcretoUsinagensRompimentos)\
-            .filter(ConcretoUsinagensRompimentos.numero_serie == numero_serie).\
-            order_by(ConcretoUsinagensRompimentos.data_rompimento.asc()).all()
+        print(f'numero_serie: {numero_serie}')
+        print(f'tanque_id: {tanque_id}')
+        print(f'contrato_id: {contrato_id}')
+        print(f'grupo_id: {grupo_id}')
+        
+
+        try:
+            numero_serie_int = int(numero_serie)
+        except (ValueError, TypeError):
+            numero_serie_int = None
+        
+        # Tentar buscar por int primeiro
+        if numero_serie_int is not None:
+            print(f'[_gerar_excel_temp] Buscando rompimentos com numero_serie_int: {numero_serie_int}')
+            rompimentos = ConcretoUsinagensRompimentos.query\
+                .filter(ConcretoUsinagensRompimentos.numero_serie == numero_serie_int)\
+                .order_by(ConcretoUsinagensRompimentos.data_rompimento.asc())\
+                .all()
+            print(f'[_gerar_excel_temp] Rompimentos encontrados (int): {len(rompimentos)}')
+        else:
+            rompimentos = []
+            print(f'[_gerar_excel_temp] Não foi possível converter numero_serie para int: {numero_serie}')
+        
+       
+        
+        # Se não encontrou com int, tentar buscar pela série da usinagem (caso o banco tenha inconsistência)
+        if not rompimentos:
+            print(f'[_gerar_excel_temp] Tentando buscar pela série da usinagem: {str(numero_serie)}')
+            usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == str(numero_serie)).first()
+            if usinagem:
+                print(f'[_gerar_excel_temp] Usinagem encontrada: {usinagem.serie}')
+                try:
+                    serie_int = int(usinagem.serie)
+                    rompimentos = ConcretoUsinagensRompimentos.query\
+                        .filter(ConcretoUsinagensRompimentos.numero_serie == serie_int)\
+                        .order_by(ConcretoUsinagensRompimentos.data_rompimento.asc())\
+                        .all()
+                    print(f'[_gerar_excel_temp] Rompimentos encontrados (via usinagem): {len(rompimentos)}')
+                except (ValueError, TypeError) as e:
+                    print(f'[_gerar_excel_temp] Erro ao converter série da usinagem: {e}')
+            else:
+                print(f'[_gerar_excel_temp] Nenhuma usinagem encontrada com série: {str(numero_serie)}')
         
         if not rompimentos:
-            print(f'Nenhum rompimento encontrado para a série {numero_serie}')
+            print(f'[_gerar_excel_temp] Nenhum rompimento encontrado para a série {numero_serie}')
             return None
+        
+        print(f'[_gerar_excel_temp] Total de rompimentos encontrados: {len(rompimentos)}')
         
         # Caminho do arquivo template
         template_path = os.path.join(
@@ -279,17 +331,42 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None):
                             new_value = new_value.replace('{21}', str(rompimentos[0].data_moldagem.strftime('%H:%M')))
                         #volume
                         new_value = new_value.replace('{22}', "5,00")
-                        #pecas
-                        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.numero_serie == numero_serie).first()
-                        if usinagem:
-                            pecas = TanquesPecas.query.filter(TanquesPecas.data_concretagem>=usinagem.data_usinagem)
-                            if tanque_id:
-                                pecas = pecas.filter(TanquesPecas.tanque_id == tanque_id)
-                            if contrato_id:
-                                pecas = pecas.filter(Tanques.contrato_id == contrato_id)
-                            pecas = pecas.all()
-
-                            pecas_str = [", ".join([peca.nome for peca in pecas])]
+                        #pecas - buscar peças que contêm a série no array 'series' do campo JSON 'dados_adicionais'
+                        try:
+                            serie_numero = int(numero_serie)
+                            # Buscar peças que contêm a série no array 'series' do campo JSON 'dados_adicionais'
+                            pecas_query = TanquesPecas.query.filter(
+                                func.json_contains(
+                                    func.json_extract(TanquesPecas.qualidade, '$.series'),
+                                    str(serie_numero)
+                                ) == 1
+                            )
+                        except (ValueError, TypeError):
+                            # Se não for possível converter para número, buscar como string
+                            pecas_query = TanquesPecas.query.filter(
+                                func.json_contains(
+                                    func.json_extract(TanquesPecas.qualidade, '$.series'),
+                                    func.json_quote(str(numero_serie))
+                                ) == 1
+                            )
+                        
+                        # Aplicar filtros de tanque, contrato e grupo
+                        if tanque_id:
+                            pecas_query = pecas_query.filter(TanquesPecas.tanque_id == tanque_id)
+                        if contrato_id:
+                            pecas_query = pecas_query.join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
+                                .filter(Tanques.contrato_id == contrato_id)
+                        if grupo_id:
+                            # Filtrar por grupo de tanques
+                            grupo = TanquesGrupos.query.get(grupo_id)
+                            if grupo and grupo.tanques:
+                                tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
+                                pecas_query = pecas_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
+                        
+                        pecas = pecas_query.all()
+                        
+                        if pecas:
+                            pecas_str = [peca.nome for peca in pecas]
                             new_value = new_value.replace('{23}', ", ".join(pecas_str))
                         else:
                             new_value = new_value.replace('{23}', "N/A")
@@ -412,6 +489,9 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None):
         return temp_file.name
     except Exception as e:
         # Em caso de erro, tentar limpar o arquivo temporário
+        print(f'Erro em _gerar_excel_temp: {str(e)}')
+        import traceback
+        print(traceback.format_exc())
         try:
             if 'temp_file' in locals() and os.path.exists(temp_file.name):
                 os.unlink(temp_file.name)
@@ -419,17 +499,43 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None):
             pass
         return None
 
-@databook_concretagem_bp.route('/exportar-excel/<int:numero_serie>')
+@databook_concretagem_bp.route('/exportar-excel/<numero_serie>')
 @login_required
 def exportar_excel(numero_serie):
     """
     Exporta dados de uma série específica para Excel usando template base
     """
     try:
-        excel_path = _gerar_excel_temp(numero_serie)
+        print(f'[exportar_excel] Iniciando exportação para série: {numero_serie}')
+        # Converter para int se possível, caso contrário manter como string
+        try:
+            numero_serie_int = int(numero_serie)
+            print(f'[exportar_excel] Série convertida para int: {numero_serie_int}')
+        except (ValueError, TypeError):
+            numero_serie_int = numero_serie
+            print(f'[exportar_excel] Série mantida como string: {numero_serie_int}')
+        
+        tanque_id = request.args.get('tanque_id', type=int) or None
+        contrato_id = request.args.get('contrato_id', type=int) or None
+        print(f'[exportar_excel] Filtros - tanque_id: {tanque_id}, contrato_id: {contrato_id}')
+        
+        excel_path = _gerar_excel_temp(numero_serie_int, tanque_id, contrato_id)
+        print(f'[exportar_excel] excel_path retornado: {excel_path}')
         
         if not excel_path:
-            return jsonify({'error': 'Nenhum rompimento encontrado para a série ' + str(numero_serie)}), 404
+            # Verificar o que está faltando para dar uma mensagem mais específica
+            usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == str(numero_serie_int)).first()
+            if not usinagem:
+                error_msg = f'Usinagem não encontrada para a série {numero_serie}'
+            else:
+                rompimentos = ConcretoUsinagensRompimentos.query.filter(
+                    ConcretoUsinagensRompimentos.numero_serie == numero_serie_int
+                ).count()
+                if rompimentos == 0:
+                    error_msg = f'Nenhum rompimento encontrado para a série {numero_serie}'
+                else:
+                    error_msg = f'Nenhuma peça encontrada para a série {numero_serie} com os filtros aplicados (tanque_id={tanque_id}, contrato_id={contrato_id})'
+            return jsonify({'error': error_msg}), 404
         
         try:
             # Ler o arquivo salvo para o buffer
@@ -459,7 +565,7 @@ def exportar_excel(numero_serie):
     except Exception as e:
         return jsonify({'error': f'Erro ao exportar Excel: {str(e)}'}), 500
 
-@databook_concretagem_bp.route('/exportar-pdf/<int:numero_serie>')
+@databook_concretagem_bp.route('/exportar-pdf/<numero_serie>')
 @login_required
 def exportar_pdf(numero_serie):
     """
@@ -469,7 +575,16 @@ def exportar_pdf(numero_serie):
     pdf_temp_path = None
     
     try:
-        excel_path = _gerar_excel_temp(numero_serie)
+        # Converter para int se possível, caso contrário manter como string
+        try:
+            numero_serie_int = int(numero_serie)
+        except (ValueError, TypeError):
+            numero_serie_int = numero_serie
+        
+        tanque_id = request.args.get('tanque_id', type=int) or None
+        contrato_id = request.args.get('contrato_id', type=int) or None
+        grupo_id = request.args.get('grupo_id', type=int) or None
+        excel_path = _gerar_excel_temp(numero_serie_int, tanque_id, contrato_id, grupo_id)
         
         if not excel_path or not os.path.exists(excel_path):
             return jsonify({'error': 'Nenhum rompimento encontrado para a série ' + str(numero_serie)}), 404
@@ -567,3 +682,172 @@ def exportar_pdf(numero_serie):
             except:
                 pass
 
+@databook_concretagem_bp.route('/exportar-massa', methods=['POST'])
+@login_required
+def exportar_massa():
+    """
+    Exporta múltiplas séries em massa (Excel ou PDF)
+    Retorna um arquivo ZIP com todos os arquivos gerados
+    """
+    try:
+        data = request.get_json()
+        series = data.get('series', [])
+        formato = data.get('formato', 'excel')  # 'excel' ou 'pdf'
+        tanque_id = data.get('tanque_id')
+        contrato_id = data.get('contrato_id')
+        grupo_id = data.get('grupo_id')
+        
+        if not series:
+            return jsonify({'error': 'Nenhuma série fornecida'}), 400
+        
+        # Criar diretório temporário para os arquivos
+        temp_dir = tempfile.mkdtemp()
+        arquivos_gerados = []
+        
+        try:
+            for numero_serie in series:
+                try:
+                    # Converter série para int se possível
+                    try:
+                        numero_serie_int = int(numero_serie)
+                    except (ValueError, TypeError):
+                        numero_serie_int = numero_serie
+                    
+                    if formato == 'excel':
+                        # Gerar Excel
+                        excel_path = _gerar_excel_temp(numero_serie_int, tanque_id, contrato_id, grupo_id)
+                        if excel_path and os.path.exists(excel_path):
+                            # Copiar para o diretório temporário com nome único
+                            nome_arquivo = f'relatorio_serie_{numero_serie}.xlsx'
+                            destino = os.path.join(temp_dir, nome_arquivo)
+                            shutil.copy2(excel_path, destino)
+                            arquivos_gerados.append(destino)
+                            # Limpar arquivo temporário original
+                            try:
+                                os.unlink(excel_path)
+                            except:
+                                pass
+                    else:  # PDF
+                        # Gerar Excel primeiro
+                        excel_path = _gerar_excel_temp(numero_serie_int, tanque_id, contrato_id, grupo_id)
+                        if excel_path and os.path.exists(excel_path):
+                            # Converter para PDF
+                            pdf_path = _gerar_pdf_temp(excel_path, numero_serie_int)
+                            if pdf_path and os.path.exists(pdf_path):
+                                nome_arquivo = f'relatorio_serie_{numero_serie}.pdf'
+                                destino = os.path.join(temp_dir, nome_arquivo)
+                                shutil.copy2(pdf_path, destino)
+                                arquivos_gerados.append(destino)
+                                # Limpar arquivos temporários
+                                try:
+                                    os.unlink(excel_path)
+                                    if pdf_path != excel_path:
+                                        os.unlink(pdf_path)
+                                except:
+                                    pass
+                except Exception as e:
+                    print(f'Erro ao processar série {numero_serie}: {str(e)}')
+                    continue
+            
+            if not arquivos_gerados:
+                return jsonify({'error': 'Nenhum arquivo foi gerado com sucesso'}), 404
+            
+            # Criar arquivo ZIP
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for arquivo in arquivos_gerados:
+                    nome_arquivo = os.path.basename(arquivo)
+                    zip_file.write(arquivo, nome_arquivo)
+            
+            zip_buffer.seek(0)
+            
+            # Nome do arquivo ZIP
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'exportacao_massa_{formato}_{timestamp}.zip'
+            
+            return send_file(
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=filename
+            )
+            
+        finally:
+            # Limpar diretório temporário
+            try:
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+                
+    except Exception as e:
+        return jsonify({'error': f'Erro ao exportar em massa: {str(e)}'}), 500
+
+def _gerar_pdf_temp(excel_path, numero_serie):
+    """
+    Função auxiliar que converte Excel para PDF usando iLovePDF API
+    Retorna o caminho do arquivo PDF temporário ou None em caso de erro
+    """
+    pdf_temp_path = None
+    pdf_temp_dir = None
+    
+    try:
+        if not excel_path or not os.path.exists(excel_path):
+            return None
+        
+        # Obter credenciais da API do ambiente
+        ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
+        ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
+        
+        if not ilovepdf_public_key or not ilovepdf_secret_key:
+            print('Credenciais iLovePDF não configuradas')
+            return None
+        
+        # Inicializar cliente iLovePDF
+        officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
+        
+        # Criar diretório temporário para salvar o PDF
+        pdf_temp_dir = tempfile.mkdtemp()
+        
+        # Criar arquivo PDF temporário
+        pdf_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf', dir=pdf_temp_dir)
+        pdf_temp_file.close()
+        pdf_temp_path = pdf_temp_file.name
+        
+        # Adicionar arquivo Excel
+        officepdf.add_file(excel_path)
+        
+        # Definir diretório de saída
+        officepdf.set_output_folder(pdf_temp_dir)
+        
+        # Executar conversão
+        officepdf.execute()
+        
+        # Baixar PDF gerado
+        officepdf.download()
+        
+        # Limpar tarefa na API
+        officepdf.delete_current_task()
+        
+        # Encontrar o arquivo PDF gerado
+        pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
+        if not pdf_files:
+            return None
+        
+        # Usar o primeiro arquivo PDF encontrado
+        generated_pdf_path = os.path.join(pdf_temp_dir, pdf_files[0])
+        if os.path.exists(generated_pdf_path):
+            return generated_pdf_path
+        
+        return None
+        
+    except Exception as e:
+        print(f'Erro ao gerar PDF: {str(e)}')
+        return None
+    finally:
+        # Limpar diretório temporário se necessário
+        if pdf_temp_dir and os.path.exists(pdf_temp_dir):
+            try:
+                # Não remover ainda, o arquivo será usado
+                pass
+            except:
+                pass

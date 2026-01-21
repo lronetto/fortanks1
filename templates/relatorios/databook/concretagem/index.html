@@ -36,6 +36,17 @@
                         </select>
                     </div>
                     <div class="col-md-2">
+                        <label for="grupo_id" class="form-label">Grupo de Tanques</label>
+                        <select class="form-select" id="grupo_id" name="grupo_id">
+                            <option value="">Todos os grupos</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo.id }}" {% if grupo_id == grupo.id %}selected{% endif %}>
+                                {{ grupo.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <label for="tanque_id" class="form-label">Tanque</label>
                         <select class="form-select" id="tanque_id" name="tanque_id">
                             <option value="">Todos os tanques</option>
@@ -46,7 +57,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
+                    <div class="col-md-1 d-flex align-items-end">
                         <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
                             <i class="fas fa-search"></i> Filtrar
                         </button>
@@ -58,16 +69,30 @@
 
     <!-- Tabela de Dados -->
     <div class="card">
-        <div class="card-header">
-            <i class="fas fa-table me-1"></i>
-            Dados de Concretagem
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-table me-1"></i>
+                Dados de Concretagem
+            </div>
+            <div>
+                <button type="button" id="btnExportarMassaExcel" class="btn btn-success btn-sm me-2">
+                    <i class="fas fa-file-excel"></i> Exportar em Massa (Excel)
+                </button>
+                <button type="button" id="btnExportarMassaPdf" class="btn btn-danger btn-sm">
+                    <i class="fas fa-file-pdf"></i> Exportar em Massa (PDF)
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
                 <table class="table table-bordered table-striped" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
+                            <th width="30px">
+                                <input type="checkbox" id="selectAll" title="Selecionar todos">
+                            </th>
                             <th>Número de Série</th>
+                            <th>Rompimentos</th>
                             <th>Data de Moldagem</th>
                             <th>Projeto</th>
                             <th>Tanque</th>
@@ -120,6 +145,7 @@
                 "data": function(d) {
                     d.contrato_id = $('#contrato_id').val();
                     d.tanque_id = $('#tanque_id').val();
+                    d.grupo_id = $('#grupo_id').val();
                     d.data_inicio = $('#data_inicio').val();
                     d.data_fim = $('#data_fim').val();
                 },
@@ -127,10 +153,25 @@
             },
             "columns": [
                 { 
-                    "data": "numero_serie",
+                    "data": null,
+                    "orderable": false,
+                    "searchable": false,
+                    "width": "30px",
                     "render": function(data, type, row) {
-                        var total = row.total_rompimentos || 1;
-                        return data + ' (' + total + ' rompimento' + (total > 1 ? 's' : '') + ')';
+                        return '<input type="checkbox" class="row-checkbox" data-serie="' + row.numero_serie + '">';
+                    }
+                },
+                { 
+                    "data": "numero_serie"
+                },
+                { 
+                    "data": "total_rompimentos",
+                    "render": function(data, type, row) {
+                        var total = data || 0;
+                        if (type === 'display') {
+                            return '<span class="badge bg-info">' + total + ' rompimento' + (total !== 1 ? 's' : '') + '</span>';
+                        }
+                        return total;
                     }
                 },
                 { 
@@ -160,81 +201,436 @@
                 }
             ],
             "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
+                "sEmptyTable": "Nenhum registro encontrado",
+                "sInfo": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
+                "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
+                "sInfoFiltered": "(Filtrados de _MAX_ registros)",
+                "sInfoPostFix": "",
+                "sInfoThousands": ".",
+                "sLengthMenu": "_MENU_ resultados por página",
+                "sLoadingRecords": "Carregando...",
+                "sProcessing": "Processando...",
+                "sZeroRecords": "Nenhum registro encontrado",
+                "sSearch": "Pesquisar",
+                "oPaginate": {
+                    "sFirst": "Primeiro",
+                    "sLast": "Último",
+                    "sNext": "Próximo",
+                    "sPrevious": "Anterior"
+                },
+                "oAria": {
+                    "sSortAscending": ": Ordenar colunas de forma ascendente",
+                    "sSortDescending": ": Ordenar colunas de forma descendente"
+                }
             },
             "order": [[0, 'asc']],  // Ordenar por número de série
             "pageLength": 25,
             "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]]
         });
 
-        // Atualizar tanques quando projeto for alterado
-        $('#contrato_id').on('change', function() {
-            const contratoId = $(this).val();
+        // Função para carregar grupos baseado no projeto
+        function carregarGrupos() {
+            const contratoId = $('#contrato_id').val();
+            
+            // Limpar seleção de grupo
+            $('#grupo_id').html('<option value="">Todos os grupos</option>');
+            
+            // Preparar dados da requisição
+            const data = {};
+            if (contratoId) {
+                data.contrato_id = contratoId;
+            }
+            
+            // Carregar grupos
+            $.ajax({
+                url: "{{ url_for('databook_api.api_grupos') }}",
+                method: 'GET',
+                data: data,
+                success: function(response) {
+                    response.grupos.forEach(function(grupo) {
+                        $('#grupo_id').append(
+                            $('<option></option>')
+                                .attr('value', grupo.id)
+                                .text(grupo.nome)
+                        );
+                    });
+                },
+                error: function(error) {
+                    console.error('Erro ao carregar grupos:', error);
+                }
+            });
+        }
+
+        // Função para carregar tanques baseado nos filtros
+        function carregarTanques() {
+            const contratoId = $('#contrato_id').val();
+            const grupoId = $('#grupo_id').val();
             
             // Limpar seleção de tanque
             $('#tanque_id').html('<option value="">Todos os tanques</option>');
             
+            // Preparar dados da requisição
+            const data = {};
             if (contratoId) {
-                // Carregar tanques do projeto selecionado
-                $.ajax({
-                    url: "{{ url_for('databook_concretagem.api_tanques') }}",
-                    method: 'GET',
-                    data: { contrato_id: contratoId },
-                    success: function(response) {
-                        response.tanques.forEach(function(tanque) {
-                            $('#tanque_id').append(
-                                $('<option></option>')
-                                    .attr('value', tanque.id)
-                                    .text(tanque.nome)
-                            );
-                        });
-                    },
-                    error: function(error) {
-                        console.error('Erro ao carregar tanques:', error);
-                    }
-                });
-            } else {
-                // Carregar todos os tanques
-                $.ajax({
-                    url: "{{ url_for('databook_concretagem.api_tanques') }}",
-                    method: 'GET',
-                    success: function(response) {
-                        response.tanques.forEach(function(tanque) {
-                            $('#tanque_id').append(
-                                $('<option></option>')
-                                    .attr('value', tanque.id)
-                                    .text(tanque.nome)
-                            );
-                        });
-                    },
-                    error: function(error) {
-                        console.error('Erro ao carregar tanques:', error);
-                    }
+                data.contrato_id = contratoId;
+            }
+            if (grupoId) {
+                data.grupo_id = grupoId;
+            }
+            
+            // Carregar tanques
+            $.ajax({
+                url: "{{ url_for('databook_api.api_tanques') }}",
+                method: 'GET',
+                data: data,
+                success: function(response) {
+                    response.tanques.forEach(function(tanque) {
+                        $('#tanque_id').append(
+                            $('<option></option>')
+                                .attr('value', tanque.id)
+                                .text(tanque.nome)
+                        );
+                    });
+                },
+                error: function(error) {
+                    console.error('Erro ao carregar tanques:', error);
+                }
+            });
+        }
+
+        // Atualizar grupos e tanques quando projeto for alterado
+        $('#contrato_id').on('change', function() {
+            carregarGrupos();
+            carregarTanques();
+        });
+
+        // Atualizar tanques quando grupo for alterado
+        $('#grupo_id').on('change', function() {
+            carregarTanques();
+        });
+
+        // Carregar grupos e tanques ao inicializar (se houver projeto selecionado)
+        if ($('#contrato_id').val()) {
+            carregarGrupos();
+            carregarTanques();
+        }
+
+        // Gerenciar seleção de checkboxes
+        $(document).on('change', '#selectAll', function() {
+            var isChecked = $(this).prop('checked');
+            $('.row-checkbox').prop('checked', isChecked);
+            atualizarBotoesExportacao();
+        });
+
+        $(document).on('change', '.row-checkbox', function() {
+            var totalCheckboxes = $('.row-checkbox').length;
+            var checkedCheckboxes = $('.row-checkbox:checked').length;
+            $('#selectAll').prop('checked', totalCheckboxes === checkedCheckboxes);
+            atualizarBotoesExportacao();
+        });
+
+        function atualizarBotoesExportacao() {
+            // Botões sempre habilitados - se não houver seleção, exporta tudo
+            $('#btnExportarMassaExcel').prop('disabled', false);
+            $('#btnExportarMassaPdf').prop('disabled', false);
+        }
+
+        // Exportação em massa Excel
+        $('#btnExportarMassaExcel').on('click', function() {
+            var seriesSelecionadas = [];
+            $('.row-checkbox:checked').each(function() {
+                seriesSelecionadas.push($(this).data('serie'));
+            });
+            
+            if (seriesSelecionadas.length === 0) {
+                // Se nenhuma selecionada, exportar todas
+                seriesSelecionadas = table.rows({search: 'applied'}).data().toArray().map(function(row) {
+                    return row.numero_serie;
                 });
             }
+            
+            if (seriesSelecionadas.length === 0) {
+                alert('Nenhuma série encontrada para exportar.');
+                return;
+            }
+            
+            exportarMassa(seriesSelecionadas, 'excel');
         });
+
+        // Exportação em massa PDF
+        $('#btnExportarMassaPdf').on('click', function() {
+            var seriesSelecionadas = [];
+            $('.row-checkbox:checked').each(function() {
+                seriesSelecionadas.push($(this).data('serie'));
+            });
+            
+            if (seriesSelecionadas.length === 0) {
+                // Se nenhuma selecionada, exportar todas
+                seriesSelecionadas = table.rows({search: 'applied'}).data().toArray().map(function(row) {
+                    return row.numero_serie;
+                });
+            }
+            
+            if (seriesSelecionadas.length === 0) {
+                alert('Nenhuma série encontrada para exportar.');
+                return;
+            }
+            
+            exportarMassa(seriesSelecionadas, 'pdf');
+        });
+
+        function exportarMassa(series, formato) {
+            var $btn = formato === 'excel' ? $('#btnExportarMassaExcel') : $('#btnExportarMassaPdf');
+            var originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Gerando...');
+            
+            // Obter filtros atuais
+            var contratoId = $('#contrato_id').val() || '';
+            var tanqueId = $('#tanque_id').val() || '';
+            var grupoId = $('#grupo_id').val() || '';
+            
+            $.ajax({
+                url: "{{ url_for('databook_concretagem.exportar_massa') }}",
+                method: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                },
+                data: JSON.stringify({
+                    series: series,
+                    formato: formato,
+                    contrato_id: contratoId || null,
+                    tanque_id: tanqueId || null,
+                    grupo_id: grupoId || null
+                }),
+                xhrFields: {
+                    responseType: 'blob'
+                },
+                success: function(data, status, xhr) {
+                    var filename = 'exportacao_massa_' + formato + '_' + new Date().getTime() + '.zip';
+                    var disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        var matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    var blob = new Blob([data], { 
+                        type: 'application/zip'
+                    });
+                    var blobUrl = window.URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = filename;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    setTimeout(function() {
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(blobUrl);
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }, 100);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao exportar em massa:', error, xhr);
+                    var errorMsg = 'Erro ao gerar arquivo.';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    }
+                    alert(errorMsg);
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        }
 
         // Filtrar dados ao clicar no botão
         $('#btnFiltrar').on('click', function() {
             table.ajax.reload();
+            // Limpar seleções ao recarregar
+            $('#selectAll').prop('checked', false);
+            $('.row-checkbox').prop('checked', false);
+            atualizarBotoesExportacao();
         });
 
         // Filtrar ao pressionar Enter nos campos
-        $('#contrato_id, #tanque_id, #data_inicio, #data_fim').on('change', function() {
+        $('#contrato_id, #tanque_id, #grupo_id, #data_inicio, #data_fim').on('change', function() {
             table.ajax.reload();
         });
 
         // Event handlers para botões de exportação
         $(document).on('click', '.btn-export-excel', function() {
-            var numeroSerie = $(this).data('serie');
-            // Redirecionar para o endpoint de exportação Excel
-            window.location.href = "{{ url_for('databook_concretagem.exportar_excel', numero_serie=0) }}".replace('0', numeroSerie);
+            var $btn = $(this);
+            var numeroSerie = $btn.data('serie');
+            
+            // Validação do número de série
+            if (!numeroSerie || numeroSerie === '') {
+                alert('Erro: Número de série não encontrado. Por favor, recarregue a página e tente novamente.');
+                console.error('Número de série inválido para exportação Excel');
+                return;
+            }
+
+            // Desabilitar botão e mostrar loading
+            var originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Gerando...');
+            
+            // Obter filtros atuais
+            var contratoId = $('#contrato_id').val() || '';
+            var tanqueId = $('#tanque_id').val() || '';
+            var grupoId = $('#grupo_id').val() || '';
+            
+            // Construir URL
+            var baseUrl = "{{ url_for('databook_concretagem.exportar_excel', numero_serie=0) }}";
+            var url = baseUrl.replace('0', encodeURIComponent(numeroSerie));
+            console.log(url);
+            // Adicionar filtros como query parameters
+            var urlObj = new URL(url, window.location.origin);
+            if (contratoId) {
+                urlObj.searchParams.append('contrato_id', contratoId);
+            }
+            if (tanqueId) {
+                urlObj.searchParams.append('tanque_id', tanqueId);
+            }
+            if (grupoId) {
+                urlObj.searchParams.append('grupo_id', grupoId);
+            }
+            
+            // Fazer requisição AJAX
+            $.ajax({
+                url: urlObj.pathname + urlObj.search,
+                method: 'GET',
+                xhrFields: {
+                    responseType: 'blob'
+                },
+                success: function(data, status, xhr) {
+                    // Obter nome do arquivo do header ou usar padrão
+                    var filename = 'relatorio_concretagem_serie_' + numeroSerie + '.xlsx';
+                    var disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        var matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    // Criar blob URL e fazer download
+                    var blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    var blobUrl = window.URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = filename;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    // Limpar
+                    setTimeout(function() {
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(blobUrl);
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }, 100);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao exportar Excel:', error, xhr);
+                    var errorMsg = 'Erro ao gerar arquivo Excel.';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    } else if (xhr.status === 404) {
+                        errorMsg = 'Nenhum rompimento encontrado para esta série.';
+                    } else if (xhr.status === 500) {
+                        errorMsg = 'Erro interno do servidor. Por favor, tente novamente mais tarde.';
+                    }
+                    alert(errorMsg);
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
         });
 
         $(document).on('click', '.btn-export-pdf', function() {
-            var numeroSerie = $(this).data('serie');
-            // Redirecionar para o endpoint de exportação PDF
-            window.location.href = "{{ url_for('databook_concretagem.exportar_pdf', numero_serie=0) }}".replace('0', numeroSerie);
+            var $btn = $(this);
+            var numeroSerie = $btn.data('serie');
+            
+            // Validação do número de série
+            if (!numeroSerie || numeroSerie === '') {
+                alert('Erro: Número de série não encontrado. Por favor, recarregue a página e tente novamente.');
+                console.error('Número de série inválido para exportação PDF');
+                return;
+            }
+
+            // Desabilitar botão e mostrar loading
+            var originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Gerando...');
+            
+            // Obter filtros atuais
+            var contratoId = $('#contrato_id').val() || '';
+            var tanqueId = $('#tanque_id').val() || '';
+            
+            // Construir URL
+            var baseUrl = "{{ url_for('databook_concretagem.exportar_pdf', numero_serie=0) }}";
+            var url = baseUrl.replace('0', encodeURIComponent(numeroSerie));
+            
+            // Adicionar filtros como query parameters
+            var urlObj = new URL(url, window.location.origin);
+            if (contratoId) {
+                urlObj.searchParams.append('contrato_id', contratoId);
+            }
+            if (tanqueId) {
+                urlObj.searchParams.append('tanque_id', tanqueId);
+            }
+            
+            // Fazer requisição AJAX
+            $.ajax({
+                url: urlObj.pathname + urlObj.search,
+                method: 'GET',
+                xhrFields: {
+                    responseType: 'blob'
+                },
+                success: function(data, status, xhr) {
+                    // Obter nome do arquivo do header ou usar padrão
+                    var filename = 'relatorio_concretagem_serie_' + numeroSerie + '.pdf';
+                    var disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        var matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    // Criar blob URL e fazer download
+                    var blob = new Blob([data], { type: 'application/pdf' });
+                    var blobUrl = window.URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = filename;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    // Limpar
+                    setTimeout(function() {
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(blobUrl);
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }, 100);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao exportar PDF:', error, xhr);
+                    var errorMsg = 'Erro ao gerar arquivo PDF.';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    } else if (xhr.status === 404) {
+                        errorMsg = 'Nenhum rompimento encontrado para esta série.';
+                    } else if (xhr.status === 500) {
+                        errorMsg = 'Erro interno do servidor. Por favor, tente novamente mais tarde.';
+                    }
+                    alert(errorMsg);
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
         });
     });
 </script>

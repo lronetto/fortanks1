@@ -524,7 +524,7 @@ def api_tipos_peca_por_grupos():
     # Buscar todos os tanques dos grupos selecionados
     tanque_ids = []
     for grupo_id in grupo_ids:
-        grupo = GrupoTanque.query.get(grupo_id)
+        grupo = TanquesGrupos.query.get(grupo_id)
         if grupo:
             for tanque in grupo.tanques:
                 if tanque.id not in tanque_ids:

@@ -5,7 +5,7 @@ from openpyxl.worksheet.page import PageMargins
 from models import tanque
 from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
 from models.contrato import Contrato
-from models.tanque import Tanques, TanquesPecas
+from models.tanque import Tanques, TanquesPecas, TanquesGrupos
 from models.database import db
 from sqlalchemy import or_, and_
 from datetime import datetime, timedelta
@@ -13,6 +13,7 @@ import os
 import io
 import shutil
 import tempfile
+import zipfile
 import openpyxl
 from openpyxl import load_workbook
 import json
@@ -32,12 +33,16 @@ def index():
     # Buscar contratos ativos para o filtro
     contratos = Contrato.query.filter_by(ativo=True).order_by(Contrato.nome).all()
     
+    # Buscar grupos de tanques para o filtro
+    grupos = TanquesGrupos.query.order_by(TanquesGrupos.nome).all()
+    
     # Buscar tanques para o filtro (inicialmente todos)
     tanques = Tanques.query.order_by(Tanques.nome).all()
     
     # Obter filtros da requisição
     contrato_id = request.args.get('contrato_id', type=int)
     tanque_id = request.args.get('tanque_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     data_inicio = request.args.get('data_inicio', '')
     data_fim = request.args.get('data_fim', '')
     
@@ -46,10 +51,12 @@ def index():
         tanques = Tanques.query.filter_by(contrato_id=contrato_id).order_by(Tanques.nome).all()
     
     return render_template('relatorios/databook/inspecao/index.html', 
-                         contratos=contratos, 
+                         contratos=contratos,
+                         grupos=grupos,
                          tanques=tanques,
                          contrato_id=contrato_id,
                          tanque_id=tanque_id,
+                         grupo_id=grupo_id,
                          data_inicio=data_inicio,
                          data_fim=data_fim)
 
@@ -62,6 +69,7 @@ def api_dados():
     """
     contrato_id = request.args.get('contrato_id', type=int)
     tanque_id = request.args.get('tanque_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     data_inicio_str = request.args.get('data_inicio')
     data_fim_str = request.args.get('data_fim')
     
@@ -155,6 +163,15 @@ def api_dados():
         if tanque_id and tanque_id not in tanque_ids:
             continue
         
+        # Aplicar filtro de grupo se especificado
+        if grupo_id:
+            grupo = TanquesGrupos.query.get(grupo_id)
+            if grupo and grupo.tanques:
+                tanque_ids_grupo = [t.id for t in grupo.tanques]
+                # Verificar se algum tanque do grupo está presente
+                if not any(tid in tanque_ids for tid in tanque_ids_grupo):
+                    continue
+        
         # Inicializar lista de tanques do grupo se não existir
         if chave not in grupos_tanques:
             grupos_tanques[chave] = set()
@@ -178,6 +195,13 @@ def api_dados():
             if contrato_id:
                 tanques_query = tanques_query.filter(Tanques.contrato_id == contrato_id)
             
+            # Aplicar filtro de grupo se especificado
+            if grupo_id:
+                grupo = TanquesGrupos.query.get(grupo_id)
+                if grupo and grupo.tanques:
+                    tanque_ids_grupo = [t.id for t in grupo.tanques]
+                    tanques_query = tanques_query.filter(Tanques.id.in_(tanque_ids_grupo))
+            
             tanques = tanques_query.all()
             
             for tanque in tanques:
@@ -188,8 +212,8 @@ def api_dados():
                     'contrato_id': tanque.contrato_id if tanque.contrato else None
                 })
         
-        # Se filtro de contrato foi aplicado e não encontrou tanques, pular
-        if contrato_id and not tanques_info:
+        # Se filtro de contrato ou grupo foi aplicado e não encontrou tanques, pular
+        if (contrato_id or grupo_id) and not tanques_info:
             continue
         
         # Contar total de concretagens neste grupo (mesma data e pista)
@@ -228,29 +252,12 @@ def api_dados():
         'recordsFiltered': len(dados)
     })
 
-@databook_inspecao_bp.route('/api/tanques')
-@login_required
-def api_tanques():
-    """
-    API para retornar tanques filtrados por projeto
-    """
-    contrato_id = request.args.get('contrato_id', type=int)
-    
-    if contrato_id:
-        tanques = Tanques.query.filter_by(contrato_id=contrato_id).order_by(Tanques.nome).all()
-    else:
-        tanques = Tanques.query.order_by(Tanques.nome).all()
-    
-    tanques_json = [{
-        'id': tanque.id,
-        'nome': tanque.nome
-    } for tanque in tanques]
-    
-    return jsonify({'tanques': tanques_json})
+# Endpoints api_tanques e api_grupos foram movidos para databook_api_controller.py
+# para evitar duplicação de código
 
 
 
-def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
+def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=None):
     """
     Função auxiliar que gera o Excel e retorna o caminho do arquivo temporário
     Retorna o caminho do arquivo temporário ou None em caso de erro
@@ -327,12 +334,15 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                         # Processar tanques do JSON
                         if concretagem.pecas:
                             pecas = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
-                            
+                            series=""
                             # Extrair todos os IDs únicos de tanques do JSON
                             tanques_ids_json = set()
                             for peca in pecas:
                                 if isinstance(peca, dict) and 'tanque' in peca and peca['tanque'] is not None:
                                     tanques_ids_json.add(peca['tanque'])
+                                
+                               
+
                             
                             if tanques_ids_json:
                                 # Buscar informações dos tanques
@@ -341,6 +351,15 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                                 # Aplicar filtro de projeto se especificado
                                 if projeto_id is not None:
                                     tanques_query = tanques_query.filter(Tanques.contrato_id == projeto_id)
+                                
+                                # Aplicar filtro de grupo se especificado
+                                if grupo_id:
+                                    grupo = TanquesGrupos.query.get(grupo_id)
+                                    if grupo and grupo.tanques:
+                                        tanque_ids_grupo = [t.id for t in grupo.tanques]
+                                        tanques_query = tanques_query.filter(Tanques.id.in_(tanque_ids_grupo))
+                                if tanque_id:
+                                    tanques_query = tanques_query.filter(Tanques.id == tanque_id)
                                 
                                 tanques = tanques_query.all()
                                 
@@ -392,12 +411,27 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                                                 if forma_peca is not None and forma_peca == forma:
                                                     # Verificar se tanque e placa existem
                                                     if peca.get('tanque') is not None and peca.get('placa'):
-                                                        peca_tanque = TanquesPecas.query.filter(
+                                                        peca_tanque_query = TanquesPecas.query.filter(
                                                             TanquesPecas.tanque_id == peca['tanque'],
                                                             TanquesPecas.nome == peca['placa']
-                                                        ).first()
+                                                        )
+                                                        if tanque_id:
+                                                            peca_tanque_query = peca_tanque_query.filter(TanquesPecas.tanque_id==tanque_id)
+                                                        if grupo_id:
+                                                            grupo = TanquesGrupos.query.get(grupo_id)
+                                                            if grupo and grupo.tanques:
+                                                                tanque_ids_grupo = [t.id for t in grupo.tanques]
+                                                                peca_tanque_query = peca_tanque_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
+                                                        peca_tanque = peca_tanque_query.first()
                                                         
                                                         if peca_tanque:
+                                                            # Buscar séries da qualidade
+                                                            qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
+                                                            if qualidade and 'series' in qualidade:
+                                                                for serie in qualidade['series']:
+                                                                    if serie not in series:
+                                                                        series += str(serie) + ', '
+                                                            
                                                             #formas
                                                             new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
                                                             #nomes
@@ -423,6 +457,13 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                                         new_value = new_value.replace(f'{{{19+forma}}}', '')
                                         new_value = new_value.replace(f'{{{31+forma}}}', '')
                                         new_value = new_value.replace(f'{{{43+forma}}}', '')
+                            
+                            # Preencher campo de séries após processar todas as peças
+                            if series:
+                                series_str = ', '.join(str(serie) for serie in sorted(series))
+                                new_value = new_value.replace('{120}', series_str)
+                            else:
+                                new_value = new_value.replace('{120}', '')
                                 
                         #bobinas
                         if concretagem.cordoalhas:
@@ -464,20 +505,46 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                             cordoalhas_data = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
                             if cordoalhas_data and isinstance(cordoalhas_data, dict) and 'alongamentos' in cordoalhas_data:
                                 alongamentos = cordoalhas_data['alongamentos']
-                                
+                                total_alongamentos = len(alongamentos)
+    
                                 if alongamentos and isinstance(alongamentos, dict):
                                     # Iterar sobre os alongamentos (formato: {"C-1": 339, "C-2": 339, ...})
                                     alongamentos_soma = 0
                                     alongamentos_maior = 0
                                     alongamentos_menor = 0
+                                    modulo = 198.7
+                                    area = 99.7
+                                    if peca_tanque and peca_tanque.tipo == 'PF':
+                                        comprimento = 15000
+                                    else:
+                                        comprimento = 65000
 
+                                    forca = 139.4
+                                    alongamento_teorico = (forca * comprimento) / (modulo * area)
+
+                                    if peca_tanque and peca_tanque.tipo == 'PF':
+                                        alongamento_maximo_teorico = 120#alongamento_teorico * 1.05
+                                        alongamento_minimo_teorico = 100#alongamento_teorico * 0.95
+                                    else:
+                                        alongamento_maximo_teorico = 356#alongamento_teorico * 1.05
+                                        alongamento_minimo_teorico = 321#alongamento_teorico * 0.95
+                                    alongamento_soma_maximo_teorico = alongamento_maximo_teorico*total_alongamentos#alongamento_soma_teorico * 1.03
+                                    alongamento_soma_minimo_teorico = alongamento_minimo_teorico*total_alongamentos#alongamento_soma_teorico * 0.97
+
+                                    new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
+                                    new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
+                                    new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
+                                    new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
+                                    alongamentos_fora_da_tolerancia = 0
                                     for chave, valor in alongamentos.items():
                                         alongamentos_soma += valor
                                         if valor > alongamentos_maior:
                                             alongamentos_maior = valor
                                         if valor < alongamentos_menor:
                                             alongamentos_menor = valor
-                                        
+                                        if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
+                                            new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(chave.replace('C-', '')))
+                                            alongamentos_fora_da_tolerancia += 1
                                         if chave and valor is not None:
                                             # Extrair o número da chave (ex: "C-1" -> 1)
                                             try:
@@ -487,7 +554,9 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                                                 new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
                                             except (ValueError, TypeError):
                                                 continue
-                                    
+                                    if alongamentos_fora_da_tolerancia < 12:
+                                        for i in range(1,12-alongamentos_fora_da_tolerancia):
+                                            new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
                                     # Tratar alongamentos além de C-16
                                     total_alongamentos = len(alongamentos)
                                     if total_alongamentos > 16:
@@ -502,30 +571,32 @@ def _gerar_excel_temp(concretagem_id,tanque_id,projeto_id):
                                     else:
                                         new_value = new_value.replace('{122}', '')
                                         # Limpar placeholders de C-17 até C-26
-                                        for i in range(17, 27):
-                                            placeholder = 79 + (i - 17)
-                                            new_value = new_value.replace(f'{{{placeholder}}}', '')
+                                        for i in range(1, 11):
+                                            if i>1:
+                                                new_value = new_value.replace(f'{{{i+86}}}', '')
+                                            new_value = new_value.replace(f'{{{i+77}}}', '')
 
                         #somatorio
                         new_value = new_value.replace('{97}', str(alongamentos_soma))
                         #alongamentos individuais maior e menor
                         #PF  100 < soma < 120 - ok
                         #PN  321 < soma < 356 - ok
-                        if peca_tanque.tipo == 'PF':
+                        if peca_tanque and peca_tanque.tipo == 'PF':
                             if 100 < alongamentos_soma < 120:
                                 new_value = new_value.replace('{101}', 'X')
                                 new_value = new_value.replace('{102}', '')
                             else:
                                 new_value = new_value.replace('{101}', '')
                                 new_value = new_value.replace('{102}', 'X')
-                        else:
+                        elif peca_tanque and peca_tanque.tipo != 'PF':
                             if 321 < alongamentos_soma < 356:
                                 new_value = new_value.replace('{101}', 'X')
                                 new_value = new_value.replace('{102}', '')
                             else:
                                 new_value = new_value.replace('{101}', '')
                                 new_value = new_value.replace('{102}', '')
-                       
+                    
+                        
                         # TODO: Preencher outros campos conforme necessário baseado no template
                         # Por enquanto, apenas preenchemos os campos básicos
                         
@@ -593,11 +664,11 @@ def exportar_excel():
         concretagem_id = request.args.get('concretagem_id', type=int)
         tanque_id = request.args.get('tanque_id', type=int) or None
         projeto_id = request.args.get('projeto_id', type=int) or None
-        
+        grupo_id = request.args.get('grupo_id', type=int) or None
         if not concretagem_id:
             return jsonify({'error': 'Parâmetro concretagem_id é obrigatório'}), 400
         time_inicio = datetime.now()
-        excel_path = _gerar_excel_temp(concretagem_id, tanque_id, projeto_id)
+        excel_path = _gerar_excel_temp(concretagem_id, tanque_id, projeto_id, grupo_id)
         print(f'Tempo de geração do Excel: {datetime.now() - time_inicio}')
         if not excel_path:
             return jsonify({'error': f'Nenhuma concretagem encontrada para o ID {concretagem_id}'}), 404
@@ -751,3 +822,166 @@ def exportar_pdf():
             except:
                 pass
 
+@databook_inspecao_bp.route('/exportar-massa', methods=['POST'])
+@login_required
+def exportar_massa():
+    """
+    Exporta múltiplas concretagens em massa (Excel ou PDF)
+    Retorna um arquivo ZIP com todos os arquivos gerados
+    """
+    try:
+        data = request.get_json()
+        concretagens_ids = data.get('concretagens_ids', [])
+        formato = data.get('formato', 'excel')  # 'excel' ou 'pdf'
+        tanque_id = data.get('tanque_id')
+        projeto_id = data.get('projeto_id')
+        grupo_id = data.get('grupo_id')
+        
+        if not concretagens_ids:
+            return jsonify({'error': 'Nenhuma concretagem fornecida'}), 400
+        
+        # Criar diretório temporário para os arquivos
+        temp_dir = tempfile.mkdtemp()
+        arquivos_gerados = []
+        
+        try:
+            for concretagem_id in concretagens_ids:
+                try:
+                    if formato == 'excel':
+                        # Gerar Excel
+                        excel_path = _gerar_excel_temp(concretagem_id, tanque_id, projeto_id, grupo_id)
+                        if excel_path and os.path.exists(excel_path):
+                            # Copiar para o diretório temporário com nome único
+                            nome_arquivo = f'relatorio_inspecao_{concretagem_id}.xlsx'
+                            destino = os.path.join(temp_dir, nome_arquivo)
+                            shutil.copy2(excel_path, destino)
+                            arquivos_gerados.append(destino)
+                            # Limpar arquivo temporário original
+                            try:
+                                os.unlink(excel_path)
+                            except:
+                                pass
+                    else:  # PDF
+                        # Gerar Excel primeiro
+                        excel_path = _gerar_excel_temp(concretagem_id, tanque_id, projeto_id, grupo_id)
+                        if excel_path and os.path.exists(excel_path):
+                            # Converter para PDF
+                            pdf_path = _gerar_pdf_temp(excel_path, concretagem_id)
+                            if pdf_path and os.path.exists(pdf_path):
+                                nome_arquivo = f'relatorio_inspecao_{concretagem_id}.pdf'
+                                destino = os.path.join(temp_dir, nome_arquivo)
+                                shutil.copy2(pdf_path, destino)
+                                arquivos_gerados.append(destino)
+                                # Limpar arquivos temporários
+                                try:
+                                    os.unlink(excel_path)
+                                    if pdf_path != excel_path:
+                                        os.unlink(pdf_path)
+                                except:
+                                    pass
+                except Exception as e:
+                    print(f'Erro ao processar concretagem {concretagem_id}: {str(e)}')
+                    continue
+            
+            if not arquivos_gerados:
+                return jsonify({'error': 'Nenhum arquivo foi gerado com sucesso'}), 404
+            
+            # Criar arquivo ZIP
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                for arquivo in arquivos_gerados:
+                    nome_arquivo = os.path.basename(arquivo)
+                    zip_file.write(arquivo, nome_arquivo)
+            
+            zip_buffer.seek(0)
+            
+            # Nome do arquivo ZIP
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'exportacao_massa_{formato}_{timestamp}.zip'
+            
+            return send_file(
+                zip_buffer,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name=filename
+            )
+            
+        finally:
+            # Limpar diretório temporário
+            try:
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+                
+    except Exception as e:
+        return jsonify({'error': f'Erro ao exportar em massa: {str(e)}'}), 500
+
+def _gerar_pdf_temp(excel_path, concretagem_id):
+    """
+    Função auxiliar que converte Excel para PDF usando iLovePDF API
+    Retorna o caminho do arquivo PDF temporário ou None em caso de erro
+    """
+    pdf_temp_path = None
+    pdf_temp_dir = None
+    
+    try:
+        if not excel_path or not os.path.exists(excel_path):
+            return None
+        
+        # Obter credenciais da API do ambiente
+        ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
+        ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
+        
+        if not ilovepdf_public_key or not ilovepdf_secret_key:
+            print('Credenciais iLovePDF não configuradas')
+            return None
+        
+        # Inicializar cliente iLovePDF
+        officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
+        
+        # Criar diretório temporário para salvar o PDF
+        pdf_temp_dir = tempfile.mkdtemp()
+        
+        # Criar arquivo PDF temporário
+        pdf_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf', dir=pdf_temp_dir)
+        pdf_temp_file.close()
+        pdf_temp_path = pdf_temp_file.name
+        
+        # Adicionar arquivo Excel
+        officepdf.add_file(excel_path)
+        
+        # Definir diretório de saída
+        officepdf.set_output_folder(pdf_temp_dir)
+        
+        # Executar conversão
+        officepdf.execute()
+        
+        # Baixar PDF gerado
+        officepdf.download()
+        
+        # Limpar tarefa na API
+        officepdf.delete_current_task()
+        
+        # Encontrar o arquivo PDF gerado
+        pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
+        if not pdf_files:
+            return None
+        
+        # Usar o primeiro arquivo PDF encontrado
+        generated_pdf_path = os.path.join(pdf_temp_dir, pdf_files[0])
+        if os.path.exists(generated_pdf_path):
+            return generated_pdf_path
+        
+        return None
+        
+    except Exception as e:
+        print(f'Erro ao gerar PDF: {str(e)}')
+        return None
+    finally:
+        # Limpar diretório temporário se necessário
+        if pdf_temp_dir and os.path.exists(pdf_temp_dir):
+            try:
+                # Não remover ainda, o arquivo será usado
+                pass
+            except:
+                pass
