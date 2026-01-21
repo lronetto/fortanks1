@@ -1178,14 +1178,14 @@ def processar_producao_manual(log):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
     dias = TanquesPecas.query.filter(TanquesPecas.data_concretagem.isnot(None)).group_by(TanquesPecas.data_concretagem).all()
-    print(f"Processando {len(dias)} dias")
+    logging.info(f"Processando {len(dias)} dias")
     for dia in dias:
         dia = dia.data_concretagem
         pecas_concretadas = TanquesPecas.query.filter(
             TanquesPecas.data_concretagem.isnot(None),
             TanquesPecas.data_concretagem == dia
         ).all()
-        print(f"Processando dia: {dia} - {len(pecas_concretadas)} peças")
+        logging.info(f"Processando dia: {dia} - {len(pecas_concretadas)} peças")
         if not pecas_concretadas:
             continue
         
@@ -1309,6 +1309,7 @@ def importar_inspecao():
     except Exception as e:
         import traceback
         db.session.rollback()
+        logging.error(f"Erro ao processar arquivo: {str(e)}", exc_info=True)
         return jsonify({
             'success': False,
             'message': f'Erro ao processar arquivo: {str(e)}',
