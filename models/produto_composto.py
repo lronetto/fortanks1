@@ -1,4 +1,5 @@
 from datetime import datetime
+from flask import json
 from sqlalchemy import Text, JSON
 from models.database import db
 from models.material import Materiais, MateriaisGrupos
@@ -198,7 +199,8 @@ class ProdutoComposto(db.Model):
         for componente in self.componentes:
             if componente.dados_adicionais:
                 try:
-                    datainicio = componente.dados_adicionais.get('data_inicio')
+                    dados_adicionais = json.loads(componente.dados_adicionais)
+                    datainicio = dados_adicionais.get('data_inicio')
                     if datainicio:
                         # Tentar parse da data
                         if isinstance(datainicio, str):
@@ -214,7 +216,7 @@ class ProdutoComposto(db.Model):
                         if datainicio and data_movimento and datainicio > data_movimento:
                             continue
                     
-                    datatermino = componente.dados_adicionais.get('data_termino')
+                    datatermino = dados_adicionais.get('data_termino')
                     if datatermino:
                         # Tentar parse da data
                         if isinstance(datatermino, str):
