@@ -14,7 +14,7 @@ import json
 import os
 import tempfile
 from models.logs import Logs
-
+import logging
 # Função auxiliar para converter Decimal para float recursivamente
 def converter_decimal_para_float(obj):
     """Converte valores Decimal para float recursivamente em estruturas de dados"""
@@ -1262,7 +1262,7 @@ def processar_producao_manual(log):
 @login_required
 def importar_inspecao():
     """Importa arquivo Excel de inspeção e processa as peças"""
-    print("importar_inspecao inicio")
+    logging.info("importar_inspecao inicio")
     tempo_inicio = datetime.now()
     try:
         if 'arquivo' not in request.files:
@@ -1285,11 +1285,11 @@ def importar_inspecao():
             # Processar arquivo usando a função do script
             resultado = processar_arquivo_inspecao(temp_path)
             tempo_final = datetime.now()
-            print(f"processar_arquivo_inspecao finalizado em {tempo_final - tempo_inicio}")
+            logging.info(f"processar_arquivo_inspecao finalizado em {tempo_final - tempo_inicio}")
             tempo_inicio = datetime.now()
             processar_producao_manual(log=False)
             tempo_final = datetime.now()
-            print(f"processar_producao_manual finalizado em {tempo_final - tempo_inicio}")
+            logging.info(f"processar_producao_manual finalizado em {tempo_final - tempo_inicio}")
             return jsonify({
                 'success': True,
                 'message': 'Arquivo processado com sucesso',
