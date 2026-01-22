@@ -16,11 +16,11 @@
             <form id="formFiltros">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row">
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="data_inicio" class="form-label">Data Início</label>
                         <input type="date" class="form-control" id="data_inicio" name="data_inicio" value="{{ data_inicio or '' }}">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="data_fim" class="form-label">Data Fim</label>
                         <input type="date" class="form-control" id="data_fim" name="data_fim" value="{{ data_fim or '' }}">
                     </div>
@@ -57,18 +57,29 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-1 d-flex align-items-end">
-                        <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
-                            <i class="fas fa-search"></i> Filtrar
-                        </button>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filtro_rompimentos" name="filtro_rompimentos">
+                            <label class="form-check-label" for="filtro_rompimentos">
+                                4 ou mais rompimentos
+                            </label>
+                        </div>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 
+    <!-- Indicador de Carregamento -->
+    <div id="loadingIndicator" class="text-center py-5" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+        </div>
+        <p class="mt-3">Carregando dados...</p>
+    </div>
+
     <!-- Tabela de Dados -->
-    <div class="card">
+    <div class="card" id="tabelaCard">
         <div class="card-header d-flex justify-content-between align-items-center">
             <div>
                 <i class="fas fa-table me-1"></i>
@@ -124,6 +135,20 @@
 
 <script>
     $(document).ready(function() {
+        // Função para mostrar/ocultar indicador de carregamento
+        function mostrarCarregamento(mostrar) {
+            if (mostrar) {
+                $('#loadingIndicator').show();
+                $('#tabelaCard').hide();
+            } else {
+                $('#loadingIndicator').hide();
+                $('#tabelaCard').show();
+            }
+        }
+        
+        // Mostrar indicador de carregamento na inicialização
+        mostrarCarregamento(true);
+        
         // Função para ordenar datas no formato ISO
         $.fn.dataTable.ext.order['date-iso'] = function(settings, col) {
             return this.api().column(col, {order:'index'}).nodes().map(function(td, i) {
@@ -148,8 +173,15 @@
                     d.grupo_id = $('#grupo_id').val();
                     d.data_inicio = $('#data_inicio').val();
                     d.data_fim = $('#data_fim').val();
+                    d.min_rompimentos = $('#filtro_rompimentos').is(':checked') ? 4 : null;
                 },
-                "dataSrc": "data"
+                "dataSrc": "data",
+                "beforeSend": function() {
+                    mostrarCarregamento(true);
+                },
+                "complete": function() {
+                    mostrarCarregamento(false);
+                }
             },
             "columns": [
                 { 
@@ -225,7 +257,11 @@
             },
             "order": [[0, 'asc']],  // Ordenar por número de série
             "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]]
+            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            "initComplete": function() {
+                // Garantir que o indicador seja ocultado após a inicialização
+                mostrarCarregamento(false);
+            }
         });
 
         // Função para carregar grupos baseado no projeto
@@ -446,18 +482,18 @@
             });
         }
 
-        // Filtrar dados ao clicar no botão
-        $('#btnFiltrar').on('click', function() {
+        // Função para recarregar dados e limpar seleções
+        function recarregarDados() {
             table.ajax.reload();
             // Limpar seleções ao recarregar
             $('#selectAll').prop('checked', false);
             $('.row-checkbox').prop('checked', false);
             atualizarBotoesExportacao();
-        });
+        }
 
-        // Filtrar ao pressionar Enter nos campos
-        $('#contrato_id, #tanque_id, #grupo_id, #data_inicio, #data_fim').on('change', function() {
-            table.ajax.reload();
+        // Filtrar automaticamente quando qualquer filtro for alterado
+        $('#contrato_id, #tanque_id, #grupo_id, #data_inicio, #data_fim, #filtro_rompimentos').on('change', function() {
+            recarregarDados();
         });
 
         // Event handlers para botões de exportação

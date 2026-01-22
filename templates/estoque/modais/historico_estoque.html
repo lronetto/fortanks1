@@ -241,28 +241,39 @@ $(document).ready(function() {
 
     // Evento quando o modal é aberto
     $('#modalHistoricoEstoque').on('show.bs.modal', function(event) {
-        const button = $(event.relatedTarget);
-        const estoqueId = button.data('estoque-id');
-        const materialId = button.data('material-id');
-        const agruparMaterial = button.data('agrupar-material') === true || button.data('agrupar-material') === 'true';
-        const codigo = button.data('codigo') || '-';
-        const nome = button.data('nome') || '-';
-        const quantidadeAtual = button.data('quantidade-atual') || '0';
-
-        // Preencher informações do item
-        $('#historico_codigo').text(codigo);
-        $('#historico_nome').text(nome);
-        $('#historico_quantidade_atual').text(parseFloat(quantidadeAtual).toFixed(2));
-
-        // Limpar filtros
-        $('#historico_data_inicio').val('');
-        $('#historico_data_fim').val('');
-
-        // Armazenar flag de agrupamento no modal para uso posterior
-        $('#modalHistoricoEstoque').data('agrupar-material', agruparMaterial);
+        let button = $(event.relatedTarget);
         
-        // Carregar gráfico (passar informação se deve agrupar por material)
-        carregarGraficoHistorico(estoqueId, null, null, agruparMaterial);
+        // Se não houver relatedTarget, tentar usar o botão temporário
+        if (!button || button.length === 0 || !button.data('estoque-id')) {
+            const tempButton = $('#modalHistoricoEstoque').data('temp-button');
+            if (tempButton && tempButton.length > 0) {
+                button = tempButton;
+            }
+        }
+        
+        if (button && button.length > 0 && button.data('estoque-id')) {
+            const estoqueId = button.data('estoque-id');
+            const materialId = button.data('material-id');
+            const agruparMaterial = button.data('agrupar-material') === true || button.data('agrupar-material') === 'true';
+            const codigo = button.data('codigo') || '-';
+            const nome = button.data('nome') || '-';
+            const quantidadeAtual = button.data('quantidade-atual') || '0';
+
+            // Preencher informações do item
+            $('#historico_codigo').text(codigo);
+            $('#historico_nome').text(nome);
+            $('#historico_quantidade_atual').text(parseFloat(quantidadeAtual).toFixed(2));
+
+            // Limpar filtros
+            $('#historico_data_inicio').val('');
+            $('#historico_data_fim').val('');
+
+            // Armazenar flag de agrupamento no modal para uso posterior
+            $('#modalHistoricoEstoque').data('agrupar-material', agruparMaterial);
+            
+            // Carregar gráfico (passar informação se deve agrupar por material)
+            carregarGraficoHistorico(estoqueId, null, null, agruparMaterial);
+        }
     });
 
     // Evento quando o modal é fechado

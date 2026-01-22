@@ -71,16 +71,13 @@ def api_dados():
     grupo_id = request.args.get('grupo_id', type=int)
     data_inicio_str = request.args.get('data_inicio')
     data_fim_str = request.args.get('data_fim')
+    min_rompimentos = request.args.get('min_rompimentos', type=int)
     
     # Converter datas se fornecidas
     data_inicio = None
     data_fim = None
-    print(f'grupo_id: {grupo_id}')
-    print(f'tanque_id: {tanque_id}')
-    print(f'contrato_id: {contrato_id}')
-    print(f'data_inicio_str: {data_inicio_str}')
-    print(f'data_fim_str: {data_fim_str}')
-    usinagens = ConcretoUsinagens.query
+   
+    usinagens = ConcretoUsinagens.query.outerjoin(ConcretoUsinagensRompimentos,ConcretoUsinagensRompimentos.numero_serie == ConcretoUsinagens.serie)
     if data_inicio_str:
         usinagens = usinagens.filter(ConcretoUsinagens.data_usinagem >= data_inicio_str)
     if data_fim_str:
@@ -104,7 +101,23 @@ def api_dados():
        
     
     # Preparar dados finais (apenas séries únicas)
-        total_rompimentos = ConcretoUsinagensRompimentos.query.filter(ConcretoUsinagensRompimentos.numero_serie == usinagem.serie).count()   
+        # Converter série para int se possível (rompimentos usa Integer)
+        try:
+            serie_int = int(usinagem.serie)
+        except (ValueError, TypeError):
+            serie_int = None
+        
+        # Buscar rompimentos (só funciona se a série for numérica)
+        if serie_int is not None:
+            total_rompimentos = ConcretoUsinagensRompimentos.query.filter(ConcretoUsinagensRompimentos.numero_serie == serie_int).count()
+        else:
+            total_rompimentos = 0
+        
+        # Aplicar filtro de rompimentos mínimos se especificado
+        if min_rompimentos is not None and total_rompimentos < min_rompimentos:
+            continue
+        
+       
         if grupo_id or tanque_id or contrato_id:
             if pecas:
                 dados.append({

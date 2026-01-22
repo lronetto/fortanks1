@@ -337,19 +337,11 @@
             e.preventDefault();
             const estoqueId = $(this).data('estoque-id');
             const itemNome = $(this).data('item-nome');
-            carregarGraficoHistorico(estoqueId, $('#data_inicio').val() || '', $('#data_fim').val() || '', false);
-            $('#modalHistoricoEstoque').modal('show');
+            
             // Carregar informações do estoque via AJAX usando a função existente api_estoque_info
- /*           $.ajax({
-                url: "{{ url_for('estoque.api_estoque_historico_saldo') }}",
+            $.ajax({
+                url: "{{ url_for('estoque.api_estoque_info', id=0) }}".replace('0', estoqueId),
                 method: 'GET',
-                data: {
-                    id: estoqueId,
-                    data_inicio: $('#data_inicio').val() || '',
-                    data_fim: $('#data_fim').val() || '',
-                    agrupar_semana: $('#agrupar_semana').val() || '',
-                    agrupar_por_material: $('#agrupar_por_material').val() || '',
-                },
                 success: function(response) {
                     if (response.success && response.data) {
                         const data = response.data;
@@ -371,12 +363,12 @@
                             .data('agrupar-material', false)
                             .appendTo('body');
                         
-                        // Armazenar o botão temporário no evento do modal
+                        // Armazenar o botão temporário no modal
                         const modal = $('#modalHistoricoEstoque');
                         modal.data('temp-button', tempButton);
                         
                         // Abrir o modal - o evento show.bs.modal será disparado automaticamente
-                        // O modal já usa a função api_historico_saldo_estoque para carregar o gráfico
+                        // O modal já usa a função api_estoque_historico_saldo para carregar o gráfico
                         modal.modal('show');
                         
                         // Remover o botão temporário após o modal ser aberto
@@ -409,45 +401,6 @@
                     }, 1000);
                 }
             });
-        }); */
-            });
-        // Sobrescrever o evento show.bs.modal para usar o botão temporário se disponível
-        $('#modalHistoricoEstoque').off('show.bs.modal').on('show.bs.modal', function(event) {
-            let button = $(event.relatedTarget);
-            
-            // Se não houver relatedTarget, tentar usar o botão temporário
-            if (!button || button.length === 0 || !button.data('estoque-id')) {
-                const tempButton = $('#modalHistoricoEstoque').data('temp-button');
-                if (tempButton && tempButton.length > 0) {
-                    button = tempButton;
-                }
-            }
-            
-            if (button && button.length > 0) {
-                const estoqueId = button.data('estoque-id');
-                const codigo = button.data('codigo') || '-';
-                const nome = button.data('nome') || '-';
-                const quantidadeAtual = button.data('quantidade-atual') || '0';
-                const agruparMaterial = button.data('agrupar-material') === true || button.data('agrupar-material') === 'true';
-
-                // Preencher informações do item
-                $('#historico_codigo').text(codigo);
-                $('#historico_nome').text(nome);
-                $('#historico_quantidade_atual').text(parseFloat(quantidadeAtual).toFixed(2));
-
-                // Limpar filtros
-                $('#historico_data_inicio').val('');
-                $('#historico_data_fim').val('');
-
-                // Armazenar flag de agrupamento no modal para uso posterior
-                $('#modalHistoricoEstoque').data('agrupar-material', agruparMaterial);
-                
-                // Carregar gráfico usando a função api_historico_saldo_estoque existente
-                // A função carregarGraficoHistorico do modal já usa essa API
-                if (typeof carregarGraficoHistorico === 'function') {
-                    carregarGraficoHistorico(estoqueId, null, null, agruparMaterial);
-                }
-            }
         });
     });
 

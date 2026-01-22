@@ -1007,15 +1007,19 @@ def api_estoque_historico_saldo():
     Ex: /api/estoque/1/historico-saldo?data_inicio=2023-01-01&data_fim=2023-12-31&agrupar_semana=true&agrupar_por_material=true
     """
     estoque_id = request.args.get('id')
+    if not estoque_id:
+        return jsonify({'error': 'Parâmetro id é obrigatório'}), 400
+    
+    try:
+        estoque_id = int(estoque_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Parâmetro id deve ser um número inteiro'}), 400
+    
     data_inicio_str = request.args.get('data_inicio') or None
     data_fim_str = request.args.get('data_fim') or None
     agrupar_semana = request.args.get('agrupar_semana', 'false').lower() == 'true'
     agrupar_por_material = request.args.get('agrupar_por_material', 'false').lower() == 'true'
-    print(f'estoque_id: {estoque_id}')
-    print(f'data_inicio: {data_inicio_str}')
-    print(f'data_fim: {data_fim_str}')
-    print(f'agrupar_semana: {agrupar_semana}')
-    print(f'agrupar_por_material: {agrupar_por_material}')
+    
     data_inicio = None
     if data_inicio_str:
         try:
@@ -1190,7 +1194,6 @@ def api_estoque_historico_saldo():
         )
         # Usar saldo real (baseado em movimentações) em vez de estoque.quantidade
         quantidade_total = float(item_estoque.get_saldo_real())
-        print(f'quantidade_total: {quantidade_total}')
 
     datas = [item['data'] for item in historico_data]
     saldos = [item['saldo'] for item in historico_data]
