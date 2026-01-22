@@ -17,9 +17,115 @@ import zipfile
 import openpyxl
 from openpyxl import load_workbook
 import json
+import subprocess
+import platform
+import time
 
-from pylovepdf.tools.officepdf import OfficeToPdf
+# Tentar importar odfpy para suporte a ODS
+try:
+    from odf.opendocument import load, OpenDocumentSpreadsheet
+    from odf.table import Table, TableRow, TableCell
+    from odf.text import P
+    ODFPY_AVAILABLE = True
+except ImportError:
+    ODFPY_AVAILABLE = False
+    print('odfpy não está instalado. Para processar ODS diretamente, instale: pip install odfpy')
 
+
+
+# Funções auxiliares para gerenciar pasta temporária do projeto
+def _obter_pasta_temp_projeto():
+    """
+    Obtém ou cria a pasta temporária exclusiva do projeto.
+    Retorna o caminho da pasta temporária.
+    """
+    # Obter diretório base do projeto (onde está o arquivo atual)
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    temp_dir = os.path.join(base_dir, 'temp', 'databook_inspecao')
+    
+    # Criar pasta se não existir
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    return temp_dir
+
+def _deve_manter_arquivos_temp():
+    """
+    Verifica se deve manter os arquivos temporários ou deletá-los.
+    Por padrão, mantém os arquivos (True).
+    """
+    manter_temp = os.getenv('MANTER_ARQUIVOS_TEMP', 'true').lower()
+    return manter_temp in ('true', '1', 'yes', 'sim')
+
+def _criar_arquivo_temp_projeto(suffix='', prefix='temp_'):
+    """
+    Cria um arquivo temporário na pasta do projeto.
+    
+    Args:
+        suffix: Sufixo do arquivo (ex: '.xlsx', '.pdf')
+        prefix: Prefixo do arquivo (padrão: 'temp_')
+    
+    Returns:
+        Caminho do arquivo temporário criado
+    """
+    temp_dir = _obter_pasta_temp_projeto()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    filename = f'{prefix}{timestamp}{suffix}'
+    filepath = os.path.join(temp_dir, filename)
+    
+    # Criar arquivo vazio
+    open(filepath, 'a').close()
+    
+    return filepath
+
+def _criar_diretorio_temp_projeto(prefix='temp_dir_'):
+    """
+    Cria um diretório temporário na pasta do projeto.
+    
+    Args:
+        prefix: Prefixo do diretório (padrão: 'temp_dir_')
+    
+    Returns:
+        Caminho do diretório temporário criado
+    """
+    temp_dir = _obter_pasta_temp_projeto()
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    dirname = f'{prefix}{timestamp}'
+    dirpath = os.path.join(temp_dir, dirname)
+    
+    # Criar diretório
+    os.makedirs(dirpath, exist_ok=True)
+    
+    return dirpath
+
+def _limpar_arquivo_temp(filepath):
+    """
+    Remove um arquivo temporário se a configuração permitir.
+    
+    Args:
+        filepath: Caminho do arquivo a ser removido
+    """
+    if not _deve_manter_arquivos_temp():
+        try:
+            if os.path.isfile(filepath):
+                os.unlink(filepath)
+            elif os.path.isdir(filepath):
+                shutil.rmtree(filepath)
+        except Exception as e:
+            print(f'Erro ao limpar arquivo temporário {filepath}: {str(e)}')
+
+def _limpar_diretorio_temp(dirpath):
+    """
+    Remove um diretório temporário se a configuração permitir.
+    
+    Args:
+        dirpath: Caminho do diretório a ser removido
+    """
+    if not _deve_manter_arquivos_temp():
+        try:
+            if os.path.exists(dirpath) and os.path.isdir(dirpath):
+                shutil.rmtree(dirpath)
+        except Exception as e:
+            print(f'Erro ao limpar diretório temporário {dirpath}: {str(e)}')
 
 
 databook_inspecao_bp = Blueprint('databook_inspecao', __name__, url_prefix='/relatorios/databook/inspecao')
@@ -322,11 +428,626 @@ def buscar_peca_por_tanque_e_nome(tanque_id, nome_peca, tanque_id_filtro=None, g
     
     return peca_query.first()
 
+def _converter_excel_para_pdf(excel_path, pdf_path=None):
+    """
+    Converte arquivo Excel/ODS para PDF usando LibreOffice em modo headless.
+    Aceita tanto arquivos XLSX quanto ODS - gera PDF diretamente do ODS quando disponível.
+    
+    Args:
+        excel_path: Caminho do arquivo Excel (XLSX) ou ODS
+        pdf_path: Caminho de saída do PDF (opcional)
+    
+    Returns:
+        Caminho do arquivo PDF gerado ou None em caso de erro
+    """
+    return _converter_excel_para_pdf_libreoffice(excel_path, pdf_path)
+
+def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
+    """
+    Converte arquivo Excel/ODS para PDF usando LibreOffice em modo headless.
+    Funciona tanto no Windows quanto no Linux.
+    Aceita tanto arquivos XLSX quanto ODS - gera PDF diretamente do ODS quando disponível.
+    
+    Args:
+        excel_path: Caminho do arquivo Excel (XLSX) ou ODS
+        pdf_path: Caminho de saída do PDF (opcional, se None, usa mesmo nome do arquivo)
+    
+    Returns:
+        Caminho do arquivo PDF gerado ou None em caso de erro
+    """
+    try:
+        if not excel_path or not os.path.exists(excel_path):
+            print(f'[_converter_excel_para_pdf_libreoffice] Arquivo não encontrado: {excel_path}')
+            return None
+        
+        # Determinar caminho do PDF de saída
+        if pdf_path is None:
+            pdf_path = excel_path.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
+        
+        # Obter diretório de saída
+        output_dir = os.path.dirname(pdf_path)
+        if not output_dir:
+            output_dir = os.path.dirname(excel_path)
+        
+        # Criar diretório se não existir
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Detectar sistema operacional e comando do LibreOffice
+        sistema = platform.system().lower()
+        
+        if sistema == 'windows':
+            # Windows - tentar diferentes caminhos comuns do LibreOffice
+            possiveis_caminhos = [
+                r'C:\Program Files\LibreOffice\program\soffice.exe',
+                r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
+                r'C:\Program Files\LibreOffice 7\program\soffice.exe',
+                r'C:\Program Files (x86)\LibreOffice 7\program\soffice.exe',
+            ]
+            
+            # Verificar se existe variável de ambiente
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
+            if libreoffice_env:
+                possiveis_caminhos.insert(0, libreoffice_env)
+            
+            soffice_cmd = None
+            for caminho in possiveis_caminhos:
+                if os.path.exists(caminho):
+                    soffice_cmd = caminho
+                    break
+            
+            if not soffice_cmd:
+                print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no Windows')
+                print('[_converter_excel_para_pdf_libreoffice] Configure a variável LIBREOFFICE_PATH ou instale o LibreOffice')
+                return None
+        else:
+            # Linux/Unix - usar comando do sistema
+            soffice_cmd = 'soffice'
+            # Verificar se existe no PATH
+            try:
+                subprocess.run(['which', 'soffice'], check=True, capture_output=True)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # Tentar caminhos comuns no Linux
+                possiveis_caminhos = [
+                    '/usr/bin/soffice',
+                    '/usr/local/bin/soffice',
+                    '/opt/libreoffice*/program/soffice',
+                ]
+                for caminho in possiveis_caminhos:
+                    if os.path.exists(caminho):
+                        soffice_cmd = caminho
+                        break
+                else:
+                    print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no sistema')
+                    print('[_converter_excel_para_pdf_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
+                    return None
+        
+        # Comando para converter Excel/ODS para PDF
+        # --headless: modo sem interface gráfica
+        # Aceita tanto XLSX quanto ODS - gera PDF diretamente do formato original
+        # --convert-to pdf: converter para PDF
+        # --outdir: diretório de saída
+        cmd = [
+            soffice_cmd,
+            '--headless',
+            '--convert-to', 'pdf',
+            '--outdir', output_dir,
+            excel_path
+        ]
+        
+        print(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
+        
+        # Executar conversão
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120  # Timeout de 2 minutos
+        )
+        
+        if result.returncode != 0:
+            print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter: {result.stderr}')
+            return None
+        
+        # O LibreOffice gera o PDF com o mesmo nome do arquivo Excel
+        excel_basename = os.path.basename(excel_path)
+        pdf_basename = excel_basename.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
+        generated_pdf_path = os.path.join(output_dir, pdf_basename)
+        
+        # Aguardar um pouco para garantir que o arquivo foi criado
+        max_tentativas = 10
+        tentativa = 0
+        while tentativa < max_tentativas:
+            if os.path.exists(generated_pdf_path):
+                # Verificar se o arquivo não está sendo escrito (tamanho estável)
+                tamanho_anterior = os.path.getsize(generated_pdf_path)
+                time.sleep(0.5)
+                tamanho_atual = os.path.getsize(generated_pdf_path)
+                if tamanho_anterior == tamanho_atual:
+                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado com sucesso: {generated_pdf_path}')
+                    return generated_pdf_path
+            tentativa += 1
+            time.sleep(0.5)
+        
+        print(f'[_converter_excel_para_pdf_libreoffice] PDF não foi gerado após {max_tentativas} tentativas')
+        return None
+        
+    except subprocess.TimeoutExpired:
+        print('[_converter_excel_para_pdf_libreoffice] Timeout ao converter Excel para PDF')
+        return None
+    except Exception as e:
+        print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter Excel para PDF: {str(e)}')
+        import traceback
+        print(traceback.format_exc())
+        return None
+
+def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
+    """
+    Converte arquivo ODS para XLSX usando LibreOffice em modo headless.
+    Funciona tanto no Windows quanto no Linux.
+    
+    Args:
+        ods_path: Caminho do arquivo ODS
+        xlsx_path: Caminho de saída do XLSX (opcional, se None, usa mesmo nome do ODS)
+    
+    Returns:
+        Caminho do arquivo XLSX gerado ou None em caso de erro
+    """
+    try:
+        if not ods_path or not os.path.exists(ods_path):
+            print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS não encontrado: {ods_path}')
+            return None
+        
+        # Determinar caminho do XLSX de saída
+        if xlsx_path is None:
+            xlsx_path = ods_path.replace('.ods', '.xlsx')
+        
+        # Obter diretório de saída
+        output_dir = os.path.dirname(xlsx_path)
+        if not output_dir:
+            output_dir = os.path.dirname(ods_path)
+        
+        # Criar diretório se não existir
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Detectar sistema operacional e comando do LibreOffice
+        sistema = platform.system().lower()
+        
+        if sistema == 'windows':
+            possiveis_caminhos = [
+                r'C:\Program Files\LibreOffice\program\soffice.exe',
+                r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
+                r'C:\Program Files\LibreOffice 7\program\soffice.exe',
+                r'C:\Program Files (x86)\LibreOffice 7\program\soffice.exe',
+            ]
+            
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
+            if libreoffice_env:
+                possiveis_caminhos.insert(0, libreoffice_env)
+            
+            soffice_cmd = None
+            for caminho in possiveis_caminhos:
+                if os.path.exists(caminho):
+                    soffice_cmd = caminho
+                    break
+            
+            if not soffice_cmd:
+                print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no Windows')
+                return None
+        else:
+            soffice_cmd = 'soffice'
+            try:
+                subprocess.run(['which', 'soffice'], check=True, capture_output=True)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                possiveis_caminhos = [
+                    '/usr/bin/soffice',
+                    '/usr/local/bin/soffice',
+                ]
+                for caminho in possiveis_caminhos:
+                    if os.path.exists(caminho):
+                        soffice_cmd = caminho
+                        break
+                else:
+                    print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no sistema')
+                    return None
+        
+        cmd = [
+            soffice_cmd,
+            '--headless',
+            '--convert-to', 'xlsx',
+            '--outdir', output_dir,
+            ods_path
+        ]
+        
+        print(f'[_converter_ods_para_xlsx_libreoffice] Executando: {" ".join(cmd)}')
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter: {result.stderr}')
+            return None
+        
+        ods_basename = os.path.basename(ods_path)
+        xlsx_basename = ods_basename.replace('.ods', '.xlsx')
+        generated_xlsx_path = os.path.join(output_dir, xlsx_basename)
+        
+        max_tentativas = 10
+        tentativa = 0
+        while tentativa < max_tentativas:
+            if os.path.exists(generated_xlsx_path):
+                tamanho_anterior = os.path.getsize(generated_xlsx_path)
+                time.sleep(0.5)
+                tamanho_atual = os.path.getsize(generated_xlsx_path)
+                if tamanho_anterior == tamanho_atual:
+                    if generated_xlsx_path != xlsx_path:
+                        shutil.move(generated_xlsx_path, xlsx_path)
+                    print(f'[_converter_ods_para_xlsx_libreoffice] XLSX gerado com sucesso: {xlsx_path}')
+                    return xlsx_path
+            tentativa += 1
+            time.sleep(0.5)
+        
+        print(f'[_converter_ods_para_xlsx_libreoffice] XLSX não foi gerado após {max_tentativas} tentativas')
+        return None
+        
+    except subprocess.TimeoutExpired:
+        print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
+        return None
+    except Exception as e:
+        print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter ODS para XLSX: {str(e)}')
+        import traceback
+        print(traceback.format_exc())
+        return None
+
+def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, contrato, tanque_id, projeto_id, grupo_id):
+    """
+    Processa um arquivo ODS diretamente, substituindo placeholders pelos dados.
+    
+    Args:
+        ods_path: Caminho do arquivo ODS
+        concretagem_id: ID da concretagem
+        concretagem: Objeto concretagem
+        contrato: Objeto contrato
+        tanque_id: ID do tanque (opcional)
+        projeto_id: ID do projeto (opcional)
+        grupo_id: ID do grupo (opcional)
+    """
+    if not ODFPY_AVAILABLE:
+        raise ImportError('odfpy não está disponível. Instale com: pip install odfpy')
+    
+    try:
+        # Carregar o documento ODS
+        doc = load(ods_path)
+        
+        # Obter todas as tabelas (planilhas)
+        tables = doc.getElementsByType(Table)
+        
+        # Preparar dados para substituição
+        pecas = None
+        
+        # Buscar primeira peça válida para usar no processamento de alongamentos
+        peca_tanque_global = None
+        if concretagem.pecas:
+            pecas = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
+            if pecas and isinstance(pecas, list):
+                for peca in pecas:
+                    if isinstance(peca, dict) and peca.get('tanque') is not None and peca.get('placa'):
+                        peca_tanque_global = buscar_peca_por_tanque_e_nome(
+                            tanque_id=peca['tanque'],
+                            nome_peca=peca['placa'],
+                            tanque_id_filtro=tanque_id,
+                            grupo_id=grupo_id
+                        )
+                        if peca_tanque_global:
+                            break
+        
+        for table in tables:
+            # Iterar sobre todas as linhas
+            rows = table.getElementsByType(TableRow)
+            for row_idx, row in enumerate(rows):
+                if row_idx == 77:  # Pular linha 77 como no código original
+                    continue
+                
+                # Iterar sobre todas as células
+                cells = row.getElementsByType(TableCell)
+                for cell_idx, cell in enumerate(cells):
+                    if cell_idx == 42:  # Pular coluna 42 como no código original
+                        continue
+                    
+                    # Obter o texto da célula
+                    original_text = ''
+                    paragraphs = cell.getElementsByType(P)
+                    
+                    # Coletar texto de todos os parágrafos
+                    if paragraphs:
+                        for para in paragraphs:
+                            para_text = ''
+                            for node in para.childNodes:
+                                if hasattr(node, 'data'):
+                                    para_text += str(node.data)
+                                elif hasattr(node, 'nodeValue'):
+                                    para_text += str(node.nodeValue)
+                            if para_text:
+                                original_text += para_text
+                    
+                    # Se não encontrou texto em parágrafos, tentar obter diretamente
+                    if not original_text:
+                        for node in cell.childNodes:
+                            if hasattr(node, 'data'):
+                                original_text += str(node.data)
+                            elif hasattr(node, 'nodeValue'):
+                                original_text += str(node.nodeValue)
+                    
+                    # Processar apenas células com texto no formato de placeholder (1 a 5 caracteres)
+                    if original_text and len(original_text.strip()) > 0 and 1 < len(original_text) <= 5:
+                        new_value = original_text
+                        
+                        # Variáveis locais para esta célula
+                        series_local = ""
+                        peca_tanque_local = peca_tanque_global
+                        
+                        # Substituir placeholders básicos
+                        new_value = new_value.replace('{1}', str(concretagem_id))
+                        
+                        cliente_nome = 'N/A'
+                        if contrato and contrato.cliente_direto:
+                            cliente_nome = contrato.cliente_direto.nome
+                        new_value = new_value.replace('{2}', str(cliente_nome))
+                        new_value = new_value.replace('{3}', str(contrato.nome if contrato else 'N/A'))
+                        new_value = new_value.replace('{4}', str(concretagem.data_concretagem.strftime('%d/%m/%Y')))
+                        
+                        # Processar tanques
+                        if concretagem.pecas and pecas:
+                            tanques_ids_json = extrair_tanque_ids_do_json(concretagem.pecas)
+                            if tanques_ids_json:
+                                tanques = buscar_tanques_com_filtros(
+                                    tanque_ids=tanques_ids_json,
+                                    tanque_id=tanque_id,
+                                    contrato_id=projeto_id,
+                                    grupo_id=grupo_id
+                                )
+                                
+                                tanques_nomes = {tanque.id: tanque.nome for tanque in tanques}
+                                
+                                if tanque_id is None:
+                                    nomes_tanques = []
+                                    for tid in sorted([t for t in tanques_ids_json if t is not None]):
+                                        if tid in tanques_nomes:
+                                            nomes_tanques.append(tanques_nomes[tid])
+                                    if nomes_tanques:
+                                        new_value = new_value.replace('{5}', ', '.join(nomes_tanques))
+                                else:
+                                    if tanque_id in tanques_nomes:
+                                        new_value = new_value.replace('{5}', str(tanques_nomes[tanque_id]))
+                                
+                                if tanques:
+                                    new_value = new_value.replace('{6}', str(tanques[0].sistema if tanques[0].sistema else ''))
+                                else:
+                                    new_value = new_value.replace('{6}', '')
+                                
+                                new_value = new_value.replace('{7}', str(concretagem.pista if concretagem.pista else ''))
+                                
+                                # Processar formas
+                                formas = [1,2,3,4,5,6,7,8,9,10,11,12]
+                                for forma in formas:
+                                    count = 0
+                                    for peca in pecas:
+                                        if isinstance(peca, dict) and 'forma' in peca and peca['forma'] is not None:
+                                            try:
+                                                forma_peca = None
+                                                if isinstance(peca['forma'], str):
+                                                    try:
+                                                        forma_peca = int(peca['forma'])
+                                                    except (ValueError, TypeError):
+                                                        continue
+                                                elif isinstance(peca['forma'], int):
+                                                    forma_peca = peca['forma']
+                                                else:
+                                                    continue
+                                                
+                                                if forma_peca is not None and forma_peca == forma:
+                                                    if peca.get('tanque') is not None and peca.get('placa'):
+                                                        peca_tanque = buscar_peca_por_tanque_e_nome(
+                                                            tanque_id=peca['tanque'],
+                                                            nome_peca=peca['placa'],
+                                                            tanque_id_filtro=tanque_id,
+                                                            grupo_id=grupo_id
+                                                        )
+                                                        
+                                                        if peca_tanque:
+                                                            peca_tanque_local = peca_tanque
+                                                            qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
+                                                            if qualidade and 'series' in qualidade:
+                                                                for serie in qualidade['series']:
+                                                                    if str(serie) not in series_local:
+                                                                        series_local += str(serie) + ', '
+                                                            
+                                                            new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
+                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['placa']))
+                                                            new_value = new_value.replace(f'{{{31+forma}}}', str(peca_tanque.tipo if peca_tanque.tipo else ''))
+                                                            
+                                                            if peca_tanque.tipo == 'PF':
+                                                                tipo_painel = 'FECHO'
+                                                            elif peca_tanque.tipo in ['PN','P']:
+                                                                tipo_painel = 'NORMAL'
+                                                            else:
+                                                                tipo_painel = 'ESPECIAL'
+                                                            new_value = new_value.replace(f'{{{43+forma}}}', str(tipo_painel))
+                                                            count += 1
+                                            except (ValueError, TypeError):
+                                                continue
+                                    
+                                    if count == 0:
+                                        new_value = new_value.replace(f'{{{7+forma}}}', '')
+                                        new_value = new_value.replace(f'{{{19+forma}}}', '')
+                                        new_value = new_value.replace(f'{{{31+forma}}}', '')
+                                        new_value = new_value.replace(f'{{{43+forma}}}', '')
+                                
+                                # Séries
+                                if series_local:
+                                    series_str = ', '.join(str(serie) for serie in sorted(series_local.split(', ')) if serie)
+                                    new_value = new_value.replace('{120}', series_str)
+                                else:
+                                    new_value = new_value.replace('{120}', '')
+                        
+                        # Processar bobinas
+                        if concretagem.cordoalhas:
+                            cordoalhas = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
+                            if cordoalhas and isinstance(cordoalhas, dict) and 'bobinas' in cordoalhas and cordoalhas['bobinas']:
+                                bobinas = cordoalhas['bobinas']
+                                if len(bobinas) > 0 and bobinas[0]:
+                                    bobina1 = bobinas[0]
+                                    new_value = new_value.replace('{56}', str(bobina1.get('numero', '')))
+                                    new_value = new_value.replace('{57}', str(bobina1.get('data_fabricacao', '')))
+                                    new_value = new_value.replace('{60}', str(bobina1.get('certificado', '')))
+                                else:
+                                    new_value = new_value.replace('{56}', '')
+                                    new_value = new_value.replace('{57}', '')
+                                    new_value = new_value.replace('{60}', '')
+                                
+                                if len(bobinas) > 1 and bobinas[1]:
+                                    bobina2 = bobinas[1]
+                                    new_value = new_value.replace('{58}', str(bobina2.get('numero', '')))
+                                    new_value = new_value.replace('{59}', str(bobina2.get('data_fabricacao', '')))
+                                    new_value = new_value.replace('{61}', str(bobina2.get('certificado', '')))
+                                else:
+                                    new_value = new_value.replace('{58}', '')
+                                    new_value = new_value.replace('{59}', '')
+                                    new_value = new_value.replace('{61}', '')
+                            else:
+                                new_value = new_value.replace('{55}', '')
+                                new_value = new_value.replace('{57}', '')
+                                new_value = new_value.replace('{58}', '')
+                                new_value = new_value.replace('{59}', '')
+                                new_value = new_value.replace('{60}', '')
+                                new_value = new_value.replace('{61}', '')
+                        
+                        # Processar alongamentos
+                        if concretagem.cordoalhas:
+                            cordoalhas_data = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
+                            if cordoalhas_data and isinstance(cordoalhas_data, dict) and 'alongamentos' in cordoalhas_data:
+                                alongamentos = cordoalhas_data['alongamentos']
+                                total_alongamentos = len(alongamentos)
+                                
+                                if alongamentos and isinstance(alongamentos, dict):
+                                    alongamentos_soma = 0
+                                    alongamentos_maior = 0
+                                    alongamentos_menor = 0
+                                    modulo = 198.7
+                                    area = 99.7
+                                    
+                                    if peca_tanque_local and peca_tanque_local.tipo == 'PF':
+                                        comprimento = 15000
+                                        alongamento_maximo_teorico = 120
+                                        alongamento_minimo_teorico = 100
+                                    else:
+                                        comprimento = 65000
+                                        alongamento_maximo_teorico = 356
+                                        alongamento_minimo_teorico = 321
+                                    
+                                    alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
+                                    alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
+                                    
+                                    new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
+                                    new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
+                                    new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
+                                    new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
+                                    
+                                    alongamentos_fora_da_tolerancia = 0
+                                    for chave, valor in alongamentos.items():
+                                        alongamentos_soma += valor
+                                        if valor > alongamentos_maior:
+                                            alongamentos_maior = valor
+                                        if valor < alongamentos_menor or alongamentos_menor == 0:
+                                            alongamentos_menor = valor
+                                        
+                                        if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
+                                            new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(chave.replace('C-', '')))
+                                            alongamentos_fora_da_tolerancia += 1
+                                        
+                                        if chave and valor is not None:
+                                            try:
+                                                numero = int(chave.replace('C-', ''))
+                                                placeholder = 62 + numero - 1
+                                                new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
+                                            except (ValueError, TypeError):
+                                                continue
+                                    
+                                    if alongamentos_fora_da_tolerancia < 12:
+                                        for i in range(1, 12 - alongamentos_fora_da_tolerancia):
+                                            new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
+                                    
+                                    for i in range(total_alongamentos + 1, 26):
+                                        new_value = new_value.replace(f'{{{62+i}}}', '')
+                                    
+                                    if total_alongamentos > 16:
+                                        new_value = new_value.replace('{122}', 'C-17')
+                                        for i in range(17, total_alongamentos + 1):
+                                            chave = f'C-{i}'
+                                            placeholder = 79 + (i - 17)
+                                            if chave in alongamentos:
+                                                valor = alongamentos[chave]
+                                                new_value = new_value.replace(f'{{{placeholder+9}}}', chave)
+                                                new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
+                                            else:
+                                                new_value = new_value.replace(f'{{{placeholder+9}}}', '')
+                                        new_value = new_value.replace('{122}', '')
+                                        for i in range(1, 11):
+                                            if i > 1:
+                                                new_value = new_value.replace(f'{{{i+86}}}', '')
+                                            new_value = new_value.replace(f'{{{i+77}}}', '')
+                                    
+                                    # Somatório
+                                    new_value = new_value.replace('{97}', str(alongamentos_soma))
+                                    
+                                    # Alongamentos individuais maior e menor
+                                    if peca_tanque_local and peca_tanque_local.tipo == 'PF':
+                                        if 100 < alongamentos_soma < 120:
+                                            new_value = new_value.replace('{101}', 'X')
+                                            new_value = new_value.replace('{102}', '')
+                                        else:
+                                            new_value = new_value.replace('{101}', '')
+                                            new_value = new_value.replace('{102}', 'X')
+                                    elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
+                                        if 321 < alongamentos_soma < 356:
+                                            new_value = new_value.replace('{101}', 'X')
+                                            new_value = new_value.replace('{102}', '')
+                                        else:
+                                            new_value = new_value.replace('{101}', '')
+                                            new_value = new_value.replace('{102}', '')
+                        
+                        # Atualizar o texto da célula
+                        if new_value != original_text:
+                            # Limpar todos os parágrafos existentes
+                            paragraphs_to_remove = cell.getElementsByType(P)
+                            for para in paragraphs_to_remove:
+                                cell.removeChild(para)
+                            
+                            # Criar novo parágrafo com o texto atualizado
+                            new_para = P()
+                            new_para.addText(new_value)
+                            cell.addElement(new_para)
+        
+        # Salvar o documento modificado
+        doc.save(ods_path)
+        print(f'[_processar_ods_template_inspecao] ODS processado com sucesso: {ods_path}')
+        
+    except Exception as e:
+        print(f'[_processar_ods_template_inspecao] Erro ao processar ODS: {str(e)}')
+        import traceback
+        print(traceback.format_exc())
+        raise
+
 def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=None):
     """
     Função auxiliar que gera o Excel e retorna o caminho do arquivo temporário
     Retorna o caminho do arquivo temporário ou None em caso de erro
     """
+    temp_file_path = None
+    temp_ods_path = None
     try:
        
         
@@ -348,24 +1069,70 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
       
 
         
-        # Caminho do arquivo template - RELATORIO INSPECAO.xlsx
-        template_path = os.path.join(
+        # Caminho do arquivo template - tentar ODS primeiro, depois XLSX
+        templates_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'templates_excel', 'RELATORIO_INSPECAO.xlsx'
+            'templates_excel'
         )
         
-        if not os.path.exists(template_path):
-            print(f'Template path: {template_path}')
-            print(f'Template RELATORIO INSPECAO.xlsx não encontrado')
+        template_ods = os.path.join(templates_dir, 'RELATORIO_INSPECAO.ods')
+        template_xlsx = os.path.join(templates_dir, 'RELATORIO_INSPECAO.xlsx')
+        
+        template_path = None
+        usar_ods = False
+        temp_ods_path = None
+        
+        # Verificar qual template existe
+        if os.path.exists(template_ods):
+            template_path = template_ods
+            usar_ods = True
+            print(f'[_gerar_excel_temp] Usando template ODS')
+        elif os.path.exists(template_xlsx):
+            template_path = template_xlsx
+            print(f'[_gerar_excel_temp] Usando template XLSX')
+        else:
+            print(f'Template RELATORIO_INSPECAO não encontrado (nem .ods nem .xlsx)')
             return None
         
-        # Criar uma cópia temporária do arquivo para preservar imagens
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
-        temp_file.close()
-        shutil.copy2(template_path, temp_file.name)
+        # Se for ODS e odfpy estiver disponível, processar diretamente
+        if usar_ods and ODFPY_AVAILABLE:
+            # Criar cópia do ODS e processar diretamente
+            temp_file_path = _criar_arquivo_temp_projeto(suffix='.ods', prefix='excel_')
+            shutil.copy2(template_path, temp_file_path)
+            
+            # Processar ODS diretamente
+            _processar_ods_template_inspecao(
+                temp_file_path,
+                concretagem_id,
+                concretagem,
+                contrato,
+                tanque_id,
+                projeto_id,
+                grupo_id
+            )
+            
+            # Retornar o arquivo ODS processado
+            return temp_file_path
         
-        # Carregar o arquivo Excel base
-        wb = load_workbook(temp_file.name, data_only=False, keep_vba=False, read_only=False)
+        # Se for ODS mas odfpy não estiver disponível, converter para XLSX
+        elif usar_ods and not ODFPY_AVAILABLE:
+            print(f'[_gerar_excel_temp] odfpy não disponível, convertendo ODS para XLSX')
+            temp_file_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_')
+            temp_ods_path = _criar_arquivo_temp_projeto(suffix='.ods', prefix='template_')
+            shutil.copy2(template_path, temp_ods_path)
+            
+            # Converter ODS para XLSX usando LibreOffice
+            template_xlsx_convertido = _converter_ods_para_xlsx_libreoffice(temp_ods_path, temp_file_path)
+            if not template_xlsx_convertido:
+                print(f'[_gerar_excel_temp] Erro ao converter ODS para XLSX')
+                return None
+        else:
+            # Se for XLSX, apenas copiar
+            temp_file_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_')
+            shutil.copy2(template_path, temp_file_path)
+        
+        # Carregar o arquivo Excel base (XLSX)
+        wb = load_workbook(temp_file_path, data_only=False, keep_vba=False, read_only=False)
        
         # Processar apenas células com texto, preservando imagens e outros objetos
         for sheet in wb.worksheets:
@@ -684,7 +1451,7 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
         
         # Salvar o arquivo temporário
         try:
-            wb.save(temp_file.name)
+            wb.save(temp_file_path)
         except Exception as save_error:
             raise Exception(f'Erro ao salvar arquivo Excel: {str(save_error)}')
         finally:
@@ -694,22 +1461,29 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                 pass
         
         # Verificar se o arquivo foi salvo corretamente
-        if not os.path.exists(temp_file.name):
+        if not os.path.exists(temp_file_path):
             return None
         
-        file_size = os.path.getsize(temp_file.name)
+        file_size = os.path.getsize(temp_file_path)
         if file_size == 0:
             return None
         
-        return temp_file.name
+        return temp_file_path
     except Exception as e:
         try:
-            if 'temp_file' in locals() and os.path.exists(temp_file.name):
-                os.unlink(temp_file.name)
+            if 'temp_file_path' in locals() and temp_file_path and os.path.exists(temp_file_path):
+                _limpar_arquivo_temp(temp_file_path)
+            # Limpar arquivo ODS temporário se existir
+            if 'temp_ods_path' in locals() and temp_ods_path and os.path.exists(temp_ods_path):
+                _limpar_arquivo_temp(temp_ods_path)
         except:
             pass
         print(f'Erro ao gerar Excel: {str(e)}')
         return None
+    finally:
+        # Limpar arquivo ODS temporário após uso (se configurado)
+        if 'temp_ods_path' in locals() and temp_ods_path and os.path.exists(temp_ods_path):
+            _limpar_arquivo_temp(temp_ods_path)
 
 @databook_inspecao_bp.route('/exportar-excel')
 @login_required
@@ -748,12 +1522,9 @@ def exportar_excel():
                 download_name=filename
             )
         finally:
-            # Limpar arquivo temporário
-            if os.path.exists(excel_path):
-                try:
-                    os.unlink(excel_path)
-                except:
-                    pass
+            # Limpar arquivo temporário (se configurado)
+            if excel_path and os.path.exists(excel_path):
+                _limpar_arquivo_temp(excel_path)
         
     except Exception as e:
         return jsonify({'error': f'Erro ao exportar Excel: {str(e)}'}), 500
@@ -762,11 +1533,10 @@ def exportar_excel():
 @login_required
 def exportar_pdf():
     """
-    Exporta dados de uma concretagem específica para PDF convertendo do Excel gerado usando iLovePDF API
+    Exporta dados de uma concretagem específica para PDF convertendo do Excel/ODS gerado usando LibreOffice
     """
     excel_path = None
     pdf_temp_path = None
-    pdf_temp_dir = None
     
     try:
         concretagem_id = request.args.get('concretagem_id', type=int)
@@ -781,64 +1551,18 @@ def exportar_pdf():
         if not excel_path or not os.path.exists(excel_path):
             return jsonify({'error': f'Nenhuma concretagem encontrada para o ID {concretagem_id}'}), 404
         
-        # Obter credenciais da API do ambiente
-        ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
-        ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
+        # Converter Excel/ODS para PDF (usa LibreOffice por padrão, ou API como fallback)
+        # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
+        generated_pdf_path = _converter_excel_para_pdf(excel_path)
         
-        if not ilovepdf_public_key or not ilovepdf_secret_key:
+        if not generated_pdf_path or not os.path.exists(generated_pdf_path):
             return jsonify({
-                'error': 'Credenciais iLovePDF não configuradas. Configure as variáveis ILOVEPDF_PUBLIC_KEY e ILOVEPDF_SECRET_KEY.'
+                'error': 'Erro ao converter Excel/ODS para PDF. Verifique se o LibreOffice está instalado e configurado corretamente.'
             }), 500
-        
-        # Inicializar cliente iLovePDF
-        officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
-        
-        # Criar diretório temporário para salvar o PDF
-        pdf_temp_dir = tempfile.mkdtemp()
-        
-        # Criar arquivo PDF temporário
-        pdf_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf', dir=pdf_temp_dir)
-        pdf_temp_file.close()
-        pdf_temp_path = pdf_temp_file.name
-        
-        # Adicionar arquivo Excel
-        officepdf.add_file(excel_path)
-        
-        # Definir diretório de saída (deve ser um diretório, não um arquivo)
-        officepdf.set_output_folder(pdf_temp_dir)
-        
-        # Executar conversão
-        officepdf.execute()
-        
-        # Baixar PDF gerado
-        officepdf.download()
-        
-        # Limpar tarefa na API
-        officepdf.delete_current_task()
-        
-        # Encontrar o arquivo PDF gerado (pode ter nome diferente)
-        pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
-        if not pdf_files:
-            return jsonify({'error': 'PDF não foi gerado pela API iLovePDF'}), 500
-
-        # Se encontrou arquivo, usar o primeiro
-        generated_pdf_path = os.path.join(pdf_temp_dir, pdf_files[0])
-        if not os.path.exists(generated_pdf_path):
-            return jsonify({'error': 'Arquivo PDF gerado não encontrado'}), 500
-        
-        # Mover para o caminho esperado
-        if generated_pdf_path != pdf_temp_path:
-            if os.path.exists(pdf_temp_path):
-                os.unlink(pdf_temp_path)
-            shutil.move(generated_pdf_path, pdf_temp_path)
-        
-        # Verificar se o PDF foi gerado corretamente
-        if not os.path.exists(pdf_temp_path) or os.path.getsize(pdf_temp_path) == 0:
-            return jsonify({'error': 'PDF não foi gerado corretamente pela API iLovePDF'}), 500
         
         # Ler o PDF gerado para buffer de memória
         output = io.BytesIO()
-        with open(pdf_temp_path, 'rb') as f:
+        with open(generated_pdf_path, 'rb') as f:
             output.write(f.read())
         output.seek(0)
         
@@ -861,23 +1585,17 @@ def exportar_pdf():
             error_msg = 'Erro desconhecido ao processar exceção'
         return jsonify({'error': f'Erro ao exportar PDF: {error_msg}'}), 500
     finally:
-        # Limpar arquivos temporários
+        # Limpar arquivos temporários (se configurado)
         if excel_path and os.path.exists(excel_path):
-            try:
-                os.unlink(excel_path)
-            except:
-                pass
-        if pdf_temp_path and os.path.exists(pdf_temp_path):
-            try:
-                os.unlink(pdf_temp_path)
-            except:
-                pass
-        # Limpar diretório temporário se existir
-        if pdf_temp_dir and os.path.exists(pdf_temp_dir):
-            try:
-                shutil.rmtree(pdf_temp_dir)
-            except:
-                pass
+            _limpar_arquivo_temp(excel_path)
+        if 'generated_pdf_path' in locals() and generated_pdf_path and os.path.exists(generated_pdf_path):
+            # Se o PDF está em um diretório temporário do projeto, remover o diretório inteiro
+            pdf_dir = os.path.dirname(generated_pdf_path)
+            temp_dir_projeto = _obter_pasta_temp_projeto()
+            if pdf_dir and os.path.exists(pdf_dir) and temp_dir_projeto in pdf_dir:
+                _limpar_diretorio_temp(pdf_dir)
+            else:
+                _limpar_arquivo_temp(generated_pdf_path)
 
 @databook_inspecao_bp.route('/exportar-massa', methods=['POST'])
 @login_required
@@ -898,10 +1616,12 @@ def exportar_massa():
             return jsonify({'error': 'Nenhuma concretagem fornecida'}), 400
         
         # Criar diretório temporário para os arquivos
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = _criar_diretorio_temp_projeto(prefix='export_massa_')
         arquivos_gerados = []
+        excel_paths = []
         
         try:
+            # Primeiro, gerar todos os arquivos Excel
             for concretagem_id in concretagens_ids:
                 try:
                     if formato == 'excel':
@@ -913,132 +1633,108 @@ def exportar_massa():
                             destino = os.path.join(temp_dir, nome_arquivo)
                             shutil.copy2(excel_path, destino)
                             arquivos_gerados.append(destino)
-                            # Limpar arquivo temporário original
-                            try:
-                                os.unlink(excel_path)
-                            except:
-                                pass
+                            # Limpar arquivo temporário original (se configurado)
+                            _limpar_arquivo_temp(excel_path)
                     else:  # PDF
-                        # Gerar Excel primeiro
+                        # Gerar arquivo (Excel ou ODS) primeiro e armazenar caminho
+                        # Se ODS estiver disponível e processado diretamente, será usado para gerar PDF direto
                         excel_path = _gerar_excel_temp(concretagem_id, tanque_id, projeto_id, grupo_id)
                         if excel_path and os.path.exists(excel_path):
-                            # Converter para PDF
-                            pdf_path = _gerar_pdf_temp(excel_path, concretagem_id)
-                            if pdf_path and os.path.exists(pdf_path):
-                                nome_arquivo = f'relatorio_inspecao_{concretagem_id}.pdf'
-                                destino = os.path.join(temp_dir, nome_arquivo)
-                                shutil.copy2(pdf_path, destino)
-                                arquivos_gerados.append(destino)
-                                # Limpar arquivos temporários
-                                try:
-                                    os.unlink(excel_path)
-                                    if pdf_path != excel_path:
-                                        os.unlink(pdf_path)
-                                except:
-                                    pass
+                            excel_paths.append(excel_path)
+                            
                 except Exception as e:
                     print(f'Erro ao processar concretagem {concretagem_id}: {str(e)}')
                     continue
+            
+            # Se for PDF, converter todos os arquivos usando LibreOffice
+            if formato == 'pdf' and excel_paths:
+                # Converter arquivo por arquivo usando LibreOffice
+                # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
+                for i, excel_path in enumerate(excel_paths):
+                    try:
+                        concretagem_id = concretagens_ids[i] if i < len(concretagens_ids) else None
+                        # Converter para PDF (aceita tanto XLSX quanto ODS)
+                        pdf_path = _converter_excel_para_pdf_libreoffice(excel_path)
+                        if pdf_path and os.path.exists(pdf_path):
+                            nome_arquivo = f'relatorio_inspecao_{concretagem_id}.pdf'
+                            destino = os.path.join(temp_dir, nome_arquivo)
+                            shutil.copy2(pdf_path, destino)
+                            arquivos_gerados.append(destino)
+                            # Limpar PDF temporário (se configurado)
+                            pdf_dir = os.path.dirname(pdf_path)
+                            temp_dir_projeto = _obter_pasta_temp_projeto()
+                            if pdf_dir and temp_dir_projeto in pdf_dir:
+                                _limpar_diretorio_temp(pdf_dir)
+                            else:
+                                _limpar_arquivo_temp(pdf_path)
+                    except Exception as e:
+                        print(f'Erro ao converter Excel/ODS para PDF (LibreOffice) da concretagem {concretagens_ids[i] if i < len(concretagens_ids) else "desconhecida"}: {str(e)}')
+                        continue
             
             if not arquivos_gerados:
                 return jsonify({'error': 'Nenhum arquivo foi gerado com sucesso'}), 404
             
             # Criar arquivo ZIP
             zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            try:
+                # Verificar se todos os arquivos existem antes de criar o ZIP
+                arquivos_validos = []
                 for arquivo in arquivos_gerados:
-                    nome_arquivo = os.path.basename(arquivo)
-                    zip_file.write(arquivo, nome_arquivo)
-            
-            zip_buffer.seek(0)
-            
-            # Nome do arquivo ZIP
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'exportacao_massa_{formato}_{timestamp}.zip'
-            
-            return send_file(
-                zip_buffer,
-                mimetype='application/zip',
-                as_attachment=True,
-                download_name=filename
-            )
+                    if arquivo and os.path.exists(arquivo):
+                        arquivos_validos.append(arquivo)
+                    else:
+                        print(f'Aviso: Arquivo não encontrado ou inválido: {arquivo}')
+                
+                if not arquivos_validos:
+                    return jsonify({'error': 'Nenhum arquivo válido encontrado para criar o ZIP'}), 404
+                
+                print(f'Criando ZIP com {len(arquivos_validos)} arquivos válidos de {len(arquivos_gerados)} totais')
+                
+                with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                    for arquivo in arquivos_validos:
+                        try:
+                            nome_arquivo = os.path.basename(arquivo)
+                            zip_file.write(arquivo, nome_arquivo)
+                            print(f'Adicionado ao ZIP: {nome_arquivo}')
+                        except Exception as file_error:
+                            print(f'Erro ao adicionar arquivo {arquivo} ao ZIP: {str(file_error)}')
+                            continue
+                
+                zip_buffer.seek(0)
+                
+                # Limpar arquivos Excel/ODS temporários antes de retornar (já foram copiados para o ZIP)
+                for excel_path in excel_paths:
+                    if excel_path and os.path.exists(excel_path):
+                        _limpar_arquivo_temp(excel_path)
+                
+                # Nome do arquivo ZIP
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                filename = f'exportacao_massa_{formato}_{timestamp}.zip'
+                
+                print(f'Retornando arquivo ZIP com {len(arquivos_validos)} arquivos')
+                return send_file(
+                    zip_buffer,
+                    mimetype='application/zip',
+                    as_attachment=True,
+                    download_name=filename
+                )
+            except Exception as zip_error:
+                print(f'Erro ao criar ZIP: {str(zip_error)}')
+                import traceback
+                print(traceback.format_exc())
+                raise
             
         finally:
-            # Limpar diretório temporário
+            # Limpar diretório temporário principal (se configurado)
             try:
-                shutil.rmtree(temp_dir)
-            except:
-                pass
+                if temp_dir and os.path.exists(temp_dir):
+                    _limpar_diretorio_temp(temp_dir)
+                    print(f'Diretório temporário limpo: {temp_dir}')
+            except Exception as cleanup_error:
+                print(f'Erro ao limpar diretório temporário {temp_dir}: {str(cleanup_error)}')
+                import traceback
+                print(traceback.format_exc())
                 
     except Exception as e:
         return jsonify({'error': f'Erro ao exportar em massa: {str(e)}'}), 500
 
-def _gerar_pdf_temp(excel_path, concretagem_id):
-    """
-    Função auxiliar que converte Excel para PDF usando iLovePDF API
-    Retorna o caminho do arquivo PDF temporário ou None em caso de erro
-    """
-    pdf_temp_path = None
-    pdf_temp_dir = None
-    
-    try:
-        if not excel_path or not os.path.exists(excel_path):
-            return None
-        
-        # Obter credenciais da API do ambiente
-        ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
-        ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
-        
-        if not ilovepdf_public_key or not ilovepdf_secret_key:
-            print('Credenciais iLovePDF não configuradas')
-            return None
-        
-        # Inicializar cliente iLovePDF
-        officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
-        
-        # Criar diretório temporário para salvar o PDF
-        pdf_temp_dir = tempfile.mkdtemp()
-        
-        # Criar arquivo PDF temporário
-        pdf_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf', dir=pdf_temp_dir)
-        pdf_temp_file.close()
-        pdf_temp_path = pdf_temp_file.name
-        
-        # Adicionar arquivo Excel
-        officepdf.add_file(excel_path)
-        
-        # Definir diretório de saída
-        officepdf.set_output_folder(pdf_temp_dir)
-        
-        # Executar conversão
-        officepdf.execute()
-        
-        # Baixar PDF gerado
-        officepdf.download()
-        
-        # Limpar tarefa na API
-        officepdf.delete_current_task()
-        
-        # Encontrar o arquivo PDF gerado
-        pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
-        if not pdf_files:
-            return None
-        
-        # Usar o primeiro arquivo PDF encontrado
-        generated_pdf_path = os.path.join(pdf_temp_dir, pdf_files[0])
-        if os.path.exists(generated_pdf_path):
-            return generated_pdf_path
-        
-        return None
-        
-    except Exception as e:
-        print(f'Erro ao gerar PDF: {str(e)}')
-        return None
-    finally:
-        # Limpar diretório temporário se necessário
-        if pdf_temp_dir and os.path.exists(pdf_temp_dir):
-            try:
-                # Não remover ainda, o arquivo será usado
-                pass
-            except:
-                pass
