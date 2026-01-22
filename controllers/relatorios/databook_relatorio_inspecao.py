@@ -583,6 +583,8 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
         pdf_basename = excel_basename.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
         generated_pdf_path = os.path.join(output_dir, pdf_basename)
         
+        print(f'[_converter_excel_para_pdf_libreoffice] Caminho esperado do PDF: {generated_pdf_path}')
+        
         # Aguardar um pouco para garantir que o arquivo foi criado
         max_tentativas = 10
         tentativa = 0
@@ -592,13 +594,37 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
                 tamanho_anterior = os.path.getsize(generated_pdf_path)
                 time.sleep(0.5)
                 tamanho_atual = os.path.getsize(generated_pdf_path)
-                if tamanho_anterior == tamanho_atual:
-                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado com sucesso: {generated_pdf_path}')
+                if tamanho_anterior == tamanho_atual and tamanho_atual > 0:
+                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado com sucesso: {generated_pdf_path} (tamanho: {tamanho_atual} bytes)')
                     return generated_pdf_path
+                elif tamanho_anterior == tamanho_atual and tamanho_atual == 0:
+                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado mas está vazio: {generated_pdf_path}')
+                    # Continuar tentando por mais um pouco
+            else:
+                print(f'[_converter_excel_para_pdf_libreoffice] Tentativa {tentativa + 1}/{max_tentativas}: PDF ainda não existe')
             tentativa += 1
             time.sleep(0.5)
         
+        # Verificar se o arquivo existe mas está vazio
+        if os.path.exists(generated_pdf_path):
+            tamanho = os.path.getsize(generated_pdf_path)
+            if tamanho == 0:
+                print(f'[_converter_excel_para_pdf_libreoffice] PDF foi criado mas está vazio: {generated_pdf_path}')
+                return None
+        
+        # Listar arquivos no diretório de saída para debug
+        try:
+            arquivos_no_dir = os.listdir(output_dir)
+            print(f'[_converter_excel_para_pdf_libreoffice] Arquivos no diretório de saída: {arquivos_no_dir}')
+            # Verificar se há algum PDF no diretório
+            pdfs_no_dir = [f for f in arquivos_no_dir if f.endswith('.pdf')]
+            if pdfs_no_dir:
+                print(f'[_converter_excel_para_pdf_libreoffice] PDFs encontrados no diretório: {pdfs_no_dir}')
+        except Exception as e:
+            print(f'[_converter_excel_para_pdf_libreoffice] Erro ao listar diretório: {str(e)}')
+        
         print(f'[_converter_excel_para_pdf_libreoffice] PDF não foi gerado após {max_tentativas} tentativas')
+        print(f'[_converter_excel_para_pdf_libreoffice] Caminho esperado: {generated_pdf_path}')
         return None
         
     except subprocess.TimeoutExpired:
@@ -1617,14 +1643,47 @@ def exportar_pdf():
         if not excel_path or not os.path.exists(excel_path):
             return jsonify({'error': f'Nenhuma concretagem encontrada para o ID {concretagem_id}'}), 404
         
-        # Converter Excel/ODS para PDF (usa LibreOffice por padrão, ou API como fallback)
+        # Verificar se o arquivo é válido
+        if not os.path.isfile(excel_path):
+            return jsonify({'error': f'Arquivo gerado não é um arquivo válido: {excel_path}'}), 500
+        
+        # Verificar tamanho do arquivo
+        file_size = os.path.getsize(excel_path)
+        if file_size == 0:
+            return jsonify({'error': f'Arquivo gerado está vazio: {excel_path}'}), 500
+        
+        print(f'[exportar_pdf] Arquivo gerado: {excel_path}, tamanho: {file_size} bytes')
+        
+        # Converter Excel/ODS para PDF usando LibreOffice
         # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
         generated_pdf_path = _converter_excel_para_pdf(excel_path)
         
-        if not generated_pdf_path or not os.path.exists(generated_pdf_path):
+        if not generated_pdf_path:
+            # Verificar se o LibreOffice foi encontrado
+            sistema = platform.system().lower()
+            if sistema == 'linux' or sistema == 'linux2':
+                soffice_cmd = shutil.which('soffice')
+                if not soffice_cmd:
+                    return jsonify({
+                        'error': 'LibreOffice não encontrado no sistema. Instale com: sudo apt-get install libreoffice (Ubuntu/Debian) ou configure LIBREOFFICE_PATH'
+                    }), 500
             return jsonify({
-                'error': 'Erro ao converter Excel/ODS para PDF. Verifique se o LibreOffice está instalado e configurado corretamente.'
+                'error': 'Erro ao converter Excel/ODS para PDF. Verifique os logs do servidor para mais detalhes. Verifique se o LibreOffice está instalado e configurado corretamente.'
             }), 500
+        
+        if not os.path.exists(generated_pdf_path):
+            return jsonify({
+                'error': f'PDF não foi gerado no caminho esperado: {generated_pdf_path}. Verifique os logs do servidor para mais detalhes.'
+            }), 500
+        
+        # Verificar se o PDF foi gerado corretamente
+        pdf_size = os.path.getsize(generated_pdf_path)
+        if pdf_size == 0:
+            return jsonify({
+                'error': f'PDF gerado está vazio: {generated_pdf_path}'
+            }), 500
+        
+        print(f'[exportar_pdf] PDF gerado com sucesso: {generated_pdf_path}, tamanho: {pdf_size} bytes')
         
         # Ler o PDF gerado para buffer de memória
         output = io.BytesIO()
