@@ -505,34 +505,83 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
             soffice_cmd = None
             
             # Verificar variável de ambiente primeiro
-            libreoffice_env = os.getenv('LIBREOFFICE_PATH','/usr/bin/soffice')
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
             if libreoffice_env and os.path.exists(libreoffice_env):
                 soffice_cmd = libreoffice_env
                 logging.info(f'[_converter_excel_para_pdf_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
             else:
-                # Tentar encontrar usando shutil.which (mais confiável)
-                soffice_cmd = shutil.which('soffice')
-                if soffice_cmd:
-                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Encontrado no PATH: {soffice_cmd}')
-                else:
-                    # Tentar caminhos comuns no Linux
-                    possiveis_caminhos = [
-                        '/usr/bin/soffice',
-                        '/usr/local/bin/soffice',
-                        '/opt/libreoffice/program/soffice',
-                        '/opt/libreoffice7/program/soffice',
-                    ]
-                    for caminho in possiveis_caminhos:
-                        if os.path.exists(caminho):
-                            soffice_cmd = caminho
-                            print(f'[_converter_excel_para_pdf_libreoffice] Encontrado em caminho padrão: {soffice_cmd}')
-                            break
+                # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
+                # O wrapper /usr/bin/soffice pode ter problemas com PATH
+                possiveis_caminhos = [
+                    '/usr/lib/libreoffice/program/soffice',
+                    '/usr/lib64/libreoffice/program/soffice',
+                    '/usr/local/lib/libreoffice/program/soffice',
+                    '/opt/libreoffice/program/soffice',
+                    '/opt/libreoffice7/program/soffice',
+                    '/opt/libreoffice*/program/soffice',
+                ]
+                
+                for caminho in possiveis_caminhos:
+                    # Tratar wildcards
+                    if '*' in caminho:
+                        import glob
+                        matches = glob.glob(caminho)
+                        if matches:
+                            caminho = matches[0]
                     
-                    if not soffice_cmd:
-                        print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no sistema')
-                        print('[_converter_excel_para_pdf_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
-                        print('[_converter_excel_para_pdf_libreoffice] Ou configure a variável LIBREOFFICE_PATH com o caminho completo')
-                        return None
+                    if os.path.exists(caminho) and os.access(caminho, os.X_OK):
+                        # Verificar se é um executável real, não um script
+                        try:
+                            with open(caminho, 'rb') as f:
+                                # Verificar se começa com shebang (script) ou ELF (binário)
+                                header = f.read(4)
+                                if header.startswith(b'\x7fELF'):  # ELF binary
+                                    soffice_cmd = caminho
+                                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Encontrado executável real: {soffice_cmd}')
+                                    break
+                        except:
+                            pass
+                
+                # Se não encontrou o executável real, tentar usar o wrapper mas com PATH completo
+                if not soffice_cmd:
+                    # Tentar encontrar usando shutil.which
+                    soffice_cmd = shutil.which('soffice')
+                    if soffice_cmd:
+                        logging.info(f'[_converter_excel_para_pdf_libreoffice] Encontrado wrapper no PATH: {soffice_cmd}')
+                        # Tentar encontrar o executável real através do wrapper
+                        try:
+                            # Ler o script wrapper para encontrar o caminho real
+                            with open(soffice_cmd, 'r') as f:
+                                script_content = f.read()
+                                # Procurar por padrões comuns no script
+                                import re
+                                # Procurar por caminhos como /usr/lib/libreoffice/program/soffice
+                                matches = re.findall(r'(/usr/lib[^/]*/libreoffice[^/]*/program/soffice)', script_content)
+                                if matches:
+                                    real_path = matches[0]
+                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
+                                        soffice_cmd = real_path
+                                        logging.info(f'[_converter_excel_para_pdf_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
+                        except Exception as e:
+                            logging.warning(f'[_converter_excel_para_pdf_libreoffice] Não foi possível encontrar executável real: {str(e)}')
+                    
+                    # Se ainda não encontrou, tentar caminhos padrão do wrapper
+                    if not soffice_cmd or not os.path.exists(soffice_cmd):
+                        possiveis_wrappers = [
+                            '/usr/bin/soffice',
+                            '/usr/local/bin/soffice',
+                        ]
+                        for caminho in possiveis_wrappers:
+                            if os.path.exists(caminho):
+                                soffice_cmd = caminho
+                                logging.info(f'[_converter_excel_para_pdf_libreoffice] Usando wrapper: {soffice_cmd}')
+                                break
+                
+                if not soffice_cmd:
+                    logging.error('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no sistema')
+                    logging.error('[_converter_excel_para_pdf_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
+                    logging.error('[_converter_excel_para_pdf_libreoffice] Ou configure a variável LIBREOFFICE_PATH com o caminho completo do executável')
+                    return None
         
         # Comando para converter Excel/ODS para PDF
         # --headless: modo sem interface gráfica
@@ -552,13 +601,25 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
         logging.info(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
         
         try:
-            # Executar conversão
+            # Configurar PATH mínimo necessário para o LibreOffice funcionar
+            # O wrapper script precisa de comandos básicos do sistema
+            env = os.environ.copy()
+            # Garantir que comandos básicos estejam no PATH
+            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin']
+            current_path = env.get('PATH', '')
+            # Adicionar caminhos básicos se não estiverem presentes
+            for path in basic_paths:
+                if path not in current_path:
+                    env['PATH'] = f"{path}:{env.get('PATH', '')}"
+            
+            # Executar conversão com PATH configurado
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=120,  # Timeout de 2 minutos
-                check=False
+                check=False,
+                env=env
             )
             
             if result.returncode != 0:
@@ -701,29 +762,63 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 soffice_cmd = libreoffice_env
                 print(f'[_converter_ods_para_xlsx_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
             else:
-                # Tentar encontrar usando shutil.which (mais confiável que 'which')
-                soffice_cmd = shutil.which('soffice')
-                if soffice_cmd:
-                    print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado no PATH: {soffice_cmd}')
-                else:
-                    # Tentar caminhos comuns no Linux
-                    possiveis_caminhos = [
-                        '/usr/bin/soffice',
-                        '/usr/local/bin/soffice',
-                        '/opt/libreoffice/program/soffice',
-                        '/opt/libreoffice7/program/soffice',
-                    ]
-                    for caminho in possiveis_caminhos:
-                        if os.path.exists(caminho):
-                            soffice_cmd = caminho
-                            print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado em caminho padrão: {soffice_cmd}')
-                            break
+                # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
+                possiveis_caminhos = [
+                    '/usr/lib/libreoffice/program/soffice',
+                    '/usr/lib64/libreoffice/program/soffice',
+                    '/usr/local/lib/libreoffice/program/soffice',
+                    '/opt/libreoffice/program/soffice',
+                    '/opt/libreoffice7/program/soffice',
+                ]
+                
+                for caminho in possiveis_caminhos:
+                    if os.path.exists(caminho) and os.access(caminho, os.X_OK):
+                        # Verificar se é um executável real (ELF binary)
+                        try:
+                            with open(caminho, 'rb') as f:
+                                header = f.read(4)
+                                if header.startswith(b'\x7fELF'):  # ELF binary
+                                    soffice_cmd = caminho
+                                    print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado executável real: {soffice_cmd}')
+                                    break
+                        except:
+                            pass
+                
+                # Se não encontrou o executável real, tentar usar o wrapper mas com PATH completo
+                if not soffice_cmd:
+                    soffice_cmd = shutil.which('soffice')
+                    if soffice_cmd:
+                        print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado wrapper no PATH: {soffice_cmd}')
+                        # Tentar encontrar o executável real através do wrapper
+                        try:
+                            with open(soffice_cmd, 'r') as f:
+                                script_content = f.read()
+                                import re
+                                matches = re.findall(r'(/usr/lib[^/]*/libreoffice[^/]*/program/soffice)', script_content)
+                                if matches:
+                                    real_path = matches[0]
+                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
+                                        soffice_cmd = real_path
+                                        print(f'[_converter_ods_para_xlsx_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
+                        except Exception as e:
+                            print(f'[_converter_ods_para_xlsx_libreoffice] Não foi possível encontrar executável real: {str(e)}')
                     
                     if not soffice_cmd:
-                        print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no sistema')
-                        print('[_converter_ods_para_xlsx_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
-                        print('[_converter_ods_para_xlsx_libreoffice] Ou configure a variável LIBREOFFICE_PATH com o caminho completo')
-                        return None
+                        possiveis_wrappers = [
+                            '/usr/bin/soffice',
+                            '/usr/local/bin/soffice',
+                        ]
+                        for caminho in possiveis_wrappers:
+                            if os.path.exists(caminho):
+                                soffice_cmd = caminho
+                                print(f'[_converter_ods_para_xlsx_libreoffice] Usando wrapper: {soffice_cmd}')
+                                break
+                
+                if not soffice_cmd:
+                    print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no sistema')
+                    print('[_converter_ods_para_xlsx_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
+                    print('[_converter_ods_para_xlsx_libreoffice] Ou configure a variável LIBREOFFICE_PATH com o caminho completo do executável')
+                    return None
         
         cmd = [
             soffice_cmd,
@@ -738,12 +833,21 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         print(f'[_converter_ods_para_xlsx_libreoffice] Diretório de saída: {output_dir}')
         
         try:
+            # Configurar PATH mínimo necessário para o LibreOffice funcionar
+            env = os.environ.copy()
+            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin']
+            current_path = env.get('PATH', '')
+            for path in basic_paths:
+                if path not in current_path:
+                    env['PATH'] = f"{path}:{env.get('PATH', '')}"
+            
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=60,
-                check=False
+                check=False,
+                env=env
             )
             
             if result.returncode != 0:
