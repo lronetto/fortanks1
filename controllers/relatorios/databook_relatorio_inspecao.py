@@ -547,9 +547,9 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
             excel_path
         ]
         
-        print(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
-        print(f'[_converter_excel_para_pdf_libreoffice] Arquivo de entrada: {excel_path}')
-        print(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
+        logging.info(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
+        logging.info(f'[_converter_excel_para_pdf_libreoffice] Arquivo de entrada: {excel_path}')
+        logging.info(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
         
         try:
             # Executar conversão
@@ -562,12 +562,12 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
             )
             
             if result.returncode != 0:
-                print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter (código {result.returncode})')
-                print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
-                print(f'[_converter_excel_para_pdf_libreoffice] stderr: {result.stderr}')
+                logging.error(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter (código {result.returncode})')
+                logging.error(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
+                logging.error(f'[_converter_excel_para_pdf_libreoffice] stderr: {result.stderr}')
                 return None
             else:
-                print(f'[_converter_excel_para_pdf_libreoffice] Comando executado com sucesso')
+                logging.info(f'[_converter_excel_para_pdf_libreoffice] Comando executado com sucesso')
                 if result.stdout:
                     print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
         except subprocess.TimeoutExpired:
