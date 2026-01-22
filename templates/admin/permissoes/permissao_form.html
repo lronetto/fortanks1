@@ -1,0 +1,201 @@
+{% extends 'common/base.html' %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">
+        <i class="fas fa-key"></i> {{ titulo }}
+    </h1>
+    <p class="mb-4">Configure as permissões de acesso ao módulo.</p>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Dados da Permissão</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="" id="formPermissao">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="modulo_id" class="form-label">Módulo <span class="text-danger">*</span></label>
+                        <select class="form-control" id="modulo_id" name="modulo_id" required>
+                            <option value="">Selecione um módulo</option>
+                            {% for modulo in modulos %}
+                                <option value="{{ modulo.id }}" 
+                                        {% if permissao and permissao.modulo_id == modulo.id %}selected{% endif %}>
+                                    {{ modulo.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label for="tipo_permissao" class="form-label">Tipo de Permissão <span class="text-danger">*</span></label>
+                        <select class="form-control" id="tipo_permissao" name="tipo_permissao" required>
+                            <option value="">Selecione o tipo</option>
+                            <option value="usuario" {% if permissao and permissao.tipo_permissao == 'usuario' %}selected{% endif %}>Usuário Específico</option>
+                            <option value="departamento" {% if permissao and permissao.tipo_permissao == 'departamento' %}selected{% endif %}>Departamento</option>
+                            <option value="cargo" {% if permissao and permissao.tipo_permissao == 'cargo' %}selected{% endif %}>Cargo</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Campo Usuário (mostrar apenas se tipo = usuario) -->
+                <div class="row" id="campo_usuario" style="display: none;">
+                    <div class="col-md-12 mb-3">
+                        <label for="usuario_id" class="form-label">Usuário <span class="text-danger">*</span></label>
+                        <select class="form-control" id="usuario_id" name="usuario_id">
+                            <option value="">Selecione um usuário</option>
+                            {% for usuario in usuarios %}
+                                <option value="{{ usuario.id }}" 
+                                        {% if permissao and permissao.usuario_id == usuario.id %}selected{% endif %}>
+                                    {{ usuario.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Campo Departamento (mostrar apenas se tipo = departamento) -->
+                <div class="row" id="campo_departamento" style="display: none;">
+                    <div class="col-md-12 mb-3">
+                        <label for="departamento_id" class="form-label">Departamento <span class="text-danger">*</span></label>
+                        <select class="form-control" id="departamento_id" name="departamento_id">
+                            <option value="">Selecione um departamento</option>
+                            {% for departamento in departamentos %}
+                                <option value="{{ departamento.id }}" 
+                                        {% if permissao and permissao.departamento_id == departamento.id %}selected{% endif %}>
+                                    {{ departamento.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Campo Cargo (mostrar apenas se tipo = cargo) -->
+                <div class="row" id="campo_cargo" style="display: none;">
+                    <div class="col-md-12 mb-3">
+                        <label for="cargo_id" class="form-label">Cargo <span class="text-danger">*</span></label>
+                        <select class="form-control" id="cargo_id" name="cargo_id">
+                            <option value="">Selecione um cargo</option>
+                            {% for cargo in cargos %}
+                                <option value="{{ cargo.id }}" 
+                                        {% if permissao and permissao.cargo_id == cargo.id %}selected{% endif %}>
+                                    {{ cargo.nome }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <h5 class="mb-3">Permissões Específicas</h5>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="pode_visualizar" name="pode_visualizar" 
+                                   {% if not permissao or permissao.pode_visualizar %}checked{% endif %}>
+                            <label class="form-check-label" for="pode_visualizar">
+                                <strong>Pode Visualizar</strong>
+                                <small class="text-muted d-block">Permite visualizar o conteúdo do módulo</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="pode_criar" name="pode_criar" 
+                                   {% if permissao and permissao.pode_criar %}checked{% endif %}>
+                            <label class="form-check-label" for="pode_criar">
+                                <strong>Pode Criar</strong>
+                                <small class="text-muted d-block">Permite criar novos registros no módulo</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="pode_editar" name="pode_editar" 
+                                   {% if permissao and permissao.pode_editar %}checked{% endif %}>
+                            <label class="form-check-label" for="pode_editar">
+                                <strong>Pode Editar</strong>
+                                <small class="text-muted d-block">Permite editar registros existentes</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="pode_excluir" name="pode_excluir" 
+                                   {% if permissao and permissao.pode_excluir %}checked{% endif %}>
+                            <label class="form-check-label" for="pode_excluir">
+                                <strong>Pode Excluir</strong>
+                                <small class="text-muted d-block">Permite excluir registros</small>
+                            </label>
+                        </div>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="pode_exportar" name="pode_exportar" 
+                                   {% if permissao and permissao.pode_exportar %}checked{% endif %}>
+                            <label class="form-check-label" for="pode_exportar">
+                                <strong>Pode Exportar</strong>
+                                <small class="text-muted d-block">Permite exportar dados do módulo</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <a href="{{ url_for('admin.permissoes_listar') }}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancelar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoPermissao = document.getElementById('tipo_permissao');
+    const campoUsuario = document.getElementById('campo_usuario');
+    const campoDepartamento = document.getElementById('campo_departamento');
+    const campoCargo = document.getElementById('campo_cargo');
+    
+    function atualizarCampos() {
+        const tipo = tipoPermissao.value;
+        
+        // Esconder todos os campos
+        campoUsuario.style.display = 'none';
+        campoDepartamento.style.display = 'none';
+        campoCargo.style.display = 'none';
+        
+        // Remover required de todos
+        document.getElementById('usuario_id').removeAttribute('required');
+        document.getElementById('departamento_id').removeAttribute('required');
+        document.getElementById('cargo_id').removeAttribute('required');
+        
+        // Mostrar apenas o campo relevante e adicionar required
+        if (tipo === 'usuario') {
+            campoUsuario.style.display = 'block';
+            document.getElementById('usuario_id').setAttribute('required', 'required');
+        } else if (tipo === 'departamento') {
+            campoDepartamento.style.display = 'block';
+            document.getElementById('departamento_id').setAttribute('required', 'required');
+        } else if (tipo === 'cargo') {
+            campoCargo.style.display = 'block';
+            document.getElementById('cargo_id').setAttribute('required', 'required');
+        }
+    }
+    
+    // Atualizar ao carregar a página
+    atualizarCampos();
+    
+    // Atualizar ao mudar o tipo
+    tipoPermissao.addEventListener('change', atualizarCampos);
+});
+</script>
+{% endblock %}

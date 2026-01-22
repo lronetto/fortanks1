@@ -1,0 +1,381 @@
+<!-- Modal de Permissão (Novo/Editar) -->
+<div class="modal fade" id="modalPermissao" tabindex="-1" aria-labelledby="modalPermissaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalPermissaoLabel">
+                    <i class="fas fa-key"></i> <span id="modalPermissaoTitulo">Nova Permissão</span>
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" id="form-permissao" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="permissao_id" name="permissao_id" value="">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="modulo_id" class="form-label">Módulo <span class="text-danger">*</span></label>
+                            <select class="form-control" id="modulo_id" name="modulo_id" required>
+                                <option value="">Selecione um módulo</option>
+                                {% for modulo in modulos %}
+                                    <option value="{{ modulo.id }}">{{ modulo.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="tipo_permissao" class="form-label">Tipo de Permissão <span class="text-danger">*</span></label>
+                            <select class="form-control" id="tipo_permissao" name="tipo_permissao" required>
+                                <option value="">Selecione o tipo</option>
+                                <option value="usuario">Usuário Específico</option>
+                                <option value="departamento">Departamento</option>
+                                <option value="cargo">Cargo</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Campo Usuário (mostrar apenas se tipo = usuario) -->
+                <div class="row" id="campo_usuario" style="display: none;">
+                    <div class="col-md-12 mb-3">
+                        <label for="usuario_id" class="form-label">Usuário(s) <span class="text-danger">*</span></label>
+                        <select class="form-control" id="usuario_id" name="usuario_id" multiple size="6">
+                            {% for usuario in usuarios %}
+                                <option value="{{ usuario.id }}">{{ usuario.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Mantenha a tecla <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd> no Mac) pressionada para selecionar múltiplos usuários
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Campo Departamento (mostrar apenas se tipo = departamento) -->
+                <div class="row" id="campo_departamento" style="display: none;">
+                    <div class="col-md-12 mb-3">
+                        <label for="departamento_id" class="form-label">Departamento(s) <span class="text-danger">*</span></label>
+                        <select class="form-control" id="departamento_id" name="departamento_id" multiple size="6">
+                            {% for departamento in departamentos %}
+                                <option value="{{ departamento.id }}">{{ departamento.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Mantenha a tecla <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd> no Mac) pressionada para selecionar múltiplos departamentos
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Campo Cargo (mostrar apenas se tipo = cargo) -->
+                <div class="row" id="campo_cargo" style="display: none;">
+                    <div class="col-md-12 mb-3">
+                        <label for="cargo_id" class="form-label">Cargo(s) <span class="text-danger">*</span></label>
+                        <select class="form-control" id="cargo_id" name="cargo_id" multiple size="6">
+                            {% for cargo in cargos %}
+                                <option value="{{ cargo.id }}">{{ cargo.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Mantenha a tecla <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd> no Mac) pressionada para selecionar múltiplos cargos
+                        </small>
+                    </div>
+                </div>
+
+                    <hr class="my-4">
+
+                    <h5 class="mb-3">Permissões Específicas</h5>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="pode_visualizar" name="pode_visualizar" checked>
+                                <label class="form-check-label" for="pode_visualizar">
+                                    <strong>Pode Visualizar</strong>
+                                    <small class="text-muted d-block">Permite visualizar o conteúdo do módulo</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="pode_criar" name="pode_criar">
+                                <label class="form-check-label" for="pode_criar">
+                                    <strong>Pode Criar</strong>
+                                    <small class="text-muted d-block">Permite criar novos registros no módulo</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="pode_editar" name="pode_editar">
+                                <label class="form-check-label" for="pode_editar">
+                                    <strong>Pode Editar</strong>
+                                    <small class="text-muted d-block">Permite editar registros existentes</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="pode_excluir" name="pode_excluir">
+                                <label class="form-check-label" for="pode_excluir">
+                                    <strong>Pode Excluir</strong>
+                                    <small class="text-muted d-block">Permite excluir registros</small>
+                                </label>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="pode_exportar" name="pode_exportar">
+                                <label class="form-check-label" for="pode_exportar">
+                                    <strong>Pode Exportar</strong>
+                                    <small class="text-muted d-block">Permite exportar dados do módulo</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = new bootstrap.Modal(document.getElementById('modalPermissao'));
+    const form = document.getElementById('form-permissao');
+    const modalTitulo = document.getElementById('modalPermissaoTitulo');
+    const tipoPermissao = document.getElementById('tipo_permissao');
+    const campoUsuario = document.getElementById('campo_usuario');
+    const campoDepartamento = document.getElementById('campo_departamento');
+    const campoCargo = document.getElementById('campo_cargo');
+    
+    // Função para atualizar campos baseado no tipo de permissão
+    function atualizarCampos() {
+        const tipo = tipoPermissao.value;
+        
+        // Esconder todos os campos
+        campoUsuario.style.display = 'none';
+        campoDepartamento.style.display = 'none';
+        campoCargo.style.display = 'none';
+        
+        // Remover required de todos
+        document.getElementById('usuario_id').removeAttribute('required');
+        document.getElementById('departamento_id').removeAttribute('required');
+        document.getElementById('cargo_id').removeAttribute('required');
+        
+        // Limpar seleções múltiplas
+        Array.from(document.getElementById('usuario_id').options).forEach(option => option.selected = false);
+        Array.from(document.getElementById('departamento_id').options).forEach(option => option.selected = false);
+        Array.from(document.getElementById('cargo_id').options).forEach(option => option.selected = false);
+        
+        // Mostrar apenas o campo relevante
+        if (tipo === 'usuario') {
+            campoUsuario.style.display = 'block';
+        } else if (tipo === 'departamento') {
+            campoDepartamento.style.display = 'block';
+        } else if (tipo === 'cargo') {
+            campoCargo.style.display = 'block';
+        }
+    }
+    
+    // Evento para mudança de tipo de permissão
+    tipoPermissao.addEventListener('change', atualizarCampos);
+    
+    // Função para abrir modal de nova permissão
+    function abrirModalNovo() {
+        modalTitulo.textContent = 'Nova Permissão';
+        form.reset();
+        form.action = '{{ url_for("admin.permissoes_nova") }}';
+        document.getElementById('permissao_id').value = '';
+        document.getElementById('pode_visualizar').checked = true;
+        atualizarCampos();
+        modal.show();
+    }
+    
+    // Função para abrir modal de edição
+    function abrirModalEditar(permissao) {
+        modalTitulo.textContent = 'Editar Permissão';
+        document.getElementById('permissao_id').value = permissao.id || '';
+        document.getElementById('modulo_id').value = permissao.modulo_id || '';
+        document.getElementById('tipo_permissao').value = permissao.tipo_permissao || '';
+        
+        // Preencher campos específicos baseado no tipo (para edição, apenas um item)
+        if (permissao.tipo_permissao === 'usuario' && permissao.usuario_id) {
+            const selectUsuario = document.getElementById('usuario_id');
+            Array.from(selectUsuario.options).forEach(option => {
+                if (option.value == permissao.usuario_id) {
+                    option.selected = true;
+                }
+            });
+        } else if (permissao.tipo_permissao === 'departamento' && permissao.departamento_id) {
+            const selectDepartamento = document.getElementById('departamento_id');
+            Array.from(selectDepartamento.options).forEach(option => {
+                if (option.value == permissao.departamento_id) {
+                    option.selected = true;
+                }
+            });
+        } else if (permissao.tipo_permissao === 'cargo' && permissao.cargo_id) {
+            const selectCargo = document.getElementById('cargo_id');
+            Array.from(selectCargo.options).forEach(option => {
+                if (option.value == permissao.cargo_id) {
+                    option.selected = true;
+                }
+            });
+        }
+        
+        // Preencher checkboxes
+        document.getElementById('pode_visualizar').checked = permissao.pode_visualizar || false;
+        document.getElementById('pode_criar').checked = permissao.pode_criar || false;
+        document.getElementById('pode_editar').checked = permissao.pode_editar || false;
+        document.getElementById('pode_excluir').checked = permissao.pode_excluir || false;
+        document.getElementById('pode_exportar').checked = permissao.pode_exportar || false;
+        
+        form.action = `/admin/permissoes/permissoes/${permissao.id}/editar`;
+        atualizarCampos();
+        modal.show();
+    }
+    
+    // Evento para botão de nova permissão
+    const btnNovaPermissao = document.querySelector('[data-bs-target="#modalPermissao"][data-action="novo"]');
+    if (btnNovaPermissao) {
+        btnNovaPermissao.addEventListener('click', function(e) {
+            e.preventDefault();
+            abrirModalNovo();
+        });
+    }
+    
+    // Eventos para botões de editar
+    document.querySelectorAll('.btn-editar-permissao').forEach(button => {
+        button.addEventListener('click', function() {
+            const permissao = {
+                id: this.dataset.id,
+                modulo_id: this.dataset.moduloId || '',
+                tipo_permissao: this.dataset.tipoPermissao || '',
+                usuario_id: this.dataset.usuarioId || '',
+                departamento_id: this.dataset.departamentoId || '',
+                cargo_id: this.dataset.cargoId || '',
+                pode_visualizar: this.dataset.podeVisualizar === 'true',
+                pode_criar: this.dataset.podeCriar === 'true',
+                pode_editar: this.dataset.podeEditar === 'true',
+                pode_excluir: this.dataset.podeExcluir === 'true',
+                pode_exportar: this.dataset.podeExportar === 'true'
+            };
+            abrirModalEditar(permissao);
+        });
+    });
+    
+    // Validação e submit do formulário
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const moduloId = document.getElementById('modulo_id').value;
+        const tipo = document.getElementById('tipo_permissao').value;
+        
+        if (!moduloId) {
+            alert('O módulo é obrigatório!');
+            document.getElementById('modulo_id').focus();
+            return false;
+        }
+        
+        if (!tipo) {
+            alert('O tipo de permissão é obrigatório!');
+            document.getElementById('tipo_permissao').focus();
+            return false;
+        }
+        
+        // Validar campo específico baseado no tipo (verificar se há pelo menos uma seleção)
+        if (tipo === 'usuario') {
+            const usuariosSelecionados = Array.from(document.getElementById('usuario_id').selectedOptions);
+            if (usuariosSelecionados.length === 0) {
+                alert('Selecione pelo menos um usuário!');
+                document.getElementById('usuario_id').focus();
+                return false;
+            }
+        } else if (tipo === 'departamento') {
+            const departamentosSelecionados = Array.from(document.getElementById('departamento_id').selectedOptions);
+            if (departamentosSelecionados.length === 0) {
+                alert('Selecione pelo menos um departamento!');
+                document.getElementById('departamento_id').focus();
+                return false;
+            }
+        } else if (tipo === 'cargo') {
+            const cargosSelecionados = Array.from(document.getElementById('cargo_id').selectedOptions);
+            if (cargosSelecionados.length === 0) {
+                alert('Selecione pelo menos um cargo!');
+                document.getElementById('cargo_id').focus();
+                return false;
+            }
+        }
+        
+        // Criar FormData
+        const formData = new FormData(form);
+        
+        // Fazer requisição AJAX
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                return response.json();
+            }
+            return response.text().then(text => {
+                // Se retornar HTML (redirect), considerar sucesso
+                if (response.ok) {
+                    return { success: true, message: 'Operação realizada com sucesso!' };
+                }
+                throw new Error('Erro na resposta do servidor');
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                modal.hide();
+                // Mostrar mensagem de sucesso
+                const mensagem = data.message || 'Operação realizada com sucesso!';
+                if (data.permissoes_criadas !== undefined) {
+                    // Nova permissão - mostrar quantas foram criadas
+                    if (data.permissoes_criadas > 0) {
+                        alert(mensagem);
+                    } else {
+                        alert(mensagem);
+                    }
+                } else if (data.permissoes_atualizadas !== undefined) {
+                    // Edição - mostrar resultado
+                    alert(mensagem);
+                }
+                // Recarregar página após 500ms para mostrar mensagem de sucesso
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                alert(data.message || data.error || 'Erro ao salvar permissão');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao salvar permissão: ' + error.message);
+        });
+    });
+    
+    // Limpar formulário ao fechar modal
+    document.getElementById('modalPermissao').addEventListener('hidden.bs.modal', function() {
+        form.reset();
+        document.getElementById('permissao_id').value = '';
+        document.getElementById('pode_visualizar').checked = true;
+        // Limpar seleções múltiplas
+        Array.from(document.getElementById('usuario_id').options).forEach(option => option.selected = false);
+        Array.from(document.getElementById('departamento_id').options).forEach(option => option.selected = false);
+        Array.from(document.getElementById('cargo_id').options).forEach(option => option.selected = false);
+        atualizarCampos();
+    });
+});
+</script>
+{% endblock %}

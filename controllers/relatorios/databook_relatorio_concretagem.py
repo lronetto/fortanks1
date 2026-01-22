@@ -3,6 +3,7 @@ from flask_login import login_required
 from models import TanquesPecas
 from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens, ConcretoConcretagens, ConcretoConcretagensTanques
 from models.contrato import Contrato
+from models.cliente import Cliente
 from models.tanque import Tanques, TanquesGrupos
 from models.database import db
 from sqlalchemy import or_, and_, func
@@ -15,6 +16,7 @@ import zipfile
 import openpyxl
 from openpyxl import load_workbook
 from openpyxl.worksheet.page import PageMargins
+import json
 
 from pylovepdf.tools.officepdf import OfficeToPdf
 
@@ -87,41 +89,13 @@ def api_dados():
     usinagens = usinagens.all()
     dados = [] 
     for usinagem in usinagens:
-        # Buscar peças que contêm a série no array 'series' do campo JSON 'qualidade'
-        # O campo qualidade tem estrutura: {"series": [985, 986, ...], ...}
-        # O array contém números, então precisamos converter a série para número
-        # Tentar converter a série para número (pode ser string "985" ou número 985)
-        try:
-            serie_numero = int(usinagem.serie)
-            # Se a série é um número, buscar como número no array JSON
-            # JSON_CONTAINS precisa do valor como string JSON válida (número sem aspas externas)
-            # Passamos o número diretamente como string para JSON_CONTAINS
-            pecas = TanquesPecas.query.join(Tanques).join(Contrato)
-            pecas = pecas.filter(
-                func.json_contains(
-                    func.json_extract(TanquesPecas.qualidade, '$.series'),
-                    str(serie_numero)
-                ) == 1
-            )
-        except (ValueError, TypeError):
-            # Se não for possível converter para número, buscar como string
-            pecas = TanquesPecas.query.filter(
-                func.json_contains(
-                    func.json_extract(TanquesPecas.qualidade, '$.series'),
-                    func.json_quote(usinagem.serie)
-                ) == 1
-            )
-        if tanque_id:
-            pecas = pecas.filter(TanquesPecas.tanque_id == tanque_id)
-        if contrato_id:
-            pecas = pecas.filter(Tanques.contrato_id == contrato_id)
-        if grupo_id:
-            # Filtrar por grupo de tanques - buscar IDs dos tanques do grupo
-            grupo = TanquesGrupos.query.get(grupo_id)
-            if grupo and grupo.tanques:
-                tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
-                pecas = pecas.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
-        pecas = pecas.all()
+        # Buscar peças usando a função comum
+        pecas = buscar_pecas_por_serie(
+            numero_serie=usinagem.serie,
+            tanque_id=tanque_id,
+            contrato_id=contrato_id,
+            grupo_id=grupo_id
+        )
         #print(pecas)
         projetos_unicos = set([peca.tanque.contrato_id for peca in pecas])
         projetos_str = ", ".join([Contrato.query.filter(Contrato.id == projeto).first().nome for projeto in projetos_unicos])
@@ -160,6 +134,86 @@ def api_dados():
 
 # Endpoints api_tanques e api_grupos foram movidos para databook_api_controller.py
 # para evitar duplicação de código
+
+def buscar_pecas_por_serie(numero_serie, tanque_id=None, contrato_id=None, grupo_id=None):
+    """
+    Função auxiliar para buscar peças que contêm a série no array 'series' do campo JSON 'qualidade'
+    
+    Args:
+        numero_serie: Número da série (pode ser int ou string)
+        tanque_id: ID do tanque para filtrar (opcional)
+        contrato_id: ID do contrato para filtrar (opcional)
+        grupo_id: ID do grupo de tanques para filtrar (opcional)
+    
+    Returns:
+        Lista de peças (TanquesPecas) que contêm a série
+    """
+    # Tentar converter para int
+    try:
+        serie_numero = int(numero_serie)
+    except (ValueError, TypeError):
+        serie_numero = None
+    
+    # Iniciar query com joins necessários
+    pecas_query = TanquesPecas.query.join(Tanques).join(Contrato)
+    
+    # Se a série for numérica, buscar de todas as formas possíveis
+    if serie_numero is not None:
+        # Buscar como número (caso esteja armazenado como número no JSON)
+        filtro_numero = func.json_contains(
+            func.json_extract(TanquesPecas.qualidade, '$.series'),
+            str(serie_numero)
+        ) == 1
+        
+        # Buscar como string exata (caso esteja como "1059" no JSON)
+        filtro_string_exata = func.json_contains(
+            func.json_extract(TanquesPecas.qualidade, '$.series'),
+            func.json_quote(str(serie_numero))
+        ) == 1
+        
+        # Buscar strings que contenham o número (para casos como "1059-c" no JSON)
+        filtro_string_parcial = func.json_search(
+            TanquesPecas.qualidade,
+            'one',
+            f'%{serie_numero}%',
+            None,
+            '$.series'
+        ).isnot(None)
+        
+        # Combinar todas as buscas com OR para cobrir todos os casos
+        pecas_query = pecas_query.filter(or_(filtro_numero, filtro_string_exata, filtro_string_parcial))
+    else:
+        # Se não for possível converter para número, buscar apenas como string exata e parcial
+        filtro_string_exata = func.json_contains(
+            func.json_extract(TanquesPecas.qualidade, '$.series'),
+            func.json_quote(str(numero_serie))
+        ) == 1
+        
+        filtro_string_parcial = func.json_search(
+            TanquesPecas.qualidade,
+            'one',
+            f'%{numero_serie}%',
+            None,
+            '$.series'
+        ).isnot(None)
+        
+        pecas_query = pecas_query.filter(or_(filtro_string_exata, filtro_string_parcial))
+    
+    # Aplicar filtros adicionais
+    if tanque_id:
+        pecas_query = pecas_query.filter(TanquesPecas.tanque_id == tanque_id)
+    
+    if contrato_id:
+        pecas_query = pecas_query.filter(Tanques.contrato_id == contrato_id)
+    
+    if grupo_id:
+        # Filtrar por grupo de tanques - buscar IDs dos tanques do grupo
+        grupo = TanquesGrupos.query.get(grupo_id)
+        if grupo and grupo.tanques:
+            tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
+            pecas_query = pecas_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
+    
+    return pecas_query.all()
 
 def calcular_data_rompimento_28_dias(data_moldagem_dt):
     """Calcula data de rompimento 28 dias após a moldagem. Se cair em domingo, adiciona 1 dia."""
@@ -207,12 +261,13 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
         print(f'grupo_id: {grupo_id}')
         
 
+        # Tentar converter para int (para buscar rompimentos, que usa Integer)
         try:
             numero_serie_int = int(numero_serie)
         except (ValueError, TypeError):
             numero_serie_int = None
         
-        # Tentar buscar por int primeiro
+        # Buscar rompimentos (só funciona se a série for numérica, pois o campo é Integer)
         if numero_serie_int is not None:
             print(f'[_gerar_excel_temp] Buscando rompimentos com numero_serie_int: {numero_serie_int}')
             rompimentos = ConcretoUsinagensRompimentos.query\
@@ -223,30 +278,55 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
         else:
             rompimentos = []
             print(f'[_gerar_excel_temp] Não foi possível converter numero_serie para int: {numero_serie}')
+            
+        # Buscar usinagem usando a string diretamente (o campo serie é String)
+        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == str(numero_serie)).first()
+        if usinagem:
+            data_moldagem = usinagem.data_usinagem
+        else:
+            print(f'[_gerar_excel_temp] Usinagem não encontrada para a série {numero_serie}')
+            data_moldagem = None
         
-       
-        
-        # Se não encontrou com int, tentar buscar pela série da usinagem (caso o banco tenha inconsistência)
-        if not rompimentos:
-            print(f'[_gerar_excel_temp] Tentando buscar pela série da usinagem: {str(numero_serie)}')
-            usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == str(numero_serie)).first()
-            if usinagem:
-                print(f'[_gerar_excel_temp] Usinagem encontrada: {usinagem.serie}')
-                try:
-                    serie_int = int(usinagem.serie)
-                    rompimentos = ConcretoUsinagensRompimentos.query\
-                        .filter(ConcretoUsinagensRompimentos.numero_serie == serie_int)\
-                        .order_by(ConcretoUsinagensRompimentos.data_rompimento.asc())\
-                        .all()
-                    print(f'[_gerar_excel_temp] Rompimentos encontrados (via usinagem): {len(rompimentos)}')
-                except (ValueError, TypeError) as e:
-                    print(f'[_gerar_excel_temp] Erro ao converter série da usinagem: {e}')
-            else:
-                print(f'[_gerar_excel_temp] Nenhuma usinagem encontrada com série: {str(numero_serie)}')
-        
+
+        # Buscar peças usando a função comum
+        pecas = buscar_pecas_por_serie(
+            numero_serie=numero_serie,
+            tanque_id=tanque_id,
+            contrato_id=contrato_id,
+            grupo_id=grupo_id
+        )
+        tanque_nome = ''
+        contrato_nome = ''
+        cliente_nome = ''
+        tanques = []
+        contratos = []
+        if pecas:
+            quantidade_tanques = len(set([peca.tanque_id for peca in pecas]))
+            print(f'[_gerar_excel_temp] Quantidade de tanques: {quantidade_tanques}')
+            if quantidade_tanques >=1:
+                for peca in pecas:
+                    tanque = Tanques.query.join(Contrato, Tanques.contrato_id == Contrato.id).join(Cliente, Contrato.cliente_direto_id == Cliente.id).filter(Tanques.id == peca.tanque_id).first()
+                    contrato = tanque.contrato
+                    if tanque not in tanques:
+                        tanques.append(tanque)
+                    if contrato not in contratos:
+                        contratos.append(contrato)
+                if len(tanques) > 1:
+                    for tanque in tanques:
+                        tanque_nome += tanque.nome + ", "
+                    tanque_nome = tanque_nome[:-2]
+                else:
+                    tanque_nome = tanques[0].nome
+                if len(contratos) > 1:
+                    for contrato in contratos:
+                        cliente_nome += contrato.cliente_direto.nome + ", "
+                    cliente_nome = cliente_nome[:-2]
+                else:
+                    cliente_nome = contratos[0].cliente_direto.nome
+                
         if not rompimentos:
             print(f'[_gerar_excel_temp] Nenhum rompimento encontrado para a série {numero_serie}')
-            return None
+            #return None
         
         print(f'[_gerar_excel_temp] Total de rompimentos encontrados: {len(rompimentos)}')
         
@@ -286,38 +366,40 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
                         # Substituir {1}, {2}, etc pelos dados correspondentes
                         new_value = new_value.replace('{1}', str(numero_serie))
                         #Cliente
-                        new_value = new_value.replace('{2}', "Cliente 1")
+                        new_value = new_value.replace('{2}', cliente_nome)
                         #Obra
-                        new_value = new_value.replace('{3}', "Obra 1")
-                        #Tipo do concreto
-                        new_value = new_value.replace('{4}', "40 MPa")
-                        #Traço
-                        new_value = new_value.replace('{5}', "FTK 40")
-                        #Brita
-                        new_value = new_value.replace('{6}', "0")
-                        #Restrição
-                        new_value = new_value.replace('{7}', "fck>=15,0 MPa P/ DESPROTENÇÂO")
-                        #Cimento 1
-                        new_value = new_value.replace('{8}', "CPIII 40 RS")
-                        #Cimento 2
-                        new_value = new_value.replace('{9}', "CP V")
-                        #Aditivo
-                        new_value = new_value.replace('{10}', "SUPER PLASTIFICANTE")
-                        #Concreteira
-                        new_value = new_value.replace('{11}', "Fortanks")
+                        new_value = new_value.replace('{3}', tanque_nome)
+
+                        #tipo de concreto   
+                        new_value = new_value.replace('{4}', '40 MPa')
+                        #traço
+                        new_value = new_value.replace('{5}', '40')
+                        #brita
+                        new_value = new_value.replace('{6}', '0')
+                        #restrição
+                        new_value = new_value.replace('{7}', '24,0')
+                        #cimento 1
+                        new_value = new_value.replace('{8}', 'CPIII 40 RS')
+                        #cimento 2
+                        new_value = new_value.replace('{9}', 'CP V')
+                        #aditivo
+                        new_value = new_value.replace('{10}', 'superplastificante')
+                        #concreteira
+                        new_value = new_value.replace('{11}', 'Fortanks')
+                        #volume
                         # Data de moldagem
-                        if rompimentos[0].data_moldagem:
-                            new_value = new_value.replace('{12}', str(rompimentos[0].data_moldagem.strftime('%d/%m/%Y')))
+                        if data_moldagem:
+                            new_value = new_value.replace('{12}', str(data_moldagem.strftime('%d/%m/%Y')))
                         #Número do caminhao
                         new_value = new_value.replace('{13}', "01")
                         #Nota fiscal
-                        new_value = new_value.replace('{14}', "1234567890")
+                        new_value = new_value = new_value.replace('{14}', usinagem.nota)
                         #Horário de saída da usina 
-                        if rompimentos[0].data_moldagem:
-                            new_value = new_value.replace('{15}', str((rompimentos[0].data_moldagem - timedelta(minutes=15)).strftime('%H:%M')))
+                        if data_moldagem:
+                            new_value = new_value.replace('{15}', str((data_moldagem - timedelta(minutes=15)).strftime('%H:%M')))
                         #Horário de chegada no destino
-                        if rompimentos[0].data_moldagem:
-                            new_value = new_value.replace('{16}', str((rompimentos[0].data_moldagem - timedelta(minutes=10)).strftime('%H:%M')))
+                        if data_moldagem:
+                            new_value = new_value.replace('{16}', str((data_moldagem - timedelta(minutes=10)).strftime('%H:%M')))
                         #Consistencia SLUMP
                         new_value = new_value.replace('{17}', "")
                         #consistencia Slump
@@ -325,49 +407,29 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
                         #consistencia FLOW
                         new_value = new_value.replace('{19}', "X")
                         #consistencia FLOW
-                        new_value = new_value.replace('{20}', "600/610")
+                        new_value = new_value.replace('{20}', str(usinagem.flow))
                         # hora de moldagem
-                        if rompimentos[0].data_moldagem:
-                            new_value = new_value.replace('{21}', str(rompimentos[0].data_moldagem.strftime('%H:%M')))
+                        if data_moldagem:
+                            new_value = new_value.replace('{21}', str(data_moldagem.strftime('%H:%M')))
                         #volume
-                        new_value = new_value.replace('{22}', "5,00")
+                        new_value = new_value.replace('{22}', str(usinagem.volume).format(2))
                         #pecas - buscar peças que contêm a série no array 'series' do campo JSON 'dados_adicionais'
-                        try:
-                            serie_numero = int(numero_serie)
-                            # Buscar peças que contêm a série no array 'series' do campo JSON 'dados_adicionais'
-                            pecas_query = TanquesPecas.query.filter(
-                                func.json_contains(
-                                    func.json_extract(TanquesPecas.qualidade, '$.series'),
-                                    str(serie_numero)
-                                ) == 1
-                            )
-                        except (ValueError, TypeError):
-                            # Se não for possível converter para número, buscar como string
-                            pecas_query = TanquesPecas.query.filter(
-                                func.json_contains(
-                                    func.json_extract(TanquesPecas.qualidade, '$.series'),
-                                    func.json_quote(str(numero_serie))
-                                ) == 1
-                            )
                         
-                        # Aplicar filtros de tanque, contrato e grupo
-                        if tanque_id:
-                            pecas_query = pecas_query.filter(TanquesPecas.tanque_id == tanque_id)
-                        if contrato_id:
-                            pecas_query = pecas_query.join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
-                                .filter(Tanques.contrato_id == contrato_id)
-                        if grupo_id:
-                            # Filtrar por grupo de tanques
-                            grupo = TanquesGrupos.query.get(grupo_id)
-                            if grupo and grupo.tanques:
-                                tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
-                                pecas_query = pecas_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
-                        
-                        pecas = pecas_query.all()
                         
                         if pecas:
-                            pecas_str = [peca.nome for peca in pecas]
-                            new_value = new_value.replace('{23}', ", ".join(pecas_str))
+                            pecas_str =''
+                            for peca in pecas:
+                                if peca.nome not in pecas_str:
+                                    qualidade = json.loads(peca.qualidade)
+                                    busca = str(numero_serie_int)+'-c'
+                                    series = qualidade.get('series', [])
+                                    if qualidade.get('series', []):
+                                        if busca in series:
+                                            pecas_str += peca.nome+'-c, '
+                                        else:
+                                            pecas_str += peca.nome+', '
+                            pecas_str = pecas_str[:-2]
+                            new_value = new_value.replace('{23}', pecas_str)
                         else:
                             new_value = new_value.replace('{23}', "N/A")
 
@@ -437,7 +499,9 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
                                 resultado_3 = (rompimentos[3].resultado or 0) * (rompimentos[3].fator_conversao or 1.2)
                                 resistencia_final_2 = max(resultado_2, resultado_3)
                                 new_value = new_value.replace('{63}', str(round(resistencia_final_2, 2)))
-                        
+                        else:
+                            for i in range(30, 64):
+                                new_value = new_value.replace('{'+str(i)+'}', "")
                         # Atribuir o valor final à célula apenas uma vez
                         if new_value != original_value:
                             cell.value = new_value

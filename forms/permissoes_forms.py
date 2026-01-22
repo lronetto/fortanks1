@@ -54,10 +54,9 @@ class PermissaoForm(FlaskForm):
         Optional()
     ], coerce=int, choices=[])
     
-    cargo = StringField('Cargo', validators=[
-        Optional(),
-        Length(max=50, message='Cargo deve ter no máximo 50 caracteres')
-    ], render_kw={'placeholder': 'Ex: Gerente, Técnico'})
+    cargo_id = SelectField('Cargo', validators=[
+        Optional()
+    ], coerce=int, choices=[])
     
     # Permissões específicas
     pode_visualizar = BooleanField('Pode Visualizar', default=True)
@@ -77,7 +76,7 @@ class PermissaoForm(FlaskForm):
         elif self.tipo_permissao.data == 'departamento':
             self.departamento_id.validators = [DataRequired(message='Departamento é obrigatório para permissão de departamento')]
         elif self.tipo_permissao.data == 'cargo':
-            self.cargo.validators = [DataRequired(message='Cargo é obrigatório para permissão de cargo')]
+            self.cargo_id.validators = [DataRequired(message='Cargo é obrigatório para permissão de cargo')]
     
     def validate(self, extra_validators=None):
         """Validação customizada do formulário"""
@@ -91,8 +90,8 @@ class PermissaoForm(FlaskForm):
         elif self.tipo_permissao.data == 'departamento' and not self.departamento_id.data:
             self.departamento_id.errors.append('Departamento é obrigatório para permissão de departamento')
             return False
-        elif self.tipo_permissao.data == 'cargo' and not self.cargo.data:
-            self.cargo.errors.append('Cargo é obrigatório para permissão de cargo')
+        elif self.tipo_permissao.data == 'cargo' and not self.cargo_id.data:
+            self.cargo_id.errors.append('Cargo é obrigatório para permissão de cargo')
             return False
         
         return True

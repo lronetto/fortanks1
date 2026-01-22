@@ -1,0 +1,176 @@
+<!-- Modal de Módulo (Novo/Editar) -->
+<div class="modal fade" id="modalModulo" tabindex="-1" aria-labelledby="modalModuloLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalModuloLabel">
+                    <i class="fas fa-cube"></i> <span id="modalModuloTitulo">Novo Módulo</span>
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" id="form-modulo" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="modulo_id" name="modulo_id" value="">
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="nome" class="form-label">Nome do Módulo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="nome" name="nome" 
+                                   placeholder="Ex: DASHBOARD, CLIENTES" required>
+                            <small class="text-muted">Nome único do módulo (ex: DASHBOARD, CLIENTES)</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="ordem" class="form-label">Ordem de Exibição</label>
+                            <input type="number" class="form-control" id="ordem" name="ordem" 
+                                   value="0" min="0" max="999">
+                            <small class="text-muted">Ordem de exibição no menu (0 = primeiro)</small>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="3"></textarea>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="icone" class="form-label">Ícone (Classe CSS)</label>
+                            <input type="text" class="form-control" id="icone" name="icone" 
+                                   placeholder="Ex: fas fa-users">
+                            <small class="text-muted">Classe CSS do ícone (ex: fas fa-users, fas fa-dashboard)</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="url" class="form-label">URL do Módulo</label>
+                            <input type="text" class="form-control" id="url" name="url" 
+                                   placeholder="Ex: /usuarios">
+                            <small class="text-muted">URL base do módulo (ex: /usuarios, /clientes)</small>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = new bootstrap.Modal(document.getElementById('modalModulo'));
+    const form = document.getElementById('form-modulo');
+    const modalTitulo = document.getElementById('modalModuloTitulo');
+    
+    // Função para abrir modal de novo módulo
+    function abrirModalNovo() {
+        modalTitulo.textContent = 'Novo Módulo';
+        form.reset();
+        form.action = '{{ url_for("admin.permissoes_modulo_novo") }}';
+        document.getElementById('modulo_id').value = '';
+        modal.show();
+    }
+    
+    // Função para abrir modal de edição
+    function abrirModalEditar(modulo) {
+        modalTitulo.textContent = 'Editar Módulo';
+        document.getElementById('modulo_id').value = modulo.id || '';
+        document.getElementById('nome').value = modulo.nome || '';
+        document.getElementById('descricao').value = modulo.descricao || '';
+        document.getElementById('icone').value = modulo.icone || '';
+        document.getElementById('url').value = modulo.url || '';
+        document.getElementById('ordem').value = modulo.ordem || 0;
+        form.action = `/admin/permissoes/modulos/${modulo.id}/editar`;
+        modal.show();
+    }
+    
+    // Evento para botão de novo módulo
+    const btnNovoModulo = document.querySelector('[data-bs-target="#modalModulo"][data-action="novo"]');
+    if (btnNovoModulo) {
+        btnNovoModulo.addEventListener('click', function(e) {
+            e.preventDefault();
+            abrirModalNovo();
+        });
+    }
+    
+    // Eventos para botões de editar
+    document.querySelectorAll('.btn-editar-modulo').forEach(button => {
+        button.addEventListener('click', function() {
+            const modulo = {
+                id: this.dataset.id,
+                nome: this.dataset.nome || '',
+                descricao: this.dataset.descricao || '',
+                icone: this.dataset.icone || '',
+                url: this.dataset.url || '',
+                ordem: this.dataset.ordem || 0
+            };
+            abrirModalEditar(modulo);
+        });
+    });
+    
+    // Validação e submit do formulário
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const nome = document.getElementById('nome').value.trim();
+        if (!nome) {
+            alert('O nome do módulo é obrigatório!');
+            document.getElementById('nome').focus();
+            return false;
+        }
+        
+        // Criar FormData
+        const formData = new FormData(form);
+        
+        // Fazer requisição AJAX
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.headers.get('content-type')?.includes('application/json')) {
+                return response.json();
+            }
+            return response.text().then(text => {
+                // Se retornar HTML (redirect), considerar sucesso
+                if (response.ok) {
+                    return { success: true, message: 'Operação realizada com sucesso!' };
+                }
+                throw new Error('Erro na resposta do servidor');
+            });
+        })
+        .then(data => {
+            if (data.success) {
+                modal.hide();
+                // Recarregar página após 500ms para mostrar mensagem de sucesso
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
+            } else {
+                alert(data.message || data.error || 'Erro ao salvar módulo');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao salvar módulo: ' + error.message);
+        });
+    });
+    
+    // Limpar formulário ao fechar modal
+    document.getElementById('modalModulo').addEventListener('hidden.bs.modal', function() {
+        form.reset();
+        document.getElementById('modulo_id').value = '';
+    });
+});
+</script>
+{% endblock %}

@@ -46,6 +46,7 @@ from .dados_analiticos import DadoAnalitico
 from .reembolso import Reembolsos, ReembolsosDocumentos
 from .epi import Epi, EpiEntregas
 from .certificado import Certificado
+from .permissoes import Modulo, Permissao
 def configure_mappers():
     """
     Configura explicitamente todos os mappers SQLAlchemy
@@ -92,4 +93,5 @@ __all__ = [
     'Reembolsos', 'ReembolsosDocumentos',
     'Epi', 'EpiEntregas',
     'Certificado',
+    'Modulo', 'Permissao',
 ] 

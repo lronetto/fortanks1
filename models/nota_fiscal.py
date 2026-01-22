@@ -252,8 +252,14 @@ class NotaFiscal(db.Model):
     def get_pdf(self):
         if not self.upload:
             if not db.session.query(Upload.id).filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first():
-                pdf_data = Arquivei(chave_acesso=self.chave_acesso)
-                self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
+                up = Upload.query.filter_by(pai='NotaFiscal', filename=f'{self.chave_acesso}.pdf', tipo=1).first()
+                if up:
+                    up.pai_id = self.id
+                    up.save()
+                    self.upload = up
+                else:
+                    pdf_data = Arquivei(chave_acesso=self.chave_acesso)
+                    self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
         return self.upload
     def get_chave_acesso(self):
         return self.chave_acesso    

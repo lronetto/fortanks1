@@ -1,0 +1,258 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Gerenciamento de Permissões{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">
+        <i class="fas fa-key"></i> Gerenciamento de Permissões
+    </h1>
+    <p class="mb-4">Gerencie módulos e permissões de acesso do sistema.</p>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Módulos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_modulos }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cubes fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Módulos Ativos
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ modulos_ativos }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Total de Permissões
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_permissoes }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shield-alt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Permissões Ativas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ permissoes_ativas }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-lock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Ações Rápidas</h6>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group" role="group">
+                        <a href="{{ url_for('admin.permissoes_modulos') }}" class="btn btn-primary">
+                            <i class="fas fa-cubes"></i> Gerenciar Módulos
+                        </a>
+                        <a href="{{ url_for('admin.permissoes_listar') }}" class="btn btn-info">
+                            <i class="fas fa-shield-alt"></i> Gerenciar Permissões
+                        </a>
+                        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalModulo" data-action="novo">
+                            <i class="fas fa-plus"></i> Novo Módulo
+                        </button>
+                        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#modalPermissao" data-action="novo">
+                            <i class="fas fa-key"></i> Nova Permissão
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Módulos Recentes -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Módulos Recentes</h6>
+                    <a href="{{ url_for('admin.permissoes_modulos') }}" class="btn btn-sm btn-primary">
+                        Ver Todos
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if modulos_recentes %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Status</th>
+                                        <th>Criado em</th>
+                                        <th width="80">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for modulo in modulos_recentes %}
+                                    <tr>
+                                        <td>
+                                            {% if modulo.icone %}
+                                                <i class="{{ modulo.icone }}"></i>
+                                            {% endif %}
+                                            {{ modulo.nome }}
+                                        </td>
+                                        <td>
+                                            {% if modulo.status == 'Ativo' %}
+                                                <span class="badge badge-success">Ativo</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Inativo</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ modulo.criado_em.strftime('%d/%m/%Y') if modulo.criado_em else '-' }}
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-primary btn-editar-modulo" 
+                                                    title="Editar"
+                                                    data-id="{{ modulo.id }}"
+                                                    data-nome="{{ modulo.nome }}"
+                                                    data-descricao="{{ modulo.descricao or '' }}"
+                                                    data-icone="{{ modulo.icone or '' }}"
+                                                    data-url="{{ modulo.url or '' }}"
+                                                    data-ordem="{{ modulo.ordem }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Nenhum módulo encontrado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Permissões Recentes -->
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Permissões Recentes</h6>
+                    <a href="{{ url_for('admin.permissoes_listar') }}" class="btn btn-sm btn-primary">
+                        Ver Todas
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if permissoes_recentes %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Módulo</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                        <th>Criado em</th>
+                                        <th width="80">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for permissao in permissoes_recentes %}
+                                    <tr>
+                                        <td>{{ permissao.modulo.nome if permissao.modulo else '-' }}</td>
+                                        <td>
+                                            {% if permissao.tipo_permissao == 'usuario' %}
+                                                <span class="badge badge-info">Usuário</span>
+                                            {% elif permissao.tipo_permissao == 'departamento' %}
+                                                <span class="badge badge-warning">Departamento</span>
+                                            {% elif permissao.tipo_permissao == 'cargo' %}
+                                                <span class="badge badge-primary">Cargo</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if permissao.status == 'Ativo' %}
+                                                <span class="badge badge-success">Ativo</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Inativo</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ permissao.criado_em.strftime('%d/%m/%Y') if permissao.criado_em else '-' }}
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-primary btn-editar-permissao" 
+                                                    title="Editar"
+                                                    data-id="{{ permissao.id }}"
+                                                    data-modulo-id="{{ permissao.modulo_id }}"
+                                                    data-tipo-permissao="{{ permissao.tipo_permissao }}"
+                                                    data-usuario-id="{{ permissao.usuario_id or '' }}"
+                                                    data-departamento-id="{{ permissao.departamento_id or '' }}"
+                                                    data-cargo-id="{{ permissao.cargo_id or '' }}"
+                                                    data-pode-visualizar="{{ permissao.pode_visualizar|lower }}"
+                                                    data-pode-criar="{{ permissao.pode_criar|lower }}"
+                                                    data-pode-editar="{{ permissao.pode_editar|lower }}"
+                                                    data-pode-excluir="{{ permissao.pode_excluir|lower }}"
+                                                    data-pode-exportar="{{ permissao.pode_exportar|lower }}">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted">Nenhuma permissão encontrada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir modais -->
+{% include 'admin/permissoes/modais/modal_modulo.html' %}
+{% include 'admin/permissoes/modais/modal_permissao.html' %}
+{% endblock %}

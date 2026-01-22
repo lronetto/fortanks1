@@ -1,0 +1,133 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Gerenciar Módulos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">
+        <i class="fas fa-cubes"></i> Gerenciar Módulos
+    </h1>
+    <p class="mb-4">Gerencie os módulos do sistema que podem ter permissões configuradas.</p>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Módulos</h6>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalModulo" data-action="novo">
+                <i class="fas fa-plus"></i> Novo Módulo
+            </button>
+        </div>
+        <div class="card-body">
+            {% if modulos %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="tabelaModulos">
+                        <thead>
+                            <tr>
+                                <th>Ordem</th>
+                                <th>Nome</th>
+                                <th>Descrição</th>
+                                <th>Ícone</th>
+                                <th>URL</th>
+                                <th>Status</th>
+                                <th width="150">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for modulo in modulos %}
+                            <tr>
+                                <td>
+                                    <span class="badge badge-secondary">{{ modulo.ordem }}</span>
+                                </td>
+                                <td>
+                                    {% if modulo.icone %}
+                                        <i class="{{ modulo.icone }} mr-2"></i>
+                                    {% endif %}
+                                    <strong>{{ modulo.nome }}</strong>
+                                </td>
+                                <td>
+                                    {% if modulo.descricao %}
+                                        {{ modulo.descricao[:50] }}{% if modulo.descricao|length > 50 %}...{% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if modulo.icone %}
+                                        <code>{{ modulo.icone }}</code>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if modulo.url %}
+                                        <code>{{ modulo.url }}</code>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if modulo.status == 'Ativo' %}
+                                        <span class="badge badge-success">Ativo</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-sm btn-primary btn-editar-modulo" 
+                                                title="Editar"
+                                                data-id="{{ modulo.id }}"
+                                                data-nome="{{ modulo.nome }}"
+                                                data-descricao="{{ modulo.descricao or '' }}"
+                                                data-icone="{{ modulo.icone or '' }}"
+                                                data-url="{{ modulo.url or '' }}"
+                                                data-ordem="{{ modulo.ordem }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <form method="POST" action="{{ url_for('admin.permissoes_modulo_excluir', id=modulo.id) }}" 
+                                              style="display: inline;" 
+                                              onsubmit="return confirm('Tem certeza que deseja excluir este módulo?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Nenhum módulo cadastrado. 
+                    <a href="{{ url_for('admin.permissoes_modulo_novo') }}">Criar primeiro módulo</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <a href="{{ url_for('admin.permissoes_index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<!-- Incluir modal de módulo -->
+{% include 'admin/permissoes/modais/modal_modulo.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#tabelaModulos').DataTable({
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
+        },
+        "pageLength": 25,
+        "order": [[0, "asc"]]
+    });
+});
+</script>
+{% endblock %}

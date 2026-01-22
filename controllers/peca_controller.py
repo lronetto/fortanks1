@@ -15,6 +15,7 @@ import os
 import tempfile
 from models.logs import Logs
 import logging
+from models.permissoes import Permissao
 # Função auxiliar para converter Decimal para float recursivamente
 def converter_decimal_para_float(obj):
     """Converte valores Decimal para float recursivamente em estruturas de dados"""
@@ -31,6 +32,12 @@ def converter_decimal_para_float(obj):
 
 # Criação do blueprint
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
+@peca.before_request
+@login_required
+def verificar_permissao():
+    if not Permissao.verificar_permissao_completa(current_user, 'pecas', 'visualizar'):
+        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
+        return redirect(url_for('dashboard.index'))
 
 @peca.route('/')
 @login_required
@@ -1381,7 +1388,7 @@ def processar_arquivo_inspecao(xlsx_path):
             filter(ProdutoComposto.nome.like(f'%{str(get_row_value(row, 5)).replace(".0", "")}%'),
             ProdutoComposto.traco==True).first()
         if usinagem:
-            print(f"Usinagem já existe: {serie}")
+            logging.info(f"Usinagem já existe, atualizando: {serie}")
             usinagem.data_usinagem = get_row_value(row, 3)
             usinagem.produtoCompostoId = produto_composto.id if produto_composto else None
             usinagem.flow = get_row_value(row, 2)
@@ -1392,7 +1399,7 @@ def processar_arquivo_inspecao(xlsx_path):
             
 
         
-        print(f"Produto composto: {str(get_row_value(row, 5)).replace(".0", "")} - {produto_composto}")
+        logging.info(f"Usinagem não existe, criando: {serie} produto composto: {produto_composto.nome if produto_composto else None}")
         usinagem = ConcretoUsinagens(
             serie=get_row_value(row, 0),
             data_usinagem=get_row_value(row, 3),

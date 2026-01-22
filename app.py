@@ -33,6 +33,7 @@ from controllers.certificado_controller import certificado_bp
 from models.usuario import Usuario
 from models.arquivei import Arquivei
 from models.nota_fiscal import NotaFiscal
+from models.permissoes import Permissao
 # Isso carregará e configurará todos os modelos
 from models import configure_mappers
 from models.database import db, init_db
@@ -232,7 +233,13 @@ logger.info("Blueprints registrados com sucesso!")
 #from commands.estoque_commands import register_commands as register_estoque_commands
 #register_estoque_commands(app)
 #logger.info("Comandos CLI registrados com sucesso!")
-
+@app.before_request
+@login_required
+def verificar_permissao():
+    if False:
+        if not Permissao.verificar_permissao_completa(current_user, request.path, 'visualizar'):
+            flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
+            return None
 @app.route('/')
 def index():
     return redirect(url_for('auth.login'))

@@ -104,49 +104,6 @@ def api_dados():
         ConcretoConcretagens.pista.asc()
     ).all()
     
-    # Função auxiliar para extrair IDs de tanques do JSON
-    def extrair_tanque_ids_do_json(pecas_json_str):
-        """
-        Extrai os IDs únicos de tanques do JSON da coluna pecas.
-        
-        Formato esperado do JSON:
-        [
-            {"placa": "PN-02", "tanque": 1, "forma": "4"},
-            {"placa": "PN-03", "tanque": 1, "forma": "6"},
-            ...
-        ]
-        """
-        tanque_ids = set()
-        try:
-            if not pecas_json_str:
-                return tanque_ids
-            
-            pecas_data = json.loads(pecas_json_str) if isinstance(pecas_json_str, str) else pecas_json_str
-            
-            # Se for uma lista de objetos (formato padrão)
-            if isinstance(pecas_data, list):
-                for item in pecas_data:
-                    if isinstance(item, dict):
-                        # Extrair ID do tanque (chave: "tanque")
-                        tanque_id = item.get('tanque')
-                        if tanque_id:
-                            tanque_ids.add(int(tanque_id))
-            # Se for um objeto com uma lista de peças
-            elif isinstance(pecas_data, dict):
-                if 'pecas' in pecas_data and isinstance(pecas_data['pecas'], list):
-                    for item in pecas_data['pecas']:
-                        if isinstance(item, dict):
-                            tanque_id = item.get('tanque')
-                            if tanque_id:
-                                tanque_ids.add(int(tanque_id))
-                # Ou se os tanques estão diretamente no objeto
-                elif 'tanque_id' in pecas_data:
-                    tanque_ids.add(int(pecas_data['tanque_id']))
-        except (json.JSONDecodeError, TypeError, ValueError, KeyError) as e:
-            print(f"Erro ao processar JSON de pecas: {e}")
-        
-        return tanque_ids
-    
     # Agrupar dados por data_concretagem e pista
     grupos = {}
     grupos_tanques = {}  # Armazenar todos os tanques únicos por grupo
@@ -186,23 +143,15 @@ def api_dados():
     for chave, tanque_ids_set in grupos_tanques.items():
         data_concretagem, pista = chave
         
-        # Buscar informações dos tanques
+        # Buscar informações dos tanques usando a função comum
         tanques_info = []
         if tanque_ids_set:
-            tanques_query = Tanques.query.filter(Tanques.id.in_(tanque_ids_set))
-            
-            # Aplicar filtro de contrato se especificado
-            if contrato_id:
-                tanques_query = tanques_query.filter(Tanques.contrato_id == contrato_id)
-            
-            # Aplicar filtro de grupo se especificado
-            if grupo_id:
-                grupo = TanquesGrupos.query.get(grupo_id)
-                if grupo and grupo.tanques:
-                    tanque_ids_grupo = [t.id for t in grupo.tanques]
-                    tanques_query = tanques_query.filter(Tanques.id.in_(tanque_ids_grupo))
-            
-            tanques = tanques_query.all()
+            tanques = buscar_tanques_com_filtros(
+                tanque_ids=tanque_ids_set,
+                tanque_id=None,  # Não filtrar por tanque específico na api_dados
+                contrato_id=contrato_id,
+                grupo_id=grupo_id
+            )
             
             for tanque in tanques:
                 tanques_info.append({
@@ -255,7 +204,123 @@ def api_dados():
 # Endpoints api_tanques e api_grupos foram movidos para databook_api_controller.py
 # para evitar duplicação de código
 
+def extrair_tanque_ids_do_json(pecas_json_str):
+    """
+    Extrai os IDs únicos de tanques do JSON da coluna pecas.
+    
+    Formato esperado do JSON:
+    [
+        {"placa": "PN-02", "tanque": 1, "forma": "4"},
+        {"placa": "PN-03", "tanque": 1, "forma": "6"},
+        ...
+    ]
+    
+    Args:
+        pecas_json_str: String JSON ou objeto JSON já parseado
+    
+    Returns:
+        Set de IDs de tanques únicos
+    """
+    tanque_ids = set()
+    try:
+        if not pecas_json_str:
+            return tanque_ids
+        
+        pecas_data = json.loads(pecas_json_str) if isinstance(pecas_json_str, str) else pecas_json_str
+        
+        # Se for uma lista de objetos (formato padrão)
+        if isinstance(pecas_data, list):
+            for item in pecas_data:
+                if isinstance(item, dict):
+                    # Extrair ID do tanque (chave: "tanque")
+                    tanque_id = item.get('tanque')
+                    if tanque_id:
+                        tanque_ids.add(int(tanque_id))
+        # Se for um objeto com uma lista de peças
+        elif isinstance(pecas_data, dict):
+            if 'pecas' in pecas_data and isinstance(pecas_data['pecas'], list):
+                for item in pecas_data['pecas']:
+                    if isinstance(item, dict):
+                        tanque_id = item.get('tanque')
+                        if tanque_id:
+                            tanque_ids.add(int(tanque_id))
+            # Ou se os tanques estão diretamente no objeto
+            elif 'tanque_id' in pecas_data:
+                tanque_ids.add(int(pecas_data['tanque_id']))
+    except (json.JSONDecodeError, TypeError, ValueError, KeyError) as e:
+        print(f"Erro ao processar JSON de pecas: {e}")
+    
+    return tanque_ids
 
+def buscar_tanques_com_filtros(tanque_ids, tanque_id=None, contrato_id=None, grupo_id=None):
+    """
+    Função auxiliar para buscar tanques aplicando filtros
+    
+    Args:
+        tanque_ids: Lista ou set de IDs de tanques para filtrar
+        tanque_id: ID específico do tanque para filtrar (opcional)
+        contrato_id: ID do contrato/projeto para filtrar (opcional)
+        grupo_id: ID do grupo de tanques para filtrar (opcional)
+    
+    Returns:
+        Lista de objetos Tanques que atendem aos filtros
+    """
+    if not tanque_ids:
+        return []
+    
+    # Converter para lista se for set
+    tanque_ids_list = list(tanque_ids) if isinstance(tanque_ids, set) else tanque_ids
+    
+    # Iniciar query
+    tanques_query = Tanques.query.filter(Tanques.id.in_(tanque_ids_list))
+    
+    # Aplicar filtro de tanque específico se especificado
+    if tanque_id:
+        tanques_query = tanques_query.filter(Tanques.id == tanque_id)
+    
+    # Aplicar filtro de contrato/projeto se especificado
+    if contrato_id is not None:
+        tanques_query = tanques_query.filter(Tanques.contrato_id == contrato_id)
+    
+    # Aplicar filtro de grupo se especificado
+    if grupo_id:
+        grupo = TanquesGrupos.query.get(grupo_id)
+        if grupo and grupo.tanques:
+            tanque_ids_grupo = [t.id for t in grupo.tanques]
+            tanques_query = tanques_query.filter(Tanques.id.in_(tanque_ids_grupo))
+    
+    return tanques_query.all()
+
+def buscar_peca_por_tanque_e_nome(tanque_id, nome_peca, tanque_id_filtro=None, grupo_id=None):
+    """
+    Função auxiliar para buscar uma peça por tanque e nome aplicando filtros
+    
+    Args:
+        tanque_id: ID do tanque da peça
+        nome_peca: Nome da peça
+        tanque_id_filtro: ID do tanque para filtrar (opcional)
+        grupo_id: ID do grupo de tanques para filtrar (opcional)
+    
+    Returns:
+        Objeto TanquesPecas ou None se não encontrado
+    """
+    peca_query = TanquesPecas.query.filter(
+        TanquesPecas.tanque_id == tanque_id,
+        TanquesPecas.nome == nome_peca
+    )
+    
+    # Aplicar filtro de tanque se especificado
+    if tanque_id_filtro:
+        peca_query = peca_query.filter(TanquesPecas.tanque_id == tanque_id_filtro)
+    
+    # Aplicar filtro de grupo se especificado
+    if grupo_id:
+        grupo = TanquesGrupos.query.get(grupo_id)
+        if grupo and grupo.tanques:
+            tanque_ids_grupo = [t.id for t in grupo.tanques]
+            peca_query = peca_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
+    
+    return peca_query.first()
 
 def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=None):
     """
@@ -335,33 +400,20 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                         if concretagem.pecas:
                             pecas = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
                             series=""
-                            # Extrair todos os IDs únicos de tanques do JSON
-                            tanques_ids_json = set()
-                            for peca in pecas:
-                                if isinstance(peca, dict) and 'tanque' in peca and peca['tanque'] is not None:
-                                    tanques_ids_json.add(peca['tanque'])
+                            # Extrair todos os IDs únicos de tanques do JSON usando a função comum
+                            tanques_ids_json = extrair_tanque_ids_do_json(concretagem.pecas)
                                 
                                
 
                             
                             if tanques_ids_json:
-                                # Buscar informações dos tanques
-                                tanques_query = Tanques.query.filter(Tanques.id.in_(tanques_ids_json))
-                                
-                                # Aplicar filtro de projeto se especificado
-                                if projeto_id is not None:
-                                    tanques_query = tanques_query.filter(Tanques.contrato_id == projeto_id)
-                                
-                                # Aplicar filtro de grupo se especificado
-                                if grupo_id:
-                                    grupo = TanquesGrupos.query.get(grupo_id)
-                                    if grupo and grupo.tanques:
-                                        tanque_ids_grupo = [t.id for t in grupo.tanques]
-                                        tanques_query = tanques_query.filter(Tanques.id.in_(tanque_ids_grupo))
-                                if tanque_id:
-                                    tanques_query = tanques_query.filter(Tanques.id == tanque_id)
-                                
-                                tanques = tanques_query.all()
+                                # Buscar informações dos tanques usando a função comum
+                                tanques = buscar_tanques_com_filtros(
+                                    tanque_ids=tanques_ids_json,
+                                    tanque_id=tanque_id,
+                                    contrato_id=projeto_id,
+                                    grupo_id=grupo_id
+                                )
                                 
                                 tanques_nomes = {tanque.id: tanque.nome for tanque in tanques}
                                 
@@ -411,18 +463,13 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                                 if forma_peca is not None and forma_peca == forma:
                                                     # Verificar se tanque e placa existem
                                                     if peca.get('tanque') is not None and peca.get('placa'):
-                                                        peca_tanque_query = TanquesPecas.query.filter(
-                                                            TanquesPecas.tanque_id == peca['tanque'],
-                                                            TanquesPecas.nome == peca['placa']
+                                                        # Buscar peça usando a função comum
+                                                        peca_tanque = buscar_peca_por_tanque_e_nome(
+                                                            tanque_id=peca['tanque'],
+                                                            nome_peca=peca['placa'],
+                                                            tanque_id_filtro=tanque_id,
+                                                            grupo_id=grupo_id
                                                         )
-                                                        if tanque_id:
-                                                            peca_tanque_query = peca_tanque_query.filter(TanquesPecas.tanque_id==tanque_id)
-                                                        if grupo_id:
-                                                            grupo = TanquesGrupos.query.get(grupo_id)
-                                                            if grupo and grupo.tanques:
-                                                                tanque_ids_grupo = [t.id for t in grupo.tanques]
-                                                                peca_tanque_query = peca_tanque_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
-                                                        peca_tanque = peca_tanque_query.first()
                                                         
                                                         if peca_tanque:
                                                             # Buscar séries da qualidade
@@ -542,9 +589,11 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                             alongamentos_maior = valor
                                         if valor < alongamentos_menor:
                                             alongamentos_menor = valor
+
                                         if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
                                             new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(chave.replace('C-', '')))
                                             alongamentos_fora_da_tolerancia += 1
+                                        
                                         if chave and valor is not None:
                                             # Extrair o número da chave (ex: "C-1" -> 1)
                                             try:
@@ -559,16 +608,24 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                             new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
                                     # Tratar alongamentos além de C-16
                                     total_alongamentos = len(alongamentos)
+                                    for i in range(total_alongamentos+1, 26):
+                                        new_value = new_value.replace(f'{{{62+i}}}', '')
+
                                     if total_alongamentos > 16:
                                         new_value = new_value.replace('{122}', 'C-17')
                                         # Preencher C-17 até o último alongamento
-                                        for i in range(17, total_alongamentos + 1):
+                                        for i in range(17 , total_alongamentos + 1):
                                             chave = f'C-{i}'
+                                            placeholder = 79 + (i - 17)
                                             if chave in alongamentos:
                                                 valor = alongamentos[chave]
-                                                placeholder = 79 + (i - 17)
+                                                
+                                                new_value = new_value.replace(f'{{{placeholder+9}}}', chave)
                                                 new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                    else:
+                                            else:
+                                                new_value = new_value.replace(f'{{{placeholder+9}}}', '')
+
+                                                                                    
                                         new_value = new_value.replace('{122}', '')
                                         # Limpar placeholders de C-17 até C-26
                                         for i in range(1, 11):

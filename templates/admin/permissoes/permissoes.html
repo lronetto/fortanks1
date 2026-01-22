@@ -1,0 +1,213 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Gerenciar Permissões{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">
+        <i class="fas fa-shield-alt"></i> Gerenciar Permissões
+    </h1>
+    <p class="mb-4">Gerencie as permissões de acesso aos módulos do sistema.</p>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" action="{{ url_for('admin.permissoes_listar') }}" class="row">
+                <div class="col-md-4 mb-3">
+                    <label for="tipo">Tipo de Permissão</label>
+                    <select class="form-control" id="tipo" name="tipo">
+                        <option value="">Todos</option>
+                        <option value="usuario" {% if tipo_filtro == 'usuario' %}selected{% endif %}>Usuário</option>
+                        <option value="departamento" {% if tipo_filtro == 'departamento' %}selected{% endif %}>Departamento</option>
+                        <option value="cargo" {% if tipo_filtro == 'cargo' %}selected{% endif %}>Cargo</option>
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label for="modulo">Módulo</label>
+                    <select class="form-control" id="modulo" name="modulo">
+                        <option value="">Todos</option>
+                        {% for modulo in modulos %}
+                            <option value="{{ modulo.id }}" {% if modulo_filtro == modulo.id %}selected{% endif %}>
+                                {{ modulo.nome }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 mb-3 align-self-end">
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Permissões -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Permissões</h6>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalPermissao" data-action="novo">
+                <i class="fas fa-plus"></i> Nova Permissão
+            </button>
+        </div>
+        <div class="card-body">
+            {% if permissoes %}
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover" id="tabelaPermissoes">
+                        <thead>
+                            <tr>
+                                <th>Módulo</th>
+                                <th>Tipo</th>
+                                <th>Entidade</th>
+                                <th>Visualizar</th>
+                                <th>Criar</th>
+                                <th>Editar</th>
+                                <th>Excluir</th>
+                                <th>Exportar</th>
+                                <th>Status</th>
+                                <th width="150">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for permissao in permissoes %}
+                            <tr>
+                                <td>
+                                    {% if permissao.modulo %}
+                                        {% if permissao.modulo.icone %}
+                                            <i class="{{ permissao.modulo.icone }} mr-2"></i>
+                                        {% endif %}
+                                        <strong>{{ permissao.modulo.nome }}</strong>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if permissao.tipo_permissao == 'usuario' %}
+                                        <span class="badge badge-info">Usuário</span>
+                                    {% elif permissao.tipo_permissao == 'departamento' %}
+                                        <span class="badge badge-warning">Departamento</span>
+                                    {% elif permissao.tipo_permissao == 'cargo' %}
+                                        <span class="badge badge-primary">Cargo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if permissao.tipo_permissao == 'usuario' and permissao.usuario %}
+                                        <i class="fas fa-user"></i> {{ permissao.usuario.nome }}
+                                    {% elif permissao.tipo_permissao == 'departamento' and permissao.departamento %}
+                                        <i class="fas fa-building"></i> {{ permissao.departamento.nome }}
+                                    {% elif permissao.tipo_permissao == 'cargo' and permissao.cargo %}
+                                        <i class="fas fa-briefcase"></i> {{ permissao.cargo.nome }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if permissao.pode_visualizar %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if permissao.pode_criar %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if permissao.pode_editar %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if permissao.pode_excluir %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if permissao.pode_exportar %}
+                                        <i class="fas fa-check text-success"></i>
+                                    {% else %}
+                                        <i class="fas fa-times text-danger"></i>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if permissao.status == 'Ativo' %}
+                                        <span class="badge badge-success">Ativo</span>
+                                    {% else %}
+                                        <span class="badge badge-secondary">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-sm btn-primary btn-editar-permissao" 
+                                                title="Editar"
+                                                data-id="{{ permissao.id }}"
+                                                data-modulo-id="{{ permissao.modulo_id }}"
+                                                data-tipo-permissao="{{ permissao.tipo_permissao }}"
+                                                data-usuario-id="{{ permissao.usuario_id or '' }}"
+                                                data-departamento-id="{{ permissao.departamento_id or '' }}"
+                                                data-cargo-id="{{ permissao.cargo_id or '' }}"
+                                                data-pode-visualizar="{{ permissao.pode_visualizar|lower }}"
+                                                data-pode-criar="{{ permissao.pode_criar|lower }}"
+                                                data-pode-editar="{{ permissao.pode_editar|lower }}"
+                                                data-pode-excluir="{{ permissao.pode_excluir|lower }}"
+                                                data-pode-exportar="{{ permissao.pode_exportar|lower }}">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <form method="POST" action="{{ url_for('admin.permissoes_excluir', id=permissao.id) }}" 
+                                              style="display: inline;" 
+                                              onsubmit="return confirm('Tem certeza que deseja excluir esta permissão?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                            <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> Nenhuma permissão encontrada. 
+                    <a href="{{ url_for('admin.permissoes_nova') }}">Criar primeira permissão</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <a href="{{ url_for('admin.permissoes_index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<!-- Incluir modal de permissão -->
+{% include 'admin/permissoes/modais/modal_permissao.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    $('#tabelaPermissoes').DataTable({
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
+        },
+        "pageLength": 25,
+        "order": [[0, "asc"]]
+    });
+});
+</script>
+{% endblock %}
