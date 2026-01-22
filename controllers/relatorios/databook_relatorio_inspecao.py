@@ -1,3 +1,4 @@
+import logging
 from time import time
 from flask import Blueprint, render_template, request, jsonify, send_file
 from flask_login import login_required
@@ -507,12 +508,12 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
             libreoffice_env = os.getenv('LIBREOFFICE_PATH','/usr/bin/soffice')
             if libreoffice_env and os.path.exists(libreoffice_env):
                 soffice_cmd = libreoffice_env
-                print(f'[_converter_excel_para_pdf_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
+                logging.info(f'[_converter_excel_para_pdf_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
             else:
                 # Tentar encontrar usando shutil.which (mais confiável)
                 soffice_cmd = shutil.which('soffice')
                 if soffice_cmd:
-                    print(f'[_converter_excel_para_pdf_libreoffice] Encontrado no PATH: {soffice_cmd}')
+                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Encontrado no PATH: {soffice_cmd}')
                 else:
                     # Tentar caminhos comuns no Linux
                     possiveis_caminhos = [
