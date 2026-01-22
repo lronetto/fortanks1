@@ -501,25 +501,37 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
                 return None
         else:
             # Linux/Unix - usar comando do sistema
-            soffice_cmd = 'soffice'
-            # Verificar se existe no PATH
-            try:
-                subprocess.run(['which', 'soffice'], check=True, capture_output=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                # Tentar caminhos comuns no Linux
-                possiveis_caminhos = [
-                    '/usr/bin/soffice',
-                    '/usr/local/bin/soffice',
-                    '/opt/libreoffice*/program/soffice',
-                ]
-                for caminho in possiveis_caminhos:
-                    if os.path.exists(caminho):
-                        soffice_cmd = caminho
-                        break
+            soffice_cmd = None
+            
+            # Verificar variável de ambiente primeiro
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
+            if libreoffice_env and os.path.exists(libreoffice_env):
+                soffice_cmd = libreoffice_env
+                print(f'[_converter_excel_para_pdf_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
+            else:
+                # Tentar encontrar usando shutil.which (mais confiável)
+                soffice_cmd = shutil.which('soffice')
+                if soffice_cmd:
+                    print(f'[_converter_excel_para_pdf_libreoffice] Encontrado no PATH: {soffice_cmd}')
                 else:
-                    print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no sistema')
-                    print('[_converter_excel_para_pdf_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
-                    return None
+                    # Tentar caminhos comuns no Linux
+                    possiveis_caminhos = [
+                        '/usr/bin/soffice',
+                        '/usr/local/bin/soffice',
+                        '/opt/libreoffice/program/soffice',
+                        '/opt/libreoffice7/program/soffice',
+                    ]
+                    for caminho in possiveis_caminhos:
+                        if os.path.exists(caminho):
+                            soffice_cmd = caminho
+                            print(f'[_converter_excel_para_pdf_libreoffice] Encontrado em caminho padrão: {soffice_cmd}')
+                            break
+                    
+                    if not soffice_cmd:
+                        print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no sistema')
+                        print('[_converter_excel_para_pdf_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
+                        print('[_converter_excel_para_pdf_libreoffice] Ou configure a variável LIBREOFFICE_PATH com o caminho completo')
+                        return None
         
         # Comando para converter Excel/ODS para PDF
         # --headless: modo sem interface gráfica
@@ -535,17 +547,35 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
         ]
         
         print(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
+        print(f'[_converter_excel_para_pdf_libreoffice] Arquivo de entrada: {excel_path}')
+        print(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
         
-        # Executar conversão
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120  # Timeout de 2 minutos
-        )
-        
-        if result.returncode != 0:
-            print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter: {result.stderr}')
+        try:
+            # Executar conversão
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,  # Timeout de 2 minutos
+                check=False
+            )
+            
+            if result.returncode != 0:
+                print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter (código {result.returncode})')
+                print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
+                print(f'[_converter_excel_para_pdf_libreoffice] stderr: {result.stderr}')
+                return None
+            else:
+                print(f'[_converter_excel_para_pdf_libreoffice] Comando executado com sucesso')
+                if result.stdout:
+                    print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
+        except subprocess.TimeoutExpired:
+            print('[_converter_excel_para_pdf_libreoffice] Timeout ao converter Excel para PDF')
+            return None
+        except Exception as e:
+            print(f'[_converter_excel_para_pdf_libreoffice] Exceção ao executar comando: {str(e)}')
+            import traceback
+            print(traceback.format_exc())
             return None
         
         # O LibreOffice gera o PDF com o mesmo nome do arquivo Excel
@@ -611,6 +641,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         
         # Detectar sistema operacional e comando do LibreOffice
         sistema = platform.system().lower()
+        print(f'[_converter_ods_para_xlsx_libreoffice] Sistema operacional: {sistema}')
         
         if sistema == 'windows':
             possiveis_caminhos = [
@@ -634,21 +665,38 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no Windows')
                 return None
         else:
-            soffice_cmd = 'soffice'
-            try:
-                subprocess.run(['which', 'soffice'], check=True, capture_output=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                possiveis_caminhos = [
-                    '/usr/bin/soffice',
-                    '/usr/local/bin/soffice',
-                ]
-                for caminho in possiveis_caminhos:
-                    if os.path.exists(caminho):
-                        soffice_cmd = caminho
-                        break
+            # Linux/Unix - usar comando do sistema
+            soffice_cmd = None
+            
+            # Verificar variável de ambiente primeiro
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
+            if libreoffice_env and os.path.exists(libreoffice_env):
+                soffice_cmd = libreoffice_env
+                print(f'[_converter_ods_para_xlsx_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
+            else:
+                # Tentar encontrar usando shutil.which (mais confiável que 'which')
+                soffice_cmd = shutil.which('soffice')
+                if soffice_cmd:
+                    print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado no PATH: {soffice_cmd}')
                 else:
-                    print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no sistema')
-                    return None
+                    # Tentar caminhos comuns no Linux
+                    possiveis_caminhos = [
+                        '/usr/bin/soffice',
+                        '/usr/local/bin/soffice',
+                        '/opt/libreoffice/program/soffice',
+                        '/opt/libreoffice7/program/soffice',
+                    ]
+                    for caminho in possiveis_caminhos:
+                        if os.path.exists(caminho):
+                            soffice_cmd = caminho
+                            print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado em caminho padrão: {soffice_cmd}')
+                            break
+                    
+                    if not soffice_cmd:
+                        print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no sistema')
+                        print('[_converter_ods_para_xlsx_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
+                        print('[_converter_ods_para_xlsx_libreoffice] Ou configure a variável LIBREOFFICE_PATH com o caminho completo')
+                        return None
         
         cmd = [
             soffice_cmd,
@@ -659,16 +707,34 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         ]
         
         print(f'[_converter_ods_para_xlsx_libreoffice] Executando: {" ".join(cmd)}')
+        print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS: {ods_path}')
+        print(f'[_converter_ods_para_xlsx_libreoffice] Diretório de saída: {output_dir}')
         
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
-        
-        if result.returncode != 0:
-            print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter: {result.stderr}')
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False
+            )
+            
+            if result.returncode != 0:
+                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
+                print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+                print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
+                return None
+            else:
+                print(f'[_converter_ods_para_xlsx_libreoffice] Comando executado com sucesso')
+                if result.stdout:
+                    print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+        except subprocess.TimeoutExpired:
+            print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
+            return None
+        except Exception as e:
+            print(f'[_converter_ods_para_xlsx_libreoffice] Exceção ao executar comando: {str(e)}')
+            import traceback
+            print(traceback.format_exc())
             return None
         
         ods_basename = os.path.basename(ods_path)
