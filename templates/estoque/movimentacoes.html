@@ -217,145 +217,24 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for mov in movimentacoes.items %}
-                        <tr>
-                            <td>{{ mov.id }}</td>
-                            <td>{{ mov.data_movimento.strftime('%d/%m/%Y %H:%M') }}</td>
-                            <td>
-                                {% if mov.estoque.material %}
-                                    <a href="{{ url_for('estoque.detalhes', id=mov.estoque.id) }}">
-                                        {{ mov.estoque.material.id }} - {{ mov.estoque.material.nome }}
-                                    </a>
-                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
-                                    <a href="{{ url_for('estoque.detalhes', id=mov.estoque.id) }}">
-                                        {{ mov.estoque.epi.material.id }} - {{ mov.estoque.epi.material.nome }}
-                                    </a>
-                                {% else %}
-                                    <a href="{{ url_for('estoque.detalhes', id=mov.estoque.id) }}">
-                                        Item #{{ mov.estoque.id }}
-                                    </a>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if mov.tipo_movimento == 'entrada' %}
-                                    <span >Entrada</span>
-                                {% elif mov.tipo_movimento == 'saida' %}
-                                    <span >Saída</span>
-                                {% elif mov.tipo_movimento == 'ajuste' %}
-                                    <span >Ajuste</span>
-                                {% else %}
-                                    <span >{{ mov.tipo_movimento }}</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-right">
-                                {{ "%.2f"|format(mov.quantidade|float) }}
-                                {% if mov.estoque.material %}
-                                    {{ mov.estoque.material.unidade_obj.nome or "" }}
-                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
-                                    {{ mov.estoque.epi.material.unidade.nome or "un" }}
-                                {% endif %}
-                            </td>
-                            <td class="text-right">
-                                {{ "%.2f"|format(mov.saldo_anterior()|float if mov.saldo_anterior() else 0) }}
-                                {% if mov.estoque.material %}
-                                    {{ mov.estoque.material.unidade_obj.nome or "" }}
-                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
-                                    {{ mov.estoque.epi.material.unidade_obj.nome or "un" }}
-                                {% endif %}
-                            </td>
-                            <td class="text-right">
-                                {{ "%.2f"|format(mov.saldo_atual()|float if mov.saldo_atual() else 0) }}
-                                {% if mov.estoque.material %}
-                                    {{ mov.estoque.material.unidade_obj.nome or "" }}
-                                {% elif mov.estoque.epi and mov.estoque.epi.material %}
-                                    {{ mov.estoque.epi.material.unidade.nome or "un" }}
-                                {% endif %}
-                            </td>
-                            <td>{{ mov.usuario.nome if mov.usuario else "Sistema" }}</td>
-                            <td>{{ mov.observacao or "-" }}</td>
-                            {% if current_user.is_admin %}
-                            <td>
-                                {% set item_nome = mov.estoque.material.nome if mov.estoque.material else (mov.estoque.epi.material.nome if mov.estoque.epi and mov.estoque.epi.material else 'Item desconhecido') %}
-                                <form method="POST" action="{{ url_for('estoque.excluir_movimentacao', id_movimentacao=mov.id) }}" style="display:inline;" onsubmit="return confirmarExclusaoMovimentacao('{{ mov.id }}', '{{ mov.tipo_movimento }}', {{ mov.quantidade|float }}, '{{ item_nome|tojson|safe }}');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-danger btn-sm">
-                                        <i class="fas fa-trash"></i> Excluir
-                                    </button>
-                                </form>
-                            </td>
-                            {% endif %}
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="{% if current_user.is_admin %}10{% else %}9{% endif %}" class="text-center">Nenhuma movimentação encontrada</td>
-                        </tr>
-                        {% endfor %}
+                        <!-- Dados carregados via AJAX -->
                     </tbody>
                 </table>
             </div>
-
-            <!-- Paginação -->
-            {% if movimentacoes.pages > 1 %}
-            <div class="d-flex justify-content-center mt-4">
-                <nav aria-label="Navegação de páginas">
-                    <ul class="pagination">
-                        <li class="page-item {% if movimentacoes.page == 1 %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.prev_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, localizacao=localizacao, observacao=observacao) }}" aria-label="Anterior">
-                                <span aria-hidden="true">&laquo;</span>
-                                <span class="sr-only">Anterior</span>
-                            </a>
-                        </li>
-                        
-                        {% for page_num in movimentacoes.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
-                        {% if page_num %}
-                            {% if page_num == movimentacoes.page %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ page_num }}<span class="sr-only">(atual)</span></span>
-                            </li>
-                            {% else %}
-                            <li class="page-item">
-                                <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=page_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, localizacao=localizacao, observacao=observacao) }}">{{ page_num }}</a>
-                            </li>
-                            {% endif %}
-                        {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">...</span>
-                            </li>
-                        {% endif %}
-                        {% endfor %}
-                        
-                        <li class="page-item {% if movimentacoes.page == movimentacoes.pages %}disabled{% endif %}">
-                            <a class="page-link" href="{{ url_for('estoque.movimentacoes', page=movimentacoes.next_num, tipo=tipo, estoque_id=estoque_id, data_inicio=data_inicio, data_fim=data_fim, material_id=material_id, localizacao=localizacao, observacao=observacao) }}" aria-label="Próximo">
-                                <span aria-hidden="true">&raquo;</span>
-                                <span class="sr-only">Próximo</span>
-                            </a>
-                        </li>
-                    </ul>
-                </nav>
-            </div>
-            {% endif %}
         </div>
     </div>
 
+    <!-- Modal de Histórico de Estoque -->
+    {% include 'estoque/modais/historico_estoque.html' %}
 
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+    var table;
+    
     $(document).ready(function() {
-        // Inicialização do DataTable
-        $('#dataTable').DataTable({
-            "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.10.22/i18n/Portuguese-Brasil.json"
-            },
-            "ordering": false,
-            "paging": false,  // Desabilitar paginação do DataTable, pois já temos nossa própria
-            "info": false,
-            "searching": false,
-            // Desabilitar info do DataTable
-        });
-        
         // Melhorar seleção de itens de estoque com select2
         $('#estoque_id').select2({
             placeholder: "Selecione um item",
@@ -369,6 +248,206 @@
             placeholder: 'Selecione um material',
             allowClear: true,
             width: '100%'
+        });
+        
+        // Inicialização do DataTable com AJAX
+        table = $('#dataTable').DataTable({
+            "language": {
+                "url": "//cdn.datatables.net/plug-ins/1.10.22/i18n/Portuguese-Brasil.json"
+            },
+            "processing": true,
+            "serverSide": true,
+            "ajax": {
+                "url": "{{ url_for('estoque.movimentacoes_api_dados') }}",
+                "type": "GET",
+                "data": function(d) {
+                    // Adicionar filtros do formulário aos parâmetros do DataTables
+                    d.estoque_id = $('#estoque_id').val() || '';
+                    d.tipo = $('#tipo').val() || '';
+                    d.data_inicio = $('#data_inicio').val() || '';
+                    d.data_fim = $('#data_fim').val() || '';
+                    d.material_id = $('#material_id').val() || '';
+                    d.localizacao = $('#localizacao').val() || '';
+                    d.observacao = $('#observacao').val() || '';
+                }
+            },
+            "columns": [
+                { "data": "id" },
+                { "data": "data_hora" },
+                { 
+                    "data": "item",
+                    "render": function(data, type, row) {
+                        // Criar link que abre o modal ao invés de redirecionar
+                        return '<a href="#" class="link-historico-estoque" data-estoque-id="' + data.id + '" data-item-nome="' + data.nome.replace(/"/g, '&quot;') + '">' + data.nome + '</a>';
+                    }
+                },
+                { "data": "tipo" },
+                { 
+                    "data": "quantidade",
+                    "render": function(data, type, row) {
+                        return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                    },
+                    "className": "text-right"
+                },
+                { 
+                    "data": "saldo_anterior",
+                    "render": function(data, type, row) {
+                        return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                    },
+                    "className": "text-right"
+                },
+                { 
+                    "data": "saldo_atual",
+                    "render": function(data, type, row) {
+                        return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                    },
+                    "className": "text-right"
+                },
+                { "data": "usuario" },
+                { "data": "observacao" }{% if current_user.is_admin %},
+                { 
+                    "data": "acoes",
+                    "render": function(data, type, row) {
+                        // O HTML das ações já vem do servidor com o CSRF token correto
+                        return data || '';
+                    },
+                    "orderable": false,
+                    "searchable": false
+                }{% endif %}
+            ],
+            "order": [[1, "desc"]], // Ordenar por data/hora descendente
+            "pageLength": 20,
+            "lengthMenu": [[10, 20, 50, 100], [10, 20, 50, 100]]
+        });
+        
+        // Recarregar tabela quando os filtros mudarem
+        $('#tipo, #estoque_id, #data_inicio, #data_fim, #material_id, #localizacao, #observacao').on('change', function() {
+            table.ajax.reload();
+        });
+        
+        // Recarregar tabela ao submeter o formulário de filtros
+        $('form[method="GET"]').on('submit', function(e) {
+            e.preventDefault();
+            table.ajax.reload();
+            return false;
+        });
+        
+        // Evento para abrir modal de histórico ao clicar no item
+        $(document).on('click', '.link-historico-estoque', function(e) {
+            e.preventDefault();
+            const estoqueId = $(this).data('estoque-id');
+            const itemNome = $(this).data('item-nome');
+            carregarGraficoHistorico(estoqueId, $('#data_inicio').val() || '', $('#data_fim').val() || '', false);
+            $('#modalHistoricoEstoque').modal('show');
+            // Carregar informações do estoque via AJAX usando a função existente api_estoque_info
+ /*           $.ajax({
+                url: "{{ url_for('estoque.api_estoque_historico_saldo') }}",
+                method: 'GET',
+                data: {
+                    id: estoqueId,
+                    data_inicio: $('#data_inicio').val() || '',
+                    data_fim: $('#data_fim').val() || '',
+                    agrupar_semana: $('#agrupar_semana').val() || '',
+                    agrupar_por_material: $('#agrupar_por_material').val() || '',
+                },
+                success: function(response) {
+                    if (response.success && response.data) {
+                        const data = response.data;
+                        
+                        // Obter código e nome do material (usar dados da API ou fallback)
+                        let codigo = data.material_id || estoqueId;
+                        let nome = data.material_nome || itemNome;
+                        let quantidadeAtual = data.quantidade || 0;
+                        
+                        // Criar um botão temporário com os dados necessários para o modal
+                        // O evento show.bs.modal do modal espera um botão com data attributes
+                        const tempButton = $('<button>')
+                            .attr('type', 'button')
+                            .css('display', 'none')
+                            .data('estoque-id', estoqueId)
+                            .data('codigo', codigo)
+                            .data('nome', nome)
+                            .data('quantidade-atual', quantidadeAtual)
+                            .data('agrupar-material', false)
+                            .appendTo('body');
+                        
+                        // Armazenar o botão temporário no evento do modal
+                        const modal = $('#modalHistoricoEstoque');
+                        modal.data('temp-button', tempButton);
+                        
+                        // Abrir o modal - o evento show.bs.modal será disparado automaticamente
+                        // O modal já usa a função api_historico_saldo_estoque para carregar o gráfico
+                        modal.modal('show');
+                        
+                        // Remover o botão temporário após o modal ser aberto
+                        setTimeout(function() {
+                            tempButton.remove();
+                        }, 1000);
+                    } else {
+                        alert('Erro ao carregar informações do estoque.');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar informações do estoque:', error);
+                    // Mesmo com erro, tentar abrir o modal com dados básicos
+                    const tempButton = $('<button>')
+                        .attr('type', 'button')
+                        .css('display', 'none')
+                        .data('estoque-id', estoqueId)
+                        .data('codigo', estoqueId)
+                        .data('nome', itemNome)
+                        .data('quantidade-atual', 0)
+                        .data('agrupar-material', false)
+                        .appendTo('body');
+                    
+                    const modal = $('#modalHistoricoEstoque');
+                    modal.data('temp-button', tempButton);
+                    modal.modal('show');
+                    
+                    setTimeout(function() {
+                        tempButton.remove();
+                    }, 1000);
+                }
+            });
+        }); */
+            });
+        // Sobrescrever o evento show.bs.modal para usar o botão temporário se disponível
+        $('#modalHistoricoEstoque').off('show.bs.modal').on('show.bs.modal', function(event) {
+            let button = $(event.relatedTarget);
+            
+            // Se não houver relatedTarget, tentar usar o botão temporário
+            if (!button || button.length === 0 || !button.data('estoque-id')) {
+                const tempButton = $('#modalHistoricoEstoque').data('temp-button');
+                if (tempButton && tempButton.length > 0) {
+                    button = tempButton;
+                }
+            }
+            
+            if (button && button.length > 0) {
+                const estoqueId = button.data('estoque-id');
+                const codigo = button.data('codigo') || '-';
+                const nome = button.data('nome') || '-';
+                const quantidadeAtual = button.data('quantidade-atual') || '0';
+                const agruparMaterial = button.data('agrupar-material') === true || button.data('agrupar-material') === 'true';
+
+                // Preencher informações do item
+                $('#historico_codigo').text(codigo);
+                $('#historico_nome').text(nome);
+                $('#historico_quantidade_atual').text(parseFloat(quantidadeAtual).toFixed(2));
+
+                // Limpar filtros
+                $('#historico_data_inicio').val('');
+                $('#historico_data_fim').val('');
+
+                // Armazenar flag de agrupamento no modal para uso posterior
+                $('#modalHistoricoEstoque').data('agrupar-material', agruparMaterial);
+                
+                // Carregar gráfico usando a função api_historico_saldo_estoque existente
+                // A função carregarGraficoHistorico do modal já usa essa API
+                if (typeof carregarGraficoHistorico === 'function') {
+                    carregarGraficoHistorico(estoqueId, null, null, agruparMaterial);
+                }
+            }
         });
     });
 

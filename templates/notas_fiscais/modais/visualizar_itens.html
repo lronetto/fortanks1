@@ -67,12 +67,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return '';
     }
     
-    $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-itens', function() {
+    // Evento delegado no documento para funcionar com DataTables
+    // O evento já está configurado no index.html, mas mantemos aqui como fallback
+    $(document).on('click', '.visualizar-itens', function() {
         console.log('visualizar itens clicado');
         const notaId = $(this).data('id');
-        carregarItensModal(notaId);
+        if (typeof carregarItensModal === 'function') {
+            carregarItensModal(notaId);
+        }
     });
-    function carregarItensModal(notaId) {
+    // Expor função globalmente para uso com DataTables
+    window.carregarItensModal = function(notaId) {
         console.log(`Carregando itens para nota ID: ${notaId}`);
         
         // Armazenar notaId para uso posterior

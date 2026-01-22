@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_file
 from flask_login import login_required, current_user
+from flask_wtf.csrf import generate_csrf
 from models.estoque import Estoque, EstoqueMovimentacoes
 from models.material import Materiais,MateriaisGrupos
 from models.epi import Epi,EpiEntregas
@@ -9,6 +10,7 @@ from forms.estoque_forms import EstoqueForm, FiltroEstoqueForm
 from datetime import datetime, date, timedelta
 from models.unidade import Unidades
 from sqlalchemy import or_, func
+from sqlalchemy.orm import joinedload
 
 from decimal import Decimal
 import logging
@@ -585,6 +587,9 @@ def movimentacoes():
     if localizacao:
         query_totais = query_totais.filter(Estoque.localizacao == localizacao)
     
+    if tipo:
+        query_totais = query_totais.filter(EstoqueMovimentacoes.tipo_movimento == tipo)
+    
     if observacao:
         query_totais = query_totais.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
     
@@ -708,6 +713,196 @@ def nova_movimentacao():
     
     return render_template('estoque/movimentacao_form.html', form=form)
 
+@estoque_bp.route('/movimentacoes/api/dados', methods=['GET'])
+@login_required
+def movimentacoes_api_dados():
+    """
+    API endpoint para DataTables - retorna dados de movimentações em formato JSON
+    """
+    # Parâmetros do DataTables
+    draw = request.args.get('draw', 1, type=int)
+    start = request.args.get('start', 0, type=int)
+    length = request.args.get('length', 20, type=int)
+    search_value = request.args.get('search[value]', '', type=str)
+    
+    # Filtros
+    estoque_id = request.args.get('estoque_id', None, type=int)
+    tipo = request.args.get('tipo', None)
+    data_inicio = request.args.get('data_inicio', None)
+    data_fim = request.args.get('data_fim', None)
+    material_id = request.args.get('material_id', None, type=int)
+    localizacao = request.args.get('localizacao', None)
+    observacao = request.args.get('observacao', None)
+    
+    # Consulta base com eager loading para evitar N+1 queries
+    query = EstoqueMovimentacoes.query.join(Estoque)\
+        .options(
+            joinedload(EstoqueMovimentacoes.estoque).joinedload(Estoque.material),
+            joinedload(EstoqueMovimentacoes.estoque).joinedload(Estoque.epi),
+            joinedload(EstoqueMovimentacoes.usuario)
+        )
+    
+    # Aplicar filtros
+    if estoque_id:
+        query = query.filter(EstoqueMovimentacoes.estoque_id == estoque_id)
+    
+    if material_id:
+        query = query.filter(Estoque.material_id == material_id)
+    
+    if localizacao:
+        query = query.filter(Estoque.localizacao == localizacao)
+    
+    if tipo:
+        query = query.filter(EstoqueMovimentacoes.tipo_movimento == tipo)
+    
+    if observacao:
+        query = query.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
+    
+    # Converter datas se fornecidas
+    if data_inicio:
+        try:
+            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+            query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) >= data_inicio_obj)
+        except ValueError:
+            pass
+    
+    if data_fim:
+        try:
+            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+            query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) <= data_fim_obj)
+        except ValueError:
+            pass
+    
+    # Busca global do DataTables
+    if search_value:
+        query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id)\
+                     .outerjoin(Epi, Estoque.epi_id == Epi.id)\
+                     .filter(
+                         db.or_(
+                             db.cast(EstoqueMovimentacoes.id, db.String).ilike(f'%{search_value}%'),
+                             EstoqueMovimentacoes.observacao.ilike(f'%{search_value}%'),
+                             Materiais.nome.ilike(f'%{search_value}%'),
+                             EstoqueMovimentacoes.tipo_movimento.ilike(f'%{search_value}%')
+                         )
+                     )
+    
+    # Total de registros antes da paginação
+    # Usar a mesma query mas sem eager loading para count (mais eficiente)
+    count_query = EstoqueMovimentacoes.query.join(Estoque)
+    
+    # Aplicar os mesmos filtros
+    if estoque_id:
+        count_query = count_query.filter(EstoqueMovimentacoes.estoque_id == estoque_id)
+    if material_id:
+        count_query = count_query.filter(Estoque.material_id == material_id)
+    if localizacao:
+        count_query = count_query.filter(Estoque.localizacao == localizacao)
+    if tipo:
+        count_query = count_query.filter(EstoqueMovimentacoes.tipo_movimento == tipo)
+    if observacao:
+        count_query = count_query.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
+    if data_inicio:
+        try:
+            data_inicio_obj_count = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+            count_query = count_query.filter(func.date(EstoqueMovimentacoes.data_movimento) >= data_inicio_obj_count)
+        except ValueError:
+            pass
+    if data_fim:
+        try:
+            data_fim_obj_count = datetime.strptime(data_fim, '%Y-%m-%d').date()
+            count_query = count_query.filter(func.date(EstoqueMovimentacoes.data_movimento) <= data_fim_obj_count)
+        except ValueError:
+            pass
+    if search_value:
+        count_query = count_query.outerjoin(Materiais, Estoque.material_id == Materiais.id)\
+                     .outerjoin(Epi, Estoque.epi_id == Epi.id)\
+                     .filter(
+                         db.or_(
+                             db.cast(EstoqueMovimentacoes.id, db.String).ilike(f'%{search_value}%'),
+                             EstoqueMovimentacoes.observacao.ilike(f'%{search_value}%'),
+                             Materiais.nome.ilike(f'%{search_value}%'),
+                             EstoqueMovimentacoes.tipo_movimento.ilike(f'%{search_value}%')
+                         )
+                     )
+    
+    total_records = count_query.count()
+    
+    # Ordenação e paginação
+    query = query.order_by(EstoqueMovimentacoes.data_movimento.desc())
+    movimentacoes = query.offset(start).limit(length).all()
+    
+    # Preparar dados para resposta
+    data = []
+    for mov in movimentacoes:
+        # Obter nome do item
+        item_nome = ""
+        item_id = ""
+        unidade = ""
+        if mov.estoque.material:
+            item_nome = f"{mov.estoque.material.id} - {mov.estoque.material.nome}"
+            item_id = mov.estoque.material.id
+            unidade = mov.estoque.material.unidade_obj.nome if mov.estoque.material.unidade_obj else ""
+        elif mov.estoque.epi and mov.estoque.epi.material:
+            item_nome = f"{mov.estoque.epi.material.id} - {mov.estoque.epi.material.nome}"
+            item_id = mov.estoque.epi.material.id if mov.estoque.epi.material else ""
+            unidade = mov.estoque.epi.material.unidade_obj.nome if mov.estoque.epi.material and mov.estoque.epi.material.unidade_obj else "un"
+        else:
+            item_nome = f"Item #{mov.estoque.id}"
+            item_id = mov.estoque.id
+        
+        # Tipo de movimentação
+        tipo_label = mov.tipo_movimento.capitalize()
+        if mov.tipo_movimento == 'entrada':
+            tipo_label = 'Entrada'
+        elif mov.tipo_movimento == 'saida':
+            tipo_label = 'Saída'
+        elif mov.tipo_movimento == 'ajuste':
+            tipo_label = 'Ajuste'
+        
+        # Saldos
+        saldo_anterior = float(mov.saldo_anterior() if mov.saldo_anterior() else 0)
+        saldo_atual = float(mov.saldo_atual() if mov.saldo_atual() else 0)
+        
+        # Botão de exclusão (apenas para admin)
+        acoes_html = ""
+        if current_user.is_admin:
+            item_nome_json = item_nome.replace("'", "\\'").replace('"', '&quot;')
+            csrf_token_value = generate_csrf()
+            acoes_html = f'''
+                <form method="POST" action="{url_for('estoque.excluir_movimentacao', id_movimentacao=mov.id)}" style="display:inline;" 
+                      onsubmit="return confirmarExclusaoMovimentacao('{mov.id}', '{mov.tipo_movimento}', {float(mov.quantidade)}, '{item_nome_json}');">
+                    <input type="hidden" name="csrf_token" value="{csrf_token_value}">
+                    <button type="submit" class="btn btn-danger btn-sm">
+                        <i class="fas fa-trash"></i> Excluir
+                    </button>
+                </form>
+            '''
+        
+        data.append({
+            'id': mov.id,
+            'data_hora': mov.data_movimento.strftime('%d/%m/%Y %H:%M'),
+            'item': {
+                'nome': item_nome,
+                'id': mov.estoque.id,
+                'item_id': item_id
+            },
+            'tipo': tipo_label,
+            'quantidade': float(mov.quantidade),
+            'unidade': unidade,
+            'saldo_anterior': saldo_anterior,
+            'saldo_atual': saldo_atual,
+            'usuario': mov.usuario.nome if mov.usuario else "Sistema",
+            'observacao': mov.observacao or "-",
+            'acoes': acoes_html
+        })
+    
+    return jsonify({
+        'draw': draw,
+        'recordsTotal': total_records,
+        'recordsFiltered': total_records,
+        'data': data
+    })
+
 @estoque_bp.route('/movimentacoes/excluir/<int:id_movimentacao>', methods=['POST'])
 @login_required
 def excluir_movimentacao(id_movimentacao):
@@ -748,7 +943,7 @@ def api_estoque_info(id):
                 'id': estoque.id,
                 'material_id': estoque.material_id,
                 'material_nome': estoque.material.nome if estoque.material else None,
-                'material_unidade': estoque.material.unidade if estoque.material else None,
+                'material_unidade': estoque.material.unidade_obj.nome if estoque.material and estoque.material.unidade_obj else None,
                 'tipo_item': estoque.tipo_item,
                 'quantidade': float(estoque.quantidade),
                 'quantidade_minima': float(estoque.quantidade_minima),
@@ -802,20 +997,25 @@ def api_estoque_por_material(material_id):
 
 
 # Rotas de API para o gráfico
-@estoque_bp.route('/api/estoque/<int:estoque_id>/historico-saldo')
+@estoque_bp.route('/api/estoque/historico-saldo')
 @login_required
-def api_historico_saldo_estoque(estoque_id):
+def api_estoque_historico_saldo():
     """
     Retorna dados formatados para o gráfico de histórico de saldo.
     Aceita 'data_inicio', 'data_fim', 'agrupar_semana' e 'agrupar_por_material' como query parameters.
     Se 'agrupar_por_material' for true, agrega o histórico de todos os estoques do mesmo material.
     Ex: /api/estoque/1/historico-saldo?data_inicio=2023-01-01&data_fim=2023-12-31&agrupar_semana=true&agrupar_por_material=true
     """
-    data_inicio_str = request.args.get('data_inicio')
-    data_fim_str = request.args.get('data_fim')
+    estoque_id = request.args.get('id')
+    data_inicio_str = request.args.get('data_inicio') or None
+    data_fim_str = request.args.get('data_fim') or None
     agrupar_semana = request.args.get('agrupar_semana', 'false').lower() == 'true'
     agrupar_por_material = request.args.get('agrupar_por_material', 'false').lower() == 'true'
-
+    print(f'estoque_id: {estoque_id}')
+    print(f'data_inicio: {data_inicio_str}')
+    print(f'data_fim: {data_fim_str}')
+    print(f'agrupar_semana: {agrupar_semana}')
+    print(f'agrupar_por_material: {agrupar_por_material}')
     data_inicio = None
     if data_inicio_str:
         try:
@@ -990,6 +1190,7 @@ def api_historico_saldo_estoque(estoque_id):
         )
         # Usar saldo real (baseado em movimentações) em vez de estoque.quantidade
         quantidade_total = float(item_estoque.get_saldo_real())
+        print(f'quantidade_total: {quantidade_total}')
 
     datas = [item['data'] for item in historico_data]
     saldos = [item['saldo'] for item in historico_data]

@@ -234,8 +234,20 @@ logger.info("Blueprints registrados com sucesso!")
 #register_estoque_commands(app)
 #logger.info("Comandos CLI registrados com sucesso!")
 @app.before_request
-@login_required
 def verificar_permissao():
+    # Excluir rotas de autenticação e estáticas do login_required
+    if request.endpoint and (
+        request.endpoint.startswith('auth.') or 
+        request.endpoint.startswith('static') or
+        request.endpoint == 'index'
+    ):
+        return None
+    
+    # Aplicar login_required apenas para outras rotas
+    if not current_user.is_authenticated:
+        from flask import redirect, url_for
+        return redirect(url_for('auth.login', next=request.url))
+    
     if False:
         if not Permissao.verificar_permissao_completa(current_user, request.path, 'visualizar'):
             flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')

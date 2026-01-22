@@ -36,6 +36,179 @@ def register(nota_fiscal_bp):
         query = api_get_dados_notas_fiscais(request)
         return jsonify([nota.to_dict() for nota in query.all()])
 
+    @nota_fiscal_bp.route("/api/notas-fiscais/datatables", methods=["GET"])
+    @login_required
+    def api_get_datatables_notas_fiscais():
+        """
+        Retorna dados formatados para DataTables via AJAX
+        """
+        from datetime import datetime
+        from models.nota_fiscal import CNPJS_FILIAIS, CNPJS_MATRIZ
+        
+        # Parâmetros do DataTables
+        draw = int(request.args.get('draw', 1))
+        start = int(request.args.get('start', 0))
+        length = int(request.args.get('length', 50))
+        page = (start // length) + 1
+        per_page = length
+
+        # Processar ordenação do DataTables
+        order_column_index = int(request.args.get('order[0][column]', 1))
+        order_dir = request.args.get('order[0][dir]', 'desc')
+        
+        # Mapear índice da coluna para campo de ordenação
+        column_mapping = {
+            0: 'numero_nf',
+            1: 'data_emissao',
+            2: 'vencimento',
+            3: 'cnpj_emitente',
+            4: 'cnpj_destinatario',
+            5: 'nome_emitente',
+            6: 'valor_total'
+        }
+        
+        order_by = column_mapping.get(order_column_index, 'data_emissao')
+        
+        # Criar um objeto request-like com os parâmetros modificados
+        class ModifiedRequest:
+            def __init__(self, original_request):
+                self._original = original_request
+                self._args = dict(original_request.args)
+                self._args['order_by'] = order_by
+                self._args['order_dir'] = order_dir
+            
+            def get(self, key, default=None):
+                return self._args.get(key, default)
+            
+            def getlist(self, key):
+                val = self._args.get(key, [])
+                return val if isinstance(val, list) else [val] if val else []
+            
+            @property
+            def args(self):
+                return self
+        
+        # Obter query com filtros (usando request modificado)
+        modified_request = ModifiedRequest(request)
+        query = api_get_dados_notas_fiscais(modified_request)
+        
+        # Contar total de registros (antes da paginação)
+        total_records = query.count()
+        
+        # Aplicar paginação
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        notas_fiscais_pagina = pagination.items
+
+        # Processar dados
+        data = []
+        for nota in notas_fiscais_pagina:
+            vencimento_str = getattr(nota.NotaFiscal, "vencimento", None) if hasattr(nota.NotaFiscal, "vencimento") else None
+            vencimento_formatado = "-"
+            if vencimento_str:
+                try:
+                    if isinstance(vencimento_str, str) and len(vencimento_str) == 10 and "-" in vencimento_str:
+                        vencimento_date = datetime.strptime(vencimento_str, "%Y-%m-%d").date()
+                        vencimento_formatado = vencimento_date.strftime("%d/%m/%Y")
+                    else:
+                        vencimento_formatado = str(vencimento_str)
+                except (ValueError, AttributeError):
+                    vencimento_formatado = str(vencimento_str) if vencimento_str else "-"
+
+            emitente = (
+                "Matriz"
+                if nota.NotaFiscal.cnpj_emitente in CNPJS_MATRIZ
+                else "Filiais"
+                if nota.NotaFiscal.cnpj_emitente in CNPJS_FILIAIS
+                else "Terceiros"
+            )
+            destinatario = (
+                "Matriz"
+                if nota.NotaFiscal.cnpj_destinatario in CNPJS_MATRIZ
+                else "Filiais"
+                if nota.NotaFiscal.cnpj_destinatario in CNPJS_FILIAIS
+                else "Terceiros"
+            )
+
+            # Calcular percentual de importação
+            percentual = getattr(nota, "percentual_importacao", 0) if hasattr(nota, "percentual_importacao") else 0
+            if percentual is None:
+                percentual = -1
+
+            # Status badge
+            status_html = ""
+            if nota.NotaFiscal.status_processamento == 'cancelada':
+                status_html = '<span class="badge bg-danger">Cancelada</span>'
+            else:
+                if percentual == 0:
+                    status_html = '<span class="badge bg-danger">Pend</span>'
+                elif percentual == 100:
+                    status_html = '<span class="badge bg-success">Impo</span>'
+                elif percentual > 0:
+                    status_html = f'<span class="badge bg-warning">Parc ({int(percentual)}%)</span>'
+                else:
+                    status_html = '<span class="badge bg-secondary">N/A</span>'
+
+                # Upload badges
+                upload = getattr(nota, "upload", 0)
+                if upload > 0:
+                    upload_protocolo = getattr(nota, "upload_protocolo", 0)
+                    upload_arquivei = getattr(nota, "upload_arquivei", 0)
+                    upload_reembolso = getattr(nota, "upload_reembolso", 0)
+                    
+                    if upload_protocolo == 1:
+                        status_html += ' <span class="badge bg-info ms-1" title="protocolo"><i class="fas fa-paperclip" style="color: green;"></i></span>'
+                    if upload_arquivei == 1:
+                        status_html += ' <span class="badge bg-info ms-1" title="arquivei"><i class="fas fa-paperclip"></i></span>'
+                    if upload_reembolso == 1:
+                        status_html += ' <span class="badge bg-info ms-1" title="reembolso"><i class="fas fa-paperclip" style="color: red;"></i></span>'
+
+                pagamento = getattr(nota, "pagamento", 0)
+                if pagamento == 1:
+                    status_html += ' <span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>'
+
+            # Botões de ação
+            acoes_html = f'''
+                <div class="btn-group">
+                    <button type="button" class="btn btn-sm btn-primary visualizar-itens" data-id="{nota.NotaFiscal.id}" title="Visualizar Itens">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success importar-itens" data-id="{nota.NotaFiscal.id}" title="Importar para Estoque">
+                        <i class="fas fa-file-import"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-warning vincular-material" data-id="{nota.NotaFiscal.id}" title="Vincular Material">
+                        <i class="fas fa-link"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger excluir-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            '''
+
+            fornecedor_html = f'''
+                <a href="javascript:void(0);" class="visualizar-docs" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" title="Visualizar Documentos">
+                    {nota.NotaFiscal.nome_emitente or '-'}
+                </a>
+            '''
+
+            data.append([
+                nota.NotaFiscal.numero_nf or '',
+                nota.NotaFiscal.data_emissao.strftime('%d/%m/%Y') if nota.NotaFiscal.data_emissao else '',
+                vencimento_formatado,
+                emitente,
+                destinatario,
+                fornecedor_html,
+                f'R$ {nota.NotaFiscal.valor_total:.2f}' if nota.NotaFiscal.valor_total else 'R$ 0.00',
+                status_html,
+                acoes_html
+            ])
+
+        return jsonify({
+            "draw": draw,
+            "recordsTotal": total_records,
+            "recordsFiltered": total_records,
+            "data": data
+        })
+
     @nota_fiscal_bp.route("/api/visualizar/<int:id>")
     @login_required
     def api_visualizar(id):
@@ -565,6 +738,41 @@ def register(nota_fiscal_bp):
                 "total_itens_similares": len(itens),
             }
         )
+
+    @nota_fiscal_bp.route("/api/excluir", methods=["POST"])
+    @login_required
+    def api_excluir_nota_fiscal():
+        """Exclui uma nota fiscal e retorna JSON"""
+        # Validar CSRF token
+        csrf_token = request.form.get('csrf_token') or (request.json.get('csrf_token') if request.is_json else None)
+        if csrf_token:
+            try:
+                from flask_wtf.csrf import validate_csrf
+                validate_csrf(csrf_token)
+            except Exception as e:
+                logger.warning(f"Erro de validação CSRF: {str(e)}")
+                return jsonify({"success": False, "message": "Token CSRF inválido"}), 403
+
+        nf_id = request.form.get("nf_id") or (request.json.get("nf_id") if request.is_json else None)
+        if not nf_id:
+            return jsonify({"success": False, "message": "ID da nota fiscal não fornecido"}), 400
+
+        try:
+            nota_fiscal = NotaFiscal.query.get(int(nf_id))
+            if not nota_fiscal:
+                return jsonify({"success": False, "message": "Nota fiscal não encontrada"}), 404
+
+            numero_nf = nota_fiscal.numero_nf
+            nota_fiscal.delete()
+            
+            usuario_nome = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
+            logger.info(f"Nota fiscal {numero_nf} (ID: {nf_id}) excluída por {usuario_nome}")
+            return jsonify({"success": True, "message": f"Nota fiscal {numero_nf} excluída com sucesso"})
+        except ValueError:
+            return jsonify({"success": False, "message": "ID da nota fiscal inválido"}), 400
+        except Exception as e:
+            logger.error(f"Erro ao excluir nota fiscal: {str(e)}")
+            return jsonify({"success": False, "message": f"Erro ao excluir nota fiscal: {str(e)}"}), 500
 
 
 def register_api(api_bp):

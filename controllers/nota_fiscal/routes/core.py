@@ -15,13 +15,6 @@ from ..services.query_notas import api_get_dados_notas_fiscais
 logger = logging.getLogger(__name__)
 
 
-@nota_fiscal_bp.before_request
-@login_required
-def verificar_permissao():
-    # Mantido por compatibilidade. Caso volte a existir regra, centralizar aqui.
-    return None
-
-
 @nota_fiscal_bp.route("/")
 @login_required
 def index():

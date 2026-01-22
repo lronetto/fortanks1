@@ -88,18 +88,23 @@
 
    
 document.addEventListener('DOMContentLoaded', function() {
-    $("#tabelaNotasFiscaisContainer").on('click', '.visualizar-docs', function() {
+    // Evento delegado no documento para funcionar com DataTables
+    // O evento já está configurado no index.html, mas mantemos aqui como fallback
+    $(document).on('click', '.visualizar-docs', function() {
         console.log('visualizar documentos clicado');
         const notaId = $(this).data('id');
         const numeroNf = $(this).data('numero');
         console.log('ID da nota:', notaId, 'Número:', numeroNf);
         
         // Abrir modal de documentos
-        $('#modalDocumentos').modal('show');
-        $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
-        $('#notaFiscalId').val(notaId);
-        
-        // Verificar se a função existe e chamar
+        const modalElement = document.getElementById('modalDocumentos');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
+            $('#notaFiscalId').val(notaId);
+            
+            // Verificar se a função existe e chamar
         if (typeof carregarDocumentos === 'function') {
             carregarDocumentos(notaId);
         } else {
@@ -201,7 +206,8 @@ function downloadPdfNota(notaId) {
 
        
 // Função para carregar documentos
-function carregarDocumentos(notaId) {
+// Expor função globalmente para uso com DataTables
+window.carregarDocumentos = function(notaId) {
     var tbody = $('#listaDocumentos');
     tbody.empty();
     tbody.append('<tr><td colspan="4" class="text-center">Carregando documentos...</td></tr>');

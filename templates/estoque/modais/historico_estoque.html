@@ -95,8 +95,11 @@ $(document).ready(function() {
         const agruparSemana = $('#agruparPorSemana').is(':checked');
         
         // Construir URL da API
-        let apiUrl = `/estoque/api/estoque/${estoqueId}/historico-saldo`;
+        let apiUrl = `/estoque/api/estoque/historico-saldo`;
         const params = new URLSearchParams();
+        if (estoqueId) {
+            params.append('id', estoqueId);
+        }
         if (dataInicio) {
             params.append('data_inicio', dataInicio);
         }

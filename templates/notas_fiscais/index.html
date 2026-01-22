@@ -179,7 +179,26 @@
     <!-- Lista de Notas Fiscais -->
     <div class="card shadow">
         <div class="card-body">
-            <div id="tabelaNotasFiscaisContainer"></div>
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabelaNotasFiscais" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Número NF</th>
+                            <th>Data Emissão</th>
+                            <th>Data Vencimento</th>
+                            <th>Emitente</th>
+                            <th>Destinatário</th>
+                            <th>Fornecedor</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th width="180">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados carregados via AJAX -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
@@ -193,6 +212,7 @@
 {% include 'notas_fiscais/modais/importar_arquivei.html' %}
 {% include 'notas_fiscais/modais/importar_xml.html' %}
 {% include 'notas_fiscais/modais/exportar_zip.html' %}
+{% include 'notas_fiscais/modais/excluir_nota.html' %}
 {% endblock %}
 
 {% block extra_css %}
@@ -235,6 +255,27 @@
 <!-- Script principal -->
 <script src="{{ url_for('static', filename='js/comum.js') }}"></script>
 <script>
+// Função auxiliar para mostrar alertas
+function mostrarAlerta(titulo, mensagem, tipo, callback) {
+    const iconMap = {
+        'success': 'success',
+        'error': 'error',
+        'warning': 'warning',
+        'info': 'info'
+    };
+    
+    Swal.fire({
+        icon: iconMap[tipo] || 'info',
+        title: titulo,
+        text: mensagem,
+        confirmButtonText: 'OK'
+    }).then((result) => {
+        if (callback && typeof callback === 'function') {
+            callback();
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Mostrar/ocultar filtros extras de CTE
     function toggleCteFilters() {
@@ -268,6 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log(response);
                 if (response.success) {
                     mostrarAlerta('Sucesso', response.message, 'success');
+                    table.ajax.reload(); // Recarregar tabela após reprocessar
                 } else {
                     mostrarAlerta('Erro', response.message, 'error');
                 }
@@ -278,125 +320,235 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-    // Ordenação de colunas - Declarar variáveis antes de usar
-    function getUrlParameter(name) {
-        let urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(name);
-    }
-    
-    let currentOrderBy = getUrlParameter('order_by') || 'data_emissao';
-    let currentOrderDir = getUrlParameter('order_dir') || 'desc';
-    
-    function carregarTabelaNotasFiscais(params = null) {
-        let url = '/notas-fiscais/tabela-notas-fiscais';
-        console.log('Carregando tabela com parâmetros:', params);
-        if (!params) {
-            params = $('#filtrosNotasFiscais').serialize();
-        }
-        
-        // Adicionar parâmetros de ordenação se não estiverem presentes
-        if (params && !params.includes('order_by=')) {
-            params += '&order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
-        } else if (!params) {
-            params = 'order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
-        }
-        
-        $.get(url + '?' + params, function(html) {
-            $('#tabelaNotasFiscaisContainer').html(html);
 
-            console.log('Tabela carregada com sucesso');
-            // Atualizar valor total após carregar a tabela
-            
-            // Atualizar ícones de ordenação após carregar tabela
-            updateSortIcons();
-        }).fail(function(xhr, status, error) {
-            console.error('Erro ao carregar tabela:', error);
-            $('#tabelaNotasFiscaisContainer').html('<div class="alert alert-danger">Erro ao carregar dados: ' + error + '</div>');
-        });
-    }
-    // Carregar tabela e total ao iniciar
-    carregarTabelaNotasFiscais();
-    
-    // Submeter filtros via AJAX
-    $('#filtrosNotasFiscais').on('submit', function(e) {
-        e.preventDefault();
-        $('#tabelaNotasFiscaisContainer').html('Carregando...');
-        let params = $(this).serialize();
-        carregarTabelaNotasFiscais(params);
+    // ===== MODAL DE EXCLUSÃO DE NOTA FISCAL =====
+    // Abrir modal de exclusão (usando delegação de eventos para funcionar com DataTables)
+    $(document).on('click', '.excluir-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNota = $(this).data('numero');
+        
+        $('#excluir_nf_id').val(notaId);
+        $('#numeroNotaExcluir').text(numeroNota);
+        
+        // Abrir modal usando Bootstrap 5
+        const modal = new bootstrap.Modal(document.getElementById('modalExcluirNota'));
+        modal.show();
     });
-    
-    // Paginação via AJAX (delegação)
-    $('#tabelaNotasFiscaisContainer').on('click', '.pagination a', function(e) {
-        e.preventDefault();
-        let url = $(this).attr('href');
-        // Extrair apenas o número da página do link
-        let pageMatch = url.match(/[?&]page=(\d+)/);
-        let pageNum = pageMatch ? pageMatch[1] : 1;
+
+    // Confirmar exclusão de nota fiscal
+    $('#btnConfirmarExclusao').on('click', function() {
+        const notaId = $('#excluir_nf_id').val();
         
-        // Preservar todos os filtros atuais e adicionar/atualizar o parâmetro page
-        let params = $('#filtrosNotasFiscais').serialize();
-        
-        // Remover page antigo se existir e adicionar o novo
-        params = params.replace(/[&]?page=\d+/g, '');
-        if (params && !params.endsWith('&')) {
-            params += '&';
+        // Obter token CSRF da meta tag ou do formulário
+        let csrfToken = $('meta[name="csrf-token"]').attr('content');
+        if (!csrfToken) {
+            csrfToken = $('#formExcluirNota input[name="csrf_token"]').val();
         }
-        params += 'page=' + pageNum;
-        
-        // Preservar ordenação se não estiver nos filtros
-        if (!params.includes('order_by=')) {
-            params += '&order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
+        if (!csrfToken) {
+            csrfToken = $('input[name="csrf_token"]').first().val();
         }
         
-        carregarTabelaNotasFiscais(params);
-        // Não atualizar total na paginação, pois o total não muda
-    });
-    
-    function updateSortIcons() {
-        $('.sortable-header').each(function() {
-            let $icon = $(this).find('.sort-icon');
-            let column = $(this).data('column');
-            
-            if (column === currentOrderBy) {
-                $icon.removeClass('fa-sort fa-sort-up fa-sort-down');
-                if (currentOrderDir === 'asc') {
-                    $icon.addClass('fa-sort-up text-primary');
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado', 'error');
+            return;
+        }
+
+        if (!csrfToken) {
+            mostrarAlerta('Erro', 'Token CSRF não encontrado. Recarregue a página e tente novamente.', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        formData.append('nf_id', notaId);
+        
+        $.ajax({
+            url: '/notas-fiscais/api/excluir',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    const modalExcluir = bootstrap.Modal.getInstance(document.getElementById('modalExcluirNota'));
+                    if (modalExcluir) modalExcluir.hide();
+                    
+                    mostrarAlerta('Sucesso', response.message, 'success', function() {
+                        // Recarregar DataTables após exclusão
+                        table.ajax.reload();
+                    });
                 } else {
-                    $icon.addClass('fa-sort-down text-primary');
+                    mostrarAlerta('Erro', response.message, 'error');
                 }
-            } else {
-                $icon.removeClass('fa-sort-up fa-sort-down text-primary');
-                $icon.addClass('fa-sort');
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao excluir nota fiscal:', error);
+                let errorMsg = 'Erro ao excluir nota fiscal';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                } else if (xhr.responseText) {
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.message) {
+                            errorMsg = errorResponse.message;
+                        }
+                    } catch (e) {
+                        // Ignorar erro de parse
+                    }
+                }
+                mostrarAlerta('Erro', errorMsg, 'error');
             }
         });
+    });
+    // Inicializar DataTables
+    let table = $('#tabelaNotasFiscais').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '/notas-fiscais/api/notas-fiscais/datatables',
+            type: 'GET',
+            data: function(d) {
+                // Adicionar filtros do formulário
+                let formData = $('#filtrosNotasFiscais').serializeArray();
+                formData.forEach(function(item) {
+                    d[item.name] = item.value;
+                });
+            }
+        },
+        columns: [
+            { data: 0, name: 'numero_nf' },
+            { data: 1, name: 'data_emissao' },
+            { data: 2, name: 'vencimento' },
+            { data: 3, name: 'emitente' },
+            { data: 4, name: 'destinatario' },
+            { data: 5, name: 'fornecedor', orderable: false },
+            { data: 6, name: 'valor_total' },
+            { data: 7, name: 'status', orderable: false },
+            { data: 8, name: 'acoes', orderable: false, searchable: false }
+        ],
+        order: [[1, 'desc']], // Ordenar por data de emissão descendente por padrão
+        pageLength: 50,
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+        },
+        drawCallback: function() {
+            // Reativar eventos dos botões após redesenhar a tabela
+            reiniciarEventosBotoes();
+        }
+    });
+
+    // Função para reiniciar eventos dos botões após redesenhar a tabela
+    function reiniciarEventosBotoes() {
+        // Eventos já são delegados, então não precisam ser reiniciados
+        // Mas podemos adicionar logs para debug se necessário
     }
+
+    // ===== EVENTOS DOS BOTÕES DE AÇÃO (usando delegação para funcionar com DataTables) =====
     
-    // Inicializar ícones de ordenação
-    updateSortIcons();
-    
-    // Handler para cliques nos cabeçalhos ordenáveis
-    $('#tabelaNotasFiscaisContainer').on('click', '.sortable-header', function(e) {
-        e.preventDefault();
-        let column = $(this).data('column');
+    // Visualizar Itens
+    $(document).on('click', '.visualizar-itens', function() {
+        console.log('visualizar itens clicado');
+        const notaId = $(this).data('id');
         
-        // Alternar direção se clicar na mesma coluna
-        if (column === currentOrderBy) {
-            currentOrderDir = currentOrderDir === 'asc' ? 'desc' : 'asc';
+        // Abrir modal
+        const modalElement = document.getElementById('modalVisualizarItens');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            
+            // Tentar carregar itens - a função pode estar definida no modal
+            setTimeout(function() {
+                if (typeof carregarItensModal === 'function') {
+                    carregarItensModal(notaId);
+                } else if (window.carregarItensModal) {
+                    window.carregarItensModal(notaId);
+                } else {
+                    console.warn('Função carregarItensModal não encontrada');
+                }
+            }, 100);
+        }
+    });
+
+    // Importar Itens
+    $(document).on('click', '.importar-itens', function() {
+        console.log('importar itens clicado');
+        const notaId = $(this).data('id');
+        
+        const modalElement = document.getElementById('modalImportarItens');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            $('#importacao_nf_id').val(notaId);
+            
+            // Carregar itens - a função pode estar definida no modal
+            setTimeout(function() {
+                if (typeof carregarItensImportacao === 'function') {
+                    carregarItensImportacao(notaId);
+                } else if (window.carregarItensImportacao) {
+                    window.carregarItensImportacao(notaId);
+                } else {
+                    console.warn('Função carregarItensImportacao não encontrada');
+                }
+            }, 100);
+        }
+    });
+
+    // Vincular Material
+    $(document).on('click', '.vincular-material', function() {
+        console.log('vincular material clicado');
+        const notaId = $(this).data('id');
+        // Abrir modal de vincular material se existir
+        const modalElement = document.getElementById('modalVincularMaterial');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            // Configurar nota ID se necessário
+            if ($('#vincular_nf_id').length) {
+                $('#vincular_nf_id').val(notaId);
+            }
         } else {
-            currentOrderBy = column;
-            currentOrderDir = 'asc';
+            // Se não houver modal específico, pode ser que precise abrir o modal de importar itens
+            const modal = new bootstrap.Modal(document.getElementById('modalImportarItens'));
+            modal.show();
+            $('#importacao_nf_id').val(notaId);
+            if (typeof carregarItensImportacao === 'function') {
+                carregarItensImportacao(notaId);
+            }
         }
+    });
+
+    // Visualizar Documentos
+    $(document).on('click', '.visualizar-docs', function() {
+        console.log('visualizar documentos clicado');
+        const notaId = $(this).data('id');
+        const numeroNf = $(this).data('numero');
+        console.log('ID da nota:', notaId, 'Número:', numeroNf);
         
-        // Obter parâmetros atuais dos filtros
-        let params = $('#filtrosNotasFiscais').serialize();
-        if (params) {
-            params += '&';
+        // Abrir modal de documentos
+        const modalElement = document.getElementById('modalDocumentos');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
+            $('#notaFiscalId').val(notaId);
+            
+            // Carregar documentos - a função pode estar definida no modal
+            setTimeout(function() {
+                if (typeof carregarDocumentos === 'function') {
+                    carregarDocumentos(notaId);
+                } else if (window.carregarDocumentos) {
+                    window.carregarDocumentos(notaId);
+                } else {
+                    console.warn('Função carregarDocumentos não encontrada');
+                }
+            }, 100);
         }
-        params += 'order_by=' + currentOrderBy + '&order_dir=' + currentOrderDir;
-        
-        // Recarregar tabela com nova ordenação
-        carregarTabelaNotasFiscais(params);
-        updateSortIcons();
+    });
+
+    // Submeter filtros via AJAX (recarregar DataTables)
+    $('#filtrosNotasFiscais').on('submit', function(e) {
+        e.preventDefault();
+        table.ajax.reload();
     });
 });
 </script>

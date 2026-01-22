@@ -98,7 +98,9 @@
             const modal = new bootstrap.Modal(document.getElementById('modalSelecionarMaterial'));
             modal.show();
         });
-        $("#tabelaNotasFiscaisContainer").on('click', '.importar-itens', function() {
+        // Evento delegado no documento para funcionar com DataTables
+        // O evento já está configurado no index.html, mas mantemos aqui como fallback
+        $(document).on('click', '.importar-itens', function() {
             console.log('importar itens');
             const notaId = $(this).data('id');
             modal=new bootstrap.Modal(document.getElementById('modalImportarItens'));
@@ -106,7 +108,9 @@
             document.getElementById('importacao_nf_id').value = notaId;
             
             // Carrega itens da nota para importação
-            carregarItensImportacao(notaId);
+            if (typeof carregarItensImportacao === 'function') {
+                carregarItensImportacao(notaId);
+            }
         });
         $('#modalImportarItens').on('click', '.btn-importar-itens', function(e) {
             e.preventDefault();
@@ -133,7 +137,8 @@
             desvincularMaterial(itemId);
         });
     });
-    function carregarItensImportacao(notaId) {
+    // Expor função globalmente para uso com DataTables
+    window.carregarItensImportacao = function(notaId) {
         console.log(`Carregando itens para nota ID: ${notaId}`);
         
         // Mostrar carregamento

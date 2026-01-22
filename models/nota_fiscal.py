@@ -390,6 +390,7 @@ class NotaFiscal(db.Model):
         """
         Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
+        print(f'processar_nf: {self.id}')
         self.inserido = False
         self.existente = False
         log = {
@@ -476,23 +477,36 @@ class NotaFiscal(db.Model):
                 )
                 item_fiscal.save()
             self.vincular_automaticamente()
+            db.session.commit()
             db.session.refresh(self)
             for item in self.itens:
-                sucesso, mensagem, estatisticas = item.vincular_e_importar_estoque_todos(
-                    usuario_id=current_user.id,
-                    centro_custo_id=None,
-                    observacao= f"Importação da NF {self.numero_nf if self else 'N/A'}",
-                )
+                try:
+                    sucesso, mensagem, estatisticas = item.vincular_e_importar_estoque_todos(
+                        usuario_id=current_user.id,
+                        centro_custo_id=None,
+                        observacao= f"Importação da NF {self.numero_nf if self else 'N/A'}",
+                    )
+                except Exception as e:
+                    import traceback
+                    traceback.print_exc()
+                    logger.error(f"Erro ao vincular e importar item {item.id}: {str(e)}")
                 if not sucesso:
                     logger.error(f"Erro ao importar item {item.id}: {mensagem}")
-                    log['erro'] = mensagem
+                    if estatisticas and estatisticas['importacao']['erros']:
+                        for erro in estatisticas['importacao']['erros']:
+                            print(f'erro: {erro}')
+                            #log['erro']+= f'{erro}\n'
+                    else:
+                        print(f'estatisticas: {estatisticas}')
+                        log['erro']= str(mensagem)
+                    log['erro']= str(mensagem)
                 else:
                     log['estatisticas'].append(estatisticas)
 
             self.inserido = True
             log['inserido'] = True
             self.log_info = log
-            
+            print(f'processar_nf: {self.id} finalizado')
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
             log['erro'] = str(e)
@@ -890,20 +904,17 @@ class NotaFiscal(db.Model):
                 
                 # Se encontrar, vincular
                 if item_anterior:
-                    print(f'item_anterior: {item_anterior.unidade} {item.unidade}')
-                    fator = get_conversao_unidade(item.unidade, item_anterior.unidade)
-                    if fator:
-                        item.fator_conversao_aplicado = fator
+                    print(f'item_anterior: {item_anterior.material.nome}')
+                    if comparar_unidades(item_anterior.unidade, item.unidade):
+                        item.fator_conversao_aplicado = item_anterior.fator_conversao_aplicado
+                        item.material_id = item_anterior.material_id
+                        item.save()
+                        db.session.commit()
+                        db.session.refresh(item)
                         itens_vinculados += 1
-                        item.material_id = item_anterior.material_id                      
-                    else:
-                        item.fator_conversao_aplicado = None
-                    material = Material.query.get(item_anterior.material_id)
-                    if material:
-                        if not material.ncm:
-                            material.ncm = item.ncm
-                            material.save()
-                    item.save()
+                else:
+                    print(f'item {item.id} não vinculado a um material do sistema')
+                    
         log={
             "itens": len(self.itens),
             "itens_vinculados": itens_vinculados
@@ -1206,7 +1217,9 @@ class NotaFiscalItem(db.Model):
                             NotaFiscalItem.unidade.like(f'%{self.unidade}%')).all()
         print(f'itens a ser processados: {len(itens)}')
        
-
+        print(f'material_id: {self.material_id}')
+        print(f'fator_conversao_aplicado: {self.fator_conversao_aplicado}')
+        
         for item in itens:
             # Inicializa estatisticas se não estiver inicializado
             if item.estatisticas is None:
@@ -1232,11 +1245,14 @@ class NotaFiscalItem(db.Model):
                         'erros': [],
                     }
                 }
+            
             if item.material_id:
                 item.estatisticas['vinculacao']['ja_vinculados'] += 1
             else:
                 item.estatisticas['vinculacao']['nao_vinculados'] += 1
                 sucesso, erro = item.vincular(self.fator_conversao_aplicado, self.material_id)
+                item.material_id = self.material_id
+                item.fator_conversao_aplicado = self.fator_conversao_aplicado
                 if sucesso:
                     item.estatisticas['vinculacao']['vinculados'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
                     item.estatisticas['vinculacao']['vinculadosn'] += 1
@@ -1244,17 +1260,30 @@ class NotaFiscalItem(db.Model):
                     item.estatisticas['vinculacao']['errosn'] += 1
                     item.estatisticas['vinculacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
                 item.save()
+                db.session.commit()
+                db.session.refresh(item)
             if item.importado_estoque:
                 item.estatisticas['importacao']['ja_importados'] += 1
             else:
                 item.estatisticas['importacao']['nao_importados'] += 1
-                sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)
+                print(f'importar_para_estoque_automatico: {item.id}')
+                try:
+                    sucesso, mensagem, estatisticas_item = item.importar_para_estoque_automatico(usuario_id=usuario_id, centro_custo_id=centro_custo_id, observacao=observacao)
+                except Exception as e:
+                    print(f'erro ao importar item {item.id}: {e}')
+                    import traceback
+                    traceback.print_exc()
+                    print(f"Erro ao importar item {item.id}: {str(e)}")
+                    item.estatisticas['importacao']['errosn'] += 1
+                    item.estatisticas['importacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id)+':'+str(e))
                 if sucesso:
+                    print(f'item {item.id} importado com sucesso')
                     item.estatisticas['importacao']['importados'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
                     item.estatisticas['importacao']['importadosn'] += 1
                 else:
                     item.estatisticas['importacao']['errosn'] += 1
-                    item.estatisticas['importacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id))
+
+                    item.estatisticas['importacao']['erros'].append('nf:'+str(item.nota_fiscal.id)+':item:'+str(item.id)+':'+str(mensagem))
 
         fim = datetime.now()
         print(f'tempo de execucao vincular_e_importar_estoque_todos: {fim - inicio}')
