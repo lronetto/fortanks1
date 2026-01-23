@@ -11,7 +11,6 @@ from datetime import datetime, timedelta
 import os
 import io
 import shutil
-import tempfile
 import zipfile
 import openpyxl
 from openpyxl import load_workbook
@@ -31,7 +30,6 @@ except ImportError:
     ODFPY_AVAILABLE = False
     print('odfpy não está instalado. Para processar ODS diretamente, instale: pip install odfpy')
 
-from pylovepdf.tools.officepdf import OfficeToPdf
 
 
 # Funções auxiliares para gerenciar pasta temporária do projeto
@@ -1022,7 +1020,7 @@ def exportar_excel(numero_serie):
 @login_required
 def exportar_pdf(numero_serie):
     """
-    Exporta dados de uma série específica para PDF convertendo do Excel gerado usando iLovePDF API
+    Exporta dados de uma série específica para PDF convertendo do Excel/ODS gerado usando LibreOffice
     """
     excel_path = None
     pdf_temp_path = None
@@ -1042,13 +1040,47 @@ def exportar_pdf(numero_serie):
         if not excel_path or not os.path.exists(excel_path):
             return jsonify({'error': 'Nenhum rompimento encontrado para a série ' + str(numero_serie)}), 404
         
-        # Converter Excel para PDF (usa LibreOffice por padrão, ou API como fallback)
+        # Verificar se o arquivo é válido
+        if not os.path.isfile(excel_path):
+            return jsonify({'error': f'Arquivo gerado não é um arquivo válido: {excel_path}'}), 500
+        
+        # Verificar tamanho do arquivo
+        file_size = os.path.getsize(excel_path)
+        if file_size == 0:
+            return jsonify({'error': f'Arquivo gerado está vazio: {excel_path}'}), 500
+        
+        print(f'[exportar_pdf] Arquivo gerado: {excel_path}, tamanho: {file_size} bytes')
+        
+        # Converter Excel/ODS para PDF usando LibreOffice
+        # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
         generated_pdf_path = _converter_excel_para_pdf(excel_path)
         
-        if not generated_pdf_path or not os.path.exists(generated_pdf_path):
+        if not generated_pdf_path:
+            # Verificar se o LibreOffice foi encontrado
+            sistema = platform.system().lower()
+            if sistema == 'linux' or sistema == 'linux2':
+                soffice_cmd = shutil.which('soffice')
+                if not soffice_cmd:
+                    return jsonify({
+                        'error': 'LibreOffice não encontrado no sistema. Instale com: sudo apt-get install libreoffice (Ubuntu/Debian) ou configure LIBREOFFICE_PATH'
+                    }), 500
             return jsonify({
-                'error': 'Erro ao converter Excel para PDF. Verifique se o LibreOffice está instalado ou configure as credenciais iLovePDF.'
+                'error': 'Erro ao converter Excel/ODS para PDF. Verifique os logs do servidor para mais detalhes. Verifique se o LibreOffice está instalado e configurado corretamente.'
             }), 500
+        
+        if not os.path.exists(generated_pdf_path):
+            return jsonify({
+                'error': f'PDF não foi gerado no caminho esperado: {generated_pdf_path}. Verifique os logs do servidor para mais detalhes.'
+            }), 500
+        
+        # Verificar se o PDF foi gerado corretamente
+        pdf_size = os.path.getsize(generated_pdf_path)
+        if pdf_size == 0:
+            return jsonify({
+                'error': f'PDF gerado está vazio: {generated_pdf_path}'
+            }), 500
+        
+        print(f'[exportar_pdf] PDF gerado com sucesso: {generated_pdf_path}, tamanho: {pdf_size} bytes')
         
         # Ler o PDF gerado para buffer de memória
         output = io.BytesIO()
@@ -1096,7 +1128,6 @@ def exportar_massa():
     """
     excel_paths = []
     temp_dir = None
-    pdf_temp_dir = None
     
     try:
         data = request.get_json()
@@ -1146,157 +1177,31 @@ def exportar_massa():
                     print(f'Erro ao processar série {numero_serie}: {str(e)}')
                     continue
             
-            # Se for PDF, converter todos os arquivos
+            # Se for PDF, converter todos os arquivos usando LibreOffice
             if formato == 'pdf' and excel_paths:
-                # Verificar se deve usar LibreOffice ou API
-                usar_libreoffice_env = os.getenv('USAR_LIBREOFFICE_PDF', 'true').lower()
-                usar_libreoffice = usar_libreoffice_env in ('true', '1', 'yes', 'sim')
-                
-                if usar_libreoffice:
-                    # Converter arquivo por arquivo usando LibreOffice
-                    for i, excel_path in enumerate(excel_paths):
-                        try:
-                            if i < len(series_validas):
-                                numero_serie = series_validas[i]
-                                # Converter para PDF
-                                pdf_path = _converter_excel_para_pdf_libreoffice(excel_path)
-                                if pdf_path and os.path.exists(pdf_path):
-                                    nome_arquivo = f'relatorio_serie_{numero_serie}.pdf'
-                                    destino = os.path.join(temp_dir, nome_arquivo)
-                                    shutil.copy2(pdf_path, destino)
-                                    arquivos_gerados.append(destino)
-                                    # Limpar PDF temporário (se configurado)
-                                    pdf_dir = os.path.dirname(pdf_path)
-                                    temp_dir_projeto = _obter_pasta_temp_projeto()
-                                    if pdf_dir and temp_dir_projeto in pdf_dir:
-                                        _limpar_diretorio_temp(pdf_dir)
-                                    else:
-                                        _limpar_arquivo_temp(pdf_path)
-                        except Exception as e:
-                            print(f'Erro ao converter Excel para PDF (LibreOffice) da série {series_validas[i] if i < len(series_validas) else "desconhecida"}: {str(e)}')
-                            continue
-                else:
-                    # Usar API iLovePDF (conversão em massa)
-                    ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
-                    ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
-                    
-                    if not ilovepdf_public_key or not ilovepdf_secret_key:
-                        return jsonify({
-                            'error': 'Credenciais iLovePDF não configuradas. Configure as variáveis ILOVEPDF_PUBLIC_KEY e ILOVEPDF_SECRET_KEY ou configure USAR_LIBREOFFICE_PDF=true para usar LibreOffice.'
-                        }), 500
-                    
-                    # Criar diretório temporário para salvar os PDFs
-                    pdf_temp_dir = _criar_diretorio_temp_projeto(prefix='pdf_api_')
-                    
-                    # Inicializar cliente iLovePDF
-                    officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
-                    
-                    # Adicionar todos os arquivos Excel de uma vez
-                    for excel_path in excel_paths:
-                        officepdf.add_file(excel_path)
-                    
-                    # Definir diretório de saída
-                    officepdf.set_output_folder(pdf_temp_dir)
-                    
-                    # Executar conversão (todos os arquivos de uma vez)
-                    officepdf.execute()
-                    
-                    # Baixar PDFs gerados
-                    officepdf.download()
-                    
-                    # Limpar tarefa na API
-                    officepdf.delete_current_task()
-                    
-                    # Verificar se a API retornou um ZIP (quando múltiplos arquivos são enviados)
-                    zip_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.zip')]
-                    pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
-                    print(f'zip_files: {zip_files}')
-                    print(f'pdf_files: {pdf_files}')
-                    
-                    if zip_files:
-                        # A API retornou um ZIP, extrair os PDFs
-                        zip_path = os.path.join(pdf_temp_dir, zip_files[0])
-                        print(f'zip_path: {zip_path}')
-                        print(f'zip_path existe: {os.path.exists(zip_path)}')
-                        
-                        if not os.path.exists(zip_path):
-                            return jsonify({'error': f'Arquivo ZIP não encontrado: {zip_path}'}), 500
-                        
-                        extract_dir = _criar_diretorio_temp_projeto(prefix='extract_zip_')
-                        print(f'extract_dir: {extract_dir}')
-                        
-                        try:
-                            # Extrair o ZIP
-                            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                                print(f'Arquivos no ZIP: {zip_ref.namelist()}')
-                                zip_ref.extractall(extract_dir)
-                            
-                            # Encontrar todos os PDFs extraídos (ordenados para manter a ordem)
-                            extracted_pdfs = sorted([f for f in os.listdir(extract_dir) if f.endswith('.pdf')])
-                            print(f'extracted_pdfs: {extracted_pdfs}')
-                            print(f'Total de PDFs extraídos: {len(extracted_pdfs)}')
-                            print(f'Total de séries válidas: {len(series_validas)}')
-                            
-                            if not extracted_pdfs:
-                                return jsonify({'error': 'Nenhum PDF encontrado no arquivo ZIP retornado pela API'}), 500
-                            
-                            # Mapear os PDFs extraídos para as séries correspondentes
-                            # A API mantém a ordem dos arquivos, então o índice do PDF corresponde ao índice do Excel
-                            for i, numero_serie in enumerate(series_validas):
-                                try:
-                                    if i < len(extracted_pdfs):
-                                        pdf_path = os.path.join(extract_dir, extracted_pdfs[i])
-                                        print(f'pdf_path: {pdf_path}, existe: {os.path.exists(pdf_path)}')
-                                        if os.path.exists(pdf_path):
-                                            nome_arquivo = f'relatorio_serie_{numero_serie}.pdf'
-                                            destino = os.path.join(temp_dir, nome_arquivo)
-                                            print(f'Copiando {pdf_path} para {destino}')
-                                            shutil.copy2(pdf_path, destino)
-                                            arquivos_gerados.append(destino)
-                                            print(f'Arquivo gerado: {destino}')
-                                    else:
-                                        print(f'Índice {i} está fora do range de extracted_pdfs (len={len(extracted_pdfs)})')
-                                except Exception as e:
-                                    print(f'Erro ao processar PDF da série {numero_serie}: {str(e)}')
-                                    import traceback
-                                    print(traceback.format_exc())
-                                    continue
-                            
-                            # Limpar diretório de extração (se configurado)
-                            _limpar_diretorio_temp(extract_dir)
-                                
-                        except zipfile.BadZipFile as e:
-                            print(f'Erro: Arquivo ZIP inválido: {str(e)}')
-                            return jsonify({'error': f'Arquivo ZIP inválido retornado pela API: {str(e)}'}), 500
-                        except Exception as e:
-                            print(f'Erro ao extrair ZIP: {str(e)}')
-                            import traceback
-                            print(traceback.format_exc())
-                            # Limpar diretório de extração em caso de erro (se configurado)
-                            if 'extract_dir' in locals() and os.path.exists(extract_dir):
-                                _limpar_diretorio_temp(extract_dir)
-                            return jsonify({'error': f'Erro ao extrair arquivo ZIP retornado pela API: {str(e)}'}), 500
-                            
-                    elif pdf_files:
-                        # A API retornou PDFs individuais (caso de um único arquivo ou comportamento diferente)
-                        pdf_files = sorted(pdf_files)
-                        
-                        # Mapear os PDFs gerados para as séries correspondentes
-                        # A ordem dos PDFs corresponde à ordem dos Excel enviados
-                        for i, numero_serie in enumerate(series_validas):
-                            try:
-                                if i < len(pdf_files):
-                                    pdf_path = os.path.join(pdf_temp_dir, pdf_files[i])
-                                    if os.path.exists(pdf_path):
-                                        nome_arquivo = f'relatorio_serie_{numero_serie}.pdf'
-                                        destino = os.path.join(temp_dir, nome_arquivo)
-                                        shutil.copy2(pdf_path, destino)
-                                        arquivos_gerados.append(destino)
-                            except Exception as e:
-                                print(f'Erro ao processar PDF da série {numero_serie}: {str(e)}')
-                                continue
-                    else:
-                        return jsonify({'error': 'Nenhum arquivo (ZIP ou PDF) foi retornado pela API iLovePDF'}), 500
+                # Converter arquivo por arquivo usando LibreOffice
+                # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
+                for i, excel_path in enumerate(excel_paths):
+                    try:
+                        if i < len(series_validas):
+                            numero_serie = series_validas[i]
+                            # Converter para PDF (aceita tanto XLSX quanto ODS)
+                            pdf_path = _converter_excel_para_pdf_libreoffice(excel_path)
+                            if pdf_path and os.path.exists(pdf_path):
+                                nome_arquivo = f'relatorio_serie_{numero_serie}.pdf'
+                                destino = os.path.join(temp_dir, nome_arquivo)
+                                shutil.copy2(pdf_path, destino)
+                                arquivos_gerados.append(destino)
+                                # Limpar PDF temporário (se configurado)
+                                pdf_dir = os.path.dirname(pdf_path)
+                                temp_dir_projeto = _obter_pasta_temp_projeto()
+                                if pdf_dir and temp_dir_projeto in pdf_dir:
+                                    _limpar_diretorio_temp(pdf_dir)
+                                else:
+                                    _limpar_arquivo_temp(pdf_path)
+                    except Exception as e:
+                        print(f'Erro ao converter Excel/ODS para PDF (LibreOffice) da série {series_validas[i] if i < len(series_validas) else "desconhecida"}: {str(e)}')
+                        continue
             
             if not arquivos_gerados:
                 return jsonify({'error': 'Nenhum arquivo foi gerado com sucesso'}), 404
@@ -1334,20 +1239,13 @@ def exportar_massa():
                 filename = f'exportacao_massa_{formato}_{timestamp}.zip'
                 
                 # Limpar arquivos temporários antes de retornar (já foram copiados para o ZIP)
-                # Limpar arquivos Excel temporários (se configurado)
+                # Limpar arquivos Excel/ODS temporários (se configurado)
                 try:
                     for excel_path in excel_paths:
                         if excel_path and os.path.exists(excel_path):
                             _limpar_arquivo_temp(excel_path)
                 except Exception as e:
-                    print(f'Erro ao limpar arquivos Excel temporários: {str(e)}')
-                
-                # Limpar diretório temporário de PDFs (se configurado)
-                try:
-                    if pdf_temp_dir and os.path.exists(pdf_temp_dir):
-                        _limpar_diretorio_temp(pdf_temp_dir)
-                except Exception as e:
-                    print(f'Erro ao limpar diretório PDF temporário: {str(e)}')
+                    print(f'Erro ao limpar arquivos Excel/ODS temporários: {str(e)}')
                 
                 # Não limpar temp_dir ainda, pois os arquivos podem estar sendo usados
                 # A limpeza será feita no finally
@@ -1440,22 +1338,123 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 return None
         else:
             # Linux/Unix - usar comando do sistema
-            soffice_cmd = 'soffice'
-            # Verificar se existe no PATH
-            try:
-                subprocess.run(['which', 'soffice'], check=True, capture_output=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                # Tentar caminhos comuns no Linux
-                possiveis_caminhos = [
-                    '/usr/bin/soffice',
-                    '/usr/local/bin/soffice',
-                ]
+            soffice_cmd = None
+            
+            # Verificar variável de ambiente primeiro
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
+            if libreoffice_env and os.path.exists(libreoffice_env):
+                soffice_cmd = libreoffice_env
+                print(f'[_converter_ods_para_xlsx_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
+            else:
+                # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
+                import glob
+                import re
+                
+                # Primeiro, tentar encontrar o executável real diretamente
+                possiveis_caminhos = []
+                
+                # Buscar em /usr/lib e /usr/lib64
+                for lib_dir in ['/usr/lib', '/usr/lib64', '/usr/local/lib']:
+                    # Tentar diferentes versões do LibreOffice
+                    for version in ['', '7', '8', '6', '5']:
+                        path = f'{lib_dir}/libreoffice{version}/program/soffice'
+                        if os.path.exists(path):
+                            possiveis_caminhos.append(path)
+                            print(f'[_converter_ods_para_xlsx_libreoffice] Caminho encontrado: {path}')
+                
+                # Buscar em /opt
+                opt_paths = glob.glob('/opt/libreoffice*/program/soffice')
+                possiveis_caminhos.extend(opt_paths)
+                for path in opt_paths:
+                    print(f'[_converter_ods_para_xlsx_libreoffice] Caminho encontrado em /opt: {path}')
+                
+                print(f'[_converter_ods_para_xlsx_libreoffice] Total de caminhos a verificar: {len(possiveis_caminhos)}')
+                
+                # Verificar cada caminho
                 for caminho in possiveis_caminhos:
+                    print(f'[_converter_ods_para_xlsx_libreoffice] Verificando caminho: {caminho}')
                     if os.path.exists(caminho):
-                        soffice_cmd = caminho
-                        break
-                else:
-                    print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no sistema')
+                        print(f'[_converter_ods_para_xlsx_libreoffice] Caminho existe: {caminho}')
+                        if os.access(caminho, os.X_OK):
+                            print(f'[_converter_ods_para_xlsx_libreoffice] Caminho tem permissão de execução: {caminho}')
+                            # Verificar se é um executável real (ELF binary) ou um link simbólico válido
+                            try:
+                                # Verificar se é um link simbólico
+                                if os.path.islink(caminho):
+                                    real_path = os.path.realpath(caminho)
+                                    print(f'[_converter_ods_para_xlsx_libreoffice] É um link simbólico apontando para: {real_path}')
+                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
+                                        caminho = real_path
+                                
+                                with open(caminho, 'rb') as f:
+                                    header = f.read(4)
+                                    if header.startswith(b'\x7fELF'):  # ELF binary
+                                        soffice_cmd = caminho
+                                        print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado executável real (ELF): {soffice_cmd}')
+                                        break
+                                    else:
+                                        # Pode ser um script ou link simbólico, mas vamos usar se existir e tiver permissão
+                                        print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo não é ELF, mas existe e tem permissão: {caminho}')
+                                        # Usar este arquivo se ainda não encontrou nenhum
+                                        if not soffice_cmd:
+                                            soffice_cmd = caminho
+                                            print(f'[_converter_ods_para_xlsx_libreoffice] Usando arquivo encontrado: {soffice_cmd}')
+                            except Exception as e:
+                                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao verificar {caminho}: {str(e)}')
+                                # Se não encontrou nenhum ainda e o arquivo existe, usar como último recurso
+                                if not soffice_cmd and os.path.exists(caminho):
+                                    soffice_cmd = caminho
+                                    print(f'[_converter_ods_para_xlsx_libreoffice] Usando como último recurso: {soffice_cmd}')
+                        else:
+                            print(f'[_converter_ods_para_xlsx_libreoffice] Caminho existe mas não tem permissão de execução: {caminho}')
+                    else:
+                        print(f'[_converter_ods_para_xlsx_libreoffice] Caminho não existe: {caminho}')
+                
+                # Se não encontrou o executável real, tentar extrair do wrapper
+                if not soffice_cmd:
+                    # Tentar encontrar usando shutil.which (pode retornar o wrapper)
+                    wrapper_path = shutil.which('soffice')
+                    if wrapper_path:
+                        print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado wrapper no PATH: {wrapper_path}')
+                        # Tentar encontrar o executável real através do wrapper
+                        try:
+                            with open(wrapper_path, 'r') as f:
+                                script_content = f.read()
+                                # Procurar por padrões comuns no script
+                                patterns = [
+                                    r'(/usr/lib[^/\s]*/libreoffice[^/\s]*/program/soffice)',
+                                    r'(/usr/lib64[^/\s]*/libreoffice[^/\s]*/program/soffice)',
+                                    r'INSTALL_DIR[=:]\s*["\']?([^"\'\s]+)',
+                                    r'exec\s+["\']?([^"\'\s]+/soffice)',
+                                ]
+                                
+                                for pattern in patterns:
+                                    matches = re.findall(pattern, script_content)
+                                    for match in matches:
+                                        if isinstance(match, tuple):
+                                            match = match[0] if match else None
+                                        if match and os.path.exists(match) and os.access(match, os.X_OK):
+                                            # Verificar se é ELF
+                                            try:
+                                                with open(match, 'rb') as f:
+                                                    header = f.read(4)
+                                                    if header.startswith(b'\x7fELF'):
+                                                        soffice_cmd = match
+                                                        print(f'[_converter_ods_para_xlsx_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
+                                                        break
+                                            except:
+                                                continue
+                                    if soffice_cmd:
+                                        break
+                        except Exception as e:
+                            print(f'[_converter_ods_para_xlsx_libreoffice] Não foi possível encontrar executável real via wrapper: {str(e)}')
+                
+                # Se ainda não encontrou, NÃO usar o wrapper - retornar erro
+                if not soffice_cmd:
+                    print('[_converter_ods_para_xlsx_libreoffice] Executável real do LibreOffice não encontrado')
+                    print('[_converter_ods_para_xlsx_libreoffice] Tentou buscar em: /usr/lib/libreoffice/program/soffice, /usr/lib64/libreoffice/program/soffice, /opt/libreoffice*/program/soffice')
+                    print('[_converter_ods_para_xlsx_libreoffice] Configure a variável LIBREOFFICE_PATH com o caminho completo do executável')
+                    print('[_converter_ods_para_xlsx_libreoffice] Exemplo: export LIBREOFFICE_PATH=/usr/lib/libreoffice/program/soffice')
                     return None
         
         # Comando para converter ODS para XLSX
@@ -1470,18 +1469,83 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             ods_path
         ]
         
+        # Verificar se o executável existe e tem permissões
+        if not os.path.exists(soffice_cmd):
+            print(f'[_converter_ods_para_xlsx_libreoffice] Executável não existe: {soffice_cmd}')
+            return None
+        
+        if not os.access(soffice_cmd, os.X_OK):
+            print(f'[_converter_ods_para_xlsx_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
+            return None
+        
         print(f'[_converter_ods_para_xlsx_libreoffice] Executando: {" ".join(cmd)}')
+        print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS: {ods_path}')
+        print(f'[_converter_ods_para_xlsx_libreoffice] Diretório de saída: {output_dir}')
+        print(f'[_converter_ods_para_xlsx_libreoffice] Executável: {soffice_cmd}')
         
-        # Executar conversão
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60  # Timeout de 1 minuto
-        )
-        
-        if result.returncode != 0:
-            print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter: {result.stderr}')
+        try:
+            # Configurar ambiente completo para o LibreOffice funcionar
+            env = os.environ.copy()
+            
+            # Garantir que comandos básicos estejam no PATH
+            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin', '/sbin', '/usr/sbin']
+            current_path = env.get('PATH', '')
+            for path in basic_paths:
+                if path not in current_path:
+                    env['PATH'] = f"{path}:{env.get('PATH', '')}"
+            
+            # Configurar LD_LIBRARY_PATH para encontrar bibliotecas do LibreOffice
+            libreoffice_lib_dir = os.path.dirname(os.path.dirname(soffice_cmd))
+            lib_paths = [
+                f'{libreoffice_lib_dir}/program',
+                f'{libreoffice_lib_dir}/ure/lib',
+                '/usr/lib',
+                '/usr/lib64',
+                '/lib',
+                '/lib64',
+            ]
+            
+            current_ld_path = env.get('LD_LIBRARY_PATH', '')
+            for lib_path in lib_paths:
+                if os.path.exists(lib_path) and lib_path not in current_ld_path:
+                    env['LD_LIBRARY_PATH'] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+            
+            # Configurar variáveis específicas do LibreOffice
+            env['SAL_USE_VCLPLUGIN'] = 'headless'
+            env['SAL_DISABLE_OPENCL'] = '1'
+            
+            # Remover variáveis que podem causar problemas
+            env.pop('DISPLAY', None)  # Garantir modo headless
+            
+            print(f'[_converter_ods_para_xlsx_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
+            print(f'[_converter_ods_para_xlsx_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                check=False,
+                env=env,
+                cwd=os.path.dirname(soffice_cmd)  # Executar no diretório do LibreOffice
+            )
+            
+            if result.returncode != 0:
+                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
+                print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+                print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
+                return None
+            else:
+                print(f'[_converter_ods_para_xlsx_libreoffice] Comando executado com sucesso')
+                if result.stdout:
+                    print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+        except subprocess.TimeoutExpired:
+            print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
+            return None
+        except Exception as e:
+            print(f'[_converter_ods_para_xlsx_libreoffice] Exceção ao executar comando: {str(e)}')
+            import traceback
+            print(traceback.format_exc())
             return None
         
         # O LibreOffice gera o XLSX com o mesmo nome do arquivo ODS
@@ -1519,117 +1583,41 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         print(traceback.format_exc())
         return None
 
-def _converter_excel_para_pdf(excel_path, pdf_path=None, usar_libreoffice=None):
+def _converter_excel_para_pdf(excel_path, pdf_path=None):
     """
-    Converte arquivo Excel para PDF usando LibreOffice ou iLovePDF API.
-    Por padrão, tenta usar LibreOffice primeiro, depois API se disponível.
+    Converte arquivo Excel/ODS para PDF usando LibreOffice em modo headless.
+    Aceita tanto arquivos XLSX quanto ODS - gera PDF diretamente do ODS quando disponível.
     
     Args:
-        excel_path: Caminho do arquivo Excel
+        excel_path: Caminho do arquivo Excel (XLSX) ou ODS
         pdf_path: Caminho de saída do PDF (opcional)
-        usar_libreoffice: Forçar uso do LibreOffice (True) ou API (False). Se None, detecta automaticamente.
     
     Returns:
         Caminho do arquivo PDF gerado ou None em caso de erro
     """
-    # Se não especificado, verificar variável de ambiente ou tentar LibreOffice primeiro
-    if usar_libreoffice is None:
-        usar_libreoffice_env = os.getenv('USAR_LIBREOFFICE_PDF', '').lower()
-        if usar_libreoffice_env in ('true', '1', 'yes', 'sim'):
-            usar_libreoffice = True
-        elif usar_libreoffice_env in ('false', '0', 'no', 'nao'):
-            usar_libreoffice = False
-        else:
-            # Por padrão, tentar LibreOffice primeiro
-            usar_libreoffice = True
-    
-    if usar_libreoffice:
-        # Tentar usar LibreOffice
-        pdf_resultado = _converter_excel_para_pdf_libreoffice(excel_path, pdf_path)
-        if pdf_resultado:
-            return pdf_resultado
-        print('[_converter_excel_para_pdf] LibreOffice falhou, tentando API iLovePDF como fallback')
-    
-    # Usar API iLovePDF como fallback ou se solicitado
-    return _converter_excel_para_pdf_api(excel_path, pdf_path)
-
-def _converter_excel_para_pdf_api(excel_path, pdf_path=None):
-    """
-    Converte arquivo Excel para PDF usando iLovePDF API.
-    
-    Args:
-        excel_path: Caminho do arquivo Excel
-        pdf_path: Caminho de saída do PDF (opcional, não usado pela API)
-    
-    Returns:
-        Caminho do arquivo PDF gerado ou None em caso de erro
-    """
-    try:
-        # Obter credenciais da API do ambiente
-        ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
-        ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
-        
-        if not ilovepdf_public_key or not ilovepdf_secret_key:
-            print('[_converter_excel_para_pdf_api] Credenciais iLovePDF não configuradas')
-            return None
-        
-        # Criar diretório temporário para salvar o PDF
-        pdf_temp_dir = _criar_diretorio_temp_projeto(prefix='pdf_api_')
-        
-        # Inicializar cliente iLovePDF
-        officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
-        
-        # Adicionar arquivo Excel
-        officepdf.add_file(excel_path)
-        
-        # Definir diretório de saída
-        officepdf.set_output_folder(pdf_temp_dir)
-        
-        # Executar conversão
-        officepdf.execute()
-        
-        # Baixar PDF gerado
-        officepdf.download()
-        
-        # Limpar tarefa na API
-        officepdf.delete_current_task()
-        
-        # Encontrar o arquivo PDF gerado
-        pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
-        if not pdf_files:
-            return None
-        
-        # Usar o primeiro arquivo PDF encontrado
-        generated_pdf_path = os.path.join(pdf_temp_dir, pdf_files[0])
-        if os.path.exists(generated_pdf_path):
-            return generated_pdf_path
-        
-        return None
-        
-    except Exception as e:
-        print(f'[_converter_excel_para_pdf_api] Erro ao converter usando API: {str(e)}')
-        return None
+    return _converter_excel_para_pdf_libreoffice(excel_path, pdf_path)
 
 def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
     """
-    Converte arquivo Excel para PDF usando LibreOffice em modo headless.
+    Converte arquivo Excel/ODS para PDF usando LibreOffice em modo headless.
     Funciona tanto no Windows quanto no Linux.
+    Aceita tanto arquivos XLSX quanto ODS - gera PDF diretamente do ODS quando disponível.
     
     Args:
-        excel_path: Caminho do arquivo Excel
-        pdf_path: Caminho de saída do PDF (opcional, se None, usa mesmo nome do Excel)
+        excel_path: Caminho do arquivo Excel (XLSX) ou ODS
+        pdf_path: Caminho de saída do PDF (opcional, se None, usa mesmo nome do arquivo)
     
     Returns:
         Caminho do arquivo PDF gerado ou None em caso de erro
     """
     try:
         if not excel_path or not os.path.exists(excel_path):
-            print(f'[_converter_excel_para_pdf_libreoffice] Arquivo Excel não encontrado: {excel_path}')
+            print(f'[_converter_excel_para_pdf_libreoffice] Arquivo não encontrado: {excel_path}')
             return None
         
         # Determinar caminho do PDF de saída
         if pdf_path is None:
-            pdf_path = excel_path.replace('.xlsx', '.pdf').replace('.xls', '.pdf')
+            pdf_path = excel_path.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
         
         # Obter diretório de saída
         output_dir = os.path.dirname(pdf_path)
@@ -1668,28 +1656,128 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
                 return None
         else:
             # Linux/Unix - usar comando do sistema
-            soffice_cmd = 'soffice'
-            # Verificar se existe no PATH
-            try:
-                subprocess.run(['which', 'soffice'], check=True, capture_output=True)
-            except (subprocess.CalledProcessError, FileNotFoundError):
-                # Tentar caminhos comuns no Linux
-                possiveis_caminhos = [
-                    '/usr/bin/soffice',
-                    '/usr/local/bin/soffice',
-                    '/opt/libreoffice*/program/soffice',
-                ]
+            soffice_cmd = None
+            
+            # Verificar variável de ambiente primeiro
+            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
+            if libreoffice_env and os.path.exists(libreoffice_env):
+                soffice_cmd = libreoffice_env
+                print(f'[_converter_excel_para_pdf_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
+            else:
+                # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
+                import glob
+                import re
+                
+                # Primeiro, tentar encontrar o executável real diretamente
+                possiveis_caminhos = []
+                
+                # Buscar em /usr/lib e /usr/lib64
+                for lib_dir in ['/usr/lib', '/usr/lib64', '/usr/local/lib']:
+                    # Tentar diferentes versões do LibreOffice
+                    for version in ['', '7', '8', '6', '5']:
+                        path = f'{lib_dir}/libreoffice{version}/program/soffice'
+                        if os.path.exists(path):
+                            possiveis_caminhos.append(path)
+                            print(f'[_converter_excel_para_pdf_libreoffice] Caminho encontrado: {path}')
+                
+                # Buscar em /opt
+                opt_paths = glob.glob('/opt/libreoffice*/program/soffice')
+                possiveis_caminhos.extend(opt_paths)
+                for path in opt_paths:
+                    print(f'[_converter_excel_para_pdf_libreoffice] Caminho encontrado em /opt: {path}')
+                
+                print(f'[_converter_excel_para_pdf_libreoffice] Total de caminhos a verificar: {len(possiveis_caminhos)}')
+                
+                # Verificar cada caminho
                 for caminho in possiveis_caminhos:
+                    print(f'[_converter_excel_para_pdf_libreoffice] Verificando caminho: {caminho}')
                     if os.path.exists(caminho):
-                        soffice_cmd = caminho
-                        break
-                else:
-                    print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no sistema')
-                    print('[_converter_excel_para_pdf_libreoffice] Instale o LibreOffice: sudo apt-get install libreoffice (Ubuntu/Debian)')
+                        print(f'[_converter_excel_para_pdf_libreoffice] Caminho existe: {caminho}')
+                        if os.access(caminho, os.X_OK):
+                            print(f'[_converter_excel_para_pdf_libreoffice] Caminho tem permissão de execução: {caminho}')
+                            # Verificar se é um executável real (ELF binary) ou um link simbólico válido
+                            try:
+                                # Verificar se é um link simbólico
+                                if os.path.islink(caminho):
+                                    real_path = os.path.realpath(caminho)
+                                    print(f'[_converter_excel_para_pdf_libreoffice] É um link simbólico apontando para: {real_path}')
+                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
+                                        caminho = real_path
+                                
+                                with open(caminho, 'rb') as f:
+                                    header = f.read(4)
+                                    if header.startswith(b'\x7fELF'):  # ELF binary
+                                        soffice_cmd = caminho
+                                        print(f'[_converter_excel_para_pdf_libreoffice] Encontrado executável real (ELF): {soffice_cmd}')
+                                        break
+                                    else:
+                                        # Pode ser um script ou link simbólico, mas vamos usar se existir e tiver permissão
+                                        print(f'[_converter_excel_para_pdf_libreoffice] Arquivo não é ELF, mas existe e tem permissão: {caminho}')
+                                        # Usar este arquivo se ainda não encontrou nenhum
+                                        if not soffice_cmd:
+                                            soffice_cmd = caminho
+                                            print(f'[_converter_excel_para_pdf_libreoffice] Usando arquivo encontrado: {soffice_cmd}')
+                            except Exception as e:
+                                print(f'[_converter_excel_para_pdf_libreoffice] Erro ao verificar {caminho}: {str(e)}')
+                                # Se não encontrou nenhum ainda e o arquivo existe, usar como último recurso
+                                if not soffice_cmd and os.path.exists(caminho):
+                                    soffice_cmd = caminho
+                                    print(f'[_converter_excel_para_pdf_libreoffice] Usando como último recurso: {soffice_cmd}')
+                        else:
+                            print(f'[_converter_excel_para_pdf_libreoffice] Caminho existe mas não tem permissão de execução: {caminho}')
+                    else:
+                        print(f'[_converter_excel_para_pdf_libreoffice] Caminho não existe: {caminho}')
+                
+                # Se não encontrou o executável real, tentar extrair do wrapper
+                if not soffice_cmd:
+                    # Tentar encontrar usando shutil.which (pode retornar o wrapper)
+                    wrapper_path = shutil.which('soffice')
+                    if wrapper_path:
+                        print(f'[_converter_excel_para_pdf_libreoffice] Encontrado wrapper no PATH: {wrapper_path}')
+                        # Tentar encontrar o executável real através do wrapper
+                        try:
+                            with open(wrapper_path, 'r') as f:
+                                script_content = f.read()
+                                # Procurar por padrões comuns no script
+                                patterns = [
+                                    r'(/usr/lib[^/\s]*/libreoffice[^/\s]*/program/soffice)',
+                                    r'(/usr/lib64[^/\s]*/libreoffice[^/\s]*/program/soffice)',
+                                    r'INSTALL_DIR[=:]\s*["\']?([^"\'\s]+)',
+                                    r'exec\s+["\']?([^"\'\s]+/soffice)',
+                                ]
+                                
+                                for pattern in patterns:
+                                    matches = re.findall(pattern, script_content)
+                                    for match in matches:
+                                        if isinstance(match, tuple):
+                                            match = match[0] if match else None
+                                        if match and os.path.exists(match) and os.access(match, os.X_OK):
+                                            # Verificar se é ELF
+                                            try:
+                                                with open(match, 'rb') as f:
+                                                    header = f.read(4)
+                                                    if header.startswith(b'\x7fELF'):
+                                                        soffice_cmd = match
+                                                        print(f'[_converter_excel_para_pdf_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
+                                                        break
+                                            except:
+                                                continue
+                                    if soffice_cmd:
+                                        break
+                        except Exception as e:
+                            print(f'[_converter_excel_para_pdf_libreoffice] Não foi possível encontrar executável real via wrapper: {str(e)}')
+                
+                # Se ainda não encontrou, NÃO usar o wrapper - retornar erro
+                if not soffice_cmd:
+                    print('[_converter_excel_para_pdf_libreoffice] Executável real do LibreOffice não encontrado')
+                    print('[_converter_excel_para_pdf_libreoffice] Tentou buscar em: /usr/lib/libreoffice/program/soffice, /usr/lib64/libreoffice/program/soffice, /opt/libreoffice*/program/soffice')
+                    print('[_converter_excel_para_pdf_libreoffice] Configure a variável LIBREOFFICE_PATH com o caminho completo do executável')
+                    print('[_converter_excel_para_pdf_libreoffice] Exemplo: export LIBREOFFICE_PATH=/usr/lib/libreoffice/program/soffice')
                     return None
         
-        # Comando para converter Excel para PDF
+        # Comando para converter Excel/ODS para PDF
         # --headless: modo sem interface gráfica
+        # Aceita tanto XLSX quanto ODS - gera PDF diretamente do formato original
         # --convert-to pdf: converter para PDF
         # --outdir: diretório de saída
         cmd = [
@@ -1701,23 +1789,91 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
         ]
         
         print(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
+        print(f'[_converter_excel_para_pdf_libreoffice] Arquivo de entrada: {excel_path}')
+        print(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
+        print(f'[_converter_excel_para_pdf_libreoffice] Executável: {soffice_cmd}')
         
-        # Executar conversão
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120  # Timeout de 2 minutos
-        )
+        # Verificar se o executável existe e tem permissões
+        if not os.path.exists(soffice_cmd):
+            print(f'[_converter_excel_para_pdf_libreoffice] Executável não existe: {soffice_cmd}')
+            return None
         
-        if result.returncode != 0:
-            print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter: {result.stderr}')
+        if not os.access(soffice_cmd, os.X_OK):
+            print(f'[_converter_excel_para_pdf_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
+            return None
+        
+        try:
+            # Configurar ambiente completo para o LibreOffice funcionar
+            env = os.environ.copy()
+            
+            # Garantir que comandos básicos estejam no PATH
+            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin', '/sbin', '/usr/sbin']
+            current_path = env.get('PATH', '')
+            for path in basic_paths:
+                if path not in current_path:
+                    env['PATH'] = f"{path}:{env.get('PATH', '')}"
+            
+            # Configurar LD_LIBRARY_PATH para encontrar bibliotecas do LibreOffice
+            libreoffice_lib_dir = os.path.dirname(os.path.dirname(soffice_cmd))
+            lib_paths = [
+                f'{libreoffice_lib_dir}/program',
+                f'{libreoffice_lib_dir}/ure/lib',
+                '/usr/lib',
+                '/usr/lib64',
+                '/lib',
+                '/lib64',
+            ]
+            
+            current_ld_path = env.get('LD_LIBRARY_PATH', '')
+            for lib_path in lib_paths:
+                if os.path.exists(lib_path) and lib_path not in current_ld_path:
+                    env['LD_LIBRARY_PATH'] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+            
+            # Configurar variáveis específicas do LibreOffice
+            env['SAL_USE_VCLPLUGIN'] = 'headless'
+            env['SAL_DISABLE_OPENCL'] = '1'
+            
+            # Remover variáveis que podem causar problemas
+            env.pop('DISPLAY', None)  # Garantir modo headless
+            
+            print(f'[_converter_excel_para_pdf_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
+            print(f'[_converter_excel_para_pdf_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
+            
+            # Executar conversão com ambiente configurado
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120,  # Timeout de 2 minutos
+                check=False,
+                env=env,
+                cwd=os.path.dirname(soffice_cmd)  # Executar no diretório do LibreOffice
+            )
+            
+            if result.returncode != 0:
+                print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter (código {result.returncode})')
+                print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
+                print(f'[_converter_excel_para_pdf_libreoffice] stderr: {result.stderr}')
+                return None
+            else:
+                print(f'[_converter_excel_para_pdf_libreoffice] Comando executado com sucesso')
+                if result.stdout:
+                    print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
+        except subprocess.TimeoutExpired:
+            print('[_converter_excel_para_pdf_libreoffice] Timeout ao converter Excel para PDF')
+            return None
+        except Exception as e:
+            print(f'[_converter_excel_para_pdf_libreoffice] Exceção ao executar comando: {str(e)}')
+            import traceback
+            print(traceback.format_exc())
             return None
         
         # O LibreOffice gera o PDF com o mesmo nome do arquivo Excel
         excel_basename = os.path.basename(excel_path)
-        pdf_basename = excel_basename.replace('.xlsx', '.pdf').replace('.xls', '.pdf')
+        pdf_basename = excel_basename.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
         generated_pdf_path = os.path.join(output_dir, pdf_basename)
+        
+        print(f'[_converter_excel_para_pdf_libreoffice] Caminho esperado do PDF: {generated_pdf_path}')
         
         # Aguardar um pouco para garantir que o arquivo foi criado
         max_tentativas = 10
@@ -1728,88 +1884,42 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
                 tamanho_anterior = os.path.getsize(generated_pdf_path)
                 time.sleep(0.5)
                 tamanho_atual = os.path.getsize(generated_pdf_path)
-                if tamanho_anterior == tamanho_atual:
-                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado com sucesso: {generated_pdf_path}')
+                if tamanho_anterior == tamanho_atual and tamanho_atual > 0:
+                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado com sucesso: {generated_pdf_path} (tamanho: {tamanho_atual} bytes)')
                     return generated_pdf_path
+                elif tamanho_anterior == tamanho_atual and tamanho_atual == 0:
+                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado mas está vazio: {generated_pdf_path}')
+                    # Continuar tentando por mais um pouco
+            else:
+                print(f'[_converter_excel_para_pdf_libreoffice] Tentativa {tentativa + 1}/{max_tentativas}: PDF ainda não existe')
             tentativa += 1
             time.sleep(0.5)
         
+        # Verificar se o arquivo existe mas está vazio
+        if os.path.exists(generated_pdf_path):
+            tamanho = os.path.getsize(generated_pdf_path)
+            if tamanho == 0:
+                print(f'[_converter_excel_para_pdf_libreoffice] PDF foi criado mas está vazio: {generated_pdf_path}')
+                return None
+        
+        # Listar arquivos no diretório de saída para debug
+        try:
+            arquivos_no_dir = os.listdir(output_dir)
+            print(f'[_converter_excel_para_pdf_libreoffice] Arquivos no diretório de saída: {arquivos_no_dir}')
+            # Verificar se há algum PDF no diretório
+            pdfs_no_dir = [f for f in arquivos_no_dir if f.endswith('.pdf')]
+            if pdfs_no_dir:
+                print(f'[_converter_excel_para_pdf_libreoffice] PDFs encontrados no diretório: {pdfs_no_dir}')
+        except Exception as e:
+            print(f'[_converter_excel_para_pdf_libreoffice] Erro ao listar diretório: {str(e)}')
+        
         print(f'[_converter_excel_para_pdf_libreoffice] PDF não foi gerado após {max_tentativas} tentativas')
+        print(f'[_converter_excel_para_pdf_libreoffice] Caminho esperado: {generated_pdf_path}')
         return None
         
-    except subprocess.TimeoutExpired:
-        print('[_converter_excel_para_pdf_libreoffice] Timeout ao converter Excel para PDF')
-        return None
     except Exception as e:
         print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter Excel para PDF: {str(e)}')
         import traceback
         print(traceback.format_exc())
         return None
 
-def _gerar_pdf_temp(excel_path, numero_serie):
-    """
-    Função auxiliar que converte Excel para PDF usando iLovePDF API
-    Retorna o caminho do arquivo PDF temporário ou None em caso de erro
-    """
-    pdf_temp_path = None
-    pdf_temp_dir = None
-    
-    try:
-        if not excel_path or not os.path.exists(excel_path):
-            return None
-        
-        # Obter credenciais da API do ambiente
-        ilovepdf_public_key = os.getenv('ILOVEPDF_PUBLIC_KEY')
-        ilovepdf_secret_key = os.getenv('ILOVEPDF_SECRET_KEY')
-        
-        if not ilovepdf_public_key or not ilovepdf_secret_key:
-            print('Credenciais iLovePDF não configuradas')
-            return None
-        
-        # Inicializar cliente iLovePDF
-        officepdf = OfficeToPdf(ilovepdf_public_key, verify_ssl=True, proxies=None)
-        
-        # Criar diretório temporário para salvar o PDF
-        pdf_temp_dir = _criar_diretorio_temp_projeto(prefix='pdf_api_')
-        
-        # Criar arquivo PDF temporário
-        pdf_temp_path = _criar_arquivo_temp_projeto(suffix='.pdf', prefix='pdf_')
-        
-        # Adicionar arquivo Excel
-        officepdf.add_file(excel_path)
-        
-        # Definir diretório de saída
-        officepdf.set_output_folder(pdf_temp_dir)
-        
-        # Executar conversão
-        officepdf.execute()
-        
-        # Baixar PDF gerado
-        officepdf.download()
-        
-        # Limpar tarefa na API
-        officepdf.delete_current_task()
-        
-        # Encontrar o arquivo PDF gerado
-        pdf_files = [f for f in os.listdir(pdf_temp_dir) if f.endswith('.pdf')]
-        if not pdf_files:
-            return None
-        
-        # Usar o primeiro arquivo PDF encontrado
-        generated_pdf_path = os.path.join(pdf_temp_dir, pdf_files[0])
-        if os.path.exists(generated_pdf_path):
-            return generated_pdf_path
-        
-        return None
-        
-    except Exception as e:
-        print(f'Erro ao gerar PDF: {str(e)}')
-        return None
-    finally:
-        # Limpar diretório temporário se necessário
-        if pdf_temp_dir and os.path.exists(pdf_temp_dir):
-            try:
-                # Não remover ainda, o arquivo será usado
-                pass
-            except:
-                pass
