@@ -525,25 +525,55 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
                         path = f'{lib_dir}/libreoffice{version}/program/soffice'
                         if os.path.exists(path):
                             possiveis_caminhos.append(path)
+                            logging.info(f'[_converter_excel_para_pdf_libreoffice] Caminho encontrado: {path}')
                 
                 # Buscar em /opt
                 opt_paths = glob.glob('/opt/libreoffice*/program/soffice')
                 possiveis_caminhos.extend(opt_paths)
+                for path in opt_paths:
+                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Caminho encontrado em /opt: {path}')
+                
+                logging.info(f'[_converter_excel_para_pdf_libreoffice] Total de caminhos a verificar: {len(possiveis_caminhos)}')
                 
                 # Verificar cada caminho
                 for caminho in possiveis_caminhos:
-                    if os.path.exists(caminho) and os.access(caminho, os.X_OK):
-                        # Verificar se é um executável real (ELF binary)
-                        try:
-                            with open(caminho, 'rb') as f:
-                                header = f.read(4)
-                                if header.startswith(b'\x7fELF'):  # ELF binary
+                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Verificando caminho: {caminho}')
+                    if os.path.exists(caminho):
+                        logging.info(f'[_converter_excel_para_pdf_libreoffice] Caminho existe: {caminho}')
+                        if os.access(caminho, os.X_OK):
+                            logging.info(f'[_converter_excel_para_pdf_libreoffice] Caminho tem permissão de execução: {caminho}')
+                            # Verificar se é um executável real (ELF binary) ou um link simbólico válido
+                            try:
+                                # Verificar se é um link simbólico
+                                if os.path.islink(caminho):
+                                    real_path = os.path.realpath(caminho)
+                                    logging.info(f'[_converter_excel_para_pdf_libreoffice] É um link simbólico apontando para: {real_path}')
+                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
+                                        caminho = real_path
+                                
+                                with open(caminho, 'rb') as f:
+                                    header = f.read(4)
+                                    if header.startswith(b'\x7fELF'):  # ELF binary
+                                        soffice_cmd = caminho
+                                        logging.info(f'[_converter_excel_para_pdf_libreoffice] Encontrado executável real (ELF): {soffice_cmd}')
+                                        break
+                                    else:
+                                        # Pode ser um script ou link simbólico, mas vamos usar se existir e tiver permissão
+                                        logging.info(f'[_converter_excel_para_pdf_libreoffice] Arquivo não é ELF, mas existe e tem permissão: {caminho}')
+                                        # Usar este arquivo se ainda não encontrou nenhum
+                                        if not soffice_cmd:
+                                            soffice_cmd = caminho
+                                            logging.info(f'[_converter_excel_para_pdf_libreoffice] Usando arquivo encontrado: {soffice_cmd}')
+                            except Exception as e:
+                                logging.warning(f'[_converter_excel_para_pdf_libreoffice] Erro ao verificar {caminho}: {str(e)}')
+                                # Se não encontrou nenhum ainda e o arquivo existe, usar como último recurso
+                                if not soffice_cmd and os.path.exists(caminho):
                                     soffice_cmd = caminho
-                                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Encontrado executável real: {soffice_cmd}')
-                                    break
-                        except Exception as e:
-                            logging.debug(f'[_converter_excel_para_pdf_libreoffice] Erro ao verificar {caminho}: {str(e)}')
-                            continue
+                                    logging.info(f'[_converter_excel_para_pdf_libreoffice] Usando como último recurso: {soffice_cmd}')
+                        else:
+                            logging.warning(f'[_converter_excel_para_pdf_libreoffice] Caminho existe mas não tem permissão de execução: {caminho}')
+                    else:
+                        logging.debug(f'[_converter_excel_para_pdf_libreoffice] Caminho não existe: {caminho}')
                 
                 # Se não encontrou o executável real, tentar extrair do wrapper
                 if not soffice_cmd:
