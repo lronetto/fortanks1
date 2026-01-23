@@ -35,9 +35,10 @@ peca = Blueprint('peca', __name__, url_prefix='/pecas')
 @peca.before_request
 @login_required
 def verificar_permissao():
-    if not Permissao.verificar_permissao_completa(current_user, 'pecas', 'visualizar'):
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+    pass
+   # if not Permissao.verificar_permissao_completa(current_user, 'pecas', 'visualizar'):
+   #     flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
+   #     return redirect(url_for('dashboard.index'))
 
 @peca.route('/')
 @login_required

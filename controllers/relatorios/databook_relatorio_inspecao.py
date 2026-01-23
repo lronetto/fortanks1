@@ -608,30 +608,66 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
             excel_path
         ]
         
+        # Verificar se o executável existe e tem permissões
+        if not os.path.exists(soffice_cmd):
+            logging.error(f'[_converter_excel_para_pdf_libreoffice] Executável não existe: {soffice_cmd}')
+            return None
+        
+        if not os.access(soffice_cmd, os.X_OK):
+            logging.error(f'[_converter_excel_para_pdf_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
+            return None
+        
         logging.info(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
         logging.info(f'[_converter_excel_para_pdf_libreoffice] Arquivo de entrada: {excel_path}')
         logging.info(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
+        logging.info(f'[_converter_excel_para_pdf_libreoffice] Executável: {soffice_cmd}')
         
         try:
-            # Configurar PATH mínimo necessário para o LibreOffice funcionar
-            # O wrapper script precisa de comandos básicos do sistema
+            # Configurar ambiente completo para o LibreOffice funcionar
             env = os.environ.copy()
+            
             # Garantir que comandos básicos estejam no PATH
-            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin']
+            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin', '/sbin', '/usr/sbin']
             current_path = env.get('PATH', '')
-            # Adicionar caminhos básicos se não estiverem presentes
             for path in basic_paths:
                 if path not in current_path:
                     env['PATH'] = f"{path}:{env.get('PATH', '')}"
             
-            # Executar conversão com PATH configurado
+            # Configurar LD_LIBRARY_PATH para encontrar bibliotecas do LibreOffice
+            libreoffice_lib_dir = os.path.dirname(os.path.dirname(soffice_cmd))
+            lib_paths = [
+                f'{libreoffice_lib_dir}/program',
+                f'{libreoffice_lib_dir}/ure/lib',
+                '/usr/lib',
+                '/usr/lib64',
+                '/lib',
+                '/lib64',
+            ]
+            
+            current_ld_path = env.get('LD_LIBRARY_PATH', '')
+            for lib_path in lib_paths:
+                if os.path.exists(lib_path) and lib_path not in current_ld_path:
+                    env['LD_LIBRARY_PATH'] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+            
+            # Configurar variáveis específicas do LibreOffice
+            env['SAL_USE_VCLPLUGIN'] = 'headless'
+            env['SAL_DISABLE_OPENCL'] = '1'
+            
+            # Remover variáveis que podem causar problemas
+            env.pop('DISPLAY', None)  # Garantir modo headless
+            
+            logging.info(f'[_converter_excel_para_pdf_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
+            logging.info(f'[_converter_excel_para_pdf_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
+            
+            # Executar conversão com ambiente configurado
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
                 timeout=120,  # Timeout de 2 minutos
                 check=False,
-                env=env
+                env=env,
+                cwd=os.path.dirname(soffice_cmd)  # Executar no diretório do LibreOffice
             )
             
             if result.returncode != 0:
@@ -863,18 +899,56 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             ods_path
         ]
         
+        # Verificar se o executável existe e tem permissões
+        if not os.path.exists(soffice_cmd):
+            print(f'[_converter_ods_para_xlsx_libreoffice] Executável não existe: {soffice_cmd}')
+            return None
+        
+        if not os.access(soffice_cmd, os.X_OK):
+            print(f'[_converter_ods_para_xlsx_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
+            return None
+        
         print(f'[_converter_ods_para_xlsx_libreoffice] Executando: {" ".join(cmd)}')
         print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS: {ods_path}')
         print(f'[_converter_ods_para_xlsx_libreoffice] Diretório de saída: {output_dir}')
+        print(f'[_converter_ods_para_xlsx_libreoffice] Executável: {soffice_cmd}')
         
         try:
-            # Configurar PATH mínimo necessário para o LibreOffice funcionar
+            # Configurar ambiente completo para o LibreOffice funcionar
             env = os.environ.copy()
-            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin']
+            
+            # Garantir que comandos básicos estejam no PATH
+            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin', '/sbin', '/usr/sbin']
             current_path = env.get('PATH', '')
             for path in basic_paths:
                 if path not in current_path:
                     env['PATH'] = f"{path}:{env.get('PATH', '')}"
+            
+            # Configurar LD_LIBRARY_PATH para encontrar bibliotecas do LibreOffice
+            libreoffice_lib_dir = os.path.dirname(os.path.dirname(soffice_cmd))
+            lib_paths = [
+                f'{libreoffice_lib_dir}/program',
+                f'{libreoffice_lib_dir}/ure/lib',
+                '/usr/lib',
+                '/usr/lib64',
+                '/lib',
+                '/lib64',
+            ]
+            
+            current_ld_path = env.get('LD_LIBRARY_PATH', '')
+            for lib_path in lib_paths:
+                if os.path.exists(lib_path) and lib_path not in current_ld_path:
+                    env['LD_LIBRARY_PATH'] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
+            
+            # Configurar variáveis específicas do LibreOffice
+            env['SAL_USE_VCLPLUGIN'] = 'headless'
+            env['SAL_DISABLE_OPENCL'] = '1'
+            
+            # Remover variáveis que podem causar problemas
+            env.pop('DISPLAY', None)  # Garantir modo headless
+            
+            print(f'[_converter_ods_para_xlsx_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
+            print(f'[_converter_ods_para_xlsx_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
             
             result = subprocess.run(
                 cmd,
@@ -882,7 +956,8 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 text=True,
                 timeout=60,
                 check=False,
-                env=env
+                env=env,
+                cwd=os.path.dirname(soffice_cmd)  # Executar no diretório do LibreOffice
             )
             
             if result.returncode != 0:

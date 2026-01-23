@@ -1014,11 +1014,12 @@ def exportar_excel():
                     estoque = componente.estoque
                     if estoque:
                         if estoque.material:
-                            nome_item = estoque.material.nome
-                            codigo_item = estoque.material.codigo or ''
-                            json_obj = json.loads(estoque.material.dados_adicionais) if estoque.material.dados_adicionais else {}
+                            material=Materiais.query.get(estoque.material_id)
+                            nome_item = material.nome
+                            codigo_item = material.codigo or ''
+                            json_obj = json.loads(material.dados_adicionais) if material.dados_adicionais else {}
                             mega = json_obj.get('cod_mega', '')
-                            unidade = estoque.material.unidade_obj.sigla if (estoque.material.unidade_obj and hasattr(estoque.material.unidade_obj, 'sigla')) else ''
+                            unidade = material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, 'nome')) else ''
                             tipo = 'Material'
                         elif estoque.produto_composto:
                             nome_item = estoque.produto_composto.nome
