@@ -5,7 +5,7 @@ from models.contrato import Contrato
 from models.tanque import TanquesGrupos, Tanques, TanquesPecas, TanquesProdutoComposto
 from models.estoque import Estoque, EstoqueMovimentacoes
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
-from models.concreto import ConcretoUsinagens
+from models.concreto import ConcretoUsinagens, ConcretoConcretagens
 from flask_wtf.csrf import generate_csrf
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -1295,7 +1295,7 @@ def importar_inspecao():
             tempo_final = datetime.now()
             logging.info(f"processar_arquivo_inspecao finalizado em {tempo_final - tempo_inicio}")
             tempo_inicio = datetime.now()
-            processar_producao_manual(log=False)
+            #processar_producao_manual(log=False)
             tempo_final = datetime.now()
             logging.info(f"processar_producao_manual finalizado em {tempo_final - tempo_inicio}")
             return jsonify({
@@ -1373,7 +1373,9 @@ def processar_arquivo_inspecao(xlsx_path):
     # Ler o arquivo Excel na aba ' CADASTRO' (com espaço no início)
     df = pd.read_excel(xlsx_path, sheet_name=' CADASTRO', engine='openpyxl')
     df_series = pd.read_excel(xlsx_path, sheet_name='series', engine='openpyxl')
+    df_alongamentos = pd.read_excel(xlsx_path, sheet_name='ALONG', engine='openpyxl')
     
+    print(f"Processando {len(df_series)} series")
     for index, row in df_series.iterrows():
         serie = get_row_value(row, 0)
         if get_row_value(row, 3) is None:
@@ -1412,9 +1414,10 @@ def processar_arquivo_inspecao(xlsx_path):
         usinagem.save()
    
     pecas = []
-    
+    print(f"Processando {len(df)} peças")
     for index, row in df.iterrows():
         peca = {
+            'concretagem': None,
             'tanque_id': None,
             'nome': None,
             'numero_sequencial': None,
@@ -1489,6 +1492,8 @@ def processar_arquivo_inspecao(xlsx_path):
         else:
             peca['data_concretagem'] = None
         
+        peca['concretagem'] = get_row_value(row, 2)
+
         peca['tipo'] = get_row_value(row, 9)
         peca['qualidade']['pista'] = get_row_value(row, 18)
         peca['qualidade']['acabamento'] = get_row_value(row, 17)
@@ -1538,7 +1543,79 @@ def processar_arquivo_inspecao(xlsx_path):
         
         pecas.append(peca)
         log['total_pecas'] += 1
+    alongamentos = []
+    print(f"Processando {len(df_alongamentos)} alongamentos")
+    for index, row in df_alongamentos.iloc[3:].iterrows():
+        if get_row_value(row, 1) is None:
+            continue
+        alongamento = {
+            'data_concretagem': None,
+            'cordoalhas': {
+                'alongamentos': [],
+                'bobinas': [],
+            },
+            'pecas': [],
+            'pista': None,
+            'concretagem': None,
+        }
+        alongamento['concretagem'] = get_row_value(row, 0)
+        data_raw = get_row_value(row, 1)
+        # Converte para datetime object ou None para salvar no MySQL
+        if data_raw and hasattr(data_raw, 'strftime'):
+            alongamento['data_concretagem'] = data_raw
+        elif data_raw and isinstance(data_raw, str) and data_raw != '-':
+            # Tenta parsear string no formato DD/MM/YYYY
+            try:
+                alongamento['data_concretagem'] = serialize_value(datetime.strptime(data_raw, '%d/%m/%Y'))
+            except:
+                alongamento['data_concretagem'] = None
+
+        for i in range(3, 24):
+            alongamento['cordoalhas']['alongamentos'].append(get_row_value(row, i-1))
+
+        bobina = {
+            'numero': get_row_value(row, 24),
+            'data_fabricacao': serialize_value(get_row_value(row, 25)),
+            'certificado': get_row_value(row, 26),
+        }
+        
+        alongamento['cordoalhas']['bobinas'].append(bobina)
+        if get_row_value(row, 27) and get_row_value(row, 27) != '':
+            bobina = {
+                'numero': get_row_value(row, 27),
+                'data_fabricacao': serialize_value(get_row_value(row, 28)),
+                'certificado': get_row_value(row, 29),
+            }
+            alongamento['cordoalhas']['bobinas'].append(bobina)
+        for peca in pecas:
+            if peca['concretagem'] == alongamento['concretagem'] and peca['data_concretagem'] == alongamento['data_concretagem']:
+                alongamento['pista'] = peca['qualidade']['pista']
+                pecaa = {
+                    'nome': peca['nome'],
+                    'tanque_id': peca['tanque_id'],
+                    'forma': 0
+                }
+                alongamento['pecas'].append(pecaa)
+        alongamentos.append(alongamento)
     
+    for alongamento in alongamentos:
+        concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.conc==alongamento['concretagem']).first()
+        if not concretagem:
+            concretagem = ConcretoConcretagens(
+                conc=alongamento['concretagem'],
+                data_concretagem=alongamento['data_concretagem'],
+                pista=alongamento['pista'],
+                cordoalhas=json.dumps(alongamento['cordoalhas']),
+                pecas=json.dumps(alongamento['pecas']),
+            )
+            concretagem.save()
+        else:
+            concretagem.data_concretagem = alongamento['data_concretagem']
+            concretagem.pista = alongamento['pista']
+            concretagem.cordoalhas = json.dumps(alongamento['cordoalhas'])
+            concretagem.pecas = json.dumps(alongamento['pecas'])
+            concretagem.save()
+
     # Processar peças
     for peca in pecas:
         peca_existe = TanquesPecas.query.filter(

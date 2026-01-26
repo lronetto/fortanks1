@@ -1,39 +1,47 @@
-<!-- Modal de confirmação de exclusão -->
+<!-- Modal de Exclusão -->
 <div class="modal fade" id="modalExcluir" tabindex="-1" aria-labelledby="modalExcluirLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form id="form-excluir" method="POST" action="">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="modalExcluirLabel">Confirmar Exclusão</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Tem certeza que deseja excluir a concretagem <strong id="concretagem-info"></strong>?</p>
-                    <p class="text-danger">Esta ação não pode ser desfeita.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger">Confirmar Exclusão</button>
-                </div>
-            </form>
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir esta concretagem?</p>
+                <input type="hidden" id="concretagem_id" name="id">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarExclusao">Excluir</button>
+            </div>
         </div>
     </div>
 </div>
-{% block scripts %}
+
 <script>
     $(document).ready(function() {
-        $('#modalExcluir').on('show.bs.modal', function (e) {
-            var id = $('.btn-excluir').data('id');
-            var tanques = $('.btn-excluir').data('tanques');
-            var data = $('.btn-excluir').data('data');
-            console.log('id: ' + id);
-            console.log('tanques: ' + tanques);
-            console.log('data: ' + data);
-
-            $('#concretagem-info').text(`#${id} - ${tanques} (${data})`);
-            $('#form-excluir').attr('action', `{{ url_for('concretagem.excluir', id=0) }}`.replace('0', id));
+        $('#btnConfirmarExclusao').on('click', function() {
+            const id = $('#concretagem_id').val();
+            
+            $.ajax({
+                url: `/concretagens/api/${id}/excluir`,
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': $('#csrf_token_global').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#modalExcluir').modal('hide');
+                        $('#tabelaConcretagens').DataTable().ajax.reload();
+                        alert('Concretagem excluída com sucesso!');
+                    } else {
+                        alert('Erro: ' + (response.message || 'Erro ao excluir concretagem'));
+                    }
+                },
+                error: function() {
+                    alert('Erro ao excluir concretagem. Tente novamente.');
+                }
+            });
         });
     });
 </script>
-{% endblock %}

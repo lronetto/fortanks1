@@ -380,6 +380,7 @@ def obter_tanque(tanque_id):
                 'placas_fecho': tanque.placas_fecho,
                 'item_nf': tanque.item_nf,
                 'contrato_id': tanque.contrato_id,
+                'dados_adicionais': tanque.dados_adicionais,
                 'area_base': tanque.area_base,
                 'volume_util': tanque.volume_util,
                 'volume_total': tanque.volume_total,

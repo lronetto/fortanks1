@@ -1014,6 +1014,7 @@ def exportar_excel():
                     estoque = componente.estoque
                     if estoque:
                         if estoque.material:
+                            cod_alterdata = estoque.material.codigo_erp or ''
                             material=Materiais.query.get(estoque.material_id)
                             nome_item = material.nome
                             codigo_item = material.codigo or ''
@@ -1028,20 +1029,23 @@ def exportar_excel():
                             codigo_item = ''
                             unidade = ''
                             tipo = 'Produto Composto'
+                            cod_alterdata = ''
                         else:
                             nome_item = 'Desconhecido'
                             codigo_item = ''
                             unidade = ''
                             tipo = 'Desconhecido'
+                            cod_alterdata = ''
                         
                         dados_componentes.append({
-                            'ID Estoque': estoque.id,
-                            'Material/Produto mega': mega,
+                            'ID Sfortanks': estoque.id,
+                            #'Material/Produto mega': mega,
                             'Nome': nome_item,
-                            'Código': codigo_item,
+                            #'Código': codigo_item,
+                            'Código Alterdata': cod_alterdata,
                             'Quantidade': float(componente.quantidade),
                             'Unidade': unidade,
-                            'Observação': componente.observacao or ''
+                            #'Observação': componente.observacao or ''
                         })
                 
                 # Ordenar componentes pelo nome do material/produto

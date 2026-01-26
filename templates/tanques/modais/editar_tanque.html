@@ -81,6 +81,24 @@
 
                     <div class="row mb-3">
                         <div class="col-md-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="edit_segunda_concretagem" name="segunda_concretagem">
+                                <label class="form-check-label" for="edit_segunda_concretagem">
+                                    Segunda Concretagem
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3" id="edit_descricao_segunda_concretagem_container" style="display: none;">
+                        <div class="col-md-12">
+                            <label for="edit_descricao_segunda_concretagem" class="form-label">Descrição da Segunda Concretagem</label>
+                            <textarea class="form-control" id="edit_descricao_segunda_concretagem" name="descricao_segunda_concretagem" rows="3" placeholder="Descreva os detalhes da segunda concretagem..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
                             <h6 class="font-weight-bold mb-2">Quantidades de Placas</h6>
                         </div>
                         <div class="col-md-6">
@@ -147,6 +165,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 contratoSelect.value = tanque.contrato_id;
             }
             
+            // Carregar dados adicionais (segunda concretagem)
+            if (tanque.dados_adicionais) {
+                try {
+                    const dadosAdicionais = JSON.parse(tanque.dados_adicionais);
+                    if (dadosAdicionais.segunda_concretagem) {
+                        document.getElementById('edit_segunda_concretagem').checked = true;
+                        if (dadosAdicionais.descricao_segunda_concretagem) {
+                            document.getElementById('edit_descricao_segunda_concretagem').value = dadosAdicionais.descricao_segunda_concretagem;
+                        }
+                        toggleDescricaoSegundaConcretagem();
+                    }
+                } catch (e) {
+                    console.error('Erro ao parsear dados_adicionais:', e);
+                }
+            }
+            
             atualizarDimensoesHelp();
         } catch (error) {
             console.error('Erro ao preencher o modal:', error);
@@ -169,6 +203,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     document.getElementById('edit_sistema').addEventListener('change', atualizarDimensoesHelp);
+
+    // Controlar visibilidade do campo de descrição da segunda concretagem
+    function toggleDescricaoSegundaConcretagem() {
+        const checkbox = document.getElementById('edit_segunda_concretagem');
+        const container = document.getElementById('edit_descricao_segunda_concretagem_container');
+        if (checkbox && container) {
+            container.style.display = checkbox.checked ? 'block' : 'none';
+        }
+    }
+    
+    document.getElementById('edit_segunda_concretagem').addEventListener('change', toggleDescricaoSegundaConcretagem);
 
     // Adicionar evento para o botão de editar
     const editButtons = document.querySelectorAll('.btn-editar-tanque');
@@ -231,8 +276,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
+                // Preparar dados adicionais em JSON
+                const segundaConcretagem = document.getElementById('edit_segunda_concretagem').checked;
+                const descricaoSegundaConcretagem = document.getElementById('edit_descricao_segunda_concretagem').value.trim();
+                
+                const dadosAdicionais = {};
+                if (segundaConcretagem) {
+                    dadosAdicionais.segunda_concretagem = true;
+                    if (descricaoSegundaConcretagem) {
+                        dadosAdicionais.descricao_segunda_concretagem = descricaoSegundaConcretagem;
+                    }
+                }
+
                 const form = document.getElementById('form-editar-tanque');
                 const formData = new FormData(form);
+                
+                // Adicionar dados_adicionais como JSON
+                if (Object.keys(dadosAdicionais).length > 0) {
+                    formData.set('dados_adicionais', JSON.stringify(dadosAdicionais));
+                } else {
+                    formData.set('dados_adicionais', '');
+                }
+                
                 const url = `/tanques/editar/${tanqueId}`;
                 
                 fetch(url, {

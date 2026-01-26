@@ -30,6 +30,7 @@ class Tanques(db.Model):
     placas_normais = db.Column(db.Integer, default=0)
     placas_fecho = db.Column(db.Integer, default=0)
     valorUnitario = db.Column(db.Float, nullable=True, default=0)
+    dados_adicionais = db.Column(db.Text, nullable=True)
     
     # Chave estrangeira para contrato
     contrato_id = db.Column(db.Integer, db.ForeignKey('contratos.id'), nullable=True)

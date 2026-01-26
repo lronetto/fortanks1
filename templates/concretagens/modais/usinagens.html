@@ -1,0 +1,309 @@
+<!-- Modal de Referenciar Usinagens (Séries) -->
+<div class="modal fade" id="modalUsinagens" tabindex="-1" aria-labelledby="modalUsinagensLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <form id="formUsinagens">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="concretagem_id_usinagens" name="concretagem_id">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalUsinagensLabel">Referenciar Usinagens (Séries)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Filtro de Data -->
+                    <div class="mb-3">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="filtro_data_usinagem" class="form-label">Filtrar por Data</label>
+                                <input type="date" class="form-control" id="filtro_data_usinagem" name="filtro_data_usinagem">
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">&nbsp;</label>
+                                <div>
+                                    <button type="button" class="btn btn-sm btn-primary" id="btnFiltrarSeries">
+                                        <i class="fas fa-filter"></i> Filtrar Séries
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de Peças -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Peças da Concretagem - Referenciar Séries por Peça</label>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table class="table table-sm table-bordered table-hover" id="tabelaPecasUsinagens">
+                                <thead class="sticky-top bg-white">
+                                    <tr>
+                                        <th>Tanque</th>
+                                        <th>Peça</th>
+                                        <th>Forma</th>
+                                        <th>Séries Disponíveis</th>
+                                        <th>Séries Referenciadas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Linhas serão adicionadas dinamicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <small class="form-text text-muted">Selecione as séries para cada peça individualmente. Segure Ctrl (ou Cmd no Mac) para selecionar múltiplas séries.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Referências</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    $(document).ready(function() {
+        let concretagemId = null;
+        let dataConcretagem = null;
+
+        // Carregar dados quando o modal abrir
+        $('#modalUsinagens').on('show.bs.modal', function(e) {
+            const id = $(this).data('concretagem-id') || $(e.relatedTarget)?.data('id');
+            if (id) {
+                concretagemId = id;
+                $('#concretagem_id_usinagens').val(id);
+                carregarDadosUsinagens(id);
+            }
+        });
+
+        // Função para carregar dados da concretagem e peças
+        function carregarDadosUsinagens(id) {
+            $.get(`/concretagens/api/${id}`, function(data) {
+                // Definir data padrão como data da concretagem
+                if (data.data_concretagem) {
+                    dataConcretagem = data.data_concretagem;
+                    $('#filtro_data_usinagem').val(dataConcretagem);
+                    
+                    // Carregar séries com a data padrão
+                    carregarSeriesPorData(dataConcretagem);
+                }
+
+                // Carregar peças da concretagem
+                carregarPecasConcretagem(id);
+            }).fail(function() {
+                alert('Erro ao carregar dados da concretagem');
+            });
+        }
+
+        // Função para carregar peças da concretagem
+        function carregarPecasConcretagem(id) {
+            $.get(`/concretagens/api/${id}/pecas`, function(data) {
+                const tbody = $('#tabelaPecasUsinagens tbody');
+                tbody.empty();
+
+                if (data.pecas && data.pecas.length > 0) {
+                    data.pecas.forEach(function(pecaItem, index) {
+                        const pecaObj = pecaItem.peca || {};
+                        const tanqueObj = pecaItem.tanque_obj || {};
+                        const pecaNome = pecaItem.placa || pecaObj.nome || '';
+                        const tanqueNome = tanqueObj.nome || '';
+                        const forma = pecaItem.forma || '';
+                        const pecaId = pecaObj.id || '';
+                        const tanqueId = pecaItem.tanque || pecaItem.tanque_id || '';
+                        
+                        // Buscar séries já referenciadas nesta peça
+                        const seriesReferenciadas = pecaObj.qualidade?.series || [];
+                        const seriesTexto = seriesReferenciadas.length > 0 
+                            ? seriesReferenciadas.join(', ') 
+                            : '<span class="text-muted">Nenhuma</span>';
+                        const seriesReferenciadasJson = JSON.stringify(seriesReferenciadas).replace(/'/g, "&#39;");
+
+                        const linha = `
+                            <tr data-peca-id="${pecaId}" data-peca-nome="${pecaNome}" data-tanque-id="${tanqueId}" data-index="${index}" data-series-referenciadas="${seriesReferenciadasJson}">
+                                <td>${tanqueNome}</td>
+                                <td>${pecaNome}</td>
+                                <td>${forma || '-'}</td>
+                                <td>
+                                    <select class="form-select form-select-sm select-series-peca" 
+                                            data-peca-id="${pecaId}" 
+                                            data-peca-nome="${pecaNome}"
+                                            data-tanque-id="${tanqueId}"
+                                            multiple 
+                                            size="5"
+                                            style="min-width: 250px;">
+                                        <option value="">Carregando séries...</option>
+                                    </select>
+                                </td>
+                                <td class="series-referenciadas">${seriesTexto}</td>
+                            </tr>
+                        `;
+                        tbody.append(linha);
+                        
+                        // Carregar séries para este select específico
+                        if (dataConcretagem) {
+                            carregarSeriesParaPeca(index, dataConcretagem, seriesReferenciadas);
+                        }
+                    });
+                } else {
+                    tbody.append('<tr><td colspan="5" class="text-center text-muted">Nenhuma peça cadastrada nesta concretagem</td></tr>');
+                }
+            }).fail(function() {
+                alert('Erro ao carregar peças da concretagem');
+            });
+        }
+
+        // Função para carregar séries por data (para todos os selects)
+        function carregarSeriesPorData(data) {
+            if (!data) {
+                return;
+            }
+
+            // Recarregar séries em todos os selects de peças
+            $('.select-series-peca').each(function() {
+                const index = $(this).closest('tr').data('index');
+                const tr = $(this).closest('tr');
+                // Buscar séries referenciadas do atributo data
+                let seriesReferenciadas = [];
+                try {
+                    const seriesDataAttr = tr.attr('data-series-referenciadas');
+                    if (seriesDataAttr) {
+                        // Decodificar HTML entities e fazer parse do JSON
+                        const decoded = seriesDataAttr.replace(/&#39;/g, "'");
+                        seriesReferenciadas = JSON.parse(decoded);
+                    }
+                } catch (e) {
+                    console.warn('Erro ao parsear séries referenciadas:', e);
+                    // Tentar buscar do texto como fallback
+                    const seriesTexto = tr.find('.series-referenciadas').text().trim();
+                    if (seriesTexto && seriesTexto !== 'Nenhuma') {
+                        seriesReferenciadas = seriesTexto.split(',').map(s => s.trim()).filter(s => s);
+                    }
+                }
+                
+                carregarSeriesParaPeca(index, data, seriesReferenciadas);
+            });
+        }
+
+        // Função para carregar séries para um select específico de peça
+        function carregarSeriesParaPeca(index, data, seriesReferenciadas = []) {
+            const select = $(`.select-series-peca`).eq(index);
+            if (select.length === 0) return;
+
+            select.html('<option value="">Carregando séries...</option>');
+
+            $.get(`/concretagens/api/usinagens/por-data`, { data: data }, function(response) {
+                select.empty();
+
+                if (response.series && response.series.length > 0) {
+                    response.series.forEach(function(serie) {
+                        const dataFormatada = serie.data_usinagem ? 
+                            new Date(serie.data_usinagem).toLocaleDateString('pt-BR') : '';
+                        const volume = serie.volume || 0;
+                        const nota = serie.nota || '';
+                        const texto = `${serie.serie} - ${dataFormatada} - Vol: ${volume}m³${nota ? ' - NF: ' + nota : ''}`;
+                        
+                        // Verificar se a série já está referenciada (comparar como strings)
+                        const serieStr = String(serie.serie);
+                        const jaReferenciada = seriesReferenciadas.some(s => String(s) === serieStr);
+                        const selected = jaReferenciada ? 'selected' : '';
+                        
+                        select.append(`<option value="${serie.serie}" ${selected}>${texto}</option>`);
+                    });
+                } else {
+                    select.append('<option value="">Nenhuma série encontrada para esta data</option>');
+                }
+            }).fail(function() {
+                select.html('<option value="">Erro ao carregar séries</option>');
+            });
+        }
+
+        // Filtrar séries ao clicar no botão
+        $('#btnFiltrarSeries').on('click', function() {
+            const data = $('#filtro_data_usinagem').val();
+            if (data) {
+                dataConcretagem = data;
+                carregarSeriesPorData(data);
+            } else {
+                alert('Selecione uma data para filtrar');
+            }
+        });
+
+        // Salvar referências
+        $('#formUsinagens').on('submit', function(e) {
+            e.preventDefault();
+
+            // Coletar séries selecionadas por peça
+            const pecasComSeries = [];
+            let totalSeries = 0;
+
+            $('#tabelaPecasUsinagens tbody tr').each(function() {
+                const pecaId = $(this).data('peca-id');
+                const pecaNome = $(this).data('peca-nome');
+                const tanqueId = $(this).data('tanque-id');
+                const select = $(this).find('.select-series-peca');
+                const seriesSelecionadas = select.val() || [];
+
+                if (seriesSelecionadas.length > 0) {
+                    pecasComSeries.push({
+                        peca_id: pecaId,
+                        peca_nome: pecaNome,
+                        tanque_id: tanqueId,
+                        series: seriesSelecionadas
+                    });
+                    totalSeries += seriesSelecionadas.length;
+                }
+            });
+
+            if (pecasComSeries.length === 0) {
+                alert('Selecione pelo menos uma série em alguma peça para referenciar');
+                return;
+            }
+
+            const dados = {
+                csrf_token: $('#csrf_token_global').val(),
+                pecas: pecasComSeries
+            };
+
+            $.ajax({
+                url: `/concretagens/api/${concretagemId}/usinagens`,
+                method: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': $('#csrf_token_global').val()
+                },
+                data: JSON.stringify(dados),
+                success: function(response) {
+                    if (response.success) {
+                        alert('Séries referenciadas com sucesso!');
+                        // Recarregar peças para mostrar as séries atualizadas
+                        if (concretagemId) {
+                            carregarPecasConcretagem(concretagemId);
+                            // Recarregar séries nos selects também
+                            if (dataConcretagem) {
+                                setTimeout(function() {
+                                    carregarSeriesPorData(dataConcretagem);
+                                }, 500);
+                            }
+                        } else {
+                            $('#modalUsinagens').modal('hide');
+                        }
+                    } else {
+                        alert('Erro: ' + (response.message || 'Erro ao salvar referências'));
+                    }
+                },
+                error: function(xhr) {
+                    const errorMsg = xhr.responseJSON?.message || 'Erro ao salvar referências. Tente novamente.';
+                    alert('Erro: ' + errorMsg);
+                }
+            });
+        });
+    });
+
+    // Expor função globalmente
+    window.carregarDadosUsinagens = function(id) {
+        $('#modalUsinagens').data('concretagem-id', id);
+        if ($('#modalUsinagens').hasClass('show')) {
+            // Se o modal já está aberto, recarregar dados
+            const event = new Event('show.bs.modal');
+            $('#modalUsinagens')[0].dispatchEvent(event);
+        }
+    };
+</script>

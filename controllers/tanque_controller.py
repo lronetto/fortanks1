@@ -208,6 +208,7 @@ def editar(id):
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
         item_nf = request.form.get('item_nf')
+        dados_adicionais = request.form.get('dados_adicionais', '')
         
         # Extrair valores numéricos das dimensões
         diametro = None
@@ -289,6 +290,7 @@ def editar(id):
             tanque.placas_fecho = placas_fecho
             tanque.contrato_id = contrato_id
             tanque.item_nf = item_nf
+            tanque.dados_adicionais = dados_adicionais if dados_adicionais else None
             
             # Salvar as alterações
             db.session.commit()

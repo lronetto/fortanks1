@@ -695,6 +695,7 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
             # Criar cópia do ODS e processar diretamente
             temp_file_path = _criar_arquivo_temp_projeto(suffix='.ods', prefix='excel_')
             shutil.copy2(template_path, temp_file_path)
+            print(f'[_gerar_excel_temp] ODS copiado com sucesso: {temp_file_path}')
             
             # Processar ODS diretamente
             _processar_ods_template(
@@ -992,9 +993,26 @@ def exportar_excel(numero_serie):
             return jsonify({'error': error_msg}), 404
         
         try:
+            # Verificar se o arquivo é ODS e converter para XLSX se necessário
+            arquivo_final = excel_path
+            ods_original = None
+            
+            if excel_path.lower().endswith('.ods'):
+                print(f'[exportar_excel] Arquivo ODS detectado, convertendo para XLSX: {excel_path}')
+                # Criar caminho para o arquivo XLSX convertido
+                xlsx_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_convertido_')
+                # Converter ODS para XLSX
+                arquivo_convertido = _converter_ods_para_xlsx_libreoffice(excel_path, xlsx_path)
+                if arquivo_convertido:
+                    arquivo_final = arquivo_convertido
+                    ods_original = excel_path  # Guardar referência para limpar depois
+                    print(f'[exportar_excel] Conversão concluída: {arquivo_final}')
+                else:
+                    print(f'[exportar_excel] Erro ao converter ODS para XLSX, usando arquivo original')
+            
             # Ler o arquivo salvo para o buffer
             output = io.BytesIO()
-            with open(excel_path, 'rb') as f:
+            with open(arquivo_final, 'rb') as f:
                 output.write(f.read())
             output.seek(0)
             
@@ -1010,8 +1028,11 @@ def exportar_excel(numero_serie):
             )
         finally:
             # Limpar arquivo temporário (se configurado)
-            if excel_path and os.path.exists(excel_path):
-                _limpar_arquivo_temp(excel_path)
+            if 'arquivo_final' in locals() and arquivo_final and os.path.exists(arquivo_final):
+                _limpar_arquivo_temp(arquivo_final)
+            # Limpar arquivo ODS original se foi convertido
+            if 'ods_original' in locals() and ods_original and os.path.exists(ods_original):
+                _limpar_arquivo_temp(ods_original)
         
     except Exception as e:
         return jsonify({'error': f'Erro ao exportar Excel: {str(e)}'}), 500

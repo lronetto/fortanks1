@@ -11,185 +11,197 @@
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cubes"></i> Concretagens</h1>
         <button class="btn btn-primary mt-2 mt-sm-0" data-bs-toggle="modal" data-bs-target="#modalNovaConcretagem">
-            <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nova Concretagem</span><span
-                class="d-inline d-sm-none">Nova</span>
+            <i class="fas fa-plus"></i> <span class="d-none d-sm-inline">Nova Concretagem</span><span class="d-inline d-sm-none">Nova</span>
         </button>
     </div>
 
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Concretagens Registradas</h6>
-
-            <!-- Filtros otimizados para mobile -->
-            <div class="mt-2 mt-md-0 d-flex flex-wrap">
-                <div class="input-group input-group-sm">
-                    <input type="text" id="filtro-concretagem" class="form-control" placeholder="Filtrar...">
-                    <button class="btn btn-outline-secondary" type="button">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </div>
-            </div>
         </div>
         <div class="card-body">
-            {% if concretagens %}
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" id="tabelaConcretagens" width="100%" cellspacing="0">
                     <thead>
                         <tr>
-                            <th class="d-none d-md-table-cell">#</th>
-                            <th>Tanques</th>
-                            <th class="d-none d-md-table-cell">Pista</th>
+                            <th>#</th>
                             <th>Data</th>
-                            <th class="d-none d-md-table-cell">Peças</th>
-                            <th class="d-none d-md-table-cell">Cadastro</th>
+                            <th>Pista</th>
+                            <th>Peças</th>
+                            <th>Cadastro</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for concretagem in concretagens %}
-                        <tr>
-                            <td class="d-none d-md-table-cell">{{ concretagem.id }}</td>
-                            <td>
-                               
-                            </td>
-                            <td class="d-none d-md-table-cell">{{ concretagem.pista }}</td>
-                            <td data-order="{{ concretagem.data_concretagem.strftime('%Y-%m-%d') }}">{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}</td>
-                            <td class="d-none d-md-table-cell">{{ concretagem.get_quantidade_pecas_json() }}</td>
-                            <td class="d-none d-md-table-cell">{{ concretagem.data_cadastro.strftime('%d/%m/%Y') }}</td>
-                            <td>
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <a href="#" class="btn btn-info visualizar-concretagem" title="Visualizar" data-id="{{ concretagem.id }}">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <a href="{{ url_for('concretagem.editar', id=concretagem.id) }}"
-                                        class="btn btn-warning editar-concretagem" title="Editar" data-id="{{ concretagem.id }}">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-success referenciar-usinagem" title="Referenciar Usinagem" 
-                                            data-id="{{ concretagem.id }}" data-tanques="{% for tanque in concretagem.tanques %}{% if not loop.first %}, {% endif %}{{ tanque.nome }}{% endfor %}">
-                                        <i class="fas fa-vial"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-info btn-alongamentos" title="Registrar Alongamentos"
-                                            data-bs-toggle="modal" data-bs-target="#modalAlongamentos"
-                                            data-id="{{ concretagem.id }}"
-                                            data-tanques="{% for tanque in concretagem.tanques %}{% if not loop.first %}, {% endif %}{{ tanque.nome }}{% endfor %}"
-                                            data-alongamentos="{{ concretagem.alongamentos }}">
-                                        <i class="fas fa-ruler"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-danger btn-excluir" data-bs-toggle="modal"
-                                        data-bs-target="#modalExcluir" data-id="{{ concretagem.id }}"
-                                        data-tanques="{% for tanque in concretagem.tanques %}{% if not loop.first %}, {% endif %}{{ tanque.nome }}{% endfor %}"
-                                        data-data="{{ concretagem.data_concretagem.strftime('%d/%m/%Y') }}"
-                                        title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-
-                        <!-- Informações adicionais para mobile (linha expandida) -->
-                        <tr class="d-md-none expandable-info">
-                            <td>
-                                <div class="small text-muted">
-                                    <strong>ID:</strong> {{ concretagem.id }}<br>
-                                    <strong>Pista:</strong> {{ concretagem.pista }}<br>
-                                    <strong>Peças Concretadas:</strong> {{ concretagem.pecas|length }}<br>
-                                    <strong>Data Cadastro:</strong> {{ concretagem.data_cadastro.strftime('%d/%m/%Y') }}
-                                </div>
-                            </td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                            <td></td>
-                        </tr>
-                        {% endfor %}
+                        <!-- Dados carregados via AJAX -->
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i> Nenhuma concretagem cadastrada.
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
 
-
-
 {% include 'concretagens/modais/nova_concretagem.html' %}
-{% include 'concretagens/modais/exclusao.html' %}
 {% include 'concretagens/modais/editar.html' %}
-{% include 'concretagens/modais/visualizar.html' %}
-{% include 'concretagens/modais/referenciar_usinagem.html' %}
+{% include 'concretagens/modais/exclusao.html' %}
 {% include 'concretagens/modais/alongamentos.html' %}
+{% include 'concretagens/modais/pecas.html' %}
+{% include 'concretagens/modais/usinagens.html' %}
 
-<!-- Modal de Referência de Usinagem -->
-<!-- (removido, agora está em arquivo separado) -->
 {% endblock %}
 
 {% block scripts %}
-<!-- Plugin para ordenação de datas no DataTables -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 <script src="https://cdn.datatables.net/plug-ins/1.13.4/sorting/datetime-moment.js"></script>
-<script src="{{ url_for('static', filename='js/concretagens-edicao.js') }}"></script>
-<script src="{{ url_for('static', filename='js/concretagens-visualizar.js') }}"></script>
 
 <script>
-    // Script que formata opções de usinagem para serem usadas no arquivo concretagens-multi-tanques.js
-    // Estas variáveis precisam ser globais para serem acessadas por concretagens-multi-tanques.js
-    let dadosConcretagemEdicao = null; // Será preenchida ao editar
-    let dataTablePortugueseTranslation = null; // Será preenchida após carregar o JSON
+    let dataTablePortugueseTranslation = null;
 
-    function initializeMainDataTable() {
-        // Remove as linhas de detalhes antes de inicializar o DataTables
-        $('#tabelaConcretagens tbody tr.expandable-info').remove();
+    function initializeDataTable() {
+        if ($.fn.DataTable.isDataTable('#tabelaConcretagens')) {
+            $('#tabelaConcretagens').DataTable().destroy();
+        }
 
-        const mainTableRows = $('#tabelaConcretagens tbody tr').not('.expandable-info');
-        if (mainTableRows.length === 0) return; // Não inicializar se não houver dados
-
-        let mainDtOptions = {
-            order: [[3, 'desc']],
-            responsive: true,
-            autoWidth: false,
+        let dtOptions = {
+            processing: true,
+            serverSide: false,
+            ajax: {
+                url: "{{ url_for('concretagem.api_listar') }}",
+                type: "GET",
+                dataSrc: "data"
+            },
+            columns: [
+                { data: 'id', title: '#' },
+                { 
+                    data: 'data_concretagem', 
+                    title: 'Data',
+                    render: function(data, type) {
+                        if (!data) return '';
+                        // Ordena/filtra usando ISO (YYYY-MM-DD), exibe em pt-BR
+                        if (type === 'sort' || type === 'type') return data;
+                        const date = new Date(data);
+                        return date.toLocaleDateString('pt-BR');
+                    }
+                },
+                { data: 'pista', title: 'Pista' },
+                { 
+                    data: 'quantidade_pecas', 
+                    title: 'Peças',
+                    render: function(data) {
+                        return data || 0;
+                    }
+                },
+                { 
+                    data: 'data_cadastro', 
+                    title: 'Cadastro',
+                    render: function(data, type) {
+                        if (!data) return '';
+                        // Ordena/filtra usando ISO (YYYY-MM-DDTHH:mm:ss), exibe em pt-BR
+                        if (type === 'sort' || type === 'type') return data;
+                        const date = new Date(data);
+                        return date.toLocaleDateString('pt-BR');
+                    }
+                },
+                {
+                    data: null,
+                    title: 'Ações',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return `
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-warning btn-editar" data-id="${row.id}" title="Editar">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-info btn-pecas" data-id="${row.id}" title="Cadastrar Peças">
+                                    <i class="fas fa-cube"></i>
+                                </button>
+                                <button type="button" class="btn btn-success btn-alongamentos" data-id="${row.id}" title="Cadastrar Alongamentos">
+                                    <i class="fas fa-ruler"></i>
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-usinagens" data-id="${row.id}" title="Referenciar Usinagens">
+                                    <i class="fas fa-industry"></i>
+                                </button>
+                                <button type="button" class="btn btn-danger btn-excluir" data-id="${row.id}" title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                    }
+                }
+            ],
+            order: [[1, 'desc']],
             pageLength: 10,
-            detail: false,
-            search: false,
             lengthMenu: [10, 25, 50, 100],
+            responsive: true,
             dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
                  "<'row'<'col-sm-12'tr>>" +
                  "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
         };
 
         if (dataTablePortugueseTranslation) {
-            mainDtOptions.language = dataTablePortugueseTranslation;
-        } else {
-            console.warn("Tradução do DataTables não carregada, #tabelaConcretagens usará o padrão.");
+            dtOptions.language = dataTablePortugueseTranslation;
         }
-        $('#tabelaConcretagens').DataTable(mainDtOptions);
+
+        $('#tabelaConcretagens').DataTable(dtOptions);
     }
 
-    $(document).ready(function () {
-        // Registrar o formato de data brasileiro para o DataTables
+    $(document).ready(function() {
+        // Carregar tradução do DataTables
+        $.getJSON("{{ url_for('static', filename='js/datatables-pt-BR.json') }}", function(json) {
+            dataTablePortugueseTranslation = json;
+            initializeDataTable();
+        }).fail(function() {
+            console.warn("Tradução do DataTables não carregada");
+            initializeDataTable();
+        });
+
+        // Registrar formato de data
         if ($.fn.dataTable && $.fn.dataTable.moment) {
             $.fn.dataTable.moment('DD/MM/YYYY');
         }
 
-        $.getJSON("{{ url_for('static', filename='js/datatables-pt-BR.json') }}", function(json) {
-            console.log("Tradução pt-BR do DataTables carregada com sucesso (index.html).", json);
-            window.dataTablePortugueseTranslation = json; // Atribui à variável global
-            initializeMainDataTable(); 
-        }).fail(function(jqxhr, textStatus, error) {
-            console.error("Falha ao carregar datatables-pt-BR.json (index.html): " + textStatus + ", " + error);
-            initializeMainDataTable(); 
+        // Delegar eventos para botões de ação
+        $(document).on('click', '.btn-editar', function() {
+            const id = $(this).data('id');
+            carregarDadosEdicao(id);
+            $('#modalEditarConcretagem').modal('show');
         });
 
-        // Definir data de hoje como padrão
-        $('#data_concretagem, #edit_data_concretagem').val(new Date().toISOString().split('T')[0]);
+        $(document).on('click', '.btn-excluir', function() {
+            const id = $(this).data('id');
+            $('#modalExcluir').find('#concretagem_id').val(id);
+            $('#modalExcluir').modal('show');
+        });
 
-        // Tratar clique no botão de editar
+        $(document).on('click', '.btn-pecas', function() {
+            const id = $(this).data('id');
+            // O modal vai carregar os dados quando abrir via evento show.bs.modal
+            $('#modalPecas').data('concretagem-id', id).modal('show');
+        });
 
+        $(document).on('click', '.btn-alongamentos', function() {
+            const id = $(this).data('id');
+            if (typeof carregarDadosAlongamentos === 'function') {
+                carregarDadosAlongamentos(id);
+            }
+            $('#modalAlongamentos').modal('show');
+        });
+
+        $(document).on('click', '.btn-usinagens', function() {
+            const id = $(this).data('id');
+            if (typeof carregarDadosUsinagens === 'function') {
+                carregarDadosUsinagens(id);
+            }
+            $('#modalUsinagens').modal('show');
+        });
     });
+
+    function carregarDadosEdicao(id) {
+        $.get(`/concretagens/api/${id}`, function(data) {
+            $('#edit_id').val(data.id);
+            $('#edit_data_concretagem').val(data.data_concretagem);
+            $('#edit_pista').val(data.pista);
+        });
+    }
 </script>
 {% endblock %}

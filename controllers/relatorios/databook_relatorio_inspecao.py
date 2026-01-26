@@ -317,8 +317,8 @@ def extrair_tanque_ids_do_json(pecas_json_str):
     
     Formato esperado do JSON:
     [
-        {"placa": "PN-02", "tanque": 1, "forma": "4"},
-        {"placa": "PN-03", "tanque": 1, "forma": "6"},
+        {"nome": "PN-02", "tanque_id": 1, "forma": "4"},
+        {"nome": "PN-03", "tanque_id": 1, "forma": "6"},
         ...
     ]
     
@@ -340,7 +340,7 @@ def extrair_tanque_ids_do_json(pecas_json_str):
             for item in pecas_data:
                 if isinstance(item, dict):
                     # Extrair ID do tanque (chave: "tanque")
-                    tanque_id = item.get('tanque')
+                    tanque_id = item.get('tanque_id')
                     if tanque_id:
                         tanque_ids.add(int(tanque_id))
         # Se for um objeto com uma lista de peças
@@ -348,7 +348,7 @@ def extrair_tanque_ids_do_json(pecas_json_str):
             if 'pecas' in pecas_data and isinstance(pecas_data['pecas'], list):
                 for item in pecas_data['pecas']:
                     if isinstance(item, dict):
-                        tanque_id = item.get('tanque')
+                        tanque_id = item.get('tanque_id')
                         if tanque_id:
                             tanque_ids.add(int(tanque_id))
             # Ou se os tanques estão diretamente no objeto
@@ -1056,6 +1056,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         raise ImportError('odfpy não está disponível. Instale com: pip install odfpy')
     
     try:
+        print(f'[_processar_ods_template_inspecao] Processando ODS: {ods_path}')
         # Carregar o documento ODS
         doc = load(ods_path)
         
@@ -1071,10 +1072,10 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
             pecas = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
             if pecas and isinstance(pecas, list):
                 for peca in pecas:
-                    if isinstance(peca, dict) and peca.get('tanque') is not None and peca.get('placa'):
+                    if isinstance(peca, dict) and peca.get('tanque_id') is not None and peca.get('nome'):
                         peca_tanque_global = buscar_peca_por_tanque_e_nome(
-                            tanque_id=peca['tanque'],
-                            nome_peca=peca['placa'],
+                            tanque_id=peca['tanque_id'],
+                            nome_peca=peca['nome'],
                             tanque_id_filtro=tanque_id,
                             grupo_id=grupo_id
                         )
@@ -1168,7 +1169,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                 new_value = new_value.replace('{7}', str(concretagem.pista if concretagem.pista else ''))
                                 
                                 # Processar formas
-                                formas = [1,2,3,4,5,6,7,8,9,10,11,12]
+                                formas = [0,1,2,3,4,5,6,7,8,9,10,11,12]
                                 for forma in formas:
                                     count = 0
                                     for peca in pecas:
@@ -1186,10 +1187,10 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                                     continue
                                                 
                                                 if forma_peca is not None and forma_peca == forma:
-                                                    if peca.get('tanque') is not None and peca.get('placa'):
+                                                    if peca.get('tanque_id') is not None and peca.get('nome'):
                                                         peca_tanque = buscar_peca_por_tanque_e_nome(
-                                                            tanque_id=peca['tanque'],
-                                                            nome_peca=peca['placa'],
+                                                            tanque_id=peca['tanque_id'],
+                                                            nome_peca=peca['nome'],
                                                             tanque_id_filtro=tanque_id,
                                                             grupo_id=grupo_id
                                                         )
@@ -1203,7 +1204,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                                                         series_local += str(serie) + ', '
                                                             
                                                             new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
-                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['placa']))
+                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
                                                             new_value = new_value.replace(f'{{{31+forma}}}', str(peca_tanque.tipo if peca_tanque.tipo else ''))
                                                             
                                                             if peca_tanque.tipo == 'PF':
@@ -1263,13 +1264,109 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                 new_value = new_value.replace('{61}', '')
                         
                         # Processar alongamentos
+                        alongamentos_soma = 0  # Inicializar variável para uso posterior
                         if concretagem.cordoalhas:
                             cordoalhas_data = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
                             if cordoalhas_data and isinstance(cordoalhas_data, dict) and 'alongamentos' in cordoalhas_data:
                                 alongamentos = cordoalhas_data['alongamentos']
-                                total_alongamentos = len(alongamentos)
                                 
-                                if alongamentos and isinstance(alongamentos, dict):
+                                # Suportar tanto array quanto dict (retrocompatibilidade)
+                                if isinstance(alongamentos, list):
+                                    # Novo formato: array de valores [350, 351, 347, ...]
+                                    alongamentos_lista = [a for a in alongamentos if a is not None]
+                                    total_alongamentos = len(alongamentos_lista)
+                                    
+                                    if alongamentos_lista:
+                                        alongamentos_soma = 0
+                                        alongamentos_maior = 0
+                                        alongamentos_menor = 0
+                                        modulo = 198.7
+                                        area = 99.7
+                                        
+                                        if peca_tanque_local and peca_tanque_local.tipo == 'PF':
+                                            comprimento = 15000
+                                            alongamento_maximo_teorico = 120
+                                            alongamento_minimo_teorico = 100
+                                        else:
+                                            comprimento = 65000
+                                            alongamento_maximo_teorico = 356
+                                            alongamento_minimo_teorico = 321
+                                        
+                                        alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
+                                        alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
+                                        
+                                        new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
+                                        new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
+                                        new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
+                                        new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
+                                        
+                                        alongamentos_fora_da_tolerancia = 0
+                                        for indice, valor in enumerate(alongamentos):
+                                            if valor is None:
+                                                continue
+                                            
+                                            numero = indice + 1  # C-1, C-2, etc.
+                                            alongamentos_soma += valor
+                                            if valor > alongamentos_maior:
+                                                alongamentos_maior = valor
+                                            if valor < alongamentos_menor or alongamentos_menor == 0:
+                                                alongamentos_menor = valor
+                                            
+                                            if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
+                                                new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(numero))
+                                                alongamentos_fora_da_tolerancia += 1
+                                            
+                                            # Preencher o placeholder correspondente (62 + número - 1, pois começa em C-1)
+                                            placeholder = 62 + numero - 1
+                                            new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
+                                        
+                                        if alongamentos_fora_da_tolerancia < 12:
+                                            for i in range(1, 12 - alongamentos_fora_da_tolerancia):
+                                                new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
+                                        
+                                        # Limpar placeholders além do total de alongamentos
+                                        for i in range(total_alongamentos + 1, 26):
+                                            new_value = new_value.replace(f'{{{62+i}}}', '')
+                                        
+                                        if total_alongamentos > 16:
+                                            new_value = new_value.replace('{122}', 'C-17')
+                                            for i in range(17, min(total_alongamentos + 1, 27)):
+                                                numero = i
+                                                placeholder = 79 + (i - 17)
+                                                if i <= len(alongamentos) and alongamentos[i-1] is not None:
+                                                    valor = alongamentos[i-1]
+                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', f'C-{numero}')
+                                                    new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
+                                                else:
+                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', '')
+                                            new_value = new_value.replace('{122}', '')
+                                            for i in range(1, 11):
+                                                if i > 1:
+                                                    new_value = new_value.replace(f'{{{i+86}}}', '')
+                                                new_value = new_value.replace(f'{{{i+77}}}', '')
+                                        
+                                        # Somatório
+                                        new_value = new_value.replace('{97}', str(alongamentos_soma))
+                                        
+                                        # Alongamentos individuais maior e menor
+                                        if peca_tanque_local and peca_tanque_local.tipo == 'PF':
+                                            if 100 < alongamentos_soma < 120:
+                                                new_value = new_value.replace('{101}', 'X')
+                                                new_value = new_value.replace('{102}', '')
+                                            else:
+                                                new_value = new_value.replace('{101}', '')
+                                                new_value = new_value.replace('{102}', 'X')
+                                        elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
+                                            if 321 < alongamentos_soma < 356:
+                                                new_value = new_value.replace('{101}', 'X')
+                                                new_value = new_value.replace('{102}', '')
+                                            else:
+                                                new_value = new_value.replace('{101}', '')
+                                                new_value = new_value.replace('{102}', '')
+                                elif isinstance(alongamentos, dict):
+                                    # Formato antigo: dict {"C-1": 339, "C-2": 339, ...} (retrocompatibilidade)
+                                    total_alongamentos = len(alongamentos)
+                                    
                                     alongamentos_soma = 0
                                     alongamentos_maior = 0
                                     alongamentos_menor = 0
@@ -1565,12 +1662,12 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                                 
                                                 # Verificar se forma_peca não é None antes de comparar
                                                 if forma_peca is not None and forma_peca == forma:
-                                                    # Verificar se tanque e placa existem
-                                                    if peca.get('tanque') is not None and peca.get('placa'):
+                                                    # Verificar se tanque_id e nome existem
+                                                    if peca.get('tanque_id') is not None and peca.get('nome'):
                                                         # Buscar peça usando a função comum
                                                         peca_tanque = buscar_peca_por_tanque_e_nome(
-                                                            tanque_id=peca['tanque'],
-                                                            nome_peca=peca['placa'],
+                                                            tanque_id=peca['tanque_id'],
+                                                            nome_peca=peca['nome'],
                                                             tanque_id_filtro=tanque_id,
                                                             grupo_id=grupo_id
                                                         )
@@ -1586,7 +1683,7 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                                             #formas
                                                             new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
                                                             #nomes
-                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['placa']))
+                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
                                                             #tipo
                                                             new_value = new_value.replace(f'{{{31+forma}}}', str(peca_tanque.tipo if peca_tanque.tipo else ''))
                                                             #tipo painel
@@ -1652,13 +1749,98 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                 new_value = new_value.replace('{61}', '')
                         
                         #alongamentos
+                        alongamentos_soma = 0  # Inicializar variável para uso posterior
                         if concretagem.cordoalhas:
                             cordoalhas_data = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
                             if cordoalhas_data and isinstance(cordoalhas_data, dict) and 'alongamentos' in cordoalhas_data:
                                 alongamentos = cordoalhas_data['alongamentos']
-                                total_alongamentos = len(alongamentos)
+                                
+                                # Suportar tanto array quanto dict (retrocompatibilidade)
+                                if isinstance(alongamentos, list):
+                                    # Novo formato: array de valores [350, 351, 347, ...]
+                                    alongamentos_lista = [a for a in alongamentos if a is not None]
+                                    total_alongamentos = len(alongamentos_lista)
+                                    print(f'total_alongamentos: {total_alongamentos}')
+                                    
+                                    if alongamentos_lista:
+                                        alongamentos_soma = 0
+                                        alongamentos_maior = 0
+                                        alongamentos_menor = 0
+                                        modulo = 198.7
+                                        area = 99.7
+                                        if peca_tanque and peca_tanque.tipo == 'PF':
+                                            comprimento = 15000
+                                        else:
+                                            comprimento = 65000
+
+                                        forca = 139.4
+                                        alongamento_teorico = (forca * comprimento) / (modulo * area)
+
+                                        if peca_tanque and peca_tanque.tipo == 'PF':
+                                            alongamento_maximo_teorico = 120
+                                            alongamento_minimo_teorico = 100
+                                        else:
+                                            alongamento_maximo_teorico = 356
+                                            alongamento_minimo_teorico = 321
+                                        alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
+                                        alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
+
+                                        new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
+                                        new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
+                                        new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
+                                        new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
+                                        alongamentos_fora_da_tolerancia = 0
+                                        
+                                        for indice, valor in enumerate(alongamentos):
+                                            if valor is None:
+                                                continue
+                                            
+                                            numero = indice + 1  # C-1, C-2, etc.
+                                            alongamentos_soma += valor
+                                            if valor > alongamentos_maior:
+                                                alongamentos_maior = valor
+                                            if valor < alongamentos_menor or alongamentos_menor == 0:
+                                                alongamentos_menor = valor
+
+                                            if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
+                                                new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(numero))
+                                                alongamentos_fora_da_tolerancia += 1
+                                            
+                                            # Preencher o placeholder correspondente (62 + número - 1, pois começa em C-1)
+                                            placeholder = 62 + numero - 1
+                                            new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
+                                        
+                                        if alongamentos_fora_da_tolerancia < 12:
+                                            for i in range(1, 12 - alongamentos_fora_da_tolerancia):
+                                                new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
+                                        
+                                        # Limpar placeholders além do total de alongamentos
+                                        for i in range(total_alongamentos + 1, 26):
+                                            new_value = new_value.replace(f'{{{62+i}}}', '')
+
+                                        if total_alongamentos > 16:
+                                            new_value = new_value.replace('{122}', 'C-17')
+                                            # Preencher C-17 até o último alongamento
+                                            for i in range(17, min(total_alongamentos + 1, 27)):
+                                                numero = i
+                                                placeholder = 79 + (i - 17)
+                                                if i <= len(alongamentos) and alongamentos[i-1] is not None:
+                                                    valor = alongamentos[i-1]
+                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', f'C-{numero}')
+                                                    new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
+                                                else:
+                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', '')
+
+                                            new_value = new_value.replace('{122}', '')
+                                            # Limpar placeholders de C-17 até C-26
+                                            for i in range(1, 11):
+                                                if i > 1:
+                                                    new_value = new_value.replace(f'{{{i+86}}}', '')
+                                                new_value = new_value.replace(f'{{{i+77}}}', '')
+                                elif isinstance(alongamentos, dict):
+                                    # Formato antigo: dict {"C-1": 339, "C-2": 339, ...} (retrocompatibilidade)
+                                    total_alongamentos = len(alongamentos)
     
-                                if alongamentos and isinstance(alongamentos, dict):
                                     # Iterar sobre os alongamentos (formato: {"C-1": 339, "C-2": 339, ...})
                                     alongamentos_soma = 0
                                     alongamentos_maior = 0
@@ -1674,13 +1856,13 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                     alongamento_teorico = (forca * comprimento) / (modulo * area)
 
                                     if peca_tanque and peca_tanque.tipo == 'PF':
-                                        alongamento_maximo_teorico = 120#alongamento_teorico * 1.05
-                                        alongamento_minimo_teorico = 100#alongamento_teorico * 0.95
+                                        alongamento_maximo_teorico = 120
+                                        alongamento_minimo_teorico = 100
                                     else:
-                                        alongamento_maximo_teorico = 356#alongamento_teorico * 1.05
-                                        alongamento_minimo_teorico = 321#alongamento_teorico * 0.95
-                                    alongamento_soma_maximo_teorico = alongamento_maximo_teorico*total_alongamentos#alongamento_soma_teorico * 1.03
-                                    alongamento_soma_minimo_teorico = alongamento_minimo_teorico*total_alongamentos#alongamento_soma_teorico * 0.97
+                                        alongamento_maximo_teorico = 356
+                                        alongamento_minimo_teorico = 321
+                                    alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
+                                    alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
 
                                     new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
                                     new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
@@ -1691,7 +1873,7 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                         alongamentos_soma += valor
                                         if valor > alongamentos_maior:
                                             alongamentos_maior = valor
-                                        if valor < alongamentos_menor:
+                                        if valor < alongamentos_menor or alongamentos_menor == 0:
                                             alongamentos_menor = valor
 
                                         if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
@@ -1708,17 +1890,16 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                             except (ValueError, TypeError):
                                                 continue
                                     if alongamentos_fora_da_tolerancia < 12:
-                                        for i in range(1,12-alongamentos_fora_da_tolerancia):
+                                        for i in range(1, 12 - alongamentos_fora_da_tolerancia):
                                             new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
                                     # Tratar alongamentos além de C-16
-                                    total_alongamentos = len(alongamentos)
-                                    for i in range(total_alongamentos+1, 26):
+                                    for i in range(total_alongamentos + 1, 26):
                                         new_value = new_value.replace(f'{{{62+i}}}', '')
 
                                     if total_alongamentos > 16:
                                         new_value = new_value.replace('{122}', 'C-17')
                                         # Preencher C-17 até o último alongamento
-                                        for i in range(17 , total_alongamentos + 1):
+                                        for i in range(17, total_alongamentos + 1):
                                             chave = f'C-{i}'
                                             placeholder = 79 + (i - 17)
                                             if chave in alongamentos:
@@ -1729,11 +1910,10 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
                                             else:
                                                 new_value = new_value.replace(f'{{{placeholder+9}}}', '')
 
-                                                                                    
                                         new_value = new_value.replace('{122}', '')
                                         # Limpar placeholders de C-17 até C-26
                                         for i in range(1, 11):
-                                            if i>1:
+                                            if i > 1:
                                                 new_value = new_value.replace(f'{{{i+86}}}', '')
                                             new_value = new_value.replace(f'{{{i+77}}}', '')
 
@@ -1842,9 +2022,26 @@ def exportar_excel():
             return jsonify({'error': f'Nenhuma concretagem encontrada para o ID {concretagem_id}'}), 404
         
         try:
+            # Verificar se o arquivo é ODS e converter para XLSX se necessário
+            arquivo_final = excel_path
+            ods_original = None
+            
+            if excel_path.lower().endswith('.ods'):
+                print(f'[exportar_excel] Arquivo ODS detectado, convertendo para XLSX: {excel_path}')
+                # Criar caminho para o arquivo XLSX convertido
+                xlsx_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_convertido_')
+                # Converter ODS para XLSX
+                arquivo_convertido = _converter_ods_para_xlsx_libreoffice(excel_path, xlsx_path)
+                if arquivo_convertido:
+                    arquivo_final = arquivo_convertido
+                    ods_original = excel_path  # Guardar referência para limpar depois
+                    print(f'[exportar_excel] Conversão concluída: {arquivo_final}')
+                else:
+                    print(f'[exportar_excel] Erro ao converter ODS para XLSX, usando arquivo original')
+            
             # Ler o arquivo salvo para o buffer
             output = io.BytesIO()
-            with open(excel_path, 'rb') as f:
+            with open(arquivo_final, 'rb') as f:
                 output.write(f.read())
             output.seek(0)
             
@@ -1860,8 +2057,11 @@ def exportar_excel():
             )
         finally:
             # Limpar arquivo temporário (se configurado)
-            if excel_path and os.path.exists(excel_path):
-                _limpar_arquivo_temp(excel_path)
+            if 'arquivo_final' in locals() and arquivo_final and os.path.exists(arquivo_final):
+                _limpar_arquivo_temp(arquivo_final)
+            # Limpar arquivo ODS original se foi convertido
+            if 'ods_original' in locals() and ods_original and os.path.exists(ods_original):
+                _limpar_arquivo_temp(ods_original)
         
     except Exception as e:
         return jsonify({'error': f'Erro ao exportar Excel: {str(e)}'}), 500

@@ -637,11 +637,11 @@
                                         </a>
                                     </li>
                                     {% if current_user.colaborador.departamento_id in [4,7] %}
-                                   <!-- <li class="{{ is_active('concretagem') }}">
+                                    <li class="{{ is_active('concretagem') }}">
                                         <a href="{{ url_for('concretagem.index') }}">
                                             <i class="fas fa-cubes"></i> Concretagens
                                         </a>
-                                    </li>-->
+                                    </li>
                                     
                                     <li class="{{ is_active('usinagem_concreto.listar_rompimentos') }}">
                                         <a href="{{ url_for('usinagem_concreto.listar_rompimentos') }}">
