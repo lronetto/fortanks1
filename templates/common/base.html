@@ -214,16 +214,41 @@
                        $('#cadastroOperacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
    
+                   // Auto-abrir o submenu Admin se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/centro-custo') ||
+                       window.location.pathname.includes('/departamentos') ||
+                       window.location.pathname.includes('/cargos') ||
+                       window.location.pathname.includes('/plano-conta') ||
+                       window.location.pathname.includes('/conversao-unidade') ||
+                       window.location.pathname.includes('/admin/unidades') ||
+                       window.location.pathname.includes('/admin/permissoes') ||
+                       window.location.pathname.includes('/admin/logs')) {
+                       $('#adminCadastrosSubmenu').addClass('show');
+                       $('#adminCadastrosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       
+                       // Auto-abrir submenu interno de Cadastros Admin
+                       if (window.location.pathname.includes('/centro-custo') ||
+                           window.location.pathname.includes('/departamentos') ||
+                           window.location.pathname.includes('/cargos') ||
+                           window.location.pathname.includes('/plano-conta') ||
+                           window.location.pathname.includes('/conversao-unidade') ||
+                           window.location.pathname.includes('/admin/unidades')) {
+                           $('#adminCadastrosSubmenuInner').addClass('show');
+                       }
+                       
+                       // Auto-abrir submenu interno de Permissões e Logs
+                       if (window.location.pathname.includes('/admin/permissoes') ||
+                           window.location.pathname.includes('/admin/logs')) {
+                           $('#adminPermissoesLogsSubmenu').addClass('show');
+                       }
+                   }
+                   
                    // Auto-abrir o novo submenu de Cadastros se estiver em uma página relacionada
                    if (window.location.pathname.includes('/usuario') ||
-                       window.location.pathname.includes('/centro_custo') ||
                        window.location.pathname.includes('/contrato') ||
                        window.location.pathname.includes('/cliente') ||
                        window.location.pathname.includes('/material') ||
-                       window.location.pathname.includes('/plano_conta') ||
                        window.location.pathname.includes('/colaborador') ||
-                       window.location.pathname.includes('/cargo') ||
-                       window.location.pathname.includes('/conversao_unidade') ||
                        window.location.pathname.includes('/tanques') ||
                        window.location.pathname.includes('/pecas') ||
                        window.location.pathname.includes('/tracos')) {
@@ -531,70 +556,116 @@
                 </li>
                 {% endif %}
 
+                <!-- Módulo Admin -->
+                {% if current_user.is_permissao('admin') %}
+                <li class="{{ is_active('admin') }}">
+                    <a href="#adminCadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                        <i class="fas fa-user-shield"></i> Admin
+                    </a>
+                    <ul class="collapse list-unstyled" id="adminCadastrosSubmenu">
+                        <!-- Submenu Cadastros -->
+                        <li>
+                            <a href="#adminCadastrosSubmenuInner" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                                <i class="fas fa-edit"></i> Cadastros
+                            </a>
+                            <ul class="collapse list-unstyled" id="adminCadastrosSubmenuInner">
+                                <li class="{{ is_active('centro-custo') }}">
+                                    <a href="{{ url_for('centro_custo.index') }}">
+                                        <i class="fas fa-building"></i> Centros de Custo
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('departamentos') }}">
+                                    <a href="{{ url_for('departamento.index') }}">
+                                        <i class="fas fa-building"></i> Departamentos
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('cargos') }}">
+                                    <a href="{{ url_for('cargo.index') }}">
+                                        <i class="fas fa-id-badge"></i> Cargos
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('plano-conta') }}">
+                                    <a href="{{ url_for('plano_conta.index') }}">
+                                        <i class="fas fa-list-ol"></i> Plano de Contas
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('conversao-unidade') }}">
+                                    <a href="{{ url_for('conversao_unidade.index') }}">
+                                        <i class="fas fa-exchange-alt"></i> Conversão de Unidades
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('admin/unidades') }}">
+                                    <a href="{{ url_for('unidade.listar') }}">
+                                        <i class="fas fa-ruler"></i> Unidades
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <!-- Submenu Permissões e Logs -->
+                        <li>
+                            <a href="#adminPermissoesLogsSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                                <i class="fas fa-shield-alt"></i> Permissões e Logs
+                            </a>
+                            <ul class="collapse list-unstyled" id="adminPermissoesLogsSubmenu">
+                                <li class="{{ is_active('admin/permissoes') }}">
+                                    <a href="{{ url_for('admin.permissoes_index') }}">
+                                        <i class="fas fa-key"></i> Permissões
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('admin/logs') }}">
+                                    <a href="{{ url_for('admin.logs') }}">
+                                        <i class="fas fa-file-alt"></i> Logs
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Novo Módulo de Cadastros -->
                 <li class="{{ is_active('cadastros') }}">
                     <a href="#cadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
                         <i class="fas fa-edit"></i> Cadastros
                     </a>
                     <ul class="collapse list-unstyled" id="cadastrosSubmenu">
-                        {% if current_user.colaborador.departamento_id in [4,5,7] %}
+                        {% if current_user.is_permissao('colaboradores') %}
                         <li class="{{ is_active('colaborador') }}">
                             <a href="{{ url_for('colaborador.index') }}">
                                 <i class="fas fa-user-tie"></i> Colaboradores
                             </a>
                         </li>
                         {% endif %}
-                        {% if current_user.colaborador.departamento_id in [4] %}
+                        {% if current_user.is_permissao('usuarios') %}
                         <li class="{{ is_active('usuario') }}">
                             <a href="{{ url_for('usuario.index') }}">
                                 <i class="fas fa-users"></i> Usuários
                             </a>
                         </li>
-                       
-                        <li class="{{ is_active('cargo') }}">
-                            <a href="{{ url_for('cargo.index') }}">
-                                <i class="fas fa-id-badge"></i> Cargos
-                            </a>
-                        </li>
-                        <li class="{{ is_active('departamento ') }}">
-                            <a href="{{ url_for('departamento.index') }}">
-                                <i class="fas fa-building"></i> Departamentos
-                            </a>
-                        </li>
-                        <li class="{{ is_active('centro_custo') }}">
-                            <a href="{{ url_for('centro_custo.index') }}">
-                                <i class="fas fa-building"></i> Centros de Custo
-                            </a>
-                        </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('contrato') %}                          
                         <li class="{{ is_active('contrato') }}">
                             <a href="{{ url_for('contrato.index') }}">
                                 <i class="fas fa-file-contract"></i> Contratos
                             </a>
                         </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('clientes') %}
                         <li class="{{ is_active('cliente') }}">
                             <a href="{{ url_for('cliente.index') }}">
                                 <i class="fas fa-building"></i> Clientes
                             </a>
                         </li>
-                        <li class="{{ is_active('plano_conta') }}">
-                            <a href="{{ url_for('plano_conta.index') }}">
-                                <i class="fas fa-list-ol"></i> Plano de Contas
-                            </a>
-                        </li>
                         {% endif %}
 
-                        {% if current_user.colaborador.departamento_id in [4,7] %}
-                        <li class="{{ is_active('conversao_unidade') }}">
-                            <a href="{{ url_for('conversao_unidade.index') }}">
-                                <i class="fas fa-exchange-alt"></i> Conversão de Unidades
-                            </a>
-                        </li>
+                        {% if current_user.is_permissao('material') %}
                         <li class="{{ is_active('material') }}">
                             <a href="{{ url_for('material.index') }}">
                                 <i class="fas fa-boxes"></i> Materiais
                             </a>
                         </li>
-                        
+                        {% endif %}
+                        {% if current_user.is_permissao('tanques') %}
                         <li class="{{ is_active('tanque') }}">
                             <a href="{{ url_for('tanque.index') }}">
                                 <i class="fas fa-water"></i> Tanques
@@ -605,19 +676,13 @@
                                 <i class="fas fa-cogs"></i> Peças de Tanques
                             </a>
                         </li>
-                        
                         {% endif %}
-
-                        <li class="{{ is_active('upload') }}">
-                            <a href="{{ url_for('uploads.index') }}">
-                                <i class="fas fa-file-upload"></i> Documentos (Uploads)
-                            </a>
-                        </li>
+                       
                     </ul>
                 </li>
 
                 <!-- Módulo Operacional -->
-                {% if current_user.colaborador.departamento_id in [3,4,7] %}
+                {% if current_user.is_permissao('operacional') %}
                     <li class="{{ is_active('operacional') }}">
                         <a href="#operacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                             class="dropdown-toggle">
@@ -689,9 +754,9 @@
                             <!-- Outros submódulos operacionais podem ser adicionados aqui -->
                         </ul>
                     </li>
-
-                    <!-- Módulo de Cadastro Operacional -->
-                    {% if current_user.colaborador_id == 22 %}
+                    {% endif %}
+                <!-- Módulo de Cadastro Operacional -->
+                {% if current_user.is_permissao('cadastro_operacional') %}
                     <li class="{{ is_active('cadastro_operacional') }}">
                         <a href="#cadastroOperacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                             class="dropdown-toggle">
@@ -711,8 +776,8 @@
                             
                         </ul>
                     </li>
-                    {% endif %}
                 {% endif %}
+                
                 <!-- Módulo de Segurança -->
                 <li class="{{ is_active('seguranca.epis_index') }} {{ is_active('seguranca.entregas_index') }} {{ is_active('seguranca.relatorios') }}">
                     <a href="#segurancaSubmenu" data-bs-toggle="collapse" aria-expanded="false"
@@ -742,14 +807,16 @@
                         <i class="fas fa-list"></i> Minhas Solicitações
                     </a>
                 </li>
+                {% if current_user.is_permissao('reembolsos') %}
                 <!-- Módulo de Reembolso -->
                 <li class="{{ is_active('reembolso') }}">
                     <a href="{{ url_for('reembolso.index') }}">
                         <i class="fas fa-money-bill-wave"></i> Reembolsos
                     </a>
                 </li>
-                
+                {% endif %}
                 <!-- Módulo de Estoque -->
+                {% if current_user.is_permissao('estoque') %}
                 <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }}">
                     <a href="#estoqueSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                         class="dropdown-toggle">
@@ -768,8 +835,9 @@
                         </li>
                     </ul>
                 </li>
-                
+                {% endif %}
                 <!-- Módulo de Inventário -->
+                {% if current_user.is_permissao('inventario') %}
                 <li class="{{ is_active('inventario') }}">
                     <a href="#inventarioSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                         class="dropdown-toggle">
@@ -784,7 +852,8 @@
                         </li>
                     </ul>
                 </li>
-                
+                {% endif %}
+                {% if current_user.is_permissao('notas_fiscais') %}
                 <!-- Módulo de Notas Fiscais -->
                 <li class="{{ is_active('nota_fiscal') }}">
                     <a href="#notasFiscaisSubmenu" data-bs-toggle="collapse" aria-expanded="false"
@@ -809,7 +878,7 @@
                         </li>
                     </ul>
                 </li>
-                
+                {% endif %}
 
             </ul>
 
@@ -919,6 +988,7 @@
         </div>
     </div>
 
+    {% block extra_js %}{% endblock %}
  
 </body>
 

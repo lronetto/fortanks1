@@ -9,6 +9,7 @@ from sqlalchemy import Text
 #2 - protocolo
 #3 - reembolso
 #4 - avulso
+#5 - certificado
 
 
 class Upload(db.Model):

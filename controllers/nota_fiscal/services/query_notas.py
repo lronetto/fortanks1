@@ -119,7 +119,7 @@ def api_get_dados_notas_fiscais(request):
     if reembolso_id:
         reembolso_column = case((exists(select(1).select_from(ReembolsosDocumentos).where(ReembolsosDocumentos.nota_fiscal_id == NotaFiscal.id, ReembolsosDocumentos.reembolso_id == reembolso_id)), 1), else_=0).label("reembolso")
     else:
-        reembolso_column = case((False,), else_=0).label("reembolso")
+        reembolso_column = None
 
 
     # Percentual de importação por NF

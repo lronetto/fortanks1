@@ -8,7 +8,7 @@ from flask_login import current_user, login_required
 from models.database import db
 from models.material import Materiais
 from models.unidade import Unidades
-from models.estoque import Estoque
+from models.estoque import Estoque, EstoqueMovimentacoes
 
 logger = logging.getLogger(__name__)
 
@@ -254,6 +254,11 @@ def register(material_bp):
             unidade = data.get("edit_unidade", "")
             mascara = data.get("edit_mascara", "")
             formula_calculo = data.get("edit_formula_calculo", "").strip()
+            
+            # Campos de quantidade
+            quantidade = data.get("edit_quantidade", "")
+            quantidade_minima = data.get("edit_quantidade_minima", "")
+            quantidade_maxima = data.get("edit_quantidade_maxima", "")
 
             if not nome or not categoria:
                 return jsonify({"success": False, "message": "Nome e categoria são campos obrigatórios!"})
@@ -276,10 +281,53 @@ def register(material_bp):
                 material.data_atualizacao = datetime.now()
                 if hasattr(current_user, "id"):
                     material.usuario_id = current_user.id
+                
+                # Atualizar ou criar estoque
+                from decimal import Decimal
+                estoque = Estoque.query.filter_by(material_id=material.id, tipo_item='material').first()
+                
+                if quantidade or quantidade_minima or quantidade_maxima:
+                    quantidade_anterior = None
+                    if not estoque:
+                        # Criar novo registro de estoque
+                        estoque = Estoque(
+                            material_id=material.id,
+                            tipo_item='material',
+                            quantidade=Decimal(str(quantidade)) if quantidade else Decimal('0'),
+                            quantidade_minima=Decimal(str(quantidade_minima)) if quantidade_minima else Decimal('0'),
+                            quantidade_maxima=Decimal(str(quantidade_maxima)) if quantidade_maxima else Decimal('0'),
+                            usuario_id=current_user.id if hasattr(current_user, "id") else None
+                        )
+                        db.session.add(estoque)
+                    else:
+                        quantidade_anterior = estoque.quantidade
+                        # Atualizar quantidades
+                        if quantidade:
+                            estoque.quantidade = Decimal(str(quantidade))
+                        if quantidade_minima:
+                            estoque.quantidade_minima = Decimal(str(quantidade_minima))
+                        if quantidade_maxima:
+                            estoque.quantidade_maxima = Decimal(str(quantidade_maxima))
+                        estoque.usuario_id = current_user.id if hasattr(current_user, "id") else estoque.usuario_id
+                    
+                    # Criar movimentação de ajuste se a quantidade foi alterada
+                    if estoque and quantidade and quantidade_anterior is not None:
+                        nova_quantidade = Decimal(str(quantidade))
+                        if nova_quantidade != quantidade_anterior:
+                            movimentacao = EstoqueMovimentacoes(
+                                estoque_id=estoque.id,
+                                tipo_movimento='ajuste',
+                                quantidade=nova_quantidade,
+                                observacao='Ajuste manual via edição de material',
+                                usuario_id=current_user.id if hasattr(current_user, "id") else None
+                            )
+                            db.session.add(movimentacao)
+                
                 db.session.commit()
                 return jsonify({"success": True, "message": "Material atualizado com sucesso!", "redirect": url_for("material.index")})
             except Exception as db_error:
                 db.session.rollback()
+                logger.error(f"Erro ao salvar material: {str(db_error)}", exc_info=True)
                 return jsonify({"success": False, "message": f"Erro ao salvar material: {str(db_error)}"})
 
         return jsonify(

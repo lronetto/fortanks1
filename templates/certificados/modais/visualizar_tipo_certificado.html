@@ -1,0 +1,44 @@
+<!-- Modal Visualizar Tipo de Certificado -->
+<div class="modal fade" id="modalVisualizarTipoCertificado" tabindex="-1" aria-labelledby="modalVisualizarTipoCertificadoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalVisualizarTipoCertificadoLabel"><i class="fas fa-eye"></i> Visualizar Tipo de Certificado</h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Nome:</label>
+                        <p id="nome_visualizar" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Status:</label>
+                        <p><span id="status_visualizar" class="badge"></span></p>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Criado em:</label>
+                        <p id="criado_em_visualizar" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Atualizado em:</label>
+                        <p id="atualizado_em_visualizar" class="form-control-plaintext"></p>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label class="form-label fw-bold">Campos Específicos (JSON):</label>
+                        <pre class="bg-light p-3 border rounded" id="dados_adicionais_visualizar" style="max-height: 400px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>

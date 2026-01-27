@@ -1,0 +1,67 @@
+<!-- Modal Novo Tipo de Certificado -->
+<div class="modal fade" id="modalNovoTipoCertificado" tabindex="-1" aria-labelledby="modalNovoTipoCertificadoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('certificado.tipos_novo') }}" id="form-novo-tipo-certificado">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalNovoTipoCertificadoLabel"><i class="fas fa-plus-circle"></i> Novo Tipo de Certificado</h5>
+                    <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="nome" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="nome" name="nome" required placeholder="Ex: Cordoalha Nua, Calibração Prensa Hidráulica">
+                            <small class="text-muted">Nome único para identificar este tipo de certificado</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="dados_adicionais" class="form-label">Campos Específicos (JSON)</label>
+                            <textarea class="form-control font-monospace" id="dados_adicionais" name="dados_adicionais" rows="10" 
+                                      placeholder='{"campos": [{"nome": "campo1", "tipo": "text", "label": "Campo 1", "obrigatorio": true}, {"nome": "campo2", "tipo": "number", "label": "Campo 2", "obrigatorio": false}]}'></textarea>
+                            <small class="text-muted">
+                                <strong>Formato JSON:</strong> Defina os campos específicos que este tipo de certificado deve ter.<br>
+                                <strong>Exemplo:</strong><br>
+                                <code>{"campos": [{"nome": "nota_fiscal", "tipo": "text", "label": "Nota Fiscal", "obrigatorio": true}, {"nome": "numero", "tipo": "text", "label": "Número", "obrigatorio": true}]}</code><br>
+                                <strong>Tipos disponíveis:</strong> text, number, date, email, tel, url, textarea, select<br>
+                                <strong>Exemplo com select:</strong><br>
+                                <code>{"campos": [{"nome": "status", "tipo": "select", "label": "Status", "obrigatorio": true, "opcoes": [{"value": "ativo", "label": "Ativo"}, {"value": "inativo", "label": "Inativo"}]}]}</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Validar JSON antes de enviar
+    document.addEventListener('DOMContentLoaded', function() {
+        const formNovo = document.getElementById('form-novo-tipo-certificado');
+        if (formNovo) {
+            formNovo.addEventListener('submit', function(e) {
+                const dadosAdicionaisInput = document.getElementById('dados_adicionais');
+                if (dadosAdicionaisInput && dadosAdicionaisInput.value.trim()) {
+                    try {
+                        JSON.parse(dadosAdicionaisInput.value);
+                    } catch (error) {
+                        e.preventDefault();
+                        alert('Erro: Os campos específicos devem estar em formato JSON válido.\n\nErro: ' + error.message);
+                        dadosAdicionaisInput.focus();
+                        return false;
+                    }
+                }
+            });
+        }
+    });
+})();
+</script>

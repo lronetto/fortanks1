@@ -32,10 +32,10 @@ admin_bp = Blueprint('admin', __name__)
 @admin_bp.before_request
 @login_required
 def verificar_admin():
-    if not current_user.is_admin:
+    if not current_user.is_permissao('admin'):
         flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
         return redirect(url_for('dashboard.index'))
-
+ 
 @admin_bp.route('/')
 def index():
     """

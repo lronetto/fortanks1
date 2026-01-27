@@ -139,6 +139,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    $('#nome').on('input', function() {
+        $(this).val($(this).val().toUpperCase());
+    });
     // Validação do formulário de novo material
     $('#form-novo-material').submit(function(e) {
         const nome = $('#nome').val().trim();

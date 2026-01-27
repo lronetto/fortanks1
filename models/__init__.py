@@ -45,7 +45,7 @@ from .produto_composto import ProdutoComposto, ProdutoCompostoItem
 from .dados_analiticos import DadoAnalitico
 from .reembolso import Reembolsos, ReembolsosDocumentos
 from .epi import Epi, EpiEntregas
-from .certificado import Certificado
+from .certificado import Certificados, CertificadosTipos
 from .permissoes import Modulo, Permissao
 def configure_mappers():
     """
@@ -92,6 +92,6 @@ __all__ = [
     'DadoAnalitico', 'configure_mappers', 
     'Reembolsos', 'ReembolsosDocumentos',
     'Epi', 'EpiEntregas',
-    'Certificado',
+    'Certificados', 'CertificadosTipos',
     'Modulo', 'Permissao',
 ] 

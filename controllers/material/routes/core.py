@@ -20,6 +20,11 @@ from .. import material_bp
 
 logger = logging.getLogger(__name__)
 
+@material_bp.before_request
+def before_request():
+    if not current_user.is_permissao('material'):
+        flash('Você não tem permissão para acessar esta página.', 'danger')
+        return redirect(url_for('dashboard.index'))
 
 @material_bp.route("/")
 @login_required
@@ -97,7 +102,7 @@ def novo():
 
         material = Materiais(
             codigo=codigo,
-            nome=nome,
+            nome=nome.upper(),
             descricao=descricao,
             categoria=categoria,
             plano_conta=plano_conta,
@@ -118,6 +123,9 @@ def novo():
 @material_bp.route("/editar/<int:id>", methods=["GET", "POST"])
 @login_required
 def editar(id):
+    if not current_user.is_permissao('material', 'editar'):
+        flash('Você não tem permissão para editar este material.', 'danger')
+        return redirect(url_for('material.index'))
     """
     Mantém fluxo de página (HTML). A parte AJAX/JSON foi centralizada em `controllers/api/material_api.py`.
     """
@@ -158,7 +166,7 @@ def editar(id):
                 codigo = f"AUTO-{id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
             material.codigo = codigo
-            material.nome = nome
+            material.nome = nome.upper()
             material.descricao = descricao
             material.categoria = categoria
             material.plano_conta = plano_conta
@@ -190,6 +198,9 @@ def visualizar(id):
 @material_bp.route("/excluir/<int:id>", methods=["POST"])
 @login_required
 def excluir(id):
+    if not current_user.is_permissao('material', 'excluir'):
+        flash('Você não tem permissão para excluir este material.', 'danger')
+        return redirect(url_for('material.index'))
     try:
         material = Materiais.query.get_or_404(id)
         

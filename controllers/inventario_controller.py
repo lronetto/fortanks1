@@ -16,6 +16,12 @@ logger = logging.getLogger(__name__)
 # Criar blueprint
 inventario_bp = Blueprint('inventario', __name__, url_prefix='/inventario')
 
+@inventario_bp.before_request
+@login_required
+def verificar_permissao():
+    if not current_user.is_permissao('inventario'):
+        flash('Você não tem permissão para acessar esta página.', 'danger')
+        return redirect(url_for('dashboard.index'))
 # Rotas de Inventário
 @inventario_bp.route('/')
 @login_required

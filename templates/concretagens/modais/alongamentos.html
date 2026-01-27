@@ -91,6 +91,10 @@
                             <i class="fas fa-plus"></i> Adicionar Cordoalha
                         </button>
                     </div>
+                    <!-- Datalist para autocompletar números de bobina -->
+                    <datalist id="datalistBobinas">
+                        <!-- Opções serão carregadas dinamicamente -->
+                    </datalist>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -102,15 +106,103 @@
 </div>
 
 <script>
+    // Dicionário para armazenar dados das bobinas (número -> {data_fabricacao, ncertificado})
+    let bobinasData = {};
+    
+    // Função para preencher dados da bobina quando selecionada
+    function preencherDadosBobina($input) {
+        const numeroBobina = $input.val().trim();
+        if (!numeroBobina) return;
+        
+        const dados = bobinasData[numeroBobina];
+        if (dados) {
+            const $tr = $input.closest('tr');
+            
+            // Preencher data de fabricação se disponível (só se estiver vazio)
+            if (dados.data_fabricacao) {
+                const $dataInput = $tr.find('.cordoalha-data');
+                if (!$dataInput.val()) {
+                    $dataInput.val(dados.data_fabricacao);
+                }
+            }
+            
+            // Preencher certificado se disponível (só se estiver vazio)
+            if (dados.ncertificado) {
+                const $certificadoInput = $tr.find('.cordoalha-certificado');
+                if (!$certificadoInput.val()) {
+                    $certificadoInput.val(dados.ncertificado);
+                }
+            }
+        }
+    }
+    
     $(document).ready(function() {
         let contadorCordoalhas = 0;
-
+        
+        // Função para limpar todos os dados do modal
+        function limparDadosModal() {
+            // Limpar todos os campos de alongamento (C-1 a C-24)
+            $('.alongamento-input').val('');
+            
+            // Limpar tabela de cordoalhas
+            $('#tabelaCordoalhas tbody').empty();
+            
+            // Limpar ID da concretagem
+            $('#concretagem_id_alongamentos').val('');
+            
+            // Resetar contador
+            contadorCordoalhas = 0;
+        }
+        
+        // Limpar dados antes de abrir o modal
+        $('#modalAlongamentos').on('show.bs.modal', function() {
+            limparDadosModal();
+        });
+        
+        // Carregar bobinas no datalist quando o modal for aberto
+        $('#modalAlongamentos').on('shown.bs.modal', function() {
+            carregarBobinasDatalist();
+        });
+        
+        // Função para carregar bobinas no datalist
+        function carregarBobinasDatalist() {
+            $.ajax({
+                url: '/certificados/api/bobinas',
+                dataType: 'json',
+                data: {
+                    term: '' // Buscar todas
+                },
+                success: function(data) {
+                    const $datalist = $('#datalistBobinas');
+                    $datalist.empty();
+                    bobinasData = {};
+                    
+                    if (data && data.results && Array.isArray(data.results)) {
+                        data.results.forEach(function(bobina) {
+                            // Adicionar opção no datalist
+                            const $option = $('<option>').attr('value', bobina.id).text(bobina.text);
+                            $datalist.append($option);
+                            
+                            // Armazenar dados da bobina
+                            bobinasData[bobina.id] = {
+                                data_fabricacao: bobina.data_fabricacao || '',
+                                ncertificado: bobina.ncertificado || ''
+                            };
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar bobinas:', error);
+                }
+            });
+        }
+        
         // Adicionar nova linha de cordoalha
         $('#btnAdicionarCordoalha').on('click', function() {
             contadorCordoalhas++;
             const linha = `
                 <tr data-index="${contadorCordoalhas}">
-                    <td><input type="number" class="form-control form-control-sm cordoalha-numero" placeholder="Número"></td>
+                    <td><input type="text" class="form-control form-control-sm cordoalha-numero" list="datalistBobinas" placeholder="Número" autocomplete="off"></td>
                     <td><input type="date" class="form-control form-control-sm cordoalha-data" placeholder="Data"></td>
                     <td><input type="number" class="form-control form-control-sm cordoalha-certificado" placeholder="Certificado"></td>
                     <td>
@@ -121,7 +213,14 @@
                 </tr>
             `;
             $('#tabelaCordoalhas tbody').append(linha);
+            
+            // Adicionar handler para preencher dados quando bobina for selecionada
+            const $novoInput = $('#tabelaCordoalhas tbody tr:last .cordoalha-numero');
+            $novoInput.on('change blur', function() {
+                preencherDadosBobina($(this));
+            });
         });
+        
 
         // Remover linha de cordoalha
         $(document).on('click', '.btn-remover-cordoalha', function() {
@@ -152,15 +251,21 @@
             // Coletar bobinas
             const bobinas = [];
             $('#tabelaCordoalhas tbody tr').each(function() {
-                const numero = $(this).find('.cordoalha-numero').val();
+                const numero = $(this).find('.cordoalha-numero').val() || '';
                 const data = $(this).find('.cordoalha-data').val();
                 const certificado = $(this).find('.cordoalha-certificado').val();
                 
                 if (numero || data || certificado) {
                     // Manter data no formato YYYY-MM-DD para compatibilidade
                     const dataFormatada = data || '';
+                    // Tentar converter número para float, mas manter como string se não for numérico
+                    let numeroFinal = null;
+                    if (numero) {
+                        const numeroFloat = parseFloat(numero);
+                        numeroFinal = isNaN(numeroFloat) ? numero : numeroFloat;
+                    }
                     bobinas.push({
-                        numero: numero ? parseFloat(numero) : null,
+                        numero: numeroFinal,
                         data_fabricacao: dataFormatada,
                         certificado: certificado ? parseFloat(certificado) : null
                     });
@@ -250,7 +355,7 @@
                             }
                             const linha = `
                                 <tr>
-                                    <td><input type="number" class="form-control form-control-sm cordoalha-numero" value="${bobina.numero || ''}"></td>
+                                    <td><input type="text" class="form-control form-control-sm cordoalha-numero" list="datalistBobinas" value="${bobina.numero || ''}" autocomplete="off"></td>
                                     <td><input type="date" class="form-control form-control-sm cordoalha-data" value="${dataFormatada}"></td>
                                     <td><input type="number" class="form-control form-control-sm cordoalha-certificado" value="${bobina.certificado || ''}"></td>
                                     <td>
@@ -261,6 +366,12 @@
                                 </tr>
                             `;
                             $('#tabelaCordoalhas tbody').append(linha);
+                            
+                            // Adicionar handler para preencher dados quando bobina for selecionada
+                            const $novoInput = $('#tabelaCordoalhas tbody tr:last .cordoalha-numero');
+                            $novoInput.on('change blur', function() {
+                                preencherDadosBobina($(this));
+                            });
                         });
                     }
                 } catch (e) {

@@ -81,7 +81,7 @@ def _processar_notas_fiscais(query):
         .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)\
         .join(Contrato, Contrato.id == Tanques.contrato_id)\
         .filter(NotaFiscalItem.nf_id.in_(nf_ids))\
-        .all()
+        .group_by(NotaFiscalItem.nf_id).all()
     
     for nf_item, tanque, contrato in nf_items_query:
         if nf_item.nf_id not in nf_items_dict:
@@ -157,6 +157,10 @@ def _processar_notas_fiscais(query):
                 except:
                     pago_str = str(data_pagamento) if data_pagamento else 'Não'
         
+        if nf.vencimento and nf.vencimento != 'null':
+            data_prevista = datetime.strptime(nf.vencimento, '%Y-%m-%d').strftime('%d/%m/%Y')
+        else:
+            data_prevista = data_prevista.strftime('%d/%m/%Y') if data_prevista else 'Não definido'
         dados_relatorio.append({
             'id': nf.id,
             'Data': nf.data_emissao.strftime('%d/%m/%Y'),
@@ -164,7 +168,7 @@ def _processar_notas_fiscais(query):
             'Nota Fiscal': nf.numero_nf,
             'Valor': Decimal(nf.valor_total),
             'Quantidade': quantidade,
-            'Data Prevista': data_prevista.strftime('%d/%m/%Y') if data_prevista else 'Não definido',
+            'Data Prevista': data_prevista,
             'Pago': pago_str,
             'Status': nf.status_processamento
         })

@@ -19,19 +19,12 @@
                     
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="tipo_editar" class="form-label">Tipo</label>
-                            <select class="form-select" id="tipo_editar" name="tipo">
+                            <label for="tipo_id_editar" class="form-label">Tipo</label>
+                            <select class="form-select" id="tipo_id_editar" name="tipo_id">
                                 <option value="">Selecione um tipo</option>
-                                <option value="cordoalha nua">Cordoalha Nua</option>
-                                <option value="calibracao prensa hidraulica">Calibração Prensa Hidráulica</option>
-                                <option value="macaco hidraulico">Macaco Hidráulico</option>
-                                <option value="manilhas e cintas">Manilhas e Cintas</option>
-                                <option value="manometros">Manômetros</option>
-                                <option value="acessorios de icamento">Acessórios de Içamento</option>
-                                <option value="materias - aço">Materiais - Aço</option>
-                                <option value="materiais - cordoalha nua">Materiais - Cordoalha Nua</option>
-                                <option value="materias - concreto">Materiais - Concreto</option>
+                                <!-- Opções serão carregadas via JavaScript -->
                             </select>
+                            <input type="hidden" id="tipo_editar" name="tipo" value="">
                         </div>
                         <div class="col-md-6">
                             <label for="data_editar" class="form-label">Data</label>
@@ -46,43 +39,22 @@
                         </div>
                     </div>
                     
-                    <!-- Campos específicos para Cordoalha Nua -->
-                    <div id="cordoalha_campos_editar" style="display: none;">
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label for="nota_fiscal_editar" class="form-label">Nota Fiscal</label>
-                                <input type="text" class="form-control" id="nota_fiscal_editar" name="nota_fiscal" placeholder="Número da nota fiscal">
-                            </div>
-                        </div>
-                        
-                        <div class="row mb-3">
-                            <div class="col-md-12">
-                                <label class="form-label">Dados da Cordoalha</label>
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-sm" id="tabela_cordoalha_editar">
-                                        <thead>
-                                            <tr>
-                                                <th>Número</th>
-                                                <th>Área</th>
-                                                <th>Alongamento 600mm</th>
-                                                <th>Carga 1%</th>
-                                                <th>Carga de Ruptura</th>
-                                                <th>Diâmetro</th>
-                                                <th>Massa</th>
-                                                <th>Módulo de Elasticidade</th>
-                                                <th>Peso Líquido</th>
-                                                <th>Ações</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="tbody_cordoalha_editar">
-                                            <!-- Linhas serão adicionadas via JavaScript -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <button type="button" class="btn btn-sm btn-success mt-2" id="btn_adicionar_linha_cordoalha_editar">
-                                    <i class="fas fa-plus"></i> Adicionar Linha
-                                </button>
-                            </div>
+                    <!-- Campos dinâmicos baseados no tipo selecionado -->
+                    <div id="campos_dinamicos_editar" style="display: none;">
+                        <hr>
+                        <h6 class="mb-3">Campos Específicos do Tipo</h6>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-sm" id="campos_dinamicos_container_editar">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 30%;">Campo</th>
+                                        <th style="width: 70%;">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Campos serão renderizados dinamicamente via JavaScript -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                     
@@ -98,11 +70,11 @@
                         </div>
                     </div>
                     
-                    <div class="row mb-3" id="dados_adicionais_container_editar">
+                    <div class="row mb-3" id="dados_adicionais_container_editar" style="display: none;">
                         <div class="col-md-12">
                             <label for="dados_adicionais_editar" class="form-label">Dados Adicionais (JSON)</label>
                             <textarea class="form-control" id="dados_adicionais_editar" name="dados_adicionais" rows="5" placeholder='{"campo1": "valor1", "campo2": "valor2"}'></textarea>
-                            <small class="text-muted" id="dados_adicionais_help_editar">Informe dados adicionais em formato JSON (opcional)</small>
+                            <small class="text-muted" id="dados_adicionais_help_editar">Este campo é preenchido automaticamente com os campos específicos</small>
                         </div>
                     </div>
                 </div>
@@ -117,152 +89,214 @@
 
 <script>
 (function() {
-    // Função para adicionar linha na tabela de cordoalha
-    function adicionarLinhaCordoalha() {
-        const tbody = document.getElementById('tbody_cordoalha_editar');
-        const rowIndex = tbody.children.length;
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_numero_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_area_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_alongamento_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_1_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_ruptura_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_diametro_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_massa_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_modulo_${rowIndex}"></td>
-            <td><input type="text" class="form-control form-control-sm" name="cordoalha_peso_liquido_${rowIndex}"></td>
-            <td><button type="button" class="btn btn-sm btn-danger" onclick="removerLinhaCordoalhaEditar(this)"><i class="fas fa-trash"></i></button></td>
-        `;
-        tbody.appendChild(row);
-    }
-
-    // Função para remover linha da tabela de cordoalha
-    window.removerLinhaCordoalhaEditar = function(btn) {
-        btn.closest('tr').remove();
-    }
-
-    // Função para formatar dados de cordoalha em JSON
-    function formatarDadosCordoalha() {
-        const notaFiscal = document.getElementById('nota_fiscal_editar')?.value || '';
-        const tbody = document.getElementById('tbody_cordoalha_editar');
+    let tiposDisponiveis = [];
+    
+    // Função para renderizar campos dinâmicos baseados no tipo
+    function renderizarCamposDinamicos(campos, dadosExistentes = {}) {
+        const container = document.querySelector('#campos_dinamicos_container_editar tbody');
+        const camposDiv = document.getElementById('campos_dinamicos_editar');
         
-        const dados = {
-            nota_fiscal: notaFiscal,
-            cordoalhas: []
-        };
+        if (!container || !camposDiv) return;
         
-        if (tbody) {
-            const rows = tbody.querySelectorAll('tr');
-            rows.forEach(row => {
-                const inputs = row.querySelectorAll('input[type="text"]');
-                if (inputs.length >= 9) {
-                    const linha = {
-                        numero: inputs[0].value || '',
-                        area: inputs[1].value || '',
-                        alongamento_600mm: inputs[2].value || '',
-                        carga_1: inputs[3].value || '',
-                        carga_ruptura: inputs[4].value || '',
-                        diametro: inputs[5].value || '',
-                        massa: inputs[6].value || '',
-                        modulo_elasticidade: inputs[7].value || '',
-                        peso_liquido: inputs[8].value || ''
-                    };
-                    // Só adiciona se pelo menos um campo estiver preenchido
-                    if (Object.values(linha).some(v => v !== '')) {
-                        dados.cordoalhas.push(linha);
-                    }
-                }
-            });
+        // Limpar campos anteriores
+        container.innerHTML = '';
+        
+        if (!campos || campos.length === 0) {
+            camposDiv.style.display = 'none';
+            return;
         }
+        
+        camposDiv.style.display = 'block';
+        
+        campos.forEach(campo => {
+            const campoNome = campo.nome || '';
+            const campoLabel = campo.label || campoNome;
+            const campoTipo = campo.tipo || 'text';
+            const campoObrigatorio = campo.obrigatorio || false;
+            const valorExistente = dadosExistentes[campoNome] || '';
+            
+            const row = document.createElement('tr');
+            
+            let inputHtml = '';
+            const inputId = `campo_${campoNome}_editar`;
+            const inputName = `campo_${campoNome}`;
+            const requiredAttr = campoObrigatorio ? 'required' : '';
+            const valorAttr = valorExistente ? `value="${String(valorExistente).replace(/"/g, '&quot;')}"` : '';
+            
+            switch(campoTipo) {
+                case 'textarea':
+                    inputHtml = `<textarea class="form-control form-control-sm" id="${inputId}" name="${inputName}" rows="2" ${requiredAttr}>${valorExistente}</textarea>`;
+                    break;
+                case 'number':
+                    inputHtml = `<input type="number" class="form-control form-control-sm" id="${inputId}" name="${inputName}" step="any" ${requiredAttr} ${valorAttr}>`;
+                    break;
+                case 'date':
+                    inputHtml = `<input type="date" class="form-control form-control-sm" id="${inputId}" name="${inputName}" ${requiredAttr} ${valorAttr}>`;
+                    break;
+                case 'email':
+                    inputHtml = `<input type="email" class="form-control form-control-sm" id="${inputId}" name="${inputName}" ${requiredAttr} ${valorAttr}>`;
+                    break;
+                case 'tel':
+                    inputHtml = `<input type="tel" class="form-control form-control-sm" id="${inputId}" name="${inputName}" ${requiredAttr} ${valorAttr}>`;
+                    break;
+                case 'url':
+                    inputHtml = `<input type="url" class="form-control form-control-sm" id="${inputId}" name="${inputName}" ${requiredAttr} ${valorAttr}>`;
+                    break;
+                case 'select':
+                case 'lista':
+                    let opcoesHtml = '<option value="">Selecione...</option>';
+                    if (campo.opcoes && Array.isArray(campo.opcoes)) {
+                        campo.opcoes.forEach(opcao => {
+                            const opcaoValue = opcao.value || opcao.valor || '';
+                            const opcaoLabel = opcao.label || opcao.texto || opcaoValue;
+                            const selectedAttr = (valorExistente && valorExistente == opcaoValue) ? 'selected' : '';
+                            opcoesHtml += `<option value="${opcaoValue}" ${selectedAttr}>${opcaoLabel}</option>`;
+                        });
+                    }
+                    inputHtml = `<select class="form-select form-select-sm" id="${inputId}" name="${inputName}" ${requiredAttr}>${opcoesHtml}</select>`;
+                    break;
+                default:
+                    inputHtml = `<input type="text" class="form-control form-control-sm" id="${inputId}" name="${inputName}" ${requiredAttr} ${valorAttr}>`;
+            }
+            
+            row.innerHTML = `
+                <td>
+                    <label for="${inputId}" class="form-label mb-0 fw-normal">${campoLabel}${campoObrigatorio ? ' <span class="text-danger">*</span>' : ''}</label>
+                </td>
+                <td>
+                    ${inputHtml}
+                </td>
+            `;
+            
+            container.appendChild(row);
+        });
+    }
+
+    // Função para carregar campos do tipo selecionado
+    function carregarCamposTipo(tipoId, dadosExistentes = {}) {
+        if (!tipoId) {
+            document.getElementById('campos_dinamicos_editar').style.display = 'none';
+            document.getElementById('tipo_editar').value = '';
+            return;
+        }
+        
+        fetch(`{{ url_for('certificado.get_campos_tipo', tipo_id=0) }}`.replace('0', tipoId))
+            .then(response => response.json())
+            .then(data => {
+                // Atualizar nome do tipo no campo hidden
+                const tipoSelect = document.getElementById('tipo_id_editar');
+                const tipoHidden = document.getElementById('tipo_editar');
+                if (tipoSelect && tipoHidden) {
+                    const selectedOption = tipoSelect.options[tipoSelect.selectedIndex];
+                    tipoHidden.value = selectedOption ? selectedOption.text : '';
+                }
+                
+                // Renderizar campos dinâmicos com dados existentes
+                renderizarCamposDinamicos(data.campos, dadosExistentes);
+            })
+            .catch(error => {
+                console.error('Erro ao carregar campos do tipo:', error);
+            });
+    }
+
+    // Função para coletar dados dos campos dinâmicos
+    function coletarDadosDinamicos() {
+        const dados = {};
+        const campos = document.querySelectorAll('#campos_dinamicos_container_editar input, #campos_dinamicos_container_editar textarea, #campos_dinamicos_container_editar select');
+        
+        campos.forEach(campo => {
+            const name = campo.name;
+            if (name && name.startsWith('campo_')) {
+                const campoNome = name.replace('campo_', '');
+                dados[campoNome] = campo.value;
+            }
+        });
         
         return dados;
     }
 
-    // Função para carregar dados de cordoalha na tabela
-    function carregarDadosCordoalha(dados) {
-        const notaFiscalInput = document.getElementById('nota_fiscal_editar');
-        const tbody = document.getElementById('tbody_cordoalha_editar');
+    // Função para carregar tipos no select
+    function carregarTiposSelect(tipos) {
+        const select = document.getElementById('tipo_id_editar');
+        if (!select) return;
         
-        if (notaFiscalInput && dados.nota_fiscal) {
-            notaFiscalInput.value = dados.nota_fiscal;
+        tiposDisponiveis = tipos;
+        select.innerHTML = '<option value="">Selecione um tipo</option>';
+        tipos.forEach(tipo => {
+            const option = document.createElement('option');
+            option.value = tipo.id;
+            option.textContent = tipo.nome;
+            select.appendChild(option);
+        });
+    }
+
+    // Expor funções para uso externo
+    window.carregarCertificadoEditar = function(certificado, tipos, documentos) {
+        // Carregar tipos no select
+        if (tipos) {
+            carregarTiposSelect(tipos);
         }
         
-        if (tbody && dados.cordoalhas && Array.isArray(dados.cordoalhas)) {
-            tbody.innerHTML = '';
-            dados.cordoalhas.forEach((cordoalha, index) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_numero_${index}" value="${(cordoalha.numero || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_area_${index}" value="${(cordoalha.area || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_alongamento_${index}" value="${(cordoalha.alongamento_600mm || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_1_${index}" value="${(cordoalha.carga_1 || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_carga_ruptura_${index}" value="${(cordoalha.carga_ruptura || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_diametro_${index}" value="${(cordoalha.diametro || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_massa_${index}" value="${(cordoalha.massa || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_modulo_${index}" value="${(cordoalha.modulo_elasticidade || '').replace(/"/g, '&quot;')}"></td>
-                    <td><input type="text" class="form-control form-control-sm" name="cordoalha_peso_liquido_${index}" value="${(cordoalha.peso_liquido || '').replace(/"/g, '&quot;')}"></td>
-                    <td><button type="button" class="btn btn-sm btn-danger" onclick="removerLinhaCordoalhaEditar(this)"><i class="fas fa-trash"></i></button></td>
+        // Preencher campos básicos
+        document.getElementById('certificado_id_editar').value = certificado.id;
+        document.getElementById('nome_editar').value = certificado.nome || '';
+        document.getElementById('data_editar').value = certificado.data || '';
+        document.getElementById('data_vencimento_editar').value = certificado.data_vencimento || '';
+        
+        // Selecionar tipo
+        const tipoSelect = document.getElementById('tipo_id_editar');
+        if (tipoSelect && certificado.tipo_id) {
+            tipoSelect.value = certificado.tipo_id;
+            // Carregar campos dinâmicos do tipo
+            const dadosExistentes = certificado.dados_adicionais || {};
+            carregarCamposTipo(certificado.tipo_id, dadosExistentes);
+        }
+        
+        // Carregar documentos existentes
+        const documentosDiv = document.getElementById('documentos_existentes');
+        if (documentosDiv && documentos) {
+            documentosDiv.innerHTML = '';
+            documentos.forEach(doc => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                item.innerHTML = `
+                    <span>${doc.filename || 'Documento'}</span>
+                    <div>
+                        <a href="{{ url_for('certificado.download_documento', doc_id=0) }}`.replace('0', doc.id) + `" class="btn btn-sm btn-primary me-1" target="_blank">
+                            <i class="fas fa-download"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="excluirDocumento(${doc.id}, ${certificado.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 `;
-                tbody.appendChild(row);
+                documentosDiv.appendChild(item);
             });
         }
-    }
-
-    // Função para mostrar/ocultar campos de cordoalha
-    function toggleCamposCordoalha(tipo) {
-        const camposDiv = document.getElementById('cordoalha_campos_editar');
-        const dadosAdicionaisInput = document.getElementById('dados_adicionais_editar');
-        const dadosAdicionaisHelp = document.getElementById('dados_adicionais_help_editar');
-        const isCordoalha = tipo === 'cordoalha nua' || tipo === 'materiais - cordoalha nua';
         
-        if (camposDiv) {
-            camposDiv.style.display = isCordoalha ? 'block' : 'none';
-            
-            if (isCordoalha && camposDiv.style.display === 'block') {
-                // Adicionar uma linha inicial se a tabela estiver vazia
-                const tbody = document.getElementById('tbody_cordoalha_editar');
-                if (tbody && tbody.children.length === 0) {
-                    adicionarLinhaCordoalha();
-                }
-                
-                // Tornar o campo de dados adicionais readonly
-                if (dadosAdicionaisInput) {
-                    dadosAdicionaisInput.readOnly = true;
-                }
-                if (dadosAdicionaisHelp) {
-                    dadosAdicionaisHelp.textContent = 'Este campo é preenchido automaticamente quando o tipo é Cordoalha Nua';
-                }
-            } else {
-                // Tornar o campo de dados adicionais editável
-                if (dadosAdicionaisInput) {
-                    dadosAdicionaisInput.readOnly = false;
-                }
-                if (dadosAdicionaisHelp) {
-                    dadosAdicionaisHelp.textContent = 'Informe dados adicionais em formato JSON (opcional)';
-                }
-            }
+        // Atualizar action do form
+        const form = document.getElementById('form-editar-certificado');
+        if (form) {
+            form.action = `{{ url_for('certificado.editar', id=0) }}`.replace('0', certificado.id);
         }
-    }
-
-    // Expor função para uso externo
-    window.carregarDadosCordoalhaEditar = carregarDadosCordoalha;
-    window.toggleCamposCordoalhaEditar = toggleCamposCordoalha;
+    };
 
     // Inicializar quando o modal for aberto
     document.addEventListener('DOMContentLoaded', function() {
-        const tipoSelect = document.getElementById('tipo_editar');
+        const tipoSelect = document.getElementById('tipo_id_editar');
         if (tipoSelect) {
             tipoSelect.addEventListener('change', function() {
-                toggleCamposCordoalha(this.value);
-            });
-        }
-        
-        // Botão para adicionar linha na tabela
-        const btnAdicionar = document.getElementById('btn_adicionar_linha_cordoalha_editar');
-        if (btnAdicionar) {
-            btnAdicionar.addEventListener('click', function() {
-                adicionarLinhaCordoalha();
+                const dadosExistentes = {};
+                // Coletar dados existentes antes de trocar o tipo
+                const camposAtuais = document.querySelectorAll('#campos_dinamicos_container_editar input, #campos_dinamicos_container_editar textarea, #campos_dinamicos_container_editar select');
+                camposAtuais.forEach(campo => {
+                    const name = campo.name;
+                    if (name && name.startsWith('campo_')) {
+                        const campoNome = name.replace('campo_', '');
+                        dadosExistentes[campoNome] = campo.value;
+                    }
+                });
+                carregarCamposTipo(this.value, dadosExistentes);
             });
         }
         
@@ -270,13 +304,10 @@
         const formEditar = document.getElementById('form-editar-certificado');
         if (formEditar) {
             formEditar.addEventListener('submit', function(e) {
-                const tipo = tipoSelect.value;
-                if (tipo === 'cordoalha nua' || tipo === 'materiais - cordoalha nua') {
-                    const dadosCordoalha = formatarDadosCordoalha();
-                    const dadosAdicionaisInput = document.getElementById('dados_adicionais_editar');
-                    if (dadosAdicionaisInput) {
-                        dadosAdicionaisInput.value = JSON.stringify(dadosCordoalha);
-                    }
+                const dadosDinamicos = coletarDadosDinamicos();
+                const dadosAdicionaisInput = document.getElementById('dados_adicionais_editar');
+                if (dadosAdicionaisInput && Object.keys(dadosDinamicos).length > 0) {
+                    dadosAdicionaisInput.value = JSON.stringify(dadosDinamicos);
                 }
             });
         }

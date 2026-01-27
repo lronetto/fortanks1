@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 
 permissoes_bp = Blueprint('permissoes', __name__)
 
+@permissoes_bp.before_request
+@login_required
+def verificar_permissao():
+    if not current_user.is_permissao('admin'):
+        flash('Você não tem permissão para acessar esta página.', 'danger')
+        return redirect(url_for('dashboard.index'))
 @permissoes_bp.route('/')
 @login_required
 def index():

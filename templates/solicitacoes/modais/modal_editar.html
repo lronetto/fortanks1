@@ -207,7 +207,34 @@ document.addEventListener('DOMContentLoaded', function() {
             const unidadeNome = item.material?.unidade_obj?.nome || item.unidade_nome || '';
             
             tr.append(`<td>${materialNome}</td>`);
-            tr.append(`<td>${item.quantidade}</td>`);
+            
+            // Célula de quantidade editável
+            const tdQuantidade = $('<td>');
+            const inputQuantidade = $('<input>')
+                .attr('type', 'number')
+                .attr('step', '0.01')
+                .attr('min', '0.01')
+                .addClass('form-control form-control-sm')
+                .val(item.quantidade || '')
+                .on('change', function() {
+                    const novaQuantidade = parseFloat($(this).val());
+                    if (isNaN(novaQuantidade) || novaQuantidade <= 0) {
+                        alert('A quantidade deve ser um número maior que zero.');
+                        $(this).val(itensSolicitacoes[index].quantidade);
+                        return;
+                    }
+                    itensSolicitacoes[index].quantidade = novaQuantidade;
+                })
+                .on('blur', function() {
+                    // Garantir que o valor seja atualizado mesmo se o usuário apenas clicar fora
+                    const valor = parseFloat($(this).val());
+                    if (!isNaN(valor) && valor > 0) {
+                        itensSolicitacoes[index].quantidade = valor;
+                    }
+                });
+            tdQuantidade.append(inputQuantidade);
+            tr.append(tdQuantidade);
+            
             tr.append(`<td>${unidadeNome}</td>`);
             
             const tdObs = $('<td>');

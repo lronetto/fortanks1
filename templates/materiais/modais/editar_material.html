@@ -94,6 +94,29 @@
                             </small>
                         </div>
                     </div>
+
+                    <hr class="my-4">
+                    <h6 class="mb-3"><i class="fas fa-boxes"></i> Informações de Estoque</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_quantidade" class="form-label">Quantidade Atual</label>
+                            <input type="number" class="form-control" id="edit_quantidade" name="edit_quantidade" 
+                                   step="0.0001" min="0" placeholder="0.0000">
+                            <small class="text-muted">Quantidade atual em estoque</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_quantidade_minima" class="form-label">Quantidade Mínima</label>
+                            <input type="number" class="form-control" id="edit_quantidade_minima" name="edit_quantidade_minima" 
+                                   step="0.0001" min="0" placeholder="0.0000">
+                            <small class="text-muted">Estoque mínimo para alertas</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_quantidade_maxima" class="form-label">Quantidade Máxima</label>
+                            <input type="number" class="form-control" id="edit_quantidade_maxima" name="edit_quantidade_maxima" 
+                                   step="0.0001" min="0" placeholder="0.0000">
+                            <small class="text-muted">Capacidade máxima de estoque</small>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -156,11 +179,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }
                 
             unidadeSelect.value = material.unidade || '';
-                
+            
+            // Preencher campos de quantidade se existirem
+            if (material.quantidade !== undefined) {
+                document.getElementById('edit_quantidade').value = material.quantidade || '0';
+            }
+            if (material.quantidade_minima !== undefined) {
+                document.getElementById('edit_quantidade_minima').value = material.quantidade_minima || '0';
+            }
+            if (material.quantidade_maxima !== undefined) {
+                document.getElementById('edit_quantidade_maxima').value = material.quantidade_maxima || '0';
+            }
             
         } catch (error) {
             console.error('Erro ao preencher o modal:', error);
         }
+    }
+    
+    // Função para buscar dados de estoque
+    function buscarEstoque(materialId) {
+        if (!materialId) return;
+        
+        fetch(`/estoque/api/estoque-por-material/${materialId}`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const estoque = data.data;
+                document.getElementById('edit_quantidade').value = estoque.quantidade || '0';
+                document.getElementById('edit_quantidade_minima').value = estoque.quantidade_minima || '0';
+                document.getElementById('edit_quantidade_maxima').value = estoque.quantidade_maxima || '0';
+            } else {
+                // Se não houver estoque, definir valores padrão
+                document.getElementById('edit_quantidade').value = '0';
+                document.getElementById('edit_quantidade_minima').value = '0';
+                document.getElementById('edit_quantidade_maxima').value = '0';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao buscar dados de estoque:', error);
+            // Em caso de erro, definir valores padrão
+            document.getElementById('edit_quantidade').value = '0';
+            document.getElementById('edit_quantidade_minima').value = '0';
+            document.getElementById('edit_quantidade_maxima').value = '0';
+        });
     }
     // Adicionar evento para o botão de editar
     const editButtons = document.querySelectorAll('.btn-editar');
@@ -182,6 +249,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         formula_calculo: this.dataset.formulaCalculo || ''
                     };
                     preencherModal(material);
+                    // Buscar dados de estoque após preencher o modal
+                    buscarEstoque(material.id);
                     return;
                 }
                 const url = `/materiais/obter-ajax/${materialId}`;
@@ -202,9 +271,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     if (data.success) {
                         preencherModal(data.material);
+                        // Buscar dados de estoque após preencher o modal
+                        buscarEstoque(data.material.id);
                     } else if (data.id) {
                         // Se retornar diretamente os dados (sem success)
                         preencherModal(data);
+                        // Buscar dados de estoque após preencher o modal
+                        buscarEstoque(data.id);
                     } else {
                         alert('Erro ao carregar os dados do material: ' + (data.error || 'Erro desconhecido'));
                     }
@@ -240,6 +313,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 const form = document.getElementById('form-editar-material');
                 const formData = new FormData(form);
+                
+                // Garantir que os campos de quantidade tenham valores padrão se vazios
+                const quantidadeInput = document.getElementById('edit_quantidade');
+                const quantidadeMinimaInput = document.getElementById('edit_quantidade_minima');
+                const quantidadeMaximaInput = document.getElementById('edit_quantidade_maxima');
+                
+                if (quantidadeInput && !quantidadeInput.value) {
+                    formData.set('edit_quantidade', '0');
+                }
+                if (quantidadeMinimaInput && !quantidadeMinimaInput.value) {
+                    formData.set('edit_quantidade_minima', '0');
+                }
+                if (quantidadeMaximaInput && !quantidadeMaximaInput.value) {
+                    formData.set('edit_quantidade_maxima', '0');
+                }
+                
                 const url = `/material/editar-material-ajax/${materialId}`;
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', url, true);
