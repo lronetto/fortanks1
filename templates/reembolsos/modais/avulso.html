@@ -52,6 +52,12 @@
             <input type="file" class="form-control" id="avulsoAnexos" name="anexos" multiple accept=".pdf,.jpg,.jpeg,.png">
             <small class="form-text text-muted">Você pode selecionar múltiplos arquivos (PDF, JPG, PNG)</small>
           </div>
+          
+          <!-- Seção de Novos Anexos Selecionados -->
+          <div class="form-group" id="novosAnexosContainer" style="display: none;">
+            <label>Novos Anexos Selecionados</label>
+            <div id="listaNovosAnexos" class="list-group mb-2"></div>
+          </div>
         </form>
       </div>
       <div class="modal-footer">
@@ -87,18 +93,32 @@ document.addEventListener('DOMContentLoaded', function() {
         });
       
       // Se não estiver editando, limpar formulário
-      if (editandoAvulsoIndex === null) {
+      // Verificar tanto editandoAvulsoIndex quanto o campo hidden
+      const editIndexEl = document.getElementById('avulsoEditIndex');
+      const isEditing = editandoAvulsoIndex !== null || (editIndexEl && editIndexEl.value !== '');
+      
+      if (!isEditing) {
         const form = document.getElementById('formAvulso');
         if (form) form.reset();
-        const editIndexEl = document.getElementById('avulsoEditIndex');
         if (editIndexEl) editIndexEl.value = '';
         const anexosContainer = document.getElementById('anexosExistentesContainer');
         if (anexosContainer) anexosContainer.style.display = 'none';
         const listaAnexos = document.getElementById('listaAnexosExistentes');
         if (listaAnexos) listaAnexos.innerHTML = '';
+        const novosAnexosContainer = document.getElementById('novosAnexosContainer');
+        if (novosAnexosContainer) novosAnexosContainer.style.display = 'none';
+        const listaNovosAnexos = document.getElementById('listaNovosAnexos');
+        if (listaNovosAnexos) listaNovosAnexos.innerHTML = '';
         const label = document.getElementById('modalAvulsoLabel');
         if (label) label.textContent = 'Adicionar Documento Avulso';
       }
+      
+      // Limpar lista de novos anexos ao abrir modal
+      const novosAnexosContainer = document.getElementById('novosAnexosContainer');
+      if (novosAnexosContainer) novosAnexosContainer.style.display = 'none';
+      const listaNovosAnexos = document.getElementById('listaNovosAnexos');
+      if (listaNovosAnexos) listaNovosAnexos.innerHTML = '';
+      window.novosAnexosSelecionados = [];
     });
     
     // Limpar estado de edição ao fechar o modal
@@ -110,15 +130,49 @@ document.addEventListener('DOMContentLoaded', function() {
       if (anexosContainer) anexosContainer.style.display = 'none';
       const listaAnexos = document.getElementById('listaAnexosExistentes');
       if (listaAnexos) listaAnexos.innerHTML = '';
+      const novosAnexosContainer = document.getElementById('novosAnexosContainer');
+      if (novosAnexosContainer) novosAnexosContainer.style.display = 'none';
+      const listaNovosAnexos = document.getElementById('listaNovosAnexos');
+      if (listaNovosAnexos) listaNovosAnexos.innerHTML = '';
+      window.novosAnexosSelecionados = [];
       const label = document.getElementById('modalAvulsoLabel');
       if (label) label.textContent = 'Adicionar Documento Avulso';
+    });
+  }
+  
+  // Event listener para quando arquivos são selecionados
+  const anexosInput = document.getElementById('avulsoAnexos');
+  if (anexosInput) {
+    anexosInput.addEventListener('change', function(e) {
+      const files = Array.from(this.files);
+      if (files.length > 0) {
+        // Inicializar array se não existir
+        if (!window.novosAnexosSelecionados) {
+          window.novosAnexosSelecionados = [];
+        }
+        
+        // Adicionar novos arquivos ao array (evitando duplicatas)
+        files.forEach(file => {
+          // Verificar se o arquivo já não foi adicionado
+          const jaExiste = window.novosAnexosSelecionados.some(f => 
+            f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
+          );
+          
+          if (!jaExiste) {
+            window.novosAnexosSelecionados.push(file);
+          }
+        });
+        
+        // Atualizar lista de novos anexos
+        atualizarListaNovosAnexos();
+      }
     });
   }
   
   // Função para salvar documento avulso
   const btnSalvar = document.getElementById('btnSalvarAvulso');
   if (btnSalvar) {
-    btnSalvar.addEventListener('click', function() {
+    btnSalvar.addEventListener('click', async function() {
       const form = document.getElementById('formAvulso');
       if (!form) return;
       
@@ -129,6 +183,18 @@ document.addEventListener('DOMContentLoaded', function() {
       const dataDoc = document.getElementById('avulsoDataDoc').value;
       const centroCusto = document.getElementById('avulsoCentroCusto').value;
       const editIndex = document.getElementById('avulsoEditIndex').value;
+      
+      // Verificar se está editando um documento existente (tem ID numérico)
+      const isEditing = editIndex !== '' && avulsos[parseInt(editIndex)] && 
+                        avulsos[parseInt(editIndex)].id && 
+                        typeof avulsos[parseInt(editIndex)].id === 'number' && 
+                        avulsos[parseInt(editIndex)].id < 1000000000000;
+      
+      // Se estiver editando um documento existente, salvar diretamente no banco
+      if (isEditing && typeof reembolso_id !== 'undefined' && reembolso_id && reembolso_id !== '0') {
+        await salvarAvulsoNoBanco(editIndex);
+        return;
+      }
       
       if (!descricao) {
         alert('Por favor, preencha a descrição.');
@@ -153,38 +219,133 @@ document.addEventListener('DOMContentLoaded', function() {
         anexos_removidos: editIndex !== '' ? (avulsos[parseInt(editIndex)].anexos_removidos || []) : [] // Manter lista de removidos
       };
       
-      // Processar novos anexos se houver
-      const anexosInput = document.getElementById('avulsoAnexos');
+      // Processar novos anexos se houver (usar os arquivos da lista de novos anexos)
       const avulsoIndex = editIndex !== '' ? parseInt(editIndex) : (typeof avulsos !== 'undefined' ? avulsos.length : 0);
       
-      if (anexosInput && anexosInput.files && anexosInput.files.length > 0) {
+      // Verificar se há novos anexos selecionados
+      const temNovosAnexos = window.novosAnexosSelecionados && Array.isArray(window.novosAnexosSelecionados) && window.novosAnexosSelecionados.length > 0;
+      console.log('Processando anexos - temNovosAnexos:', temNovosAnexos);
+      console.log('novosAnexosSelecionados:', window.novosAnexosSelecionados);
+      console.log('Tipo de novosAnexosSelecionados:', typeof window.novosAnexosSelecionados);
+      console.log('É array?', Array.isArray(window.novosAnexosSelecionados));
+      
+      // Inicializar anexos_files como array vazio
+      avulso.anexos_files = [];
+      
+      if (temNovosAnexos) {
         // Armazenar referência aos arquivos para envio posterior
-        if (!avulso.anexos_files) avulso.anexos_files = [];
+        // Criar uma cópia dos arquivos para garantir que sejam preservados
+        const arquivosValidos = window.novosAnexosSelecionados.filter(file => file instanceof File);
+        console.log('Arquivos válidos encontrados:', arquivosValidos.length, arquivosValidos.map(f => f.name));
         
-        // Adicionar novos arquivos
-        const novosArquivos = Array.from(anexosInput.files);
-        avulso.anexos_files = novosArquivos;
-        avulso.anexos_count = (avulso.anexos ? avulso.anexos.length : 0) + novosArquivos.length;
+        avulso.anexos_files = [...arquivosValidos]; // Usar spread para criar nova referência
+        
+        // Se editando, combinar com anexos existentes que não foram removidos
+        if (editIndex !== '' && avulsos[parseInt(editIndex)] && avulsos[parseInt(editIndex)].anexos_files) {
+          // Manter anexos_files existentes que não foram removidos
+          const anexosExistentes = avulsos[parseInt(editIndex)].anexos_files.filter(file => file instanceof File);
+          console.log('Anexos existentes encontrados:', anexosExistentes.length);
+          // Combinar: existentes primeiro, depois novos
+          avulso.anexos_files = [...anexosExistentes, ...avulso.anexos_files];
+        }
+        
+        avulso.anexos_count = (avulso.anexos ? avulso.anexos.length : 0) + avulso.anexos_files.length;
         avulso.anexos_index = avulsoIndex;
+        
+        console.log('anexos_files após processamento:', avulso.anexos_files.length, 'arquivos');
+        console.log('Nomes dos arquivos:', avulso.anexos_files.map(f => f.name));
       } else if (editIndex !== '' && avulsos[parseInt(editIndex)]) {
-        // Se editando e não há novos arquivos, manter contador dos existentes
+        // Se editando e não há novos arquivos, manter anexos_files existentes
+        if (avulsos[parseInt(editIndex)].anexos_files && Array.isArray(avulsos[parseInt(editIndex)].anexos_files)) {
+          avulso.anexos_files = avulsos[parseInt(editIndex)].anexos_files.filter(file => file instanceof File);
+          console.log('Mantendo anexos existentes:', avulso.anexos_files.length);
+        } else {
+          avulso.anexos_files = [];
+        }
         avulso.anexos_count = avulso.anexos ? avulso.anexos.length : 0;
       } else {
+        avulso.anexos_files = [];
         avulso.anexos_count = 0;
+        console.log('Nenhum anexo para processar');
       }
+      
+      console.log('Avulso final antes de adicionar ao array:', {
+        id: avulso.id,
+        descricao: avulso.descricao,
+        anexos_files_count: avulso.anexos_files ? avulso.anexos_files.length : 0,
+        anexos_count: avulso.anexos_count
+      });
       
       // Adicionar ao array de avulsos (se não existir globalmente, criar)
       if (typeof avulsos === 'undefined') {
         window.avulsos = [];
       }
       
+      // IMPORTANTE: Preservar anexos_files ANTES de qualquer operação
+      const anexosFilesParaPreservar = avulso.anexos_files ? [...avulso.anexos_files] : [];
+      console.log('Arquivos a preservar:', anexosFilesParaPreservar.length, anexosFilesParaPreservar.map(f => f.name));
+      
       if (editIndex !== '') {
         // Atualizar avulso existente
-        avulsos[parseInt(editIndex)] = avulso;
+        const index = parseInt(editIndex);
+        const avulsoExistente = avulsos[index];
+        
+        // Se o avulso existente já tinha anexos_files, combinar com os novos
+        if (avulsoExistente && avulsoExistente.anexos_files && Array.isArray(avulsoExistente.anexos_files)) {
+          const anexosExistentes = avulsoExistente.anexos_files.filter(file => file instanceof File);
+          // Combinar anexos existentes com novos (novos têm prioridade se houver duplicatas)
+          const todosAnexos = [...anexosExistentes];
+          anexosFilesParaPreservar.forEach(novoFile => {
+            // Verificar se já não existe (por nome e tamanho)
+            const jaExiste = todosAnexos.some(f => f.name === novoFile.name && f.size === novoFile.size);
+            if (!jaExiste) {
+              todosAnexos.push(novoFile);
+            }
+          });
+          avulso.anexos_files = todosAnexos;
+        }
+        
+        // Atualizar todas as propriedades do avulso
+        for (let key in avulso) {
+          if (key !== 'anexos_files') {
+            avulsos[index][key] = avulso[key];
+          }
+        }
+        
+        // Garantir que anexos_files seja preservado explicitamente
+        avulsos[index].anexos_files = avulso.anexos_files || [];
+        
+        console.log(`Avulso atualizado no índice ${index}:`, {
+          id: avulsos[index].id,
+          anexos_files: avulsos[index].anexos_files ? avulsos[index].anexos_files.length : 0,
+          anexos_count: avulsos[index].anexos_count,
+          todos_sao_files: avulsos[index].anexos_files ? avulsos[index].anexos_files.every(f => f instanceof File) : false,
+          nomes_arquivos: avulsos[index].anexos_files ? avulsos[index].anexos_files.map(f => f.name) : []
+        });
       } else {
         // Adicionar novo avulso
+        // Garantir que anexos_files seja um array válido
+        avulso.anexos_files = anexosFilesParaPreservar;
         avulsos.push(avulso);
+        const novoIndex = avulsos.length - 1;
+        console.log(`Novo avulso adicionado no índice ${novoIndex}:`, {
+          id: avulsos[novoIndex].id,
+          anexos_files: avulsos[novoIndex].anexos_files ? avulsos[novoIndex].anexos_files.length : 0,
+          anexos_count: avulsos[novoIndex].anexos_count,
+          todos_sao_files: avulsos[novoIndex].anexos_files ? avulsos[novoIndex].anexos_files.every(f => f instanceof File) : false,
+          nomes_arquivos: avulsos[novoIndex].anexos_files ? avulsos[novoIndex].anexos_files.map(f => f.name) : []
+        });
       }
+      
+      // Verificar se os arquivos foram preservados
+      const avulsoVerificado = editIndex !== '' ? avulsos[parseInt(editIndex)] : avulsos[avulsos.length - 1];
+      console.log('Verificação pós-salvamento:', {
+        tem_anexos_files: !!avulsoVerificado.anexos_files,
+        anexos_files_length: avulsoVerificado.anexos_files ? avulsoVerificado.anexos_files.length : 0,
+        todos_sao_files: avulsoVerificado.anexos_files ? avulsoVerificado.anexos_files.every(f => f instanceof File) : false,
+        tipos: avulsoVerificado.anexos_files ? avulsoVerificado.anexos_files.map(f => typeof f) : [],
+        nomes: avulsoVerificado.anexos_files ? avulsoVerificado.anexos_files.map(f => f.name) : []
+      });
       
       // Atualizar tabela de avulsos
       atualizarTabelaAvulsos();
@@ -192,6 +353,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Atualizar total
       atualizarTotal();
       
+      // IMPORTANTE: NÃO limpar novosAnexosSelecionados aqui, pois os arquivos já foram copiados para avulso.anexos_files
       // Limpar formulário e fechar modal
       form.reset();
       editandoAvulsoIndex = null;
@@ -201,8 +363,22 @@ document.addEventListener('DOMContentLoaded', function() {
       if (anexosContainer) anexosContainer.style.display = 'none';
       const listaAnexos = document.getElementById('listaAnexosExistentes');
       if (listaAnexos) listaAnexos.innerHTML = '';
+      const novosAnexosContainer = document.getElementById('novosAnexosContainer');
+      if (novosAnexosContainer) novosAnexosContainer.style.display = 'none';
+      const listaNovosAnexos = document.getElementById('listaNovosAnexos');
+      if (listaNovosAnexos) listaNovosAnexos.innerHTML = '';
+      // Limpar apenas após confirmar que os arquivos foram preservados
+      window.novosAnexosSelecionados = [];
       const label = document.getElementById('modalAvulsoLabel');
       if (label) label.textContent = 'Adicionar Documento Avulso';
+      
+      // Verificação final antes de fechar
+      const avulsoFinal = editIndex !== '' ? avulsos[parseInt(editIndex)] : avulsos[avulsos.length - 1];
+      console.log('Verificação final antes de fechar modal:', {
+        tem_anexos_files: !!avulsoFinal.anexos_files,
+        quantidade: avulsoFinal.anexos_files ? avulsoFinal.anexos_files.length : 0,
+        todos_files: avulsoFinal.anexos_files ? avulsoFinal.anexos_files.every(f => f instanceof File) : false
+      });
       
       // Fechar modal usando Bootstrap 5
       const modalEl = document.getElementById('modalAvulso');
@@ -223,27 +399,101 @@ document.addEventListener('DOMContentLoaded', function() {
 // Função para atualizar a tabela de avulsos
 
 // Função para editar avulso
-function editarAvulso(index) {
+function editarAvulso(index, avulsoId) {
+  // Se o index não for válido, tentar encontrar pelo ID
+  if (index === null || index === undefined || (typeof avulsos !== 'undefined' && !avulsos[index])) {
+    // Tentar encontrar pelo ID se fornecido
+    if (avulsoId && typeof avulsos !== 'undefined') {
+      index = avulsos.findIndex(a => a.id === avulsoId);
+      if (index === -1) {
+        alert('Documento avulso não encontrado.');
+        return;
+      }
+    } else {
+      alert('Documento avulso não encontrado.');
+      return;
+    }
+  }
+  
   if (typeof avulsos === 'undefined' || !avulsos[index]) {
     alert('Documento avulso não encontrado.');
     return;
   }
   
   const avulso = avulsos[index];
+  
+  // Debug: verificar dados do avulso
+  console.log('Editando avulso no índice:', index);
+  console.log('Dados do avulso:', avulso);
+  console.log('Data do documento:', avulso.data_documento);
+  console.log('Anexos:', avulso.anexos);
+  console.log('Quantidade de anexos:', avulso.anexos_count);
+  
+  // Definir índice de edição ANTES de preencher os dados
   editandoAvulsoIndex = index;
   
   // Preencher formulário com dados do avulso
-  document.getElementById('avulsoFornecedor').value = avulso.fornecedor || '';
-  document.getElementById('avulsoNumeroDoc').value = avulso.ndocumento || '';
-  document.getElementById('avulsoDataDoc').value = avulso.data_documento || '';
-  document.getElementById('avulsoCentroCusto').value = avulso.centro_custo_id || '';
-  document.getElementById('avulsoDescricao').value = avulso.descricao || '';
-  document.getElementById('avulsoValor').value = avulso.valor || 0;
-  document.getElementById('avulsoEditIndex').value = index;
-  document.getElementById('avulsoAnexos').value = ''; // Limpar input de arquivos
+  const fornecedorEl = document.getElementById('avulsoFornecedor');
+  const numeroDocEl = document.getElementById('avulsoNumeroDoc');
+  const dataDocEl = document.getElementById('avulsoDataDoc');
+  const centroCustoEl = document.getElementById('avulsoCentroCusto');
+  const descricaoEl = document.getElementById('avulsoDescricao');
+  const valorEl = document.getElementById('avulsoValor');
+  const editIndexEl = document.getElementById('avulsoEditIndex');
+  const anexosInputEl = document.getElementById('avulsoAnexos');
+  const labelEl = document.getElementById('modalAvulsoLabel');
+  
+  if (fornecedorEl) fornecedorEl.value = avulso.fornecedor || '';
+  if (numeroDocEl) numeroDocEl.value = avulso.ndocumento || '';
+  
+  // Converter data para formato YYYY-MM-DD (necessário para input type="date")
+  let dataFormatada = '';
+  if (avulso.data_documento) {
+    // Se for string ISO (ex: "2024-01-15T00:00:00"), extrair apenas a data
+    if (typeof avulso.data_documento === 'string') {
+      // Se já estiver no formato YYYY-MM-DD, usar diretamente
+      if (avulso.data_documento.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        dataFormatada = avulso.data_documento;
+      } else {
+        // Se for ISO completo, extrair apenas a data
+        dataFormatada = avulso.data_documento.split('T')[0];
+      }
+    } else {
+      // Se for Date object, converter
+      const data = new Date(avulso.data_documento);
+      dataFormatada = data.toISOString().split('T')[0];
+    }
+  }
+  console.log('Data formatada para input:', dataFormatada);
+  if (dataDocEl) {
+    dataDocEl.value = dataFormatada;
+    console.log('Valor definido no input de data:', dataDocEl.value);
+  }
+  
+  if (centroCustoEl) centroCustoEl.value = avulso.centro_custo_id || '';
+  if (descricaoEl) descricaoEl.value = avulso.descricao || '';
+  if (valorEl) valorEl.value = avulso.valor || 0;
+  if (editIndexEl) editIndexEl.value = index;
+  if (anexosInputEl) anexosInputEl.value = ''; // Limpar input de arquivos
+  
+  // Limpar novos anexos selecionados ao editar
+  window.novosAnexosSelecionados = [];
+  const novosAnexosContainer = document.getElementById('novosAnexosContainer');
+  if (novosAnexosContainer) novosAnexosContainer.style.display = 'none';
+  const listaNovosAnexos = document.getElementById('listaNovosAnexos');
+  if (listaNovosAnexos) listaNovosAnexos.innerHTML = '';
   
   // Atualizar título do modal
-  document.getElementById('modalAvulsoLabel').textContent = 'Editar Documento Avulso';
+  if (labelEl) labelEl.textContent = 'Editar Documento Avulso';
+  
+  // Garantir que os anexos existam no objeto avulso (pode não vir do JSON)
+  if (!avulso.anexos || !Array.isArray(avulso.anexos)) {
+    console.warn('Anexos não encontrados ou não é array. Criando array vazio.');
+    avulso.anexos = [];
+  }
+  
+  console.log('Anexos antes de carregar:', avulso.anexos);
+  console.log('Quantidade de anexos:', avulso.anexos.length);
   
   // Carregar anexos existentes
   carregarAnexosExistentes(avulso);
@@ -258,29 +508,56 @@ function editarAvulso(index) {
 
 // Função para carregar anexos existentes
 function carregarAnexosExistentes(avulso) {
+  console.log('carregarAnexosExistentes chamada com:', avulso);
+  
   const container = document.getElementById('anexosExistentesContainer');
   const lista = document.getElementById('listaAnexosExistentes');
   
-  if (!avulso.anexos || avulso.anexos.length === 0) {
-    container.style.display = 'none';
+  if (!container || !lista) {
+    console.warn('Elementos de anexos não encontrados');
     return;
   }
   
+  // Verificar se há anexos (pode vir como array vazio ou undefined)
+  const anexos = avulso.anexos || [];
+  
+  console.log('Anexos para carregar:', anexos);
+  console.log('É array?', Array.isArray(anexos));
+  console.log('Tamanho:', anexos.length);
+  
+  if (!Array.isArray(anexos) || anexos.length === 0) {
+    console.log('Nenhum anexo para exibir, ocultando container');
+    container.style.display = 'none';
+    lista.innerHTML = '';
+    return;
+  }
+  
+  console.log('Exibindo', anexos.length, 'anexo(s)');
   container.style.display = 'block';
   lista.innerHTML = '';
   
   const currentEditIndex = editandoAvulsoIndex !== null ? editandoAvulsoIndex : document.getElementById('avulsoEditIndex').value;
   
-  avulso.anexos.forEach((anexo, anexoIndex) => {
+  anexos.forEach((anexo, anexoIndex) => {
+    // Garantir que o anexo tenha id e filename
+    if (!anexo || !anexo.id) {
+      console.warn('Anexo inválido no índice', anexoIndex, anexo);
+      return;
+    }
+    
+    console.log('Adicionando anexo:', anexo);
+    
     const item = document.createElement('div');
     item.className = 'list-group-item d-flex justify-content-between align-items-center';
+    const filename = anexo.filename || 'Anexo';
+    const filenameEscaped = filename.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     item.innerHTML = `
       <div>
         <i class="fas fa-file me-2"></i>
-        <a href="/reembolsos/anexo/${anexo.id}/download" target="_blank">${anexo.filename || 'Anexo'}</a>
+        <a href="/reembolsos/anexo/${anexo.id}/download" target="_blank">${filename}</a>
       </div>
       <div>
-        <button type="button" class="btn btn-sm btn-info mr-1" onclick="visualizarAnexo(${anexo.id}, '${anexo.filename || ''}')" title="Visualizar">
+        <button type="button" class="btn btn-sm btn-info mr-1 visualizar-documento" data-id="${anexo.id}" title="Visualizar">
           <i class="fas fa-eye"></i>
         </button>
         <button type="button" class="btn btn-sm btn-danger" onclick="removerAnexoExistente(${currentEditIndex}, ${anexoIndex})" title="Remover">
@@ -290,6 +567,8 @@ function carregarAnexosExistentes(avulso) {
     `;
     lista.appendChild(item);
   });
+  
+  console.log('Anexos carregados com sucesso');
 }
 
 // Função para visualizar anexo
@@ -352,6 +631,235 @@ function removerAvulso(index) {
       atualizarTotal();
     }
   }
+}
+
+// Função para atualizar lista de novos anexos selecionados
+function atualizarListaNovosAnexos() {
+  const container = document.getElementById('novosAnexosContainer');
+  const lista = document.getElementById('listaNovosAnexos');
+  
+  if (!container || !lista) {
+    console.warn('Elementos de novos anexos não encontrados');
+    return;
+  }
+  
+  if (!window.novosAnexosSelecionados || window.novosAnexosSelecionados.length === 0) {
+    container.style.display = 'none';
+    lista.innerHTML = '';
+    return;
+  }
+  
+  container.style.display = 'block';
+  lista.innerHTML = '';
+  
+  window.novosAnexosSelecionados.forEach((file, index) => {
+    const item = document.createElement('div');
+    item.className = 'list-group-item d-flex justify-content-between align-items-center';
+    
+    // Formatar tamanho do arquivo
+    const tamanho = file.size;
+    let tamanhoFormatado = '';
+    if (tamanho < 1024) {
+      tamanhoFormatado = tamanho + ' B';
+    } else if (tamanho < 1024 * 1024) {
+      tamanhoFormatado = (tamanho / 1024).toFixed(2) + ' KB';
+    } else {
+      tamanhoFormatado = (tamanho / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+    
+    // Ícone baseado na extensão
+    const extensao = file.name.split('.').pop().toLowerCase();
+    let icone = 'fa-file';
+    if (extensao === 'pdf') {
+      icone = 'fa-file-pdf';
+    } else if (['jpg', 'jpeg', 'png', 'gif'].includes(extensao)) {
+      icone = 'fa-file-image';
+    }
+    
+    item.innerHTML = `
+      <div>
+        <i class="fas ${icone} me-2"></i>
+        <span>${file.name}</span>
+        <small class="text-muted ms-2">(${tamanhoFormatado})</small>
+      </div>
+      <div>
+        <button type="button" class="btn btn-sm btn-danger" onclick="removerNovoAnexo(${index})" title="Remover">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    `;
+    lista.appendChild(item);
+  });
+}
+
+// Função para remover novo anexo da lista
+function removerNovoAnexo(index) {
+  if (window.novosAnexosSelecionados && window.novosAnexosSelecionados[index]) {
+    window.novosAnexosSelecionados.splice(index, 1);
+    atualizarListaNovosAnexos();
+    
+    // Atualizar o input de arquivos (remover o arquivo da seleção)
+    const anexosInput = document.getElementById('avulsoAnexos');
+    if (anexosInput && window.novosAnexosSelecionados.length > 0) {
+      // Criar um novo DataTransfer para limpar e recriar a lista de arquivos
+      try {
+        const dt = new DataTransfer();
+        window.novosAnexosSelecionados.forEach(file => {
+          dt.items.add(file);
+        });
+        anexosInput.files = dt.files;
+      } catch (e) {
+        // Se DataTransfer não estiver disponível, apenas limpar o input
+        // O usuário terá que selecionar os arquivos novamente se quiser adicionar mais
+        console.warn('DataTransfer não disponível, limpando input:', e);
+        if (window.novosAnexosSelecionados.length === 0) {
+          anexosInput.value = '';
+        }
+      }
+    } else if (anexosInput && window.novosAnexosSelecionados.length === 0) {
+      // Se não há mais arquivos, limpar o input
+      anexosInput.value = '';
+    }
+  }
+}
+
+// Função para salvar avulso diretamente no banco de dados
+async function salvarAvulsoNoBanco(editIndex) {
+  const form = document.getElementById('formAvulso');
+  if (!form) return;
+  
+  // Obter dados do formulário
+  const fornecedor = document.getElementById('avulsoFornecedor').value.trim();
+  const descricao = document.getElementById('avulsoDescricao').value.trim();
+  const valor = parseFloat(document.getElementById('avulsoValor').value);
+  const dataDoc = document.getElementById('avulsoDataDoc').value;
+  const centroCusto = document.getElementById('avulsoCentroCusto').value;
+  const avulsoId = avulsos[parseInt(editIndex)].id;
+  
+  // Validar campos obrigatórios
+  if (!descricao) {
+    alert('Por favor, preencha a descrição.');
+    return;
+  }
+  
+  if (!valor || valor <= 0) {
+    alert('Por favor, informe um valor válido.');
+    return;
+  }
+  
+  // Verificar se reembolso_id está disponível
+  if (typeof reembolso_id === 'undefined' || !reembolso_id || reembolso_id === '0') {
+    alert('Erro: ID do reembolso não encontrado.');
+    return;
+  }
+  
+  // Mostrar indicador de carregamento
+  const btnSalvar = document.getElementById('btnSalvarAvulso');
+  const originalText = btnSalvar.innerHTML;
+  btnSalvar.disabled = true;
+  btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Salvando...';
+  
+  // Criar FormData para enviar dados e arquivos
+  const formData = new FormData();
+  formData.append('descricao', descricao);
+  formData.append('valor', valor);
+  formData.append('fornecedor', fornecedor);
+  formData.append('ndocumento', document.getElementById('avulsoNumeroDoc').value.trim());
+  formData.append('data_documento', dataDoc);
+  formData.append('centro_custo_id', centroCusto || '');
+  formData.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+  
+  // Adicionar anexos removidos
+  const anexosRemovidos = avulsos[parseInt(editIndex)].anexos_removidos || [];
+  formData.append('anexos_removidos', JSON.stringify(anexosRemovidos));
+  
+  // Adicionar novos anexos
+  if (window.novosAnexosSelecionados && window.novosAnexosSelecionados.length > 0) {
+    window.novosAnexosSelecionados.forEach((file, index) => {
+      if (file instanceof File) {
+        formData.append(`anexo_${index}`, file);
+      }
+    });
+  }
+  
+  try {
+    const response = await fetch(`/reembolsos/${reembolso_id}/avulso/${avulsoId}`, {
+      method: 'PUT',
+      body: formData,
+      headers: {
+        'X-CSRFToken': document.querySelector('[name=csrf_token]').value
+      }
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      // Atualizar o avulso no array local com os dados retornados
+      const avulsoAtualizado = result.avulso;
+      avulsos[parseInt(editIndex)] = {
+        ...avulsos[parseInt(editIndex)],
+        ...avulsoAtualizado,
+        anexos: avulsoAtualizado.anexos || [],
+        anexos_count: avulsoAtualizado.anexos_count || 0,
+        anexos_removidos: [] // Limpar lista de removidos após salvar
+      };
+      
+      // Atualizar tabela de avulsos
+      if (typeof atualizarTabelaAvulsos === 'function') {
+        atualizarTabelaAvulsos();
+      } else if (typeof tableAvulsos !== 'undefined' && tableAvulsos) {
+        // Se estiver usando DataTables, recarregar
+        tableAvulsos.ajax.reload();
+      }
+      
+      // Atualizar total
+      if (typeof atualizarTotal === 'function') {
+        atualizarTotal();
+      }
+      
+      // Limpar formulário e fechar modal
+      form.reset();
+      editandoAvulsoIndex = null;
+      const editIndexEl = document.getElementById('avulsoEditIndex');
+      if (editIndexEl) editIndexEl.value = '';
+      const anexosContainer = document.getElementById('anexosExistentesContainer');
+      if (anexosContainer) anexosContainer.style.display = 'none';
+      const listaAnexos = document.getElementById('listaAnexosExistentes');
+      if (listaAnexos) listaAnexos.innerHTML = '';
+      const novosAnexosContainer = document.getElementById('novosAnexosContainer');
+      if (novosAnexosContainer) novosAnexosContainer.style.display = 'none';
+      const listaNovosAnexos = document.getElementById('listaNovosAnexos');
+      if (listaNovosAnexos) listaNovosAnexos.innerHTML = '';
+      window.novosAnexosSelecionados = [];
+      const label = document.getElementById('modalAvulsoLabel');
+      if (label) label.textContent = 'Adicionar Documento Avulso';
+      
+      // Fechar modal
+      const modalEl = document.getElementById('modalAvulso');
+      if (modalEl) {
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) {
+          modal.hide();
+        }
+      }
+      
+      alert('Documento avulso salvo com sucesso!');
+    } else {
+      alert('Erro ao salvar documento avulso: ' + (result.error || 'Erro desconhecido'));
+    }
+  } catch (error) {
+    console.error('Erro ao salvar avulso:', error);
+    alert('Erro ao salvar documento avulso. Por favor, tente novamente.');
+  } finally {
+    // Restaurar botão
+    btnSalvar.disabled = false;
+    btnSalvar.innerHTML = originalText;
+  }
+}
+
+// Inicializar array de novos anexos
+if (typeof window.novosAnexosSelecionados === 'undefined') {
+  window.novosAnexosSelecionados = [];
 }
 
 // Função auxiliar para formatar moeda (se não existir globalmente)

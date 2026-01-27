@@ -67,6 +67,7 @@ class Upload(db.Model):
         try:
             db.session.add(self)
             db.session.commit()
+            db.session.flush()
         except Exception as e:
             print('upload error: ',e)
             db.session.rollback()

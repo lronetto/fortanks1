@@ -27,10 +27,16 @@ import base64
 from PyPDF2 import PdfReader, PdfWriter
 import tempfile
 import os
+import zipfile
+import zipfile
 reembolso_bp = Blueprint('reembolso', __name__, url_prefix='/reembolsos')
 import dotenv
 import os
 dotenv.load_dotenv()
+
+def formatarMoeda(valor):
+    """Formata valor como moeda brasileira"""
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def parse_data_documento(data_str):
     """
@@ -298,8 +304,477 @@ def nota_fiscal_busca_reembolso():
             print(f'Erro ao buscar notas: {str(e)}')
             import traceback
             traceback.print_exc()
-            return jsonify({'error': str(e)}), 400
-    return jsonify({'error': 'Método não permitido'}), 405
+            return jsonify({'error': str(e)}), 500
+
+
+@reembolso_bp.route('/datatables/notas', methods=['POST'])
+@login_required
+def datatables_notas():
+    """Endpoint DataTables para notas fiscais"""
+    try:
+        data = request.get_json() if request.is_json else request.form.to_dict()
+        
+        # Parâmetros do DataTables
+        draw = int(data.get('draw', 1))
+        start = int(data.get('start', 0))
+        length = int(data.get('length', 25))
+        page = (start // length) + 1
+        per_page = length
+        
+        # Parâmetros de ordenação
+        order_by = 'data_emissao'
+        order_dir = 'desc'
+        order_column_index = None
+        if 'order' in data and len(data['order']) > 0:
+            order_column_index = int(data['order'][0].get('column', 1))
+            order_dir = data['order'][0].get('dir', 'desc')
+            
+            # Mapeamento de índices de colunas para campos de ordenação
+            # 0: data_emissao_sort (oculta), 1: selecao (checkbox), 2: data_emissao (visível), 3: nome_emitente, 4: numero_nf, 5: valor_total, 6: pagamento, 7: descricao, 8: centro_custo
+            column_mapping = {
+                0: 'data_emissao',  # Coluna oculta de data
+                2: 'data_emissao',  # Coluna visível de data
+                3: 'nome_emitente',
+                4: 'numero_nf'
+            }
+            order_by = column_mapping.get(order_column_index, 'data_emissao')
+        
+        print(f'[datatables_notas] Ordenação: coluna {order_column_index}, campo: {order_by}, direção: {order_dir}')
+    
+        # Filtros
+        notas_selecionadas = data.get('notas_selecionadas', [])
+        if isinstance(notas_selecionadas, str):
+            try:
+                notas_selecionadas = json.loads(notas_selecionadas)
+            except:
+                notas_selecionadas = []
+        
+        json_filtros = {
+            'page': page,
+            'per_page': per_page,
+            'busca': data.get('numero', ''),
+            'fornecedor': data.get('fornecedor', ''),
+            'data_inicial': data.get('data_inicial', ''),
+            'data_final': data.get('data_final', ''),
+            'valor_minimo': data.get('valor_minimo', ''),
+            'valor_maximo': data.get('valor_maximo', ''),
+            'valor_exato': data.get('valor_exato', ''),
+            'reembolso_id': data.get('reembolso_id', ''),
+            'order_by': order_by,
+            'order_dir': order_dir
+        }
+        
+        pagamento = data.get('pagamento', '')
+        if pagamento:
+            if pagamento == '0':
+                json_filtros['status_pagamento'] = 'nao_pago'
+            elif pagamento == '1':
+                json_filtros['status_pagamento'] = 'pago'
+            elif pagamento == '2':
+                json_filtros['status_pagamento'] = 'sem_envio'
+            elif pagamento == '3':
+                json_filtros['status_pagamento'] = 'apenas_reembolso'
+            elif pagamento == '4':
+                json_filtros['status_pagamento'] = 'selecionados'
+            elif pagamento == '5':
+                json_filtros['status_pagamento'] = 'reembolso_e_nao_pago'
+            elif pagamento == '6':
+                json_filtros['status_pagamento'] = 'reembolso_e_nao_pago_e_nao_selecionados'
+        
+        print(f'Filtro pagamento: {pagamento}, status_pagamento: {json_filtros.get("status_pagamento")}')
+        print(f'Notas selecionadas: {notas_selecionadas}')
+        
+        reembolso_id = data.get('reembolso_id', '')
+        
+        # Buscar notas
+        query = api_get_dados_notas_fiscais(json_filtros)
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        notas = pagination.items
+        print(f'Notas: {len(notas)}')
+        # Processar notas para DataTables - retornar apenas dados brutos
+        notas_data = []
+        for n in notas:
+            try:
+                nota_fiscal_obj = n.NotaFiscal
+                # Verificar se a nota está no reembolso usando a coluna reembolso
+                esta_no_reembolso = bool(n.reembolso if hasattr(n, 'reembolso') else 0)
+                
+                # Buscar dados do documento do reembolso se houver
+                item_selecionado = None
+                if esta_no_reembolso and reembolso_id:
+                    try:
+                        reembolso_doc = ReembolsosDocumentos.query.filter_by(
+                            nota_fiscal_id=nota_fiscal_obj.id,
+                            reembolso_id=reembolso_id
+                        ).first()
+                        if reembolso_doc:
+                            item_selecionado = {
+                                'centro_custo_id': reembolso_doc.centro_custo_id,
+                                'descricao': reembolso_doc.descricao or ''
+                            }
+                    except Exception as e:
+                        print(f'Erro ao buscar documento do reembolso: {str(e)}')
+                
+                # Formatar data para ordenação (ISO)
+                data_emissao_sort = ''
+                if nota_fiscal_obj.data_emissao:
+                    data_emissao_sort = nota_fiscal_obj.data_emissao.strftime('%Y-%m-%d')
+                
+                notas_data.append({
+                    'DT_RowId': f'nota_{nota_fiscal_obj.id}',
+                    'id': nota_fiscal_obj.id,
+                    'data_emissao': nota_fiscal_obj.data_emissao.isoformat() if nota_fiscal_obj.data_emissao else None,
+                    'data_emissao_sort': data_emissao_sort,
+                    'nome_emitente': nota_fiscal_obj.nome_emitente or '',
+                    'numero_nf': nota_fiscal_obj.numero_nf or '',
+                    'valor_total': float(nota_fiscal_obj.valor_total) if nota_fiscal_obj.valor_total else 0.0,
+                    'pagamento': n.pagamento if hasattr(n, 'pagamento') else 0,
+                    'upload': n.upload if hasattr(n, 'upload') else 0,
+                    'upload_reembolso': n.upload_reembolso if hasattr(n, 'upload_reembolso') else 0,
+                    'upload_protocolo': n.upload_protocolo if hasattr(n, 'upload_protocolo') else 0,
+                    'selecionada': esta_no_reembolso,
+                    'reembolso': esta_no_reembolso,
+                    'centro_custo_id': item_selecionado.get('centro_custo_id') if item_selecionado else None,
+                    'descricao': item_selecionado.get('descricao') if item_selecionado else ''
+                })
+            except Exception as e:
+                print(f'Erro ao processar nota: {str(e)}')
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        response_data = {
+            'draw': draw,
+            'recordsTotal': pagination.total,
+            'recordsFiltered': pagination.total,
+            'data': notas_data
+        }
+        print(f'Retornando {len(notas_data)} notas de {pagination.total} total')
+        print(f'Response data keys: {response_data.keys()}')
+        return jsonify(response_data)
+    except Exception as e:
+        print(f'Erro ao buscar notas DataTables: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'draw': 1, 'recordsTotal': 0, 'recordsFiltered': 0, 'data': []}), 500
+
+@reembolso_bp.route('/<int:reembolso_id>/avulso/<int:avulso_id>', methods=['PUT', 'POST'])
+@login_required
+def salvar_avulso_individual(reembolso_id, avulso_id):
+    """Endpoint para salvar/atualizar um documento avulso individual"""
+    try:
+        reembolso = Reembolsos.query.get_or_404(reembolso_id)
+        
+        # Verificar permissão
+        if reembolso.usuario_id != current_user.id and not current_user.is_admin:
+            return jsonify({'error': 'Acesso negado'}), 403
+        
+        # Buscar documento existente ou criar novo
+        if avulso_id > 0:
+            doc = ReembolsosDocumentos.query.filter_by(
+                id=avulso_id,
+                reembolso_id=reembolso_id,
+                tipo='avulso'
+            ).first()
+            print(f'doc: {doc}')
+            if not doc:
+                return jsonify({'error': 'Documento não encontrado'}), 404
+        else:
+            # Criar novo documento
+            doc = ReembolsosDocumentos(
+                reembolso=reembolso,
+                tipo='avulso'
+            )
+            db.session.add(doc)
+            db.session.flush()
+        
+        # Atualizar campos do documento
+        data = request.form
+        doc.descricao = data.get('descricao', '')
+        doc.valor = float(data.get('valor', 0))
+        doc.fornecedor = data.get('fornecedor', '')
+        doc.ndocumento = data.get('ndocumento', '')
+        doc.data_documento = parse_data_documento(data.get('data_documento'))
+        doc.centro_custo_id = data.get('centro_custo_id') or None
+        
+        # Processar anexos removidos
+        print(f'data: {data}')
+        anexos_removidos = json.loads(data.get('anexos_removidos', '[]'))
+        if anexos_removidos:
+            uploads = Upload.query.filter_by(
+                pai='ReembolsosDocumentos',
+                pai_id=doc.id,
+                tipo=4
+            ).all()
+            for upload in uploads:
+                if upload.id in anexos_removidos:
+                    db.session.delete(upload)
+        
+        # Processar novos anexos
+        anexos_processados = 0
+        print(f'request.files: {request.files}')
+        print(f'reembolso: {reembolso_id}')
+        print(f'avulso: {avulso_id}')
+        print(f'Processando novos anexos: {request.files}')
+        for file_key in request.files.keys():
+            if file_key.startswith('anexo_'):
+                file = request.files[file_key]
+                if file and hasattr(file, 'filename') and file.filename:
+                    file_content = file.read()
+                    try:
+                        # Verificar se o upload já existe antes de criar
+                        upload_existente = Upload.query.filter_by(
+                            pai='ReembolsosDocumentos',
+                            pai_id=doc.id,
+                            tipo=4,
+                            filename=file.filename
+                        ).first()
+                        
+                        if upload_existente:
+                           pass
+                        else:
+                           Upload(pai='ReembolsosDocumentos', pai_id=doc.id, tipo=4, filename=file.filename, mimetype=file.content_type, blob=file_content)
+                    except Exception as e:
+                        print(f'Erro ao criar/atualizar upload: {str(e)}')
+                        import traceback
+                        traceback.print_exc()
+                        db.session.rollback()
+        
+        # Atualizar valor total do reembolso
+        valor_total = 0
+        for doc in reembolso.documentos:
+            if doc.tipo == 'avulso':
+                valor_total += float(doc.valor) if doc.valor else 0.0
+            elif doc.tipo == 'nota':
+                valor_total += float(doc.valor) if doc.valor else 0.0
+        reembolso.valor_total = valor_total
+        
+        db.session.commit()
+        
+        # Buscar anexos atualizados
+        anexos_upload = Upload.query.filter_by(
+            pai_id=doc.id,
+            pai='ReembolsosDocumentos',
+            tipo=4
+        ).all()
+        anexos_list = [
+            {'id': upload.id, 'filename': upload.filename}
+            for upload in anexos_upload
+        ]
+        
+        return jsonify({
+            'success': True,
+            'avulso': {
+                'id': doc.id,
+                'fornecedor': doc.fornecedor or '',
+                'ndocumento': doc.ndocumento or '',
+                'data_documento': doc.data_documento.strftime('%Y-%m-%d') if doc.data_documento else None,
+                'descricao': doc.descricao or '',
+                'valor': float(doc.valor) if doc.valor else 0.0,
+                'centro_custo_id': doc.centro_custo_id,
+                'anexos_count': len(anexos_list),
+                'anexos': anexos_list
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f'Erro ao salvar avulso individual: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@reembolso_bp.route('/datatables/avulsos', methods=['POST'])
+@login_required
+def datatables_avulsos():
+    """Endpoint DataTables para documentos avulsos"""
+    try:
+        data = request.get_json() if request.is_json else request.form.to_dict()
+        
+        # Parâmetros do DataTables
+        draw = int(data.get('draw', 1))
+        start = int(data.get('start', 0))
+        length = int(data.get('length', 25))
+        reembolso_id = data.get('reembolso_id', '')
+        
+        # Parâmetros de ordenação
+        order_column_index = 0
+        order_dir = 'desc'
+        if 'order' in data and len(data['order']) > 0:
+            order_column_index = int(data['order'][0].get('column', 0))
+            order_dir = data['order'][0].get('dir', 'desc')
+        
+        print(f'[datatables_avulsos] Recebido reembolso_id: {reembolso_id}, tipo: {type(reembolso_id)}')
+        print(f'[datatables_avulsos] Ordenação: coluna {order_column_index}, direção {order_dir}')
+        print(f'[datatables_avulsos] Paginação: start={start}, length={length}')
+        
+        # Buscar avulsos do banco de dados
+        avulsos_list = []
+        if reembolso_id and str(reembolso_id).strip() and str(reembolso_id) != '0':
+            try:
+                reembolso_id_int = int(reembolso_id)
+                print(f'[datatables_avulsos] Buscando reembolso com ID: {reembolso_id_int}')
+                reembolso = Reembolsos.query.get(reembolso_id_int)
+                if reembolso:
+                    # Verificar permissão
+                    if reembolso.usuario_id != current_user.id and not current_user.is_admin:
+                        print(f'[datatables_avulsos] Acesso negado para reembolso {reembolso_id_int}')
+                        return jsonify({'error': 'Acesso negado', 'draw': draw, 'recordsTotal': 0, 'recordsFiltered': 0, 'data': []}), 403
+                    
+                    print(f'[datatables_avulsos] Reembolso encontrado, total de documentos: {len(reembolso.documentos)}')
+                    # Buscar documentos avulsos
+                    for doc in reembolso.documentos:
+                        if doc.tipo == 'avulso':
+                            # Formatar data
+                            data_documento = None
+                            if doc.data_documento:
+                                data_documento = doc.data_documento.strftime('%Y-%m-%d')
+                            
+                            # Buscar anexos
+                            anexos_upload = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
+                            anexos_list = [
+                                {'id': upload.id, 'filename': upload.filename}
+                                for upload in anexos_upload
+                            ]
+                            
+                            avulsos_list.append({
+                                'id': doc.id,
+                                'fornecedor': doc.fornecedor or '',
+                                'ndocumento': doc.ndocumento or '',
+                                'data_documento': data_documento,
+                                'descricao': doc.descricao or '',
+                                'valor': float(doc.valor) if doc.valor else 0.0,
+                                'centro_custo_id': doc.centro_custo_id,
+                                'anexos_count': len(anexos_list),
+                                'anexos': anexos_list
+                            })
+                    print(f'[datatables_avulsos] Total de avulsos encontrados: {len(avulsos_list)}')
+                else:
+                    print(f'[datatables_avulsos] Reembolso não encontrado com ID: {reembolso_id_int}')
+            except (ValueError, TypeError) as e:
+                print(f'[datatables_avulsos] Erro ao processar reembolso_id: {reembolso_id}, erro: {str(e)}')
+        else:
+            print(f'[datatables_avulsos] reembolso_id vazio ou zero, retornando lista vazia')
+        
+        # Processar avulsos para DataTables - retornar apenas dados brutos
+        avulsos_data = []
+        for idx, avulso in enumerate(avulsos_list):
+            try:
+                # Formatar data para exibição e ordenação
+                data_doc = ''
+                data_doc_sort = ''
+                if avulso.get('data_documento'):
+                    try:
+                        if isinstance(avulso.get('data_documento'), str):
+                            data_obj = datetime.strptime(avulso.get('data_documento').split('T')[0], '%Y-%m-%d')
+                        else:
+                            data_obj = avulso.get('data_documento')
+                        if hasattr(data_obj, 'strftime'):
+                            data_doc = data_obj.strftime('%d/%m/%Y')
+                            data_doc_sort = data_obj.strftime('%Y-%m-%d')  # Formato ISO para ordenação
+                        else:
+                            data_doc = str(avulso.get('data_documento', ''))
+                            data_doc_sort = ''
+                    except:
+                        data_doc = str(avulso.get('data_documento', ''))
+                        data_doc_sort = ''
+                
+                # Buscar nome do centro de custo
+                centroCustoNome = ''
+                if avulso.get('centro_custo_id'):
+                    centro = CentroCusto.query.get(avulso.get('centro_custo_id'))
+                    if centro:
+                        centroCustoNome = f'{centro.codigo} - {centro.nome}'
+                
+                anexosCount = avulso.get('anexos_count', 0) or (len(avulso.get('anexos', [])) if avulso.get('anexos') else 0)
+                
+                avulsos_data.append({
+                    'DT_RowId': f'avulso_{avulso.get("id", idx)}',
+                    'id': avulso.get('id', idx),
+                    'data_documento': data_doc,
+                    'data_documento_sort': data_doc_sort,  # Campo oculto para ordenação
+                    'fornecedor': avulso.get('fornecedor', ''),
+                    'numero': avulso.get('ndocumento', ''),
+                    'valor': float(avulso.get('valor', 0)),
+                    'anexos_count': anexosCount,
+                    'descricao': avulso.get('descricao', ''),
+                    'centro_custo_id': avulso.get('centro_custo_id'),
+                    'centro_custo': centroCustoNome,
+                    '_raw_data': {
+                        'index': idx,
+                        'avulso': avulso
+                    }
+                })
+            except Exception as e:
+                print(f'Erro ao processar avulso: {str(e)}')
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        # Aplicar ordenação
+        # Mapeamento de índices de colunas para campos de ordenação
+        # Estrutura das colunas no DataTables:
+        # 0: data_documento_sort (oculta), 1: data_documento (visível, mas ordena pela 0), 2: fornecedor, 3: numero, 4: valor, 5: anexos_count, 6: descricao, 7: centro_custo, 8: acoes
+        column_mapping = {
+            0: 'data_documento_sort',  # Coluna oculta
+            1: 'data_documento_sort',  # Coluna visível de data ordena pela oculta
+            2: 'fornecedor',
+            3: 'numero',
+            4: 'valor',
+            5: 'anexos_count',
+            6: 'descricao',
+            7: 'centro_custo'
+        }
+        
+        # Mapeamento direto: agora a coluna 1 (visível) também usa data_documento_sort diretamente
+        # porque mudei a coluna para usar data_documento_sort como data source
+        sort_key = column_mapping.get(order_column_index, 'data_documento_sort')
+        reverse = (order_dir == 'desc')
+        
+        print(f'[datatables_avulsos] Índice da coluna clicada: {order_column_index}')
+        print(f'[datatables_avulsos] Ordenando por: {sort_key}, direção: {order_dir}')
+        print(f'[datatables_avulsos] Total de registros antes da ordenação: {len(avulsos_data)}')
+        
+        try:
+            # Ordenar os dados
+            if sort_key == 'data_documento_sort':
+                # Ordenar por data (usar o campo de ordenação ISO)
+                # Tratar strings vazias como menor valor
+                avulsos_data.sort(key=lambda x: x.get('data_documento_sort', '') or '0000-00-00', reverse=reverse)
+            elif sort_key == 'valor':
+                # Ordenar por valor numérico
+                avulsos_data.sort(key=lambda x: float(x.get('valor', 0) or 0), reverse=reverse)
+            elif sort_key == 'anexos_count':
+                # Ordenar por contagem de anexos
+                avulsos_data.sort(key=lambda x: int(x.get('anexos_count', 0) or 0), reverse=reverse)
+            else:
+                # Ordenar por string (fornecedor, numero, descricao, centro_custo)
+                avulsos_data.sort(key=lambda x: str(x.get(sort_key, '') or '').lower(), reverse=reverse)
+            print(f'[datatables_avulsos] Ordenação aplicada com sucesso')
+        except Exception as e:
+            print(f'[datatables_avulsos] Erro ao ordenar: {str(e)}')
+            import traceback
+            traceback.print_exc()
+            # Em caso de erro, manter ordem original
+        
+        # Aplicar paginação
+        total_records = len(avulsos_data)
+        paginated_data = avulsos_data[start:start + length]
+        
+        print(f'[datatables_avulsos] Total: {total_records}, Retornando: {len(paginated_data)} (start={start}, length={length})')
+        
+        response_data = {
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': total_records,
+            'data': paginated_data
+        }
+        print(f'[datatables_avulsos] Retornando {len(paginated_data)} avulsos de {total_records} total')
+        return jsonify(response_data)
+    except Exception as e:
+        print(f'Erro ao buscar avulsos DataTables: {str(e)}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'draw': 1, 'recordsTotal': 0, 'recordsFiltered': 0, 'data': []}), 500
 
 @reembolso_bp.route('/<int:reembolso_id>/pdf_template')
 @login_required
@@ -340,79 +815,110 @@ def dias_desde_1900(data):
     return (data - data_inicial).days
 
 @reembolso_bp.route('/exportar_pdf/<int:id>')
+@login_required
 def exportar_pdf(id):
     reembolso = Reembolsos.query.options(
         joinedload(Reembolsos.usuario).joinedload(Usuario.colaborador).joinedload(Colaborador.dados_bancarios)
     ).filter(Reembolsos.id==id).first()
     if not reembolso:
         abort(404)
-    pdf_writer = PdfWriter()
-    CCs = ReembolsosDocumentos.query.\
-    filter(ReembolsosDocumentos.reembolso_id==id)\
-    .join(CentroCusto, ReembolsosDocumentos.centro_custo_id==CentroCusto.id)\
-    .group_by(ReembolsosDocumentos.centro_custo_id)\
-            .order_by(CentroCusto.nome).all()
-            
     
-    for cc in CCs:
-        docs = ReembolsosDocumentos.query.\
-            filter(ReembolsosDocumentos.reembolso_id==id, 
-                   ReembolsosDocumentos.centro_custo_id==cc.centro_custo_id).\
-                    order_by(ReembolsosDocumentos.data_documento.desc()).all()
-        valor_total = sum(doc.valor for doc in docs)
-        # Calcula o número de dias desde 1900
-        dias = dias_desde_1900(reembolso.data.date())
-        nrel = valor_total+dias
-        html = render_template('reembolsos/pdf_template.html', docs=docs, reembolso=reembolso, nrel=nrel, valor_total=valor_total)
-        pdf_bytes = HTML(string=html, base_url=request.base_url).write_pdf()
-        pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
+    # Verificar permissão
+    if reembolso.usuario_id != current_user.id and not current_user.is_admin:
+        abort(403)
+    
+    # Buscar todos os centros de custo do reembolso com seus dados
+    CCs = db.session.query(CentroCusto, ReembolsosDocumentos.centro_custo_id).\
+        join(ReembolsosDocumentos, CentroCusto.id == ReembolsosDocumentos.centro_custo_id).\
+        filter(ReembolsosDocumentos.reembolso_id == id).\
+        group_by(ReembolsosDocumentos.centro_custo_id, CentroCusto.id, CentroCusto.codigo, CentroCusto.nome).\
+        order_by(CentroCusto.nome).all()
+    
+    # Criar ZIP em memória
+    zip_buffer = BytesIO()
+    
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Para cada centro de custo, criar um PDF separado
+        for centro_custo, centro_custo_id in CCs:
+            # Criar um PdfWriter para este centro de custo
+            pdf_writer = PdfWriter()
+            
+            # Buscar documentos deste centro de custo
+            docs = ReembolsosDocumentos.query.\
+                filter(ReembolsosDocumentos.reembolso_id == id, 
+                       ReembolsosDocumentos.centro_custo_id == centro_custo_id).\
+                order_by(ReembolsosDocumentos.data_documento.desc()).all()
+            
+            if not docs:
+                continue
+            
+            valor_total = sum(doc.valor for doc in docs)
+            # Calcula o número de dias desde 1900
+            dias = dias_desde_1900(reembolso.data.date())
+            nrel = valor_total + dias
+            html = render_template('reembolsos/pdf_template.html', docs=docs, reembolso=reembolso, nrel=nrel, valor_total=valor_total)
+            pdf_bytes = HTML(string=html, base_url=request.base_url).write_pdf()
+            pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
 
-        for doc in docs:
-            if doc.tipo == 'nota' and doc.nota_fiscal:
-                doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).all()
-            
-        
-            if doc.tipo == 'nota' and doc.nota_fiscal and doc.nota_fiscal.uploads:
-                for upload in doc.nota_fiscal.uploads:
-                    if upload.mimetype == 'application/pdf':
-                        try:
-                            # Converte o blob base64 para bytes
-                            pdf_bytes = base64.b64decode(upload.blob)
-                            # Adiciona o PDF ao final
-                            pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
-                        except Exception as e:
-                            print(f"Erro ao processar PDF da nota fiscal {doc.ndocumento}: {str(e)}")
-            elif doc.tipo == 'avulso':
-                # Buscar anexos usando modelo Upload
-                anexos = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsoDocumento', tipo=4).all()
-                for anexo in anexos:
-                    if anexo.mimetype == 'application/pdf':
-                        try:
-                            # Converte o blob base64 para bytes
-                            # Tenta decodificar base64, se falhar assume que já está em bytes
+            for doc in docs:
+                if doc.tipo == 'nota' and doc.nota_fiscal:
+                    doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).all()
+                
+                if doc.tipo == 'nota' and doc.nota_fiscal and doc.nota_fiscal.uploads:
+                    for upload in doc.nota_fiscal.uploads:
+                        if upload.mimetype == 'application/pdf':
                             try:
-                                pdf_bytes = base64.b64decode(anexo.blob)
-                            except:
-                                # Se não for base64, assume que já está em bytes (compatibilidade com dados antigos)
-                                if isinstance(anexo.blob, str):
-                                    pdf_bytes = anexo.blob.encode('latin-1')
-                                else:
-                                    pdf_bytes = anexo.blob
-                            # Adiciona o PDF ao final
-                            pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
-                        except Exception as e:
-                            print(f"Erro ao processar PDF do documento avulso {doc.ndocumento}: {str(e)}")
+                                # Converte o blob base64 para bytes
+                                pdf_bytes = base64.b64decode(upload.blob)
+                                # Adiciona o PDF ao final
+                                pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
+                            except Exception as e:
+                                print(f"Erro ao processar PDF da nota fiscal {doc.ndocumento}: {str(e)}")
+                elif doc.tipo == 'avulso':
+                    # Buscar anexos usando modelo Upload
+                    anexos = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
+                    for anexo in anexos:
+                        if anexo.mimetype == 'application/pdf':
+                            try:
+                                # Converte o blob base64 para bytes
+                                # Tenta decodificar base64, se falhar assume que já está em bytes
+                                try:
+                                    pdf_bytes = base64.b64decode(anexo.blob)
+                                except:
+                                    # Se não for base64, assume que já está em bytes (compatibilidade com dados antigos)
+                                    if isinstance(anexo.blob, str):
+                                        pdf_bytes = anexo.blob.encode('latin-1')
+                                    else:
+                                        pdf_bytes = anexo.blob
+                                # Adiciona o PDF ao final
+                                pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
+                            except Exception as e:
+                                print(f"Erro ao processar PDF do documento avulso {doc.ndocumento}: {str(e)}")
+            
+            # Salvar PDF deste centro de custo em BytesIO
+            pdf_output = BytesIO()
+            pdf_writer.write(pdf_output)
+            pdf_output.seek(0)
+            
+            # Criar nome do arquivo baseado no centro de custo
+            # Limpar caracteres inválidos do nome do arquivo
+            nome_arquivo = f"{centro_custo.codigo} - {centro_custo.nome}".replace('/', '_').replace('\\', '_').replace(':', '_')
+            nome_arquivo = f"{nome_arquivo}.pdf"
+            
+            # Adicionar PDF ao ZIP
+            zip_file.writestr(nome_arquivo, pdf_output.getvalue())
+            
+            # Fechar recursos
+            pdf_output.close()
+            pdf_writer.close()
     
-    # Salva o PDF final em um BytesIO
-    output = BytesIO()
-    pdf_writer.write(output)
-    output.seek(0)
+    # Preparar resposta ZIP
+    zip_buffer.seek(0)
+    response = make_response(zip_buffer.getvalue())
+    zip_buffer.close()
     
-    response = make_response(output.getvalue())
-    output.close()
-    pdf_writer.close()
-    response.headers['Content-Type'] = 'application/pdf'
-    response.headers['Content-Disposition'] = f'inline; filename=reembolso_{reembolso.numero_relatorio}.pdf'
+    response.headers['Content-Type'] = 'application/zip'
+    response.headers['Content-Disposition'] = f'attachment; filename=reembolso_{reembolso.numero_relatorio}_por_centro_custo.zip'
     return response
 
 @reembolso_bp.route('/anexo/<int:anexo_id>/download')
@@ -673,19 +1179,28 @@ def editar(reembolso_id):
     notas = []
     for doc in reembolso.documentos:
         if doc.tipo == 'avulso':
+            # Formatar data para YYYY-MM-DD (formato necessário para input type="date")
+            data_documento = None
+            if doc.data_documento:
+                data_documento = doc.data_documento.strftime('%Y-%m-%d')
+            
+            # Buscar anexos
+            anexos_upload = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
+            anexos_list = [
+                {'id': upload.id, 'filename': upload.filename}
+                for upload in anexos_upload
+            ]
+            
             avulsos.append({
                 'id': doc.id,
                 'fornecedor': doc.fornecedor or '',
                 'ndocumento': doc.ndocumento or '',
-                'data_documento': doc.data_documento.isoformat() if doc.data_documento else None,
+                'data_documento': data_documento,
                 'descricao': doc.descricao,
                 'valor': float(doc.valor),
                 'centro_custo_id': doc.centro_custo_id,
-                'anexos_count': len(Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()),
-                'anexos': [
-                    {'id': upload.id, 'filename': upload.filename}
-                    for upload in Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
-                ]
+                'anexos_count': len(anexos_list),
+                'anexos': anexos_list
             })
         if doc.tipo == 'nota':
             notas.append({

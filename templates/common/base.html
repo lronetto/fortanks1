@@ -500,20 +500,19 @@
                     </ul>
                 </li>
                 <!-- Módulo Administrativo -->
-                {% if current_user.is_gerente_ou_superior %}
+                {% if current_user.is_permissao('gerencial') %}
                 <li class="{{ is_active('gerencial') }}">
                     <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
                         <i class="fas fa-cogs"></i> Gerencial
                     </a>
                     <ul class="collapse list-unstyled" id="adminSubmenu">
-                        
                         <li class="{{ is_active('dados_analiticos') }}">
                             <a href="#dadosAnaliticosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                                 class="dropdown-toggle">
                                 <i class="fas fa-chart-line"></i> Dados Analíticos
                             </a>
                             <ul class="collapse list-unstyled" id="dadosAnaliticosSubmenu">
-                                {% if current_user.is_permissao('DADOSANALITICOS') %}
+
                                 <li>
                                     <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}">
                                         <i class="fas fa-chart-area"></i> Dashboard
@@ -524,10 +523,10 @@
                                         <i class="fas fa-chart-line"></i> Listagem de Dados
                                     </a>
                                 </li>
-                                {% endif %}
+                       
                             </ul>
                         </li>
-                        
+                       
                     </ul>
                 </li>
                 {% endif %}

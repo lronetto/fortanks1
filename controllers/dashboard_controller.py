@@ -46,6 +46,7 @@ def meu_dashboard():
     exibir_card_materiais_usinagem = False
 
     if current_user.colaborador and current_user.departamento_id in [3, 4, 7]:
+        print("exibir_card_materiais_usinagem")
         exibir_card_materiais_usinagem = True
         materiais_usinagem_estoque_data = card_materiais_usinagem()
         # Subquery para obter IDs de materiais distintos usados em UsinagemMaterial
@@ -54,6 +55,7 @@ def meu_dashboard():
     exibir_card_analitico = False
     centros_custo_analitico_data = []
     if current_user.colaborador and current_user.departamento_id == 4:
+        print("exibir_card_analitico")
         exibir_card_analitico = True
         centros_custo_analitico_data = CentroCusto.query.filter_by(ativo=True).order_by(CentroCusto.nome).all()
 
@@ -61,30 +63,35 @@ def meu_dashboard():
     exibir_card_epis_vencimento = False
     epis_vencimento = []
     if current_user.colaborador and current_user.departamento_id == 99:
+        print("exibir_card_epis_vencimento")
         exibir_card_epis_vencimento = True
         epis_vencimento = card_epis_vencimento()
 
     exibir_card_epis_estoque_critico = False
     epis_criticos_data = []
     if current_user.colaborador and current_user.departamento_id == 99:
+        print("exibir_card_epis_estoque_critico")
         exibir_card_epis_estoque_critico = True
         epis_criticos_data = card_epis_estoque_critico()
 
     exibir_card_concretagens_recentes = False
     concretagens_recentes_op = []
     if current_user.colaborador and current_user.departamento_id in [4, 10]:
+        print("exibir_card_concretagens_recentes")
         exibir_card_concretagens_recentes = True
         concretagens_recentes_op = card_concretagens_recentes()
 
     exibir_card_historico_usinagem = False
     historico_usinagem = []
     if current_user.colaborador and current_user.departamento_id in [4, 10]:
+        print("exibir_card_historico_usinagem")
         exibir_card_historico_usinagem = True
         historico_usinagem = card_historico_usinagem()
     
     exibir_card_historico_semanal_concretagens = False
     historico_semanal_concretagens = []
     if current_user.colaborador and current_user.departamento_id in [4, 10]:
+        print("exibir_card_historico_semanal_concretagens")
         exibir_card_historico_semanal_concretagens = True
         historico_semanal_concretagens = card_historico_semanal_concretagens()
     
@@ -92,6 +99,7 @@ def meu_dashboard():
     resumo_placas = []
     agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'false').lower() == 'true'
     if current_user.colaborador and current_user.departamento_id in [4, 10]:
+        print("exibir_card_resumo_placas")
         exibir_card_resumo_placas = True
         resumo_placas = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo)
    
@@ -99,6 +107,7 @@ def meu_dashboard():
     resumo_notas = []
     contratos = []
     if current_user.colaborador and current_user.departamento_id in [4, 10]:
+        print("exibir_card_resumo_notas")
         exibir_card_resumo_notas = True
         resumo_notas = card_resumo_notas()
         contratos = [ contrato.to_dict() for contrato in Contrato.query.all() ]

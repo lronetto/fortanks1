@@ -47,7 +47,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <small class="form-text text-muted">Selecione as séries para cada peça individualmente. Segure Ctrl (ou Cmd no Mac) para selecionar múltiplas séries.</small>
+                        <small class="form-text text-muted">Selecione as séries para cada peça individualmente usando os checkboxes. Marque também se é segunda concretagem.</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -110,10 +110,19 @@
                         const tanqueId = pecaItem.tanque || pecaItem.tanque_id || '';
                         
                         // Buscar séries já referenciadas nesta peça
+                        // Suporta tanto formato antigo (array de strings) quanto novo (array de objetos)
                         const seriesReferenciadas = pecaObj.qualidade?.series || [];
-                        const seriesTexto = seriesReferenciadas.length > 0 
-                            ? seriesReferenciadas.join(', ') 
-                            : '<span class="text-muted">Nenhuma</span>';
+                        let seriesTexto = '<span class="text-muted">Nenhuma</span>';
+                        if (seriesReferenciadas.length > 0) {
+                            const seriesFormatadas = seriesReferenciadas.map(function(s) {
+                                if (typeof s === 'object' && s !== null) {
+                                    const texto = s.serie || s;
+                                    return s.segunda_concretagem ? `${texto} (2ª conc.)` : texto;
+                                }
+                                return String(s);
+                            });
+                            seriesTexto = seriesFormatadas.join(', ');
+                        }
                         const seriesReferenciadasJson = JSON.stringify(seriesReferenciadas).replace(/'/g, "&#39;");
 
                         const linha = `
@@ -122,15 +131,13 @@
                                 <td>${pecaNome}</td>
                                 <td>${forma || '-'}</td>
                                 <td>
-                                    <select class="form-select form-select-sm select-series-peca" 
-                                            data-peca-id="${pecaId}" 
-                                            data-peca-nome="${pecaNome}"
-                                            data-tanque-id="${tanqueId}"
-                                            multiple 
-                                            size="5"
-                                            style="min-width: 250px;">
-                                        <option value="">Carregando séries...</option>
-                                    </select>
+                                    <div class="series-checkboxes-container" 
+                                         data-peca-id="${pecaId}" 
+                                         data-peca-nome="${pecaNome}"
+                                         data-tanque-id="${tanqueId}"
+                                         style="max-height: 200px; overflow-y: auto; min-width: 300px;">
+                                        <div class="text-muted small">Carregando séries...</div>
+                                    </div>
                                 </td>
                                 <td class="series-referenciadas">${seriesTexto}</td>
                             </tr>
@@ -150,14 +157,14 @@
             });
         }
 
-        // Função para carregar séries por data (para todos os selects)
+        // Função para carregar séries por data (para todos os containers de checkboxes)
         function carregarSeriesPorData(data) {
             if (!data) {
                 return;
             }
 
-            // Recarregar séries em todos os selects de peças
-            $('.select-series-peca').each(function() {
+            // Recarregar séries em todos os containers de peças
+            $('.series-checkboxes-container').each(function() {
                 const index = $(this).closest('tr').data('index');
                 const tr = $(this).closest('tr');
                 // Buscar séries referenciadas do atributo data
@@ -182,15 +189,15 @@
             });
         }
 
-        // Função para carregar séries para um select específico de peça
+        // Função para carregar séries para um container específico de peça
         function carregarSeriesParaPeca(index, data, seriesReferenciadas = []) {
-            const select = $(`.select-series-peca`).eq(index);
-            if (select.length === 0) return;
+            const container = $(`.series-checkboxes-container`).eq(index);
+            if (container.length === 0) return;
 
-            select.html('<option value="">Carregando séries...</option>');
+            container.html('<div class="text-muted small">Carregando séries...</div>');
 
             $.get(`/concretagens/api/usinagens/por-data`, { data: data }, function(response) {
-                select.empty();
+                container.empty();
 
                 if (response.series && response.series.length > 0) {
                     response.series.forEach(function(serie) {
@@ -198,20 +205,86 @@
                             new Date(serie.data_usinagem).toLocaleDateString('pt-BR') : '';
                         const volume = serie.volume || 0;
                         const nota = serie.nota || '';
-                        const texto = `${serie.serie} - ${dataFormatada} - Vol: ${volume}m³${nota ? ' - NF: ' + nota : ''}`;
-                        
-                        // Verificar se a série já está referenciada (comparar como strings)
                         const serieStr = String(serie.serie);
-                        const jaReferenciada = seriesReferenciadas.some(s => String(s) === serieStr);
-                        const selected = jaReferenciada ? 'selected' : '';
                         
-                        select.append(`<option value="${serie.serie}" ${selected}>${texto}</option>`);
+                        // Verificar se a série já está referenciada
+                        // Suporta tanto formato antigo (array de strings) quanto novo (array de objetos)
+                        let jaReferenciada = false;
+                        let segundaConcretagem = false;
+                        
+                        if (Array.isArray(seriesReferenciadas)) {
+                            jaReferenciada = seriesReferenciadas.some(function(s) {
+                                if (typeof s === 'string' || typeof s === 'number') {
+                                    return String(s) === serieStr;
+                                } else if (typeof s === 'object' && s !== null) {
+                                    if (String(s.serie || s) === serieStr) {
+                                        segundaConcretagem = s.segunda_concretagem || false;
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            });
+                        }
+                        
+                        const checked = jaReferenciada ? 'checked' : '';
+                        const checkedSegunda = segundaConcretagem ? 'checked' : '';
+                        const serieId = `serie-${index}-${serieStr.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                        const segundaId = `segunda-${index}-${serieStr.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                        
+                        const checkboxHtml = `
+                            <div class="mb-2 p-2 border rounded">
+                                <div class="form-check">
+                                    <input class="form-check-input checkbox-serie" 
+                                           type="checkbox" 
+                                           value="${serie.serie}" 
+                                           id="${serieId}"
+                                           data-serie="${serie.serie}"
+                                           ${checked}>
+                                    <label class="form-check-label" for="${serieId}">
+                                        <strong>${serie.serie}</strong> - ${dataFormatada} - Vol: ${volume}m³${nota ? ' - NF: ' + nota : ''}
+                                    </label>
+                                </div>
+                                <div class="form-check ms-4 mt-1">
+                                    <input class="form-check-input checkbox-segunda-concretagem" 
+                                           type="checkbox" 
+                                           id="${segundaId}"
+                                           data-serie="${serie.serie}"
+                                           ${checkedSegunda}
+                                           ${!checked ? 'disabled' : ''}>
+                                    <label class="form-check-label small text-muted" for="${segundaId}">
+                                        Segunda Concretagem
+                                    </label>
+                                </div>
+                            </div>
+                        `;
+                        container.append(checkboxHtml);
+                    });
+                    
+                    // Habilitar/desabilitar checkbox de segunda concretagem baseado no checkbox da série
+                    // Usar event delegation para funcionar com elementos adicionados dinamicamente
+                    container.on('change', '.checkbox-serie', function() {
+                        const serie = $(this).data('serie');
+                        const segundaCheckbox = container.find(`.checkbox-segunda-concretagem[data-serie="${serie}"]`);
+                        if ($(this).is(':checked')) {
+                            segundaCheckbox.prop('disabled', false);
+                        } else {
+                            segundaCheckbox.prop('disabled', true).prop('checked', false);
+                        }
+                    });
+                    
+                    // Aplicar estado inicial dos checkboxes de segunda concretagem
+                    container.find('.checkbox-serie').each(function() {
+                        if (!$(this).is(':checked')) {
+                            const serie = $(this).data('serie');
+                            const segundaCheckbox = container.find(`.checkbox-segunda-concretagem[data-serie="${serie}"]`);
+                            segundaCheckbox.prop('disabled', true);
+                        }
                     });
                 } else {
-                    select.append('<option value="">Nenhuma série encontrada para esta data</option>');
+                    container.html('<div class="text-muted small">Nenhuma série encontrada para esta data</div>');
                 }
             }).fail(function() {
-                select.html('<option value="">Erro ao carregar séries</option>');
+                container.html('<div class="text-danger small">Erro ao carregar séries</div>');
             });
         }
 
@@ -238,8 +311,20 @@
                 const pecaId = $(this).data('peca-id');
                 const pecaNome = $(this).data('peca-nome');
                 const tanqueId = $(this).data('tanque-id');
-                const select = $(this).find('.select-series-peca');
-                const seriesSelecionadas = select.val() || [];
+                const container = $(this).find('.series-checkboxes-container');
+                
+                // Coletar séries selecionadas com informação de segunda concretagem
+                const seriesSelecionadas = [];
+                container.find('.checkbox-serie:checked').each(function() {
+                    const serie = $(this).data('serie');
+                    const segundaCheckbox = container.find(`.checkbox-segunda-concretagem[data-serie="${serie}"]`);
+                    const segundaConcretagem = segundaCheckbox.is(':checked');
+                    
+                    seriesSelecionadas.push({
+                        serie: serie,
+                        segunda_concretagem: segundaConcretagem
+                    });
+                });
 
                 if (seriesSelecionadas.length > 0) {
                     pecasComSeries.push({
@@ -276,7 +361,7 @@
                         // Recarregar peças para mostrar as séries atualizadas
                         if (concretagemId) {
                             carregarPecasConcretagem(concretagemId);
-                            // Recarregar séries nos selects também
+                            // Recarregar séries nos containers também
                             if (dataConcretagem) {
                                 setTimeout(function() {
                                     carregarSeriesPorData(dataConcretagem);

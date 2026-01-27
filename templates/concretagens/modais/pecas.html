@@ -68,12 +68,15 @@
                     data.pecas.forEach(function(pecaItem) {
                         const pecaObj = pecaItem.peca;
                         const tanqueObj = pecaItem.tanque_obj;
-                        const pecaNome = pecaItem.placa; // Nome da peça no JSON
+                        // Suporta tanto formato antigo ("placa") quanto novo ("nome")
+                        const pecaNome = pecaItem.nome || pecaItem.placa; // Nome da peça no JSON
                         
-                        if (pecaNome && tanqueObj) {
+                        // Suporta tanto formato antigo (tanque_obj) quanto novo (tanque_id direto)
+                        const tanqueIdObj = pecaItem.tanque_id || (tanqueObj ? tanqueObj.id : null);
+                        if (pecaNome && tanqueIdObj) {
                             contadorPecas++;
-                            const formaValue = (pecaItem.forma || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-                            const tanqueId = tanqueObj.id.toString();
+                            const formaValue = (pecaItem.forma || 0).toString().replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                            const tanqueId = tanqueIdObj.toString();
                             
                             // Buscar todas as peças do tanque para popular o select
                             $.get(`/concretagens/api/tanque/${tanqueId}/pecas`, function(pecasData) {
@@ -250,11 +253,11 @@
                 const pecaNome = pecaSelect.find('option:selected').data('nome') || pecaSelect.find('option:selected').text().split(' (')[0]; // Pegar nome da peça
                 const forma = $(this).find('.peca-forma').val();
                 
-                if (pecaId && pecaNome) {
+                if (pecaId && pecaNome && tanqueId) {
                     pecasData.push({
-                        placa: pecaNome, // Salvar o nome da peça, não o ID
-                        tanque: tanqueId ? parseInt(tanqueId) : null,
-                        forma: forma || null
+                        nome: pecaNome, // Novo formato: usar "nome" ao invés de "placa"
+                        tanque_id: parseInt(tanqueId), // Novo formato: usar "tanque_id" ao invés de "tanque"
+                        forma: forma ? parseInt(forma) : 0 // Garantir que forma seja número
                     });
                 }
             });

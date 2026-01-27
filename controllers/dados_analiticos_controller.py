@@ -46,7 +46,7 @@ dados_analiticos_bp = Blueprint('dados_analiticos', __name__)
 
 @dados_analiticos_bp.before_request
 def verificar_permissao():
-    if not current_user.is_permissao('DADOSANALITICOS'):
+    if not current_user.is_permissao('dados_analiticos'):
         flash('Você não tem permissão para acessar esta página.', 'danger')
         return redirect(url_for('dashboard.index'))
 
@@ -775,7 +775,7 @@ def api_dashboard_data():
                     valores_meses_query = db.session.query(
                         extract('month', DadoAnalitico.data_pagamento).label('mes'),
                         func.sum(DadoAnalitico.valor).label('total')
-                    ).filter(extract('year', DadoAnalitico.data_pagamento) == ano)
+                    ).join(PlanoConta, DadoAnalitico.plano_conta_id == PlanoConta.id).filter(extract('year', DadoAnalitico.data_pagamento) == ano, PlanoConta.codigo.in_(PL_RECOP))
                     
                     if cc_id and cc_id.strip():
                         valores_meses_query = valores_meses_query.filter(DadoAnalitico.centro_custo_id == cc_id)
@@ -821,7 +821,8 @@ def api_dashboard_data():
                     CentroCusto.nome,
                     func.sum(DadoAnalitico.valor).label('total')
                 ).join(
-                    DadoAnalitico, DadoAnalitico.centro_custo_id == CentroCusto.id
+                    DadoAnalitico, DadoAnalitico.centro_custo_id == CentroCusto.id,
+                    PlanoConta, DadoAnalitico.plano_conta_id == PlanoConta.id
                 )
                 
                 if ano:
@@ -833,7 +834,8 @@ def api_dashboard_data():
                 if cc_id and cc_id.strip():
                     cc_query = cc_query.filter(DadoAnalitico.centro_custo_id == cc_id)
                 
-                cc_resultados = cc_query.group_by(CentroCusto.nome).order_by(func.sum(DadoAnalitico.valor).desc()).limit(10).all()
+                cc_query = cc_query.filter(PlanoConta.codigo.in_(PL_RECOP))
+                cc_resultados = cc_query.group_by(CentroCusto.id).order_by(func.sum(DadoAnalitico.valor).desc()).limit(10).all()
                 logger.info(f"API Dashboard - Centros de custo encontrados: {len(cc_resultados)}")
                 
                 # Transformar em listas para o gráfico
@@ -850,7 +852,8 @@ def api_dashboard_data():
                     PlanoConta.descricao,
                     func.sum(DadoAnalitico.valor).label('total')
                 ).join(
-                    DadoAnalitico, DadoAnalitico.plano_conta_id == PlanoConta.id
+                    DadoAnalitico, DadoAnalitico.plano_conta_id == PlanoConta.id,
+                    PlanoConta, DadoAnalitico.plano_conta_id == PlanoConta.id
                 )
                 
                 if ano:
@@ -861,8 +864,8 @@ def api_dashboard_data():
                 
                 if cc_id and cc_id.strip():
                     pc_query = pc_query.filter(DadoAnalitico.centro_custo_id == cc_id)
-                
-                pc_resultados = pc_query.group_by(PlanoConta.descricao).join(PlanoConta, PlanoConta.id == DadoAnalitico.plano_conta_id).order_by(func.sum(DadoAnalitico.valor).desc()).limit(10).all()
+                pc_query = pc_query.filter(PlanoConta.codigo.in_(PL_RECOP))
+                pc_resultados = pc_query.group_by(PlanoConta.codigo).order_by(func.sum(DadoAnalitico.valor).desc()).limit(10).all()
                 logger.info(f"API Dashboard - Planos de conta encontrados: {len(pc_resultados)}")
                 
                 # Transformar em listas para o gráfico
@@ -1510,8 +1513,11 @@ def _calcular_dados_dashboard_mensal(ano: Optional[str], mes: Optional[str], cc_
             CentroCusto.nome,
                     func.sum(DadoAnalitico.valor).label('total')
                 ).join(
-            CentroCusto, DadoAnalitico.centro_custo_id == CentroCusto.id
-        ).filter(PlanoConta.codigo.in_(PL_CUSTO)) # Apenas custos para top CC
+           
+            DadoAnalitico, DadoAnalitico.centro_custo_id == CentroCusto.id
+        ).join(
+            PlanoConta, DadoAnalitico.plano_conta_id == PlanoConta.id
+        ).filter(PlanoConta.codigo.in_(PL_RECOP)) # Apenas custos para top CC
         
         # Aplicar filtros de data (CC não é filtrado aqui, pois queremos o top geral ou do período)
         if ano_int:
@@ -1522,7 +1528,7 @@ def _calcular_dados_dashboard_mensal(ano: Optional[str], mes: Optional[str], cc_
         if cc_ids:
             query_cc = query_cc.filter(DadoAnalitico.centro_custo_id.in_(cc_ids))
             
-        query_cc = query_cc.group_by(DadoAnalitico.centro_custo_id).order_by(func.sum(DadoAnalitico.valor).desc())
+        query_cc = query_cc.group_by(DadoAnalitico.centro_custo_id).order_by(func.sum(DadoAnalitico.valor).asc())
         # Limita o top N apenas se não houver filtro de CC específico
         if not cc_ids: 
              query_cc = query_cc.limit(10) 

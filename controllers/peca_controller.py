@@ -1428,6 +1428,7 @@ def processar_arquivo_inspecao(xlsx_path):
                 'acabamento': None,
                 'chapa': None,
                 'pista': None,
+                'forma': None,
                 'transporte': {
                     'data_transporte': None,
                     'nota': None,
@@ -1535,12 +1536,15 @@ def processar_arquivo_inspecao(xlsx_path):
         # Trata series
         serie1_raw = get_row_value(row, 27)
         serie2_raw = get_row_value(row, 28)
+        serie3_raw = get_row_value(row, 29)
         if serie1_raw and serie1_raw != '-':
             peca['qualidade']['series'].append(serie1_raw)
         if serie2_raw and serie2_raw != '-':
             peca['qualidade']['series'].append(serie2_raw)
+        if serie3_raw and serie3_raw != '-':
+            peca['qualidade']['series'].append(serie3_raw)
+        peca['forma'] = get_row_value(row, 30)
 
-        
         pecas.append(peca)
         log['total_pecas'] += 1
     alongamentos = []
@@ -1593,7 +1597,7 @@ def processar_arquivo_inspecao(xlsx_path):
                 pecaa = {
                     'nome': peca['nome'],
                     'tanque_id': peca['tanque_id'],
-                    'forma': 0
+                    'forma': peca['forma']
                 }
                 alongamento['pecas'].append(pecaa)
         alongamentos.append(alongamento)

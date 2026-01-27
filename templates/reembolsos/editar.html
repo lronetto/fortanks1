@@ -83,7 +83,7 @@
                         
                         <div class="row mb-3">
                             <div class="col-12">
-                                <button type="button" class="btn btn-primary" onclick="filtrarNotas()">
+                                <button type="button" class="btn btn-primary" onclick="if(tableNotas) tableNotas.ajax.reload();">
                                     <i class="fas fa-search"></i> Buscar Notas
                                 </button>
                             </div>
@@ -100,6 +100,7 @@
     <table class="table table-bordered" id="tabelaNotas">
         <thead>
             <tr>
+                <th width="50"><input type="checkbox" id="selecionarTodosNotas" title="Selecionar Todos"></th>
                 <th>Data</th>
                 <th>Fornecedor</th>
                 <th>Número</th>
@@ -107,15 +108,11 @@
                 <th>Pagamento</th>
                 <th>Descrição</th>
                 <th>Centro de Custo</th>
-                <th width="100">Ações</th>
             </tr>
         </thead>
         <tbody>
         </tbody>
     </table>
-    <nav>
-        <ul class="pagination justify-content-center" id="paginacaoNotas"></ul>
-    </nav>
 </div>
 
         </div>
@@ -234,20 +231,468 @@
 let notasSelecionadas = {{ notas|tojson if notas else '[]' }};
 let reembolso_id = {{ reembolso_id if reembolso_id else '0' }};
 let avulsos = [];
-let paginaNotas = 1;
-let totalPaginasNotas = 1;
-let notasPorPagina = 25;
 
-let spinner,tbody,paginacao;
+let spinner,tbody;
+let tableNotas = null;
+let tableAvulsos = null;
 window.centrosCusto = {{ centros_custo|tojson if centros_custo else '[]' }};
 window.modo = '{{ modo }}';
 document.addEventListener('DOMContentLoaded', function() {
     spinner = document.getElementById('spinnerNotas');
     tbody = document.querySelector('#tabelaNotas tbody');
-    paginacao = document.getElementById('paginacaoNotas');
+    
+    // Inicializar DataTable de Notas
+    if ($.fn.DataTable) {
+        console.log('Iniciando DataTable de Notas');
+        // Verificar se a tabela existe
+        const tabelaElement = document.getElementById('tabelaNotas');
+        if (!tabelaElement) {
+            console.error('Tabela #tabelaNotas não encontrada!');
+            return;
+        }
+        console.log('Tabela encontrada, inicializando DataTable...');
+        // Verificar se já existe uma instância e destruir
+        if ($.fn.DataTable.isDataTable('#tabelaNotas')) {
+            console.log('Destruindo instância anterior do DataTable');
+            $('#tabelaNotas').DataTable().destroy();
+        }
+        try {
+            tableNotas = $('#tabelaNotas').DataTable({
+                processing: true,
+                serverSide: true,
+                autoWidth: false,
+                destroy: false,
+                deferRender: true,
+            ajax: {
+                url: '/reembolsos/datatables/notas',
+                type: 'POST',
+                contentType: 'application/json',
+                data: function(d) {
+                    const filtroPagamento = document.getElementById('filtroPagamento')?.value || '';
+                    const dataToSend = {
+                        draw: d.draw || 1,
+                        start: d.start || 0,
+                        length: d.length || 25,
+                        notas_selecionadas: notasSelecionadas || [],
+                        reembolso_id: reembolso_id,
+                        numero: document.getElementById('filtroNumero')?.value || '',
+                        fornecedor: document.getElementById('filtroFornecedor')?.value || '',
+                        data_inicial: document.getElementById('filtroDataInicial')?.value || '',
+                        data_final: document.getElementById('filtroDataFinal')?.value || '',
+                        valor_minimo: document.getElementById('filtroValorMinimo')?.value || '',
+                        valor_maximo: document.getElementById('filtroValorMaximo')?.value || '',
+                        pagamento: filtroPagamento,
+                        csrf_token: document.querySelector('[name=csrf_token]')?.value
+                    };
+                    console.log('Enviando dados para DataTables - Filtro:', filtroPagamento, 'Notas selecionadas:', notasSelecionadas);
+                    return JSON.stringify(dataToSend);
+                },
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
+                },
+                dataSrc: function(json) {
+                    console.log('Dados recebidos:', json);
+                    console.log('Total de registros:', json.recordsTotal);
+                    console.log('Registros filtrados:', json.recordsFiltered);
+                    console.log('Dados:', json.data);
+                    if (json.error) {
+                        console.error('Erro no servidor:', json.error);
+                    }
+                    // Processar dados e adicionar listeners
+                    setTimeout(function() {
+                        adicionarListenersNotas();
+                    }, 100);
+                    return json.data || [];
+                },
+                error: function(xhr, error, thrown) {
+                    console.error('Erro ao carregar notas:', error, thrown);
+                    console.error('Status:', xhr.status);
+                    console.error('Response:', xhr.responseText);
+                    return [];
+                }
+            },
+            columns: [
+                { 
+                    data: 'data_emissao_sort', 
+                    name: 'data_emissao_sort', 
+                    title: 'Data',
+                    visible: false,
+                    orderable: true
+                },
+                { 
+                    data: null,
+                    name: 'selecao',
+                    title: '',
+                    orderable: false,
+                    searchable: false,
+                    width: '50px',
+                    render: function(data, type, row) {
+                        const checked = row.reembolso ? 'checked' : '';
+                        return `<input type="checkbox" class="nota-checkbox" value="${row.id}" ${checked} title="Selecionar">`;
+                    }
+                },
+               
+                { 
+                    data: 'data_emissao', 
+                    name: 'data_emissao', 
+                    title: 'Data',
+                    orderable: true,
+                    orderData: [0],
+                    render: function(data, type, row) {
+                        if (!data) return '';
+                        const date = new Date(data);
+                        return date.toLocaleDateString('pt-BR');
+                    }
+                },
+                { 
+                    data: 'nome_emitente', 
+                    name: 'nome_emitente', 
+                    title: 'Fornecedor',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return `<a href="#" class="link-nota-fiscal" data-id="${row.id}">${data || ''}</a>`;
+                    }
+                },
+                { data: 'numero_nf', name: 'numero_nf', title: 'Número' },
+                { 
+                    data: 'valor_total', 
+                    name: 'valor_total', 
+                    title: 'Valor',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return formatarMoeda(data || 0);
+                    }
+                },
+                { 
+                    data: null,
+                    name: 'pagamento',
+                    title: 'Pagamento',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        let badges = '';
+                        if (row.pagamento) {
+                            badges += '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>';
+                        }
+                        if (row.upload_reembolso) {
+                            badges += '<span class="badge bg-info ms-1" title="Documentos de reembolso"><i class="fas fa-paperclip" style="color:red"></i></span>';
+                        }
+                        if (row.upload_protocolo) {
+                            badges += '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip" style="color:green"></i></span>';
+                        }
+                        if (row.upload && !row.upload_reembolso && !row.upload_protocolo) {
+                            badges += '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip"></i></span>';
+                        }
+                        return badges;
+                    }
+                },
+                { 
+                    data: 'descricao',
+                    name: 'descricao',
+                    title: 'Descrição',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return `<input type="text" class="form-control nota-descricao" data-id="${row.id}" value="${data || ''}">`;
+                    }
+                },
+                { 
+                    data: 'centro_custo_id',
+                    name: 'centro_custo',
+                    title: 'Centro de Custo',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        let options = '<option value="">Selecione...</option>';
+                        if (window.centrosCusto) {
+                            window.centrosCusto.forEach(function(centro) {
+                                const selected = (data && data == centro.id) ? 'selected' : '';
+                                options += `<option value="${centro.id}" ${selected}>${centro.codigo} - ${centro.nome}</option>`;
+                            });
+                        }
+                        return `<select class="form-control nota-centro-custo" data-id="${row.id}">${options}</select>`;
+                    }
+                },
+                
+            ],
+            order: [[0, 'desc']], // Ordenar pela coluna oculta de data (índice 0)
+            pageLength: 25,
+            lengthMenu: [[-1, 10, 25, 50, 100], ["Todos",10, 25, 50, 100]],
+            paging: true,
+            pagingType: 'full_numbers',
+            language: {
+                "decimal": ",",
+                "emptyTable": "Nenhum registro encontrado",
+                "info": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
+                "infoEmpty": "Mostrando 0 até 0 de 0 registros",
+                "infoFiltered": "(Filtrados de _MAX_ registros)",
+                "infoPostFix": "",
+                "thousands": ".",
+                "lengthMenu": "Mostrar _MENU_ registros por página",
+                "loadingRecords": "Carregando...",
+                "processing": "Processando...",
+                "search": "Buscar:",
+                "zeroRecords": "Nenhum registro encontrado",
+                "paginate": {
+                    "first": "Primeiro",
+                    "last": "Último",
+                    "next": "Próximo",
+                    "previous": "Anterior"
+                },
+                "aria": {
+                    "sortAscending": ": Ordenar colunas de forma ascendente",
+                    "sortDescending": ": Ordenar colunas de forma descendente"
+                }
+            },
+            responsive: true,
+            drawCallback: function(settings) {
+                adicionarListenersNotas();
+                // Atualizar checkbox "Selecionar Todos" baseado no estado atual
+                atualizarCheckboxSelecionarTodos();
+                
+                // Verificar se todas as colunas estão sendo renderizadas
+                const api = this.api();
+                const columns = api.columns().count();
+                console.log('Total de colunas renderizadas:', columns);
+                api.columns().every(function(index) {
+                    const column = this;
+                    const header = column.header();
+                    if (header) {
+                        console.log(`Coluna ${index}: ${header.textContent || header.innerHTML}`);
+                    }
+                });
+            },
+            initComplete: function(settings, json) {
+                // Verificar se todas as colunas foram inicializadas
+                const api = this.api();
+                const columns = api.columns().count();
+                console.log('DataTable inicializado com', columns, 'colunas');
+            }
+        });
+        console.log('DataTable inicializado com sucesso');
+        } catch (error) {
+            console.error('Erro ao inicializar DataTable:', error);
+        }
+        
+        // Event listener para checkbox "Selecionar Todos"
+        $(document).on('change', '#selecionarTodosNotas', function() {
+            selecionarTodosNotas(this);
+        });
+        
+        // Inicializar DataTable de Avulsos
+        const tabelaAvulsosElement = document.getElementById('tabelaAvulsos');
+        if (!tabelaAvulsosElement) {
+            console.error('Tabela #tabelaAvulsos não encontrada!');
+        } else {
+            console.log('Inicializando DataTable de Avulsos, reembolso_id:', reembolso_id);
+            // Verificar se já existe uma instância e destruir
+            if ($.fn.DataTable.isDataTable('#tabelaAvulsos')) {
+                console.log('Destruindo instância anterior do DataTable de Avulsos');
+                $('#tabelaAvulsos').DataTable().destroy();
+            }
+            try {
+                tableAvulsos = $('#tabelaAvulsos').DataTable({
+                    processing: false,
+                    serverSide: false, // Mudar para false pois os dados já vêm processados
+                    ajax: {
+                        url: '/reembolsos/datatables/avulsos',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: function(d) {
+                            const dataToSend = {
+                                draw: d.draw || 1,
+                                start: d.start || 0,
+                                length: d.length || 25,
+                                reembolso_id: reembolso_id || 0,
+                                order: d.order || [],
+                                csrf_token: document.querySelector('[name=csrf_token]')?.value
+                            };
+                            console.log('Enviando dados para DataTables Avulsos:', dataToSend);
+                            console.log('Parâmetros de ordenação recebidos do DataTables:', d.order);
+                            return JSON.stringify(dataToSend);
+                        },
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
+                        },
+                        dataSrc: function(json) {
+                            console.log('Dados recebidos de avulsos:', json);
+                            if (json.error) {
+                                console.error('Erro no servidor:', json.error);
+                                // Esconder indicador de processamento em caso de erro
+                                setTimeout(function() {
+                                    const processingEl = document.querySelector('#tabelaAvulsos_processing');
+                                    if (processingEl) {
+                                        processingEl.style.display = 'none';
+                                    }
+                                }, 100);
+                                return [];
+                            }
+                            // Garantir que retorna um array válido
+                            const data = json.data || [];
+                            console.log('Retornando', data.length, 'registros para DataTables');
+                            // Esconder indicador de processamento após processar dados
+                            setTimeout(function() {
+                                esconderIndicadorProcessamentoAvulsos();
+                            }, 300);
+                            return data;
+                        },
+                        error: function(xhr, error, thrown) {
+                            console.error('Erro ao carregar avulsos:', error, thrown);
+                            console.error('Status:', xhr.status);
+                            console.error('Response:', xhr.responseText);
+                            // Esconder indicador de processamento em caso de erro
+                            setTimeout(function() {
+                                const processingEl = document.querySelector('#tabelaAvulsos_processing');
+                                if (processingEl) {
+                                    processingEl.style.display = 'none';
+                                }
+                            }, 100);
+                        }
+                    },
+            columns: [
+                { 
+                    data: 'data_documento_sort', 
+                    name: 'data_documento_sort', 
+                    title: 'Data',
+                    visible: false,
+                    orderable: true
+                },
+                { 
+                    data: 'data_documento_sort',  // Usar o campo de ordenação diretamente
+                    name: 'data_documento', 
+                    title: 'Data',
+                    orderable: true,
+                    render: function(data, type, row) {
+                        // Retornar data formatada para exibição
+                        if (type === 'display' || type === 'type') {
+                            return row.data_documento || '';
+                        }
+                        // Retornar data de ordenação para sorting
+                        return data || '';
+                    }
+                },
+                { 
+                    data: 'fornecedor', 
+                    name: 'fornecedor', 
+                    title: 'Fornecedor',
+                    orderable: true
+                },
+                { 
+                    data: 'numero', 
+                    name: 'numero', 
+                    title: 'Número',
+                    orderable: true
+                },
+                { 
+                    data: 'valor', 
+                    name: 'valor', 
+                    title: 'Valor', 
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return formatarMoeda(data || 0);
+                    }
+                },
+                { data: 'anexos_count', name: 'anexos_count', title: 'Anexos', orderable: false },
+                { data: 'descricao', name: 'descricao', title: 'Descrição', orderable: false },
+                { 
+                    data: 'centro_custo', 
+                    name: 'centro_custo', 
+                    title: 'Centro de Custo', 
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return data || '';
+                    }
+                },
+                { 
+                    data: null,
+                    name: 'acoes',
+                    title: 'Ações',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        const avulsoId = row.id || row._raw_data?.avulso?.id;
+                        const index = row._raw_data?.index;
+                        return `
+                            <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${index !== undefined ? index : 'null'}, ${avulsoId})" title="Editar">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${index !== undefined ? index : 'null'}, ${avulsoId})" title="Remover">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        `;
+                    }
+                }
+            ],
+            order: [[1, 'desc']], // Ordenar pela coluna de data (índice 1, que usa data_documento_sort)
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            paging: true,
+            pagingType: 'full_numbers',
+            language: {
+                "decimal": ",",
+                "emptyTable": "Nenhum registro encontrado",
+                "info": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
+                "infoEmpty": "Mostrando 0 até 0 de 0 registros",
+                "infoFiltered": "(Filtrados de _MAX_ registros)",
+                "infoPostFix": "",
+                "thousands": ".",
+                "lengthMenu": "Mostrar _MENU_ registros por página",
+                "loadingRecords": "Carregando...",
+                "processing": "Processando...",
+                "search": "Buscar:",
+                "zeroRecords": "Nenhum registro encontrado",
+                "paginate": {
+                    "first": "Primeiro",
+                    "last": "Último",
+                    "next": "Próximo",
+                    "previous": "Anterior"
+                },
+                "aria": {
+                    "sortAscending": ": Ordenar colunas de forma ascendente",
+                    "sortDescending": ": Ordenar colunas de forma descendente"
+                }
+            },
+                    responsive: true,
+                    initComplete: function(settings, json) {
+                        console.log('DataTable de Avulsos inicializado com sucesso');
+                        console.log('Dados recebidos:', json);
+                        // Garantir que o indicador de processamento seja escondido
+                        setTimeout(function() {
+                            esconderIndicadorProcessamentoAvulsos();
+                        }, 300);
+                    },
+                    drawCallback: function(settings) {
+                        console.log('DataTable de Avulsos desenhado');
+                        // Garantir que o indicador de processamento seja escondido após desenhar
+                        setTimeout(function() {
+                            esconderIndicadorProcessamentoAvulsos();
+                        }, 300);
+                    }
+                });
+                console.log('DataTable de Avulsos configurado com sucesso');
+            } catch (error) {
+                console.error('Erro ao inicializar DataTable de Avulsos:', error);
+            }
+        }
+    }
+    
+    // Função auxiliar para esconder indicador de processamento de avulsos
+    function esconderIndicadorProcessamentoAvulsos() {
+        // Tentar múltiplos seletores para garantir que encontre o elemento
+        const selectors = [
+            '#tabelaAvulsos_processing',
+            '.dataTables_processing',
+            '#tabelaAvulsos_wrapper .dataTables_processing'
+        ];
+        
+        selectors.forEach(function(selector) {
+            const el = document.querySelector(selector);
+            if (el) {
+                el.style.display = 'none';
+                console.log('Indicador de processamento escondido:', selector);
+            }
+        });
+    }
+    
     if (window.modo === 'editar') {
         const filtroPagamento = document.getElementById('filtroPagamento');
-        if (filtroPagamento) filtroPagamento.value = 'selecionados';
+        if (filtroPagamento) filtroPagamento.value = '4'; // Valor do option "Selecionados"
         
         const notasInput = document.getElementById('notas_selecionadas');
         const avulsosInput = document.getElementById('avulsos_data');
@@ -257,16 +702,55 @@ document.addEventListener('DOMContentLoaded', function() {
                 notasSelecionadas = JSON.parse(notasInput.value).map(n => ({...n, id: parseInt(n.id)}));
             }
             if (avulsosInput && avulsosInput.value && avulsosInput.value !== '[]') {
-                avulsos = JSON.parse(avulsosInput.value);
-                // Atualizar tabela de avulsos se a função existir
-                if (typeof atualizarTabelaAvulsos === 'function') {
+                try {
+                    avulsos = JSON.parse(avulsosInput.value);
+                    console.log('Avulsos carregados do campo hidden:', avulsos);
+                    console.log('Quantidade de avulsos:', avulsos.length);
+                    // Verificar cada avulso
+                    avulsos.forEach((av, idx) => {
+                        console.log(`Avulso ${idx}:`, {
+                            id: av.id,
+                            data_documento: av.data_documento,
+                            anexos: av.anexos,
+                            anexos_count: av.anexos_count
+                        });
+                    });
+                    // Atualizar tabela de avulsos
                     atualizarTabelaAvulsos();
+                } catch (e) {
+                    console.error('Erro ao parsear avulsos:', e);
                 }
             }
         } catch (e) { /* ignora erro de parse */ }
     }
 
-    filtrarNotas();
+    // Aplicar filtros quando os campos mudarem
+    document.getElementById('filtroNumero')?.addEventListener('input', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    document.getElementById('filtroFornecedor')?.addEventListener('input', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    document.getElementById('filtroDataInicial')?.addEventListener('change', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    document.getElementById('filtroDataFinal')?.addEventListener('change', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    document.getElementById('filtroValorMinimo')?.addEventListener('input', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    document.getElementById('filtroValorMaximo')?.addEventListener('input', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    document.getElementById('filtroPagamento')?.addEventListener('change', function() {
+        if (tableNotas) tableNotas.ajax.reload();
+    });
+    
+    // Carregar dados iniciais
+    if (tableNotas) {
+        tableNotas.ajax.reload();
+    }
     document.getElementById('formReembolso').addEventListener('submit', function(e) {
         e.preventDefault();
         if (notasSelecionadas.length === 0 && avulsos.length === 0) {
@@ -308,8 +792,23 @@ document.addEventListener('DOMContentLoaded', function() {
             })));
             
             avulsos.forEach((avulso, idx) => {
-                if (avulso.anexos_files && avulso.anexos_files.length > 0) {
-                    console.log(`Avulso ${idx} tem ${avulso.anexos_files.length} arquivo(s):`, avulso.anexos_files.map(f => f.name));
+                console.log(`Verificando avulso ${idx}:`, {
+                    id: avulso.id,
+                    descricao: avulso.descricao,
+                    tem_anexos_files: !!avulso.anexos_files,
+                    anexos_files_type: typeof avulso.anexos_files,
+                    anexos_files_is_array: Array.isArray(avulso.anexos_files),
+                    anexos_files_length: avulso.anexos_files ? avulso.anexos_files.length : 0
+                });
+                
+                if (avulso.anexos_files && Array.isArray(avulso.anexos_files) && avulso.anexos_files.length > 0) {
+                    console.log(`Avulso ${idx} tem ${avulso.anexos_files.length} arquivo(s):`, avulso.anexos_files.map(f => ({
+                        name: f.name,
+                        size: f.size,
+                        type: f.type,
+                        isFile: f instanceof File
+                    })));
+                    
                     avulso.anexos_files.forEach((file, fileIdx) => {
                         if (file instanceof File) {
                             formData.append(`avulso_${idx}_anexo_${fileIdx}`, file);
@@ -320,7 +819,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     });
                 } else {
-                    console.log(`Avulso ${idx} não tem anexos_files ou está vazio`);
+                    console.log(`Avulso ${idx} não tem anexos_files válidos ou está vazio`);
+                    if (avulso.anexos_files) {
+                        console.log('Tipo de anexos_files:', typeof avulso.anexos_files, Array.isArray(avulso.anexos_files));
+                    }
                 }
             });
             console.log('Total de anexos adicionados ao FormData:', totalAnexos);
@@ -492,233 +994,252 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function atualizarTabelaAvulsos() {
-  const tbody = document.querySelector('#tabelaAvulsos tbody');
-  if (!tbody) return;
-  
-  tbody.innerHTML = '';
-  
-  if (typeof avulsos === 'undefined' || !avulsos || avulsos.length === 0) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td colspan="8" class="text-center text-muted">Nenhum documento avulso adicionado</td>';
-    tbody.appendChild(tr);
+  if (!tableAvulsos) {
+    // Se DataTable não estiver inicializado, usar método manual
+    const tbody = document.querySelector('#tabelaAvulsos tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (typeof avulsos === 'undefined' || !avulsos || avulsos.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="8" class="text-center text-muted">Nenhum documento avulso adicionado</td>';
+      tbody.appendChild(tr);
+      return;
+    }
+    
+    // Criar cópia do array com índices originais e ordenar por data do documento (mais recente primeiro)
+    const avulsosOrdenados = avulsos.map((avulso, indexOriginal) => ({
+      ...avulso,
+      indexOriginal: indexOriginal
+    })).sort((a, b) => {
+      const dataA = a.data_documento ? new Date(a.data_documento).getTime() : 0;
+      const dataB = b.data_documento ? new Date(b.data_documento).getTime() : 0;
+      return dataB - dataA; // Ordena do mais recente para o mais antigo
+    });
+    
+    avulsosOrdenados.forEach((avulso) => {
+      const index = avulso.indexOriginal; // Usar o índice original para editar/remover
+      const tr = document.createElement('tr');
+      const dataDoc = avulso.data_documento ? new Date(avulso.data_documento).toLocaleDateString() : '';
+      const fornecedor = avulso.fornecedor || '';
+      const numero = avulso.ndocumento || '';
+      const valor = formatarMoeda(avulso.valor || 0);
+      const pagamento = ''; // Em branco para avulsos
+      const descricao = avulso.descricao || '';
+      const anexos_count = avulso.anexos_count || 0;
+      
+      // Buscar nome do centro de custo
+      let centroCustoNome = '';
+      if (avulso.centro_custo_id && window.centrosCusto) {
+        const centro = window.centrosCusto.find(c => c.id == avulso.centro_custo_id);
+        if (centro) {
+          centroCustoNome = `${centro.codigo} - ${centro.nome}`;
+        }
+      }
+      
+      const anexosCount = avulso.anexos_count || (avulso.anexos ? avulso.anexos.length : 0);
+      const anexosInfo = anexosCount > 0 ? `${anexosCount} arquivo(s)` : 'Sem anexos';
+      
+      tr.innerHTML = `
+        <td>${dataDoc}</td>
+        <td>${fornecedor}</td>
+        <td>${numero}</td>
+        <td>${valor}</td>
+        <td>${anexos_count}</td>
+        <td>${descricao}</td>
+        <td>${centroCustoNome}</td>
+        <td>
+          <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${index})" title="Editar">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${index})" title="Remover">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
     return;
   }
   
-  // Criar cópia do array com índices originais e ordenar por data do documento (mais recente primeiro)
-  const avulsosOrdenados = avulsos.map((avulso, indexOriginal) => ({
-    ...avulso,
-    indexOriginal: indexOriginal
-  })).sort((a, b) => {
-    const dataA = a.data_documento ? new Date(a.data_documento).getTime() : 0;
-    const dataB = b.data_documento ? new Date(b.data_documento).getTime() : 0;
-    return dataB - dataA; // Ordena do mais recente para o mais antigo
-  });
+  // Usar DataTable para atualizar
+  if (typeof avulsos === 'undefined' || !avulsos || avulsos.length === 0) {
+    tableAvulsos.clear().draw();
+    return;
+  }
   
-  avulsosOrdenados.forEach((avulso) => {
-    const index = avulso.indexOriginal; // Usar o índice original para editar/remover
-    const tr = document.createElement('tr');
-    const dataDoc = avulso.data_documento ? new Date(avulso.data_documento).toLocaleDateString() : '';
-    const fornecedor = avulso.fornecedor || '';
-    const numero = avulso.ndocumento || '';
-    const valor = formatarMoeda(avulso.valor || 0);
-    const pagamento = ''; // Em branco para avulsos
-    const descricao = avulso.descricao || '';
-    
-    // Buscar nome do centro de custo
-    let centroCustoNome = '';
-    if (avulso.centro_custo_id && window.centrosCusto) {
-      const centro = window.centrosCusto.find(c => c.id == avulso.centro_custo_id);
-      if (centro) {
-        centroCustoNome = `${centro.codigo} - ${centro.nome}`;
+    // Preparar dados para DataTable
+    const avulsosData = avulsos.map((avulso, indexOriginal) => {
+      // Formatar data para exibição e ordenação
+      let dataDoc = '';
+      let dataDocSort = '';
+      if (avulso.data_documento) {
+        try {
+          let dataObj;
+          if (typeof avulso.data_documento === 'string') {
+            // Tentar parsear diferentes formatos
+            if (avulso.data_documento.includes('T')) {
+              dataObj = new Date(avulso.data_documento.split('T')[0]);
+            } else if (avulso.data_documento.match(/^\d{4}-\d{2}-\d{2}$/)) {
+              dataObj = new Date(avulso.data_documento);
+            } else {
+              dataObj = new Date(avulso.data_documento);
+            }
+          } else {
+            dataObj = new Date(avulso.data_documento);
+          }
+          
+          if (!isNaN(dataObj.getTime())) {
+            dataDoc = dataObj.toLocaleDateString('pt-BR');
+            // Formato ISO para ordenação (YYYY-MM-DD)
+            const ano = dataObj.getFullYear();
+            const mes = String(dataObj.getMonth() + 1).padStart(2, '0');
+            const dia = String(dataObj.getDate()).padStart(2, '0');
+            dataDocSort = `${ano}-${mes}-${dia}`;
+          }
+        } catch {
+          dataDoc = String(avulso.data_documento || '');
+          dataDocSort = '';
+        }
       }
-    }
-    
-    const anexosCount = avulso.anexos_count || (avulso.anexos ? avulso.anexos.length : 0);
-    const anexosInfo = anexosCount > 0 ? `${anexosCount} arquivo(s)` : 'Sem anexos';
-    
-    tr.innerHTML = `
-      <td>${dataDoc}</td>
-      <td>${fornecedor}</td>
-      <td>${numero}</td>
-      <td>${valor}</td>
-      <td>${pagamento}</td>
-      <td>${descricao}</td>
-      <td>${centroCustoNome}</td>
-      <td>
-        <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${index})" title="Editar">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${index})" title="Remover">
-          <i class="fas fa-trash"></i>
-        </button>
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
-}
-
-
-function filtrarNotas(page = 1) {
-    paginaNotas = page;
-    
-    if (spinner) spinner.style.display = '';
-    
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    
-    if (!paginacao) return; 
-    paginacao.innerHTML = '';
-    const filtros = {
-        numero: document.getElementById('filtroNumero')?.value,
-        fornecedor: document.getElementById('filtroFornecedor')?.value,
-        data_inicial: document.getElementById('filtroDataInicial')?.value,
-        data_final: document.getElementById('filtroDataFinal')?.value,
-        valor_minimo: document.getElementById('filtroValorMinimo')?.value,
-        valor_maximo: document.getElementById('filtroValorMaximo')?.value,
-        valor_exato: document.getElementById('filtroValorExato')?.value,
-        pagamento: document.getElementById('filtroPagamento') ? document.getElementById('filtroPagamento').value : '',
-        page: paginaNotas,
-        per_page: notasPorPagina,
-        ids: notasSelecionadas,
-        notas_selecionadas: notasSelecionadas,
-        reembolso_id: reembolso_id
-    };
-    post = {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value
-        },
-        body: JSON.stringify(filtros)
-    }
-    console.log('post',post);
-    fetch('/reembolsos/buscar_notas', post)
-    .then(
-        response => {
-            console.log('response:',response);
-            return response.json()
+      
+      // Buscar nome do centro de custo
+      let centroCustoNome = '';
+      if (avulso.centro_custo_id && window.centrosCusto) {
+        const centro = window.centrosCusto.find(c => c.id == avulso.centro_custo_id);
+        if (centro) {
+          centroCustoNome = `${centro.codigo} - ${centro.nome}`;
         }
-    )
-    .then(data => {
-        console.log('data',data);
-        if (data.notas && Array.isArray(data.notas)) {
-            data.notas.forEach(nota => {
-               
-                const descricao = nota.doc.descricao || '';
-                const centro_custo_id = nota.doc.cc || '';
-                const checked = centro_custo_id ? 'checked' : '';
-                let centroCustoOptions = '<option value="">Selecione...</option>';
-                if (window.centrosCusto) {
-                    window.centrosCusto.forEach(function(centro) {
-                        if (nota.doc.cc !='' && nota.doc.cc == centro.id) {
-                            centroCustoOptions += `<option value="${centro.id}" selected>${centro.codigo} - ${centro.nome}</option>`;
-                        } else {
-                            centroCustoOptions += `<option value="${centro.id}">${centro.codigo} - ${centro.nome}</option>`;
-                        }
-                    });
-                }
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${new Date(nota.data_emissao).toLocaleDateString()}</td>
-                    <td><a href="#" class="link-nota-fiscal"
-                        data-id="${nota.id}">${nota.nome_emitente}</a></td>
-                    <td>${nota.numero_nf}</td>
-                    <td>${formatarMoeda(nota.valor_total)}</td>
-                    <td>${nota.pagamento ? '<span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>' : ''}
-                        ${nota.upload_reembolso == 1 ? '<span class="badge bg-info ms-1" title="Documentos de reembolso"><i class="fas fa-paperclip" style="color:red"></i></span>' : ''}
-                        ${nota.upload_envio == 1 ? '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip" style="color:green"></i></span>' : ''}
-                        ${(nota.upload == 1 && nota.upload_reembolso == 0 && nota.upload_envio == 0) ? '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip"></i></span>' : ''}</td>
-                    <td><input type="text" class="form-control nota-descricao" data-id="${nota.id}" value="${descricao}"></td>
-                    <td><select class="form-control nota-centro-custo" data-id="${nota.id}">${centroCustoOptions}</select></td>
-                    <td>
-                        <button type="button" class="btn btn-primary btn-sm" onclick="abrirModalDocumentos(${nota.id})" title="Ver Anexos">
-                            <i class="fas fa-paperclip"></i>
-                        </button>
-                        <input type="checkbox" class="nota-checkbox" value="${nota.id}" ${checked} style="margin-left: 5px;" title="Selecionar">
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-            totalPaginasNotas = data.pages;
-            renderPaginacaoNotas();
-            adicionarListenersNotas();
-        } else {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar notas</td></tr>';
-        }
-    })
-    .catch(error => {
-        const tbody = document.querySelector('#tabelaNotas tbody');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center">Erro ao carregar notas</td></tr>';
-    })
-    .finally(() => {
-        if (spinner) spinner.style.display = 'none';
+      }
+      
+      return {
+        data_documento: dataDoc,
+        data_documento_sort: dataDocSort, // Campo oculto para ordenação
+        fornecedor: avulso.fornecedor || '',
+        numero: avulso.ndocumento || '',
+        valor: formatarMoeda(avulso.valor || 0),
+        anexos_count: avulso.anexos_count || 0,
+        descricao: avulso.descricao || '',
+        centro_custo: centroCustoNome,
+        acoes: `
+          <button type="button" class="btn btn-sm btn-info mr-1" onclick="editarAvulso(${indexOriginal})" title="Editar">
+            <i class="fas fa-edit"></i>
+          </button>
+          <button type="button" class="btn btn-sm btn-danger" onclick="removerAvulso(${indexOriginal})" title="Remover">
+            <i class="fas fa-trash"></i>
+          </button>
+        `
+      };
     });
+  
+  tableAvulsos.clear();
+  tableAvulsos.rows.add(avulsosData);
+  tableAvulsos.draw();
 }
 
-function renderPaginacaoNotas() {
-   
-    if (totalPaginasNotas <= 1) return;
-    let html = '';
-    html += `<li class="page-item${paginaNotas === 1 ? ' disabled' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas - 1}); return false;">Anterior</a></li>`;
-    let start = Math.max(1, paginaNotas - 2);
-    let end = Math.min(totalPaginasNotas, paginaNotas + 2);
-    if (paginaNotas <= 3) { end = Math.min(5, totalPaginasNotas); }
-    if (paginaNotas > totalPaginasNotas - 2) { start = Math.max(1, totalPaginasNotas - 4); }
-    for (let i = start; i <= end; i++) {
-        html += `<li class="page-item${paginaNotas === i ? ' active' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${i}); return false;">${i}</a></li>`;
-    }
-    html += `<li class="page-item${paginaNotas === totalPaginasNotas ? ' disabled' : ''}"><a class="page-link" href="#" onclick="filtrarNotas(${paginaNotas + 1}); return false;">Próxima</a></li>`;
-    paginacao.innerHTML = html;
-}
+
+// Função filtrarNotas removida - agora usando DataTables
+// Função renderPaginacaoNotas removida - DataTables gerencia paginação automaticamente
 function selecionarTodosNotas(checkbox) {
+    // Selecionar todos os checkboxes visíveis na página atual
     const checkboxes = document.querySelectorAll('.nota-checkbox');
     checkboxes.forEach(cb => {
         cb.checked = checkbox.checked;
-        const tr = cb.closest('tr');
         const notaId = parseInt(cb.value);
-        const descricao = tr.querySelector('.nota-descricao').value;
-        const valor = parseFloat(tr.querySelector('td:nth-child(4)').textContent.replace(/[^0-9,-]/g, '').replace(',', '.'));
-        const centro_custo_id = tr.querySelector('.nota-centro-custo').value;
+        const row = tableNotas.row(`#nota_${notaId}`);
+        const rowData = row.data();
+        
+        if (rowData) {
+            const rowNode = row.node();
+            const descricaoEl = $(rowNode).find('.nota-descricao');
+            const centroCustoEl = $(rowNode).find('.nota-centro-custo');
+            const descricao = descricaoEl.val() || '';
+            const valor = rowData.valor_total || 0;
+            const centro_custo_id = centroCustoEl.val() || '';
+            
+            let nota = { id: notaId, descricao, valor, centro_custo_id };
+            if (checkbox.checked) {
+                if (!notasSelecionadas.find(n => n.id === notaId)) {
+                    notasSelecionadas.push(nota);
+                }
+            } else {
+                notasSelecionadas = notasSelecionadas.filter(n => n.id !== notaId);
+            }
+        }
+    });
+    atualizarTotal();
+    // Atualizar DataTable para refletir mudanças
+    if (tableNotas) {
+        tableNotas.ajax.reload(null, false);
+    }
+}
+
+function atualizarCheckboxSelecionarTodos() {
+    const checkboxTodos = document.getElementById('selecionarTodosNotas');
+    if (!checkboxTodos) return;
+    
+    const checkboxes = document.querySelectorAll('.nota-checkbox');
+    if (checkboxes.length === 0) {
+        checkboxTodos.checked = false;
+        checkboxTodos.indeterminate = false;
+        return;
+    }
+    
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    if (checkedCount === 0) {
+        checkboxTodos.checked = false;
+        checkboxTodos.indeterminate = false;
+    } else if (checkedCount === checkboxes.length) {
+        checkboxTodos.checked = true;
+        checkboxTodos.indeterminate = false;
+    } else {
+        checkboxTodos.checked = false;
+        checkboxTodos.indeterminate = true;
+    }
+}
+function adicionarListenersNotas() {
+    // Usar delegação de eventos para funcionar com DataTables
+    $(document).off('change', '.nota-checkbox').on('change', '.nota-checkbox', function(e) {
+        const notaId = parseInt(this.value);
+        const tr = $(this).closest('tr');
+        const row = tableNotas.row(tr);
+        const rowData = row.data();
+        
+        const descricao = tr.find('.nota-descricao').val() || '';
+        const valor = rowData ? (rowData.valor_total || 0) : 0;
+        const centro_custo_id = tr.find('.nota-centro-custo').val() || '';
         let nota = { id: notaId, descricao, valor, centro_custo_id };
-        if (checkbox.checked) {
+        
+        if (this.checked) {
             if (!notasSelecionadas.find(n => n.id === notaId)) notasSelecionadas.push(nota);
         } else {
             notasSelecionadas = notasSelecionadas.filter(n => n.id !== notaId);
         }
+        atualizarTotal();
+        atualizarCheckboxSelecionarTodos();
+        // Atualizar DataTable para refletir mudanças
+        if (tableNotas) {
+            tableNotas.ajax.reload(null, false);
+        }
     });
-    atualizarTotal();
-}
-function adicionarListenersNotas() {
-    document.querySelectorAll('.nota-checkbox').forEach(cb => {
-        cb.addEventListener('change', function(e) {
-            console.log('cb');
-            const notaId = parseInt(this.value);
-            const tr = this.closest('tr');
-            const descricao = tr.querySelector('.nota-descricao').value;
-            const valor = parseFloat(tr.querySelector('td:nth-child(4)').textContent.replace(/[^\d,-]/g, '').replace(',', '.'));
-            const centro_custo_id = tr.querySelector('.nota-centro-custo').value;
-            let nota = { id: notaId, descricao, valor, centro_custo_id };
-            if (this.checked) {
-                if (!notasSelecionadas.find(n => n.id === notaId)) notasSelecionadas.push(nota);
-            } else {
-                notasSelecionadas = notasSelecionadas.filter(n => n.id !== notaId);
-            }
-            atualizarTotal();
-        });
+    
+    $(document).off('input', '.nota-descricao').on('input', '.nota-descricao', function(e) {
+        const notaId = parseInt($(this).data('id'));
+        const nota = notasSelecionadas.find(n => n.id === notaId);
+        if (nota) nota.descricao = $(this).val();
     });
-    document.querySelectorAll('.nota-descricao').forEach(input => {
-        input.addEventListener('input', function(e) {
-            const notaId = parseInt(this.dataset.id);
-            const nota = notasSelecionadas.find(n => n.id === notaId);
-            if (nota) nota.descricao = this.value;
-        });
+    
+    $(document).off('change', '.nota-centro-custo').on('change', '.nota-centro-custo', function(e) {
+        const notaId = parseInt($(this).data('id'));
+        const nota = notasSelecionadas.find(n => n.id === notaId);
+        if (nota) nota.centro_custo_id = $(this).val();
     });
-    document.querySelectorAll('.nota-centro-custo').forEach(select => {
-        select.addEventListener('change', function(e) {
-            const notaId = parseInt(this.dataset.id);
-            const nota = notasSelecionadas.find(n => n.id === notaId);
-            if (nota) nota.centro_custo_id = this.value;
-        });
+    
+    $(document).off('click', '.link-nota-fiscal').on('click', '.link-nota-fiscal', function(e) {
+        e.preventDefault();
+        const notaId = $(this).data('id');
+        abrirModalDocumentos(notaId);
     });
 }
 function abrirPdfNota(notaId) {

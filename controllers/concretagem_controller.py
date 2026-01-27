@@ -56,8 +56,10 @@ def get_pecas_por_tanque(tanque_id):
                 pecas_json = json.loads(conc.pecas) if isinstance(conc.pecas, str) else conc.pecas
                 if isinstance(pecas_json, list):
                     for p in pecas_json:
-                        if p.get('placa'):
-                            pecas_concretadas_ids.add(str(p['placa']))
+                        # Suporta tanto formato antigo ("placa") quanto novo ("nome")
+                        peca_nome = p.get('nome') or p.get('placa')
+                        if peca_nome:
+                            pecas_concretadas_ids.add(str(peca_nome))
             except:
                 pass
         
@@ -126,8 +128,10 @@ def get_pecas_por_tanques():
                 pecas_json = json.loads(conc.pecas) if isinstance(conc.pecas, str) else conc.pecas
                 if isinstance(pecas_json, list):
                     for p in pecas_json:
-                        if p.get('placa'):
-                            pecas_concretadas_ids.add(p['placa'])
+                        # Suporta tanto formato antigo ("placa") quanto novo ("nome")
+                        peca_nome = p.get('nome') or p.get('placa')
+                        if peca_nome:
+                            pecas_concretadas_ids.add(peca_nome)
             except:
                 pass
         
@@ -186,6 +190,7 @@ def api_listar():
                     pass
             
             data.append({
+                'concretagem': conc.conc,
                 'id': conc.id,
                 'data_concretagem': conc.data_concretagem.isoformat() if conc.data_concretagem else None,
                 'pista': conc.pista,
@@ -231,6 +236,7 @@ def api_get(id):
         concretagem = ConcretoConcretagens.query.get_or_404(id)
         
         return jsonify({
+            'concretagem': concretagem.conc,
             'id': concretagem.id,
             'data_concretagem': concretagem.data_concretagem.strftime('%Y-%m-%d') if concretagem.data_concretagem else None,
             'pista': concretagem.pista,
@@ -326,16 +332,20 @@ def api_pecas(id):
                     pecas_json = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
                     if isinstance(pecas_json, list):
                         for peca_item in pecas_json:
+                            # Suporta tanto formato antigo ("placa", "tanque") quanto novo ("nome", "tanque_id")
+                            peca_nome = peca_item.get('nome') or peca_item.get('placa')
+                            tanque_id_val = peca_item.get('tanque_id') or peca_item.get('tanque')
+                            
                             peca_obj = {
-                                'placa': peca_item.get('nome'),  # Nome da peça
-                                'tanque': peca_item.get('tanque_id'),  # ID do tanque
-                                'forma': peca_item.get('forma')
+                                'nome': peca_nome,  # Nome da peça
+                                'tanque': tanque_id_val,  # ID do tanque
+                                'forma': peca_item.get('forma', 0)
                             }
                             
                             # Buscar dados completos do tanque primeiro
                             tanque_obj = None
-                            if peca_item.get('tanque'):
-                                tanque_id = peca_item.get('tanque')
+                            if tanque_id_val:
+                                tanque_id = tanque_id_val
                                 try:
                                     tanque_id_int = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
                                     tanque = Tanques.query.get(tanque_id_int)
@@ -350,9 +360,13 @@ def api_pecas(id):
                                     print(f"[API] Erro ao converter ID do tanque {tanque_id}: {str(e)}")
                             
                             # Buscar dados completos da peça pelo nome e tanque_id
-                            if peca_item.get('nome') and peca_item.get('tanque_id'):
-                                peca_nome = peca_item.get('nome')  # Nome da peça
-                                tanque_id = peca_item.get('tanque_id')
+                            # Suporta tanto formato antigo quanto novo
+                            peca_nome_busca = peca_item.get('nome') or peca_item.get('placa')
+                            tanque_id_busca = peca_item.get('tanque_id') or peca_item.get('tanque')
+                            
+                            if peca_nome_busca and tanque_id_busca:
+                                peca_nome = peca_nome_busca  # Nome da peça
+                                tanque_id = tanque_id_busca
                                 try:
                                     tanque_id_int = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
                                     # Buscar peça pelo nome e tanque_id (pode haver peças com mesmo nome em tanques diferentes)
@@ -516,16 +530,59 @@ def api_salvar_usinagens(id):
             if 'series' not in qualidade:
                 qualidade['series'] = []
             
-            # Substituir séries existentes pelas selecionadas
-            # Primeiro, remover séries antigas que não estão mais selecionadas
-            series_selecionadas_str = [str(s) for s in series]
-            qualidade['series'] = [s for s in qualidade['series'] if str(s) in series_selecionadas_str]
+            # Normalizar séries recebidas (pode ser array de strings ou array de objetos)
+            series_normalizadas = []
+            for s in series:
+                if isinstance(s, dict):
+                    # Novo formato: objeto com serie e segunda_concretagem
+                    series_normalizadas.append({
+                        'serie': str(s.get('serie', s)),
+                        'segunda_concretagem': bool(s.get('segunda_concretagem', False))
+                    })
+                else:
+                    # Formato antigo: string simples
+                    series_normalizadas.append({
+                        'serie': str(s),
+                        'segunda_concretagem': False
+                    })
             
-            # Adicionar novas séries (evitando duplicatas)
-            for serie in series:
-                serie_str = str(serie)
-                if serie_str not in [str(s) for s in qualidade['series']]:
-                    qualidade['series'].append(serie_str)
+            # Extrair apenas os números das séries selecionadas para comparação
+            series_selecionadas_str = [s['serie'] for s in series_normalizadas]
+            
+            # Converter séries existentes para o novo formato se necessário
+            series_existentes = []
+            for s in qualidade['series']:
+                if isinstance(s, dict):
+                    # Já está no novo formato
+                    series_existentes.append(s)
+                else:
+                    # Converter do formato antigo para o novo
+                    series_existentes.append({
+                        'serie': str(s),
+                        'segunda_concretagem': False
+                    })
+            
+            # Remover séries que não estão mais selecionadas
+            series_existentes = [s for s in series_existentes if s['serie'] in series_selecionadas_str]
+            
+            # Adicionar/atualizar séries selecionadas
+            for serie_nova in series_normalizadas:
+                serie_str = serie_nova['serie']
+                # Procurar se já existe
+                encontrada = False
+                for i, serie_existente in enumerate(series_existentes):
+                    if serie_existente['serie'] == serie_str:
+                        # Atualizar (incluindo segunda_concretagem)
+                        series_existentes[i] = serie_nova
+                        encontrada = True
+                        break
+                
+                if not encontrada:
+                    # Adicionar nova série
+                    series_existentes.append(serie_nova)
+            
+            # Atualizar qualidade com as séries no novo formato
+            qualidade['series'] = series_existentes
             
             # Salvar qualidade atualizada
             peca.qualidade = json.dumps(qualidade, ensure_ascii=False)

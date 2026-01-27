@@ -1321,7 +1321,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                             new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
                                         
                                         if alongamentos_fora_da_tolerancia < 12:
-                                            for i in range(1, 12 - alongamentos_fora_da_tolerancia):
+                                            for i in range(1, 13 - alongamentos_fora_da_tolerancia):
                                                 new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
                                         
                                         # Limpar placeholders além do total de alongamentos
@@ -1344,25 +1344,47 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                                 if i > 1:
                                                     new_value = new_value.replace(f'{{{i+86}}}', '')
                                                 new_value = new_value.replace(f'{{{i+77}}}', '')
-                                        
+                                        else:
+                                            new_value = new_value.replace('{122}', '')
+                                            for i in range(1, 11):
+                                                if i > 1:
+                                                    new_value = new_value.replace(f'{{{i+86}}}', '')
+                                                new_value = new_value.replace(f'{{{i+77}}}', '')
+
                                         # Somatório
                                         new_value = new_value.replace('{97}', str(alongamentos_soma))
                                         
                                         # Alongamentos individuais maior e menor
                                         if peca_tanque_local and peca_tanque_local.tipo == 'PF':
-                                            if 100 < alongamentos_soma < 120:
-                                                new_value = new_value.replace('{101}', 'X')
-                                                new_value = new_value.replace('{102}', '')
-                                            else:
+                                            if alongamentos_menor < 100 or alongamentos_maior > 120:
                                                 new_value = new_value.replace('{101}', '')
                                                 new_value = new_value.replace('{102}', 'X')
-                                        elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
-                                            if 321 < alongamentos_soma < 356:
+                                            else:
                                                 new_value = new_value.replace('{101}', 'X')
                                                 new_value = new_value.replace('{102}', '')
-                                            else:
+                                        elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
+                                            if alongamentos_menor < 321 or alongamentos_maior > 356:
                                                 new_value = new_value.replace('{101}', '')
+                                                new_value = new_value.replace('{102}', 'X')
+                                            else:
+                                                new_value = new_value.replace('{101}', 'X')
                                                 new_value = new_value.replace('{102}', '')
+
+                                         # Alongamentos soma maior e menor
+                                        if peca_tanque_local and peca_tanque_local.tipo == 'PF':
+                                            if alongamentos_soma < 100*total_alongamentos and alongamentos_soma > 120*total_alongamentos:
+                                                new_value = new_value.replace('{117}', '')
+                                                new_value = new_value.replace('{118}', 'X')
+                                            else:
+                                                new_value = new_value.replace('{117}', 'X')
+                                                new_value = new_value.replace('{118}', '')
+                                        elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
+                                            if alongamentos_soma < 321*total_alongamentos or alongamentos_soma > 356*total_alongamentos:
+                                                new_value = new_value.replace('{117}', '')
+                                                new_value = new_value.replace('{118}', 'X')
+                                            else:
+                                                new_value = new_value.replace('{117}', 'X')
+                                                new_value = new_value.replace('{118}', '')
                                 elif isinstance(alongamentos, dict):
                                     # Formato antigo: dict {"C-1": 339, "C-2": 339, ...} (retrocompatibilidade)
                                     total_alongamentos = len(alongamentos)

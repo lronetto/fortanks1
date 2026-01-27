@@ -109,8 +109,8 @@ def agrupar_por_mes(dados):
         if chave_concretagem not in agrupado[chave]['concretagens_unicas']:
             agrupado[chave]['concretagens_unicas'].add(chave_concretagem)
             agrupado[chave]['quantidade_concretagens'] += 1
-        print(chave_concretagem)
-        print(chave)
+       # print(chave_concretagem)
+       # print(chave)
     # Converter sets para contagem e remover do dicionário
     for chave in agrupado:
         if 'concretagens_unicas' in agrupado[chave]:

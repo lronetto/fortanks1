@@ -1,6 +1,6 @@
 from datetime import datetime
 from models.database import db
-
+from sqlalchemy import or_
 class Modulo(db.Model):
     """
     Modelo para representar módulos do sistema
@@ -70,12 +70,15 @@ class Permissao(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
+
     # Relacionamentos
     modulo = db.relationship('Modulo', back_populates='permissoes', lazy=True)
     usuario = db.relationship('Usuario', foreign_keys=[usuario_id], lazy=True)
     departamento = db.relationship('Departamento', foreign_keys=[departamento_id], lazy=True)
     cargo = db.relationship('Cargo', foreign_keys=[cargo_id], lazy=True)
     
+    permissao = None
+   
     def to_dict(self):
         return {
             'id': self.id,
@@ -111,7 +114,7 @@ class Permissao(db.Model):
         db.session.commit()
     
     @staticmethod
-    def verificar_permissao_completa(usuario, modulo_nome, acao='visualizar'):
+    def verificar_permissao_completa(usuario, modulo_nome, acao='visualiz   r'):
         """
         Verifica se um usuário tem permissão para realizar uma ação em um módulo.
         
@@ -194,8 +197,25 @@ class Permissao(db.Model):
             logger.error(f"Erro ao verificar permissão: {str(e)}")
             return False
     
+    def get_permissao(self,usuario):
+        permissao = Permissao.query.join(Modulo,Permissao.modulo_id==Modulo.id).filter(
+            or_(Permissao.usuario_id==usuario.id,
+            Permissao.departamento_id==usuario.departamento_id,
+            Permissao.cargo_id==usuario.cargo_id),
+            Permissao.status=='Ativo').all()
+        permissoes = []
+        for p in permissao:
+            permissoes.append({
+                'modulo_nome': p.modulo.nome,
+                'pode_visualizar': p.pode_visualizar,
+                'pode_criar': p.pode_criar,
+                'pode_editar': p.pode_editar,
+                'pode_excluir': p.pode_excluir,
+                'pode_exportar': p.pode_exportar
+            })
+        return permissoes
     def __repr__(self):
-        tipo = self.tipo_permissao
+        tipo = self.tipo_permissao  if self.tipo_permissao else 'N/A'
         entidade = 'N/A'
         if tipo == 'usuario' and self.usuario:
             entidade = self.usuario.nome

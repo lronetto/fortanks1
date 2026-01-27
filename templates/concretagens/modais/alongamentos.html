@@ -134,16 +134,18 @@
             
             const concretagemId = $('#concretagem_id_alongamentos').val();
             
-            // Coletar alongamentos das duas linhas
-            const alongamentos = {};
+            // Coletar alongamentos das duas linhas - formato array [350, 351, ...]
+            const alongamentos = new Array(24).fill(null);
             $('.alongamento-input').each(function() {
                 const linha = $(this).data('linha');
                 const pos = $(this).data('pos');
                 const valor = $(this).val();
                 if (valor) {
                     // Calcular número do cabo: linha 1 = 1-12, linha 2 = 13-24
+                    // Array é 0-indexed, então C-1 = índice 0, C-2 = índice 1, etc
                     const numeroCabo = (linha - 1) * 12 + pos;
-                    alongamentos[`C-${numeroCabo}`] = parseFloat(valor);
+                    const indice = numeroCabo - 1; // Converter para índice do array (C-1 = 0)
+                    alongamentos[indice] = parseFloat(valor);
                 }
             });
 
@@ -155,11 +157,12 @@
                 const certificado = $(this).find('.cordoalha-certificado').val();
                 
                 if (numero || data || certificado) {
-                    const dataFormatada = data ? new Date(data).toLocaleDateString('pt-BR') : '';
+                    // Manter data no formato YYYY-MM-DD para compatibilidade
+                    const dataFormatada = data || '';
                     bobinas.push({
-                        numero: numero ? parseInt(numero) : null,
+                        numero: numero ? parseFloat(numero) : null,
                         data_fabricacao: dataFormatada,
-                        certificado: certificado ? parseInt(certificado) : null
+                        certificado: certificado ? parseFloat(certificado) : null
                     });
                 }
             });
@@ -203,25 +206,48 @@
                 try {
                     const cordoalhas = JSON.parse(data.cordoalhas);
                     
-                    // Preencher alongamentos
+                    // Preencher alongamentos - suporta tanto array quanto objeto (compatibilidade)
                     if (cordoalhas.alongamentos) {
-                        Object.entries(cordoalhas.alongamentos).forEach(([key, value]) => {
-                            const match = key.match(/C-(\d+)/);
-                            if (match) {
-                                const num = parseInt(match[1]);
-                                const linha = Math.ceil(num / 12);
-                                const pos = ((num - 1) % 12) + 1;
-                                $(`.alongamento-input[data-linha="${linha}"][data-pos="${pos}"]`).val(value);
-                            }
-                        });
+                        if (Array.isArray(cordoalhas.alongamentos)) {
+                            // Novo formato: array [350, 351, ...]
+                            cordoalhas.alongamentos.forEach(function(value, index) {
+                                if (value !== null && value !== undefined) {
+                                    // Converter índice do array para número do cabo (0 = C-1, 1 = C-2, etc)
+                                    const numeroCabo = index + 1;
+                                    const linha = Math.ceil(numeroCabo / 12);
+                                    const pos = ((numeroCabo - 1) % 12) + 1;
+                                    $(`.alongamento-input[data-linha="${linha}"][data-pos="${pos}"]`).val(value);
+                                }
+                            });
+                        } else {
+                            // Formato antigo: objeto {"C-1": 350, ...} - manter compatibilidade
+                            Object.entries(cordoalhas.alongamentos).forEach(([key, value]) => {
+                                const match = key.match(/C-(\d+)/);
+                                if (match) {
+                                    const num = parseInt(match[1]);
+                                    const linha = Math.ceil(num / 12);
+                                    const pos = ((num - 1) % 12) + 1;
+                                    $(`.alongamento-input[data-linha="${linha}"][data-pos="${pos}"]`).val(value);
+                                }
+                            });
+                        }
                     }
                     
                     // Preencher bobinas
                     if (cordoalhas.bobinas) {
                         $('#tabelaCordoalhas tbody').empty();
                         cordoalhas.bobinas.forEach(function(bobina) {
-                            const dataFormatada = bobina.data_fabricacao ? 
-                                bobina.data_fabricacao.split('/').reverse().join('-') : '';
+                            // Suporta tanto formato YYYY-MM-DD quanto DD/MM/YYYY
+                            let dataFormatada = '';
+                            if (bobina.data_fabricacao) {
+                                if (bobina.data_fabricacao.includes('/')) {
+                                    // Formato DD/MM/YYYY - converter para YYYY-MM-DD
+                                    dataFormatada = bobina.data_fabricacao.split('/').reverse().join('-');
+                                } else {
+                                    // Já está no formato YYYY-MM-DD
+                                    dataFormatada = bobina.data_fabricacao;
+                                }
+                            }
                             const linha = `
                                 <tr>
                                     <td><input type="number" class="form-control form-control-sm cordoalha-numero" value="${bobina.numero || ''}"></td>

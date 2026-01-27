@@ -247,7 +247,8 @@ def verificar_permissao():
     if not current_user.is_authenticated:
         from flask import redirect, url_for
         return redirect(url_for('auth.login', next=request.url))
-    
+   
+    #return permissao.permissao
     if False:
         if not Permissao.verificar_permissao_completa(current_user, request.path, 'visualizar'):
             flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')

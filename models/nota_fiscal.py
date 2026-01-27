@@ -482,7 +482,7 @@ class NotaFiscal(db.Model):
             for item in self.itens:
                 try:
                     sucesso, mensagem, estatisticas = item.vincular_e_importar_estoque_todos(
-                        usuario_id=current_user.id,
+                        usuario_id=current_user.id if current_user else None,
                         centro_custo_id=None,
                         observacao= f"Importação da NF {self.numero_nf if self else 'N/A'}",
                     )
