@@ -831,6 +831,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no Windows')
                 return None
         else:
+            logging.info(f'[_converter_ods_para_xlsx_libreoffice] Sistema operacional: {sistema}')
             # Linux/Unix - usar comando do sistema
             soffice_cmd = None
             
