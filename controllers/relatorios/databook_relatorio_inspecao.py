@@ -871,7 +871,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                                     soffice_cmd = caminho
                                     break
                         except Exception as e:
-                            logging.error(f'[_converter_ods_para_xlsx_libreoffice] Erro ao verificar {caminho}: {str(e)}')
+                            logging.info(f'[_converter_ods_para_xlsx_libreoffice] Erro ao verificar {caminho}: {str(e)}')
                             continue
                 
                 # Se não encontrou o executável real, tentar extrair do wrapper
@@ -938,11 +938,11 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         
         # Verificar se o executável existe e tem permissões
         if not os.path.exists(soffice_cmd):
-            logging.error(f'[_converter_ods_para_xlsx_libreoffice] Executável não existe: {soffice_cmd}')
+            logging.info(f'[_converter_ods_para_xlsx_libreoffice] Executável não existe: {soffice_cmd}')
             return None
         
         if not os.access(soffice_cmd, os.X_OK):
-            logging.error(f'[_converter_ods_para_xlsx_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
+            logging.info(f'[_converter_ods_para_xlsx_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
             return None
         
             
@@ -993,9 +993,9 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             )
             
             if result.returncode != 0:
-                logging.error(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
-                logging.error(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
-                logging.error(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
+                logging.info(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
+                logging.info(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+                logging.info(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
                 return None
             else:
                 # LibreOffice costuma escrever mensagens úteis no stdout mesmo quando dá certo
