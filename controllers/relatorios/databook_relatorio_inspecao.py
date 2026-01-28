@@ -2154,15 +2154,37 @@ def exportar_massa():
             for concretagem_id in concretagens_ids:
                 try:
                     if formato == 'excel':
-                        # Gerar Excel
+                        # Gerar Excel (pode retornar ODS ou XLSX)
                         excel_path = _gerar_excel_temp(concretagem_id, tanque_id, projeto_id, grupo_id)
                         if excel_path and os.path.exists(excel_path):
+                            arquivo_final = excel_path
+                            ods_original = None
+                            
+                            # Se o arquivo gerado for ODS, converter para XLSX usando LibreOffice
+                            if excel_path.lower().endswith('.ods'):
+                                print(f'[exportar_massa] Arquivo ODS detectado, convertendo para XLSX: {excel_path}')
+                                # Criar caminho para o arquivo XLSX convertido
+                                xlsx_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_convertido_')
+                                # Converter ODS para XLSX
+                                arquivo_convertido = _converter_ods_para_xlsx_libreoffice(excel_path, xlsx_path)
+                                if arquivo_convertido:
+                                    arquivo_final = arquivo_convertido
+                                    ods_original = excel_path  # Guardar referência para limpar depois
+                                    print(f'[exportar_massa] Conversão concluída: {arquivo_final}')
+                                else:
+                                    print(f'[exportar_massa] Erro ao converter ODS para XLSX, usando arquivo original')
+                            
                             # Copiar para o diretório temporário com nome único
                             nome_arquivo = f'relatorio_inspecao_{concretagem_id}.xlsx'
                             destino = os.path.join(temp_dir, nome_arquivo)
-                            shutil.copy2(excel_path, destino)
+                            shutil.copy2(arquivo_final, destino)
                             arquivos_gerados.append(destino)
-                            # Limpar arquivo temporário original (se configurado)
+                            
+                            # Limpar arquivos temporários (se configurado)
+                            if arquivo_final != excel_path:
+                                _limpar_arquivo_temp(arquivo_final)
+                            if ods_original:
+                                _limpar_arquivo_temp(ods_original)
                             _limpar_arquivo_temp(excel_path)
                     else:  # PDF
                         # Gerar arquivo (Excel ou ODS) primeiro e armazenar caminho
