@@ -808,7 +808,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         
         # Detectar sistema operacional e comando do LibreOffice
         sistema = platform.system().lower()
-        print(f'[_converter_ods_para_xlsx_libreoffice] Sistema operacional: {sistema}')
         
         if sistema == 'windows':
             possiveis_caminhos = [
@@ -839,7 +838,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             libreoffice_env = os.getenv('LIBREOFFICE_PATH')
             if libreoffice_env and os.path.exists(libreoffice_env):
                 soffice_cmd = libreoffice_env
-                print(f'[_converter_ods_para_xlsx_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
             else:
                 # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
                 import glob
@@ -869,7 +867,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                                 header = f.read(4)
                                 if header.startswith(b'\x7fELF'):  # ELF binary
                                     soffice_cmd = caminho
-                                    print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado executável real: {soffice_cmd}')
                                     break
                         except Exception as e:
                             print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao verificar {caminho}: {str(e)}')
@@ -880,7 +877,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                     # Tentar encontrar usando shutil.which (pode retornar o wrapper)
                     wrapper_path = shutil.which('soffice')
                     if wrapper_path:
-                        print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado wrapper no PATH: {wrapper_path}')
                         # Tentar encontrar o executável real através do wrapper
                         try:
                             with open(wrapper_path, 'r') as f:
@@ -905,7 +901,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                                                     header = f.read(4)
                                                     if header.startswith(b'\x7fELF'):
                                                         soffice_cmd = match
-                                                        print(f'[_converter_ods_para_xlsx_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
                                                         break
                                             except:
                                                 continue
@@ -939,11 +934,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             print(f'[_converter_ods_para_xlsx_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
             return None
         
-        print(f'[_converter_ods_para_xlsx_libreoffice] Executando: {" ".join(cmd)}')
-        print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS: {ods_path}')
-        print(f'[_converter_ods_para_xlsx_libreoffice] Diretório de saída: {output_dir}')
-        print(f'[_converter_ods_para_xlsx_libreoffice] Executável: {soffice_cmd}')
-        
+            
         try:
             # Configurar ambiente completo para o LibreOffice funcionar
             env = os.environ.copy()
@@ -978,9 +969,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             # Remover variáveis que podem causar problemas
             env.pop('DISPLAY', None)  # Garantir modo headless
             
-            print(f'[_converter_ods_para_xlsx_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
-            print(f'[_converter_ods_para_xlsx_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
-            
+             
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -997,7 +986,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
                 return None
             else:
-                print(f'[_converter_ods_para_xlsx_libreoffice] Comando executado com sucesso')
                 if result.stdout:
                     print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
         except subprocess.TimeoutExpired:
@@ -1023,7 +1011,6 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 if tamanho_anterior == tamanho_atual:
                     if generated_xlsx_path != xlsx_path:
                         shutil.move(generated_xlsx_path, xlsx_path)
-                    print(f'[_converter_ods_para_xlsx_libreoffice] XLSX gerado com sucesso: {xlsx_path}')
                     return xlsx_path
             tentativa += 1
             time.sleep(0.5)
@@ -1053,23 +1040,17 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         projeto_id: ID do projeto (opcional)
         grupo_id: ID do grupo (opcional)
     """
-    print(f'[_processar_ods_template_inspecao] Concretagem: {concretagem_id}')
-    print(f'[_processar_ods_template_inspecao] Concretagem: {concretagem}')
-    print(f'[_processar_ods_template_inspecao] Contrato: {contrato}')
-    print(f'[_processar_ods_template_inspecao] Tanque: {tanque_id}')
-    print(f'[_processar_ods_template_inspecao] Projeto: {projeto_id}')
-    print(f'[_processar_ods_template_inspecao] Grupo: {grupo_id}')
     if not ODFPY_AVAILABLE:
         raise ImportError('odfpy não está disponível. Instale com: pip install odfpy')
     
     try:
-        print(f'[_processar_ods_template_inspecao] Processando ODS: {ods_path}')
+
         # Carregar o documento ODS
         doc = load(ods_path)
         
         # Obter todas as tabelas (planilhas)
         tables = doc.getElementsByType(Table)
-        
+        time_start = time.time()
         # Preparar dados para substituição
         pecas = None
         tanques_ids = []
@@ -1090,20 +1071,31 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         elif grupo_id:
             grupo = TanquesGrupos.query.get(grupo_id)
             if grupo and grupo.tanques:
-                tanques_ids = [tanque.id for tanque in grupo.tanques]
-                tanques_nomes = [tanque.nome for tanque in grupo.tanques]
-                tanques_sistemas = [tanque.sistema for tanque in grupo.tanques]
-                clientes_nome = [tanque.contrato.cliente_direto.nome for tanque in grupo.tanques]
-                contratos_nome = [tanque.contrato.nome for tanque in grupo.tanques]
-            print(f'[_processar_ods_template_inspecao] Tanques: {tanques_ids}, {tanques_nomes}, {tanques_sistemas}')
+                for tanque in grupo.tanques:
+                    if tanque.id in concretagem.get_tanques_ids():
+                        if tanque.id not in tanques_ids:
+                            tanques_ids.append(tanque.id)
+                            tanques_nomes.append(tanque.nome)
+                        if tanque.sistema not in tanques_sistemas:
+                            tanques_sistemas.append(tanque.sistema)
+                        if tanque.contrato.cliente_direto.nome not in clientes_nome:
+                            clientes_nome.append(tanque.contrato.cliente_direto.nome)
+                        if tanque.contrato.nome not in contratos_nome:
+                            contratos_nome.append(tanque.contrato.nome)
         elif projeto_id:
             tanques = Tanques.query.filter_by(contrato_id=projeto_id).all()
             if tanques:
-                tanques_ids = [tanque.id for tanque in tanques]
-                tanques_nomes = [tanque.nome for tanque in tanques]
-                tanques_sistemas = [tanque.sistema for tanque in tanques]
-                clientes_nome = [tanque.contrato.cliente_direto.nome for tanque in tanques]
-                contratos_nome = [tanque.contrato.nome for tanque in tanques]
+                for tanque in tanques:
+                    if tanque.id in concretagem.get_tanques_ids():
+                        if tanque.id not in tanques_ids:
+                            tanques_ids.append(tanque.id)
+                            tanques_nomes.append(tanque.nome)
+                        if tanque.sistema not in tanques_sistemas:
+                            tanques_sistemas.append(tanque.sistema)
+                        if tanque.contrato.cliente_direto.nome not in clientes_nome:
+                            clientes_nome.append(tanque.contrato.cliente_direto.nome)
+                        if tanque.contrato.nome not in contratos_nome:
+                            contratos_nome.append(tanque.contrato.nome)
         else:
             concretagem = ConcretoConcretagens.query.get(concretagem_id)
             if concretagem:
@@ -1115,8 +1107,11 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                             if tanque.id not in tanques_ids:
                                 tanques_ids.append(tanque.id)
                                 tanques_nomes.append(tanque.nome)
+                            if tanque.sistema not in tanques_sistemas:
                                 tanques_sistemas.append(tanque.sistema)
+                            if tanque.contrato.cliente_direto.nome not in clientes_nome:
                                 clientes_nome.append(tanque.contrato.cliente_direto.nome)
+                            if tanque.contrato.nome not in contratos_nome:
                                 contratos_nome.append(tanque.contrato.nome)
             
        
@@ -1124,29 +1119,40 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         # Buscar primeira peça válida para usar no processamento de alongamentos
         peca_tanque_global = None
         if tanques_ids:
-            pecas = concretagem.get_pecas()
-            if pecas:
-                for peca in pecas:
+            pecasb = concretagem.get_pecas()
+            if pecasb:
+                for peca in pecasb:
                     if peca['tanque_id'] in tanques_ids:
                         peca_tanque = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca['tanque_id'], TanquesPecas.nome == peca['nome']).first()
+                        series = peca_tanque.get_series_de_pecas()
                         if peca_tanque:
                             peca['tipo'] = peca_tanque.tipo
-                        pecas_concretadas.append(peca)
-                        series_concretadas.append(peca_tanque.get_series_de_pecas())
+                            pecas_concretadas.append(peca)
+                            if len(series) > 0:
+                                for serie in series:
+                                    if serie not in series_concretadas:
+                                        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == serie).first()
+                                        if usinagem:
+                                            data = usinagem.data_usinagem
+                                            if data:
+                                                if data_conclusao < data:
+                                                    data_conclusao = data
+                                        series_concretadas.append(serie)
         else:
             pecas_concretadasb = concretagem.get_pecas()
             if pecas_concretadasb:
                 for peca_tanque in pecas_concretadasb:
                     peca_obj = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca_tanque['tanque_id'], TanquesPecas.nome == peca_tanque['nome']).first()
+                    series = peca_obj.get_series_de_pecas()
                     if peca_obj:
                         peca = {
                             'tanque_id': peca_tanque['tanque_id'],
                             'nome': peca_tanque['nome'],
                             'tipo': peca_obj.tipo,
-                            'series': peca_obj.get_series_de_pecas()
+                            'series': series
                         }
                         pecas_concretadas.append(peca)
-                        for serie in peca['series']:
+                        for serie in series:
                             if serie not in series_concretadas:
                                 usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == serie).first()
                                 if usinagem:
@@ -1155,8 +1161,18 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                         if data_conclusao < data:
                                             data_conclusao = data
                                 series_concretadas.append(serie)
-                                
-
+        print(f'[_processar_ods_template_inspecao] Tanques IDs: {len(tanques_ids)}')
+        print(f'[_processar_ods_template_inspecao] Tanques Nomes: {len(tanques_nomes)}')
+        print(f'[_processar_ods_template_inspecao] Tanques Sistemas: {len(tanques_sistemas)}')
+        print(f'[_processar_ods_template_inspecao] Clientes Nome: {len(clientes_nome)}')
+        print(f'[_processar_ods_template_inspecao] Contratos Nome: {len(contratos_nome)}')
+        print(f'[_processar_ods_template_inspecao] Data de Conclusão: {data_conclusao}')
+        print(f'[_processar_ods_template_inspecao] Pecas Concretadas: {len(pecas_concretadas)}')
+        print(f'[_processar_ods_template_inspecao] Series Concretadas: {len(series_concretadas)}')
+        time_end = time.time()
+        print(f'[_processar_ods_template_inspecao] Tempo de execução dados iniciais: {time_end - time_start} segundos')
+        
+        time_start = time.time()
         for table in tables:
             # Iterar sobre todas as linhas
             rows = table.getElementsByType(TableRow)
@@ -1405,7 +1421,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                         # Processar series concretadas
                         if series_concretadas:
                             if len(series_concretadas) > 1:
-                                series_concretadas_nome = ', '.join(series_concretadas)
+                                series_concretadas_nome = ', '.join(str(serie) for serie in series_concretadas)
                             else:
                                 series_concretadas_nome = series_concretadas[0]
                             new_value = new_value.replace('{120}', str(series_concretadas_nome))
@@ -1423,10 +1439,10 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                             new_para = P()
                             new_para.addText(new_value)
                             cell.addElement(new_para)
-        
+        time_end = time.time()
+        print(f'[_processar_ods_template_inspecao] Tempo de execução processamento: {time_end - time_start} segundos')
         # Salvar o documento modificado
         doc.save(ods_path)
-        print(f'[_processar_ods_template_inspecao] ODS processado com sucesso: {ods_path}')
         
     except Exception as e:
         print(f'[_processar_ods_template_inspecao] Erro ao processar ODS: {str(e)}')
@@ -1479,7 +1495,6 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
         if os.path.exists(template_ods):
             template_path = template_ods
             usar_ods = True
-            print(f'[_gerar_excel_temp] Usando template ODS')
         elif os.path.exists(template_xlsx):
             template_path = template_xlsx
             print(f'[_gerar_excel_temp] Usando template XLSX')
@@ -1509,452 +1524,13 @@ def _gerar_excel_temp(concretagem_id,tanque_id=None,projeto_id=None,grupo_id=Non
         
         # Se for ODS mas odfpy não estiver disponível, converter para XLSX
         elif usar_ods and not ODFPY_AVAILABLE:
-            print(f'[_gerar_excel_temp] odfpy não disponível, convertendo ODS para XLSX')
-            temp_file_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_')
-            temp_ods_path = _criar_arquivo_temp_projeto(suffix='.ods', prefix='template_')
-            shutil.copy2(template_path, temp_ods_path)
-            
-            # Converter ODS para XLSX usando LibreOffice
-            template_xlsx_convertido = _converter_ods_para_xlsx_libreoffice(temp_ods_path, temp_file_path)
-            if not template_xlsx_convertido:
-                print(f'[_gerar_excel_temp] Erro ao converter ODS para XLSX')
-                return None
-        else:
-            # Se for XLSX, apenas copiar
-            temp_file_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_')
-            shutil.copy2(template_path, temp_file_path)
-        
-        # Carregar o arquivo Excel base (XLSX)
-        wb = load_workbook(temp_file_path, data_only=False, keep_vba=False, read_only=False)
-       
-        # Processar apenas células com texto, preservando imagens e outros objetos
-        for sheet in wb.worksheets:
-            for index, row in enumerate(sheet.iter_rows()):
-                if index == 77:
-                    continue
-                for index_cell, cell in enumerate(row):
-                    if index_cell == 42:
-                        continue
-                    # Processar apenas células que contêm texto (string) e não estão vazias
-                    if cell.value is not None and isinstance(cell.value, str) and len(cell.value.strip()) > 0 and  1<len(cell.value)<=5:
-                        # Criar uma cópia do valor original para evitar problemas
-                        original_value = str(cell.value)
-                        new_value = original_value
-                    
-                        # Registro
-                        new_value = new_value.replace('{1}', str(concretagem_id))
-
-                        # Cliente
-                        cliente_nome = 'N/A'
-                        if contrato and contrato.cliente_direto:
-                            cliente_nome = contrato.cliente_direto.nome
-                        new_value = new_value.replace('{2}', str(cliente_nome))
-
-                        #Obra
-                        new_value = new_value.replace('{3}', str(contrato.nome if contrato else 'N/A'))
-
-                        # Data de fabricação
-                        new_value = new_value.replace('{4}', str(concretagem.data_concretagem.strftime('%d/%m/%Y')))
-
-                        # Processar tanques do JSON
-                        if concretagem.pecas:
-                            pecas = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
-                            series=""
-                            # Extrair todos os IDs únicos de tanques do JSON usando a função comum
-                            tanques_ids_json = extrair_tanque_ids_do_json(concretagem.pecas)
-                                
-                               
-
-                            
-                            if tanques_ids_json:
-                                # Buscar informações dos tanques usando a função comum
-                                tanques = buscar_tanques_com_filtros(
-                                    tanque_ids=tanques_ids_json,
-                                    tanque_id=tanque_id,
-                                    contrato_id=projeto_id,
-                                    grupo_id=grupo_id
-                                )
-                                
-                                tanques_nomes = {tanque.id: tanque.nome for tanque in tanques}
-                                
-                                # Se tanque_id for None, listar todos os tanques únicos
-                                if tanque_id is None:
-                                    # Listar todos os tanques encontrados no JSON (filtrar None antes de ordenar)
-                                    nomes_tanques = []
-                                    for tid in sorted([t for t in tanques_ids_json if t is not None]):
-                                        if tid in tanques_nomes:
-                                            nomes_tanques.append(tanques_nomes[tid])
-                                    
-                                    if nomes_tanques:
-                                        new_value = new_value.replace('{5}', ', '.join(nomes_tanques))
-                                else:
-                                    # Se tanque_id foi especificado, mostrar apenas aquele tanque
-                                    if tanque_id in tanques_nomes:
-                                        new_value = new_value.replace('{5}', str(tanques_nomes[tanque_id]))
-                                
-                                #sistema (verificar se há tanques antes de acessar)
-                                if tanques:
-                                    new_value = new_value.replace('{6}', str(tanques[0].sistema if tanques[0].sistema else ''))
-                                else:
-                                    new_value = new_value.replace('{6}', '')
-                                
-                                #mesa
-                                new_value = new_value.replace('{7}', str(concretagem.pista if concretagem.pista else ''))
-                                
-                                formas = [1,2,3,4,5,6,7,8,9,10,11,12]
-                                for forma in formas:
-                                    count = 0
-                                    for peca in pecas:
-                                        if isinstance(peca, dict) and 'forma' in peca and peca['forma'] is not None:
-                                            try:
-                                                # Converter forma para int se for string
-                                                forma_peca = None
-                                                if isinstance(peca['forma'], str):
-                                                    try:
-                                                        forma_peca = int(peca['forma'])
-                                                    except (ValueError, TypeError):
-                                                        continue
-                                                elif isinstance(peca['forma'], int):
-                                                    forma_peca = peca['forma']
-                                                else:
-                                                    continue
-                                                
-                                                # Verificar se forma_peca não é None antes de comparar
-                                                if forma_peca is not None and forma_peca == forma:
-                                                    # Verificar se tanque_id e nome existem
-                                                    if peca.get('tanque_id') is not None and peca.get('nome'):
-                                                        # Buscar peça usando a função comum
-                                                        peca_tanque = buscar_peca_por_tanque_e_nome(
-                                                            tanque_id=peca['tanque_id'],
-                                                            nome_peca=peca['nome'],
-                                                            tanque_id_filtro=tanque_id,
-                                                            grupo_id=grupo_id
-                                                        )
-                                                        
-                                                        if peca_tanque:
-                                                            # Buscar séries da qualidade
-                                                            qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
-                                                            if qualidade and 'series' in qualidade:
-                                                                for serie in qualidade['series']:
-                                                                    if serie not in series:
-                                                                        series += str(serie) + ', '
-                                                            
-                                                            #formas
-                                                            new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
-                                                            #nomes
-                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
-                                                            #tipo
-                                                            new_value = new_value.replace(f'{{{31+forma}}}', str(peca_tanque.tipo if peca_tanque.tipo else ''))
-                                                            #tipo painel
-                                                            if peca_tanque.tipo == 'PF':
-                                                                tipo_painel = 'FECHO'
-                                                            elif peca_tanque.tipo in ['PN','P']:
-                                                                tipo_painel = 'NORMAL'
-                                                            else:
-                                                                tipo_painel = 'ESPECIAL'
-                                                            #tipo painel
-                                                            new_value = new_value.replace(f'{{{43+forma}}}', str(tipo_painel))
-                                                            count += 1
-                                            except (ValueError, TypeError) as e:
-                                                # Se não conseguir converter ou comparar, pular esta peça
-                                                continue
-                                    
-                                    if count == 0:
-                                        new_value = new_value.replace(f'{{{7+forma}}}', '')
-                                        new_value = new_value.replace(f'{{{19+forma}}}', '')
-                                        new_value = new_value.replace(f'{{{31+forma}}}', '')
-                                        new_value = new_value.replace(f'{{{43+forma}}}', '')
-                            
-                            # Preencher campo de séries após processar todas as peças
-                            if series:
-                                series_str = ', '.join(str(serie) for serie in sorted(series))
-                                new_value = new_value.replace('{120}', series_str)
-                            else:
-                                new_value = new_value.replace('{120}', '')
-                                
-                        #bobinas
-                        if concretagem.cordoalhas:
-                            cordoalhas = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
-                            if cordoalhas and isinstance(cordoalhas, dict) and 'bobinas' in cordoalhas and cordoalhas['bobinas']:
-                                bobinas = cordoalhas['bobinas']
-                                #bobina 1
-                                if len(bobinas) > 0 and bobinas[0]:
-                                    bobina1 = bobinas[0]
-                                    new_value = new_value.replace('{56}', str(bobina1.get('numero', '')))
-                                    new_value = new_value.replace('{57}', str(bobina1.get('data_fabricacao', '')))
-                                    new_value = new_value.replace('{60}', str(bobina1.get('certificado', '')))
-                                else:
-                                    new_value = new_value.replace('{56}', '')
-                                    new_value = new_value.replace('{57}', '')
-                                    new_value = new_value.replace('{60}', '')
-                                
-                                #bobina 2
-                                if len(bobinas) > 1 and bobinas[1]:
-                                    bobina2 = bobinas[1]
-                                    new_value = new_value.replace('{58}', str(bobina2.get('numero', '')))
-                                    new_value = new_value.replace('{59}', str(bobina2.get('data_fabricacao', '')))
-                                    new_value = new_value.replace('{61}', str(bobina2.get('certificado', '')))
-                                else:   
-                                    new_value = new_value.replace('{58}', '')
-                                    new_value = new_value.replace('{59}', '')
-                                    new_value = new_value.replace('{61}', '')
-                            else:
-                                # Limpar campos de bobinas se não houver dados
-                                new_value = new_value.replace('{55}', '')
-                                new_value = new_value.replace('{57}', '')
-                                new_value = new_value.replace('{58}', '')
-                                new_value = new_value.replace('{59}', '')
-                                new_value = new_value.replace('{60}', '')
-                                new_value = new_value.replace('{61}', '')
-                        
-                        #alongamentos
-                        alongamentos_soma = 0  # Inicializar variável para uso posterior
-                        if concretagem.cordoalhas:
-                            cordoalhas_data = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
-                            if cordoalhas_data and isinstance(cordoalhas_data, dict) and 'alongamentos' in cordoalhas_data:
-                                alongamentos = cordoalhas_data['alongamentos']
-                                
-                                # Suportar tanto array quanto dict (retrocompatibilidade)
-                                if isinstance(alongamentos, list):
-                                    # Novo formato: array de valores [350, 351, 347, ...]
-                                    alongamentos_lista = [a for a in alongamentos if a is not None]
-                                    total_alongamentos = len(alongamentos_lista)
-                                    print(f'total_alongamentos: {total_alongamentos}')
-                                    
-                                    if alongamentos_lista:
-                                        alongamentos_soma = 0
-                                        alongamentos_maior = 0
-                                        alongamentos_menor = 0
-                                        modulo = 198.7
-                                        area = 99.7
-                                        if peca_tanque and peca_tanque.tipo == 'PF':
-                                            comprimento = 15000
-                                        else:
-                                            comprimento = 65000
-
-                                        forca = 139.4
-                                        alongamento_teorico = (forca * comprimento) / (modulo * area)
-
-                                        if peca_tanque and peca_tanque.tipo == 'PF':
-                                            alongamento_maximo_teorico = 120
-                                            alongamento_minimo_teorico = 100
-                                        else:
-                                            alongamento_maximo_teorico = 356
-                                            alongamento_minimo_teorico = 321
-                                        alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
-                                        alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
-
-                                        new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
-                                        new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
-                                        new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
-                                        new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
-                                        alongamentos_fora_da_tolerancia = 0
-                                        
-                                        for indice, valor in enumerate(alongamentos):
-                                            if valor is None:
-                                                continue
-                                            
-                                            numero = indice + 1  # C-1, C-2, etc.
-                                            alongamentos_soma += valor
-                                            if valor > alongamentos_maior:
-                                                alongamentos_maior = valor
-                                            if valor < alongamentos_menor or alongamentos_menor == 0:
-                                                alongamentos_menor = valor
-
-                                            if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
-                                                new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(numero))
-                                                alongamentos_fora_da_tolerancia += 1
-                                            
-                                            # Preencher o placeholder correspondente (62 + número - 1, pois começa em C-1)
-                                            placeholder = 62 + numero - 1
-                                            new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                        
-                                        if alongamentos_fora_da_tolerancia < 12:
-                                            for i in range(1, 12 - alongamentos_fora_da_tolerancia):
-                                                new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
-                                        
-                                        # Limpar placeholders além do total de alongamentos
-                                        for i in range(total_alongamentos + 1, 26):
-                                            new_value = new_value.replace(f'{{{62+i}}}', '')
-
-                                        if total_alongamentos > 16:
-                                            new_value = new_value.replace('{122}', 'C-17')
-                                            # Preencher C-17 até o último alongamento
-                                            for i in range(17, min(total_alongamentos + 1, 27)):
-                                                numero = i
-                                                placeholder = 79 + (i - 17)
-                                                if i <= len(alongamentos) and alongamentos[i-1] is not None:
-                                                    valor = alongamentos[i-1]
-                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', f'C-{numero}')
-                                                    new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                                else:
-                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', '')
-
-                                            new_value = new_value.replace('{122}', '')
-                                            # Limpar placeholders de C-17 até C-26
-                                            for i in range(1, 11):
-                                                if i > 1:
-                                                    new_value = new_value.replace(f'{{{i+86}}}', '')
-                                                new_value = new_value.replace(f'{{{i+77}}}', '')
-                                elif isinstance(alongamentos, dict):
-                                    # Formato antigo: dict {"C-1": 339, "C-2": 339, ...} (retrocompatibilidade)
-                                    total_alongamentos = len(alongamentos)
-    
-                                    # Iterar sobre os alongamentos (formato: {"C-1": 339, "C-2": 339, ...})
-                                    alongamentos_soma = 0
-                                    alongamentos_maior = 0
-                                    alongamentos_menor = 0
-                                    modulo = 198.7
-                                    area = 99.7
-                                    if peca_tanque and peca_tanque.tipo == 'PF':
-                                        comprimento = 15000
-                                    else:
-                                        comprimento = 65000
-
-                                    forca = 139.4
-                                    alongamento_teorico = (forca * comprimento) / (modulo * area)
-
-                                    if peca_tanque and peca_tanque.tipo == 'PF':
-                                        alongamento_maximo_teorico = 120
-                                        alongamento_minimo_teorico = 100
-                                    else:
-                                        alongamento_maximo_teorico = 356
-                                        alongamento_minimo_teorico = 321
-                                    alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
-                                    alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
-
-                                    new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
-                                    new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
-                                    new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
-                                    new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
-                                    alongamentos_fora_da_tolerancia = 0
-                                    for chave, valor in alongamentos.items():
-                                        alongamentos_soma += valor
-                                        if valor > alongamentos_maior:
-                                            alongamentos_maior = valor
-                                        if valor < alongamentos_menor or alongamentos_menor == 0:
-                                            alongamentos_menor = valor
-
-                                        if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
-                                            new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(chave.replace('C-', '')))
-                                            alongamentos_fora_da_tolerancia += 1
-                                        
-                                        if chave and valor is not None:
-                                            # Extrair o número da chave (ex: "C-1" -> 1)
-                                            try:
-                                                numero = int(chave.replace('C-', ''))
-                                                # Preencher o placeholder correspondente (62 + número - 1, pois começa em C-1)
-                                                placeholder = 62 + numero - 1
-                                                new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                            except (ValueError, TypeError):
-                                                continue
-                                    if alongamentos_fora_da_tolerancia < 12:
-                                        for i in range(1, 12 - alongamentos_fora_da_tolerancia):
-                                            new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
-                                    # Tratar alongamentos além de C-16
-                                    for i in range(total_alongamentos + 1, 26):
-                                        new_value = new_value.replace(f'{{{62+i}}}', '')
-
-                                    if total_alongamentos > 16:
-                                        new_value = new_value.replace('{122}', 'C-17')
-                                        # Preencher C-17 até o último alongamento
-                                        for i in range(17, total_alongamentos + 1):
-                                            chave = f'C-{i}'
-                                            placeholder = 79 + (i - 17)
-                                            if chave in alongamentos:
-                                                valor = alongamentos[chave]
-                                                
-                                                new_value = new_value.replace(f'{{{placeholder+9}}}', chave)
-                                                new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                            else:
-                                                new_value = new_value.replace(f'{{{placeholder+9}}}', '')
-
-                                        new_value = new_value.replace('{122}', '')
-                                        # Limpar placeholders de C-17 até C-26
-                                        for i in range(1, 11):
-                                            if i > 1:
-                                                new_value = new_value.replace(f'{{{i+86}}}', '')
-                                            new_value = new_value.replace(f'{{{i+77}}}', '')
-
-                        #somatorio
-                        new_value = new_value.replace('{97}', str(alongamentos_soma))
-                        #alongamentos individuais maior e menor
-                        #PF  100 < soma < 120 - ok
-                        #PN  321 < soma < 356 - ok
-                        if peca_tanque and peca_tanque.tipo == 'PF':
-                            if 100 < alongamentos_soma < 120:
-                                new_value = new_value.replace('{101}', 'X')
-                                new_value = new_value.replace('{102}', '')
-                            else:
-                                new_value = new_value.replace('{101}', '')
-                                new_value = new_value.replace('{102}', 'X')
-                        elif peca_tanque and peca_tanque.tipo != 'PF':
-                            if 321 < alongamentos_soma < 356:
-                                new_value = new_value.replace('{101}', 'X')
-                                new_value = new_value.replace('{102}', '')
-                            else:
-                                new_value = new_value.replace('{101}', '')
-                                new_value = new_value.replace('{102}', '')
-                    
-                        
-                        # TODO: Preencher outros campos conforme necessário baseado no template
-                        # Por enquanto, apenas preenchemos os campos básicos
-                        
-                        # Atribuir o valor final à célula apenas uma vez
-                        if new_value != original_value:
-                            cell.value = new_value
-
-        # Configurar tamanho da página como A4 para todas as planilhas
-        for sheet in wb.worksheets:
-            # A4 = '9' conforme documentação do openpyxl
-            sheet.page_setup.paperSize = 9  # PAPERSIZE_A4
-            sheet.page_setup.orientation = 'portrait'  # ORIENTATION_PORTRAIT
-            
-            # Configurar margens menores (em centímetros, convertido para polegadas)
-            # Margens reduzidas: 0.5cm = ~0.2 polegadas
-            sheet.page_margins = PageMargins(
-                left=0.2,    # 0.5cm
-                right=0.2,   # 0.5cm
-                top=0.3,     # 0.75cm
-                bottom=0.3,  # 0.75cm
-                header=0.1,  # 0.25cm
-                footer=0.1  # 0.25cm
-            )
-            
-            # Ajustar escala para caber em 1 página de largura
-            sheet.page_setup.fitToWidth = 1
-            sheet.page_setup.fitToHeight = 1  # 0 = ajustar automaticamente a altura
-        
-        # Salvar o arquivo temporário
-        try:
-            wb.save(temp_file_path)
-        except Exception as save_error:
-            raise Exception(f'Erro ao salvar arquivo Excel: {str(save_error)}')
-        finally:
-            try:
-                wb.close()
-            except:
-                pass
-        
-        # Verificar se o arquivo foi salvo corretamente
-        if not os.path.exists(temp_file_path):
+            print(f'[_gerar_excel_temp] odfpy não disponível')
             return None
-        
-        file_size = os.path.getsize(temp_file_path)
-        if file_size == 0:
-            return None
-        
-        return temp_file_path
     except Exception as e:
-        try:
-            if 'temp_file_path' in locals() and temp_file_path and os.path.exists(temp_file_path):
-                _limpar_arquivo_temp(temp_file_path)
-            # Limpar arquivo ODS temporário se existir
-            if 'temp_ods_path' in locals() and temp_ods_path and os.path.exists(temp_ods_path):
-                _limpar_arquivo_temp(temp_ods_path)
-        except:
-            pass
-        print(f'Erro ao gerar Excel: {str(e)}')
+        print(f'[_gerar_excel_temp] Erro ao gerar Excel: {str(e)}')
+        import traceback
+        print(traceback.format_exc())
+        raise
         return None
     finally:
         # Limpar arquivo ODS temporário após uso (se configurado)
@@ -1986,15 +1562,16 @@ def exportar_excel():
             ods_original = None
             
             if excel_path.lower().endswith('.ods'):
-                print(f'[exportar_excel] Arquivo ODS detectado, convertendo para XLSX: {excel_path}')
                 # Criar caminho para o arquivo XLSX convertido
                 xlsx_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_convertido_')
+                time_start = time.time()
                 # Converter ODS para XLSX
                 arquivo_convertido = _converter_ods_para_xlsx_libreoffice(excel_path, xlsx_path)
+                time_end = time.time()
+                print(f'[exportar_excel] Tempo de conversão ODS para XLSX: {time_end - time_start} segundos')
                 if arquivo_convertido:
                     arquivo_final = arquivo_convertido
                     ods_original = excel_path  # Guardar referência para limpar depois
-                    print(f'[exportar_excel] Conversão concluída: {arquivo_final}')
                 else:
                     print(f'[exportar_excel] Erro ao converter ODS para XLSX, usando arquivo original')
             
@@ -2060,7 +1637,10 @@ def exportar_pdf():
         
         # Converter Excel/ODS para PDF usando LibreOffice
         # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
+        time_start = time.time()
         generated_pdf_path = _converter_excel_para_pdf(excel_path)
+        time_end = time.time()
+        print(f'[exportar_pdf] Tempo de conversão Excel para PDF: {time_end - time_start} segundos')
         
         if not generated_pdf_path:
             # Verificar se o LibreOffice foi encontrado
@@ -2150,6 +1730,7 @@ def exportar_massa():
         excel_paths = []
         
         try:
+            time_start = time.time()
             # Primeiro, gerar todos os arquivos Excel
             for concretagem_id in concretagens_ids:
                 try:
@@ -2159,10 +1740,8 @@ def exportar_massa():
                         if excel_path and os.path.exists(excel_path):
                             arquivo_final = excel_path
                             ods_original = None
-                            
                             # Se o arquivo gerado for ODS, converter para XLSX usando LibreOffice
                             if excel_path.lower().endswith('.ods'):
-                                print(f'[exportar_massa] Arquivo ODS detectado, convertendo para XLSX: {excel_path}')
                                 # Criar caminho para o arquivo XLSX convertido
                                 xlsx_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_convertido_')
                                 # Converter ODS para XLSX
@@ -2170,7 +1749,6 @@ def exportar_massa():
                                 if arquivo_convertido:
                                     arquivo_final = arquivo_convertido
                                     ods_original = excel_path  # Guardar referência para limpar depois
-                                    print(f'[exportar_massa] Conversão concluída: {arquivo_final}')
                                 else:
                                     print(f'[exportar_massa] Erro ao converter ODS para XLSX, usando arquivo original')
                             
@@ -2196,11 +1774,14 @@ def exportar_massa():
                 except Exception as e:
                     print(f'Erro ao processar concretagem {concretagem_id}: {str(e)}')
                     continue
-            
+            time_end = time.time()
+            print(f'[exportar_massa] Tempo de geração de Excel: {time_end - time_start} segundos')
+            time_start = time.time()
             # Se for PDF, converter todos os arquivos usando LibreOffice
             if formato == 'pdf' and excel_paths:
                 # Converter arquivo por arquivo usando LibreOffice
                 # Se o arquivo for ODS processado diretamente, gera PDF direto do ODS sem converter para XLSX
+                time_start = time.time()
                 for i, excel_path in enumerate(excel_paths):
                     try:
                         concretagem_id = concretagens_ids[i] if i < len(concretagens_ids) else None
@@ -2221,11 +1802,13 @@ def exportar_massa():
                     except Exception as e:
                         print(f'Erro ao converter Excel/ODS para PDF (LibreOffice) da concretagem {concretagens_ids[i] if i < len(concretagens_ids) else "desconhecida"}: {str(e)}')
                         continue
-            
+            time_end = time.time()
+            print(f'[exportar_massa] Tempo de conversão de Excel para PDF: {time_end - time_start} segundos')
             if not arquivos_gerados:
                 return jsonify({'error': 'Nenhum arquivo foi gerado com sucesso'}), 404
             
             # Criar arquivo ZIP
+            time_start = time.time()
             zip_buffer = io.BytesIO()
             try:
                 # Verificar se todos os arquivos existem antes de criar o ZIP
@@ -2250,7 +1833,8 @@ def exportar_massa():
                         except Exception as file_error:
                             print(f'Erro ao adicionar arquivo {arquivo} ao ZIP: {str(file_error)}')
                             continue
-                
+                time_end = time.time()
+                print(f'[exportar_massa] Tempo de criação do ZIP: {time_end - time_start} segundos')
                 zip_buffer.seek(0)
                 
                 # Limpar arquivos Excel/ODS temporários antes de retornar (já foram copiados para o ZIP)

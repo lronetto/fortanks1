@@ -71,6 +71,17 @@ class ConcretoConcretagens(db.Model):
             return []
         except (json.JSONDecodeError, TypeError, AttributeError):
             return []
+    def get_tanques_ids(self):
+        """
+        Retorna os IDs dos tanques associados à concretagem
+        """
+        pecas = self.get_pecas()
+        tanques_ids = []
+        if pecas:
+            for peca in pecas:
+                if peca['tanque_id'] not in tanques_ids:
+                    tanques_ids.append(peca['tanque_id'])
+        return tanques_ids
     def get_quantidade_pecas_json(self):
         """
         Retorna a quantidade de peças armazenadas no campo JSON 'pecas'
