@@ -685,7 +685,7 @@ def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
             env['SAL_DISABLE_OPENCL'] = '1'
             
             # Remover variáveis que podem causar problemas
-            env.pop('DISPLAY', None)  # Garantir modo headless
+            env.pop('DISPLAY', None)  # Garantirx modo headless
             
             logging.info(f'[_converter_excel_para_pdf_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
             logging.info(f'[_converter_excel_para_pdf_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
@@ -1021,6 +1021,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 time.sleep(0.5)
                 tamanho_atual = os.path.getsize(generated_xlsx_path)
                 if tamanho_anterior == tamanho_atual and tamanho_atual > 0:
+                    logging.info(f'[_converter_ods_para_xlsx_libreoffice] XLSX gerado com sucesso: {generated_xlsx_path}')
                     if generated_xlsx_path != xlsx_path:
                         shutil.move(generated_xlsx_path, xlsx_path)
                     return xlsx_path
