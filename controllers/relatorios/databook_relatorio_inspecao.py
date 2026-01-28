@@ -839,6 +839,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             libreoffice_env = os.getenv('LIBREOFFICE_PATH')
             if libreoffice_env and os.path.exists(libreoffice_env):
                 soffice_cmd = libreoffice_env
+                logging.info(f'[_converter_ods_para_xlsx_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
             else:
                 # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
                 import glob
@@ -918,6 +919,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                     print('[_converter_ods_para_xlsx_libreoffice] Exemplo: export LIBREOFFICE_PATH=/usr/lib/libreoffice/program/soffice')
                     return None
         
+        logging.info(f'[_converter_ods_para_xlsx_libreoffice] Executável encontrado: {soffice_cmd}')
         # Observação: em algumas instalações Linux, `--convert-to xlsx` sem filtro pode falhar silenciosamente
         # (ou gerar outro formato). O filtro abaixo é o mais compatível para XLSX.
         convert_to_arg = 'xlsx:"Calc MS Excel 2007 XML"'
@@ -945,6 +947,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         
             
         try:
+            logging.info(f'[_converter_ods_para_xlsx_libreoffice] Executando comando: {" ".join(cmd)}')
             # Configurar ambiente completo para o LibreOffice funcionar
             env = os.environ.copy()
             
