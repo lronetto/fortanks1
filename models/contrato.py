@@ -83,4 +83,4 @@ class Contrato(db.Model):
         """
         Representação em string do contrato
         """
-        return f'<Contrato {self.numero} - {self.nome}>' 
+        return f'<Contrato  - {self.nome}>' 

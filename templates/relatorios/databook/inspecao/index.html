@@ -162,10 +162,10 @@
                     "orderable": false,
                     "searchable": false,
                     "render": function(data, type, row) {
-                        var urlParams = 'concretagem_id=' + row.concretagem_id + '&projeto_id=' + row.projeto_id;
-                        return '<button class="btn btn-success btn-sm btn-export-excel" data-concretagem-id="' + row.concretagem_id + '" data-projeto-id="' + row.projeto_id + '" title="Exportar Excel">' +
+                        var urlParams = 'concretagem_id=' + row.concretagem_id + '&projeto_id=' + row.projeto_id + '&tanque_id=' + row.tanque_id;
+                        return '<button class="btn btn-success btn-sm btn-export-excel" data-concretagem-id="' + row.concretagem_id + '" data-projeto-id="' + row.projeto_id + '" data-tanque-id="' + row.tanque_id + '" title="Exportar Excel">' +
                                '<i class="fas fa-file-excel"></i> Excel</button> ' +
-                               '<button class="btn btn-danger btn-sm btn-export-pdf" data-concretagem-id="' + row.concretagem_id + '" data-projeto-id="' + row.projeto_id + '" title="Exportar PDF">' +
+                               '<button class="btn btn-danger btn-sm btn-export-pdf" data-concretagem-id="' + row.concretagem_id + '" data-projeto-id="' + row.projeto_id + '" data-tanque-id="' + row.tanque_id + '" title="Exportar PDF">' +
                                '<i class="fas fa-file-pdf"></i> PDF</button>';
                     }
                 }
@@ -426,14 +426,16 @@
         // Event handlers para botões de exportação
         $(document).on('click', '.btn-export-excel', function() {
             var concretagemId = $(this).data('concretagem-id');
-            var projetoId = $(this).data('projeto-id');
-            window.location.href = "{{ url_for('databook_inspecao.exportar_excel') }}?concretagem_id=" + concretagemId + "&projeto_id=" + projetoId;
+            var projetoId = $('#contrato_id').val();
+            var tanqueId = $('#tanque_id').val();
+            window.location.href = "{{ url_for('databook_inspecao.exportar_excel') }}?concretagem_id=" + concretagemId + "&projeto_id=" + projetoId + "&tanque_id=" + tanqueId;
         });
 
         $(document).on('click', '.btn-export-pdf', function() {
             var concretagemId = $(this).data('concretagem-id');
-            var projetoId = $(this).data('projeto-id');
-            window.location.href = "{{ url_for('databook_inspecao.exportar_pdf') }}?concretagem_id=" + concretagemId + "&projeto_id=" + projetoId;
+            var projetoId = $('#contrato_id').val();
+            var tanqueId = $('#tanque_id').val();
+            window.location.href = "{{ url_for('databook_inspecao.exportar_pdf') }}?concretagem_id=" + concretagemId + "&projeto_id=" + projetoId + "&tanque_id=" + tanqueId;
         });
     });
 </script>

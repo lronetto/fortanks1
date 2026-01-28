@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from models.database import db
 from sqlalchemy.orm import relationship
 
@@ -321,6 +322,17 @@ class TanquesPecas(db.Model):
     def __repr__(self):
         return f'<Peca {self.nome} ({self.tipo}) - #{self.numero_sequencial}>' 
     
+    def get_series_de_pecas(self):
+        """
+        Retorna as séries de peças do tanque
+        """
+        try:
+            qualidade = json.loads(self.qualidade)
+            if qualidade and 'series' in qualidade:
+                return qualidade['series']
+            return []
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            return []
     def is_PF(self):
         return self.tipo == 'PF'
 

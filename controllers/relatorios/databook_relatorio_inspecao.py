@@ -4,10 +4,11 @@ from flask import Blueprint, render_template, request, jsonify, send_file
 from flask_login import login_required
 from openpyxl.worksheet.page import PageMargins
 from models import tanque
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
+from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, ConcretoUsinagens
 from models.contrato import Contrato
 from models.tanque import Tanques, TanquesPecas, TanquesGrupos
 from models.database import db
+from models.certificado import Certificados
 from sqlalchemy import or_, and_
 from datetime import datetime, timedelta
 import os
@@ -1052,6 +1053,12 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         projeto_id: ID do projeto (opcional)
         grupo_id: ID do grupo (opcional)
     """
+    print(f'[_processar_ods_template_inspecao] Concretagem: {concretagem_id}')
+    print(f'[_processar_ods_template_inspecao] Concretagem: {concretagem}')
+    print(f'[_processar_ods_template_inspecao] Contrato: {contrato}')
+    print(f'[_processar_ods_template_inspecao] Tanque: {tanque_id}')
+    print(f'[_processar_ods_template_inspecao] Projeto: {projeto_id}')
+    print(f'[_processar_ods_template_inspecao] Grupo: {grupo_id}')
     if not ODFPY_AVAILABLE:
         raise ImportError('odfpy não está disponível. Instale com: pip install odfpy')
     
@@ -1065,23 +1072,91 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         
         # Preparar dados para substituição
         pecas = None
-        
+        tanques_ids = []
+        tanques_nomes = []
+        pecas_concretadas = []
+        series_concretadas = []
+        tanques_sistemas = []
+        clientes_nome = []
+        contratos_nome = []
+        data_conclusao = None 
+        if tanque_id:
+            tanque = Tanques.query.get(tanque_id)
+            tanques_ids = [tanque_id]
+            tanques_nomes = [tanque.nome]
+            tanques_sistemas = [tanque.sistema]
+            clientes_nome = [tanque.contrato.cliente_direto.nome]
+            contratos_nome = [tanque.contrato.nome]
+        elif grupo_id:
+            grupo = TanquesGrupos.query.get(grupo_id)
+            if grupo and grupo.tanques:
+                tanques_ids = [tanque.id for tanque in grupo.tanques]
+                tanques_nomes = [tanque.nome for tanque in grupo.tanques]
+                tanques_sistemas = [tanque.sistema for tanque in grupo.tanques]
+                clientes_nome = [tanque.contrato.cliente_direto.nome for tanque in grupo.tanques]
+                contratos_nome = [tanque.contrato.nome for tanque in grupo.tanques]
+            print(f'[_processar_ods_template_inspecao] Tanques: {tanques_ids}, {tanques_nomes}, {tanques_sistemas}')
+        elif projeto_id:
+            tanques = Tanques.query.filter_by(contrato_id=projeto_id).all()
+            if tanques:
+                tanques_ids = [tanque.id for tanque in tanques]
+                tanques_nomes = [tanque.nome for tanque in tanques]
+                tanques_sistemas = [tanque.sistema for tanque in tanques]
+                clientes_nome = [tanque.contrato.cliente_direto.nome for tanque in tanques]
+                contratos_nome = [tanque.contrato.nome for tanque in tanques]
+        else:
+            concretagem = ConcretoConcretagens.query.get(concretagem_id)
+            if concretagem:
+                pecas = concretagem.get_pecas()
+                if pecas:
+                    for peca in pecas:
+                        tanque = Tanques.query.get(peca['tanque_id'])
+                        if tanque:
+                            if tanque.id not in tanques_ids:
+                                tanques_ids.append(tanque.id)
+                                tanques_nomes.append(tanque.nome)
+                                tanques_sistemas.append(tanque.sistema)
+                                clientes_nome.append(tanque.contrato.cliente_direto.nome)
+                                contratos_nome.append(tanque.contrato.nome)
+            
+       
+       
         # Buscar primeira peça válida para usar no processamento de alongamentos
         peca_tanque_global = None
-        if concretagem.pecas:
-            pecas = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
-            if pecas and isinstance(pecas, list):
+        if tanques_ids:
+            pecas = concretagem.get_pecas()
+            if pecas:
                 for peca in pecas:
-                    if isinstance(peca, dict) and peca.get('tanque_id') is not None and peca.get('nome'):
-                        peca_tanque_global = buscar_peca_por_tanque_e_nome(
-                            tanque_id=peca['tanque_id'],
-                            nome_peca=peca['nome'],
-                            tanque_id_filtro=tanque_id,
-                            grupo_id=grupo_id
-                        )
-                        if peca_tanque_global:
-                            break
-        
+                    if peca['tanque_id'] in tanques_ids:
+                        peca_tanque = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca['tanque_id'], TanquesPecas.nome == peca['nome']).first()
+                        if peca_tanque:
+                            peca['tipo'] = peca_tanque.tipo
+                        pecas_concretadas.append(peca)
+                        series_concretadas.append(peca_tanque.get_series_de_pecas())
+        else:
+            pecas_concretadasb = concretagem.get_pecas()
+            if pecas_concretadasb:
+                for peca_tanque in pecas_concretadasb:
+                    peca_obj = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca_tanque['tanque_id'], TanquesPecas.nome == peca_tanque['nome']).first()
+                    if peca_obj:
+                        peca = {
+                            'tanque_id': peca_tanque['tanque_id'],
+                            'nome': peca_tanque['nome'],
+                            'tipo': peca_obj.tipo,
+                            'series': peca_obj.get_series_de_pecas()
+                        }
+                        pecas_concretadas.append(peca)
+                        for serie in peca['series']:
+                            if serie not in series_concretadas:
+                                usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == serie).first()
+                                if usinagem:
+                                    data = usinagem.data_usinagem
+                                    if data:
+                                        if data_conclusao < data:
+                                            data_conclusao = data
+                                series_concretadas.append(serie)
+                                
+
         for table in tables:
             # Iterar sobre todas as linhas
             rows = table.getElementsByType(TableRow)
@@ -1131,106 +1206,69 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                         new_value = new_value.replace('{1}', str(concretagem_id))
                         
                         cliente_nome = 'N/A'
-                        if contrato and contrato.cliente_direto:
-                            cliente_nome = contrato.cliente_direto.nome
+                        if clientes_nome:
+                            if len(clientes_nome) > 1:
+                                cliente_nome = ', '.join(clientes_nome)
+                            else:
+                                cliente_nome = clientes_nome[0]
                         new_value = new_value.replace('{2}', str(cliente_nome))
-                        new_value = new_value.replace('{3}', str(contrato.nome if contrato else 'N/A'))
+                        contrato_nome = 'N/A'
+                        if contratos_nome:
+                            if len(contratos_nome) > 1:
+                                contrato_nome = ', '.join(contratos_nome)
+                            else:
+                                contrato_nome = contratos_nome[0]
+                        new_value = new_value.replace('{3}', str(contrato_nome))
                         new_value = new_value.replace('{4}', str(concretagem.data_concretagem.strftime('%d/%m/%Y')))
                         
-                        # Processar tanques
-                        if concretagem.pecas and pecas:
-                            tanques_ids_json = extrair_tanque_ids_do_json(concretagem.pecas)
-                            if tanques_ids_json:
-                                tanques = buscar_tanques_com_filtros(
-                                    tanque_ids=tanques_ids_json,
-                                    tanque_id=tanque_id,
-                                    contrato_id=projeto_id,
-                                    grupo_id=grupo_id
-                                )
+                        if tanques_nomes:
+                            if len(tanques_nomes) > 1:
+                                nomes = ', '.join(tanques_nomes)
+                            else:
+                                nomes = tanques_nomes[0]
+                            new_value = new_value.replace('{5}', str(nomes))
+                               
+                        else:
+                            new_value = new_value.replace('{5}', '')
+
+                        if tanques_sistemas:
+                            if len(tanques_sistemas) > 1:
+                                sistemas = ', '.join(tanques_sistemas)
+                            else:
+                                sistemas = tanques_sistemas[0]
+                            new_value = new_value.replace('{6}', str(sistemas))
+                        else:
+                            new_value = new_value.replace('{6}', '')
                                 
-                                tanques_nomes = {tanque.id: tanque.nome for tanque in tanques}
+                        new_value = new_value.replace('{7}', concretagem.pista)
                                 
-                                if tanque_id is None:
-                                    nomes_tanques = []
-                                    for tid in sorted([t for t in tanques_ids_json if t is not None]):
-                                        if tid in tanques_nomes:
-                                            nomes_tanques.append(tanques_nomes[tid])
-                                    if nomes_tanques:
-                                        new_value = new_value.replace('{5}', ', '.join(nomes_tanques))
-                                else:
-                                    if tanque_id in tanques_nomes:
-                                        new_value = new_value.replace('{5}', str(tanques_nomes[tanque_id]))
-                                
-                                if tanques:
-                                    new_value = new_value.replace('{6}', str(tanques[0].sistema if tanques[0].sistema else ''))
-                                else:
-                                    new_value = new_value.replace('{6}', '')
-                                
-                                new_value = new_value.replace('{7}', str(concretagem.pista if concretagem.pista else ''))
-                                
-                                # Processar formas
-                                formas = [0,1,2,3,4,5,6,7,8,9,10,11,12]
-                                for forma in formas:
-                                    count = 0
-                                    for peca in pecas:
-                                        if isinstance(peca, dict) and 'forma' in peca and peca['forma'] is not None:
-                                            try:
-                                                forma_peca = None
-                                                if isinstance(peca['forma'], str):
-                                                    try:
-                                                        forma_peca = int(peca['forma'])
-                                                    except (ValueError, TypeError):
-                                                        continue
-                                                elif isinstance(peca['forma'], int):
-                                                    forma_peca = peca['forma']
-                                                else:
-                                                    continue
-                                                
-                                                if forma_peca is not None and forma_peca == forma:
-                                                    if peca.get('tanque_id') is not None and peca.get('nome'):
-                                                        peca_tanque = buscar_peca_por_tanque_e_nome(
-                                                            tanque_id=peca['tanque_id'],
-                                                            nome_peca=peca['nome'],
-                                                            tanque_id_filtro=tanque_id,
-                                                            grupo_id=grupo_id
-                                                        )
-                                                        
-                                                        if peca_tanque:
-                                                            peca_tanque_local = peca_tanque
-                                                            qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
-                                                            if qualidade and 'series' in qualidade:
-                                                                for serie in qualidade['series']:
-                                                                    if str(serie) not in series_local:
-                                                                        series_local += str(serie) + ', '
-                                                            
-                                                            new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
-                                                            new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
-                                                            new_value = new_value.replace(f'{{{31+forma}}}', str(peca_tanque.tipo if peca_tanque.tipo else ''))
-                                                            
-                                                            if peca_tanque.tipo == 'PF':
-                                                                tipo_painel = 'FECHO'
-                                                            elif peca_tanque.tipo in ['PN','P']:
-                                                                tipo_painel = 'NORMAL'
-                                                            else:
-                                                                tipo_painel = 'ESPECIAL'
-                                                            new_value = new_value.replace(f'{{{43+forma}}}', str(tipo_painel))
-                                                            count += 1
-                                            except (ValueError, TypeError):
-                                                continue
-                                    
-                                    if count == 0:
-                                        new_value = new_value.replace(f'{{{7+forma}}}', '')
-                                        new_value = new_value.replace(f'{{{19+forma}}}', '')
-                                        new_value = new_value.replace(f'{{{31+forma}}}', '')
-                                        new_value = new_value.replace(f'{{{43+forma}}}', '')
-                                
-                                # Séries
-                                if series_local:
-                                    series_str = ', '.join(str(serie) for serie in sorted(series_local.split(', ')) if serie)
-                                    new_value = new_value.replace('{120}', series_str)
-                                else:
-                                    new_value = new_value.replace('{120}', '')
-                        
+                        # Processar formas
+                        formas = [0,1,2,3,4,5,6,7,8,9,10,11,12]
+                        for forma in formas:
+                            count = 0
+                            for peca in pecas_concretadas:
+                                if peca['forma'] is not None:
+                                    forma_peca = peca['forma']
+                                    if forma_peca == forma:
+                                        new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
+                                        new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
+                                        new_value = new_value.replace(f'{{{31+forma}}}', str(peca['tipo']))
+                                        
+                                        if peca_tanque.tipo == 'PF':
+                                            tipo_painel = 'FECHO'
+                                        elif peca_tanque.tipo in ['PN','P']:
+                                            tipo_painel = 'NORMAL'
+                                        else:
+                                            tipo_painel = 'ESPECIAL'
+                                        new_value = new_value.replace(f'{{{43+forma}}}', str(tipo_painel))
+                                        count += 1
+
+                            if count == 0:
+                                new_value = new_value.replace(f'{{{7+forma}}}', '')
+                                new_value = new_value.replace(f'{{{19+forma}}}', '')
+                                new_value = new_value.replace(f'{{{31+forma}}}', '')
+                                new_value = new_value.replace(f'{{{43+forma}}}', '')
+                           
                         # Processar bobinas
                         if concretagem.cordoalhas:
                             cordoalhas = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
@@ -1263,218 +1301,117 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                 new_value = new_value.replace('{60}', '')
                                 new_value = new_value.replace('{61}', '')
                         
+                        if 'PF' in peca_tanque.tipo:
+                            alongamento_maximo_unitario = 120
+                            alongamento_minimo_unitario = 100
+                        else:
+                            alongamento_maximo_unitario = 356
+                            alongamento_minimo_unitario = 321
                         # Processar alongamentos
                         alongamentos_soma = 0  # Inicializar variável para uso posterior
+                        alongamentos_lista = []
+                        alongamentos_total = 0
+                        alongamento_maior = 0
+                        alongamento_menor = 0
+                        alongamento_maximo_teorico = 0
+                        alongamento_minimo_teorico = 0
+                        alongamentos_fora_da_tolerancia = []
                         if concretagem.cordoalhas:
                             cordoalhas_data = json.loads(concretagem.cordoalhas) if isinstance(concretagem.cordoalhas, str) else concretagem.cordoalhas
                             if cordoalhas_data and isinstance(cordoalhas_data, dict) and 'alongamentos' in cordoalhas_data:
                                 alongamentos = cordoalhas_data['alongamentos']
                                 
+                                
                                 # Suportar tanto array quanto dict (retrocompatibilidade)
                                 if isinstance(alongamentos, list):
                                     # Novo formato: array de valores [350, 351, 347, ...]
-                                    alongamentos_lista = [a for a in alongamentos if a is not None]
-                                    total_alongamentos = len(alongamentos_lista)
+                                    for alongamento in alongamentos:
+                                        if alongamento is not None and alongamento != 'null':
+                                            alongamentos_lista.append(alongamento)
+                                        else:
+                                            break
+                                else:
+                                    alongamentos_lista = [a for a in alongamentos.values() if a is not None]
+                        
+                        alongamentos_total = len(alongamentos_lista)
+                       #print(f'[_processar_ods_template_inspecao] Alongamentos: {alongamentos_total}')
+                        alongamento_maximo_teorico = alongamento_maximo_unitario * alongamentos_total
+                        alongamento_minimo_teorico = alongamento_minimo_unitario * alongamentos_total
+
+                        new_value = new_value.replace(f'{{{98}}}', f'{alongamento_minimo_unitario:.2f}')
+                        new_value = new_value.replace(f'{{{99}}}', f'{alongamento_maximo_unitario:.2f}')
+                        new_value = new_value.replace(f'{{{115}}}', f'{alongamento_minimo_teorico:.2f}')
+                        new_value = new_value.replace(f'{{{116}}}', f'{alongamento_maximo_teorico:.2f}')
+
+                        if alongamentos_total > 0:
+                            for alongamento in alongamentos_lista:
+                                alongamentos_soma += alongamento
+                                if alongamento > alongamento_maior:
+                                    alongamento_maior = alongamento
+                                if alongamento < alongamento_menor or alongamento_menor == 0:
+                                    alongamento_menor = alongamento
+                                if alongamento > alongamento_maximo_unitario or alongamento < alongamento_minimo_unitario:
+                                    alongamentos_fora_da_tolerancia.append(alongamento)
+                                        
+                            if len(alongamentos_fora_da_tolerancia) < 12:
+                                for i in range(1, 13 - len(alongamentos_fora_da_tolerancia)):
+                                    new_value = new_value.replace(f'{{{102+len(alongamentos_fora_da_tolerancia)+i}}}', '')
                                     
-                                    if alongamentos_lista:
-                                        alongamentos_soma = 0
-                                        alongamentos_maior = 0
-                                        alongamentos_menor = 0
-                                        modulo = 198.7
-                                        area = 99.7
-                                        
-                                        if peca_tanque_local and peca_tanque_local.tipo == 'PF':
-                                            comprimento = 15000
-                                            alongamento_maximo_teorico = 120
-                                            alongamento_minimo_teorico = 100
-                                        else:
-                                            comprimento = 65000
-                                            alongamento_maximo_teorico = 356
-                                            alongamento_minimo_teorico = 321
-                                        
-                                        alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
-                                        alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
-                                        
-                                        new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
-                                        new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
-                                        new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
-                                        new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
-                                        
-                                        alongamentos_fora_da_tolerancia = 0
-                                        for indice, valor in enumerate(alongamentos):
-                                            if valor is None:
-                                                continue
-                                            
-                                            numero = indice + 1  # C-1, C-2, etc.
-                                            alongamentos_soma += valor
-                                            if valor > alongamentos_maior:
-                                                alongamentos_maior = valor
-                                            if valor < alongamentos_menor or alongamentos_menor == 0:
-                                                alongamentos_menor = valor
-                                            
-                                            if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
-                                                new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(numero))
-                                                alongamentos_fora_da_tolerancia += 1
-                                            
-                                            # Preencher o placeholder correspondente (62 + número - 1, pois começa em C-1)
-                                            placeholder = 62 + numero - 1
-                                            new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                        
-                                        if alongamentos_fora_da_tolerancia < 12:
-                                            for i in range(1, 13 - alongamentos_fora_da_tolerancia):
-                                                new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
-                                        
-                                        # Limpar placeholders além do total de alongamentos
-                                        for i in range(total_alongamentos + 1, 26):
-                                            new_value = new_value.replace(f'{{{62+i}}}', '')
-                                        
-                                        if total_alongamentos > 16:
-                                            new_value = new_value.replace('{122}', 'C-17')
-                                            for i in range(17, min(total_alongamentos + 1, 27)):
-                                                numero = i
-                                                placeholder = 79 + (i - 17)
-                                                if i <= len(alongamentos) and alongamentos[i-1] is not None:
-                                                    valor = alongamentos[i-1]
-                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', f'C-{numero}')
-                                                    new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                                else:
-                                                    new_value = new_value.replace(f'{{{placeholder+9}}}', '')
-                                            new_value = new_value.replace('{122}', '')
-                                            for i in range(1, 11):
-                                                if i > 1:
-                                                    new_value = new_value.replace(f'{{{i+86}}}', '')
-                                                new_value = new_value.replace(f'{{{i+77}}}', '')
-                                        else:
-                                            new_value = new_value.replace('{122}', '')
-                                            for i in range(1, 11):
-                                                if i > 1:
-                                                    new_value = new_value.replace(f'{{{i+86}}}', '')
-                                                new_value = new_value.replace(f'{{{i+77}}}', '')
+                            for index, alongamento in enumerate(alongamentos_lista):
+                                new_value = new_value.replace(f'{{{62+index}}}', str(alongamento))
+
+                            if alongamentos_total > 16:
+                                new_value = new_value.replace('{122}', 'C-17')
+                                for i in range(17, alongamentos_total):
+                                    new_value = new_value.replace(f'{{{88-17+i}}}', f'C-{i+1}')
+
+                                for i in range(alongamentos_total-17, 9):
+                                    new_value = new_value.replace(f'{{{88+i}}}', '')
+                                    new_value = new_value.replace(f'{{{79+i}}}', '')
+                            else:    
+                                new_value = new_value.replace('{122}', '')
+                                for i in range(1, 11):
+                                    new_value = new_value.replace(f'{{{86+i}}}', '')
+                                    new_value = new_value.replace(f'{{{77+i}}}', '')
 
                                         # Somatório
-                                        new_value = new_value.replace('{97}', str(alongamentos_soma))
-                                        
-                                        # Alongamentos individuais maior e menor
-                                        if peca_tanque_local and peca_tanque_local.tipo == 'PF':
-                                            if alongamentos_menor < 100 or alongamentos_maior > 120:
-                                                new_value = new_value.replace('{101}', '')
-                                                new_value = new_value.replace('{102}', 'X')
-                                            else:
-                                                new_value = new_value.replace('{101}', 'X')
-                                                new_value = new_value.replace('{102}', '')
-                                        elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
-                                            if alongamentos_menor < 321 or alongamentos_maior > 356:
-                                                new_value = new_value.replace('{101}', '')
-                                                new_value = new_value.replace('{102}', 'X')
-                                            else:
-                                                new_value = new_value.replace('{101}', 'X')
-                                                new_value = new_value.replace('{102}', '')
+                            new_value = new_value.replace('{97}', str(alongamentos_soma))
+                                
+                            # Alongamentos individuais maior e menor
+                            if alongamento_menor < alongamento_minimo_unitario or alongamento_maior > alongamento_maximo_unitario:
+                                new_value = new_value.replace('{101}', '')
+                                new_value = new_value.replace('{102}', 'X')
+                            else:
+                                new_value = new_value.replace('{101}', 'X')
+                                new_value = new_value.replace('{102}', '')
+                            
+                            if alongamentos_soma < alongamento_minimo_teorico or alongamentos_soma > alongamento_maximo_teorico:
+                                new_value = new_value.replace('{117}', '')
+                                new_value = new_value.replace('{118}', 'X')
+                            else:
+                                new_value = new_value.replace('{117}', 'X')
+                                new_value = new_value.replace('{118}', '')
 
-                                         # Alongamentos soma maior e menor
-                                        if peca_tanque_local and peca_tanque_local.tipo == 'PF':
-                                            if alongamentos_soma < 100*total_alongamentos and alongamentos_soma > 120*total_alongamentos:
-                                                new_value = new_value.replace('{117}', '')
-                                                new_value = new_value.replace('{118}', 'X')
-                                            else:
-                                                new_value = new_value.replace('{117}', 'X')
-                                                new_value = new_value.replace('{118}', '')
-                                        elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
-                                            if alongamentos_soma < 321*total_alongamentos or alongamentos_soma > 356*total_alongamentos:
-                                                new_value = new_value.replace('{117}', '')
-                                                new_value = new_value.replace('{118}', 'X')
-                                            else:
-                                                new_value = new_value.replace('{117}', 'X')
-                                                new_value = new_value.replace('{118}', '')
-                                elif isinstance(alongamentos, dict):
-                                    # Formato antigo: dict {"C-1": 339, "C-2": 339, ...} (retrocompatibilidade)
-                                    total_alongamentos = len(alongamentos)
-                                    
-                                    alongamentos_soma = 0
-                                    alongamentos_maior = 0
-                                    alongamentos_menor = 0
-                                    modulo = 198.7
-                                    area = 99.7
-                                    
-                                    if peca_tanque_local and peca_tanque_local.tipo == 'PF':
-                                        comprimento = 15000
-                                        alongamento_maximo_teorico = 120
-                                        alongamento_minimo_teorico = 100
-                                    else:
-                                        comprimento = 65000
-                                        alongamento_maximo_teorico = 356
-                                        alongamento_minimo_teorico = 321
-                                    
-                                    alongamento_soma_maximo_teorico = alongamento_maximo_teorico * total_alongamentos
-                                    alongamento_soma_minimo_teorico = alongamento_minimo_teorico * total_alongamentos
-                                    
-                                    new_value = new_value.replace('{98}', f"{alongamento_minimo_teorico:.2f}")
-                                    new_value = new_value.replace('{99}', f"{alongamento_maximo_teorico:.2f}")
-                                    new_value = new_value.replace('{115}', f"{alongamento_soma_minimo_teorico:.2f}")
-                                    new_value = new_value.replace('{116}', f"{alongamento_soma_maximo_teorico:.2f}")
-                                    
-                                    alongamentos_fora_da_tolerancia = 0
-                                    for chave, valor in alongamentos.items():
-                                        alongamentos_soma += valor
-                                        if valor > alongamentos_maior:
-                                            alongamentos_maior = valor
-                                        if valor < alongamentos_menor or alongamentos_menor == 0:
-                                            alongamentos_menor = valor
-                                        
-                                        if valor > alongamento_maximo_teorico or valor < alongamento_minimo_teorico:
-                                            new_value = new_value.replace(f'{{{103+alongamentos_fora_da_tolerancia}}}', str(chave.replace('C-', '')))
-                                            alongamentos_fora_da_tolerancia += 1
-                                        
-                                        if chave and valor is not None:
-                                            try:
-                                                numero = int(chave.replace('C-', ''))
-                                                placeholder = 62 + numero - 1
-                                                new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                            except (ValueError, TypeError):
-                                                continue
-                                    
-                                    if alongamentos_fora_da_tolerancia < 12:
-                                        for i in range(1, 12 - alongamentos_fora_da_tolerancia):
-                                            new_value = new_value.replace(f'{{{102+alongamentos_fora_da_tolerancia+i}}}', '')
-                                    
-                                    for i in range(total_alongamentos + 1, 26):
-                                        new_value = new_value.replace(f'{{{62+i}}}', '')
-                                    
-                                    if total_alongamentos > 16:
-                                        new_value = new_value.replace('{122}', 'C-17')
-                                        for i in range(17, total_alongamentos + 1):
-                                            chave = f'C-{i}'
-                                            placeholder = 79 + (i - 17)
-                                            if chave in alongamentos:
-                                                valor = alongamentos[chave]
-                                                new_value = new_value.replace(f'{{{placeholder+9}}}', chave)
-                                                new_value = new_value.replace(f'{{{placeholder}}}', str(valor))
-                                            else:
-                                                new_value = new_value.replace(f'{{{placeholder+9}}}', '')
-                                        new_value = new_value.replace('{122}', '')
-                                        for i in range(1, 11):
-                                            if i > 1:
-                                                new_value = new_value.replace(f'{{{i+86}}}', '')
-                                            new_value = new_value.replace(f'{{{i+77}}}', '')
-                                    
-                                    # Somatório
-                                    new_value = new_value.replace('{97}', str(alongamentos_soma))
-                                    
-                                    # Alongamentos individuais maior e menor
-                                    if peca_tanque_local and peca_tanque_local.tipo == 'PF':
-                                        if 100 < alongamentos_soma < 120:
-                                            new_value = new_value.replace('{101}', 'X')
-                                            new_value = new_value.replace('{102}', '')
-                                        else:
-                                            new_value = new_value.replace('{101}', '')
-                                            new_value = new_value.replace('{102}', 'X')
-                                    elif peca_tanque_local and peca_tanque_local.tipo != 'PF':
-                                        if 321 < alongamentos_soma < 356:
-                                            new_value = new_value.replace('{101}', 'X')
-                                            new_value = new_value.replace('{102}', '')
-                                        else:
-                                            new_value = new_value.replace('{101}', '')
-                                            new_value = new_value.replace('{102}', '')
-                        
+                        certificado = Certificados.query.filter(\
+                            Certificados.tipo_id==2,\
+                            Certificados.dados_adicionais.contains('"tipo": "2"'),\
+                            Certificados.data_vencimento>=datetime.now(),\
+                            Certificados.ativo==True).first()
+                        if certificado:
+                            dados = json.loads(certificado.dados_adicionais)
+                            new_value = new_value.replace('{119}', str(dados.get('certificado', '')))
+                        else:
+                            new_value = new_value.replace('{119}', '')
+                        # Processar series concretadas
+                        if series_concretadas:
+                            if len(series_concretadas) > 1:
+                                series_concretadas_nome = ', '.join(series_concretadas)
+                            else:
+                                series_concretadas_nome = series_concretadas[0]
+                            new_value = new_value.replace('{120}', str(series_concretadas_nome))
+                        else:
+                            new_value = new_value.replace('{120}', '')
+
                         # Atualizar o texto da célula
                         if new_value != original_text:
                             # Limpar todos os parágrafos existentes

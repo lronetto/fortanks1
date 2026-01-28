@@ -5,6 +5,7 @@ from sqlalchemy import JSON
 from models.database import db
 from sqlalchemy.orm import relationship
 from decimal import Decimal
+from models.tanque import TanquesPecas
 from models.unidade import Unidades
 from models.material import Materiais
 from models.estoque import EstoqueMovimentacoes
@@ -32,21 +33,44 @@ class ConcretoConcretagens(db.Model):
     # Relacionamentos
     tanques_associados = db.relationship("ConcretoConcretagensTanques", back_populates="concretagem", cascade="all, delete-orphan")
    
-    def get_volume_total(self,data_inicio=None,data_fim=None):
+    def get_volume_total(self):
         """
         Retorna o volume total da concretagem
         """ 
-        query = db.session.query(func.sum(ConcretoUsinagens.volume_produzido)).\
-            join(ConcretoUsinagens, ConcretoUsinagens.concretagem_id == ConcretoConcretagens.id)
-        if data_inicio:
-            query = query.filter(ConcretoConcretagens.data_concretagem >= data_inicio)
-        if data_fim:
-            query = query.filter(ConcretoConcretagens.data_concretagem <= data_fim)
-        if self.id:
-            query = query.filter(ConcretoConcretagens.id == self.id)
-        volume_total = query.scalar() or Decimal(0.0) or 0.0
+        pecas = self.get_pecas()
+        #print(pecas)
+        if not pecas:
+            return 0
+        volume_total = 0
+        series = []
+        for peca in pecas:
+            peca = TanquesPecas.query.filter(TanquesPecas.nome == peca['nome'],TanquesPecas.tanque_id == peca['tanque_id']).first()
+            if peca:
+                seriesb = peca.get_series_de_pecas()
+                if not seriesb:
+                    continue
+                for seriea in seriesb:
+                    if seriea not in series:
+                        series.append(seriea)
+        volume_total = db.session.query(func.sum(ConcretoUsinagens.volume)).\
+            filter(ConcretoUsinagens.serie.in_(series)).scalar() or 0
         return volume_total
 
+    def get_pecas(self):
+        """
+        Retorna as peças da concretagem
+        """
+        try:
+            import json
+            pecas_str = self.pecas
+            if not pecas_str:
+                return []
+            pecas_json = json.loads(pecas_str) if isinstance(pecas_str, str) else pecas_str
+            if isinstance(pecas_json, list):
+                return pecas_json
+            return []
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            return []
     def get_quantidade_pecas_json(self):
         """
         Retorna a quantidade de peças armazenadas no campo JSON 'pecas'

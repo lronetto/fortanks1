@@ -1,32 +1,29 @@
 <div class="card shadow mb-4">
     <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">Histórico de Concretagens</h6>
+        <h6 class="m-0 font-weight-bold text-primary">Histórico de Concretagens Pecas Semanais</h6>
     </div>
     <div class="card-body">
         <div class="chart-area">
-            <canvas id="concretagensChart"></canvas>
+            <canvas id="historicoConcretagemSemanalPecasChart"></canvas>
         </div>
-        <div class="text-center mt-3">
-            <p>Total de peças concretadas nos últimos 30 dias: <strong>{{ cards.concretagens_recentes.dados.total_pecas_recentes }}</strong></p>
-        </div>
+       
     </div>
 </div>
 {% block scripts %}
 <script>
     $(document).ready(function() {
-        loadConcretagensChart();
+        loadHistoricoConcretagemSemanalPecasChart();
     });
-    function loadConcretagensChart() {
+    function loadHistoricoConcretagemSemanalPecasChart() {
 
-        dados = {{ cards.historico_usinagem.dados|tojson }}
+        dados = {{ cards.historico_concretagem_semanal.dados|tojson }}
         console.log(dados);
-        if (dados.concretagens_semanais && dados.volume_usinado_semanal) {
-            const ctxConcretagens = document.getElementById("concretagensChart");
-            if (ctxConcretagens) {
+        if (dados.concretagens_semanais) {
+            const ctxHistoricoConcretagemSemanalPecasChart = document.getElementById("historicoConcretagemSemanalPecasChart");
+            if (ctxHistoricoConcretagemSemanalPecasChart) {
                 const concretagensData = dados.concretagens_semanais;
-                const volumeUsinadoData = dados.volume_usinado_semanal;
                 
-                new Chart(ctxConcretagens, {
+                new Chart(ctxHistoricoConcretagemSemanalPecasChart, {
                     type: 'line',
                     data: {
                         labels: concretagensData.map(item => item.semana),
@@ -43,19 +40,6 @@
                             pointHoverBorderColor: "rgba(78, 115, 223, 1)",
                             pointHitRadius: 10,
                             data: concretagensData.map(item => item.quantidade),
-                        }, {
-                            label: 'Volume Usinado Semanais',
-                            lineTension: 0.3,
-                            backgroundColor: "rgba(255, 99, 132, 0.05)",
-                            borderColor: "rgba(255, 99, 132, 1)",
-                            pointRadius: 3,
-                            pointBackgroundColor: "rgba(255, 99, 132, 1)",
-                            pointBorderColor: "rgba(255, 99, 132, 1)",
-                            pointHoverRadius: 3,
-                            pointHoverBackgroundColor: "rgba(255, 99, 132, 1)",
-                            pointHoverBorderColor: "rgba(255, 99, 132, 1)",
-                            pointHitRadius: 10,
-                            data: volumeUsinadoData.map(item => item.volume),
                         }],
                     },
                     options: {

@@ -45,7 +45,7 @@ def meu_dashboard():
     materiais_usinagem_estoque_data = []
     exibir_card_materiais_usinagem = False
 
-    if current_user.colaborador and current_user.departamento_id in [3, 4, 7]:
+    if current_user.colaborador and current_user.is_permissao('dashboard_materiais_usinagem'):
         print("exibir_card_materiais_usinagem")
         exibir_card_materiais_usinagem = True
         materiais_usinagem_estoque_data = card_materiais_usinagem()
@@ -54,7 +54,7 @@ def meu_dashboard():
     # Novo Card: Resumo Analítico por Centro de Custo
     exibir_card_analitico = False
     centros_custo_analitico_data = []
-    if current_user.colaborador and current_user.departamento_id == 4:
+    if current_user.colaborador and current_user.is_permissao('dashboard_analitico'):
         print("exibir_card_analitico")
         exibir_card_analitico = True
         centros_custo_analitico_data = CentroCusto.query.filter_by(ativo=True).order_by(CentroCusto.nome).all()
@@ -62,43 +62,37 @@ def meu_dashboard():
 
     exibir_card_epis_vencimento = False
     epis_vencimento = []
-    if current_user.colaborador and current_user.departamento_id == 99:
+    if current_user.colaborador and current_user.is_permissao('dashboard_epis_vencimento'):
         print("exibir_card_epis_vencimento")
         exibir_card_epis_vencimento = True
         epis_vencimento = card_epis_vencimento()
 
     exibir_card_epis_estoque_critico = False
     epis_criticos_data = []
-    if current_user.colaborador and current_user.departamento_id == 99:
+    if current_user.colaborador and current_user.is_permissao('dashboard_epis_estoque_critico'):
         print("exibir_card_epis_estoque_critico")
         exibir_card_epis_estoque_critico = True
         epis_criticos_data = card_epis_estoque_critico()
 
     exibir_card_concretagens_recentes = False
     concretagens_recentes_op = []
-    if current_user.colaborador and current_user.departamento_id in [4, 10]:
+    if current_user.colaborador and current_user.is_permissao('dashboard_concretagens_recentes'):
         print("exibir_card_concretagens_recentes")
         exibir_card_concretagens_recentes = True
         concretagens_recentes_op = card_concretagens_recentes()
 
-    exibir_card_historico_usinagem = False
-    historico_usinagem = []
-    if current_user.colaborador and current_user.departamento_id in [4, 10]:
-        print("exibir_card_historico_usinagem")
-        exibir_card_historico_usinagem = True
-        historico_usinagem = card_historico_usinagem()
     
-    exibir_card_historico_semanal_concretagens = False
-    historico_semanal_concretagens = []
-    if current_user.colaborador and current_user.departamento_id in [4, 10]:
-        print("exibir_card_historico_semanal_concretagens")
-        exibir_card_historico_semanal_concretagens = True
-        historico_semanal_concretagens = card_historico_semanal_concretagens()
+    exibir_card_historico_concretagem_semanal = False
+    historico_concretagem_semanal = []
+    if current_user.colaborador and current_user.is_permissao('dashboard_historico_concretagem_semanal'):
+        print("exibir_card_historico_concretagem_semanal")
+        exibir_card_historico_concretagem_semanal = True
+        historico_concretagem_semanal = card_historico_concretagem_semanal()
     
     exibir_card_resumo_placas = False
     resumo_placas = []
     agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'false').lower() == 'true'
-    if current_user.colaborador and current_user.departamento_id in [4, 10]:
+    if current_user.colaborador and current_user.is_permissao('dashboard_resumo_placas'):
         print("exibir_card_resumo_placas")
         exibir_card_resumo_placas = True
         resumo_placas = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo)
@@ -106,7 +100,7 @@ def meu_dashboard():
     exibir_card_resumo_notas = False
     resumo_notas = []
     contratos = []
-    if current_user.colaborador and current_user.departamento_id in [4, 10]:
+    if current_user.colaborador and current_user.is_permissao('dashboard_resumo_notas'):
         print("exibir_card_resumo_notas")
         exibir_card_resumo_notas = True
         resumo_notas = card_resumo_notas()
@@ -137,13 +131,9 @@ def meu_dashboard():
                 'dados': concretagens_recentes_op,
                 'exibir': exibir_card_concretagens_recentes
             },
-            'historico_usinagem': {
-                'dados': historico_usinagem,
-                'exibir': exibir_card_historico_usinagem
-            },
-            'historico_semanal_concretagens': {
-                'dados': historico_semanal_concretagens,
-                'exibir': exibir_card_historico_semanal_concretagens
+            'historico_concretagem_semanal': {
+                'dados': historico_concretagem_semanal,
+                'exibir': exibir_card_historico_concretagem_semanal
             },
             'resumo_placas': {
                 'dados': resumo_placas,
@@ -163,7 +153,7 @@ def card_epis_estoque_critico():
     ).limit(5).all()
     return epis_criticos_tst
 
-def card_historico_usinagem():
+def card_historico_concretagem_semanal():
     num_semanas = 8
     concretagens_semanais_api = []
     volume_usinado_semanal_api = [] # Nova lista para volume
@@ -188,20 +178,25 @@ def card_historico_usinagem():
             # Início do período é o domingo da semana (i) semanas atrás
             inicio_periodo = fim_periodo - timedelta(days=6)
 
-        # Contagem de concretagens (baseado na data da concretagem)
-        qtd_concretagens = ConcretoConcretagens.query.filter(
+        qtd_concretagens = 0
+        volume_total_periodo_usinagem = 0
+        concretagens = ConcretoConcretagens.query.filter(
             ConcretoConcretagens.data_concretagem >= inicio_periodo,
             ConcretoConcretagens.data_concretagem <= fim_periodo
-        ).count()
+        ).all()
+        for concretagem in concretagens:
+            qtd_concretagens += 1
+            volume_total_periodo_usinagem += concretagem.get_volume_total()
+       
         
         # Cálculo do volume usinado (baseado na data da usinagem)
         # Usamos func.date para comparar a parte da data de data_usinagem (DateTime) com inicio_periodo e fim_periodo (date)
-        volume_total_periodo_usinagem = 0
+
         
         if i == 0:
             rotulo_semana = f"Atual ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
         else:
-            rotulo_semana = f"Sem {i} ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
+            rotulo_semana = f"Sem {num_semanas - i} ({inicio_periodo.strftime('%d/%m')} - {fim_periodo.strftime('%d/%m')})"
         
         concretagens_semanais_api.append({
             'semana': rotulo_semana,

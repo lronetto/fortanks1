@@ -16,13 +16,12 @@
             {% include 'dashboard/cards/resumo_placas.html' %}
             {% endif %}
 
-           {% if cards.historico_usinagem.exibir %}
-            {% include 'dashboard/cards/historico_usinagem.html' %}
+            {% if cards.historico_concretagem_semanal.exibir %}
+            {% include 'dashboard/cards/historico_concretagem_semanal_pecas.html' %}
+            {% include 'dashboard/cards/historico_concretagem_semanal_volume.html' %}
             {% endif %}
 
-            {% if cards.historico_semanal_concretagens.exibir %}
-            {% include 'dashboard/cards/historico_semanal_concretagens.html' %}
-            {% endif %}
+            
 
             {% if cards.concretagens_recentes.exibir %}
             <!-- Concretagens Recentes -->

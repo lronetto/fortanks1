@@ -1,0 +1,59 @@
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Histórico de Concretagens Volume Semanais</h6>
+    </div>
+    <div class="card-body">
+        <div class="chart-area">
+            <canvas id="historicoConcretagemSemanalVolumeChart"></canvas>
+        </div>
+
+    </div>
+</div>
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        loadHistoricoConcretagemSemanalVolumeChart();
+    });
+    function loadHistoricoConcretagemSemanalVolumeChart() {
+
+        dados = {{ cards.historico_concretagem_semanal.dados|tojson }}
+        console.log(dados);
+        if (dados.concretagens_semanais && dados.volume_usinado_semanal) {
+            const ctxHistoricoConcretagemSemanalVolumeChart = document.getElementById("historicoConcretagemSemanalVolumeChart");
+            if (ctxHistoricoConcretagemSemanalVolumeChart) {
+                const volumeUsinadoData = dados.volume_usinado_semanal;
+                
+                new Chart(ctxHistoricoConcretagemSemanalVolumeChart, {
+                    type: 'line',
+                    data: {
+                        labels: volumeUsinadoData.map(item => item.semana),
+                        datasets: [ {
+                            label: 'Volume Usinado Semanais',
+                            lineTension: 0.3,
+                            backgroundColor: "rgba(255, 99, 132, 0.05)",
+                            borderColor: "rgba(255, 99, 132, 1)",
+                            pointRadius: 3,
+                            pointBackgroundColor: "rgba(255, 99, 132, 1)",
+                            pointBorderColor: "rgba(255, 99, 132, 1)",
+                            pointHoverRadius: 3,
+                            pointHoverBackgroundColor: "rgba(255, 99, 132, 1)",
+                            pointHoverBorderColor: "rgba(255, 99, 132, 1)",
+                            pointHitRadius: 10,
+                            data: volumeUsinadoData.map(item => item.volume),
+                        }]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}
+    
