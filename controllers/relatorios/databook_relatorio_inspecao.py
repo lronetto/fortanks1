@@ -791,7 +791,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
     """
     try:
         if not ods_path or not os.path.exists(ods_path):
-            print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS não encontrado: {ods_path}')
+            logging.info(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS não encontrado: {ods_path}')
             return None
         
         # Determinar caminho do XLSX de saída
@@ -922,7 +922,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         logging.info(f'[_converter_ods_para_xlsx_libreoffice] Executável encontrado: {soffice_cmd}')
         # Observação: em algumas instalações Linux, `--convert-to xlsx` sem filtro pode falhar silenciosamente
         # (ou gerar outro formato). O filtro abaixo é o mais compatível para XLSX.
-        convert_to_arg = 'xlsx:"Calc MS Excel 2007 XML"'
+        convert_to_arg = 'xlsx'
 
         cmd = [
             soffice_cmd,
