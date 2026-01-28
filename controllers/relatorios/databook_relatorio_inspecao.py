@@ -917,10 +917,18 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                     print('[_converter_ods_para_xlsx_libreoffice] Exemplo: export LIBREOFFICE_PATH=/usr/lib/libreoffice/program/soffice')
                     return None
         
+        # Observação: em algumas instalações Linux, `--convert-to xlsx` sem filtro pode falhar silenciosamente
+        # (ou gerar outro formato). O filtro abaixo é o mais compatível para XLSX.
+        convert_to_arg = 'xlsx:"Calc MS Excel 2007 XML"'
+
         cmd = [
             soffice_cmd,
             '--headless',
-            '--convert-to', 'xlsx',
+            '--nologo',
+            '--nolockcheck',
+            '--nodefault',
+            '--norestore',
+            '--convert-to', convert_to_arg,
             '--outdir', output_dir,
             ods_path
         ]
@@ -986,8 +994,11 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
                 return None
             else:
+                # LibreOffice costuma escrever mensagens úteis no stdout mesmo quando dá certo
                 if result.stdout:
                     print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+                if result.stderr:
+                    print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
         except subprocess.TimeoutExpired:
             print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
             return None
@@ -1004,18 +1015,44 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
         max_tentativas = 10
         tentativa = 0
         while tentativa < max_tentativas:
+            # Caso 1: caminho "esperado" existe
             if os.path.exists(generated_xlsx_path):
                 tamanho_anterior = os.path.getsize(generated_xlsx_path)
                 time.sleep(0.5)
                 tamanho_atual = os.path.getsize(generated_xlsx_path)
-                if tamanho_anterior == tamanho_atual:
+                if tamanho_anterior == tamanho_atual and tamanho_atual > 0:
                     if generated_xlsx_path != xlsx_path:
                         shutil.move(generated_xlsx_path, xlsx_path)
                     return xlsx_path
+
+            # Caso 2 (Linux): LO pode gerar com nome ligeiramente diferente; procurar qualquer .xlsx no outdir
+            try:
+                candidatos = [
+                    os.path.join(output_dir, f)
+                    for f in os.listdir(output_dir)
+                    if f.lower().endswith('.xlsx')
+                ]
+                if candidatos:
+                    # Pegar o mais recente
+                    candidatos.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+                    candidato = candidatos[0]
+                    tamanho = os.path.getsize(candidato)
+                    if tamanho > 0:
+                        if candidato != xlsx_path:
+                            shutil.move(candidato, xlsx_path)
+                        return xlsx_path
+            except Exception as e:
+                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao procurar XLSX no diretório de saída: {str(e)}')
+
             tentativa += 1
             time.sleep(0.5)
         
         print(f'[_converter_ods_para_xlsx_libreoffice] XLSX não foi gerado após {max_tentativas} tentativas')
+        try:
+            arquivos_no_dir = os.listdir(output_dir)
+            print(f'[_converter_ods_para_xlsx_libreoffice] Arquivos no diretório de saída: {arquivos_no_dir}')
+        except Exception:
+            pass
         return None
         
     except subprocess.TimeoutExpired:
