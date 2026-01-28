@@ -990,9 +990,9 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
             )
             
             if result.returncode != 0:
-                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
-                print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
-                print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
+                logging.error(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
+                logging.error(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
+                logging.error(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
                 return None
             else:
                 # LibreOffice costuma escrever mensagens úteis no stdout mesmo quando dá certo
