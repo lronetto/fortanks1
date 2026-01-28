@@ -1001,10 +1001,10 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                 if result.stderr:
                     print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
         except subprocess.TimeoutExpired:
-            print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
+            logging.error(f'[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
             return None
         except Exception as e:
-            print(f'[_converter_ods_para_xlsx_libreoffice] Exceção ao executar comando: {str(e)}')
+            logging.error(f'[_converter_ods_para_xlsx_libreoffice] Exceção ao executar comando: {str(e)}')
             import traceback
             print(traceback.format_exc())
             return None
@@ -1044,7 +1044,7 @@ def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
                             shutil.move(candidato, xlsx_path)
                         return xlsx_path
             except Exception as e:
-                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao procurar XLSX no diretório de saída: {str(e)}')
+                logging.error(f'[_converter_ods_para_xlsx_libreoffice] Erro ao procurar XLSX no diretório de saída: {str(e)}')
 
             tentativa += 1
             time.sleep(0.5)
