@@ -15,7 +15,7 @@ import os
 import tempfile
 from werkzeug.utils import secure_filename
 from . import usinagem_concreto
-from .utils import (
+from controllers.utils import (
     get_value_datetime,
     get_value_str,
     is_date_string,
@@ -783,7 +783,7 @@ def importar_rompimentos_excel():
         
         for index, row in df.iterrows():
             rompimentos = []
-           
+            
             # Tentar obter numero_serie - pode estar em diferentes colunas
             numero_serie = None
             # Tentar coluna 0 primeiro (primeira coluna de dados)
@@ -791,6 +791,7 @@ def importar_rompimentos_excel():
             if valor_col0 and not is_date_string(valor_col0):
                 numero_serie = valor_col0
            
+            print(f'linha: {index+1} - numero_serie: {numero_serie}')
             data_moldagem_dt = None
             rompimento5_dt = None
             rompimento8_dt = None
@@ -931,7 +932,12 @@ def importar_rompimentos_excel():
             # Salvar rompimentos no banco de dados
             if rompimentos:
                 try:
-                    db.session.add_all(rompimentos)
+                    for rompimento in rompimentos:
+                        if not rompimento.is_exist():
+                            db.session.add(rompimento)
+                        else:
+                            print(f'linha {index+6}: serie {numero_serie} já existe!')
+                            continue
                     db.session.commit()
                     print(f'linha {index+6}: serie {numero_serie} importado(s) com sucesso!')
                 except (ValueError, TypeError) as e:

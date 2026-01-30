@@ -599,6 +599,14 @@ class ConcretoUsinagensRompimentos(db.Model):
         db.session.delete(self)
         db.session.commit()
         return self
-    
+    def is_exist(self):
+        """Verifica se o rompimento existe no banco de dados"""
+        return ConcretoUsinagensRompimentos.query.filter_by( 
+            numero_serie=self.numero_serie, 
+            data_rompimento=self.data_rompimento, 
+            tipo_rompimento=self.tipo_rompimento, 
+            resultado=self.resultado, 
+            data_moldagem=self.data_moldagem,
+            usinagem_id=self.usinagem_id ).first() is not None
     def __repr__(self):
         return f'<RompimentoCorpoProva {self.id} - Usinagem: {self.usinagem_id}, Série: {self.numero_serie}, Idade: {self.idade_cp} dias>' 

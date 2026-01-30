@@ -111,6 +111,14 @@
                     </select>
                 </div>
                 <div class="col-md-3">
+                    <label for="status_liberacao" class="form-label">Status de Liberação</label>
+                    <select name="status_liberacao" id="status_liberacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="liberada" {% if request.args.get('status_liberacao') == 'liberada' %}selected{% endif %}>Liberada</option>
+                        <option value="nao_liberada" {% if request.args.get('status_liberacao') == 'nao_liberada' %}selected{% endif %}>Não Liberada</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label for="data_emissao_inicio" class="form-label">Data Emissão (Início)</label>
                     <input type="date" name="data_emissao_inicio" id="data_emissao_inicio" class="form-control" value="{{ request.args.get('data_emissao_inicio', '') }}">
                 </div>
@@ -397,6 +405,81 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 mostrarAlerta('Erro', errorMsg, 'error');
+            }
+        });
+    });
+
+    // Liberar/Desliberar nota fiscal
+    $(document).on('click', '.liberar-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNota = $(this).data('numero');
+        const liberada = $(this).data('liberada') == 1;
+        
+        const acao = liberada ? 'desliberar' : 'liberar';
+        const confirmacao = liberada 
+            ? `Deseja realmente desliberar a nota fiscal ${numeroNota}?`
+            : `Deseja realmente liberar a nota fiscal ${numeroNota}?`;
+        
+        Swal.fire({
+            title: 'Confirmar ação',
+            text: confirmacao,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sim',
+            cancelButtonText: 'Não',
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Obter token CSRF
+                let csrfToken = $('meta[name="csrf-token"]').attr('content');
+                if (!csrfToken) {
+                    csrfToken = $('input[name="csrf_token"]').first().val();
+                }
+                
+                if (!csrfToken) {
+                    mostrarAlerta('Erro', 'Token CSRF não encontrado. Recarregue a página e tente novamente.', 'error');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+                formData.append('nf_id', notaId);
+                
+                $.ajax({
+                    url: '/notas-fiscais/api/liberar',
+                    type: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.success) {
+                            mostrarAlerta('Sucesso', response.message, 'success', function() {
+                                // Recarregar DataTables após liberação
+                                table.ajax.reload();
+                            });
+                        } else {
+                            mostrarAlerta('Erro', response.message, 'error');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Erro ao alterar status de liberação:', error);
+                        let errorMsg = 'Erro ao alterar status de liberação';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            errorMsg = xhr.responseJSON.message;
+                        } else if (xhr.responseText) {
+                            try {
+                                const errorResponse = JSON.parse(xhr.responseText);
+                                if (errorResponse.message) {
+                                    errorMsg = errorResponse.message;
+                                }
+                            } catch (e) {
+                                // Ignorar erro de parse
+                            }
+                        }
+                        mostrarAlerta('Erro', errorMsg, 'error');
+                    }
+                });
             }
         });
     });

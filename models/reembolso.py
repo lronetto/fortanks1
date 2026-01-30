@@ -10,6 +10,7 @@ class Reembolsos(db.Model):
     data = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     valor_total = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     numero_relatorio = db.Column(db.String(20), nullable=False, unique=True)
+    dados_adicionais = db.Column(db.Text, nullable=True)
 
     usuario = db.relationship('Usuario', backref='reembolsos')
     centro_custo = db.relationship('CentroCusto', backref='reembolsos')
@@ -24,7 +25,8 @@ class Reembolsos(db.Model):
             'centro_custo_id': self.centro_custo_id,
             'data': self.data,
             'valor_total': self.valor_total,
-            'numero_relatorio': self.numero_relatorio
+            'numero_relatorio': self.numero_relatorio,
+            'dados_adicionais': self.dados_adicionais
         }
 
 class ReembolsosDocumentos(db.Model):

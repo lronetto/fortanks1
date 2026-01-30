@@ -23,18 +23,36 @@
                             <th>Data</th>
                             <th>Centro de Custo</th>
                             <th>Valor Total</th>
+                            <th>Status</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for r in reembolsos %}
+                        {% set dados = r.dados_adicionais_parsed if r.dados_adicionais_parsed else {} %}
+                        {% set enviado = dados.get('enviado', False) %}
                         <tr>
                             <td>{{ r.numero_relatorio }}</td>
                             <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
                             <td>{{ r.centro_custo.codigo }} - {{ r.centro_custo.nome }}</td>
                             <td>R$ {{ '%.2f'|format(r.valor_total) }}</td>
                             <td>
-                                <a href="{{ url_for('reembolso.editar', reembolso_id=r.id) }}" class="btn btn-sm btn-warning"><i class="fas fa-edit"></i></a>
+                                <button type="button" 
+                                        class="btn btn-sm {{ 'btn-success' if enviado else 'btn-outline-secondary' }} btn-enviado" 
+                                        data-reembolso-id="{{ r.id }}"
+                                        data-enviado="{{ 'true' if enviado else 'false' }}"
+                                        title="{{ 'Marcar como não enviado' if enviado else 'Marcar como enviado' }}">
+                                    <i class="fas {{ 'fa-check-circle' if enviado else 'fa-paper-plane' }}"></i>
+                                    {{ 'Enviado' if enviado else 'Não Enviado' }}
+                                </button>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('reembolso.editar', reembolso_id=r.id) }}" 
+                                   class="btn btn-sm btn-warning {{ 'disabled' if enviado else '' }}" 
+                                   {{ 'onclick="return false;"' if enviado else '' }}
+                                   title="{{ 'Reembolso enviado, não pode ser editado' if enviado else 'Editar' }}">
+                                    <i class="fas fa-edit"></i>
+                                </a>
                                 <a href="{{ url_for('reembolso.exportar_pdf', id=r.id) }}" class="btn btn-sm btn-danger" target="_blank"><i class="fas fa-file-pdf"></i></a>
                                 <form method="POST" action="{{ url_for('reembolso.apagar', reembolso_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja apagar este reembolso? Esta ação não pode ser desfeita.');">
                                     <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
@@ -43,7 +61,7 @@
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="text-center">Nenhum reembolso encontrado.</td></tr>
+                        <tr><td colspan="6" class="text-center">Nenhum reembolso encontrado.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -53,4 +71,84 @@
         {% include 'reembolsos/modais/avulso.html' %}
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Adicionar event listeners aos botões de enviado
+    document.querySelectorAll('.btn-enviado').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const reembolsoId = this.getAttribute('data-reembolso-id');
+            const enviado = this.getAttribute('data-enviado') === 'true';
+            const btnElement = this;
+            const row = btnElement.closest('tr');
+            const editBtn = row.querySelector('a.btn-warning');
+            
+            // Desabilitar botão durante a requisição
+            btnElement.disabled = true;
+            
+            // Obter token CSRF da meta tag
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || 
+                             document.querySelector('input[name="csrf_token"]')?.value;
+            
+            if (!csrfToken) {
+                alert('Erro: Token CSRF não encontrado. Recarregue a página e tente novamente.');
+                btnElement.disabled = false;
+                return;
+            }
+            
+            // Fazer requisição AJAX
+            fetch(`/reembolsos/${reembolsoId}/alternar_enviado`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Atualizar estado do botão
+                    const novoEstado = data.enviado;
+                    btnElement.setAttribute('data-enviado', novoEstado.toString());
+                    
+                    if (novoEstado) {
+                        // Marcar como enviado
+                        btnElement.classList.remove('btn-outline-secondary');
+                        btnElement.classList.add('btn-success');
+                        btnElement.innerHTML = '<i class="fas fa-check-circle"></i> Enviado';
+                        btnElement.setAttribute('title', 'Marcar como não enviado');
+                        
+                        // Desabilitar botão de edição
+                        editBtn.classList.add('disabled');
+                        editBtn.setAttribute('onclick', 'return false;');
+                        editBtn.setAttribute('title', 'Reembolso enviado, não pode ser editado');
+                    } else {
+                        // Marcar como não enviado
+                        btnElement.classList.remove('btn-success');
+                        btnElement.classList.add('btn-outline-secondary');
+                        btnElement.innerHTML = '<i class="fas fa-paper-plane"></i> Não Enviado';
+                        btnElement.setAttribute('title', 'Marcar como enviado');
+                        
+                        // Habilitar botão de edição
+                        editBtn.classList.remove('disabled');
+                        editBtn.removeAttribute('onclick');
+                        editBtn.setAttribute('title', 'Editar');
+                    }
+                } else {
+                    alert('Erro ao alterar status: ' + (data.message || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                alert('Erro ao alterar status do reembolso');
+            })
+            .finally(() => {
+                // Reabilitar botão
+                btnElement.disabled = false;
+            });
+        });
+    });
+});
+</script>
 {% endblock %} 

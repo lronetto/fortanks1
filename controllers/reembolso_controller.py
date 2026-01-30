@@ -72,6 +72,17 @@ def index():
     query = Reembolsos.query.filter_by(usuario_id=current_user.id).order_by(Reembolsos.data.desc())
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
     reembolsos = pagination.items
+    
+    # Processar dados_adicionais para cada reembolso
+    for reembolso in reembolsos:
+        if reembolso.dados_adicionais:
+            try:
+                reembolso.dados_adicionais_parsed = json.loads(reembolso.dados_adicionais)
+            except:
+                reembolso.dados_adicionais_parsed = {}
+        else:
+            reembolso.dados_adicionais_parsed = {}
+    
     form = ReembolsoForm()
     form.centro_custo_id.choices = [(c.id, f"{c.codigo} - {c.nome}") for c in CentroCusto.query.filter_by(ativo=True).all()]
     return render_template('reembolsos/index.html', reembolsos=reembolsos, form=form, pagination=pagination)
@@ -827,26 +838,39 @@ def exportar_pdf(id):
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
     
-    # Buscar todos os centros de custo do reembolso com seus dados
-    CCs = db.session.query(CentroCusto, ReembolsosDocumentos.centro_custo_id).\
+    # Buscar todos os centros de custo e anos do reembolso com seus dados
+    # Agrupar por centro de custo e ano da data do documento
+    CCsAnos = db.session.query(
+        CentroCusto, 
+        ReembolsosDocumentos.centro_custo_id,
+        func.extract('year', ReembolsosDocumentos.data_documento).label('ano')
+    ).\
         join(ReembolsosDocumentos, CentroCusto.id == ReembolsosDocumentos.centro_custo_id).\
-        filter(ReembolsosDocumentos.reembolso_id == id).\
-        group_by(ReembolsosDocumentos.centro_custo_id, CentroCusto.id, CentroCusto.codigo, CentroCusto.nome).\
-        order_by(CentroCusto.nome).all()
+        filter(ReembolsosDocumentos.reembolso_id == id,
+               ReembolsosDocumentos.data_documento.isnot(None)).\
+        group_by(
+            ReembolsosDocumentos.centro_custo_id, 
+            CentroCusto.id, 
+            CentroCusto.codigo, 
+            CentroCusto.nome,
+            func.extract('year', ReembolsosDocumentos.data_documento)
+        ).\
+        order_by(CentroCusto.nome, func.extract('year', ReembolsosDocumentos.data_documento).desc()).all()
     
     # Criar ZIP em memória
     zip_buffer = BytesIO()
     
     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        # Para cada centro de custo, criar um PDF separado
-        for centro_custo, centro_custo_id in CCs:
-            # Criar um PdfWriter para este centro de custo
+        # Para cada combinação de centro de custo e ano, criar um PDF separado
+        for centro_custo, centro_custo_id, ano in CCsAnos:
+            # Criar um PdfWriter para este centro de custo e ano
             pdf_writer = PdfWriter()
             
-            # Buscar documentos deste centro de custo
+            # Buscar documentos deste centro de custo e ano
             docs = ReembolsosDocumentos.query.\
                 filter(ReembolsosDocumentos.reembolso_id == id, 
-                       ReembolsosDocumentos.centro_custo_id == centro_custo_id).\
+                       ReembolsosDocumentos.centro_custo_id == centro_custo_id,
+                       func.extract('year', ReembolsosDocumentos.data_documento) == ano).\
                 order_by(ReembolsosDocumentos.data_documento.desc()).all()
             
             if not docs:
@@ -895,14 +919,14 @@ def exportar_pdf(id):
                             except Exception as e:
                                 print(f"Erro ao processar PDF do documento avulso {doc.ndocumento}: {str(e)}")
             
-            # Salvar PDF deste centro de custo em BytesIO
+            # Salvar PDF deste centro de custo e ano em BytesIO
             pdf_output = BytesIO()
             pdf_writer.write(pdf_output)
             pdf_output.seek(0)
             
-            # Criar nome do arquivo baseado no centro de custo
+            # Criar nome do arquivo baseado no centro de custo e ano
             # Limpar caracteres inválidos do nome do arquivo
-            nome_arquivo = f"{centro_custo.codigo} - {centro_custo.nome}".replace('/', '_').replace('\\', '_').replace(':', '_')
+            nome_arquivo = f"{centro_custo.codigo} - {centro_custo.nome} - {int(ano)}".replace('/', '_').replace('\\', '_').replace(':', '_')
             nome_arquivo = f"{nome_arquivo}.pdf"
             
             # Adicionar PDF ao ZIP
@@ -918,7 +942,7 @@ def exportar_pdf(id):
     zip_buffer.close()
     
     response.headers['Content-Type'] = 'application/zip'
-    response.headers['Content-Disposition'] = f'attachment; filename=reembolso_{reembolso.numero_relatorio}_por_centro_custo.zip'
+    response.headers['Content-Disposition'] = f'attachment; filename=reembolso_{reembolso.numero_relatorio}_por_centro_custo_ano.zip'
     return response
 
 @reembolso_bp.route('/anexo/<int:anexo_id>/download')
@@ -951,10 +975,20 @@ def editar(reembolso_id):
     print(f'reembolso_id: {reembolso_id}')
     reembolso = Reembolsos.query.get_or_404(reembolso_id)
    
-    
-
     if reembolso.usuario_id != current_user.id and not current_user.is_admin:
         abort(403)
+    
+    # Verificar se o reembolso foi enviado
+    dados = {}
+    if reembolso.dados_adicionais:
+        try:
+            dados = json.loads(reembolso.dados_adicionais)
+        except:
+            dados = {}
+    
+    if dados.get('enviado', False):
+        flash('Este reembolso foi enviado e não pode ser editado.', 'warning')
+        return redirect(url_for('reembolso.index'))
 
     if request.method == 'POST':
         print(f'salvar editar reembolso')
@@ -1266,6 +1300,45 @@ def fornecedores_avulsos():
     return jsonify(list(fornecedores))
 
 # Rotas para upload/download de anexos e exportação PDF serão implementadas na próxima etapa.
+
+@reembolso_bp.route('/<int:reembolso_id>/alternar_enviado', methods=['POST'])
+@login_required
+def alternar_enviado(reembolso_id):
+    """Alterna o estado de enviado do reembolso"""
+    reembolso = Reembolsos.query.get_or_404(reembolso_id)
+    
+    # Verificar permissão
+    if reembolso.usuario_id != current_user.id and not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Acesso negado'}), 403
+    
+    try:
+        # Carregar dados_adicionais existentes ou criar novo
+        dados = {}
+        if reembolso.dados_adicionais:
+            try:
+                dados = json.loads(reembolso.dados_adicionais)
+            except:
+                dados = {}
+        
+        # Alternar estado de enviado
+        dados['enviado'] = not dados.get('enviado', False)
+        if dados.get('enviado'):
+            dados['data_envio'] = datetime.utcnow().isoformat()
+        else:
+            dados.pop('data_envio', None)
+        
+        # Salvar em dados_adicionais
+        reembolso.dados_adicionais = json.dumps(dados)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'enviado': dados['enviado'],
+            'data_envio': dados.get('data_envio')
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @reembolso_bp.route('/<int:reembolso_id>/apagar', methods=['POST'])
 @login_required

@@ -16,6 +16,14 @@ import tempfile
 from models.logs import Logs
 import logging
 from models.permissoes import Permissao
+
+from controllers.utils import (
+    get_value_datetime,
+    get_value_str,
+    is_date_string,
+    serialize_value,
+    serialize_nested
+)
 # Função auxiliar para converter Decimal para float recursivamente
 def converter_decimal_para_float(obj):
     """Converte valores Decimal para float recursivamente em estruturas de dados"""
@@ -1345,74 +1353,39 @@ def processar_arquivo_inspecao(xlsx_path):
         'linhas_ignoradas': []
     }
     
-    def serialize_value(value):
-        from datetime import date as date_type
-        if isinstance(value, (pd.Timestamp, datetime, date_type)):
-            if hasattr(value, 'strftime'):
-                return value.strftime('%Y-%m-%d')
-            return str(value)
-        return value
-
-    def serialize_nested(data):
-        if isinstance(data, dict):
-            return {k: serialize_nested(v) for k, v in data.items()}
-        if isinstance(data, list):
-            return [serialize_nested(item) for item in data]
-        return serialize_value(data)
-    
-    def get_row_value(row, index, default=None):
-        """Acessa valor de uma linha de forma segura, evitando IndexError"""
-        try:
-            if len(row) > index:
-                value = row.iloc[index]
-                return value if pd.notna(value) else default
-            return default
-        except (IndexError, KeyError):
-            return default
-    
+   
     # Ler o arquivo Excel na aba ' CADASTRO' (com espaço no início)
     df = pd.read_excel(xlsx_path, sheet_name=' CADASTRO', engine='openpyxl')
     df_series = pd.read_excel(xlsx_path, sheet_name='series', engine='openpyxl')
     df_alongamentos = pd.read_excel(xlsx_path, sheet_name='ALONG', engine='openpyxl')
     
     print(f"Processando {len(df_series)} series")
+    series = []
     for index, row in df_series.iterrows():
-        serie = get_row_value(row, 0)
-        if get_row_value(row, 3) is None:
+        serie = {
+            'serie': None,
+            'data_usinagem': None,
+            'produto_composto_id': None,
+            'flow': None,
+            'volume': None,
+            'nota': None,
+        }
+        serie['serie'] = get_value_str(row, 0)
+        if get_value_str(row, 3) is None:
             continue
-        if get_row_value(row, 1) is None:
+        if get_value_str(row, 1) is None:
             continue
-        if get_row_value(row, 2) is None:
+        if get_value_str(row, 2) is None:
             continue
-        if get_row_value(row, 4) is None:
+        if get_value_str(row, 4) is None:
             continue
-        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie==serie).first()
-        produto_composto = ProdutoComposto.query.\
-            filter(ProdutoComposto.nome.like(f'%{str(get_row_value(row, 5)).replace(".0", "")}%'),
-            ProdutoComposto.traco==True).first()
-        if usinagem:
-            logging.info(f"Usinagem já existe, atualizando: {serie}")
-            usinagem.data_usinagem = get_row_value(row, 3)
-            usinagem.produtoCompostoId = produto_composto.id if produto_composto else None
-            usinagem.flow = get_row_value(row, 2)
-            usinagem.volume = get_row_value(row, 1)
-            usinagem.nota = get_row_value(row, 4)
-            usinagem.save()
-            continue
-            
-
+        serie['data_usinagem'] = get_value_datetime(row, 3)
+        serie['produto_composto_id'] = get_value_str(row, 5)
+        serie['flow'] = get_value_str(row, 2)
+        serie['volume'] = get_value_str(row, 1)
+        serie['nota'] = get_value_str(row, 4)
+        series.append(serie)
         
-        logging.info(f"Usinagem não existe, criando: {serie} produto composto: {produto_composto.nome if produto_composto else None}")
-        usinagem = ConcretoUsinagens(
-            serie=get_row_value(row, 0),
-            data_usinagem=get_row_value(row, 3),
-            produtoCompostoId=produto_composto.id if produto_composto else None,
-            flow=get_row_value(row, 2),
-            volume=get_row_value(row, 1),
-            nota=get_row_value(row, 4),
-        )
-        usinagem.save()
-   
     pecas = []
     print(f"Processando {len(df)} peças")
     for index, row in df.iterrows():
@@ -1442,14 +1415,14 @@ def processar_arquivo_inspecao(xlsx_path):
         }
         
         # Verifica se a linha tem dados válidos na coluna 5
-        nome_part1_check = get_row_value(row, 5)
+        nome_part1_check = get_value_str(row, 5)
         if nome_part1_check == '-' or nome_part1_check is None:
             log['ignoradas']['quantidade'] += 1
             log['ignoradas']['lista'].append(index)
             continue
         
         # Usa função auxiliar para acessar por posição de forma segura
-        tipo_tanque_raw = get_row_value(row, 4)
+        tipo_tanque_raw = get_value_str(row, 4)
         tipo_tanque = str(tipo_tanque_raw).strip() if tipo_tanque_raw and pd.notna(tipo_tanque_raw) else None
         peca['tipo_tanque'] = None
         tanque = Tanques.query.filter(Tanques.nome.like(f'%{tipo_tanque}%')).first()
@@ -1464,8 +1437,8 @@ def processar_arquivo_inspecao(xlsx_path):
             continue
         
         # Trata valores nan do pandas
-        nome_part1 = get_row_value(row, 5, '')
-        nome_part2 = get_row_value(row, 7, '')
+        nome_part1 = get_value_str(row, 5, '')
+        nome_part2 = get_value_str(row, 7, '')
         seq_match = re.search(r'\d+', str(nome_part2)) if nome_part2 != '' else None
         seq_formatado = seq_match.group(0).zfill(2) if seq_match else (str(nome_part2).strip() if nome_part2 != '' else '')
         peca['nome'] = f"{str(nome_part1).strip()}-{seq_formatado}"
@@ -1480,44 +1453,35 @@ def processar_arquivo_inspecao(xlsx_path):
                 numero_tanque = int(match.group(1))
         peca['numero_tanque'] = numero_tanque if numero_tanque is not None else 3
         
-        data_raw = get_row_value(row, 1)
+        data_raw = get_value_datetime(row, 1)
         # Converte para datetime object ou None para salvar no MySQL
-        if data_raw and hasattr(data_raw, 'strftime'):
+        if data_raw and data_raw != '-':
             peca['data_concretagem'] = data_raw
-        elif data_raw and isinstance(data_raw, str) and data_raw != '-':
-            # Tenta parsear string no formato DD/MM/YYYY
-            try:
-                peca['data_concretagem'] = datetime.strptime(data_raw, '%d/%m/%Y')
-            except:
-                peca['data_concretagem'] = None
         else:
             peca['data_concretagem'] = None
         
-        peca['concretagem'] = get_row_value(row, 2)
+        peca['concretagem'] = get_value_str(row, 2)
 
-        peca['tipo'] = get_row_value(row, 9)
-        peca['qualidade']['pista'] = get_row_value(row, 18)
-        peca['qualidade']['acabamento'] = get_row_value(row, 17)
-        chapa_valor = get_row_value(row, 16)
+        peca['tipo'] = get_value_str(row, 9)
+        peca['qualidade']['pista'] = get_value_str(row, 12)
+        peca['qualidade']['acabamento'] = get_value_datetime(row, 11)
+        chapa_valor = get_value_str(row, 10)
         peca['qualidade']['chapa'] = '' if chapa_valor == 'NÃO TEM CHAPA' else (chapa_valor or '')
         
         # Trata data_transporte
-        data_transporte_raw = get_row_value(row, 20)
-        if data_transporte_raw and hasattr(data_transporte_raw, 'strftime'):
-            peca['qualidade']['transporte']['data_transporte'] = data_transporte_raw.strftime('%Y-%m-%d')
-        elif data_transporte_raw and isinstance(data_transporte_raw, str):
-            try:
-                dt = datetime.strptime(data_transporte_raw, '%d/%m/%Y')
-                peca['qualidade']['transporte']['data_transporte'] = dt.strftime('%Y-%m-%d')
-            except:
-                peca['qualidade']['transporte']['data_transporte'] = data_transporte_raw
+        data_transporte_raw = get_value_datetime(row, 14)
+        if data_transporte_raw and data_transporte_raw != '-':
+            peca['qualidade']['transporte']['data_transporte'] = data_transporte_raw
         else:
             peca['qualidade']['transporte']['data_transporte'] = None
         
         # Trata nota
-        nota_raw = get_row_value(row, 22)
-        if nota_raw is not None and pd.notna(nota_raw) and nota_raw != '-':
-            peca['qualidade']['transporte']['nota'] = int(nota_raw) if isinstance(nota_raw, (int, float)) else nota_raw
+        nota_raw = get_value_str(row, 16)
+        if nota_raw and nota_raw != '-':
+            #print(f"Nota: {nota_raw}")
+            if '-' in nota_raw:
+                nota_raw = nota_raw.split('-')[0]
+            peca['qualidade']['transporte']['nota'] = int(nota_raw)
         else:
             peca['qualidade']['transporte']['nota'] = None
 
@@ -1531,26 +1495,27 @@ def processar_arquivo_inspecao(xlsx_path):
                 peca['qualidade']['transporte']['cte'] = cte.numero_nf
                 peca['qualidade']['transporte']['transportadora'] = cte.nome_emitente
 
-        peca['qualidade']['transporte']['placa_carreta'] = get_row_value(row, 21)
+        peca['qualidade']['transporte']['placa_carreta'] = get_value_str(row, 15)
         
         # Trata series
-        serie1_raw = get_row_value(row, 27)
-        serie2_raw = get_row_value(row, 28)
-        serie3_raw = get_row_value(row, 29)
+        serie1_raw = get_value_str(row, 21)
+        serie2_raw = get_value_str(row, 22)
+        serie3_raw = get_value_str(row, 23)
         if serie1_raw and serie1_raw != '-':
             peca['qualidade']['series'].append(serie1_raw)
         if serie2_raw and serie2_raw != '-':
             peca['qualidade']['series'].append(serie2_raw)
         if serie3_raw and serie3_raw != '-':
             peca['qualidade']['series'].append(serie3_raw)
-        peca['forma'] = get_row_value(row, 30)
+        
+        peca['forma'] = get_value_str(row, 24)
 
         pecas.append(peca)
         log['total_pecas'] += 1
     alongamentos = []
     print(f"Processando {len(df_alongamentos)} alongamentos")
     for index, row in df_alongamentos.iloc[3:].iterrows():
-        if get_row_value(row, 1) is None:
+        if get_value_datetime(row, 1) is None:
             continue
         alongamento = {
             'data_concretagem': None,
@@ -1562,37 +1527,33 @@ def processar_arquivo_inspecao(xlsx_path):
             'pista': None,
             'concretagem': None,
         }
-        alongamento['concretagem'] = get_row_value(row, 0)
-        data_raw = get_row_value(row, 1)
+        alongamento['concretagem'] = get_value_str(row, 0)
+        data_raw = get_value_datetime(row, 1)
         # Converte para datetime object ou None para salvar no MySQL
-        if data_raw and hasattr(data_raw, 'strftime'):
+        if data_raw and data_raw != '-':
             alongamento['data_concretagem'] = data_raw
-        elif data_raw and isinstance(data_raw, str) and data_raw != '-':
-            # Tenta parsear string no formato DD/MM/YYYY
-            try:
-                alongamento['data_concretagem'] = serialize_value(datetime.strptime(data_raw, '%d/%m/%Y'))
-            except:
-                alongamento['data_concretagem'] = None
 
         for i in range(3, 24):
-            alongamento['cordoalhas']['alongamentos'].append(get_row_value(row, i-1))
+            alongamento['cordoalhas']['alongamentos'].append(get_value_str(row, i-1))
 
         bobina = {
-            'numero': get_row_value(row, 24),
-            'data_fabricacao': serialize_value(get_row_value(row, 25)),
-            'certificado': get_row_value(row, 26),
+            'numero': get_value_str(row, 24),
+            'data_fabricacao': serialize_value(get_value_datetime(row, 25)),
+            'certificado': get_value_str(row, 26),
         }
         
         alongamento['cordoalhas']['bobinas'].append(bobina)
-        if get_row_value(row, 27) and get_row_value(row, 27) != '':
+        if get_value_str(row, 27) and get_value_str(row, 27) != '':
             bobina = {
-                'numero': get_row_value(row, 27),
-                'data_fabricacao': serialize_value(get_row_value(row, 28)),
-                'certificado': get_row_value(row, 29),
+                'numero': get_value_str(row, 27),
+                'data_fabricacao': serialize_value(get_value_datetime(row, 28)),
+                'certificado': get_value_str(row, 29),
             }
             alongamento['cordoalhas']['bobinas'].append(bobina)
+        print(f"Alongamento: {alongamento['concretagem']}")
         for peca in pecas:
-            if peca['concretagem'] == alongamento['concretagem'] and peca['data_concretagem'] == alongamento['data_concretagem']:
+            if peca['concretagem'] == alongamento['concretagem']:
+                print(f"Peca: {peca['nome']} - Alongamento: {alongamento['concretagem']} - Data: {peca['data_concretagem'].date()} - {alongamento['data_concretagem'].date()}")
                 alongamento['pista'] = peca['qualidade']['pista']
                 pecaa = {
                     'nome': peca['nome'],
@@ -1602,6 +1563,32 @@ def processar_arquivo_inspecao(xlsx_path):
                 alongamento['pecas'].append(pecaa)
         alongamentos.append(alongamento)
     
+    atualizadas = 0
+    novas = 0
+    for serie in series:
+        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie==serie['serie']).first()
+        if not usinagem:
+            usinagem = ConcretoUsinagens(
+                serie=serie['serie'],
+                data_usinagem=serie['data_usinagem'],
+                produtoCompostoId=serie['produto_composto_id'],
+                flow=serie['flow'],
+                volume=serie['volume'],
+                nota=serie['nota'],
+            )
+            usinagem.save()
+            novas += 1
+        else:
+            usinagem.data_usinagem = serie['data_usinagem']
+            usinagem.produtoCompostoId = serie['produto_composto_id']
+            usinagem.flow = serie['flow']
+            usinagem.volume = serie['volume']
+            usinagem.nota = serie['nota']
+            usinagem.save()
+            atualizadas += 1
+    print(f"Total de séries novas: {novas} e atualizadas: {atualizadas}")
+    atualizadas = 0
+    novas = 0
     for alongamento in alongamentos:
         concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.conc==alongamento['concretagem']).first()
         if not concretagem:
@@ -1613,13 +1600,17 @@ def processar_arquivo_inspecao(xlsx_path):
                 pecas=json.dumps(alongamento['pecas']),
             )
             concretagem.save()
+            novas += 1
         else:
             concretagem.data_concretagem = alongamento['data_concretagem']
             concretagem.pista = alongamento['pista']
             concretagem.cordoalhas = json.dumps(alongamento['cordoalhas'])
             concretagem.pecas = json.dumps(alongamento['pecas'])
             concretagem.save()
-
+            atualizadas += 1
+    print(f"Total de concretagens novas: {novas} e atualizadas: {atualizadas}")
+    atualizadas = 0
+    novas = 0
     # Processar peças
     for peca in pecas:
         peca_existe = TanquesPecas.query.filter(
@@ -1641,6 +1632,7 @@ def processar_arquivo_inspecao(xlsx_path):
                 qualidade=qualidade_serializada
             )
             peca_dict.save()
+            novas += 1
         else:
             log['atualizadas'] += 1
             peca_existe.qualidade = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
@@ -1648,7 +1640,8 @@ def processar_arquivo_inspecao(xlsx_path):
             peca_existe.tipo = peca['tipo']
             peca_existe.numero_tanque = peca['numero_tanque']
             peca_existe.save()
-    
+            atualizadas += 1
+    print(f"Total de peças novas: {novas} e atualizadas: {atualizadas}")
     # Salvar log
     Logs(local='importar_inspecao', data=datetime.now(), texto=json.dumps(log))
     db.session.commit()

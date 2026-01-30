@@ -1,0 +1,124 @@
+<!-- Modal de Resumo -->
+<div class="modal fade" id="modalResumo" tabindex="-1" aria-labelledby="modalResumoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalResumoLabel">
+                    <i class="fas fa-chart-bar"></i> Resumo dos Dados
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resumoLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                    <p class="mt-3">Carregando resumo...</p>
+                </div>
+                <div id="resumoContent" style="display: none;">
+                    <!-- Resumo de Séries -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-list"></i> Resumo de Séries</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Total de Séries:</strong></span>
+                                        <span class="badge bg-primary" id="totalSeries">0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Séries com Rompimentos:</strong></span>
+                                        <span class="badge bg-warning" id="totalSeriesComRompimentos">0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Séries com Peças:</strong></span>
+                                        <span class="badge bg-success" id="totalSeriesComPecas">0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Séries sem Peças:</strong></span>
+                                        <span class="badge bg-danger" id="totalSeriesSemPecas">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="statusSeries" class="mt-3"></div>
+                            <div id="seriesSemPecasList" class="mt-3" style="display: none;">
+                                <strong>Séries sem peças vinculadas:</strong>
+                                <div class="mt-2">
+                                    <span id="seriesSemPecasItems" class="badge bg-secondary me-1 mb-1"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resumo de Rompimentos -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-warning text-dark">
+                            <h6 class="mb-0"><i class="fas fa-flask"></i> Resumo de Rompimentos</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>Total de Rompimentos:</strong></span>
+                                <span class="badge bg-warning fs-6" id="totalRompimentos">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Resumo de Peças -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fas fa-puzzle-piece"></i> Resumo de Peças</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Total de Peças:</strong></span>
+                                        <span class="badge bg-primary" id="totalPecas">0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Peças com Vinculação:</strong></span>
+                                        <span class="badge bg-success" id="totalPecasComVinculacao">0</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span><strong>Peças sem Vinculação:</strong></span>
+                                        <span class="badge bg-danger" id="totalPecasSemVinculacao">0</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="statusPecas" class="mt-3"></div>
+                        </div>
+                    </div>
+
+                    <!-- Status Geral -->
+                    <div class="card">
+                        <div class="card-header bg-secondary text-white">
+                            <h6 class="mb-0"><i class="fas fa-check-circle"></i> Status Geral</h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="statusGeral"></div>
+                        </div>
+                    </div>
+                </div>
+                <div id="resumoError" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btnExportarDetalhesExcel" class="btn btn-primary btn-sm" style="display: none;">
+                    <i class="fas fa-file-excel"></i> Exportar Detalhes (Excel)
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>

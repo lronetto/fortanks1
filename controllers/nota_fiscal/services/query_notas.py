@@ -53,6 +53,7 @@ def api_get_dados_notas_fiscais(request):
     tipo_operacao = json_filtros.get("tipo_operacao", "") # Venda, Compra, Transferência
     cnpj_emitente = (json_filtros.get("cnpj_emitente", "") or "").strip()
     cnpj_destinatario = (json_filtros.get("cnpj_destinatario", "") or "").strip()
+    status_liberacao = json_filtros.get("status_liberacao", "")
     valor_minimo = json_filtros.get("valor_minimo", "")
     valor_maximo = json_filtros.get("valor_maximo", "")
     valor_exato = json_filtros.get("valor_exato", "")
@@ -146,6 +147,27 @@ def api_get_dados_notas_fiscais(request):
         .label("percentual_importacao")
     )
 
+    # Status de liberação extraído de dados_adicionais
+    # Usa CASE para tratar valores booleanos/numéricos do JSON
+    # Verifica se o campo liberada existe e é verdadeiro (1, true, ou "true")
+    liberada_column = (
+        case(
+            (
+                and_(
+                    NotaFiscal.dados_adicionais.isnot(None),
+                    or_(
+                        func.cast(func.json_extract(NotaFiscal.dados_adicionais, "$.liberada"), Integer) == 1,
+                        func.json_extract(NotaFiscal.dados_adicionais, "$.liberada") == 'true',
+                    ),
+                ),
+                1,
+            ),
+            else_=0,
+        )
+        .cast(Integer)
+        .label("liberada")
+    )
+
 
     query = (
         db.session.query(
@@ -158,6 +180,7 @@ def api_get_dados_notas_fiscais(request):
             upload_arquivei_column,
             percentual_importacao_column,
             reembolso_column,
+            liberada_column,
         )
         .select_from(NotaFiscal)
         .filter(NotaFiscal.status_processamento != "cancelada")
@@ -285,6 +308,13 @@ def api_get_dados_notas_fiscais(request):
             query = query.filter(~_upload_exists(2))
         elif status_upload == "5":
             query = query.filter(~_upload_exists())
+
+    # Filtro por status de liberação
+    if status_liberacao:
+        if status_liberacao == "liberada":
+            query = query.filter(liberada_column == 1)
+        elif status_liberacao == "nao_liberada":
+            query = query.filter(or_(liberada_column == 0, liberada_column.is_(None)))
 
     if valor_minimo:
         query = query.filter(NotaFiscal.valor_total >= valor_minimo)

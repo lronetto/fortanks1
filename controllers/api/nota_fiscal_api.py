@@ -134,6 +134,11 @@ def register(nota_fiscal_bp):
             if percentual is None:
                 percentual = -1
 
+            # Status de liberação
+            liberada = getattr(nota, "liberada", 0) if hasattr(nota, "liberada") else 0
+            if liberada is None:
+                liberada = 0
+
             # Status badge
             status_html = ""
             if nota.NotaFiscal.status_processamento == 'cancelada':
@@ -147,6 +152,12 @@ def register(nota_fiscal_bp):
                     status_html = f'<span class="badge bg-warning">Parc ({int(percentual)}%)</span>'
                 else:
                     status_html = '<span class="badge bg-secondary">N/A</span>'
+
+                # Badge de liberação
+                if liberada == 1:
+                    status_html += ' <span class="badge bg-primary ms-1" title="Liberada"><i class="fas fa-check-circle"></i> Lib</span>'
+                else:
+                    status_html += ' <span class="badge bg-secondary ms-1" title="Não Liberada"><i class="fas fa-times-circle"></i> NLib</span>'
 
                 # Upload badges
                 upload = getattr(nota, "upload", 0)
@@ -166,7 +177,16 @@ def register(nota_fiscal_bp):
                 if pagamento == 1:
                     status_html += ' <span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>'
 
+            # Status de liberação para o botão
+            liberada = getattr(nota, "liberada", 0) if hasattr(nota, "liberada") else 0
+            if liberada is None:
+                liberada = 0
+            
             # Botões de ação
+            btn_liberar_class = "btn-info" if liberada == 0 else "btn-primary"
+            btn_liberar_icon = "fa-unlock" if liberada == 0 else "fa-lock"
+            btn_liberar_title = "Liberar" if liberada == 0 else "Desliberar"
+            
             acoes_html = f'''
                 <div class="btn-group">
                     <button type="button" class="btn btn-sm btn-primary visualizar-itens" data-id="{nota.NotaFiscal.id}" title="Visualizar Itens">
@@ -177,6 +197,9 @@ def register(nota_fiscal_bp):
                     </button>
                     <button type="button" class="btn btn-sm btn-warning vincular-material" data-id="{nota.NotaFiscal.id}" title="Vincular Material">
                         <i class="fas fa-link"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm {btn_liberar_class} liberar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-liberada="{liberada}" title="{btn_liberar_title}">
+                        <i class="fas {btn_liberar_icon}"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-danger excluir-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" title="Excluir">
                         <i class="fas fa-trash"></i>
@@ -773,6 +796,71 @@ def register(nota_fiscal_bp):
         except Exception as e:
             logger.error(f"Erro ao excluir nota fiscal: {str(e)}")
             return jsonify({"success": False, "message": f"Erro ao excluir nota fiscal: {str(e)}"}), 500
+
+    @nota_fiscal_bp.route("/api/liberar", methods=["POST"])
+    @login_required
+    def api_liberar_nota_fiscal():
+        """Alterna o status de liberação da nota fiscal"""
+        import json
+        from datetime import datetime
+        
+        # Validar CSRF token
+        csrf_token = request.form.get('csrf_token') or (request.json.get('csrf_token') if request.is_json else None)
+        if csrf_token:
+            try:
+                from flask_wtf.csrf import validate_csrf
+                validate_csrf(csrf_token)
+            except Exception as e:
+                logger.warning(f"Erro de validação CSRF: {str(e)}")
+                return jsonify({"success": False, "message": "Token CSRF inválido"}), 403
+
+        nf_id = request.form.get("nf_id") or (request.json.get("nf_id") if request.is_json else None)
+        if not nf_id:
+            return jsonify({"success": False, "message": "ID da nota fiscal não fornecido"}), 400
+
+        try:
+            nota_fiscal = NotaFiscal.query.get(int(nf_id))
+            if not nota_fiscal:
+                return jsonify({"success": False, "message": "Nota fiscal não encontrada"}), 404
+
+            # Carregar dados_adicionais existentes ou criar novo dict
+            dados_adicionais = {}
+            if nota_fiscal.dados_adicionais:
+                try:
+                    dados_adicionais = json.loads(nota_fiscal.dados_adicionais) if isinstance(nota_fiscal.dados_adicionais, str) else nota_fiscal.dados_adicionais
+                except (json.JSONDecodeError, TypeError):
+                    dados_adicionais = {}
+            
+            # Alternar status de liberação
+            liberada = dados_adicionais.get('liberada', False)
+            dados_adicionais['liberada'] = not liberada
+            
+            # Adicionar informações de quem e quando liberou/desliberou
+            if dados_adicionais['liberada']:
+                dados_adicionais['liberada_por'] = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
+                dados_adicionais['liberada_em'] = datetime.now().isoformat()
+            else:
+                dados_adicionais['desliberada_por'] = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
+                dados_adicionais['desliberada_em'] = datetime.now().isoformat()
+            
+            # Salvar dados_adicionais atualizados
+            nota_fiscal.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
+            db.session.commit()
+            
+            status_texto = "liberada" if dados_adicionais['liberada'] else "desliberada"
+            usuario_nome = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
+            logger.info(f"Nota fiscal {nota_fiscal.numero_nf} (ID: {nf_id}) {status_texto} por {usuario_nome}")
+            
+            return jsonify({
+                "success": True, 
+                "message": f"Nota fiscal {nota_fiscal.numero_nf} {status_texto} com sucesso",
+                "liberada": dados_adicionais['liberada']
+            })
+        except ValueError:
+            return jsonify({"success": False, "message": "ID da nota fiscal inválido"}), 400
+        except Exception as e:
+            logger.error(f"Erro ao alterar status de liberação: {str(e)}")
+            return jsonify({"success": False, "message": f"Erro ao alterar status de liberação: {str(e)}"}), 500
 
 
 def register_api(api_bp):

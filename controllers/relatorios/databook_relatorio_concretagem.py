@@ -19,6 +19,12 @@ import json
 import subprocess
 import platform
 import time
+import pandas as pd
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+from controllers.relatorios.commun import _converter_ods_para_xlsx_libreoffice, _converter_excel_para_pdf_libreoffice
+from controllers.relatorios.commun import _obter_pasta_temp_projeto, _criar_diretorio_temp_projeto, _limpar_arquivo_temp, _limpar_diretorio_temp,_criar_arquivo_temp_projeto
+
 
 # Tentar importar odfpy para suporte a ODS
 try:
@@ -29,102 +35,6 @@ try:
 except ImportError:
     ODFPY_AVAILABLE = False
     print('odfpy não está instalado. Para processar ODS diretamente, instale: pip install odfpy')
-
-
-
-# Funções auxiliares para gerenciar pasta temporária do projeto
-def _obter_pasta_temp_projeto():
-    """
-    Obtém ou cria a pasta temporária exclusiva do projeto.
-    Retorna o caminho da pasta temporária.
-    """
-    # Obter diretório base do projeto (onde está o arquivo atual)
-    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    temp_dir = os.path.join(base_dir, 'temp', 'databook_concretagem')
-    
-    # Criar pasta se não existir
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    return temp_dir
-
-def _deve_manter_arquivos_temp():
-    """
-    Verifica se deve manter os arquivos temporários ou deletá-los.
-    Por padrão, mantém os arquivos (True).
-    """
-    manter_temp = os.getenv('MANTER_ARQUIVOS_TEMP', 'true').lower()
-    return manter_temp in ('true', '1', 'yes', 'sim')
-
-def _criar_arquivo_temp_projeto(suffix='', prefix='temp_'):
-    """
-    Cria um arquivo temporário na pasta do projeto.
-    
-    Args:
-        suffix: Sufixo do arquivo (ex: '.xlsx', '.pdf')
-        prefix: Prefixo do arquivo (padrão: 'temp_')
-    
-    Returns:
-        Caminho do arquivo temporário criado
-    """
-    temp_dir = _obter_pasta_temp_projeto()
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-    filename = f'{prefix}{timestamp}{suffix}'
-    filepath = os.path.join(temp_dir, filename)
-    
-    # Criar arquivo vazio
-    open(filepath, 'a').close()
-    
-    return filepath
-
-def _criar_diretorio_temp_projeto(prefix='temp_dir_'):
-    """
-    Cria um diretório temporário na pasta do projeto.
-    
-    Args:
-        prefix: Prefixo do diretório (padrão: 'temp_dir_')
-    
-    Returns:
-        Caminho do diretório temporário criado
-    """
-    temp_dir = _obter_pasta_temp_projeto()
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-    dirname = f'{prefix}{timestamp}'
-    dirpath = os.path.join(temp_dir, dirname)
-    
-    # Criar diretório
-    os.makedirs(dirpath, exist_ok=True)
-    
-    return dirpath
-
-def _limpar_arquivo_temp(filepath):
-    """
-    Remove um arquivo temporário se a configuração permitir.
-    
-    Args:
-        filepath: Caminho do arquivo a ser removido
-    """
-    if not _deve_manter_arquivos_temp():
-        try:
-            if os.path.isfile(filepath):
-                os.unlink(filepath)
-            elif os.path.isdir(filepath):
-                shutil.rmtree(filepath)
-        except Exception as e:
-            print(f'Erro ao limpar arquivo temporário {filepath}: {str(e)}')
-
-def _limpar_diretorio_temp(dirpath):
-    """
-    Remove um diretório temporário se a configuração permitir.
-    
-    Args:
-        dirpath: Caminho do diretório a ser removido
-    """
-    if not _deve_manter_arquivos_temp():
-        try:
-            if os.path.exists(dirpath) and os.path.isdir(dirpath):
-                shutil.rmtree(dirpath)
-        except Exception as e:
-            print(f'Erro ao limpar diretório temporário {dirpath}: {str(e)}')
 
 
 databook_concretagem_bp = Blueprint('databook_concretagem', __name__, url_prefix='/relatorios/databook/concretagem')
@@ -249,6 +159,421 @@ def api_dados():
         'recordsTotal': len(dados),
         'recordsFiltered': len(dados)
     })
+
+@databook_concretagem_bp.route('/api/resumo')
+@login_required
+def api_resumo():
+    """
+    API para retornar resumo dos dados conforme filtros aplicados
+    Retorna informações sobre rompimentos, peças e vinculações
+    """
+    contrato_id = request.args.get('contrato_id', type=int)
+    tanque_id = request.args.get('tanque_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
+    data_inicio_str = request.args.get('data_inicio')
+    data_fim_str = request.args.get('data_fim')
+    min_rompimentos = request.args.get('min_rompimentos', type=int)
+    
+    # Buscar todas as usinagens com os filtros aplicados
+    usinagens_query = ConcretoUsinagens.query
+    if data_inicio_str:
+        usinagens_query = usinagens_query.filter(ConcretoUsinagens.data_usinagem >= data_inicio_str)
+    if data_fim_str:
+        usinagens_query = usinagens_query.filter(ConcretoUsinagens.data_usinagem <= data_fim_str)
+    
+    usinagens = usinagens_query.all()
+    
+    # Coletar dados
+    series_com_rompimentos = set()
+    series_com_pecas = set()
+    series_sem_pecas = set()
+    pecas_vinculadas = set()
+    total_rompimentos = 0
+    
+    # Processar cada usinagem
+    for usinagem in usinagens:
+        numero_serie = usinagem.serie
+        
+        # Tentar converter para int
+        try:
+            serie_int = int(numero_serie)
+        except (ValueError, TypeError):
+            serie_int = None
+        
+        # Buscar rompimentos
+        if serie_int is not None:
+            rompimentos = ConcretoUsinagensRompimentos.query.filter(
+                ConcretoUsinagensRompimentos.numero_serie == serie_int
+            ).all()
+            if rompimentos:
+                total_rompimentos += len(rompimentos)
+                series_com_rompimentos.add(numero_serie)
+        
+        # Buscar peças
+        pecas = buscar_pecas_por_serie(
+            numero_serie=numero_serie,
+            tanque_id=tanque_id,
+            contrato_id=contrato_id,
+            grupo_id=grupo_id
+        )
+        
+        if pecas:
+            series_com_pecas.add(numero_serie)
+            for peca in pecas:
+                pecas_vinculadas.add(peca.id)
+        else:
+            # Aplicar filtro de rompimentos mínimos apenas se não houver peças
+            if min_rompimentos is not None:
+                if serie_int is not None:
+                    count_romp = ConcretoUsinagensRompimentos.query.filter(
+                        ConcretoUsinagensRompimentos.numero_serie == serie_int
+                    ).count()
+                    if count_romp >= min_rompimentos:
+                        series_sem_pecas.add(numero_serie)
+            else:
+                series_sem_pecas.add(numero_serie)
+    
+    # Buscar todas as peças que deveriam estar vinculadas (baseado nos filtros)
+    # Para isso, vamos buscar todas as peças que têm séries no campo qualidade
+    pecas_query = TanquesPecas.query.join(Tanques).join(Contrato)
+    
+    # Aplicar filtros de peças
+    if tanque_id:
+        pecas_query = pecas_query.filter(TanquesPecas.tanque_id == tanque_id)
+    if contrato_id:
+        pecas_query = pecas_query.filter(Tanques.contrato_id == contrato_id)
+    if grupo_id:
+        grupo = TanquesGrupos.query.get(grupo_id)
+        if grupo and grupo.tanques:
+            tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
+            pecas_query = pecas_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
+    
+    todas_pecas = pecas_query.all()
+    
+    # Inicializar conjunto de peças não vinculadas
+    pecas_nao_vinculadas = set()
+    
+    # Verificar quais peças têm séries vinculadas
+    for peca in todas_pecas:
+        if peca.qualidade:
+            try:
+                qualidade = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                series_peca = qualidade.get('series', [])
+                if series_peca:
+                    # Verificar se alguma série da peça está nas usinagens filtradas
+                    tem_serie_vinculada = False
+                    for serie_peca in series_peca:
+                        # Normalizar série (pode ser "1059", "1059-c", etc)
+                        serie_base = str(serie_peca).split('-')[0]
+                        for usinagem in usinagens:
+                            if str(usinagem.serie) == serie_base or str(usinagem.serie) == str(serie_peca):
+                                tem_serie_vinculada = True
+                                break
+                        if tem_serie_vinculada:
+                            break
+                    
+                    if not tem_serie_vinculada:
+                        pecas_nao_vinculadas.add(peca.id)
+                else:
+                    pecas_nao_vinculadas.add(peca.id)
+            except (json.JSONDecodeError, AttributeError):
+                pecas_nao_vinculadas.add(peca.id)
+        else:
+            pecas_nao_vinculadas.add(peca.id)
+    
+    # Calcular estatísticas
+    total_series = len(usinagens)
+    total_series_com_rompimentos = len(series_com_rompimentos)
+    total_series_com_pecas = len(series_com_pecas)
+    total_series_sem_pecas = len(series_sem_pecas)
+    total_pecas = len(todas_pecas)
+    total_pecas_com_vinculacao = len(pecas_vinculadas)
+    total_pecas_sem_vinculacao = len(pecas_nao_vinculadas)
+    
+    # Verificar se todas as séries estão vinculadas
+    todas_series_vinculadas = total_series_sem_pecas == 0
+    todas_pecas_vinculadas = total_pecas_sem_vinculacao == 0
+    
+    return jsonify({
+        'resumo': {
+            'total_series': total_series,
+            'total_rompimentos': total_rompimentos,
+            'total_series_com_rompimentos': total_series_com_rompimentos,
+            'total_series_com_pecas': total_series_com_pecas,
+            'total_series_sem_pecas': total_series_sem_pecas,
+            'series_sem_pecas': sorted(list(series_sem_pecas), key=lambda x: (len(str(x)), str(x))),
+            'total_pecas': total_pecas,
+            'total_pecas_com_vinculacao': total_pecas_com_vinculacao,
+            'total_pecas_sem_vinculacao': total_pecas_sem_vinculacao,
+            'todas_series_vinculadas': todas_series_vinculadas,
+            'todas_pecas_vinculadas': todas_pecas_vinculadas
+        }
+    })
+
+@databook_concretagem_bp.route('/exportar-detalhes-excel')
+@login_required
+def exportar_detalhes_excel():
+    """
+    Exporta os detalhes das séries, rompimentos e peças em Excel
+    com múltiplas abas conforme os filtros aplicados
+    """
+    try:
+        # Obter filtros
+        contrato_id = request.args.get('contrato_id', type=int)
+        tanque_id = request.args.get('tanque_id', type=int)
+        grupo_id = request.args.get('grupo_id', type=int)
+        data_inicio_str = request.args.get('data_inicio')
+        data_fim_str = request.args.get('data_fim')
+        min_rompimentos = request.args.get('min_rompimentos', type=int)
+        
+        # Buscar todas as usinagens com os filtros aplicados
+        usinagens_query = ConcretoUsinagens.query
+        if data_inicio_str:
+            usinagens_query = usinagens_query.filter(ConcretoUsinagens.data_usinagem >= data_inicio_str)
+        if data_fim_str:
+            usinagens_query = usinagens_query.filter(ConcretoUsinagens.data_usinagem <= data_fim_str)
+        
+        usinagens = usinagens_query.all()
+        
+        # Preparar dados para Excel
+        dados_series = []
+        dados_rompimentos = []
+        dados_pecas = []
+        
+        # Processar cada usinagem
+        for usinagem in usinagens:
+            numero_serie = usinagem.serie
+            
+            # Tentar converter para int
+            try:
+                serie_int = int(numero_serie)
+            except (ValueError, TypeError):
+                serie_int = None
+            
+            # Buscar rompimentos
+            rompimentos = []
+            if serie_int is not None:
+                rompimentos = ConcretoUsinagensRompimentos.query.filter(
+                    ConcretoUsinagensRompimentos.numero_serie == serie_int
+                ).order_by(ConcretoUsinagensRompimentos.data_rompimento.asc()).all()
+            
+            # Aplicar filtro de rompimentos mínimos se especificado
+            if min_rompimentos is not None and len(rompimentos) < min_rompimentos:
+                continue
+            
+            # Buscar peças
+            pecas = buscar_pecas_por_serie(
+                numero_serie=numero_serie,
+                tanque_id=tanque_id,
+                contrato_id=contrato_id,
+                grupo_id=grupo_id
+            )
+            
+            # Não filtrar séries sem peças - incluir todas as séries
+            # para mostrar também as que não estão vinculadas
+            
+            # Preparar dados da série
+            projetos_unicos = set([peca.tanque.contrato_id for peca in pecas]) if pecas else set()
+            projetos_str = ", ".join([Contrato.query.filter(Contrato.id == projeto).first().nome for projeto in projetos_unicos]) if projetos_unicos else "N/A"
+            tanques_unicos = set([peca.tanque_id for peca in pecas]) if pecas else set()
+            tanques_str = ", ".join([Tanques.query.filter(Tanques.id == tanque).first().nome for tanque in tanques_unicos]) if tanques_unicos else "N/A"
+            
+            dados_series.append({
+                'Número de Série': numero_serie,
+                'Data de Moldagem': usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') if usinagem.data_usinagem else 'N/A',
+                'Projeto': projetos_str,
+                'Tanque': tanques_str,
+                'Total de Rompimentos': len(rompimentos),
+                'Total de Peças': len(pecas),
+                'Tem Peças Vinculadas': 'Sim' if pecas else 'Não'
+            })
+            
+            # Preparar dados dos rompimentos
+            for rompimento in rompimentos:
+                resultado_calculado = None
+                if rompimento.resultado and rompimento.fator_conversao:
+                    resultado_calculado = float(rompimento.resultado) * float(rompimento.fator_conversao)
+                
+                dados_rompimentos.append({
+                    'Número de Série': numero_serie,
+                    'Data de Moldagem': usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') if usinagem.data_usinagem else 'N/A',
+                    'Data de Rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') if rompimento.data_rompimento else 'N/A',
+                    'Idade (dias)': calcular_idade_cp(usinagem.data_usinagem, rompimento.data_rompimento) if usinagem.data_usinagem and rompimento.data_rompimento else 'N/A',
+                    'Resultado (MPa)': round(resultado_calculado, 2) if resultado_calculado else (rompimento.resultado if rompimento.resultado else 'N/A'),
+                    'Tipo de Rompimento': rompimento.tipo_rompimento if rompimento.tipo_rompimento else 'N/A',
+                    'Fator de Conversão': rompimento.fator_conversao if rompimento.fator_conversao else 'N/A'
+                })
+            
+            # Preparar dados das peças
+            for peca in pecas:
+                qualidade = None
+                series_peca = []
+                try:
+                    qualidade = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                    series_peca = qualidade.get('series', []) if qualidade else []
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+                
+                dados_pecas.append({
+                    'Número de Série': numero_serie,
+                    'ID da Peça': peca.id,
+                    'Nome da Peça': peca.nome,
+                    'Tanque': peca.tanque.nome if peca.tanque else 'N/A',
+                    'Projeto': peca.tanque.contrato.nome if peca.tanque and peca.tanque.contrato else 'N/A',
+                    'Séries na Peça': ", ".join([str(s) for s in series_peca]) if series_peca else 'N/A'
+                })
+        
+        # Adicionar peças não vinculadas (se houver filtros de tanque/contrato/grupo)
+        # Buscar todas as peças que deveriam estar vinculadas mas não estão
+        if grupo_id or tanque_id or contrato_id:
+            pecas_query = TanquesPecas.query.join(Tanques).join(Contrato)
+            
+            # Aplicar filtros de peças
+            if tanque_id:
+                pecas_query = pecas_query.filter(TanquesPecas.tanque_id == tanque_id)
+            if contrato_id:
+                pecas_query = pecas_query.filter(Tanques.contrato_id == contrato_id)
+            if grupo_id:
+                grupo = TanquesGrupos.query.get(grupo_id)
+                if grupo and grupo.tanques:
+                    tanque_ids_grupo = [tanque.id for tanque in grupo.tanques]
+                    pecas_query = pecas_query.filter(TanquesPecas.tanque_id.in_(tanque_ids_grupo))
+            
+            todas_pecas_filtradas = pecas_query.all()
+            
+            # Verificar quais peças não estão vinculadas a séries nas usinagens filtradas
+            pecas_ids_ja_incluidas = set([peca['ID da Peça'] for peca in dados_pecas])
+            
+            for peca in todas_pecas_filtradas:
+                if peca.id in pecas_ids_ja_incluidas:
+                    continue
+                
+                qualidade = None
+                series_peca = []
+                tem_serie_vinculada = False
+                
+                try:
+                    qualidade = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                    series_peca = qualidade.get('series', []) if qualidade else []
+                    
+                    if series_peca:
+                        # Verificar se alguma série da peça está nas usinagens filtradas
+                        for serie_peca in series_peca:
+                            serie_base = str(serie_peca).split('-')[0]
+                            for usinagem in usinagens:
+                                if str(usinagem.serie) == serie_base or str(usinagem.serie) == str(serie_peca):
+                                    tem_serie_vinculada = True
+                                    break
+                            if tem_serie_vinculada:
+                                break
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+                
+                # Se não tem série vinculada ou não tem séries no campo qualidade, adicionar como não vinculada
+                if not tem_serie_vinculada:
+                    dados_pecas.append({
+                        'Número de Série': 'N/A',
+                        'ID da Peça': peca.id,
+                        'Nome da Peça': peca.nome,
+                        'Tanque': peca.tanque.nome if peca.tanque else 'N/A',
+                        'Projeto': peca.tanque.contrato.nome if peca.tanque and peca.tanque.contrato else 'N/A',
+                        'Séries na Peça': ", ".join([str(s) for s in series_peca]) if series_peca else 'N/A'
+                    })
+        
+        # Verificar se há dados para exportar
+        if not dados_series and not dados_rompimentos and not dados_pecas:
+            return jsonify({'error': 'Nenhum dado encontrado para exportar com os filtros aplicados'}), 404
+        
+        # Criar Excel na memória
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            # Aba 1: Resumo de Séries
+            if dados_series:
+                df_series = pd.DataFrame(dados_series)
+                df_series.to_excel(writer, index=False, sheet_name='Séries')
+                
+                # Formatar aba de séries
+                worksheet_series = writer.sheets['Séries']
+                for idx, col in enumerate(df_series.columns):
+                    max_length = max(
+                        df_series[col].astype(str).apply(len).max(),
+                        len(col)
+                    )
+                    adjusted_width = min(max_length + 2, 50)
+                    col_letter = get_column_letter(idx + 1)
+                    worksheet_series.column_dimensions[col_letter].width = adjusted_width
+                
+                # Formatar cabeçalho
+                for cell in worksheet_series[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+                    cell.font = Font(bold=True, color='FFFFFF')
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            # Aba 2: Detalhes de Rompimentos
+            if dados_rompimentos:
+                df_rompimentos = pd.DataFrame(dados_rompimentos)
+                df_rompimentos.to_excel(writer, index=False, sheet_name='Rompimentos')
+                
+                # Formatar aba de rompimentos
+                worksheet_rompimentos = writer.sheets['Rompimentos']
+                for idx, col in enumerate(df_rompimentos.columns):
+                    max_length = max(
+                        df_rompimentos[col].astype(str).apply(len).max(),
+                        len(col)
+                    )
+                    adjusted_width = min(max_length + 2, 50)
+                    col_letter = get_column_letter(idx + 1)
+                    worksheet_rompimentos.column_dimensions[col_letter].width = adjusted_width
+                
+                # Formatar cabeçalho
+                for cell in worksheet_rompimentos[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill(start_color='ED7D31', end_color='ED7D31', fill_type='solid')
+                    cell.font = Font(bold=True, color='FFFFFF')
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            # Aba 3: Detalhes de Peças
+            if dados_pecas:
+                df_pecas = pd.DataFrame(dados_pecas)
+                df_pecas.to_excel(writer, index=False, sheet_name='Peças')
+                
+                # Formatar aba de peças
+                worksheet_pecas = writer.sheets['Peças']
+                for idx, col in enumerate(df_pecas.columns):
+                    max_length = max(
+                        df_pecas[col].astype(str).apply(len).max(),
+                        len(col)
+                    )
+                    adjusted_width = min(max_length + 2, 50)
+                    col_letter = get_column_letter(idx + 1)
+                    worksheet_pecas.column_dimensions[col_letter].width = adjusted_width
+                
+                # Formatar cabeçalho
+                for cell in worksheet_pecas[1]:
+                    cell.font = Font(bold=True)
+                    cell.fill = PatternFill(start_color='70AD47', end_color='70AD47', fill_type='solid')
+                    cell.font = Font(bold=True, color='FFFFFF')
+                    cell.alignment = Alignment(horizontal='center', vertical='center')
+        
+        output.seek(0)
+        
+        # Nome do arquivo
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'detalhes_concretagem_{timestamp}.xlsx'
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        print(f'Erro ao exportar detalhes Excel: {str(e)}')
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({'error': f'Erro ao exportar Excel: {str(e)}'}), 500
 
 # Endpoints api_tanques e api_grupos foram movidos para databook_api_controller.py
 # para evitar duplicação de código
@@ -714,226 +1039,8 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
         
         # Se for ODS mas odfpy não estiver disponível, converter para XLSX
         elif usar_ods and not ODFPY_AVAILABLE:
-            print(f'[_gerar_excel_temp] odfpy não disponível, convertendo ODS para XLSX')
-            temp_file_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_')
-            temp_ods_path = _criar_arquivo_temp_projeto(suffix='.ods', prefix='template_')
-            shutil.copy2(template_path, temp_ods_path)
-            
-            # Converter ODS para XLSX usando LibreOffice
-            template_xlsx_convertido = _converter_ods_para_xlsx_libreoffice(temp_ods_path, temp_file_path)
-            if not template_xlsx_convertido:
-                print(f'[_gerar_excel_temp] Erro ao converter ODS para XLSX')
-                return None
-        else:
-            # Se for XLSX, apenas copiar
-            temp_file_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_')
-            shutil.copy2(template_path, temp_file_path)
-        
-        # Carregar o arquivo Excel base (XLSX)
-        # Usar read_only=False para permitir edição
-        wb = load_workbook(temp_file_path, data_only=False, keep_vba=False, read_only=False)
-       
-        # Processar apenas células com texto, preservando imagens e outros objetos
-        for sheet in wb.worksheets:
-            for index, row in enumerate(sheet.iter_rows()):
-                if index == 60:
-                    continue
-                for index_cell, cell in enumerate(row):
-                    if index_cell == 30:
-                        continue
-                    # Processar apenas células que contêm texto (string) e não estão vazias
-                    if cell.value is not None and isinstance(cell.value, str) and len(cell.value.strip()) > 0:
-                        # Criar uma cópia do valor original para evitar problemas
-                        original_value = str(cell.value)
-                        new_value = original_value
-                        
-                        # Substituir {1}, {2}, etc pelos dados correspondentes
-                        new_value = new_value.replace('{1}', str(numero_serie))
-                        #Cliente
-                        new_value = new_value.replace('{2}', cliente_nome)
-                        #Obra
-                        new_value = new_value.replace('{3}', tanque_nome)
-
-                        #tipo de concreto   
-                        new_value = new_value.replace('{4}', '40 MPa')
-                        #traço
-                        new_value = new_value.replace('{5}', '40')
-                        #brita
-                        new_value = new_value.replace('{6}', '0')
-                        #restrição
-                        new_value = new_value.replace('{7}', '24,0')
-                        #cimento 1
-                        new_value = new_value.replace('{8}', 'CPIII 40 RS')
-                        #cimento 2
-                        new_value = new_value.replace('{9}', 'CP V')
-                        #aditivo
-                        new_value = new_value.replace('{10}', 'superplastificante')
-                        #concreteira
-                        new_value = new_value.replace('{11}', 'Fortanks')
-                        #volume
-                        # Data de moldagem
-                        if data_moldagem:
-                            new_value = new_value.replace('{12}', str(data_moldagem.strftime('%d/%m/%Y')))
-                        #Número do caminhao
-                        new_value = new_value.replace('{13}', "01")
-                        #Nota fiscal
-                        new_value = new_value = new_value.replace('{14}', usinagem.nota)
-                        #Horário de saída da usina 
-                        if data_moldagem:
-                            new_value = new_value.replace('{15}', str((data_moldagem - timedelta(minutes=15)).strftime('%H:%M')))
-                        #Horário de chegada no destino
-                        if data_moldagem:
-                            new_value = new_value.replace('{16}', str((data_moldagem - timedelta(minutes=10)).strftime('%H:%M')))
-                        #Consistencia SLUMP
-                        new_value = new_value.replace('{17}', "")
-                        #consistencia Slump
-                        new_value = new_value.replace('{18}', "")
-                        #consistencia FLOW
-                        new_value = new_value.replace('{19}', "X")
-                        #consistencia FLOW
-                        new_value = new_value.replace('{20}', str(usinagem.flow))
-                        # hora de moldagem
-                        if data_moldagem:
-                            new_value = new_value.replace('{21}', str(data_moldagem.strftime('%H:%M')))
-                        #volume
-                        new_value = new_value.replace('{22}', str(usinagem.volume).format(2))
-                        #pecas - buscar peças que contêm a série no array 'series' do campo JSON 'dados_adicionais'
-                        
-                        
-                        if pecas:
-                            pecas_str =''
-                            for peca in pecas:
-                                if peca.nome not in pecas_str:
-                                    qualidade = json.loads(peca.qualidade)
-                                    busca = str(numero_serie_int)+'-c'
-                                    series = qualidade.get('series', [])
-                                    if qualidade.get('series', []):
-                                        if busca in series:
-                                            pecas_str += peca.nome+'-c, '
-                                        else:
-                                            pecas_str += peca.nome+', '
-                            pecas_str = pecas_str[:-2]
-                            new_value = new_value.replace('{23}', pecas_str)
-                        else:
-                            new_value = new_value.replace('{23}', "N/A")
-
-                        if (len(rompimentos) >= 4 and 
-                            rompimentos[len(rompimentos)-1].data_moldagem and 
-                            rompimentos[len(rompimentos)-1].data_rompimento and
-                            calcular_idade_cp(rompimentos[len(rompimentos)-1].data_moldagem, rompimentos[len(rompimentos)-1].data_rompimento) >= 25):
-                            #data de rompimento 1
-                            if rompimentos[0].data_rompimento:
-                                new_value = new_value.replace('{30}', str(rompimentos[0].data_rompimento.strftime('%d/%m/%Y')))
-                            #idade de rompimento 1
-                            if rompimentos[0].data_moldagem and rompimentos[0].data_rompimento:
-                                idade = calcular_idade_cp(rompimentos[0].data_moldagem, rompimentos[0].data_rompimento)
-                                if idade is not None:
-                                    new_value = new_value.replace('{31}', str(idade))
-                            #hora de rompimento 1
-                            if rompimentos[0].data_rompimento:
-                                new_value = new_value.replace('{32}', str(rompimentos[0].data_rompimento.strftime('%H:%M')))
-                            #resultado de rompimento 1
-                            if rompimentos[0].resultado:
-                                resultado_1 = float(rompimentos[0].resultado) * float(rompimentos[0].fator_conversao or 1.2)
-                                new_value = new_value.replace('{34}', str(round(resultado_1, 2)))
-                            #tipo de rompimento 1
-                            tipo_romp_1 = mapear_tipo_rompimento(rompimentos[0].tipo_rompimento, [35, 36, 37, 38,39])
-                            for campo, valor in tipo_romp_1.items():
-                                new_value = new_value.replace('{'+str(campo)+'}', valor)
-                            #resultado de rompimento 2
-                            if rompimentos[1].resultado:
-                                resultado_2 = float(rompimentos[1].resultado) * float(rompimentos[1].fator_conversao or 1.2)
-                                new_value = new_value.replace('{41}', str(round(resultado_2, 2)))
-                            #tipo de rompimento 2
-                            tipo_romp_2 = mapear_tipo_rompimento(rompimentos[1].tipo_rompimento, [42, 43, 44, 45,46])
-                            for campo, valor in tipo_romp_2.items():
-                                new_value = new_value.replace('{'+str(campo)+'}', valor)
-                            #data de rompimento 3 e 4
-                            if rompimentos[2].data_rompimento:
-                                new_value = new_value.replace('{47}', str(rompimentos[2].data_rompimento.strftime('%d/%m/%Y')))
-                            #hora de rompimento 3 e 4
-                            if rompimentos[2].data_rompimento:
-                                new_value = new_value.replace('{48}', str(rompimentos[2].data_rompimento.strftime('%H:%M')))
-                            #resultado de rompimento 3
-                            if rompimentos[2].resultado:
-                                resultado_3 = float(rompimentos[2].resultado) * float(rompimentos[2].fator_conversao or 1.2)
-                                new_value = new_value.replace('{49}', str(round(resultado_3, 2)))
-                            #tipo de rompimento 3
-                            tipo_romp_3 = mapear_tipo_rompimento(rompimentos[2].tipo_rompimento, [50, 51, 52, 53, 54])
-                            for campo, valor in tipo_romp_3.items():
-                                new_value = new_value.replace('{'+str(campo)+'}', valor)
-                            #resultado de rompimento 4
-                            if rompimentos[3].resultado:
-                                resultado_4 = float(rompimentos[3].resultado) * float(rompimentos[3].fator_conversao or 1.2)
-                                new_value = new_value.replace('{55}', str(round(resultado_4, 2)))
-                            #tipo de rompimento 4
-                            tipo_romp_4 = mapear_tipo_rompimento(rompimentos[3].tipo_rompimento, [56, 57, 58, 59, 60])
-                            for campo, valor in tipo_romp_4.items():
-                                new_value = new_value.replace('{'+str(campo)+'}', valor)
-
-                            #resistencia final 1
-                            if rompimentos[0].resultado and rompimentos[1].resultado:
-                                resultado_0 = (rompimentos[0].resultado or 0) * (rompimentos[0].fator_conversao or 1.2)
-                                resultado_1 = (rompimentos[1].resultado or 0) * (rompimentos[1].fator_conversao or 1.2)
-                                resistencia_final_1 = max(resultado_0, resultado_1)
-                                new_value = new_value.replace('{61}', str(round(resistencia_final_1, 2)))
-                            #resistencia final 2
-                            if rompimentos[2].resultado and rompimentos[3].resultado:
-                                resultado_2 = (rompimentos[2].resultado or 0) * (rompimentos[2].fator_conversao or 1.2)
-                                resultado_3 = (rompimentos[3].resultado or 0) * (rompimentos[3].fator_conversao or 1.2)
-                                resistencia_final_2 = max(resultado_2, resultado_3)
-                                new_value = new_value.replace('{63}', str(round(resistencia_final_2, 2)))
-                        else:
-                            for i in range(30, 64):
-                                new_value = new_value.replace('{'+str(i)+'}', "")
-                        # Atribuir o valor final à célula apenas uma vez
-                        if new_value != original_value:
-                            cell.value = new_value
-        
-        # Configurar tamanho da página como A4 para todas as planilhas
-        for sheet in wb.worksheets:
-            # A4 = '9' conforme documentação do openpyxl
-            sheet.page_setup.paperSize = 9  # PAPERSIZE_A4
-            sheet.page_setup.orientation = 'portrait'  # ORIENTATION_PORTRAIT
-            
-            # Configurar margens menores (em centímetros, convertido para polegadas)
-            # Margens reduzidas: 0.5cm = ~0.2 polegadas
-            sheet.page_margins = PageMargins(
-                left=0.2,    # 0.5cm
-                right=0.2,   # 0.5cm
-                top=0.3,     # 0.75cm
-                bottom=0.3,  # 0.75cm
-                header=0.1,  # 0.25cm
-                footer=0.1  # 0.25cm
-            )
-            
-            # Ajustar escala para caber em 1 página de largura
-            sheet.page_setup.fitToWidth = 1
-            sheet.page_setup.fitToHeight = 1  # 0 = ajustar automaticamente a altura
-        
-        # Salvar o arquivo temporário (preserva imagens melhor que BytesIO)
-        # Garantir que o arquivo seja salvo corretamente
-        try:
-            # Salvar o arquivo
-            wb.save(temp_file_path)
-        except Exception as save_error:
-            # Se houver erro ao salvar, retornar None
-            raise Exception(f'Erro ao salvar arquivo Excel: {str(save_error)}')
-        finally:
-            # Sempre fechar o workbook
-            try:
-                wb.close()
-            except:
-                pass
-        
-        # Verificar se o arquivo foi salvo corretamente
-        if not os.path.exists(temp_file_path):
+            print(f'[_gerar_excel_temp] odfpy não disponível')
             return None
-        
-        file_size = os.path.getsize(temp_file_path)
-        if file_size == 0:
-            return None
-        
         return temp_file_path
     except Exception as e:
         # Em caso de erro, tentar limpar os arquivos temporários
@@ -1180,12 +1287,30 @@ def exportar_massa():
                         # Gerar Excel
                         excel_path = _gerar_excel_temp(numero_serie_int, tanque_id, contrato_id, grupo_id)
                         if excel_path and os.path.exists(excel_path):
-                            # Copiar para o diretório temporário com nome único
+                            arquivo_final = excel_path
+                            ods_original = None
+                            # Se o arquivo gerado for ODS, converter para XLSX usando LibreOffice
+                            if excel_path.lower().endswith('.ods'):
+                                # Criar caminho para o arquivo XLSX convertido
+                                xlsx_path = _criar_arquivo_temp_projeto(suffix='.xlsx', prefix='excel_convertido_')
+                                # Converter ODS para XLSX
+                                arquivo_convertido = _converter_ods_para_xlsx_libreoffice(excel_path, xlsx_path)
+                                if arquivo_convertido:
+                                    arquivo_final = arquivo_convertido
+                                    ods_original = excel_path  # Guardar referência para limpar depois
+                                else:
+                                    print(f'[exportar_massa] Erro ao converter ODS para XLSX, usando arquivo original')
+                            
                             nome_arquivo = f'relatorio_serie_{numero_serie}.xlsx'
                             destino = os.path.join(temp_dir, nome_arquivo)
-                            shutil.copy2(excel_path, destino)
+                            shutil.copy2(arquivo_final, destino)
                             arquivos_gerados.append(destino)
-                            # Limpar arquivo temporário original (se configurado)
+                            
+                            # Limpar arquivos temporários (se configurado)
+                            if arquivo_final != excel_path:
+                                _limpar_arquivo_temp(arquivo_final)
+                            if ods_original:
+                                _limpar_arquivo_temp(ods_original)
                             _limpar_arquivo_temp(excel_path)
                     else:  # PDF
                         # Gerar Excel primeiro e armazenar caminho e série correspondente
@@ -1302,308 +1427,6 @@ def exportar_massa():
         print(traceback.format_exc())
         return jsonify({'error': f'Erro ao exportar em massa: {str(e)}'}), 500
 
-def _converter_ods_para_xlsx_libreoffice(ods_path, xlsx_path=None):
-    """
-    Converte arquivo ODS para XLSX usando LibreOffice em modo headless.
-    Funciona tanto no Windows quanto no Linux.
-    
-    Args:
-        ods_path: Caminho do arquivo ODS
-        xlsx_path: Caminho de saída do XLSX (opcional, se None, usa mesmo nome do ODS)
-    
-    Returns:
-        Caminho do arquivo XLSX gerado ou None em caso de erro
-    """
-    try:
-        if not ods_path or not os.path.exists(ods_path):
-            print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS não encontrado: {ods_path}')
-            return None
-        
-        # Determinar caminho do XLSX de saída
-        if xlsx_path is None:
-            xlsx_path = ods_path.replace('.ods', '.xlsx')
-        
-        # Obter diretório de saída
-        output_dir = os.path.dirname(xlsx_path)
-        if not output_dir:
-            output_dir = os.path.dirname(ods_path)
-        
-        # Criar diretório se não existir
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Detectar sistema operacional e comando do LibreOffice
-        sistema = platform.system().lower()
-        
-        if sistema == 'windows':
-            # Windows - tentar diferentes caminhos comuns do LibreOffice
-            possiveis_caminhos = [
-                r'C:\Program Files\LibreOffice\program\soffice.exe',
-                r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
-                r'C:\Program Files\LibreOffice 7\program\soffice.exe',
-                r'C:\Program Files (x86)\LibreOffice 7\program\soffice.exe',
-            ]
-            
-            # Verificar se existe variável de ambiente
-            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
-            if libreoffice_env:
-                possiveis_caminhos.insert(0, libreoffice_env)
-            
-            soffice_cmd = None
-            for caminho in possiveis_caminhos:
-                if os.path.exists(caminho):
-                    soffice_cmd = caminho
-                    break
-            
-            if not soffice_cmd:
-                print('[_converter_ods_para_xlsx_libreoffice] LibreOffice não encontrado no Windows')
-                return None
-        else:
-            # Linux/Unix - usar comando do sistema
-            soffice_cmd = None
-            
-            # Verificar variável de ambiente primeiro
-            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
-            if libreoffice_env and os.path.exists(libreoffice_env):
-                soffice_cmd = libreoffice_env
-                print(f'[_converter_ods_para_xlsx_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
-            else:
-                # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
-                import glob
-                import re
-                
-                # Primeiro, tentar encontrar o executável real diretamente
-                possiveis_caminhos = []
-                
-                # Buscar em /usr/lib e /usr/lib64
-                for lib_dir in ['/usr/lib', '/usr/lib64', '/usr/local/lib']:
-                    # Tentar diferentes versões do LibreOffice
-                    for version in ['', '7', '8', '6', '5']:
-                        path = f'{lib_dir}/libreoffice{version}/program/soffice'
-                        if os.path.exists(path):
-                            possiveis_caminhos.append(path)
-                            print(f'[_converter_ods_para_xlsx_libreoffice] Caminho encontrado: {path}')
-                
-                # Buscar em /opt
-                opt_paths = glob.glob('/opt/libreoffice*/program/soffice')
-                possiveis_caminhos.extend(opt_paths)
-                for path in opt_paths:
-                    print(f'[_converter_ods_para_xlsx_libreoffice] Caminho encontrado em /opt: {path}')
-                
-                print(f'[_converter_ods_para_xlsx_libreoffice] Total de caminhos a verificar: {len(possiveis_caminhos)}')
-                
-                # Verificar cada caminho
-                for caminho in possiveis_caminhos:
-                    print(f'[_converter_ods_para_xlsx_libreoffice] Verificando caminho: {caminho}')
-                    if os.path.exists(caminho):
-                        print(f'[_converter_ods_para_xlsx_libreoffice] Caminho existe: {caminho}')
-                        if os.access(caminho, os.X_OK):
-                            print(f'[_converter_ods_para_xlsx_libreoffice] Caminho tem permissão de execução: {caminho}')
-                            # Verificar se é um executável real (ELF binary) ou um link simbólico válido
-                            try:
-                                # Verificar se é um link simbólico
-                                if os.path.islink(caminho):
-                                    real_path = os.path.realpath(caminho)
-                                    print(f'[_converter_ods_para_xlsx_libreoffice] É um link simbólico apontando para: {real_path}')
-                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
-                                        caminho = real_path
-                                
-                                with open(caminho, 'rb') as f:
-                                    header = f.read(4)
-                                    if header.startswith(b'\x7fELF'):  # ELF binary
-                                        soffice_cmd = caminho
-                                        print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado executável real (ELF): {soffice_cmd}')
-                                        break
-                                    else:
-                                        # Pode ser um script ou link simbólico, mas vamos usar se existir e tiver permissão
-                                        print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo não é ELF, mas existe e tem permissão: {caminho}')
-                                        # Usar este arquivo se ainda não encontrou nenhum
-                                        if not soffice_cmd:
-                                            soffice_cmd = caminho
-                                            print(f'[_converter_ods_para_xlsx_libreoffice] Usando arquivo encontrado: {soffice_cmd}')
-                            except Exception as e:
-                                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao verificar {caminho}: {str(e)}')
-                                # Se não encontrou nenhum ainda e o arquivo existe, usar como último recurso
-                                if not soffice_cmd and os.path.exists(caminho):
-                                    soffice_cmd = caminho
-                                    print(f'[_converter_ods_para_xlsx_libreoffice] Usando como último recurso: {soffice_cmd}')
-                        else:
-                            print(f'[_converter_ods_para_xlsx_libreoffice] Caminho existe mas não tem permissão de execução: {caminho}')
-                    else:
-                        print(f'[_converter_ods_para_xlsx_libreoffice] Caminho não existe: {caminho}')
-                
-                # Se não encontrou o executável real, tentar extrair do wrapper
-                if not soffice_cmd:
-                    # Tentar encontrar usando shutil.which (pode retornar o wrapper)
-                    wrapper_path = shutil.which('soffice')
-                    if wrapper_path:
-                        print(f'[_converter_ods_para_xlsx_libreoffice] Encontrado wrapper no PATH: {wrapper_path}')
-                        # Tentar encontrar o executável real através do wrapper
-                        try:
-                            with open(wrapper_path, 'r') as f:
-                                script_content = f.read()
-                                # Procurar por padrões comuns no script
-                                patterns = [
-                                    r'(/usr/lib[^/\s]*/libreoffice[^/\s]*/program/soffice)',
-                                    r'(/usr/lib64[^/\s]*/libreoffice[^/\s]*/program/soffice)',
-                                    r'INSTALL_DIR[=:]\s*["\']?([^"\'\s]+)',
-                                    r'exec\s+["\']?([^"\'\s]+/soffice)',
-                                ]
-                                
-                                for pattern in patterns:
-                                    matches = re.findall(pattern, script_content)
-                                    for match in matches:
-                                        if isinstance(match, tuple):
-                                            match = match[0] if match else None
-                                        if match and os.path.exists(match) and os.access(match, os.X_OK):
-                                            # Verificar se é ELF
-                                            try:
-                                                with open(match, 'rb') as f:
-                                                    header = f.read(4)
-                                                    if header.startswith(b'\x7fELF'):
-                                                        soffice_cmd = match
-                                                        print(f'[_converter_ods_para_xlsx_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
-                                                        break
-                                            except:
-                                                continue
-                                    if soffice_cmd:
-                                        break
-                        except Exception as e:
-                            print(f'[_converter_ods_para_xlsx_libreoffice] Não foi possível encontrar executável real via wrapper: {str(e)}')
-                
-                # Se ainda não encontrou, NÃO usar o wrapper - retornar erro
-                if not soffice_cmd:
-                    print('[_converter_ods_para_xlsx_libreoffice] Executável real do LibreOffice não encontrado')
-                    print('[_converter_ods_para_xlsx_libreoffice] Tentou buscar em: /usr/lib/libreoffice/program/soffice, /usr/lib64/libreoffice/program/soffice, /opt/libreoffice*/program/soffice')
-                    print('[_converter_ods_para_xlsx_libreoffice] Configure a variável LIBREOFFICE_PATH com o caminho completo do executável')
-                    print('[_converter_ods_para_xlsx_libreoffice] Exemplo: export LIBREOFFICE_PATH=/usr/lib/libreoffice/program/soffice')
-                    return None
-        
-        # Comando para converter ODS para XLSX
-        # --headless: modo sem interface gráfica
-        # --convert-to xlsx: converter para XLSX
-        # --outdir: diretório de saída
-        cmd = [
-            soffice_cmd,
-            '--headless',
-            '--convert-to', 'xlsx',
-            '--outdir', output_dir,
-            ods_path
-        ]
-        
-        # Verificar se o executável existe e tem permissões
-        if not os.path.exists(soffice_cmd):
-            print(f'[_converter_ods_para_xlsx_libreoffice] Executável não existe: {soffice_cmd}')
-            return None
-        
-        if not os.access(soffice_cmd, os.X_OK):
-            print(f'[_converter_ods_para_xlsx_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
-            return None
-        
-        print(f'[_converter_ods_para_xlsx_libreoffice] Executando: {" ".join(cmd)}')
-        print(f'[_converter_ods_para_xlsx_libreoffice] Arquivo ODS: {ods_path}')
-        print(f'[_converter_ods_para_xlsx_libreoffice] Diretório de saída: {output_dir}')
-        print(f'[_converter_ods_para_xlsx_libreoffice] Executável: {soffice_cmd}')
-        
-        try:
-            # Configurar ambiente completo para o LibreOffice funcionar
-            env = os.environ.copy()
-            
-            # Garantir que comandos básicos estejam no PATH
-            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin', '/sbin', '/usr/sbin']
-            current_path = env.get('PATH', '')
-            for path in basic_paths:
-                if path not in current_path:
-                    env['PATH'] = f"{path}:{env.get('PATH', '')}"
-            
-            # Configurar LD_LIBRARY_PATH para encontrar bibliotecas do LibreOffice
-            libreoffice_lib_dir = os.path.dirname(os.path.dirname(soffice_cmd))
-            lib_paths = [
-                f'{libreoffice_lib_dir}/program',
-                f'{libreoffice_lib_dir}/ure/lib',
-                '/usr/lib',
-                '/usr/lib64',
-                '/lib',
-                '/lib64',
-            ]
-            
-            current_ld_path = env.get('LD_LIBRARY_PATH', '')
-            for lib_path in lib_paths:
-                if os.path.exists(lib_path) and lib_path not in current_ld_path:
-                    env['LD_LIBRARY_PATH'] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
-            
-            # Configurar variáveis específicas do LibreOffice
-            env['SAL_USE_VCLPLUGIN'] = 'headless'
-            env['SAL_DISABLE_OPENCL'] = '1'
-            
-            # Remover variáveis que podem causar problemas
-            env.pop('DISPLAY', None)  # Garantir modo headless
-            
-            print(f'[_converter_ods_para_xlsx_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
-            print(f'[_converter_ods_para_xlsx_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                check=False,
-                env=env,
-                cwd=os.path.dirname(soffice_cmd)  # Executar no diretório do LibreOffice
-            )
-            
-            if result.returncode != 0:
-                print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter (código {result.returncode})')
-                print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
-                print(f'[_converter_ods_para_xlsx_libreoffice] stderr: {result.stderr}')
-                return None
-            else:
-                print(f'[_converter_ods_para_xlsx_libreoffice] Comando executado com sucesso')
-                if result.stdout:
-                    print(f'[_converter_ods_para_xlsx_libreoffice] stdout: {result.stdout}')
-        except subprocess.TimeoutExpired:
-            print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
-            return None
-        except Exception as e:
-            print(f'[_converter_ods_para_xlsx_libreoffice] Exceção ao executar comando: {str(e)}')
-            import traceback
-            print(traceback.format_exc())
-            return None
-        
-        # O LibreOffice gera o XLSX com o mesmo nome do arquivo ODS
-        ods_basename = os.path.basename(ods_path)
-        xlsx_basename = ods_basename.replace('.ods', '.xlsx')
-        generated_xlsx_path = os.path.join(output_dir, xlsx_basename)
-        
-        # Aguardar um pouco para garantir que o arquivo foi criado
-        max_tentativas = 10
-        tentativa = 0
-        while tentativa < max_tentativas:
-            if os.path.exists(generated_xlsx_path):
-                # Verificar se o arquivo não está sendo escrito (tamanho estável)
-                tamanho_anterior = os.path.getsize(generated_xlsx_path)
-                time.sleep(0.5)
-                tamanho_atual = os.path.getsize(generated_xlsx_path)
-                if tamanho_anterior == tamanho_atual:
-                    # Se o caminho de saída especificado é diferente, mover o arquivo
-                    if generated_xlsx_path != xlsx_path:
-                        shutil.move(generated_xlsx_path, xlsx_path)
-                    print(f'[_converter_ods_para_xlsx_libreoffice] XLSX gerado com sucesso: {xlsx_path}')
-                    return xlsx_path
-            tentativa += 1
-            time.sleep(0.5)
-        
-        print(f'[_converter_ods_para_xlsx_libreoffice] XLSX não foi gerado após {max_tentativas} tentativas')
-        return None
-        
-    except subprocess.TimeoutExpired:
-        print('[_converter_ods_para_xlsx_libreoffice] Timeout ao converter ODS para XLSX')
-        return None
-    except Exception as e:
-        print(f'[_converter_ods_para_xlsx_libreoffice] Erro ao converter ODS para XLSX: {str(e)}')
-        import traceback
-        print(traceback.format_exc())
-        return None
-
 def _converter_excel_para_pdf(excel_path, pdf_path=None):
     """
     Converte arquivo Excel/ODS para PDF usando LibreOffice em modo headless.
@@ -1617,330 +1440,3 @@ def _converter_excel_para_pdf(excel_path, pdf_path=None):
         Caminho do arquivo PDF gerado ou None em caso de erro
     """
     return _converter_excel_para_pdf_libreoffice(excel_path, pdf_path)
-
-def _converter_excel_para_pdf_libreoffice(excel_path, pdf_path=None):
-    """
-    Converte arquivo Excel/ODS para PDF usando LibreOffice em modo headless.
-    Funciona tanto no Windows quanto no Linux.
-    Aceita tanto arquivos XLSX quanto ODS - gera PDF diretamente do ODS quando disponível.
-    
-    Args:
-        excel_path: Caminho do arquivo Excel (XLSX) ou ODS
-        pdf_path: Caminho de saída do PDF (opcional, se None, usa mesmo nome do arquivo)
-    
-    Returns:
-        Caminho do arquivo PDF gerado ou None em caso de erro
-    """
-    try:
-        if not excel_path or not os.path.exists(excel_path):
-            print(f'[_converter_excel_para_pdf_libreoffice] Arquivo não encontrado: {excel_path}')
-            return None
-        
-        # Determinar caminho do PDF de saída
-        if pdf_path is None:
-            pdf_path = excel_path.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
-        
-        # Obter diretório de saída
-        output_dir = os.path.dirname(pdf_path)
-        if not output_dir:
-            output_dir = os.path.dirname(excel_path)
-        
-        # Criar diretório se não existir
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Detectar sistema operacional e comando do LibreOffice
-        sistema = platform.system().lower()
-        
-        if sistema == 'windows':
-            # Windows - tentar diferentes caminhos comuns do LibreOffice
-            possiveis_caminhos = [
-                r'C:\Program Files\LibreOffice\program\soffice.exe',
-                r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
-                r'C:\Program Files\LibreOffice 7\program\soffice.exe',
-                r'C:\Program Files (x86)\LibreOffice 7\program\soffice.exe',
-            ]
-            
-            # Verificar se existe variável de ambiente
-            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
-            if libreoffice_env:
-                possiveis_caminhos.insert(0, libreoffice_env)
-            
-            soffice_cmd = None
-            for caminho in possiveis_caminhos:
-                if os.path.exists(caminho):
-                    soffice_cmd = caminho
-                    break
-            
-            if not soffice_cmd:
-                print('[_converter_excel_para_pdf_libreoffice] LibreOffice não encontrado no Windows')
-                print('[_converter_excel_para_pdf_libreoffice] Configure a variável LIBREOFFICE_PATH ou instale o LibreOffice')
-                return None
-        else:
-            # Linux/Unix - usar comando do sistema
-            soffice_cmd = None
-            
-            # Verificar variável de ambiente primeiro
-            libreoffice_env = os.getenv('LIBREOFFICE_PATH')
-            if libreoffice_env and os.path.exists(libreoffice_env):
-                soffice_cmd = libreoffice_env
-                print(f'[_converter_excel_para_pdf_libreoffice] Usando LIBREOFFICE_PATH: {soffice_cmd}')
-            else:
-                # Tentar encontrar o executável real do LibreOffice (não o wrapper script)
-                import glob
-                import re
-                
-                # Primeiro, tentar encontrar o executável real diretamente
-                possiveis_caminhos = []
-                
-                # Buscar em /usr/lib e /usr/lib64
-                for lib_dir in ['/usr/lib', '/usr/lib64', '/usr/local/lib']:
-                    # Tentar diferentes versões do LibreOffice
-                    for version in ['', '7', '8', '6', '5']:
-                        path = f'{lib_dir}/libreoffice{version}/program/soffice'
-                        if os.path.exists(path):
-                            possiveis_caminhos.append(path)
-                            print(f'[_converter_excel_para_pdf_libreoffice] Caminho encontrado: {path}')
-                
-                # Buscar em /opt
-                opt_paths = glob.glob('/opt/libreoffice*/program/soffice')
-                possiveis_caminhos.extend(opt_paths)
-                for path in opt_paths:
-                    print(f'[_converter_excel_para_pdf_libreoffice] Caminho encontrado em /opt: {path}')
-                
-                print(f'[_converter_excel_para_pdf_libreoffice] Total de caminhos a verificar: {len(possiveis_caminhos)}')
-                
-                # Verificar cada caminho
-                for caminho in possiveis_caminhos:
-                    print(f'[_converter_excel_para_pdf_libreoffice] Verificando caminho: {caminho}')
-                    if os.path.exists(caminho):
-                        print(f'[_converter_excel_para_pdf_libreoffice] Caminho existe: {caminho}')
-                        if os.access(caminho, os.X_OK):
-                            print(f'[_converter_excel_para_pdf_libreoffice] Caminho tem permissão de execução: {caminho}')
-                            # Verificar se é um executável real (ELF binary) ou um link simbólico válido
-                            try:
-                                # Verificar se é um link simbólico
-                                if os.path.islink(caminho):
-                                    real_path = os.path.realpath(caminho)
-                                    print(f'[_converter_excel_para_pdf_libreoffice] É um link simbólico apontando para: {real_path}')
-                                    if os.path.exists(real_path) and os.access(real_path, os.X_OK):
-                                        caminho = real_path
-                                
-                                with open(caminho, 'rb') as f:
-                                    header = f.read(4)
-                                    if header.startswith(b'\x7fELF'):  # ELF binary
-                                        soffice_cmd = caminho
-                                        print(f'[_converter_excel_para_pdf_libreoffice] Encontrado executável real (ELF): {soffice_cmd}')
-                                        break
-                                    else:
-                                        # Pode ser um script ou link simbólico, mas vamos usar se existir e tiver permissão
-                                        print(f'[_converter_excel_para_pdf_libreoffice] Arquivo não é ELF, mas existe e tem permissão: {caminho}')
-                                        # Usar este arquivo se ainda não encontrou nenhum
-                                        if not soffice_cmd:
-                                            soffice_cmd = caminho
-                                            print(f'[_converter_excel_para_pdf_libreoffice] Usando arquivo encontrado: {soffice_cmd}')
-                            except Exception as e:
-                                print(f'[_converter_excel_para_pdf_libreoffice] Erro ao verificar {caminho}: {str(e)}')
-                                # Se não encontrou nenhum ainda e o arquivo existe, usar como último recurso
-                                if not soffice_cmd and os.path.exists(caminho):
-                                    soffice_cmd = caminho
-                                    print(f'[_converter_excel_para_pdf_libreoffice] Usando como último recurso: {soffice_cmd}')
-                        else:
-                            print(f'[_converter_excel_para_pdf_libreoffice] Caminho existe mas não tem permissão de execução: {caminho}')
-                    else:
-                        print(f'[_converter_excel_para_pdf_libreoffice] Caminho não existe: {caminho}')
-                
-                # Se não encontrou o executável real, tentar extrair do wrapper
-                if not soffice_cmd:
-                    # Tentar encontrar usando shutil.which (pode retornar o wrapper)
-                    wrapper_path = shutil.which('soffice')
-                    if wrapper_path:
-                        print(f'[_converter_excel_para_pdf_libreoffice] Encontrado wrapper no PATH: {wrapper_path}')
-                        # Tentar encontrar o executável real através do wrapper
-                        try:
-                            with open(wrapper_path, 'r') as f:
-                                script_content = f.read()
-                                # Procurar por padrões comuns no script
-                                patterns = [
-                                    r'(/usr/lib[^/\s]*/libreoffice[^/\s]*/program/soffice)',
-                                    r'(/usr/lib64[^/\s]*/libreoffice[^/\s]*/program/soffice)',
-                                    r'INSTALL_DIR[=:]\s*["\']?([^"\'\s]+)',
-                                    r'exec\s+["\']?([^"\'\s]+/soffice)',
-                                ]
-                                
-                                for pattern in patterns:
-                                    matches = re.findall(pattern, script_content)
-                                    for match in matches:
-                                        if isinstance(match, tuple):
-                                            match = match[0] if match else None
-                                        if match and os.path.exists(match) and os.access(match, os.X_OK):
-                                            # Verificar se é ELF
-                                            try:
-                                                with open(match, 'rb') as f:
-                                                    header = f.read(4)
-                                                    if header.startswith(b'\x7fELF'):
-                                                        soffice_cmd = match
-                                                        print(f'[_converter_excel_para_pdf_libreoffice] Executável real encontrado via wrapper: {soffice_cmd}')
-                                                        break
-                                            except:
-                                                continue
-                                    if soffice_cmd:
-                                        break
-                        except Exception as e:
-                            print(f'[_converter_excel_para_pdf_libreoffice] Não foi possível encontrar executável real via wrapper: {str(e)}')
-                
-                # Se ainda não encontrou, NÃO usar o wrapper - retornar erro
-                if not soffice_cmd:
-                    print('[_converter_excel_para_pdf_libreoffice] Executável real do LibreOffice não encontrado')
-                    print('[_converter_excel_para_pdf_libreoffice] Tentou buscar em: /usr/lib/libreoffice/program/soffice, /usr/lib64/libreoffice/program/soffice, /opt/libreoffice*/program/soffice')
-                    print('[_converter_excel_para_pdf_libreoffice] Configure a variável LIBREOFFICE_PATH com o caminho completo do executável')
-                    print('[_converter_excel_para_pdf_libreoffice] Exemplo: export LIBREOFFICE_PATH=/usr/lib/libreoffice/program/soffice')
-                    return None
-        
-        # Comando para converter Excel/ODS para PDF
-        # --headless: modo sem interface gráfica
-        # Aceita tanto XLSX quanto ODS - gera PDF diretamente do formato original
-        # --convert-to pdf: converter para PDF
-        # --outdir: diretório de saída
-        cmd = [
-            soffice_cmd,
-            '--headless',
-            '--convert-to', 'pdf',
-            '--outdir', output_dir,
-            excel_path
-        ]
-        
-        print(f'[_converter_excel_para_pdf_libreoffice] Executando: {" ".join(cmd)}')
-        print(f'[_converter_excel_para_pdf_libreoffice] Arquivo de entrada: {excel_path}')
-        print(f'[_converter_excel_para_pdf_libreoffice] Diretório de saída: {output_dir}')
-        print(f'[_converter_excel_para_pdf_libreoffice] Executável: {soffice_cmd}')
-        
-        # Verificar se o executável existe e tem permissões
-        if not os.path.exists(soffice_cmd):
-            print(f'[_converter_excel_para_pdf_libreoffice] Executável não existe: {soffice_cmd}')
-            return None
-        
-        if not os.access(soffice_cmd, os.X_OK):
-            print(f'[_converter_excel_para_pdf_libreoffice] Executável não tem permissão de execução: {soffice_cmd}')
-            return None
-        
-        try:
-            # Configurar ambiente completo para o LibreOffice funcionar
-            env = os.environ.copy()
-            
-            # Garantir que comandos básicos estejam no PATH
-            basic_paths = ['/usr/bin', '/bin', '/usr/local/bin', '/sbin', '/usr/sbin']
-            current_path = env.get('PATH', '')
-            for path in basic_paths:
-                if path not in current_path:
-                    env['PATH'] = f"{path}:{env.get('PATH', '')}"
-            
-            # Configurar LD_LIBRARY_PATH para encontrar bibliotecas do LibreOffice
-            libreoffice_lib_dir = os.path.dirname(os.path.dirname(soffice_cmd))
-            lib_paths = [
-                f'{libreoffice_lib_dir}/program',
-                f'{libreoffice_lib_dir}/ure/lib',
-                '/usr/lib',
-                '/usr/lib64',
-                '/lib',
-                '/lib64',
-            ]
-            
-            current_ld_path = env.get('LD_LIBRARY_PATH', '')
-            for lib_path in lib_paths:
-                if os.path.exists(lib_path) and lib_path not in current_ld_path:
-                    env['LD_LIBRARY_PATH'] = f"{lib_path}:{env.get('LD_LIBRARY_PATH', '')}"
-            
-            # Configurar variáveis específicas do LibreOffice
-            env['SAL_USE_VCLPLUGIN'] = 'headless'
-            env['SAL_DISABLE_OPENCL'] = '1'
-            
-            # Remover variáveis que podem causar problemas
-            env.pop('DISPLAY', None)  # Garantir modo headless
-            
-            print(f'[_converter_excel_para_pdf_libreoffice] PATH: {env.get("PATH", "")[:200]}...')
-            print(f'[_converter_excel_para_pdf_libreoffice] LD_LIBRARY_PATH: {env.get("LD_LIBRARY_PATH", "")[:200]}...')
-            
-            # Executar conversão com ambiente configurado
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,  # Timeout de 2 minutos
-                check=False,
-                env=env,
-                cwd=os.path.dirname(soffice_cmd)  # Executar no diretório do LibreOffice
-            )
-            
-            if result.returncode != 0:
-                print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter (código {result.returncode})')
-                print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
-                print(f'[_converter_excel_para_pdf_libreoffice] stderr: {result.stderr}')
-                return None
-            else:
-                print(f'[_converter_excel_para_pdf_libreoffice] Comando executado com sucesso')
-                if result.stdout:
-                    print(f'[_converter_excel_para_pdf_libreoffice] stdout: {result.stdout}')
-        except subprocess.TimeoutExpired:
-            print('[_converter_excel_para_pdf_libreoffice] Timeout ao converter Excel para PDF')
-            return None
-        except Exception as e:
-            print(f'[_converter_excel_para_pdf_libreoffice] Exceção ao executar comando: {str(e)}')
-            import traceback
-            print(traceback.format_exc())
-            return None
-        
-        # O LibreOffice gera o PDF com o mesmo nome do arquivo Excel
-        excel_basename = os.path.basename(excel_path)
-        pdf_basename = excel_basename.replace('.xlsx', '.pdf').replace('.xls', '.pdf').replace('.ods', '.pdf')
-        generated_pdf_path = os.path.join(output_dir, pdf_basename)
-        
-        print(f'[_converter_excel_para_pdf_libreoffice] Caminho esperado do PDF: {generated_pdf_path}')
-        
-        # Aguardar um pouco para garantir que o arquivo foi criado
-        max_tentativas = 10
-        tentativa = 0
-        while tentativa < max_tentativas:
-            if os.path.exists(generated_pdf_path):
-                # Verificar se o arquivo não está sendo escrito (tamanho estável)
-                tamanho_anterior = os.path.getsize(generated_pdf_path)
-                time.sleep(0.5)
-                tamanho_atual = os.path.getsize(generated_pdf_path)
-                if tamanho_anterior == tamanho_atual and tamanho_atual > 0:
-                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado com sucesso: {generated_pdf_path} (tamanho: {tamanho_atual} bytes)')
-                    return generated_pdf_path
-                elif tamanho_anterior == tamanho_atual and tamanho_atual == 0:
-                    print(f'[_converter_excel_para_pdf_libreoffice] PDF gerado mas está vazio: {generated_pdf_path}')
-                    # Continuar tentando por mais um pouco
-            else:
-                print(f'[_converter_excel_para_pdf_libreoffice] Tentativa {tentativa + 1}/{max_tentativas}: PDF ainda não existe')
-            tentativa += 1
-            time.sleep(0.5)
-        
-        # Verificar se o arquivo existe mas está vazio
-        if os.path.exists(generated_pdf_path):
-            tamanho = os.path.getsize(generated_pdf_path)
-            if tamanho == 0:
-                print(f'[_converter_excel_para_pdf_libreoffice] PDF foi criado mas está vazio: {generated_pdf_path}')
-                return None
-        
-        # Listar arquivos no diretório de saída para debug
-        try:
-            arquivos_no_dir = os.listdir(output_dir)
-            print(f'[_converter_excel_para_pdf_libreoffice] Arquivos no diretório de saída: {arquivos_no_dir}')
-            # Verificar se há algum PDF no diretório
-            pdfs_no_dir = [f for f in arquivos_no_dir if f.endswith('.pdf')]
-            if pdfs_no_dir:
-                print(f'[_converter_excel_para_pdf_libreoffice] PDFs encontrados no diretório: {pdfs_no_dir}')
-        except Exception as e:
-            print(f'[_converter_excel_para_pdf_libreoffice] Erro ao listar diretório: {str(e)}')
-        
-        print(f'[_converter_excel_para_pdf_libreoffice] PDF não foi gerado após {max_tentativas} tentativas')
-        print(f'[_converter_excel_para_pdf_libreoffice] Caminho esperado: {generated_pdf_path}')
-        return None
-        
-    except Exception as e:
-        print(f'[_converter_excel_para_pdf_libreoffice] Erro ao converter Excel para PDF: {str(e)}')
-        import traceback
-        print(traceback.format_exc())
-        return None
-

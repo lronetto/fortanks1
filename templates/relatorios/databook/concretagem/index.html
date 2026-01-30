@@ -86,6 +86,9 @@
                 Dados de Concretagem
             </div>
             <div>
+                <button type="button" id="btnResumo" class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalResumo">
+                    <i class="fas fa-chart-bar"></i> Resumo
+                </button>
                 <button type="button" id="btnExportarMassaExcel" class="btn btn-success btn-sm me-2">
                     <i class="fas fa-file-excel"></i> Exportar em Massa (Excel)
                 </button>
@@ -118,6 +121,9 @@
         </div>
     </div>
 </div>
+
+<!-- Incluir modal de resumo -->
+{% include 'relatorios/databook/concretagem/modais/modal_resumo.html' %}
 {% endblock %}
 
 {% block extra_css %}
@@ -667,6 +673,194 @@
                     $btn.prop('disabled', false).html(originalHtml);
                 }
             });
+        });
+
+        // Exportação de detalhes em Excel
+        $('#btnExportarDetalhesExcel').on('click', function() {
+            var $btn = $(this);
+            var originalHtml = $btn.html();
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Gerando...');
+            
+            // Obter filtros atuais
+            var filtros = {
+                contrato_id: $('#contrato_id').val() || null,
+                tanque_id: $('#tanque_id').val() || null,
+                grupo_id: $('#grupo_id').val() || null,
+                data_inicio: $('#data_inicio').val() || null,
+                data_fim: $('#data_fim').val() || null,
+                min_rompimentos: $('#filtro_rompimentos').is(':checked') ? 4 : null
+            };
+            
+            // Construir URL com query parameters
+            var url = "{{ url_for('databook_concretagem.exportar_detalhes_excel') }}";
+            var urlObj = new URL(url, window.location.origin);
+            Object.keys(filtros).forEach(function(key) {
+                if (filtros[key] !== null && filtros[key] !== '') {
+                    urlObj.searchParams.append(key, filtros[key]);
+                }
+            });
+            
+            // Fazer requisição AJAX
+            $.ajax({
+                url: urlObj.pathname + urlObj.search,
+                method: 'GET',
+                xhrFields: {
+                    responseType: 'blob'
+                },
+                success: function(data, status, xhr) {
+                    // Obter nome do arquivo do header ou usar padrão
+                    var filename = 'detalhes_concretagem.xlsx';
+                    var disposition = xhr.getResponseHeader('Content-Disposition');
+                    if (disposition && disposition.indexOf('attachment') !== -1) {
+                        var filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                        var matches = filenameRegex.exec(disposition);
+                        if (matches != null && matches[1]) {
+                            filename = matches[1].replace(/['"]/g, '');
+                        }
+                    }
+                    
+                    // Criar blob URL e fazer download
+                    var blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    var blobUrl = window.URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = blobUrl;
+                    link.download = filename;
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    // Limpar
+                    setTimeout(function() {
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(blobUrl);
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }, 100);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao exportar detalhes Excel:', error, xhr);
+                    var errorMsg = 'Erro ao gerar arquivo Excel.';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    } else if (xhr.status === 500) {
+                        errorMsg = 'Erro interno do servidor. Por favor, tente novamente mais tarde.';
+                    }
+                    alert(errorMsg);
+                    $btn.prop('disabled', false).html(originalHtml);
+                }
+            });
+        });
+
+        // Função para carregar resumo do modal
+        function carregarResumo() {
+            const resumoLoading = $('#resumoLoading');
+            const resumoContent = $('#resumoContent');
+            const resumoError = $('#resumoError');
+            
+            // Mostrar loading e ocultar conteúdo
+            resumoLoading.show();
+            resumoContent.hide();
+            resumoError.hide();
+            
+            // Obter filtros atuais
+            const filtros = {
+                contrato_id: $('#contrato_id').val() || null,
+                tanque_id: $('#tanque_id').val() || null,
+                grupo_id: $('#grupo_id').val() || null,
+                data_inicio: $('#data_inicio').val() || null,
+                data_fim: $('#data_fim').val() || null,
+                min_rompimentos: $('#filtro_rompimentos').is(':checked') ? 4 : null
+            };
+            
+            // Fazer requisição AJAX
+            $.ajax({
+                url: "{{ url_for('databook_concretagem.api_resumo') }}",
+                method: 'GET',
+                data: filtros,
+                success: function(response) {
+                    const resumo = response.resumo;
+                    
+                    // Preencher dados de séries
+                    $('#totalSeries').text(resumo.total_series);
+                    $('#totalSeriesComRompimentos').text(resumo.total_series_com_rompimentos);
+                    $('#totalSeriesComPecas').text(resumo.total_series_com_pecas);
+                    $('#totalSeriesSemPecas').text(resumo.total_series_sem_pecas);
+                    
+                    // Preencher dados de rompimentos
+                    $('#totalRompimentos').text(resumo.total_rompimentos);
+                    
+                    // Preencher dados de peças
+                    $('#totalPecas').text(resumo.total_pecas);
+                    $('#totalPecasComVinculacao').text(resumo.total_pecas_com_vinculacao);
+                    $('#totalPecasSemVinculacao').text(resumo.total_pecas_sem_vinculacao);
+                    
+                    // Status das séries
+                    let statusSeriesHtml = '';
+                    if (resumo.todas_series_vinculadas) {
+                        statusSeriesHtml = '<div class="alert alert-success mb-0"><i class="fas fa-check-circle"></i> Todas as séries estão vinculadas a peças.</div>';
+                        $('#seriesSemPecasList').hide();
+                    } else {
+                        statusSeriesHtml = '<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle"></i> Existem séries sem peças vinculadas.</div>';
+                        if (resumo.series_sem_pecas && resumo.series_sem_pecas.length > 0) {
+                            $('#seriesSemPecasItems').html(
+                                resumo.series_sem_pecas.map(function(serie) {
+                                    return '<span class="badge bg-danger me-1 mb-1">' + serie + '</span>';
+                                }).join('')
+                            );
+                            $('#seriesSemPecasList').show();
+                        } else {
+                            $('#seriesSemPecasList').hide();
+                        }
+                    }
+                    $('#statusSeries').html(statusSeriesHtml);
+                    
+                    // Status das peças
+                    let statusPecasHtml = '';
+                    if (resumo.todas_pecas_vinculadas) {
+                        statusPecasHtml = '<div class="alert alert-success mb-0"><i class="fas fa-check-circle"></i> Todas as peças estão vinculadas a séries.</div>';
+                    } else {
+                        statusPecasHtml = '<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle"></i> Existem peças sem séries vinculadas.</div>';
+                    }
+                    $('#statusPecas').html(statusPecasHtml);
+                    
+                    // Status geral
+                    let statusGeralHtml = '';
+                    if (resumo.todas_series_vinculadas && resumo.todas_pecas_vinculadas) {
+                        statusGeralHtml = '<div class="alert alert-success mb-0"><i class="fas fa-check-circle"></i> <strong>Tudo OK!</strong> Todas as séries estão vinculadas a peças e todas as peças estão vinculadas a séries.</div>';
+                    } else {
+                        statusGeralHtml = '<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle"></i> <strong>Atenção!</strong> Existem inconsistências nas vinculações entre séries e peças.</div>';
+                    }
+                    $('#statusGeral').html(statusGeralHtml);
+                    
+                    // Ocultar loading e mostrar conteúdo
+                    resumoLoading.hide();
+                    resumoContent.show();
+                    // Mostrar botão de exportação
+                    $('#btnExportarDetalhesExcel').show();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar resumo:', error);
+                    resumoLoading.hide();
+                    resumoError.text('Erro ao carregar resumo: ' + (xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : error)).show();
+                }
+            });
+        }
+        
+        // Evento ao abrir o modal
+        $('#modalResumo').on('show.bs.modal', function() {
+            carregarResumo();
+        });
+        
+        // Limpar conteúdo ao fechar o modal
+        $('#modalResumo').on('hidden.bs.modal', function() {
+            $('#resumoContent').hide();
+            $('#resumoLoading').show();
+            $('#resumoError').hide();
+            $('#btnExportarDetalhesExcel').hide();
+        });
+        
+        // Ocultar botão de exportação ao abrir o modal
+        $('#modalResumo').on('show.bs.modal', function() {
+            $('#btnExportarDetalhesExcel').hide();
         });
     });
 </script>
