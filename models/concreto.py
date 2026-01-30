@@ -528,6 +528,14 @@ class ConcretoUsinagens(db.Model):
     def __repr__(self):
         return f'<UsinagemConcreto {self.id} - Série: {self.serie}, Data: {self.data_usinagem}, Volume: {self.volume}m³>'
 
+    def get_caminhao(self):
+        """Retorna o caminhão baseado no número da série."""
+        primeira_serie = ConcretoUsinagens.query.filter(func.date(ConcretoUsinagens.data_usinagem) == self.data_usinagem.date()).order_by(ConcretoUsinagens.data_usinagem.asc()).first().serie
+
+        if primeira_serie == self.serie:
+            return "01"
+        else:
+            return str(self.serie-primeira_serie+1)
 class ConcretoUsinagensMateriais(db.Model):
     """
     Modelo para representar materiais utilizados em uma usinagem

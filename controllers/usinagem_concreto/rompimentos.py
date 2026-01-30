@@ -662,9 +662,9 @@ def buscar_rompimento_por_serie(numero_serie):
         try:
             numero_serie_int = int(numero_serie)
             # Busca o último rompimento com este número de série (mais recente)
-            rompimento = ConcretoUsinagensRompimentos.query.filter_by(
-                numero_serie=numero_serie_int
-            ).order_by(ConcretoUsinagensRompimentos.data_rompimento.desc()).first()
+            usinagem = ConcretoUsinagens.query.filter_by(
+                serie=numero_serie_int
+            ).order_by(ConcretoUsinagens.data_usinagem.desc()).first()
         except ValueError:
             # Se não for número, tentar buscar como string (caso o campo seja alterado para String no futuro)
             # Por enquanto, retornar que não encontrou
@@ -674,9 +674,9 @@ def buscar_rompimento_por_serie(numero_serie):
                 'existe': False
             })
         
-        if rompimento and rompimento.data_moldagem:
+        if usinagem and usinagem.data_usinagem:
             # Formatar data para o formato datetime-local (YYYY-MM-DDTHH:mm)
-            data_moldagem_formatada = rompimento.data_moldagem.strftime('%Y-%m-%dT%H:%M')
+            data_moldagem_formatada = usinagem.data_usinagem.strftime('%Y-%m-%dT%H:%M')
             return jsonify({
                 'success': True,
                 'data_moldagem': data_moldagem_formatada,

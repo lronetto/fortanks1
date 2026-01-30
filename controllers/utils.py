@@ -159,6 +159,10 @@ def is_date_string(valor_str):
     return False
 
 
+def format_float(value):
+    """Formata float para string com duas casas decimais e separador de milhar"""
+    return "{:,.2f}".format(value).replace('.', ',')
+
 def get_value_str(row, col_index, default=None):
     """Converte valor do Excel para string, retornando None se for NaN ou vazio"""
     try:

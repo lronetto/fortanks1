@@ -49,6 +49,11 @@ def get_dados_acabamento(data_inicio=None, data_fim=None, tanque_id=None, contra
                 if data_fim and data_acabamento > data_fim:
                     continue
                 
+                # Buscar pista do campo qualidade
+                pista = None
+                if 'pista' in qualidade_dict:
+                    pista = qualidade_dict['pista']
+                
                 # Calcular metros de placas (altura_total do tanque)
                 metros_placas = 0
                 if peca.tanque and peca.tanque.altura_total:
@@ -64,6 +69,7 @@ def get_dados_acabamento(data_inicio=None, data_fim=None, tanque_id=None, contra
                     'contrato_nome': peca.tanque.contrato.nome if (peca.tanque and peca.tanque.contrato) else None,
                     'data_acabamento': data_acabamento,
                     'data_concretagem': peca.data_concretagem.date() if peca.data_concretagem else None,
+                    'pista': pista,
                     'tipo': peca.tipo,
                     'metros_placas': metros_placas
                 })
@@ -95,9 +101,45 @@ def agrupar_por_mes(dados):
     # Ordenar por data
     return dict(sorted(agrupado.items()))
 
+def agrupar_por_semana_por_pista(dados):
+    """
+    Agrupa dados de acabamento por semana e por pista
+    Retorna um dicionário com estrutura: {semana: {pista: quantidade}}
+    """
+    agrupado = {}
+    pistas_unicas = set()
+    
+    for item in dados:
+        data = item['data_acabamento']
+        pista = item.get('pista', 'Sem pista')
+        pistas_unicas.add(pista)
+        
+        # Calcular número da semana ISO
+        ano, semana, dia_semana = data.isocalendar()
+        chave = f"{ano}-W{semana:02d}"
+        
+        if chave not in agrupado:
+            # Calcular início da semana (segunda-feira)
+            inicio_semana = data - timedelta(days=dia_semana - 1)
+            agrupado[chave] = {
+                'ano': ano,
+                'semana': semana,
+                'inicio_semana': inicio_semana,
+                'fim_semana': inicio_semana + timedelta(days=6),
+                'pistas': {}
+            }
+        
+        if pista not in agrupado[chave]['pistas']:
+            agrupado[chave]['pistas'][pista] = 0
+        
+        agrupado[chave]['pistas'][pista] += 1
+    
+    # Ordenar por data
+    return dict(sorted(agrupado.items())), sorted(list(pistas_unicas))
+
 def agrupar_por_semana(dados):
     """
-    Agrupa dados de acabamento por semana
+    Agrupa dados de acabamento por semana (compatibilidade com exportações)
     """
     agrupado = {}
     for item in dados:
@@ -152,16 +194,23 @@ def index():
     
     # Agrupar dados
     dados_mes = agrupar_por_mes(dados)
-    dados_semana = agrupar_por_semana(dados)
+    dados_semana, pistas = agrupar_por_semana_por_pista(dados)
     
-    # Preparar dados para gráficos
-    labels_mes = [f"{v['mes']:02d}/{v['ano']}" for v in dados_mes.values()]
-    valores_mes = [v['quantidade'] for v in dados_mes.values()]
-    metros_placas_mes = [round(v.get('metros_placas', 0), 2) for v in dados_mes.values()]
-    
+    # Preparar dados para gráficos por pista
     labels_semana = [f"Sem {v['semana']}/{v['ano']}" for v in dados_semana.values()]
-    valores_semana = [v['quantidade'] for v in dados_semana.values()]
-    metros_placas_semana = [round(v.get('metros_placas', 0), 2) for v in dados_semana.values()]
+    
+    # Preparar dados por pista para o gráfico
+    dados_por_pista = {}
+    medias_diarias_por_pista = {}
+    for pista in pistas:
+        dados_por_pista[pista] = []
+        medias_diarias_por_pista[pista] = []
+        for chave, valor in dados_semana.items():
+            quantidade = valor['pistas'].get(pista, 0)
+            dados_por_pista[pista].append(quantidade)
+            # Calcular média diária (quantidade / 7 dias)
+            media_diaria = round(quantidade / 7.0, 2) if quantidade > 0 else 0
+            medias_diarias_por_pista[pista].append(media_diaria)
     
     # Calcular total de metros de placas
     total_metros_placas = sum(item.get('metros_placas', 0) for item in dados)
@@ -183,14 +232,11 @@ def index():
     
     return render_template(
         'relatorios/acabamento_pecas/index.html',
-        dados_mes=dados_mes,
         dados_semana=dados_semana,
-        labels_mes=labels_mes,
-        valores_mes=valores_mes,
-        metros_placas_mes=metros_placas_mes,
         labels_semana=labels_semana,
-        valores_semana=valores_semana,
-        metros_placas_semana=metros_placas_semana,
+        dados_por_pista=dados_por_pista,
+        medias_diarias_por_pista=medias_diarias_por_pista,
+        pistas=pistas,
         data_inicio=data_inicio,
         data_fim=data_fim,
         tanque_id=tanque_id,
@@ -248,48 +294,34 @@ def api_dados():
         data_fim = None
     
     dados = get_dados_acabamento(data_inicio=data_inicio, data_fim=data_fim, tanque_id=tanque_id, contrato_id=contrato_id)
-    dados_mes = agrupar_por_mes(dados)
-    dados_semana = agrupar_por_semana(dados)
+    dados_semana, pistas = agrupar_por_semana_por_pista(dados)
     
-    # Preparar dados das tabelas
-    resumo_mes = []
-    for chave, valor in dados_mes.items():
-        resumo_mes.append({
-            'mes_ano': f"{valor['mes']:02d}/{valor['ano']}",
-            'mes': valor['mes'],
-            'ano': valor['ano'],
-            'quantidade': valor['quantidade'],
-            'metros_placas': round(valor.get('metros_placas', 0), 2)
-        })
+    # Preparar dados para gráfico por pista
+    labels_semana = [f"Sem {v['semana']}/{v['ano']}" for v in dados_semana.values()]
     
-    resumo_semana = []
-    for chave, valor in dados_semana.items():
-        resumo_semana.append({
-            'semana': f"Sem {valor['semana']}/{valor['ano']}",
-            'semana_num': valor['semana'],
-            'ano': valor['ano'],
-            'inicio': valor['inicio_semana'].strftime('%d/%m/%Y'),
-            'fim': valor['fim_semana'].strftime('%d/%m/%Y'),
-            'quantidade': valor['quantidade'],
-            'metros_placas': round(valor.get('metros_placas', 0), 2)
-        })
+    # Preparar dados por pista
+    dados_por_pista = {}
+    medias_diarias_por_pista = {}
+    for pista in pistas:
+        dados_por_pista[pista] = []
+        medias_diarias_por_pista[pista] = []
+        for chave, valor in dados_semana.items():
+            quantidade = valor['pistas'].get(pista, 0)
+            dados_por_pista[pista].append(quantidade)
+            # Calcular média diária (quantidade / 7 dias)
+            media_diaria = round(quantidade / 7.0, 2) if quantidade > 0 else 0
+            medias_diarias_por_pista[pista].append(media_diaria)
     
     # Calcular total de metros de placas
     total_metros_placas = sum(item.get('metros_placas', 0) for item in dados)
     
     return jsonify({
-        'mes': {
-            'labels': [f"{v['mes']:02d}/{v['ano']}" for v in dados_mes.values()],
-            'valores': [v['quantidade'] for v in dados_mes.values()],
-            'metros_placas': [round(v.get('metros_placas', 0), 2) for v in dados_mes.values()]
-        },
         'semana': {
-            'labels': [f"Sem {v['semana']}/{v['ano']}" for v in dados_semana.values()],
-            'valores': [v['quantidade'] for v in dados_semana.values()],
-            'metros_placas': [round(v.get('metros_placas', 0), 2) for v in dados_semana.values()]
+            'labels': labels_semana,
+            'pistas': pistas,
+            'dados_por_pista': dados_por_pista,
+            'medias_diarias_por_pista': medias_diarias_por_pista
         },
-        'resumo_mes': resumo_mes,
-        'resumo_semana': resumo_semana,
         'total': len(dados),
         'total_metros_placas': round(total_metros_placas, 2),
         'data_inicio': data_inicio_str,

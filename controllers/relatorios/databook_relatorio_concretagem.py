@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from controllers.relatorios.commun import _converter_ods_para_xlsx_libreoffice, _converter_excel_para_pdf_libreoffice
 from controllers.relatorios.commun import _obter_pasta_temp_projeto, _criar_diretorio_temp_projeto, _limpar_arquivo_temp, _limpar_diretorio_temp,_criar_arquivo_temp_projeto
-
+from controllers.utils import format_float
 
 # Tentar importar odfpy para suporte a ODS
 try:
@@ -668,9 +668,9 @@ def calcular_data_rompimento_28_dias(data_moldagem_dt):
 def calcular_idade_cp(data_moldagem_dt, data_rompimento_dt):
     """Calcula idade do CP baseado na data de moldagem e data de rompimento."""
     if not data_moldagem_dt or not data_rompimento_dt:
-        return 0
+        return 0.0
     diff_hours = (data_rompimento_dt - data_moldagem_dt).total_seconds() / 3600
-    return int(diff_hours / 24) if diff_hours >= 24 else int(diff_hours)
+    return float(diff_hours / 24) if diff_hours >= 24 else float(diff_hours)
 def mapear_tipo_rompimento(tipo_rompimento, campos_base):
     """
     Mapeia o tipo de rompimento para os campos correspondentes.
@@ -774,7 +774,7 @@ def _processar_ods_template(ods_path, numero_serie, cliente_nome, tanque_nome, d
                             if data_moldagem:
                                 new_value = new_value.replace('{12}', str(data_moldagem.strftime('%d/%m/%Y')))
                             
-                            new_value = new_value.replace('{13}', "01")
+                            new_value = new_value.replace('{13}', usinagem.get_caminhao() if usinagem else "01")
                             
                             if usinagem and hasattr(usinagem, 'nota'):
                                 new_value = new_value.replace('{14}', usinagem.nota)
@@ -831,12 +831,12 @@ def _processar_ods_template(ods_path, numero_serie, cliente_nome, tanque_nome, d
                                 if rompimentos[0].data_moldagem and rompimentos[0].data_rompimento:
                                     idade = calcular_idade_cp(rompimentos[0].data_moldagem, rompimentos[0].data_rompimento)
                                     if idade is not None:
-                                        new_value = new_value.replace('{31}', str(idade))
+                                        new_value = new_value.replace('{31}', format_float(idade))
                                 if rompimentos[0].data_rompimento:
                                     new_value = new_value.replace('{32}', str(rompimentos[0].data_rompimento.strftime('%H:%M')))
                                 if rompimentos[0].resultado:
-                                    resultado_1 = float(rompimentos[0].resultado) * float(rompimentos[0].fator_conversao or 1.2)
-                                    new_value = new_value.replace('{34}', str(round(resultado_1, 2)))
+                                    resultado_1 = float(rompimentos[0].resultado) 
+                                    new_value = new_value.replace('{34}', format_float(resultado_1))
                                 
                                 tipo_romp_1 = mapear_tipo_rompimento(rompimentos[0].tipo_rompimento, [35, 36, 37, 38, 39])
                                 for campo, valor in tipo_romp_1.items():
@@ -844,8 +844,8 @@ def _processar_ods_template(ods_path, numero_serie, cliente_nome, tanque_nome, d
                                 
                                 # Rompimento 2
                                 if rompimentos[1].resultado:
-                                    resultado_2 = float(rompimentos[1].resultado) * float(rompimentos[1].fator_conversao or 1.2)
-                                    new_value = new_value.replace('{41}', str(round(resultado_2, 2)))
+                                    resultado_2 = float(rompimentos[1].resultado)
+                                    new_value = new_value.replace('{41}', format_float(resultado_2))
                                 tipo_romp_2 = mapear_tipo_rompimento(rompimentos[1].tipo_rompimento, [42, 43, 44, 45, 46])
                                 for campo, valor in tipo_romp_2.items():
                                     new_value = new_value.replace('{'+str(campo)+'}', valor)
@@ -856,32 +856,32 @@ def _processar_ods_template(ods_path, numero_serie, cliente_nome, tanque_nome, d
                                 if rompimentos[2].data_rompimento:
                                     new_value = new_value.replace('{48}', str(rompimentos[2].data_rompimento.strftime('%H:%M')))
                                 if rompimentos[2].resultado:
-                                    resultado_3 = float(rompimentos[2].resultado) * float(rompimentos[2].fator_conversao or 1.2)
-                                    new_value = new_value.replace('{49}', str(round(resultado_3, 2)))
+                                    resultado_3 = float(rompimentos[2].resultado)
+                                    new_value = new_value.replace('{49}', format_float(resultado_3))
                                 tipo_romp_3 = mapear_tipo_rompimento(rompimentos[2].tipo_rompimento, [50, 51, 52, 53, 54])
                                 for campo, valor in tipo_romp_3.items():
                                     new_value = new_value.replace('{'+str(campo)+'}', valor)
                                 
                                 # Rompimento 4
                                 if rompimentos[3].resultado:
-                                    resultado_4 = float(rompimentos[3].resultado) * float(rompimentos[3].fator_conversao or 1.2)
-                                    new_value = new_value.replace('{55}', str(round(resultado_4, 2)))
+                                    resultado_4 = float(rompimentos[3].resultado)
+                                    new_value = new_value.replace('{55}', format_float(resultado_4))
                                 tipo_romp_4 = mapear_tipo_rompimento(rompimentos[3].tipo_rompimento, [56, 57, 58, 59, 60])
                                 for campo, valor in tipo_romp_4.items():
                                     new_value = new_value.replace('{'+str(campo)+'}', valor)
                                 
                                 # Resistências finais
                                 if rompimentos[0].resultado and rompimentos[1].resultado:
-                                    resultado_0 = (rompimentos[0].resultado or 0) * (rompimentos[0].fator_conversao or 1.2)
-                                    resultado_1 = (rompimentos[1].resultado or 0) * (rompimentos[1].fator_conversao or 1.2)
+                                    resultado_0 = (rompimentos[0].resultado or 0)
+                                    resultado_1 = (rompimentos[1].resultado or 0)
                                     resistencia_final_1 = max(resultado_0, resultado_1)
-                                    new_value = new_value.replace('{61}', str(round(resistencia_final_1, 2)))
+                                    new_value = new_value.replace('{61}', format_float(resistencia_final_1))
                                 
                                 if rompimentos[2].resultado and rompimentos[3].resultado:
-                                    resultado_2 = (rompimentos[2].resultado or 0) * (rompimentos[2].fator_conversao or 1.2)
-                                    resultado_3 = (rompimentos[3].resultado or 0) * (rompimentos[3].fator_conversao or 1.2)
+                                    resultado_2 = (rompimentos[2].resultado or 0)
+                                    resultado_3 = (rompimentos[3].resultado or 0)
                                     resistencia_final_2 = max(resultado_2, resultado_3)
-                                    new_value = new_value.replace('{63}', str(round(resistencia_final_2, 2)))
+                                    new_value = new_value.replace('{63}', format_float(resistencia_final_2))
                             else:
                                 # Limpar campos de rompimento se não houver dados suficientes
                                 for i in range(30, 64):

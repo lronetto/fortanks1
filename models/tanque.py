@@ -3,6 +3,8 @@ import json
 from models.database import db
 from sqlalchemy.orm import relationship
 
+from models.nota_fiscal import NotaFiscalItem
+
 class Tanques(db.Model):
     """
     Modelo para representar tanques de projetos
@@ -179,7 +181,46 @@ class Tanques(db.Model):
         except (ValueError, IndexError) as e:
             print(f"Erro ao extrair dimensões numéricas para o tanque {self.id}: {str(e)}")
             return False 
+    def get_concretadas(self):
+        """
+        Retorna o total de concretagens do tanque
+        """
+        return TanquesPecas.query.filter_by(tanque_id=self.id, data_concretagem__isnot=None).count()
+    def get_statistics(self):
+        """
+        Retorna as estatísticas do tanque
+        """
+        pecas_acabadas = 0
+        pecas_transportadas = 0
+        pecas_em_estoque = 0
+        pecas_prontas_transportar = 0
+        nfs_emitidas_total = 0
+        pecas_concretadas = 0
+        for peca in self.TanquesPecas:
+            if peca.qualidade:
+                try:
+                    qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
+                        pecas_acabadas += 1
+                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
+                        pecas_transportadas += 1
+                    if peca.data_concretagem:
+                        pecas_concretadas += 1
 
+                except:
+                    pass
+        nfs_emitidas_total = NotaFiscalItem.query.filter_by(codigo=self.item_nf).group_by(NotaFiscalItem.nf_id).count()
+        pecas_prontas_transportar = pecas_acabadas - pecas_transportadas
+        pecas_em_estoque = pecas_concretadas - pecas_transportadas
+        return {
+            'concretadas': pecas_concretadas,
+            'acabadas': pecas_acabadas,
+            'transportadas': pecas_transportadas,
+            'total_pecas': len(self.TanquesPecas),
+            'em_estoque': pecas_em_estoque,
+            'prontas_transportar': pecas_prontas_transportar,
+            'nfs_emitidas_total': nfs_emitidas_total
+        }
 class TanquesGrupos(db.Model):
     """
     Modelo para representar grupos de tanques
