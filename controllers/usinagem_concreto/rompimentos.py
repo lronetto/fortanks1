@@ -95,8 +95,6 @@ def listar_rompimentos_api():
         return {
             'id': rompimento.id,
             'numero_serie': rompimento.numero_serie,
-            'usinagem_id': rompimento.usinagem_id,
-            'usinagem_traco': rompimento.usinagem.traco.nome if rompimento.usinagem and rompimento.usinagem.traco else None,
             'data_moldagem': rompimento.data_moldagem.strftime('%d/%m/%Y %H:%M') if rompimento.data_moldagem else None,
             'data_rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M'),
             'idade': calcular_idade(rompimento),

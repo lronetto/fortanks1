@@ -41,7 +41,6 @@
                 <thead>
                     <tr>
                         <th>Número de Série</th>
-                        <th>Usinagem</th>
                         <th>Data de Moldagem</th>
                         <th>Data de Rompimento</th>
                         <th>Idade</th>
@@ -50,73 +49,6 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for rompimento in rompimentos %}
-                    <tr data-serie="{{ rompimento.numero_serie }}" class="rompimento-row">
-                        <td>{{ rompimento.numero_serie }}</td>
-                        <td>
-                            {% if rompimento.usinagem_id %}
-                            <a href="{{ url_for('usinagem_concreto.visualizar_usinagem', id=rompimento.usinagem_id) }}">
-                                Usinagem #{{ rompimento.usinagem_id }} ({{ rompimento.usinagem.traco.nome if rompimento.usinagem else 'N/A' }})
-                            </a>
-                            {% else %}
-                            <span class="text-muted">Não vinculado</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ rompimento.data_moldagem.strftime('%d/%m/%Y %H:%M') if rompimento.data_moldagem else 'N/A' }}</td>
-                        <td>{{ rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td>
-                            {% set idade_calculada = None %}
-                            {% set diff_hours = None %}
-                            
-                            {# Prioridade 1: Calcular pela data de moldagem se disponível #}
-                            {% if rompimento.data_moldagem and rompimento.data_rompimento %}
-                                {% set diff_hours = (rompimento.data_rompimento - rompimento.data_moldagem).total_seconds() / 3600 %}
-                            {# Prioridade 2: Calcular pela data de usinagem se disponível #}
-                            {% elif rompimento.usinagem and rompimento.usinagem.data_usinagem and rompimento.data_rompimento %}
-                                {% set diff_hours = (rompimento.data_rompimento - rompimento.usinagem.data_usinagem).total_seconds() / 3600 %}
-                            {# Prioridade 3: Usar idade_cp se disponível e não houver datas para calcular #}
-                            {% elif rompimento.idade_cp is not none %}
-                                {% set diff_hours = rompimento.idade_cp * 24 if rompimento.idade_cp >= 1 else rompimento.idade_cp %}
-                            {% endif %}
-                            
-                            {% if diff_hours is not none %}
-                                {% if diff_hours < 24 %}
-                                    {{ diff_hours|int }}h
-                                {% else %}
-                                    {{ (diff_hours / 24)|int }}d
-                                {% endif %}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </td>
-                        <td>{{ rompimento.resultado|round(2) if rompimento.resultado else 'Não informado' }}</td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-sm btn-info"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#modalEditarRompimento"
-                                        data-id="{{ rompimento.id }}"
-                                        data-usinagem="{{ rompimento.usinagem_id if rompimento.usinagem_id else '' }}"
-                                        data-data-moldagem="{{ rompimento.data_moldagem.strftime('%Y-%m-%dT%H:%M') if rompimento.data_moldagem else '' }}"
-                                        data-data="{{ rompimento.data_rompimento.strftime('%Y-%m-%dT%H:%M') }}"
-                                        data-idade="{{ rompimento.idade_cp if rompimento.idade_cp else '' }}"
-                                        data-numero_serie="{{ rompimento.numero_serie }}"
-                                        data-resultado="{{ rompimento.resultado|round(2) if rompimento.resultado else '' }}"
-                                        data-fator-conversao="{{ rompimento.fator_conversao|round(2) if rompimento.fator_conversao else '1.2' }}"
-                                        data-tipo_rompimento="{{ rompimento.tipo_rompimento if rompimento.tipo_rompimento else '' }}"
-                                        data-observacoes="{{ rompimento.observacoes|replace('"', '&quot;') if rompimento.observacoes else '' }}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-danger"
-                                        data-bs-toggle="modal"
-                                        data-bs-target="#modalExcluirRompimento"
-                                        data-id="{{ rompimento.id }}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
                 </tbody>
             </table>
         </div>
@@ -218,13 +150,7 @@
         
         // Função para criar linha de rompimento
         function criarLinhaRompimento(rompimento) {
-            var usinagemHtml = '';
-            if (rompimento.usinagem_id) {
-                usinagemHtml = '<a href="/usinagem-concreto/usinagens/' + rompimento.usinagem_id + '">Usinagem #' + rompimento.usinagem_id + 
-                    (rompimento.usinagem_traco ? ' (' + rompimento.usinagem_traco + ')' : '') + '</a>';
-            } else {
-                usinagemHtml = '<span class="text-muted">Não vinculado</span>';
-            }
+
             
             var resultadoHtml = rompimento.resultado ? rompimento.resultado.toFixed(2) : 'Não informado';
             
@@ -234,7 +160,6 @@
             
             return [
                 rompimento.numero_serie,
-                usinagemHtml,
                 rompimento.data_moldagem || 'N/A',
                 rompimento.data_rompimento,
                 rompimento.idade,
@@ -242,7 +167,6 @@
                 '<div class="btn-group" role="group">' +
                     '<button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modalEditarRompimento" ' +
                         'data-id="' + rompimento.id + '" ' +
-                        'data-usinagem="' + (rompimento.usinagem_id || '') + '" ' +
                         'data-data-moldagem="' + dataMoldagemConvertida + '" ' +
                         'data-data="' + dataRompimentoConvertida + '" ' +
                         'data-numero_serie="' + (rompimento.numero_serie || '') + '" ' +

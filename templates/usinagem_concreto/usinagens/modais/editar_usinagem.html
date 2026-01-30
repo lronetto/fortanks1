@@ -67,6 +67,15 @@
                             <small class="form-text text-muted">Configure as quantidades de materiais para redozagem</small>
                         </div>
                     </div>
+
+                    <!-- Observação -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label for="edit_observacao" class="form-label fw-bold">Observação</label>
+                            <textarea class="form-control" id="edit_observacao" name="observacao" rows="3" maxlength="500" placeholder="Digite observações sobre a usinagem..."></textarea>
+                            <small class="form-text text-muted">Opcional: informações adicionais sobre a usinagem</small>
+                        </div>
+                    </div>
                     
                     <!-- Campo oculto para dados adicionais -->
                     <div class="d-none">
@@ -134,20 +143,37 @@
         
         if (dadosAdicionais) {
             let dadosAdicionaisStr = '';
+            let dadosParsed = null;
+            
             if (typeof dadosAdicionais === 'string') {
                 // Se já é string, verificar se é JSON válido
                 try {
-                    JSON.parse(dadosAdicionais);
+                    dadosParsed = JSON.parse(dadosAdicionais);
                     dadosAdicionaisStr = dadosAdicionais;
                     console.log('DEBUG editar_usinagem modal - String JSON válida, usando diretamente');
                 } catch (e) {
                     // Se não for JSON válido, tentar stringify
                     dadosAdicionaisStr = JSON.stringify(dadosAdicionais);
+                    try {
+                        dadosParsed = JSON.parse(dadosAdicionaisStr);
+                    } catch (e2) {
+                        dadosParsed = dadosAdicionais;
+                    }
                     console.log('DEBUG editar_usinagem modal - String não é JSON válido, convertendo para JSON');
                 }
             } else {
+                dadosParsed = dadosAdicionais;
                 dadosAdicionaisStr = JSON.stringify(dadosAdicionais);
                 console.log('DEBUG editar_usinagem modal - Objeto convertido para JSON string');
+            }
+            
+            // Preencher campo de observação se existir nos dados
+            if (dadosParsed && dadosParsed.observacao) {
+                $('#edit_observacao').val(dadosParsed.observacao);
+                console.log('DEBUG editar_usinagem modal - Observação carregada:', dadosParsed.observacao);
+            } else {
+                $('#edit_observacao').val('');
+                console.log('DEBUG editar_usinagem modal - Nenhuma observação nos dados');
             }
             
             console.log('DEBUG editar_usinagem modal - Valor a ser salvo no campo:', dadosAdicionaisStr);
@@ -158,18 +184,16 @@
             console.log('DEBUG editar_usinagem modal - Valor verificado no campo após salvar:', valorVerificado);
             
             // Verificar se há redosagem nos dados
-            try {
-                const dadosParsed = JSON.parse(dadosAdicionaisStr);
+            if (dadosParsed) {
                 if (dadosParsed.redosagem) {
                     console.log('DEBUG editar_usinagem modal - Redosagem encontrada nos dados:', dadosParsed.redosagem);
                 } else {
                     console.log('DEBUG editar_usinagem modal - Nenhuma redosagem nos dados');
                 }
-            } catch (e) {
-                console.warn('DEBUG editar_usinagem modal - Erro ao verificar redosagem:', e);
             }
         } else {
             $('#edit_dados_adicionais').val('');
+            $('#edit_observacao').val('');
             console.log('DEBUG editar_usinagem modal - dadosAdicionais vazio, campo limpo');
         }
         
@@ -188,6 +212,7 @@
     // Limpar formulário ao fechar o modal
     $('#modalEditarUsinagem').on('hidden.bs.modal', function() {
         $('#formEditarUsinagem')[0].reset();
+        $('#edit_observacao').val('');
         $('#mensagemEditarUsinagem').addClass('d-none').removeClass('alert-success alert-danger');
         $('#formEditarUsinagem').find('.is-invalid').removeClass('is-invalid');
         
@@ -250,17 +275,25 @@
         var campoDadosAdicionais = document.getElementById('edit_dados_adicionais');
         var dadosAdicionais = campoDadosAdicionais ? campoDadosAdicionais.value : '';
         
+        // Obter observação do campo
+        var observacao = $('#edit_observacao').val().trim();
+        
         console.log('DEBUG editar - Campo dados_adicionais encontrado:', !!campoDadosAdicionais);
         console.log('DEBUG editar - Valor do campo dados_adicionais:', dadosAdicionais);
-        console.log('DEBUG editar - Tipo do valor:', typeof dadosAdicionais);
-        console.log('DEBUG editar - Tamanho do valor:', dadosAdicionais ? dadosAdicionais.length : 0);
+        console.log('DEBUG editar - Observação:', observacao);
         
-        // Validar e enviar dados_adicionais apenas se for JSON válido
+        // Preparar objeto dados_adicionais mesclando dados existentes com observação
+        var dadosAdicionaisObj = {};
+        
+        // Se existir dados_adicionais, tentar parsear e mesclar
         if (dadosAdicionais && dadosAdicionais.trim() && dadosAdicionais.trim() !== '{}') {
             // Verificar se não é JSON incompleto (começa com { mas não termina com })
             if (dadosAdicionais.trim().startsWith('{') && !dadosAdicionais.trim().endsWith('}')) {
-                console.warn('DEBUG editar - JSON incompleto detectado, não enviando:', dadosAdicionais);
-                // Não enviar, backend manterá existentes
+                console.warn('DEBUG editar - JSON incompleto detectado, criando novo objeto apenas com observação');
+                // Criar novo objeto apenas com observação
+                if (observacao) {
+                    dadosAdicionaisObj.observacao = observacao;
+                }
             } else {
                 // Validar se dados_adicionais é JSON válido antes de enviar
                 try {
@@ -269,30 +302,43 @@
                     
                     // Verificar se é um objeto válido (não string, array, etc)
                     if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                        // Verificar se não é objeto vazio
-                        if (Object.keys(parsed).length > 0 || (parsed.redosagem && parsed.redosagem.materiais && parsed.redosagem.materiais.length > 0)) {
-                            formData.set('dados_adicionais', dadosAdicionais);
-                            console.log('DEBUG editar - Enviando dados_adicionais (JSON válido):', dadosAdicionais);
-                            console.log('DEBUG editar - Objeto parseado:', parsed);
-                        } else {
-                            console.log('DEBUG editar - Objeto vazio, não enviando (backend manterá existentes)');
+                        // Mesclar dados existentes com observação
+                        dadosAdicionaisObj = Object.assign({}, parsed);
+                        if (observacao) {
+                            dadosAdicionaisObj.observacao = observacao;
+                        } else if (dadosAdicionaisObj.observacao) {
+                            // Manter observação existente se não foi alterada
+                            // (já está no objeto parsed)
                         }
                     } else {
                         console.warn('DEBUG editar - dados_adicionais parseado mas não é um objeto válido:', typeof parsed);
-                        // Se não for objeto válido, não enviar (backend manterá existentes)
-                        console.log('DEBUG editar - Não enviando dados_adicionais, backend manterá existentes');
+                        // Criar novo objeto apenas com observação
+                        if (observacao) {
+                            dadosAdicionaisObj.observacao = observacao;
+                        }
                     }
                 } catch (e) {
                     console.error('DEBUG editar - dados_adicionais contém JSON inválido:', e);
-                    console.error('DEBUG editar - Valor problemático:', dadosAdicionais);
-                    // Se for inválido, não enviar (backend manterá existentes)
-                    console.log('DEBUG editar - Não enviando dados_adicionais inválido, backend manterá existentes');
+                    // Criar novo objeto apenas com observação
+                    if (observacao) {
+                        dadosAdicionaisObj.observacao = observacao;
+                    }
                 }
             }
         } else {
-            // Se estiver vazio ou for objeto vazio, não enviar
-            // O backend manterá os dados existentes
-            console.log('DEBUG editar - dados_adicionais vazio ou objeto vazio, não enviando (backend manterá existentes)');
+            // Se estiver vazio, criar novo objeto apenas com observação
+            if (observacao) {
+                dadosAdicionaisObj.observacao = observacao;
+            }
+        }
+        
+        // Enviar dados_adicionais apenas se tiver conteúdo
+        if (Object.keys(dadosAdicionaisObj).length > 0) {
+            var dadosAdicionaisFinal = JSON.stringify(dadosAdicionaisObj);
+            formData.set('dados_adicionais', dadosAdicionaisFinal);
+            console.log('DEBUG editar - Enviando dados_adicionais:', dadosAdicionaisFinal);
+        } else {
+            console.log('DEBUG editar - dados_adicionais vazio, não enviando (backend manterá existentes)');
         }
         
         // Verificar se o campo foi adicionado ao FormData
@@ -307,7 +353,8 @@
             data_usinagem: dataUsinagem,
             produto_composto_id: produtoCompostoId,
             volume: volume,
-            dados_adicionais: dadosAdicionais
+            observacao: observacao,
+            dados_adicionais: formData.has('dados_adicionais') ? formData.get('dados_adicionais') : 'não enviado'
         });
         
         // Enviar via AJAX

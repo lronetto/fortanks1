@@ -50,16 +50,11 @@
                         </div>
                     </div>
 
-                    <!-- NF e Dados Adicionais -->
+                    <!-- NF e Redosagem -->
                     <div class="row mb-3">
                         <div class="col-12 col-md-6 mb-3 mb-md-0">
                             <label for="nf" class="form-label fw-bold">Nota Fiscal</label>
                             <input type="text" class="form-control" id="nf" name="nf" maxlength="50">
-                        </div>
-                        <div class="col-12 col-md-6 d-none">
-                            <label for="dados_adicionais" class="form-label fw-bold">Dados Adicionais (JSON)</label>
-                            <input type="text" class="form-control" id="dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
-                            <small class="form-text text-muted">Opcional: dados em formato JSON para uso futuro</small>
                         </div>
                         <div class="col-12 col-md-6">
                             <label class="form-label fw-bold">Redosagem</label>
@@ -70,6 +65,20 @@
                             </div>
                             <small class="form-text text-muted">Configure as quantidades de materiais para redozagem</small>
                         </div>
+                    </div>
+
+                    <!-- Observação -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label for="observacao" class="form-label fw-bold">Observação</label>
+                            <textarea class="form-control" id="observacao" name="observacao" rows="3" maxlength="500" placeholder="Digite observações sobre a usinagem..."></textarea>
+                            <small class="form-text text-muted">Opcional: informações adicionais sobre a usinagem</small>
+                        </div>
+                    </div>
+
+                    <!-- Campo oculto para dados adicionais -->
+                    <div class="d-none">
+                        <input type="text" class="form-control" id="dados_adicionais" name="dados_adicionais" placeholder='{"campo": "valor"}'>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -200,11 +209,31 @@
         // Preparar dados do formulário
         var formData = new FormData(this);
         
-        // Garantir que dados_adicionais seja enviado mesmo se estiver oculto
-        var dadosAdicionais = $('#dados_adicionais').val();
-        if (dadosAdicionais) {
-            formData.set('dados_adicionais', dadosAdicionais);
+        // Preparar dados_adicionais como JSON incluindo observação
+        var observacao = $('#observacao').val().trim();
+        var dadosAdicionaisObj = {};
+        
+        // Incluir observação se preenchida
+        if (observacao) {
+            dadosAdicionaisObj.observacao = observacao;
         }
+        
+        // Verificar se já existe dados_adicionais (pode vir da redosagem)
+        var dadosAdicionaisExistentes = $('#dados_adicionais').val();
+        if (dadosAdicionaisExistentes && dadosAdicionaisExistentes.trim()) {
+            try {
+                var dadosExistentes = JSON.parse(dadosAdicionaisExistentes);
+                // Mesclar dados existentes com observação
+                dadosAdicionaisObj = Object.assign({}, dadosExistentes, dadosAdicionaisObj);
+            } catch (e) {
+                // Se não for JSON válido, apenas adicionar observação
+                console.warn('dados_adicionais não é JSON válido, apenas adicionando observação');
+            }
+        }
+        
+        // Converter para JSON string e adicionar ao FormData
+        var dadosAdicionais = JSON.stringify(dadosAdicionaisObj);
+        formData.set('dados_adicionais', dadosAdicionais);
         
         // Debug: log dos dados sendo enviados (remover em produção)
         console.log('Dados do formulário:', {
@@ -212,6 +241,7 @@
             data_usinagem: dataUsinagem,
             produto_composto_id: produtoCompostoId,
             volume: volume,
+            observacao: observacao,
             dados_adicionais: dadosAdicionais
         });
         

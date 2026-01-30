@@ -15,18 +15,6 @@
                         <small class="text-muted">Digite o número de série do corpo de prova</small>
                     </div>
                     <div class="mb-3">
-                        <label for="usinagem_id" class="form-label">Usinagem de Concreto</label>
-                        <select name="usinagem_id" id="usinagem_id" class="form-select">
-                            <option value="">Não vinculado a usinagem</option>
-                            {% for usinagem in usinagens %}
-                            <option value="{{ usinagem.id }}">
-                                Usinagem #{{ usinagem.id }} - {{ usinagem.produto_composto.nome }} ({{ usinagem.data_usinagem.strftime('%d/%m/%Y') }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted">Opcional: vincule a uma usinagem se aplicável</small>
-                    </div>
-                    <div class="mb-3">
                         <label for="data_moldagem" class="form-label">Data e Hora de Moldagem</label>
                         <input type="datetime-local" class="form-control" id="data_moldagem" name="data_moldagem">
                         <small class="text-muted">Data e hora em que o corpo de prova foi moldado</small>
