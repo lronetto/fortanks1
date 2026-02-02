@@ -26,7 +26,7 @@ import imaplib
 import email
 from email.header import decode_header
 import zipfile
-
+import logging
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 from evolutionapi.client import EvolutionClient
