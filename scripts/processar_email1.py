@@ -995,14 +995,20 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
                 temp_rar_path = temp_rar.name
             
             try:
-                with rarfile.RarFile(temp_rar_path, 'r') as rar_ref:
-                    arquivos_no_arquivo = rar_ref.namelist()
-                    logging.info(f"RAR contém {len(arquivos_no_arquivo)} arquivos: {arquivos_no_arquivo}")
-                    
-                    # Processa os arquivos
-                    resultado = _processar_arquivos_comprimidos(
-                        rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
-                    )
+                try:
+                    with rarfile.RarFile(temp_rar_path, 'r') as rar_ref:
+                        arquivos_no_arquivo = rar_ref.namelist()
+                        logging.info(f"RAR contém {len(arquivos_no_arquivo)} arquivos: {arquivos_no_arquivo}")
+                        
+                        # Processa os arquivos
+                        resultado = _processar_arquivos_comprimidos(
+                            rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
+                        )
+                except rarfile.RarCannotExec as e:
+                    erro_msg = "Ferramenta unrar não encontrada no sistema. Instale unrar: sudo apt-get install unrar (Ubuntu/Debian) ou sudo yum install unrar (CentOS/RHEL)"
+                    logging.error(f"Erro ao abrir RAR {filename}: {erro_msg}")
+                    anexo['codbarras']['erro'].append(erro_msg)
+                    resultado = False
             finally:
                 # Remove arquivo temporário
                 try:
@@ -1098,11 +1104,27 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
                         logging.info(f"PDF {arquivo_nome} extraído do {tipo_arquivo} e processado com sucesso")
                     else:
                         logging.warning(f"Falha ao processar PDF {arquivo_nome} extraído do {tipo_arquivo}")
+                except rarfile.RarCannotExec as e:
+                    # Erro específico quando unrar não está disponível
+                    erro_msg = f"Ferramenta unrar não encontrada no sistema. Instale unrar: sudo apt-get install unrar (Ubuntu/Debian) ou sudo yum install unrar (CentOS/RHEL)"
+                    logging.error(f"Erro ao extrair {arquivo_nome} do {tipo_arquivo}: {erro_msg}")
+                    anexo['codbarras']['erro'].append(f"Erro ao extrair {arquivo_nome}: {erro_msg}")
+                    # Interrompe o processamento de outros arquivos do RAR se a ferramenta não está disponível
+                    break
                 except Exception as e:
-                    logging.error(f"Erro ao processar PDF {arquivo_nome} do {tipo_arquivo}: {e}")
-                    import traceback
-                    logging.debug(f"Traceback: {traceback.format_exc()}")
-                    anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_nome}: {str(e)}")
+                    erro_msg = str(e)
+                    # Verifica se é o erro "Cannot find working tool"
+                    if "Cannot find working tool" in erro_msg or "RarCannotExec" in str(type(e).__name__):
+                        erro_msg = f"Ferramenta unrar não encontrada no sistema. Instale unrar: sudo apt-get install unrar (Ubuntu/Debian) ou sudo yum install unrar (CentOS/RHEL)"
+                        logging.error(f"Erro ao processar PDF {arquivo_nome} do {tipo_arquivo}: {erro_msg}")
+                        anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_nome}: {erro_msg}")
+                        # Interrompe o processamento de outros arquivos do RAR se a ferramenta não está disponível
+                        break
+                    else:
+                        logging.error(f"Erro ao processar PDF {arquivo_nome} do {tipo_arquivo}: {e}")
+                        import traceback
+                        logging.debug(f"Traceback: {traceback.format_exc()}")
+                        anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_nome}: {str(e)}")
         
         if pdfs_processados > 0:
             total_pdfs = len([a for a in arquivos_lista if a.lower().endswith('.pdf')])
