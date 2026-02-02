@@ -26,15 +26,35 @@ import imaplib
 import email
 from email.header import decode_header
 import zipfile
-try:
-    import rarfile
-    RAR_SUPPORT = True
-except ImportError:
-    RAR_SUPPORT = False
-    logging.warning("Biblioteca rarfile não encontrada. Arquivos .rar não serão processados. Instale com: pip install rarfile")
+import shutil
 import logging
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+
+try:
+    import rarfile
+    RAR_SUPPORT = True
+    # Tenta configurar o caminho do unrar se disponível
+    unrar_paths = ['/usr/bin/unrar', '/usr/local/bin/unrar', '/bin/unrar', 'unrar']
+    unrar_found = None
+    for path in unrar_paths:
+        if shutil.which(path) or (os.path.exists(path) and os.access(path, os.X_OK)):
+            unrar_found = path
+            rarfile.UNRAR_TOOL = path
+            logging.info(f"Ferramenta unrar encontrada em: {path}")
+            break
+    
+    if not unrar_found:
+        # Tenta encontrar unrar no PATH
+        unrar_in_path = shutil.which('unrar')
+        if unrar_in_path:
+            rarfile.UNRAR_TOOL = unrar_in_path
+            logging.info(f"Ferramenta unrar encontrada no PATH: {unrar_in_path}")
+        else:
+            logging.warning("Ferramenta unrar não encontrada. Arquivos RAR podem não funcionar corretamente.")
+except ImportError:
+    RAR_SUPPORT = False
+    logging.warning("Biblioteca rarfile não encontrada. Arquivos .rar não serão processados. Instale com: pip install rarfile")
 from evolutionapi.client import EvolutionClient
 from evolutionapi.models.message import TextMessage, QuotedMessage
 import requests
@@ -996,6 +1016,18 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
             
             try:
                 try:
+                    # Verifica se unrar está disponível antes de tentar abrir
+                    if hasattr(rarfile, 'UNRAR_TOOL'):
+                        logging.info(f"Tentando abrir RAR usando unrar em: {rarfile.UNRAR_TOOL}")
+                    else:
+                        # Tenta encontrar unrar novamente
+                        unrar_in_path = shutil.which('unrar')
+                        if unrar_in_path:
+                            rarfile.UNRAR_TOOL = unrar_in_path
+                            logging.info(f"unrar encontrado no PATH: {unrar_in_path}")
+                        else:
+                            logging.warning("unrar não encontrado no PATH. Tentando usar caminhos padrão...")
+                    
                     with rarfile.RarFile(temp_rar_path, 'r') as rar_ref:
                         arquivos_no_arquivo = rar_ref.namelist()
                         logging.info(f"RAR contém {len(arquivos_no_arquivo)} arquivos: {arquivos_no_arquivo}")
@@ -1005,8 +1037,16 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
                             rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
                         )
                 except rarfile.RarCannotExec as e:
-                    erro_msg = "Ferramenta unrar não encontrada no sistema. Instale unrar: sudo apt-get install unrar (Ubuntu/Debian) ou sudo yum install unrar (CentOS/RHEL)"
+                    erro_msg = f"Ferramenta unrar não encontrada ou não pode ser executada. Erro: {str(e)}. Verifique se unrar está instalado e no PATH."
                     logging.error(f"Erro ao abrir RAR {filename}: {erro_msg}")
+                    logging.error(f"Tentando verificar unrar...")
+                    unrar_check = shutil.which('unrar')
+                    if unrar_check:
+                        logging.info(f"unrar encontrado em: {unrar_check}")
+                        logging.info(f"Tentando configurar rarfile.UNRAR_TOOL = {unrar_check}")
+                        rarfile.UNRAR_TOOL = unrar_check
+                    else:
+                        logging.error("unrar não encontrado no PATH do sistema")
                     anexo['codbarras']['erro'].append(erro_msg)
                     resultado = False
             finally:
