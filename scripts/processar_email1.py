@@ -680,6 +680,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
                     }
                     
                     # Processa a página individualmente
+                    logging.info(f"processando página {filename_pagina}")
                     resultado = processar_anexo_pdf_pagina(anexo_pagina, filename_pagina, payload_pagina, tipo)
                     resultados.append(resultado)
                     
@@ -716,7 +717,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
         logging.info(f"Ignorando arquivo de protocolo: {filename}")
         return False
     
-    logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
+    #logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
     try:
         img = convert_from_bytes(payload, 500,poppler_path='/usr/bin')[0]
     except Exception as e:
@@ -781,7 +782,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                     try:
                         arquivei = Arquivei(chave_acesso=dec1, tipo=tiponfc)
                         if arquivei.xml_data:
-                            logging.info(f"achado arquivei")
+                            #logging.info(f"achado arquivei")
                             nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
                             if nota:
                                 processar_upload(anexo, nota, filename, payload, tipo)
