@@ -654,6 +654,17 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
     """
     # Se for tipo 3 (Reembolso) e o PDF tiver mais de uma página, separa por páginas
     logging.info(f"processando anexo pdf tipo: {tipo} filename: {filename}")
+    
+    # Garante que o anexo tem a estrutura correta
+    if 'codbarras' not in anexo:
+        anexo['codbarras'] = {'qtd': 0, 'codigos': [], 'erro': []}
+    if 'db' not in anexo:
+        anexo['db'] = []
+    if 'upload' not in anexo:
+        anexo['upload'] = False
+    if 'nao_identificados' not in anexo:
+        anexo['nao_identificados'] = 0
+    
     if tipo == 3:
         try:
             pdf_reader = PdfReader(io.BytesIO(payload))
@@ -665,35 +676,55 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
                 
                 # Processa cada página separadamente
                 resultados = []
-                for payload_pagina, filename_pagina in paginas_separadas:
-                    # Cria um novo anexo para cada página
-                    anexo_pagina = {
-                        'filename': filename_pagina,
-                        'codbarras': {
-                            'qtd': 0,
-                            'codigos': [],
-                            'erro': []
-                        },
-                        'db': [],
-                        'upload': False,
-                        'nao_identificados': 0
-                    }
-                    
-                    # Processa a página individualmente
-                    logging.info(f"processando página {filename_pagina}")
-                    resultado = processar_anexo_pdf_pagina(anexo_pagina, filename_pagina, payload_pagina, tipo)
-                    resultados.append(resultado)
-                    
-                    # Adiciona informações da página ao anexo original
-                    anexo['codbarras']['qtd'] += anexo_pagina['codbarras']['qtd']
-                    anexo['codbarras']['codigos'].extend(anexo_pagina['codbarras']['codigos'])
-                    anexo['codbarras']['erro'].extend(anexo_pagina['codbarras']['erro'])
-                    anexo['db'].extend(anexo_pagina['db'])
-                    if anexo_pagina['upload']:
-                        anexo['upload'] = True
-                    anexo['nao_identificados'] += anexo_pagina['nao_identificados']
+                total_paginas = len(paginas_separadas)
+                logging.info(f"Iniciando processamento de {total_paginas} páginas separadas")
+                
+                for idx, (payload_pagina, filename_pagina) in enumerate(paginas_separadas):
+                    try:
+                        # Cria um novo anexo para cada página
+                        anexo_pagina = {
+                            'filename': filename_pagina,
+                            'codbarras': {
+                                'qtd': 0,
+                                'codigos': [],
+                                'erro': []
+                            },
+                            'db': [],
+                            'upload': False,
+                            'nao_identificados': 0
+                        }
+                        
+                        # Processa a página individualmente
+                        logging.info(f"processando página {idx+1}/{total_paginas}: {filename_pagina}")
+                        resultado = processar_anexo_pdf_pagina(anexo_pagina, filename_pagina, payload_pagina, tipo)
+                        resultados.append(resultado)
+                        
+                        # Adiciona informações da página ao anexo original
+                        if 'codbarras' in anexo_pagina and 'codbarras' in anexo:
+                            anexo['codbarras']['qtd'] += anexo_pagina['codbarras'].get('qtd', 0)
+                            anexo['codbarras']['codigos'].extend(anexo_pagina['codbarras'].get('codigos', []))
+                            anexo['codbarras']['erro'].extend(anexo_pagina['codbarras'].get('erro', []))
+                        if 'db' in anexo_pagina:
+                            anexo['db'].extend(anexo_pagina.get('db', []))
+                        if anexo_pagina.get('upload', False):
+                            anexo['upload'] = True
+                        anexo['nao_identificados'] += anexo_pagina.get('nao_identificados', 0)
+                        
+                        logging.info(f"Página {idx+1}/{total_paginas} processada: resultado={resultado}")
+                    except Exception as e_pagina:
+                        logging.error(f"Erro ao processar página {idx+1}/{total_paginas} ({filename_pagina}): {e_pagina}")
+                        import traceback
+                        logging.debug(f"Traceback: {traceback.format_exc()}")
+                        # Adiciona o erro ao anexo original
+                        if 'codbarras' in anexo and 'erro' in anexo['codbarras']:
+                            anexo['codbarras']['erro'].append(f"Erro ao processar {filename_pagina}: {str(e_pagina)}")
+                        resultados.append(False)
+                        # Continua processando as próximas páginas
+                        continue
                 
                 # Retorna True se pelo menos uma página foi processada com sucesso
+                paginas_processadas = sum(1 for r in resultados if r)
+                logging.info(f"Processamento concluído: {paginas_processadas}/{total_paginas} páginas processadas com sucesso")
                 return any(resultados)
         except Exception as e:
             logging.error(f"Erro ao verificar/separar páginas do PDF {filename}: {e}")
