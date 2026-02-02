@@ -966,6 +966,12 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
     Se tipo == 3 (reembolso), processa PDFs extraídos usando processar_anexo_pdf.
     Retorna True se processou com sucesso, False caso contrário.
     """
+    # Garante que o anexo tem a estrutura correta
+    if 'codbarras' not in anexo:
+        anexo['codbarras'] = {'qtd': 0, 'codigos': [], 'erro': []}
+    if 'erro' not in anexo['codbarras']:
+        anexo['codbarras']['erro'] = []
+    
     is_rar = filename.lower().endswith('.rar')
     is_zip = filename.lower().endswith('.zip')
     
@@ -1016,14 +1022,21 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
         
         return resultado
                 
-    except (zipfile.BadZipFile, rarfile.RarCannotExec, rarfile.RarFileError) as e:
-        tipo_erro = "RAR" if is_rar else "ZIP"
+    except zipfile.BadZipFile as e:
+        tipo_erro = "ZIP"
         logging.error(f"Arquivo {filename} não é um {tipo_erro} válido: {e}")
         anexo['codbarras']['erro'].append(f"Arquivo não é um {tipo_erro} válido")
+        return False
+    except (rarfile.RarCannotExec, rarfile.RarNoFilesError) as e:
+        tipo_erro = "RAR"
+        logging.error(f"Arquivo {filename} não é um {tipo_erro} válido ou não pode ser processado: {e}")
+        anexo['codbarras']['erro'].append(f"Arquivo não é um {tipo_erro} válido ou ferramenta unrar não encontrada")
         return False
     except Exception as e:
         tipo_erro = "RAR" if is_rar else "ZIP"
         logging.error(f"Erro ao processar {tipo_erro} {filename}: {e}")
+        import traceback
+        logging.debug(f"Traceback: {traceback.format_exc()}")
         anexo['codbarras']['erro'].append(f"Erro ao processar {tipo_erro}: {str(e)}")
         return False
 
@@ -1031,6 +1044,18 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
     """
     Função auxiliar para processar arquivos dentro de ZIP ou RAR.
     """
+    # Garante que o anexo tem a estrutura correta
+    if 'codbarras' not in anexo:
+        anexo['codbarras'] = {'qtd': 0, 'codigos': [], 'erro': []}
+    if 'erro' not in anexo['codbarras']:
+        anexo['codbarras']['erro'] = []
+    if 'db' not in anexo:
+        anexo['db'] = []
+    if 'upload' not in anexo:
+        anexo['upload'] = False
+    if 'nao_identificados' not in anexo:
+        anexo['nao_identificados'] = 0
+    
     # Se for tipo 3 (reembolso), processa apenas PDFs
     if tipo == 3:
         pdfs_processados = 0
@@ -1060,13 +1085,13 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
                     if resultado:
                         pdfs_processados += 1
                         # Adiciona informações do PDF processado ao anexo original
-                        anexo['codbarras']['qtd'] += anexo_pdf['codbarras']['qtd']
-                        anexo['codbarras']['codigos'].extend(anexo_pdf['codbarras']['codigos'])
-                        anexo['codbarras']['erro'].extend(anexo_pdf['codbarras']['erro'])
-                        anexo['db'].extend(anexo_pdf['db'])
-                        if anexo_pdf['upload']:
+                        anexo['codbarras']['qtd'] += anexo_pdf['codbarras'].get('qtd', 0)
+                        anexo['codbarras']['codigos'].extend(anexo_pdf['codbarras'].get('codigos', []))
+                        anexo['codbarras']['erro'].extend(anexo_pdf['codbarras'].get('erro', []))
+                        anexo['db'].extend(anexo_pdf.get('db', []))
+                        if anexo_pdf.get('upload', False):
                             anexo['upload'] = True
-                        anexo['nao_identificados'] += anexo_pdf['nao_identificados']
+                        anexo['nao_identificados'] += anexo_pdf.get('nao_identificados', 0)
                         
                         # Adiciona o anexo PDF ao log
                         log_email_entry['anexos'].append(anexo_pdf)
@@ -1075,6 +1100,8 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
                         logging.warning(f"Falha ao processar PDF {arquivo_nome} extraído do {tipo_arquivo}")
                 except Exception as e:
                     logging.error(f"Erro ao processar PDF {arquivo_nome} do {tipo_arquivo}: {e}")
+                    import traceback
+                    logging.debug(f"Traceback: {traceback.format_exc()}")
                     anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_nome}: {str(e)}")
         
         if pdfs_processados > 0:
