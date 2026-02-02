@@ -25,6 +25,7 @@ from datetime import datetime
 import imaplib
 import email
 from email.header import decode_header
+import zipfile
 
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -656,7 +657,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
         try:
             pdf_reader = PdfReader(io.BytesIO(payload))
             num_paginas = len(pdf_reader.pages)
-            
+            logging.info(f"PDF de reembolso com {num_paginas} páginas detectado. Separando por páginas...")
             if num_paginas > 1:
                 logging.info(f"PDF de reembolso com {num_paginas} páginas detectado. Separando por páginas...")
                 paginas_separadas = separar_pdf_por_paginas(payload, filename)
@@ -915,6 +916,90 @@ def processar_upload(anexo, nota, filename, payload, tipo):
             up.save()
             logging.info(f"upload atualizado {nota.numero_nf}")
             anexo['upload'] = True
+
+def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
+    """
+    Processa um anexo ZIP: extrai arquivos e processa conforme o tipo.
+    Se tipo == 3 (reembolso), processa PDFs extraídos usando processar_anexo_pdf.
+    Retorna True se processou com sucesso, False caso contrário.
+    """
+    try:
+        logging.info(f"Processando arquivo ZIP: {filename}")
+        
+        # Cria um objeto BytesIO a partir do payload
+        zip_buffer = io.BytesIO(payload)
+        
+        # Abre o arquivo ZIP
+        with zipfile.ZipFile(zip_buffer, 'r') as zip_ref:
+            # Lista todos os arquivos no ZIP
+            arquivos_no_zip = zip_ref.namelist()
+            logging.info(f"ZIP contém {len(arquivos_no_zip)} arquivos: {arquivos_no_zip}")
+            
+            # Se for tipo 3 (reembolso), processa apenas PDFs
+            if tipo == 3:
+                pdfs_processados = 0
+                for arquivo_zip in arquivos_no_zip:
+                    # Processa apenas arquivos PDF
+                    if arquivo_zip.lower().endswith('.pdf'):
+                        try:
+                            # Extrai o conteúdo do arquivo do ZIP
+                            arquivo_conteudo = zip_ref.read(arquivo_zip)
+                            
+                            # Cria um anexo temporário para processar o PDF
+                            anexo_pdf = {
+                                'filename': arquivo_zip,
+                                'codbarras': {
+                                    'qtd': 0,
+                                    'codigos': [],
+                                    'erro': []
+                                },
+                                'db': [],
+                                'upload': False,
+                                'nao_identificados': 0
+                            }
+                            
+                            # Processa o PDF usando a função existente
+                            resultado = processar_anexo_pdf(anexo_pdf, arquivo_zip, arquivo_conteudo, tipo)
+                            
+                            if resultado:
+                                pdfs_processados += 1
+                                # Adiciona informações do PDF processado ao anexo ZIP
+                                anexo['codbarras']['qtd'] += anexo_pdf['codbarras']['qtd']
+                                anexo['codbarras']['codigos'].extend(anexo_pdf['codbarras']['codigos'])
+                                anexo['codbarras']['erro'].extend(anexo_pdf['codbarras']['erro'])
+                                anexo['db'].extend(anexo_pdf['db'])
+                                if anexo_pdf['upload']:
+                                    anexo['upload'] = True
+                                anexo['nao_identificados'] += anexo_pdf['nao_identificados']
+                                
+                                # Adiciona o anexo PDF ao log
+                                log_email_entry['anexos'].append(anexo_pdf)
+                                logging.info(f"PDF {arquivo_zip} extraído do ZIP e processado com sucesso")
+                            else:
+                                logging.warning(f"Falha ao processar PDF {arquivo_zip} extraído do ZIP")
+                        except Exception as e:
+                            logging.error(f"Erro ao processar PDF {arquivo_zip} do ZIP: {e}")
+                            anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_zip}: {str(e)}")
+                
+                if pdfs_processados > 0:
+                    logging.info(f"ZIP processado: {pdfs_processados} PDFs processados de {len([a for a in arquivos_no_zip if a.lower().endswith('.pdf')])} PDFs encontrados")
+                    return True
+                else:
+                    logging.warning(f"ZIP não contém PDFs válidos ou nenhum PDF foi processado com sucesso")
+                    return False
+            else:
+                # Para outros tipos, apenas registra que o ZIP foi encontrado
+                logging.info(f"ZIP encontrado para tipo {tipo}, mas processamento específico não implementado")
+                return False
+                
+    except zipfile.BadZipFile:
+        logging.error(f"Arquivo {filename} não é um ZIP válido")
+        anexo['codbarras']['erro'].append("Arquivo não é um ZIP válido")
+        return False
+    except Exception as e:
+        logging.error(f"Erro ao processar ZIP {filename}: {e}")
+        anexo['codbarras']['erro'].append(f"Erro ao processar ZIP: {str(e)}")
+        return False
 def processar_anexos_email(msg, tipo, log_email_entry):
     """
     Processa todos os anexos de um email.
@@ -926,32 +1011,36 @@ def processar_anexos_email(msg, tipo, log_email_entry):
     # Filtra e ordena anexos
     anexos_filtrados = msg.attachments
     if PROCESSAR_APENAS_PDF_XML:
-        anexos_filtrados = [att for att in msg.attachments if att["filename"].lower().endswith(('.pdf', '.xml'))]
+        # Inclui ZIPs também quando PROCESSAR_APENAS_PDF_XML está ativo
+        anexos_filtrados = [att for att in msg.attachments if att["filename"].lower().endswith(('.pdf', '.xml', '.zip'))]
         if len(anexos_filtrados) < len(msg.attachments):
-            logging.info(f'Filtrados {len(msg.attachments) - len(anexos_filtrados)} anexos não-PDF/XML de {len(msg.attachments)} totais')
+            logging.info(f'Filtrados {len(msg.attachments) - len(anexos_filtrados)} anexos não-PDF/XML/ZIP de {len(msg.attachments)} totais')
     
-    # Ordena anexos
+    # Ordena anexos (inclui ZIPs na ordenação)
     if PRIORIZAR_XML:
         anexos_ordenados = sorted(anexos_filtrados, key=lambda att: (
             0 if att["filename"].lower().endswith('.xml') else
-            1 if att["filename"].lower().endswith('.pdf') else 2
+            1 if att["filename"].lower().endswith('.pdf') else
+            2 if att["filename"].lower().endswith('.zip') else 3
         ))
     else:
         anexos_ordenados = sorted(anexos_filtrados, key=lambda att: (
             0 if att["filename"].lower().endswith('.pdf') else
-            1 if att["filename"].lower().endswith('.xml') else 2
+            1 if att["filename"].lower().endswith('.xml') else
+            2 if att["filename"].lower().endswith('.zip') else 3
         ))
     
     # Filtra anexos já processados
     anexos_nao_processados = []
     for att in anexos_ordenados:
         filename = att["filename"]
-        if Upload.query.filter(Upload.filename == filename).first():
-            logging.info(f"arquivo {filename} ja existe no db")
-            log_email_entry['anexos_existentes']['files'].append(filename)
-            log_email_entry['anexos_existentes']['qtd'] += 1
-        else:
-            anexos_nao_processados.append(att)
+        if tipo != 3:   
+            if Upload.query.filter(Upload.filename == filename).first():
+                logging.info(f"arquivo {filename} ja existe no db")
+                log_email_entry['anexos_existentes']['files'].append(filename)
+                log_email_entry['anexos_existentes']['qtd'] += 1
+                continue
+        anexos_nao_processados.append(att)
 
     total_anexos = len(anexos_ordenados)
     total_nao_processados = len(anexos_nao_processados)
@@ -999,13 +1088,20 @@ def processar_anexos_email(msg, tipo, log_email_entry):
         
         anexos_processados += 1
         
-        # Processa PDF ou XML
+        # Processa PDF, XML ou ZIP
         if filename.lower().endswith('.pdf'):
             processar_anexo_pdf(anexo, filename, payload, tipo)
+            log_email_entry['anexos'].append(anexo)
         elif filename.lower().endswith('.xml'):
             processar_anexo_xml(filename, payload, log_email_entry)
-        
-        log_email_entry['anexos'].append(anexo)
+            # XML não adiciona ao anexo pois já é processado separadamente
+        elif filename.lower().endswith('.zip'):
+            # Para ZIPs, o processamento pode adicionar múltiplos anexos ao log
+            # Se for tipo 3 (reembolso), os PDFs extraídos já são adicionados ao log dentro de processar_anexo_zip
+            processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry)
+            # Adiciona o anexo ZIP ao log apenas se não for tipo 3 (pois tipo 3 já adiciona os PDFs)
+            if tipo != 3:
+                log_email_entry['anexos'].append(anexo)
     
     return anexos_processados, ignorado, total_nao_processados
 

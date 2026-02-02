@@ -348,7 +348,7 @@ def datatables_notas():
             }
             order_by = column_mapping.get(order_column_index, 'data_emissao')
         
-        print(f'[datatables_notas] Ordenação: coluna {order_column_index}, campo: {order_by}, direção: {order_dir}')
+        #print(f'[datatables_notas] Ordenação: coluna {order_column_index}, campo: {order_by}, direção: {order_dir}')
     
         # Filtros
         notas_selecionadas = data.get('notas_selecionadas', [])
@@ -369,8 +369,7 @@ def datatables_notas():
         json_filtros = {
             'page': page,
             'per_page': per_page,
-            'busca': data.get('numero', ''),
-            'fornecedor': data.get('fornecedor', ''),
+            'busca': data.get('busca', ''),
             'data_inicial': data.get('data_inicial', ''),
             'data_final': data.get('data_final', ''),
             'valor_minimo': data.get('valor_minimo', ''),
@@ -381,6 +380,7 @@ def datatables_notas():
             'order_dir': order_dir,
             'emitente': 'Terceiros' 
         }
+        
         
         pagamento = data.get('pagamento', '')
         if pagamento:
@@ -398,9 +398,14 @@ def datatables_notas():
                 json_filtros['status_pagamento'] = 'reembolso_e_nao_pago'
             elif pagamento == '6':
                 json_filtros['status_pagamento'] = 'reembolso_e_nao_pago_e_nao_selecionados'
+            elif pagamento == '7':
+                json_filtros['status_upload'] = '3nao'
+                json_filtros['status_pagamento'] = 'selecionados'
         
-        print(f'Filtro pagamento: {pagamento}, status_pagamento: {json_filtros.get("status_pagamento")}')
-        print(f'Notas selecionadas: {notas_selecionadas}')
+
+        print(json.dumps(json_filtros, indent=4))
+        #print(f'Filtro pagamento: {pagamento}, status_pagamento: {json_filtros.get("status_pagamento")}')
+        #print(f'Notas selecionadas: {notas_selecionadas}')
         
         reembolso_id = data.get('reembolso_id', '')
         
@@ -486,8 +491,8 @@ def datatables_notas():
             'recordsFiltered': pagination.total,
             'data': notas_data
         }
-        print(f'Retornando {len(notas_data)} notas de {pagination.total} total')
-        print(f'Response data keys: {response_data.keys()}')
+        #print(f'Retornando {len(notas_data)} notas de {pagination.total} total')
+        #print(f'Response data keys: {response_data.keys()}')
         return jsonify(response_data)
     except Exception as e:
         print(f'Erro ao buscar notas DataTables: {str(e)}')

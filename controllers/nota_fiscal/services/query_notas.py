@@ -49,7 +49,6 @@ def api_get_dados_notas_fiscais(request):
     destino = json_filtros.get("destino", "")
     remetente = json_filtros.get("remetente", "")
     status_upload = json_filtros.get("status_upload", "")
-    tipo_operacao = json_filtros.get("tipo_operacao", "")
     tipo_operacao = json_filtros.get("tipo_operacao", "") # Venda, Compra, Transferência
     cnpj_emitente = (json_filtros.get("cnpj_emitente", "") or "").strip()
     cnpj_destinatario = (json_filtros.get("cnpj_destinatario", "") or "").strip()
@@ -298,12 +297,20 @@ def api_get_dados_notas_fiscais(request):
                 )
 
     if status_upload:
+        #0 - nao definido
+        #1 - arquivei
+        #2 - protocolo
+        #3 - reembolso
+        #4 - avulso
+        #5 - certificado
         if status_upload == "1":
             query = query.filter(_upload_exists(1))
         elif status_upload == "2":
             query = query.filter(_upload_exists(2))
         elif status_upload == "3":
             query = query.filter(_upload_exists(3))
+        elif status_upload == "3nao":
+            query = query.filter(~_upload_exists(3))
         elif status_upload == "4":
             query = query.filter(~_upload_exists(2))
         elif status_upload == "5":

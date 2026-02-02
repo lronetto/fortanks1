@@ -27,14 +27,8 @@
                         <div class="row mb-3">
                             <div class="col-md-2">
                                 <div class="form-group">
-                                    <label>Número NF</label>
-                                    <input type="text" class="form-control" id="filtroNumero">
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <label>Fornecedor</label>
-                                    <input type="text" class="form-control" id="filtroFornecedor">
+                                    <label>Busca</label>
+                                    <input type="text" class="form-control" id="filtroBusca">
                                 </div>
                             </div>
                             <div class="col-md-2">
@@ -68,14 +62,15 @@
                                 <div class="form-group">
                                     <label>Pagamento</label>
                                     <select class="form-control" id="filtroPagamento">
-                                        <option value="">Todos</option>
-                                        <option value="0">Não Pago</option>
-                                        <option value="1">Pago</option>
-                                        <option value="2">Sem Envio</option>
-                                        <option value="3">Apenas reembolso</option>
-                                        <option value="4" selected>Selecionados</option>
-                                        <option value="5">Reembolso e nao pago</option>
-                                        <option value="6">Reembolso e nao pago e nao selecionados</option>
+                                        <option value="" >Todos</option>
+                                        <option value="0" >Não Pago</option>
+                                        <option value="1" >Pago</option>
+                                        <option value="2" >Sem Envio</option>
+                                        <option value="3" >Apenas reembolso</option>
+                                        <option value="4" >Selecionados</option>
+                                        <option value="5" >Reembolso e nao pago</option>
+                                        <option value="6" >Reembolso e nao pago e nao selecionados</option>
+                                        <option value="7" >Reembolso e sem envio</option>
                                     </select>
                                 </div>
                             </div>
@@ -240,7 +235,7 @@ window.modo = '{{ modo }}';
 document.addEventListener('DOMContentLoaded', function() {
     spinner = document.getElementById('spinnerNotas');
     tbody = document.querySelector('#tabelaNotas tbody');
-    
+    filtroPagamento = document.getElementById('filtroPagamento').value;
     // Inicializar DataTable de Notas
     if ($.fn.DataTable) {
         console.log('Iniciando DataTable de Notas');
@@ -275,8 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         length: d.length || 25,
                         notas_selecionadas: notasSelecionadas || [],
                         reembolso_id: reembolso_id,
-                        numero: document.getElementById('filtroNumero')?.value || '',
-                        fornecedor: document.getElementById('filtroFornecedor')?.value || '',
+                        busca: document.getElementById('filtroBusca')?.value || '',
                         data_inicial: document.getElementById('filtroDataInicial')?.value || '',
                         data_final: document.getElementById('filtroDataFinal')?.value || '',
                         valor_minimo: document.getElementById('filtroValorMinimo')?.value || '',
