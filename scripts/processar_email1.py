@@ -783,14 +783,6 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                             logging.info(f"achado arquivei")
                             nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
                             if nota:
-                                if tipo == 2:
-                                    json_nota = json.loads(nota.dados_adicionais)
-                                    json_nota['liberada'] = True
-                                    json_nota['liberada_em'] = datetime.now().isoformat()
-                                    json_nota['liberada_por'] = 'email'
-                                    nota.dados_adicionais = json.dumps(json_nota)
-                                    nota.save()
-                                logging.info(f"fazendo o upload da nota: {nota}")
                                 processar_upload(anexo, nota, filename, payload, tipo)
                             return True
                     except Exception as e:
@@ -895,9 +887,19 @@ def marcar_email_como_lido(uid, usar_imaplib, mail_marcar=None, imap=None):
         return False
 
 def processar_upload(anexo, nota, filename, payload, tipo):
+    
     up = Upload.query.filter(Upload.filename==filename).first()
+    if nota:
+        json_nota = json.loads(nota.dados_adicionais)
+        json_nota['liberada'] = True
+        json_nota['liberada_em'] = datetime.now().isoformat()
+        json_nota['liberada_por'] = 'email'
+        nota.dados_adicionais = json.dumps(json_nota)
+        nota.save()
+    logging.info(f"fazendo o upload da nota: {nota}")
+    file_name = f'{nota.id}_{nota.tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
     if not up:
-        up = Upload('NotaFiscal', nota.id, tipo, filename, 'application/pdf', payload)
+        up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
         if up.id:
             anexo['upload'] = True
             logging.info(f"upload realizado {nota.numero_nf}")
@@ -906,7 +908,7 @@ def processar_upload(anexo, nota, filename, payload, tipo):
             logging.info(f"upload ja existe {nota.numero_nf}")
             return False
     else:
-        if up.nota == nota.id and up.tipo == tipo and up.mimetype == 'application/pdf':
+        if up.nota == nota.id and up.tipo == tipo and up.mimetype == 'application/pdf' and up.filename == file_name:
             anexo['upload'] = True
             logging.info(f"upload ja existe {nota.numero_nf}")
         else:
