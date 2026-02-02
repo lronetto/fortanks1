@@ -26,6 +26,12 @@ import imaplib
 import email
 from email.header import decode_header
 import zipfile
+try:
+    import rarfile
+    RAR_SUPPORT = True
+except ImportError:
+    RAR_SUPPORT = False
+    logging.warning("Biblioteca rarfile não encontrada. Arquivos .rar não serão processados. Instale com: pip install rarfile")
 import logging
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -956,86 +962,131 @@ def processar_upload(anexo, nota, filename, payload, tipo):
 
 def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
     """
-    Processa um anexo ZIP: extrai arquivos e processa conforme o tipo.
+    Processa um anexo ZIP ou RAR: extrai arquivos e processa conforme o tipo.
     Se tipo == 3 (reembolso), processa PDFs extraídos usando processar_anexo_pdf.
     Retorna True se processou com sucesso, False caso contrário.
     """
+    is_rar = filename.lower().endswith('.rar')
+    is_zip = filename.lower().endswith('.zip')
+    
+    if is_rar and not RAR_SUPPORT:
+        logging.error(f"Arquivo RAR {filename} não pode ser processado: biblioteca rarfile não está instalada")
+        anexo['codbarras']['erro'].append("Biblioteca rarfile não está instalada. Instale com: pip install rarfile")
+        return False
+    
     try:
-        logging.info(f"Processando arquivo ZIP: {filename}")
+        tipo_arquivo = "RAR" if is_rar else "ZIP"
+        logging.info(f"Processando arquivo {tipo_arquivo}: {filename}")
         
         # Cria um objeto BytesIO a partir do payload
-        zip_buffer = io.BytesIO(payload)
+        arquivo_buffer = io.BytesIO(payload)
         
-        # Abre o arquivo ZIP
-        with zipfile.ZipFile(zip_buffer, 'r') as zip_ref:
-            # Lista todos os arquivos no ZIP
-            arquivos_no_zip = zip_ref.namelist()
-            logging.info(f"ZIP contém {len(arquivos_no_zip)} arquivos: {arquivos_no_zip}")
+        # Abre o arquivo ZIP ou RAR
+        if is_rar:
+            # Para RAR, precisa salvar temporariamente em disco (rarfile não suporta BytesIO diretamente)
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.rar') as temp_rar:
+                temp_rar.write(payload)
+                temp_rar_path = temp_rar.name
             
-            # Se for tipo 3 (reembolso), processa apenas PDFs
-            if tipo == 3:
-                pdfs_processados = 0
-                for arquivo_zip in arquivos_no_zip:
-                    # Processa apenas arquivos PDF
-                    if arquivo_zip.lower().endswith('.pdf'):
-                        try:
-                            # Extrai o conteúdo do arquivo do ZIP
-                            arquivo_conteudo = zip_ref.read(arquivo_zip)
-                            
-                            # Cria um anexo temporário para processar o PDF
-                            anexo_pdf = {
-                                'filename': arquivo_zip,
-                                'codbarras': {
-                                    'qtd': 0,
-                                    'codigos': [],
-                                    'erro': []
-                                },
-                                'db': [],
-                                'upload': False,
-                                'nao_identificados': 0
-                            }
-                            
-                            # Processa o PDF usando a função existente
-                            resultado = processar_anexo_pdf(anexo_pdf, arquivo_zip, arquivo_conteudo, tipo)
-                            
-                            if resultado:
-                                pdfs_processados += 1
-                                # Adiciona informações do PDF processado ao anexo ZIP
-                                anexo['codbarras']['qtd'] += anexo_pdf['codbarras']['qtd']
-                                anexo['codbarras']['codigos'].extend(anexo_pdf['codbarras']['codigos'])
-                                anexo['codbarras']['erro'].extend(anexo_pdf['codbarras']['erro'])
-                                anexo['db'].extend(anexo_pdf['db'])
-                                if anexo_pdf['upload']:
-                                    anexo['upload'] = True
-                                anexo['nao_identificados'] += anexo_pdf['nao_identificados']
-                                
-                                # Adiciona o anexo PDF ao log
-                                log_email_entry['anexos'].append(anexo_pdf)
-                                logging.info(f"PDF {arquivo_zip} extraído do ZIP e processado com sucesso")
-                            else:
-                                logging.warning(f"Falha ao processar PDF {arquivo_zip} extraído do ZIP")
-                        except Exception as e:
-                            logging.error(f"Erro ao processar PDF {arquivo_zip} do ZIP: {e}")
-                            anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_zip}: {str(e)}")
+            try:
+                with rarfile.RarFile(temp_rar_path, 'r') as rar_ref:
+                    arquivos_no_arquivo = rar_ref.namelist()
+                    logging.info(f"RAR contém {len(arquivos_no_arquivo)} arquivos: {arquivos_no_arquivo}")
+                    
+                    # Processa os arquivos
+                    resultado = _processar_arquivos_comprimidos(
+                        rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
+                    )
+            finally:
+                # Remove arquivo temporário
+                try:
+                    os.unlink(temp_rar_path)
+                except:
+                    pass
+        else:
+            # Processa ZIP
+            with zipfile.ZipFile(arquivo_buffer, 'r') as zip_ref:
+                arquivos_no_arquivo = zip_ref.namelist()
+                logging.info(f"ZIP contém {len(arquivos_no_arquivo)} arquivos: {arquivos_no_arquivo}")
                 
-                if pdfs_processados > 0:
-                    logging.info(f"ZIP processado: {pdfs_processados} PDFs processados de {len([a for a in arquivos_no_zip if a.lower().endswith('.pdf')])} PDFs encontrados")
-                    return True
-                else:
-                    logging.warning(f"ZIP não contém PDFs válidos ou nenhum PDF foi processado com sucesso")
-                    return False
-            else:
-                # Para outros tipos, apenas registra que o ZIP foi encontrado
-                logging.info(f"ZIP encontrado para tipo {tipo}, mas processamento específico não implementado")
-                return False
+                # Processa os arquivos
+                resultado = _processar_arquivos_comprimidos(
+                    zip_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
+                )
+        
+        return resultado
                 
-    except zipfile.BadZipFile:
-        logging.error(f"Arquivo {filename} não é um ZIP válido")
-        anexo['codbarras']['erro'].append("Arquivo não é um ZIP válido")
+    except (zipfile.BadZipFile, rarfile.RarCannotExec, rarfile.RarFileError) as e:
+        tipo_erro = "RAR" if is_rar else "ZIP"
+        logging.error(f"Arquivo {filename} não é um {tipo_erro} válido: {e}")
+        anexo['codbarras']['erro'].append(f"Arquivo não é um {tipo_erro} válido")
         return False
     except Exception as e:
-        logging.error(f"Erro ao processar ZIP {filename}: {e}")
-        anexo['codbarras']['erro'].append(f"Erro ao processar ZIP: {str(e)}")
+        tipo_erro = "RAR" if is_rar else "ZIP"
+        logging.error(f"Erro ao processar {tipo_erro} {filename}: {e}")
+        anexo['codbarras']['erro'].append(f"Erro ao processar {tipo_erro}: {str(e)}")
+        return False
+
+def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, log_email_entry, tipo_arquivo):
+    """
+    Função auxiliar para processar arquivos dentro de ZIP ou RAR.
+    """
+    # Se for tipo 3 (reembolso), processa apenas PDFs
+    if tipo == 3:
+        pdfs_processados = 0
+        for arquivo_nome in arquivos_lista:
+            # Processa apenas arquivos PDF
+            if arquivo_nome.lower().endswith('.pdf'):
+                try:
+                    # Extrai o conteúdo do arquivo
+                    arquivo_conteudo = arquivo_ref.read(arquivo_nome)
+                    
+                    # Cria um anexo temporário para processar o PDF
+                    anexo_pdf = {
+                        'filename': arquivo_nome,
+                        'codbarras': {
+                            'qtd': 0,
+                            'codigos': [],
+                            'erro': []
+                        },
+                        'db': [],
+                        'upload': False,
+                        'nao_identificados': 0
+                    }
+                    
+                    # Processa o PDF usando a função existente
+                    resultado = processar_anexo_pdf(anexo_pdf, arquivo_nome, arquivo_conteudo, tipo)
+                    
+                    if resultado:
+                        pdfs_processados += 1
+                        # Adiciona informações do PDF processado ao anexo original
+                        anexo['codbarras']['qtd'] += anexo_pdf['codbarras']['qtd']
+                        anexo['codbarras']['codigos'].extend(anexo_pdf['codbarras']['codigos'])
+                        anexo['codbarras']['erro'].extend(anexo_pdf['codbarras']['erro'])
+                        anexo['db'].extend(anexo_pdf['db'])
+                        if anexo_pdf['upload']:
+                            anexo['upload'] = True
+                        anexo['nao_identificados'] += anexo_pdf['nao_identificados']
+                        
+                        # Adiciona o anexo PDF ao log
+                        log_email_entry['anexos'].append(anexo_pdf)
+                        logging.info(f"PDF {arquivo_nome} extraído do {tipo_arquivo} e processado com sucesso")
+                    else:
+                        logging.warning(f"Falha ao processar PDF {arquivo_nome} extraído do {tipo_arquivo}")
+                except Exception as e:
+                    logging.error(f"Erro ao processar PDF {arquivo_nome} do {tipo_arquivo}: {e}")
+                    anexo['codbarras']['erro'].append(f"Erro ao processar {arquivo_nome}: {str(e)}")
+        
+        if pdfs_processados > 0:
+            total_pdfs = len([a for a in arquivos_lista if a.lower().endswith('.pdf')])
+            logging.info(f"{tipo_arquivo} processado: {pdfs_processados} PDFs processados de {total_pdfs} PDFs encontrados")
+            return True
+        else:
+            logging.warning(f"{tipo_arquivo} não contém PDFs válidos ou nenhum PDF foi processado com sucesso")
+            return False
+    else:
+        # Para outros tipos, apenas registra que o arquivo foi encontrado
+        logging.info(f"{tipo_arquivo} encontrado para tipo {tipo}, mas processamento específico não implementado")
         return False
 def processar_anexos_email(msg, tipo, log_email_entry):
     """
@@ -1049,7 +1100,7 @@ def processar_anexos_email(msg, tipo, log_email_entry):
     anexos_filtrados = msg.attachments
     if PROCESSAR_APENAS_PDF_XML:
         # Inclui ZIPs também quando PROCESSAR_APENAS_PDF_XML está ativo
-        anexos_filtrados = [att for att in msg.attachments if att["filename"].lower().endswith(('.pdf', '.xml', '.zip'))]
+        anexos_filtrados = [att for att in msg.attachments if att["filename"].lower().endswith(('.pdf', '.xml', '.zip', '.rar'))]
         if len(anexos_filtrados) < len(msg.attachments):
             logging.info(f'Filtrados {len(msg.attachments) - len(anexos_filtrados)} anexos não-PDF/XML/ZIP de {len(msg.attachments)} totais')
     
@@ -1058,13 +1109,15 @@ def processar_anexos_email(msg, tipo, log_email_entry):
         anexos_ordenados = sorted(anexos_filtrados, key=lambda att: (
             0 if att["filename"].lower().endswith('.xml') else
             1 if att["filename"].lower().endswith('.pdf') else
-            2 if att["filename"].lower().endswith('.zip') else 3
+            2 if att["filename"].lower().endswith('.zip') else 
+            3 if att["filename"].lower().endswith('.rar') else 4
         ))
     else:
         anexos_ordenados = sorted(anexos_filtrados, key=lambda att: (
             0 if att["filename"].lower().endswith('.pdf') else
             1 if att["filename"].lower().endswith('.xml') else
-            2 if att["filename"].lower().endswith('.zip') else 3
+            2 if att["filename"].lower().endswith('.zip') else 
+            3 if att["filename"].lower().endswith('.rar') else 4
         ))
     
     # Filtra anexos já processados
