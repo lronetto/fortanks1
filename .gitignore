@@ -5,7 +5,7 @@ __pycache__/*
 */*/*/__pycache/*
 */*/*/__pycache/*
 
-
+temp/
 *.py[cod]
 *$py.class
 

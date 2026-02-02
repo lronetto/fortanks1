@@ -1,4 +1,5 @@
 import asyncio
+import platform
 from controllers.seguranca_controller import seguranca_bp
 from controllers.colaborador_controller import colaborador_bp
 from controllers.equipamento_controller import equipamento_bp
@@ -494,7 +495,10 @@ def gerenciar_scheduler():
         logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
 
 # Gerenciar o scheduler
-#gerenciar_scheduler()
+sistema = platform.system().lower()
+if sistema == 'linux':
+    gerenciar_scheduler()
+
 
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():
