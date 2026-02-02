@@ -1100,7 +1100,7 @@ def processar_anexos_email(msg, tipo, log_email_entry):
         elif filename.lower().endswith('.xml'):
             processar_anexo_xml(filename, payload, log_email_entry)
             # XML não adiciona ao anexo pois já é processado separadamente
-        elif filename.lower().endswith('.zip'):
+        elif filename.lower().endswith('.zip') or filename.lower().endswith('.rar'):
             # Para ZIPs, o processamento pode adicionar múltiplos anexos ao log
             # Se for tipo 3 (reembolso), os PDFs extraídos já são adicionados ao log dentro de processar_anexo_zip
             processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry)

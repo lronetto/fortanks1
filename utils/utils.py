@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import re
 from PyPDF2 import PdfReader, PdfWriter
+import io
+import logging
 def formatarMoeda(valor):
     """Formata valor como moeda brasileira"""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
