@@ -1210,7 +1210,8 @@ function adicionarListenersNotas() {
         const valor = rowData ? (rowData.valor_total || 0) : 0;
         const centro_custo_id = tr.find('.nota-centro-custo').val() || '';
         let nota = { id: notaId, descricao, valor, centro_custo_id };
-        
+        console.log('nota',nota);
+        console.log('notasSelecionadas',notasSelecionadas);
         if (this.checked) {
             if (!notasSelecionadas.find(n => n.id === notaId)) notasSelecionadas.push(nota);
         } else {

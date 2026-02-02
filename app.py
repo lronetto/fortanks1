@@ -477,7 +477,7 @@ def gerenciar_scheduler():
             logger.info("Job diário adicionado ao scheduler")
 
             # Adiciona o job semanal (todo domingo às 00:00)
-            app.scheduler.add_job(job_semanal, 'cron', day_of_week='sun', hour=0, minute=0)
+            app.scheduler.add_job(job_semanal, 'cron', day_of_week='sun', hour=23, minute=59)
             logger.info("Job semanal adicionado ao scheduler")
 
             # Adiciona o job horário (a cada hora)

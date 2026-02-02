@@ -1,5 +1,6 @@
 from itertools import groupby
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, current_app
+from sqlalchemy import func
 from models import db
 from models.contrato import Contrato
 from models.tanque import TanquesGrupos, Tanques, TanquesPecas, TanquesProdutoComposto
@@ -17,7 +18,7 @@ from models.logs import Logs
 import logging
 from models.permissoes import Permissao
 
-from controllers.utils import (
+from utils.utils import (
     get_value_datetime,
     get_value_str,
     is_date_string,
@@ -990,14 +991,20 @@ def processar_producao(log=False):
     try:
         print("Processando produção...")
         EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
+        EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%usinagem_concreto%')).delete()
         db.session.commit()
-        processar_producao_manual(log=log)
+        
+        # Obter usuario_id do current_user ou usar fallback
+        usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
+        
+        processar_producao_manual(log=log, usuario_id=usuario_id)
         return jsonify({
             'success': True,
             'message': 'Produção processada com sucesso!'
         }), 200
     except Exception as e:
         import traceback
+        db.session.rollback()
         return jsonify({
             'success': False,
             'message': f'Erro ao processar produção: {str(e)}',
@@ -1190,18 +1197,37 @@ def processar_producao(log=False):
             }), 500
 
     
-def processar_producao_manual(log):
+def processar_producao_manual(log, usuario_id=1):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
+    from datetime import date as date_type
+    
     dias = TanquesPecas.query.filter(TanquesPecas.data_concretagem.isnot(None)).group_by(TanquesPecas.data_concretagem).all()
     logging.info(f"Processando {len(dias)} dias")
-    for dia in dias:
-        dia = dia.data_concretagem
+    for dia_obj in dias:
+        dia = dia_obj.data_concretagem
+        
+        # Normalizar dia para date se for datetime
+        if isinstance(dia, datetime):
+            dia_date = dia.date()
+        elif isinstance(dia, date_type):
+            dia_date = dia
+        else:
+            # Tentar converter se for string
+            try:
+                if isinstance(dia, str):
+                    dia_date = datetime.strptime(dia, '%Y-%m-%d').date()
+                else:
+                    dia_date = dia
+            except:
+                logging.warning(f"Erro ao converter data: {dia}")
+                continue
+        
         pecas_concretadas = TanquesPecas.query.filter(
             TanquesPecas.data_concretagem.isnot(None),
-            TanquesPecas.data_concretagem == dia
+            func.date(TanquesPecas.data_concretagem) == dia_date
         ).all()
-        logging.info(f"Processando dia: {dia} - {len(pecas_concretadas)} peças")
+        logging.info(f"Processando dia: {dia_date} - {len(pecas_concretadas)} peças")
         if not pecas_concretadas:
             continue
         
@@ -1212,6 +1238,16 @@ def processar_producao_manual(log):
             if chave not in grupos:
                 grupos[chave] = []
             grupos[chave].append(peca)
+
+        # Buscar usinagens do dia
+        if False:
+            usinagens = ConcretoUsinagens.query.filter(func.date(ConcretoUsinagens.data_usinagem) == dia_date).all()
+            for usinagem in usinagens:
+                try:
+                    usinagem.produzir(usuario_id=usuario_id)
+                except Exception as e:
+                    logging.error(f"Erro ao processar usinagem {usinagem.id}: {str(e)}")
+                    continue
         
         materiais_necessarios = {}
         todas_pecas_processadas = []
@@ -1239,39 +1275,57 @@ def processar_producao_manual(log):
                 print(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s)")
             
             produtos_processados = set()  # isolado por grupo para não pular composições entre grupos
-            produto_composto.produzir(
-                quantidade=quantidade_grupo, 
-                data_movimento=dia, 
-                usuario_id=current_user.id, 
-                log=log,
-                produtos_processados=produtos_processados,
-                materiais_necessarios=materiais_necessarios
-            )
+            try:
+                produto_composto.produzir(
+                    quantidade=quantidade_grupo, 
+                    data_movimento=dia_date, 
+                    usuario_id=usuario_id, 
+                    log=True,
+                    produtos_processados=produtos_processados,
+                    materiais_necessarios=materiais_necessarios,
+                    traco=True
+                )
+            except Exception as e:
+                logging.error(f"Erro ao processar produto composto {produto_composto.id}: {str(e)}")
+                continue
 
         print(f"Materiais necessários: {len(materiais_necessarios)}")
         if materiais_necessarios:
             # Processar materiais agrupados
             for info in materiais_necessarios.values():
-                estoque = info['estoque']
-                quantidade_total = info['quantidade']
-                produto_id = info['produto_id']
-                
-                if log:
-                    print(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
-                
-                mov = EstoqueMovimentacoes()
-                mov.remover(
-                    quantidade=quantidade_total, 
-                    estoque_id=estoque.id, 
-                    origem_id=produto_id, 
-                    origem_tipo='producao_peca', 
-                    usuario_id=current_user.id,
-                    motivo=f'Produção das peças: {", ".join(todas_pecas_processadas)} - Quantidade total: {quantidade_total}',
-                    log=log
-                )
-                # Definir data_movimento se fornecida
-                mov.data_movimento = dia
-                mov.save()
+                try:
+                    estoque = info['estoque']
+                    quantidade_total = info['quantidade']
+                    produto_id = info['produto_id']
+                    
+                    if log:
+                        print(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
+                    
+                    mov = EstoqueMovimentacoes()
+                    mov.remover(
+                        quantidade=quantidade_total, 
+                        estoque_id=estoque.id, 
+                        origem_id=produto_id, 
+                        origem_tipo='producao_peca', 
+                        usuario_id=usuario_id,
+                        motivo=f'Produção das peças: {", ".join(todas_pecas_processadas[:10])} - Quantidade total: {quantidade_total}',
+                        log=log
+                    )
+                    # Definir data_movimento se fornecida
+                    mov.data_movimento = dia_date
+                    mov.save()
+                except Exception as e:
+                    logging.error(f"Erro ao criar movimentação de estoque: {str(e)}")
+                    continue
+        
+        # Commit após processar cada dia
+        try:
+            db.session.commit()
+        except Exception as e:
+            logging.error(f"Erro ao fazer commit: {str(e)}")
+            db.session.rollback()
+            continue
+    
     return True
 
 @peca.route('/importar-inspecao', methods=['POST'])

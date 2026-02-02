@@ -33,10 +33,8 @@ reembolso_bp = Blueprint('reembolso', __name__, url_prefix='/reembolsos')
 import dotenv
 import os
 dotenv.load_dotenv()
+from utils.utils import formatarMoeda
 
-def formatarMoeda(valor):
-    """Formata valor como moeda brasileira"""
-    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def parse_data_documento(data_str):
     """
@@ -360,6 +358,14 @@ def datatables_notas():
             except:
                 notas_selecionadas = []
         
+        # Criar dicionário de notas selecionadas para busca rápida
+        notas_selecionadas_dict = {}
+        if notas_selecionadas:
+            for nota_sel in notas_selecionadas:
+                nota_id = int(nota_sel.get('id', 0)) if isinstance(nota_sel, dict) else int(nota_sel) if isinstance(nota_sel, (int, str)) else 0
+                if nota_id:
+                    notas_selecionadas_dict[nota_id] = nota_sel if isinstance(nota_sel, dict) else {}
+        
         json_filtros = {
             'page': page,
             'per_page': per_page,
@@ -372,7 +378,8 @@ def datatables_notas():
             'valor_exato': data.get('valor_exato', ''),
             'reembolso_id': data.get('reembolso_id', ''),
             'order_by': order_by,
-            'order_dir': order_dir
+            'order_dir': order_dir,
+            'emitente': 'Terceiros' 
         }
         
         pagamento = data.get('pagamento', '')
@@ -407,15 +414,34 @@ def datatables_notas():
         for n in notas:
             try:
                 nota_fiscal_obj = n.NotaFiscal
-                # Verificar se a nota está no reembolso usando a coluna reembolso
-                esta_no_reembolso = bool(n.reembolso if hasattr(n, 'reembolso') else 0)
+                nota_id = nota_fiscal_obj.id
                 
-                # Buscar dados do documento do reembolso se houver
+                # Verificar se a nota está no reembolso usando a coluna reembolso do banco
+                esta_no_reembolso_db = bool(n.reembolso if hasattr(n, 'reembolso') else 0)
+                
+                # Verificar se a nota está na lista de selecionadas do frontend
+                esta_na_lista_selecionadas = nota_id in notas_selecionadas_dict
+                
+                # A nota está selecionada se estiver no banco OU na lista do frontend
+                esta_no_reembolso = esta_no_reembolso_db or esta_na_lista_selecionadas
+                
+                # Buscar dados do documento do reembolso se houver (prioridade: lista frontend > banco)
                 item_selecionado = None
-                if esta_no_reembolso and reembolso_id:
+                
+                # Primeiro, verificar se está na lista do frontend (tem prioridade)
+                if esta_na_lista_selecionadas:
+                    nota_sel = notas_selecionadas_dict[nota_id]
+                    if isinstance(nota_sel, dict):
+                        item_selecionado = {
+                            'centro_custo_id': nota_sel.get('centro_custo_id') or None,
+                            'descricao': nota_sel.get('descricao') or ''
+                        }
+                
+                # Se não encontrou na lista do frontend, buscar no banco
+                if not item_selecionado and esta_no_reembolso_db and reembolso_id:
                     try:
                         reembolso_doc = ReembolsosDocumentos.query.filter_by(
-                            nota_fiscal_id=nota_fiscal_obj.id,
+                            nota_fiscal_id=nota_id,
                             reembolso_id=reembolso_id
                         ).first()
                         if reembolso_doc:
@@ -432,8 +458,8 @@ def datatables_notas():
                     data_emissao_sort = nota_fiscal_obj.data_emissao.strftime('%Y-%m-%d')
                 
                 notas_data.append({
-                    'DT_RowId': f'nota_{nota_fiscal_obj.id}',
-                    'id': nota_fiscal_obj.id,
+                    'DT_RowId': f'nota_{nota_id}',
+                    'id': nota_id,
                     'data_emissao': nota_fiscal_obj.data_emissao.isoformat() if nota_fiscal_obj.data_emissao else None,
                     'data_emissao_sort': data_emissao_sort,
                     'nome_emitente': nota_fiscal_obj.nome_emitente or '',

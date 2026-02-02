@@ -1,10 +1,12 @@
 from datetime import datetime
 
+from flask_login import current_user
 from sqlalchemy.sql import func
 from sqlalchemy import JSON
 from models.database import db
 from sqlalchemy.orm import relationship
 from decimal import Decimal
+from models.produto_composto import ProdutoComposto
 from models.tanque import TanquesPecas
 from models.unidade import Unidades
 from models.material import Materiais
@@ -536,6 +538,48 @@ class ConcretoUsinagens(db.Model):
             return "01"
         else:
             return str(self.serie-primeira_serie+1)
+    def produzir(self, usuario_id=None):
+        """Produz a usinagem de concreto"""
+        # Obter usuario_id do parâmetro ou do current_user
+        if usuario_id is None:
+            usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
+        
+        print(f"Produzindo usinagem de concreto #{self.id} - Série: {self.serie} - Data: {self.data_usinagem} - Volume: {self.volume}")
+        if not self.produto_composto:
+            return False
+        produto = ProdutoComposto.query.get(self.produtoCompostoId)
+        if not produto:
+            return False
+        _produtos_processados = set()
+        _materiais_necessarios = {}
+        produto.produzir(
+                    quantidade=self.volume, 
+                    data_movimento=self.data_usinagem, 
+                    usuario_id=usuario_id, 
+                    log=True,
+                    produtos_processados=_produtos_processados,
+                    materiais_necessarios=_materiais_necessarios,
+                    traco=True
+                )
+        print(f"Materiais necessários: {len(_materiais_necessarios)}")
+        if _materiais_necessarios:
+            for info in _materiais_necessarios.values():
+                estoque = info['estoque']
+                quantidade_total = info['quantidade']
+                produto_id = info['produto_id']
+                print(f"  -> Componente material: {estoque.material.nome} - Quantidade total: {quantidade_total}")
+                mov = EstoqueMovimentacoes()
+                mov.remover(
+                    quantidade=quantidade_total, 
+                    estoque_id=estoque.id, 
+                    origem_id=self.id, 
+                    origem_tipo='usinagem_concreto', 
+                    usuario_id=usuario_id,
+                    motivo=f'Produção da usinagem de concreto #{self.id} - Série: {self.serie} - Quantidade: {quantidade_total}',
+                    log=True)
+                mov.data_movimento = self.data_usinagem
+                mov.save()
+        return True
 class ConcretoUsinagensMateriais(db.Model):
     """
     Modelo para representar materiais utilizados em uma usinagem

@@ -142,7 +142,7 @@ class ProdutoComposto(db.Model):
         """Retorna o valor unitário do produto composto"""
         return sum(componente.get_valor_total() for componente in self.componentes)
     
-    def produzir(self, quantidade=1, data_movimento=None, usuario_id=1, log=None, produtos_processados=None, materiais_necessarios=None):
+    def produzir(self, quantidade=1, data_movimento=None, usuario_id=1, log=None, produtos_processados=None, materiais_necessarios=None,traco=False):
         """
         Produz um item do produto composto.
         
@@ -156,6 +156,7 @@ class ProdutoComposto(db.Model):
         # Inicializar conjunto de produtos processados se não foi fornecido
         if produtos_processados is None:
             produtos_processados = set()
+        
         
         # Verificar se este produto já foi processado (evita loops infinitos)
         if self.id in produtos_processados:
@@ -266,7 +267,6 @@ class ProdutoComposto(db.Model):
             
             elif componente.estoque.tipo_item == 'produto_composto':
                 produtos_compostos.append(componente)
-            
             else:
                 if log:
                     print(f"  AVISO: Tipo de item {componente.estoque.tipo_item} não suportado")
@@ -298,7 +298,7 @@ class ProdutoComposto(db.Model):
                 if log:
                     print(f"  AVISO: Produto composto {comp.nome} (ID: {comp.id}) já foi processado. Pulando para evitar loop infinito.")
                 continue
-            print(f"produzido")
+            #print(f"produzido")
             # Chamar recursivamente passando o conjunto de produtos processados
             comp.produzir(
                 quantidade=quantidade*componente.quantidade, 

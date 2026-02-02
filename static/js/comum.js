@@ -42,6 +42,7 @@ function fecharModal(modalId) {
     $('body').removeClass('modal-open');
 }
 async function compararUnidades(unidadeNota, unidadeMaterial) {
+    console.log('compararUnidades', unidadeNota, unidadeMaterial);
     try {
         const response = await fetch('/notas-fiscais/api/comparar-unidades', {
             method: 'POST',

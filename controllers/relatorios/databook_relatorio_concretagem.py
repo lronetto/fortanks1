@@ -24,7 +24,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from controllers.relatorios.commun import _converter_ods_para_xlsx_libreoffice, _converter_excel_para_pdf_libreoffice
 from controllers.relatorios.commun import _obter_pasta_temp_projeto, _criar_diretorio_temp_projeto, _limpar_arquivo_temp, _limpar_diretorio_temp,_criar_arquivo_temp_projeto
-from controllers.utils import format_float
+from utils.utils import format_float
 
 # Tentar importar odfpy para suporte a ODS
 try:

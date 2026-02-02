@@ -403,11 +403,12 @@ def register(nota_fiscal_bp):
         Espera JSON: {unidadeNota: str, unidadeMaterial: str}
         Retorna: {success: bool, fator_conversao: float|None}
         """
+        print('api_comparar_unidades', request.get_json());
         data = request.get_json() or {}
         unidade_nota = data.get("unidadeNota", "").strip()
         unidade_material = data.get("unidadeMaterial", "").strip()
 
-        fator = get_conversao_unidade(unidade_nota, unidade_material)   
+        fator = get_conversao_unidade(unidade_entrada=unidade_nota, unidade_saida=unidade_material)   
         if fator:
             return jsonify({"success": True, "fator_conversao": fator})
         # Não são iguais e não há conversão disponível

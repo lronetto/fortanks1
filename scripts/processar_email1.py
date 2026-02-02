@@ -34,7 +34,7 @@ import requests
 import time
 from pyzbar.pyzbar import decode
 from pdf2image import convert_from_path, convert_from_bytes
-
+from utils.utils import separar_pdf_por_paginas
 def carregar_variaveis_ambiente():
     """
     Carrega as variáveis de ambiente do arquivo .env
@@ -644,42 +644,7 @@ def validar_chave_acesso(chave):
     
     return True
 
-def separar_pdf_por_paginas(payload, filename):
-    """
-    Separa um PDF em múltiplos PDFs, um por página.
-    Retorna lista de tuplas (payload_pagina, filename_pagina).
-    """
-    try:
-        pdf_reader = PdfReader(io.BytesIO(payload))
-        num_paginas = len(pdf_reader.pages)
-        
-        if num_paginas <= 1:
-            return [(payload, filename)]
-        
-        paginas_separadas = []
-        nome_base = filename.replace('.pdf', '')
-        
-        for i in range(num_paginas):
-            pdf_writer = PdfWriter()
-            pdf_writer.add_page(pdf_reader.pages[i])
-            
-            # Cria um novo PDF em memória
-            output_buffer = io.BytesIO()
-            pdf_writer.write(output_buffer)
-            output_buffer.seek(0)
-            payload_pagina = output_buffer.getvalue()
-            
-            # Nome do arquivo com número da página
-            filename_pagina = f"{nome_base}_pagina_{i+1}.pdf"
-            
-            paginas_separadas.append((payload_pagina, filename_pagina))
-            logging.info(f"Página {i+1}/{num_paginas} separada: {filename_pagina}")
-        
-        return paginas_separadas
-    except Exception as e:
-        logging.error(f"Erro ao separar PDF {filename} por páginas: {e}")
-        # Em caso de erro, retorna o PDF original
-        return [(payload, filename)]
+
 
 def processar_anexo_pdf(anexo, filename, payload, tipo):
     """
@@ -817,6 +782,13 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                             logging.info(f"achado arquivei")
                             nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
                             if nota:
+                                if tipo == 2:
+                                    json_nota = json.loads(nota.dados_adicionais)
+                                    json_nota['liberada'] = True
+                                    json_nota['liberada_em'] = datetime.now().isoformat()
+                                    json_nota['liberada_por'] = 'email'
+                                    nota.dados_adicionais = json.dumps(json_nota)
+                                    nota.save()
                                 logging.info(f"fazendo o upload da nota: {nota}")
                                 processar_upload(anexo, nota, filename, payload, tipo)
                             return True

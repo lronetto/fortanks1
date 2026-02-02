@@ -4,7 +4,10 @@ Funções auxiliares compartilhadas entre usinagens e rompimentos
 import pandas as pd
 from datetime import datetime, timedelta
 import re
-
+from PyPDF2 import PdfReader, PdfWriter
+def formatarMoeda(valor):
+    """Formata valor como moeda brasileira"""
+    return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def normalizar_data_str(s):
     """Normaliza string de data removendo espaços extras"""
@@ -196,3 +199,40 @@ def serialize_nested(data):
     if isinstance(data, list):
         return [serialize_nested(item) for item in data]
     return serialize_value(data)
+
+def separar_pdf_por_paginas(payload, filename):
+    """
+    Separa um PDF em múltiplos PDFs, um por página.
+    Retorna lista de tuplas (payload_pagina, filename_pagina).
+    """
+    try:
+        pdf_reader = PdfReader(io.BytesIO(payload))
+        num_paginas = len(pdf_reader.pages)
+        
+        if num_paginas <= 1:
+            return [(payload, filename)]
+        
+        paginas_separadas = []
+        nome_base = filename.replace('.pdf', '')
+        
+        for i in range(num_paginas):
+            pdf_writer = PdfWriter()
+            pdf_writer.add_page(pdf_reader.pages[i])
+            
+            # Cria um novo PDF em memória
+            output_buffer = io.BytesIO()
+            pdf_writer.write(output_buffer)
+            output_buffer.seek(0)
+            payload_pagina = output_buffer.getvalue()
+            
+            # Nome do arquivo com número da página
+            filename_pagina = f"{nome_base}_pagina_{i+1}.pdf"
+            
+            paginas_separadas.append((payload_pagina, filename_pagina))
+            logging.info(f"Página {i+1}/{num_paginas} separada: {filename_pagina}")
+        
+        return paginas_separadas
+    except Exception as e:
+        logging.error(f"Erro ao separar PDF {filename} por páginas: {e}")
+        # Em caso de erro, retorna o PDF original
+        return [(payload, filename)]

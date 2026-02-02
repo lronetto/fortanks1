@@ -103,8 +103,12 @@
             fatorConversao = 0;
             const resultado = await compararUnidades(itemUnidade, materialUnidade);
             if (resultado.success) {
+                console.log('resultado', resultado);
                 fatorConversao = resultado.fator_conversao;
                 iguais = true;
+            }
+            else {
+                console.log('resultado', resultado);
             }
             console.log('materialUnidade', materialUnidade);
             console.log('itemUnidade', itemUnidade);

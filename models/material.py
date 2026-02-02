@@ -161,7 +161,6 @@ class MateriaisGrupos(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     criado_por_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    dados_adicionais = db.Column(db.JSON, nullable=True)
     # Relacionamentos
     criado_por = relationship('Usuario', foreign_keys=[criado_por_id])
 

@@ -200,9 +200,9 @@ class Tanques(db.Model):
             if peca.qualidade:
                 try:
                     qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
+                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento'] and (qualidade_dict['acabamento'] != '' or qualidade_dict['acabamento'] != 'null'):
                         pecas_acabadas += 1
-                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
+                    if 'transporte' in qualidade_dict and qualidade_dict['transporte'] and (qualidade_dict['transporte']['data_transporte'] != '' or qualidade_dict['transporte']['data_transporte'] != 'null'):
                         pecas_transportadas += 1
                     if peca.data_concretagem:
                         pecas_concretadas += 1
