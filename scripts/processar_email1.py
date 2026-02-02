@@ -653,6 +653,7 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
     Retorna True se processou com sucesso, False caso contrário.
     """
     # Se for tipo 3 (Reembolso) e o PDF tiver mais de uma página, separa por páginas
+    logging.info(f"processando anexo pdf tipo: {tipo} filename: {filename}")
     if tipo == 3:
         try:
             pdf_reader = PdfReader(io.BytesIO(payload))
@@ -898,6 +899,7 @@ def processar_upload(anexo, nota, filename, payload, tipo):
         nota.save()
     logging.info(f"fazendo o upload da nota: {nota}")
     file_name = f'{nota.id}_{nota.tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
+    logging.info(f"file_name: {file_name}")
     if not up:
         up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
         if up.id:
