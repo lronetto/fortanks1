@@ -908,11 +908,12 @@ def processar_upload(anexo, nota, filename, payload, tipo):
             logging.info(f"upload ja existe {nota.numero_nf}")
             return False
     else:
-        if up.nota == nota.id and up.tipo == tipo and up.mimetype == 'application/pdf' and up.filename == file_name:
+        if up.pai_id == nota.id and up.pai == 'NotaFiscal' and up.tipo == tipo and up.mimetype == 'application/pdf' and up.filename == file_name:
             anexo['upload'] = True
             logging.info(f"upload ja existe {nota.numero_nf}")
         else:
-            up.nota = nota.id
+            up.pai_id = nota.id
+            up.pai = 'NotaFiscal'
             up.tipo = tipo
             up.mimetype = 'application/pdf'
             up.save()
