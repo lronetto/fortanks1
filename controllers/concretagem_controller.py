@@ -49,42 +49,17 @@ def get_pecas_por_tanque(tanque_id):
         print(f"[API] Quantidade de peças encontradas: {len(pecas)}")
         
         # Obter IDs de peças já concretadas (verificar no campo pecas JSON)
-        pecas_concretadas_ids = set()
-        concretagens = ConcretoConcretagens.query.filter(ConcretoConcretagens.pecas.isnot(None)).all()
-        for conc in concretagens:
-            try:
-                pecas_json = json.loads(conc.pecas) if isinstance(conc.pecas, str) else conc.pecas
-                if isinstance(pecas_json, list):
-                    for p in pecas_json:
-                        # Suporta tanto formato antigo ("placa") quanto novo ("nome")
-                        peca_nome = p.get('nome') or p.get('placa')
-                        if peca_nome:
-                            pecas_concretadas_ids.add(str(peca_nome))
-            except:
-                pass
+        pecas_concretadas_ids = tanque.get_pecas_concretadas()
         
         print(f"[API] Peças já concretadas: {len(pecas_concretadas_ids)}")
         
         # Preparar resultados
         result = []
         for peca in pecas:
-            concretada = str(peca.id) in pecas_concretadas_ids
-            
-            # Se só quer não concretadas e a peça está concretada, pular
-            if mostrar_nao_concretadas and concretada:
+            if peca.id not in pecas_concretadas_ids:
                 continue
-                
-            # Garantir que todos os campos necessários estejam presentes e com nomes consistentes
-            peca_dict = {
-                'id': peca.id,
-                'nome': peca.nome,
-                'tipo': peca.tipo,
-                'numero_sequencial': peca.numero_sequencial,
-                'tanque_nome': peca.tanque.nome if peca.tanque else '',
-                'tanque_id': peca.tanque_id,
-                'concretada': concretada
-            }
-            result.append(peca_dict)
+            
+            result.append(peca.to_dict())
         
         print(f"[API] Retornando {len(result)} peças no resultado final")
         # Adicionar um cabeçalho para evitar caching
@@ -180,21 +155,14 @@ def api_listar():
         
         data = []
         for conc in concretagens:
-            pecas_count = 0
-            if conc.pecas:
-                try:
-                    pecas_json = json.loads(conc.pecas) if isinstance(conc.pecas, str) else conc.pecas
-                    if isinstance(pecas_json, list):
-                        pecas_count = len(pecas_json)
-                except:
-                    pass
+            
             
             data.append({
                 'concretagem': conc.conc,
                 'id': conc.id,
                 'data_concretagem': conc.data_concretagem.isoformat() if conc.data_concretagem else None,
                 'pista': conc.pista,
-                'quantidade_pecas': pecas_count,
+                'quantidade_pecas': len(conc.get_pecas()),
                 'data_cadastro': conc.data_cadastro.isoformat() if conc.data_cadastro else None
             })
         

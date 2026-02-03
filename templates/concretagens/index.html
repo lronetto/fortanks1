@@ -79,8 +79,13 @@
                         if (!data) return '';
                         // Ordena/filtra usando ISO (YYYY-MM-DD), exibe em pt-BR
                         if (type === 'sort' || type === 'type') return data;
-                        const date = new Date(data);
-                        return date.toLocaleDateString('pt-BR');
+                        // Parse manual para evitar problemas de timezone
+                        const parts = data.split('T')[0].split('-');
+                        if (parts.length === 3) {
+                            const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                            return date.toLocaleDateString('pt-BR');
+                        }
+                        return data;
                     }
                 },
                 { data: 'pista', title: 'Pista' },

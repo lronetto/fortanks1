@@ -181,11 +181,20 @@ class Tanques(db.Model):
         except (ValueError, IndexError) as e:
             print(f"Erro ao extrair dimensões numéricas para o tanque {self.id}: {str(e)}")
             return False 
+    def get_pecas_concretadas(self):
+        """
+        Retorna o total de peças concretadas do tanque
+        """
+        pecas_ids = []
+        for peca in self.TanquesPecas:
+            if peca.data_concretagem:
+                pecas_ids.append(peca.id)
+        return pecas_ids
     def get_concretadas(self):
         """
         Retorna o total de concretagens do tanque
         """
-        return TanquesPecas.query.filter_by(tanque_id=self.id, data_concretagem__isnot=None).count()
+        return len(self.get_pecas_concretadas())
     def get_statistics(self):
         """
         Retorna as estatísticas do tanque
@@ -200,9 +209,9 @@ class Tanques(db.Model):
             if peca.qualidade:
                 try:
                     qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento'] and (qualidade_dict['acabamento'] != '' or qualidade_dict['acabamento'] != 'null'):
+                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento'] and (qualidade_dict['acabamento'] != '' and qualidade_dict['acabamento'] != 'null'):
                         pecas_acabadas += 1
-                    if 'transporte' in qualidade_dict and qualidade_dict['transporte'] and (qualidade_dict['transporte']['data_transporte'] != '' or qualidade_dict['transporte']['data_transporte'] != 'null'):
+                    if 'transporte' in qualidade_dict and qualidade_dict['transporte'] and (qualidade_dict['transporte']['data_transporte'] != '' and qualidade_dict['transporte']['data_transporte'] != 'null'):
                         pecas_transportadas += 1
                     if peca.data_concretagem:
                         pecas_concretadas += 1
@@ -376,7 +385,22 @@ class TanquesPecas(db.Model):
             return []
     def is_PF(self):
         return self.tipo == 'PF'
-
+    def to_dict(self):
+        """
+        Retorna um dicionário com os campos da peça
+        """
+        return {
+            'id': self.id,
+            'nome': self.nome,
+            'tipo': self.tipo,
+            'numero_sequencial': self.numero_sequencial,
+            'numero_tanque': self.numero_tanque,
+            'volume': self.volume,
+            'data_prevista': self.data_prevista,
+            'data_concretagem': self.data_concretagem,
+            'data_entrega': self.data_entrega,
+            'qualidade': self.qualidade,
+        }
 class TanquesProdutoComposto(db.Model):
     """
     Modelo para vincular tanques a produtos compostos

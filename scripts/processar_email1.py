@@ -956,7 +956,7 @@ def processar_upload(anexo, nota, filename, payload, tipo):
         nota.dados_adicionais = json.dumps(json_nota)
         nota.save()
     logging.info(f"fazendo o upload da nota: {nota}")
-    file_name = f'{nota.id}_{nota.tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
+    file_name = f'{nota.id}_{tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
     logging.info(f"file_name: {file_name}")
     if not up:
         up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
