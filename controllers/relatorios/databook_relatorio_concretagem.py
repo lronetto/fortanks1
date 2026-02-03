@@ -190,6 +190,9 @@ def api_resumo():
     pecas_vinculadas = set()
     total_rompimentos = 0
     
+    # Se houver filtros de projeto, grupo ou tanque, filtrar séries que têm peças vinculadas
+    tem_filtros_especificos = contrato_id or grupo_id or tanque_id
+    
     # Processar cada usinagem
     for usinagem in usinagens:
         numero_serie = usinagem.serie
@@ -200,6 +203,18 @@ def api_resumo():
         except (ValueError, TypeError):
             serie_int = None
         
+        # Buscar peças (aplicando filtros de projeto, grupo e tanque)
+        pecas = buscar_pecas_por_serie(
+            numero_serie=numero_serie,
+            tanque_id=tanque_id,
+            contrato_id=contrato_id,
+            grupo_id=grupo_id
+        )
+        
+        # Se houver filtros específicos e não encontrar peças, pular esta série
+        if tem_filtros_especificos and not pecas:
+            continue
+        
         # Buscar rompimentos
         if serie_int is not None:
             rompimentos = ConcretoUsinagensRompimentos.query.filter(
@@ -208,14 +223,6 @@ def api_resumo():
             if rompimentos:
                 total_rompimentos += len(rompimentos)
                 series_com_rompimentos.add(numero_serie)
-        
-        # Buscar peças
-        pecas = buscar_pecas_por_serie(
-            numero_serie=numero_serie,
-            tanque_id=tanque_id,
-            contrato_id=contrato_id,
-            grupo_id=grupo_id
-        )
         
         if pecas:
             series_com_pecas.add(numero_serie)
@@ -282,7 +289,12 @@ def api_resumo():
             pecas_nao_vinculadas.add(peca.id)
     
     # Calcular estatísticas
-    total_series = len(usinagens)
+    # Se houver filtros específicos, contar apenas séries que têm peças vinculadas
+    if tem_filtros_especificos:
+        # Total de séries é a união de séries com peças e séries sem peças (que atendem aos filtros)
+        total_series = len(series_com_pecas | series_sem_pecas)
+    else:
+        total_series = len(usinagens)
     total_series_com_rompimentos = len(series_com_rompimentos)
     total_series_com_pecas = len(series_com_pecas)
     total_series_sem_pecas = len(series_sem_pecas)
