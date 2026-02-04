@@ -1,5 +1,3 @@
-import asyncio
-import platform
 from controllers.seguranca_controller import seguranca_bp
 from controllers.colaborador_controller import colaborador_bp
 from controllers.equipamento_controller import equipamento_bp
@@ -44,7 +42,7 @@ from flask_login import LoginManager, login_required, current_user, login_user, 
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
 from werkzeug.exceptions import HTTPException
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -53,11 +51,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-from scripts.processar_email1 import processar_emails
-from apscheduler.schedulers.background import BackgroundScheduler
 from controllers.relatorio_controller import relatorio_bp
-
-from controllers.dados_analiticos_controller import executar_importacao_async
 from controllers.upload_controller import upload_bp
 
 
@@ -70,7 +64,6 @@ from controllers.relatorios.estoque_grupos_controller import estoque_grupos_bp
 from controllers.relatorios.databook_relatorio_concretagem import databook_concretagem_bp
 from controllers.relatorios.databook_relatorio_inspecao import databook_inspecao_bp
 from controllers.relatorios.databook_api_controller import databook_api_bp
-from controllers.relatorios.script_email import relatorio_semanal
 
 load_dotenv('.env')
 
@@ -385,119 +378,8 @@ def handle_exception(e):
                                error_code=code,
                                error_title=name,
                                error_message=description), code
-def processar_arquivei():
-    NotaFiscal.importar_arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'))
-    NotaFiscal.importar_arquivei(data_inicial=(datetime.now()-timedelta(days=1)).strftime('%Y-%m-%d'),data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='cte')
-def job_email5min():
-    with app.app_context():
-        processar_emails()
-        #processar_protocolos()
-        #processar_reembolsos()
-        #processar_notas_fiscais()
-
-def job_email15min():
-    with app.app_context():
-        #processar_protocolos()
-        #processar_reembolsos()
-        pass
-        
-        #processar_notas_fiscais()
-def job_diario():
-    """
-    Job que executa uma vez por dia
-    """
-    with app.app_context():
-        logger.info("Executando job diário...")
-        loop = asyncio.new_event_loop() 
-        asyncio.set_event_loop(loop)
-        logger.info("Iniciando extração de dados analíticos...")
-        resultado = loop.run_until_complete(
-                executar_importacao_async(0)
-            )  
-        logger.info(f"Resultado da extração: {resultado}")
-        # Aqui você pode adicionar as funções que deseja executar diariamente
-        # Por exemplo:
-        # processar_relatorios_diarios()
-        # enviar_relatorio_diario()
-        # etc...
-
-def job_semanal():
-    """
-    Job que executa uma vez por semana (todo domingo às 00:00)
-    """
-    with app.app_context():
-        
-        logger.info("Executando job semanal...")
-        relatorio_semanal()
-        # Aqui você pode adicionar as funções que deseja executar semanalmente
-        # Por exemplo:
-        # processar_relatorios_semanais()
-        # enviar_relatorio_semanal()
-        # etc...
-
-def job_hora():
-    """
-    Job que executa a cada hora
-    """
-    with app.app_context():
-        logger.info("Executando job horário...")
-        processar_arquivei()
-        # Aqui você pode adicionar as funções que deseja executar a cada hora
-        # Por exemplo:
-        # verificar_status_sistema()
-        # atualizar_cache()
-        # etc...
-
-def gerenciar_scheduler():
-    """
-    Gerencia os schedulers da aplicação, garantindo que não haja duplicatas
-    """
-    try:
-        # Parar todos os schedulers existentes
-        if hasattr(app, 'scheduler'):
-            try:
-                app.scheduler.shutdown()
-                logger.info("Scheduler existente parado com sucesso")
-            except:
-                pass
-
-        # Criar novo scheduler se não existir
-        if not hasattr(app, 'scheduler'):
-            app.scheduler = BackgroundScheduler(timezone='America/Sao_Paulo')
-            
-            # Adiciona o job de email (a cada 5 minutos)
-            app.scheduler.add_job(job_email5min, 'cron', minute='*/5')
-            logger.info("Job de email adicionado ao scheduler")
-
-            # Adiciona o job de email (a cada 15 minutos)
-            app.scheduler.add_job(job_email15min, 'cron', minute='*/15')
-            logger.info("Job de email adicionado ao scheduler")
-            
-            # Adiciona o job diário (todos os dias às 00:00)
-            app.scheduler.add_job(job_diario, 'cron', hour=0, minute=0)
-            logger.info("Job diário adicionado ao scheduler")
-
-            # Adiciona o job semanal (todo domingo às 00:00)
-            app.scheduler.add_job(job_semanal, 'cron', day_of_week='sun', hour=23, minute=59)
-            logger.info("Job semanal adicionado ao scheduler")
-
-            # Adiciona o job horário (a cada hora)
-            app.scheduler.add_job(job_hora, 'cron', hour='*')
-            logger.info("Job horário adicionado ao scheduler")
-            
-            logger.info("Novo scheduler criado com sucesso")
-        
-        # Iniciar o scheduler se não estiver rodando
-        if not app.scheduler.running:
-            app.scheduler.start()
-            logger.info("Scheduler iniciado com sucesso")
-    except Exception as e:
-        logger.error(f"Erro ao gerenciar scheduler: {str(e)}")
-
-# Gerenciar o scheduler
-sistema = platform.system().lower()
-if sistema == 'linux':
-    gerenciar_scheduler()
+# Scheduler movido para scheduler_service.py
+# Execute o scheduler como um serviço separado: python scheduler_service.py
 
 
 # Inicializa o banco de dados quando a aplicação é iniciada

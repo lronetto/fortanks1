@@ -718,7 +718,7 @@ class NotaFiscal(db.Model):
         """
         try:
             # Parse do XML
-            root = ET.fromstring(base64.b64decode(self.data.get('xml',None)).decode('utf-8'))
+            root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
             
             # Definir os namespaces
             ns = {

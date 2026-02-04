@@ -1044,6 +1044,15 @@ def editar(reembolso_id):
             avulsos_data = json.loads(request.form.get('avulsos_data', '[]'))
             print(f'notas_selecionadas: {notas_selecionadas}')
             print(f'avulsos_data: {avulsos_data}')
+            
+            # Coletar IDs de notas fiscais que devem ser mantidas
+            notas_ids_manter = []
+            for nota_data in notas_selecionadas:
+                nota_id = nota_data.get('id')
+                if nota_id:
+                    notas_ids_manter.append(int(nota_id))
+            print(f'Notas que devem ser mantidas: {notas_ids_manter}')
+            
             # Coletar IDs de documentos avulsos que serão mantidos (editados)
             avulsos_ids_manter = []
             for avulso_data in avulsos_data:
@@ -1052,21 +1061,31 @@ def editar(reembolso_id):
                 if avulso_id and isinstance(avulso_id, int) and avulso_id < 1000000000000:
                     avulsos_ids_manter.append(avulso_id)
             
-            # Limpar apenas docs que não estão sendo editados
+            # Limpar apenas docs que não estão sendo mantidos
             for doc in list(reembolso.documentos):
                 # Se for avulso e não está na lista de manter, deletar
                 if doc.tipo == 'avulso' and doc.id not in avulsos_ids_manter:
-                    # Remove anexos se for avulso
-                    for anexo in list(doc.anexos):
-                        db.session.delete(anexo)
+                    # Remove anexos se for avulso (usando modelo Upload)
+                    uploads = Upload.query.filter_by(
+                        pai_id=doc.id,
+                        pai='ReembolsosDocumentos',
+                        tipo=4
+                    ).all()
+                    for upload in uploads:
+                        db.session.delete(upload)
                     db.session.delete(doc)
-                # Se for nota, deletar (será recriado)
+                    print(f'Documento avulso {doc.id} deletado')
+                # Se for nota e não está na lista de manter, deletar
                 elif doc.tipo == 'nota':
-                    db.session.delete(doc)
+                    if doc.nota_fiscal_id not in notas_ids_manter:
+                        print(f'Documento nota {doc.id} (nota_fiscal_id={doc.nota_fiscal_id}) deletado - não está na lista de manter')
+                        db.session.delete(doc)
+                    else:
+                        print(f'Documento nota {doc.id} (nota_fiscal_id={doc.nota_fiscal_id}) mantido - está na lista')
             db.session.flush()
 
             valor_total = 0
-            # Adicionar notas fiscais
+            # Processar notas fiscais - atualizar existentes ou criar novas
             for nota_data in notas_selecionadas:
                 nota_id = nota_data.get('id')
                 if not nota_id:
@@ -1077,19 +1096,40 @@ def editar(reembolso_id):
                 if not nota:
                     print(f'Erro: Nota fiscal {nota_id} não encontrada, pulando...')
                     continue
-                    
-                doc = ReembolsosDocumentos(
-                    reembolso=reembolso,
+                
+                # Verificar se já existe documento para esta nota
+                doc_existente = ReembolsosDocumentos.query.filter_by(
+                    reembolso_id=reembolso_id,
                     tipo='nota',
-                    nota_fiscal_id=nota.id,
-                    descricao=nota_data.get('descricao', ''),
-                    valor=nota.valor_total,
-                    fornecedor=nota.nome_emitente,
-                    ndocumento=nota.numero_nf,
-                    data_documento=nota.data_emissao,
-                    centro_custo_id=nota_data.get('centro_custo_id')
-                )
-                db.session.add(doc)
+                    nota_fiscal_id=nota_id
+                ).first()
+                
+                if doc_existente:
+                    # Atualizar documento existente
+                    print(f'Atualizando documento existente para nota {nota_id}')
+                    doc_existente.descricao = nota_data.get('descricao', '')
+                    doc_existente.valor = nota.valor_total
+                    doc_existente.fornecedor = nota.nome_emitente
+                    doc_existente.ndocumento = nota.numero_nf
+                    doc_existente.data_documento = nota.data_emissao
+                    doc_existente.centro_custo_id = nota_data.get('centro_custo_id')
+                    doc = doc_existente
+                else:
+                    # Criar novo documento
+                    print(f'Criando novo documento para nota {nota_id}')
+                    doc = ReembolsosDocumentos(
+                        reembolso=reembolso,
+                        tipo='nota',
+                        nota_fiscal_id=nota.id,
+                        descricao=nota_data.get('descricao', ''),
+                        valor=nota.valor_total,
+                        fornecedor=nota.nome_emitente,
+                        ndocumento=nota.numero_nf,
+                        data_documento=nota.data_emissao,
+                        centro_custo_id=nota_data.get('centro_custo_id')
+                    )
+                    db.session.add(doc)
+                
                 valor_total += float(nota.valor_total)
             # Adicionar documentos avulsos
             for idx, avulso_data in enumerate(avulsos_data):
