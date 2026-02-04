@@ -117,7 +117,7 @@
                                 <button type="button" class="btn btn-warning btn-editar" data-id="${row.id}" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button type="button" class="btn btn-info btn-pecas" data-id="${row.id}" title="Cadastrar Peças">
+                                <button type="button" class="btn btn-info btn-pecas" data-id="${row.id}" data-pista="${row.pista}" title="Cadastrar Peças">
                                     <i class="fas fa-cube"></i>
                                 </button>
                                 <button type="button" class="btn btn-success btn-alongamentos" data-id="${row.id}" title="Cadastrar Alongamentos">
@@ -180,8 +180,9 @@
 
         $(document).on('click', '.btn-pecas', function() {
             const id = $(this).data('id');
+            const pista = $(this).data('pista');
             // O modal vai carregar os dados quando abrir via evento show.bs.modal
-            $('#modalPecas').data('concretagem-id', id).modal('show');
+            $('#modalPecas').data('concretagem-id', id).data('pista', pista).modal('show');
         });
 
         $(document).on('click', '.btn-alongamentos', function() {

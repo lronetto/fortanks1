@@ -16,33 +16,57 @@ ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 class Arquivei: 
     pdf = None
     chave_acesso = None
-    xml_data = None
+    data = None
     data_inicial = None
     data_final = None
     xml_datas = []
     cancelada = False
     tipo = 'nfe'
     log_info = None
-    def __init__(self, data_inicial=None, data_final=None, chave_acesso=None, xml_data=None,cancelamento=False,send=False,tipo='nfe'):
+    datas = []
+    id = None
+    def __init__(self, data_inicial=None, chave_acesso=None, data_final=None, data=None, xml_data=None,cancelamento=False,send=False,tipo='nfe',pdf=None):
+        self.data = data
         self.chave_acesso = chave_acesso
-        self.xml_data = xml_data
+        if data:
+            self.chave_acesso = data.get('chave_acesso',None)
+            self.xml_data = data.get('xml',None)
+            self.id = data.get('id',None)
         self.data_inicial = data_inicial
         self.data_final = data_final
         self.xml_datas = []
         self.pdf = None
         self.cancelada = False
         self.tipo = tipo
+        #31062002253113791001285000000002718526021360649640
+        #32053092226452925000167000000000000826020933758380
+        #42260205405307000196550010000696781840333914
         if xml_data:
             self.xml_data = xml_data
             self.upload()
         if data_inicial and data_final:
             print(f'processando arquivei {tipo}')
             self.processar_arquivei()
-        if chave_acesso and cancelamento==False:
-            if int(chave_acesso[20:22]) == 57:
-                self.tipo = 'cte'
-            self.get()
-        if chave_acesso and cancelamento:
+            print(f'datas: {len(self.datas)}')
+         
+        if self.chave_acesso and cancelamento==False:
+            print(f'chave_acesso: {self.chave_acesso}')
+            if len(self.chave_acesso) == 44:
+                if int(self.chave_acesso[20:22]) == 57:
+                    self.tipo = 'cte'
+                elif int(self.chave_acesso[20:22]) == 55:
+                    self.tipo = 'nfe'
+            else:
+                if len(self.chave_acesso) == 50:
+                    from models.nota_fiscal import NotaFiscal
+                    nota = NotaFiscal.query.filter_by(chave_acesso=self.chave_acesso).first()
+                    json_nota = json.loads(nota.dados_adicionais)
+                    id = json_nota.get('id',None)
+                    self.id = id
+                    self.tipo = 'nfse'
+            if pdf:
+                self.get_pdf()
+        if self.chave_acesso and cancelamento:
             self.cancelada = self.cancelamento()
         if send:
             self.processar_arquivei(send=True)
@@ -85,7 +109,6 @@ class Arquivei:
         """
         Processa as notas fiscais da API do Arquivei
         """
-
                 # Configurar cabeçalhos da API
         headers = {
             'X-API-ID': ARQUIVEI_API_ID,
@@ -103,24 +126,18 @@ class Arquivei:
             if send:
                 self.data_inicial = '2020-01-01'
                 self.data_final = datetime.now().strftime("%Y-%m-%d")
-
-
-           
-            #print(params)
-            # Executar a consulta na API
-
-            if send:
                 url = 'https://api.arquivei.com.br/v1/nfe/emitted'
             else:
                 url = 'https://api.arquivei.com.br/v1/nfe/received'
         if self.tipo=='cte':
             url='https://api.arquivei.com.br/v1/cte/taker'
-
+        if self.tipo=='nfse':
+            url = 'https://api.arquivei.com.br/v1/nfse/received'
         
         response = requests.get(url, headers=headers, params=params)
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 1')
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')
-            #print(response.json())
+        #print(f'response: {response.json()}')
             
         # Processar cada nota fiscal
         notas_processadas = 0
@@ -146,6 +163,7 @@ class Arquivei:
             notas_processadas = 0
             notas_ignoradas = 0
             xml_data = []
+           
             while data_fim != dt_final or len(response.json()['data'])==50:
                 
                 i=0
@@ -154,12 +172,26 @@ class Arquivei:
                     response_data = response.json()
                     if 'data' in response_data and response_data['data']:
                         for item in response_data['data']:
+                            data = {
+                                'xml': None,
+                                'id': None,
+                                'chave_acesso': None,
+                            }
                             if item.get('xml'):
                                 xml_base64 = item.get('xml')
                                 if not xml_base64:
                                     notas_ignoradas += 1
                                     continue
-                                self.xml_datas.append(xml_base64)
+                                data['xml'] = xml_base64
+                                id = item.get('id',None)
+                                if id:
+                                    data['id'] = id
+                                chave_acesso = item.get('access_key',None)
+                                if chave_acesso:
+                                    data['chave_acesso'] = chave_acesso
+                                print(f'item: {id}')
+                                print(f'chave_acesso: {chave_acesso}')
+                                self.datas.append(data)
                                 notas_processadas += 1
                             #print(f'processando nota fiscal {i}')
                             i+=1
@@ -242,13 +274,18 @@ class Arquivei:
             'X-API-KEY': ARQUIVEI_API_KEY,
             'Content-Type': 'application/json'
         }
+        #print(f'tipo: {self.tipo}')
         if self.tipo == 'cte':
             url = f"https://api.arquivei.com.br//v1/cte/dacte?access_key={self.chave_acesso}"
-        else:
+        elif self.tipo == 'nfe':
             url = f"https://api.arquivei.com.br/v1/nfe/danfe?access_key={self.chave_acesso}"
+        elif self.tipo == 'nfse':
+
+            url = f"https://api.arquivei.com.br/v1/nfse/danfse?id={self.id}"
         response = requests.get(url, headers=headers)
         response_data = response.json() 
-        print('get pdf')
+        #print('get pdf')
+        #print(f'response_data: {response_data}')
         if response_data.get('status').get('code') == 200:
             self.pdf = response_data.get('data').get('encoded_pdf')
             #print('pdf: ',self._pdf)

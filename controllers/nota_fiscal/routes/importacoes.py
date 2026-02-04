@@ -59,6 +59,7 @@ def importar_arquivei():
         if tipo_documento == "todos":
             NotaFiscal.importar_arquivei(data_inicial, data_final, "nfe")
             NotaFiscal.importar_arquivei(data_inicial, data_final, "cte")
+            NotaFiscal.importar_arquivei(data_inicial, data_final, "nfse")
         else:
             NotaFiscal.importar_arquivei(data_inicial, data_final, tipo_documento)
 

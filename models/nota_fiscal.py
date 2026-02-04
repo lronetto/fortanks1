@@ -107,6 +107,11 @@ def get_xml_text(element, xpath, ns):
         return found.text if found is not None else None
     except:
         return None
+#Nota Fiscal
+#tipo 0 - NFe
+#tipo 1 - NFe
+#tipo 2 - CTE
+#tipo 3 - NFSe
 class NotaFiscal(db.Model):
     """
     Modelo para representar Notas Fiscais
@@ -116,7 +121,7 @@ class NotaFiscal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.Integer, nullable=False)
     numero_nf = db.Column(db.String(20), nullable=False)
-    chave_acesso = db.Column(db.String(44), unique=True, nullable=False)
+    chave_acesso = db.Column(db.String(100), unique=True, nullable=False)
     data_emissao = db.Column(db.DateTime, nullable=False)
     valor_total = db.Column(db.Numeric(15, 2), nullable=False)
     
@@ -148,26 +153,30 @@ class NotaFiscal(db.Model):
     inserido = False
     existente = False
     log_info = None
+    data = None
+
     
-    def __init__(self, xml_data=None, chave_acesso=None, id=None, cancelada=False,tipo=None):
-        self.xml_data = xml_data
+    def __init__(self, data=None, chave_acesso=None, id=None, cancelada=False,tipo=None):
+        self.data = data
         self.chave_acesso = chave_acesso
         self.id = id
         self.upload = None
         self.cancelada = cancelada
-        if xml_data and tipo is None:
-            self.tipo = self.extrair_tipo_nota(xml_data)
+        if self.data.get('xml',None) and tipo is None:
+            self.tipo = self.extrair_tipo_nota(self.xml_data)
             if self.tipo == 'nfe':
                 self.processar_nf()
             elif self.tipo == 'cte':
                 self.processar_cte()
             
-        if xml_data and tipo == 'nfe':
+        if self.data.get('xml',None) and tipo == 'nfe':
             print(f'NotaFiscal xml')
             self.processar_nf()
-            
+        if self.data.get('xml',None) and tipo == 'nfse':
+            print(f'NotaFiscal nfse')
+            self.processar_nfse()
                 
-        if xml_data and tipo == 'cte':
+        if self.data.get('xml',None) and tipo == 'cte':
             print(f'NotaFiscal cte')
             return self,self.processar_cte()
              
@@ -192,22 +201,20 @@ class NotaFiscal(db.Model):
                 else:
                     self.upload = upload
                 print('self.upload: ',self.upload)
-    def extrair_tipo_nota(self, xml_data):
+    def extrair_tipo_nota(self, data):
         """
         Extrai o tipo de nota fiscal do XML
         """
-        root = ET.fromstring(base64.b64decode(xml_data).decode('utf-8'))
-        ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
-        ns1 = {'nfe': 'http://www.portalfiscal.inf.br/nfe'}
-        infCte = root.find('.//cte:infCte', ns) or root.find('.//infCte', ns)
-        infNFe = root.find('.//nfe:infNFe', ns1) or root.find('.//infNFe', ns)
-        if infNFe:
-            return 'nfe'
-
-        if infCte:
-            return 'cte'
-        else:
-            return None
+        if data.get('id'):
+            return 'nfse'
+        if data.get('chave_acesso'):
+            if int(data.get('chave_acesso')[20:22]) == 55:
+                return 'nfe'
+            elif int(data.get('chave_acesso')[20:22]) == 57:
+                return 'cte'
+            else:
+                return 'nfse'
+        return None
     def save(self):
         """
         Salva a nota fiscal no banco de dados
@@ -251,6 +258,7 @@ class NotaFiscal(db.Model):
         return (itens_importados / total_itens) * 100   
     def get_pdf(self):
         if not self.upload:
+            print(f'get_pdf: {self.id} chave: {self.chave_acesso}')
             if not db.session.query(Upload.id).filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first():
                 up = Upload.query.filter_by(pai='NotaFiscal', filename=f'{self.chave_acesso}.pdf', tipo=1).first()
                 if up:
@@ -258,8 +266,12 @@ class NotaFiscal(db.Model):
                     up.save()
                     self.upload = up
                 else:
-                    pdf_data = Arquivei(chave_acesso=self.chave_acesso)
-                    self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
+                    print(f'get_pdf: {self.id} chave: {self.chave_acesso} len: {len(self.chave_acesso)} pdf=True')
+                    pdf_data = Arquivei(chave_acesso=self.chave_acesso,pdf=True)
+                    if pdf_data.pdf:
+                        self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
+                    else:
+                        return None
         return self.upload
     def get_chave_acesso(self):
         return self.chave_acesso    
@@ -310,15 +322,15 @@ class NotaFiscal(db.Model):
         return None        
     def importar_arquivei(data_inicial,data_final,tipo='nfe'):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
-        total = len(notas.xml_datas)
+        total = len(notas.datas)
         i=0
         existente=0
         inseridos=0
         notas_log = []
         notasn = []
         if total > 0:
-            for xml_data in notas.xml_datas:
-                nf = NotaFiscal(xml_data=xml_data,tipo=tipo)
+            for data in notas.datas:
+                nf = NotaFiscal(data=data,tipo=tipo)
                 notasn.append(nf)
                 existente+=(1 if nf.existente else 0)
                 inseridos+=(1 if nf.inserido else 0)
@@ -366,10 +378,59 @@ class NotaFiscal(db.Model):
             return existente
         try:
             self.tipo = 2
+            self.xml_data = self.data.get('xml',None)
             self.numero_nf = dados.get('numero_cte')
             self.chave_acesso = dados.get('chave_acesso')
             self.data_emissao = dados.get('data_emissao')
             self.valor_total = dados.get('valor_total')
+            self.cnpj_emitente = dados.get('cnpj_emitente')
+            self.nome_emitente = dados.get('nome_emitente')
+            self.cnpj_destinatario = dados.get('cnpj_destinatario')
+            self.nome_destinatario = dados.get('nome_destinatario')
+            self.status_processamento = 'importado'
+            self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+            self.save()
+            self.inserido = True
+            log['inserido'] = True
+            self.log_info = log
+            return log
+        except Exception as e:
+            logger.error(f"Erro ao processar CT-e: {str(e)}")
+            log['erro'] = str(e)
+            self.log_info = log
+            return False
+    def processar_nfse(self):
+        chave_acesso, dados = self.extrair_dados_xml_nfse()
+        if not chave_acesso or not dados:
+            return False
+        print(f'chave_acesso: {chave_acesso}')
+        #print(f'dados: {dados}')
+
+        log = {
+            'existente': False,
+            'inserido': False,
+            'erro': None,
+            'chave_acesso': chave_acesso,
+            'numero_nfse': dados.get('Numero'),
+            'tipo': 3,
+            'data_emissao': dados.get('DataEmissao'),
+            'valor_total': dados.get('valores').get('ValorLiquidoNfse'),
+        }
+        existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+        if existente:
+            log['existente'] = True
+            existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+            existente.save()
+            existente.inserido = False
+            existente.log_info = log
+            return existente
+        try:
+            self.tipo = 3
+            self.xml_data = self.data.get('xml',None)
+            self.numero_nf = dados.get('Numero')
+            self.chave_acesso = chave_acesso
+            self.data_emissao = dados.get('DataEmissao')
+            self.valor_total = dados.get('valores').get('ValorLiquidoNfse')
             self.cnpj_emitente = dados.get('cnpj_emitente')
             self.nome_emitente = dados.get('nome_emitente')
             self.cnpj_destinatario = dados.get('cnpj_destinatario')
@@ -447,7 +508,7 @@ class NotaFiscal(db.Model):
                 self.log_info = log
                 return nf   
             
-            #self.xml_data=self.xml_data
+            self.xml_data=self.data.get('xml',None)
             self.numero_nf=dados_nf.get('numero')
             self.tipo=dados_nf.get('tipo')
             self.chave_acesso=chave_acesso
@@ -514,7 +575,7 @@ class NotaFiscal(db.Model):
             return False
     def extrair_dados_xml_cte(self):
 
-        root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
+        root = ET.fromstring(base64.b64decode(self.data.get('xml',None)).decode('utf-8'))
         ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
 
         # Caminhos principais
@@ -657,7 +718,7 @@ class NotaFiscal(db.Model):
         """
         try:
             # Parse do XML
-            root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
+            root = ET.fromstring(base64.b64decode(self.data.get('xml',None)).decode('utf-8'))
             
             # Definir os namespaces
             ns = {
@@ -885,6 +946,143 @@ class NotaFiscal(db.Model):
             return chave_acesso, nfe_data
         
         except Exception as e:
+            logger.error(f"Erro ao extrair dados do XML: {str(e)}")
+            return None, None
+    def extrair_dados_xml_nfse(self):
+        """
+        Extrai os dados de uma nota fiscal a partir do XML
+        Retorna a chave de acesso e um dicionário com os dados da nota fiscal
+        """
+        try:
+            # Parse do XML
+            root = ET.fromstring(base64.b64decode(self.data.get('xml',None)).decode('utf-8'))
+
+            dados_adicionais = {
+                'id': self.data.get('id',None),
+                'Rps': {
+                    'Numero': None,
+                    'Serie': None,
+                    'DataEmissao': None,
+                    'DataVencimento': None,
+                },
+                'Servico': {
+                    'Valores': {
+                        'Aliquota': None,
+                        'ValorConfins': None,
+                        'ValorIss': None,
+                        'ValorPis': None,
+                        'ValorServicos': None,
+                    },
+                    'IssRetido': None,
+                    'Discriminacao': None,
+                },
+            }
+            dados_nfse = {
+                'Numero': None,
+                'cnpj_emitente': None,
+                'nome_emitente': None,
+                'cnpj_destinatario': None,
+                'nome_destinatario': None,
+                'DataEmissao': None,
+                'valores': None,
+                'dados_adicionais': dados_adicionais,
+            }
+            
+            # Definir os namespaces
+            ns = {
+                'CompNfse': 'http://www.abrasf.org.br/nfse.xsd'
+            }
+            Nfse = root.find('.//CompNfse:Nfse', ns)
+            if Nfse is None:
+                print(f'Nfse is None')
+                return None, None
+            # Extrair dados da nota
+            inf_nfe = Nfse.find('.//CompNfse:InfNfse', ns) or Nfse.find('.//InfNfse', ns)
+            if inf_nfe is None:
+                print(f'inf_nfe is None')
+                return None, None
+            chave_acesso = inf_nfe.attrib.get('Id', '')
+            #print(f'chave_acesso: {chave_acesso}')
+            if chave_acesso.startswith('NFS'):
+                chave_acesso = chave_acesso[3:]
+            numero = inf_nfe.findtext('.//CompNfse:Numero', default='', namespaces=ns) or inf_nfe.findtext('.//Numero', default='', namespaces=ns)
+            dados_nfse['Numero'] = numero
+            data_emissao = inf_nfe.findtext('.//CompNfse:DataEmissao', default='', namespaces=ns) or inf_nfe.findtext('.//DataEmissao', default='', namespaces=ns)
+            dados_nfse['DataEmissao'] = data_emissao
+            ValoresNfse = inf_nfe.find('.//CompNfse:ValoresNfse', ns) or inf_nfe.find('.//ValoresNfse', ns)
+            if ValoresNfse is not None:
+                valores = {
+                'BaseCalculo': ValoresNfse.findtext('.//CompNfse:BaseCalculo', default='', namespaces=ns) or ValoresNfse.findtext('.//BaseCalculo', default='', namespaces=ns),
+                'Aliquota': ValoresNfse.findtext('.//CompNfse:Aliquota', default='', namespaces=ns) or ValoresNfse.findtext('.//Aliquota', default='', namespaces=ns),
+                'ValorIss': ValoresNfse.findtext('.//CompNfse:ValorIss', default='', namespaces=ns) or ValoresNfse.findtext('.//ValorIss', default='', namespaces=ns),
+                'ValorLiquidoNfse': ValoresNfse.findtext('.//CompNfse:ValorLiquidoNfse', default='', namespaces=ns) or ValoresNfse.findtext('.//ValorLiquidoNfse', default='', namespaces=ns),
+                }
+                dados_nfse['valores'] = valores
+            else:
+                valores = None
+            PrestadorServico = inf_nfe.find('.//CompNfse:PrestadorServico', ns) or inf_nfe.find('.//PrestadorServico', ns)
+            if PrestadorServico is not None:
+                IdentificacaoPrestador = PrestadorServico.find('.//CompNfse:IdentificacaoPrestador', ns) or PrestadorServico.find('.//IdentificacaoPrestador', ns)
+                if IdentificacaoPrestador is not None:
+                    CpfCnpj = IdentificacaoPrestador.find('.//CompNfse:CpfCnpj', ns) or IdentificacaoPrestador.find('.//CpfCnpj', ns)
+                    if CpfCnpj is not None:
+                        cpf = CpfCnpj.findtext('.//CompNfse:Cpf', default='', namespaces=ns) or CpfCnpj.findtext('.//Cpf', default='', namespaces=ns)
+                        cnpj = CpfCnpj.findtext('.//CompNfse:Cnpj', default='', namespaces=ns) or CpfCnpj.findtext('.//Cnpj', default='', namespaces=ns)
+                        if cpf or cnpj is not None:
+                            cnpj_emitente = cpf if cpf else cnpj
+                        else:
+                            cnpj_emitente = None
+                nome_emitente = PrestadorServico.findtext('.//CompNfse:RazaoSocial', default='', namespaces=ns) or PrestadorServico.findtext('.//RazaoSocial', default='', namespaces=ns)
+                dados_nfse['cnpj_emitente'] = cnpj_emitente
+                dados_nfse['nome_emitente'] = nome_emitente
+            DeclaracaoPrestacaoServico = inf_nfe.find('.//CompNfse:DeclaracaoPrestacaoServico', ns) or inf_nfe.find('.//DeclaracaoPrestacaoServico', ns)
+            if DeclaracaoPrestacaoServico is not None:
+                InfDeclaracaoPrestacaoServico = DeclaracaoPrestacaoServico.find('.//CompNfse:InfDeclaracaoPrestacaoServico', ns) or DeclaracaoPrestacaoServico.find('.//InfDeclaracaoPrestacaoServico', ns)
+                if InfDeclaracaoPrestacaoServico is not None:
+                    Rps = InfDeclaracaoPrestacaoServico.find('.//CompNfse:Rps', ns) or InfDeclaracaoPrestacaoServico.find('.//Rps', ns)
+                    if Rps is not None:
+                        IdentificacaoRps = Rps.find('.//CompNfse:IdentificacaoRps', ns) or Rps.find('.//IdentificacaoRps', ns)
+                        if IdentificacaoRps is not None:
+                            dados_adicionais['Rps']['Numero'] = IdentificacaoRps.findtext('.//CompNfse:Numero', default='', namespaces=ns) or IdentificacaoRps.findtext('.//Numero', default='', namespaces=ns)
+                            dados_adicionais['Rps']['Serie'] = IdentificacaoRps.findtext('.//CompNfse:Serie', default='', namespaces=ns) or IdentificacaoRps.findtext('.//Serie', default='', namespaces=ns)
+                        dados_adicionais['Rps']['DataEmissao'] = IdentificacaoRps.findtext('.//CompNfse:DataEmissao', default='', namespaces=ns) or IdentificacaoRps.findtext('.//DataEmissao', default='', namespaces=ns)
+                        dados_adicionais['Rps']['DataVencimento'] = IdentificacaoRps.findtext('.//CompNfse:DataVencimento', default='', namespaces=ns) or IdentificacaoRps.findtext('.//DataVencimento', default='', namespaces=ns)
+                    Servico = InfDeclaracaoPrestacaoServico.find('.//CompNfse:Servico', ns) or InfDeclaracaoPrestacaoServico.find('.//Servico', ns)
+                    if Servico is not None:
+                        Valores = Servico.find('.//CompNfse:Valores', ns) or Servico.find('.//Valores', ns)
+                        if Valores is not None:
+                            aliquota = Valores.findtext('.//CompNfse:BaseCalculo', default='', namespaces=ns) or Valores.findtext('.//BaseCalculo', default='', namespaces=ns)
+                            dados_adicionais['Servico']['Valores']['Aliquota'] = aliquota
+                            ValorConfins = Valores.findtext('.//CompNfse:ValorConfins', default='', namespaces=ns) or Valores.findtext('.//ValorConfins', default='', namespaces=ns)
+                            dados_adicionais['Servico']['Valores']['ValorConfins'] = ValorConfins
+                            ValorPis = Valores.findtext('.//CompNfse:ValorPis', default='', namespaces=ns) or Valores.findtext('.//ValorPis', default='', namespaces=ns)
+                            dados_adicionais['Servico']['Valores']['ValorPis'] = ValorPis
+                            ValorServicos = Valores.findtext('.//CompNfse:ValorServicos', default='', namespaces=ns) or Valores.findtext('.//ValorServicos', default='', namespaces=ns)
+                            dados_adicionais['Servico']['Valores']['ValorServicos'] = ValorServicos
+                        IssRetido = Servico.findtext('.//CompNfse:IssRetido', default='', namespaces=ns) or Servico.findtext('.//IssRetido', default='', namespaces=ns)
+                        dados_adicionais['Servico']['IssRetido'] = IssRetido
+                        Discriminacao = Servico.findtext('.//CompNfse:Discriminacao', default='', namespaces=ns) or Servico.findtext('.//Discriminacao', default='', namespaces=ns)
+                        dados_adicionais['Servico']['Discriminacao'] = Discriminacao
+                Tomador = inf_nfe.find('.//CompNfse:Tomador', ns) or inf_nfe.find('.//Tomador', ns)
+                if Tomador is not None:
+                    IdentificacaoTomador = Tomador.find('.//CompNfse:IdentificacaoTomador', ns) or Tomador.find('.//IdentificacaoTomador', ns)
+                    if IdentificacaoTomador is not None:
+                        CpfCnpj = IdentificacaoTomador.find('.//CompNfse:CpfCnpj', ns) or IdentificacaoTomador.find('.//CpfCnpj', ns)
+                        if CpfCnpj is not None:
+                            cpf = CpfCnpj.findtext('.//CompNfse:Cpf', default='', namespaces=ns) or CpfCnpj.findtext('.//Cpf', default='', namespaces=ns)
+                            cnpj = CpfCnpj.findtext('.//CompNfse:Cnpj', default='', namespaces=ns) or CpfCnpj.findtext('.//Cnpj', default='', namespaces=ns)
+                            if cpf or cnpj is not None:
+                                cnpj_destinatario = cpf if cpf else cnpj
+                            else:
+                                cnpj_destinatario = None
+                    nome_destinatario = Tomador.findtext('.//CompNfse:RazaoSocial', default='', namespaces=ns) or Tomador.findtext('.//RazaoSocial', default='', namespaces=ns)
+                    dados_nfse['cnpj_destinatario'] = cnpj_destinatario
+                    dados_nfse['nome_destinatario'] = nome_destinatario
+            dados_nfse['dados_adicionais'] = dados_adicionais
+            return chave_acesso, dados_nfse
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
             logger.error(f"Erro ao extrair dados do XML: {str(e)}")
             return None, None
     def vincular_automaticamente(self):

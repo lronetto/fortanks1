@@ -53,17 +53,25 @@
         let tanques = [];
         let pecas = [];
         let contadorPecas = 0;
+        let carregandoPecas = false; // Flag para evitar recursão
+        let pistaAtual = null; // Variável para armazenar a pista
 
         // Função para carregar peças existentes
         function carregarDadosPecas(id) {
             console.log('Carregando peças para concretagem ID:', id);
             console.log('Tanques disponíveis:', tanques.length);
             
+            // Ativar flag de carregamento
+            carregandoPecas = true;
+            
             // Carregar as peças da concretagem (agora com objetos completos)
             $.get(`/concretagens/api/${id}/pecas`, function(data) {
                 console.log('Dados recebidos da API:', data);
                 if (data.pecas && data.pecas.length > 0) {
                     console.log(`Carregando ${data.pecas.length} peças existentes`);
+                    
+                    let pecasCarregadas = 0;
+                    let totalPecas = data.pecas.length;
                     
                     data.pecas.forEach(function(pecaItem) {
                         const pecaObj = pecaItem.peca;
@@ -72,72 +80,108 @@
                         const pecaNome = pecaItem.nome || pecaItem.placa; // Nome da peça no JSON
                         
                         // Suporta tanto formato antigo (tanque_obj) quanto novo (tanque_id direto)
-                        const tanqueIdObj = pecaItem.tanque_id || (tanqueObj ? tanqueObj.id : null);
+                        const tanqueIdObj = pecaItem.tanque_id || pecaItem.tanque || (tanqueObj ? tanqueObj.id : null);
                         if (pecaNome && tanqueIdObj) {
                             contadorPecas++;
                             const formaValue = (pecaItem.forma || 0).toString().replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                             const tanqueId = tanqueIdObj.toString();
                             
-                            // Buscar todas as peças do tanque para popular o select
-                            $.get(`/concretagens/api/tanque/${tanqueId}/pecas`, function(pecasData) {
-                                const linha = `
-                                    <tr data-index="${contadorPecas}">
-                                        <td>
-                                            <select class="form-select form-select-sm peca-tanque" data-index="${contadorPecas}">
-                                                <option value="">Selecione o tanque</option>
-                                                ${tanques.map(t => `<option value="${t.id}" ${t.id == tanqueId || t.id === parseInt(tanqueId) ? 'selected' : ''}>${t.nome}</option>`).join('')}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <select class="form-select form-select-sm peca-peca" data-index="${contadorPecas}">
-                                                <option value="">Selecione a peça</option>
-                                                ${pecasData.map(p => {
-                                                    // Selecionar pelo nome da peça (pode haver peças com mesmo nome em tanques diferentes)
-                                                    const isSelected = p.nome === pecaNome;
-                                                    return `<option value="${p.id}" data-nome="${p.nome}" ${isSelected ? 'selected' : ''}>${p.nome} (${p.tipo})</option>`;
-                                                }).join('')}
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <input type="text" class="form-control form-control-sm peca-forma" value="${formaValue}" placeholder="Forma">
-                                        </td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-danger btn-remover-peca">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                `;
-                                $('#tabelaPecasModal tbody').append(linha);
-                                console.log('Linha adicionada para peça:', pecaNome);
-                            }).fail(function(xhr, status, error) {
-                                console.error('Erro ao carregar peças do tanque:', error, xhr.responseText);
+                            // Buscar todas as peças do tanque para popular o select usando a rota correta
+                            $.ajax({
+                                url: `/concretagens/api/tanque/pecas`,
+                                method: 'GET',
+                                data: {
+                                    tanque_id: tanqueId,
+                                    nao_concretadas: false, // Incluir todas as peças, mesmo as já concretadas
+                                    pista: pistaAtual
+                                },
+                                success: function(pecasData) {
+                                    const linha = `
+                                        <tr data-index="${contadorPecas}">
+                                            <td>
+                                                <select class="form-select form-select-sm peca-tanque" data-index="${contadorPecas}">
+                                                    <option value="">Selecione o tanque</option>
+                                                    ${tanques.map(t => `<option value="${t.id}" ${t.id == tanqueId || t.id === parseInt(tanqueId) ? 'selected' : ''}>${t.nome}</option>`).join('')}
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <select class="form-select form-select-sm peca-peca" data-index="${contadorPecas}">
+                                                    <option value="">Selecione a peça</option>
+                                                    ${pecasData.map(p => {
+                                                        // Selecionar pelo nome da peça (pode haver peças com mesmo nome em tanques diferentes)
+                                                        const isSelected = p.nome === pecaNome;
+                                                        return `<option value="${p.id}" data-nome="${p.nome}" ${isSelected ? 'selected' : ''}>${p.nome} (${p.tipo})</option>`;
+                                                    }).join('')}
+                                                </select>
+                                            </td>
+                                            <td>
+                                                <input type="text" class="form-control form-control-sm peca-forma" value="${formaValue}" placeholder="Forma">
+                                            </td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-danger btn-remover-peca">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `;
+                                    $('#tabelaPecasModal tbody').append(linha);
+                                    console.log('Linha adicionada para peça:', pecaNome);
+                                    
+                                    pecasCarregadas++;
+                                    // Desativar flag quando todas as peças forem carregadas
+                                    if (pecasCarregadas >= totalPecas) {
+                                        setTimeout(function() {
+                                            carregandoPecas = false;
+                                            console.log('Todas as peças foram carregadas. Total de linhas na tabela:', $('#tabelaPecasModal tbody tr').length);
+                                        }, 300);
+                                    }
+                                },
+                                error: function(xhr, status, error) {
+                                    console.error('Erro ao carregar peças do tanque:', error, xhr.responseText);
+                                    pecasCarregadas++;
+                                    // Mesmo em caso de erro, continuar o processo
+                                    if (pecasCarregadas >= totalPecas) {
+                                        setTimeout(function() {
+                                            carregandoPecas = false;
+                                        }, 300);
+                                    }
+                                }
                             });
                         } else {
                             console.warn('Peça ou tanque não encontrado nos objetos:', {
                                 pecaItem: pecaItem,
                                 pecaNome: pecaNome,
-                                tanqueObj: tanqueObj
+                                tanqueObj: tanqueObj,
+                                tanqueIdObj: tanqueIdObj
                             });
+                            pecasCarregadas++;
+                            // Se não tem dados suficientes, ainda conta como processado
+                            if (pecasCarregadas >= totalPecas) {
+                                setTimeout(function() {
+                                    carregandoPecas = false;
+                                }, 300);
+                            }
                         }
                     });
-                    
-                    console.log('Todas as peças foram processadas. Total de linhas na tabela:', $('#tabelaPecasModal tbody tr').length);
                 } else {
                     console.log('Nenhuma peça encontrada para esta concretagem');
+                    carregandoPecas = false;
                 }
             }).fail(function(xhr, status, error) {
                 console.error('Erro ao carregar peças da concretagem:', error, xhr.responseText);
+                alert('Erro ao carregar peças existentes. Verifique o console para mais detalhes.');
+                carregandoPecas = false;
             });
         }
 
         // Carregar tanques ao abrir o modal
         $('#modalPecas').on('show.bs.modal', function(e) {
             const id = $(this).data('concretagem-id') || $(e.relatedTarget)?.data('id');
-            
+            pistaAtual = $(this).data('pista') || $(e.relatedTarget)?.data('pista');
             // Resetar contador
             contadorPecas = 0;
             $('#tabelaPecasModal tbody').empty();
+            carregandoPecas = false;
             
             if (id) {
                 $('#concretagem_id_pecas').val(id);
@@ -214,6 +258,11 @@
 
         // Quando selecionar tanque, carregar peças
         $(document).on('change', '.peca-tanque', function() {
+            // Ignorar eventos durante o carregamento inicial para evitar recursão
+            if (carregandoPecas) {
+                return;
+            }
+            
             const tanqueId = $(this).val();
             const index = $(this).data('index');
             const selectPeca = $(`.peca-peca[data-index="${index}"]`);
@@ -224,12 +273,21 @@
             selectPeca.empty().append('<option value="">Selecione a peça</option>');
             
             if (tanqueId) {
-                $.get(`/concretagens/api/tanque/${tanqueId}/pecas`, function(data) {
-                    data.forEach(function(peca) {
-                        // Selecionar pelo ID (valorAtual é o ID do select)
-                        const isSelected = (valorAtual && (peca.id == valorAtual || peca.id === parseInt(valorAtual)));
-                        selectPeca.append(`<option value="${peca.id}" data-nome="${peca.nome}" ${isSelected ? 'selected' : ''}>${peca.nome} (${peca.tipo})</option>`);
-                    });
+                $.ajax({
+                    url: `/concretagens/api/tanque/pecas`, 
+                    method: 'GET',
+                    data: {
+                        tanque_id: tanqueId,
+                        nao_concretadas: true,
+                        pista: pistaAtual
+                    },
+                    success: function(data) {
+                        data.forEach(function(peca) {
+                            // Selecionar pelo ID (valorAtual é o ID do select)
+                            const isSelected = (valorAtual && (peca.id == valorAtual || peca.id === parseInt(valorAtual)));
+                            selectPeca.append(`<option value="${peca.id}" data-nome="${peca.nome}" ${isSelected ? 'selected' : ''}>${peca.nome} (${peca.tipo})</option>`);
+                        });
+                    }
                 });
             }
         });

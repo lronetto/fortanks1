@@ -25,14 +25,15 @@ def index():
 
 
 
-@concretagem.route('/api/tanque/<int:tanque_id>/pecas')
+@concretagem.route('/api/tanque/pecas', methods=['GET'])
 @login_required
-def get_pecas_por_tanque(tanque_id):
+def get_pecas_por_tanque():
     """Retorna as peças de um tanque em formato JSON para ser usado em seleção dinâmica"""
     try:
+        tanque_id = request.args.get('tanque_id', type=int)
+        pista = request.args.get('pista', None)
         print(f"[API] Função get_pecas_por_tanque chamada com tanque_id: {tanque_id}")
         logging.info(f"[API] Buscando peças para o tanque ID: {tanque_id}")
-        
         # Verificar se o tanque existe
         tanque = Tanques.query.get(tanque_id)
         if not tanque:
@@ -45,20 +46,25 @@ def get_pecas_por_tanque(tanque_id):
         print(f"[API] Filtro mostrar_nao_concretadas: {mostrar_nao_concretadas}")
         
         # Obter todas as peças do tanque
-        pecas = TanquesPecas.query.filter_by(tanque_id=tanque_id).order_by(TanquesPecas.numero_sequencial).all()
+        pecas = TanquesPecas.query.filter(TanquesPecas.tanque_id == tanque_id)
+        
+        # Filtrar apenas peças não concretadas se solicitado
+        if mostrar_nao_concretadas:
+            pecas = pecas.filter(TanquesPecas.data_concretagem.is_(None))
+        
+        print(f"[API] Pista: {pista}")
+        if pista:
+            if 'PF' in pista:
+                pecas = pecas.filter(TanquesPecas.tipo == 'PF')
+            else:
+                pecas = pecas.filter(TanquesPecas.tipo != 'PF')
+
+        pecas = pecas.order_by(TanquesPecas.numero_sequencial).all()
         print(f"[API] Quantidade de peças encontradas: {len(pecas)}")
-        
-        # Obter IDs de peças já concretadas (verificar no campo pecas JSON)
-        pecas_concretadas_ids = tanque.get_pecas_concretadas()
-        
-        print(f"[API] Peças já concretadas: {len(pecas_concretadas_ids)}")
         
         # Preparar resultados
         result = []
         for peca in pecas:
-            if peca.id not in pecas_concretadas_ids:
-                continue
-            
             result.append(peca.to_dict())
         
         print(f"[API] Retornando {len(result)} peças no resultado final")
@@ -74,75 +80,6 @@ def get_pecas_por_tanque(tanque_id):
 
 
 
-@concretagem.route('/api/tanques/pecas', methods=['POST'])
-@login_required
-def get_pecas_por_tanques():
-    """Retorna as peças de múltiplos tanques em formato JSON para ser usado em seleção dinâmica"""
-    try:
-        # Obter lista de IDs de tanques do corpo da requisição
-        data = request.get_json()
-        if not data or 'tanque_ids' not in data:
-            return jsonify({'erro': 'IDs de tanques não fornecidos', 'status': 'error'}), 400
-            
-        tanque_ids = data['tanque_ids']
-        print(f"[API] Função get_pecas_por_tanques chamada com tanque_ids: {tanque_ids}")
-        
-        # Verificar se deve filtrar apenas peças não concretadas
-        mostrar_nao_concretadas = data.get('nao_concretadas', False)
-        print(f"[API] Filtro mostrar_nao_concretadas: {mostrar_nao_concretadas}")
-        
-        # Obter todas as peças dos tanques selecionados
-        pecas = TanquesPecas.query.filter(TanquesPecas.tanque_id.in_(tanque_ids)).order_by(TanquesPecas.id).all()
-        print(f"[API] Quantidade de peças encontradas: {len(pecas)}")
-        
-        # Obter IDs de peças já concretadas (verificar no campo pecas JSON)
-        pecas_concretadas_ids = set()
-        concretagens = ConcretoConcretagens.query.filter(ConcretoConcretagens.pecas.isnot(None)).all()
-        for conc in concretagens:
-            try:
-                pecas_json = json.loads(conc.pecas) if isinstance(conc.pecas, str) else conc.pecas
-                if isinstance(pecas_json, list):
-                    for p in pecas_json:
-                        # Suporta tanto formato antigo ("placa") quanto novo ("nome")
-                        peca_nome = p.get('nome') or p.get('placa')
-                        if peca_nome:
-                            pecas_concretadas_ids.add(peca_nome)
-            except:
-                pass
-        
-        print(f"[API] Peças já concretadas: {len(pecas_concretadas_ids)}")
-        
-        # Preparar resultados
-        result = []
-        for peca in pecas:
-            concretada = str(peca.id) in pecas_concretadas_ids
-            
-            # Se só quer não concretadas e a peça está concretada, pular
-            if mostrar_nao_concretadas and concretada:
-                continue
-                
-            # Garantir que todos os campos necessários estejam presentes
-            peca_dict = {
-                'id': peca.id,
-                'nome': peca.nome,
-                'tipo': peca.tipo,
-                'numero_sequencial': peca.numero_sequencial,
-                'tanque_nome': peca.tanque.nome if peca.tanque else '',
-                'tanque_id': peca.tanque_id,
-                'concretada': concretada
-            }
-            result.append(peca_dict)
-        
-        print(f"[API] Retornando {len(result)} peças no resultado final")
-        # Adicionar um cabeçalho para evitar caching
-        response = jsonify(result)
-        response.headers.add('Cache-Control', 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0')
-        return response
-        
-    except Exception as e:
-        print(f"[API] Erro ao buscar peças dos tanques: {str(e)}")
-        logging.error(f"[API] Erro ao buscar peças dos tanques: {str(e)}", exc_info=True)
-        return jsonify({'erro': f'Erro ao buscar peças: {str(e)}', 'status': 'error'}), 500
 
 # Novas rotas AJAX simplificadas
 
@@ -306,7 +243,8 @@ def api_pecas(id):
                             
                             peca_obj = {
                                 'nome': peca_nome,  # Nome da peça
-                                'tanque': tanque_id_val,  # ID do tanque
+                                'tanque': tanque_id_val,  # ID do tanque (formato antigo)
+                                'tanque_id': tanque_id_val,  # ID do tanque (formato novo)
                                 'forma': peca_item.get('forma', 0)
                             }
                             
