@@ -119,6 +119,11 @@
                             <input type="number" class="form-control" id="edit_item_nf" name="item_nf" min="0">
                             <small class="form-text text-muted">Número do item na nota fiscal</small>
                         </div>
+                        <div class="col-md-6">
+                            <label for="edit_valor_unitario" class="form-label">Valor Unitário (R$)</label>
+                            <input type="number" class="form-control" id="edit_valor_unitario" name="valor_unitario" step="0.01" min="0">
+                            <small class="form-text text-muted">Valor unitário do tanque</small>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -153,6 +158,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_placas_normais').value = tanque.placas_normais || '';
             document.getElementById('edit_placas_fecho').value = tanque.placas_fecho || '';
             document.getElementById('edit_item_nf').value = tanque.item_nf || '';
+            document.getElementById('edit_valor_unitario').value = tanque.valor_unitario || '';
             document.getElementById('edit_cobertura').checked = tanque.cobertura || false;
             
             const sistemaSelect = document.getElementById('edit_sistema');

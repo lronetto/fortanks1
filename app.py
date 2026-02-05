@@ -64,6 +64,7 @@ from controllers.relatorios.estoque_grupos_controller import estoque_grupos_bp
 from controllers.relatorios.databook_relatorio_concretagem import databook_concretagem_bp
 from controllers.relatorios.databook_relatorio_inspecao import databook_inspecao_bp
 from controllers.relatorios.databook_api_controller import databook_api_bp
+from controllers.relatorios.usinagem_controller import usinagem_bp
 
 load_dotenv('.env')
 
@@ -218,6 +219,7 @@ app.register_blueprint(estoque_grupos_bp)
 app.register_blueprint(databook_concretagem_bp)
 app.register_blueprint(databook_inspecao_bp)
 app.register_blueprint(databook_api_bp)
+app.register_blueprint(usinagem_bp)
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
 app.register_blueprint(upload_bp, url_prefix='/uploads')
 logger.info("Blueprints registrados com sucesso!")

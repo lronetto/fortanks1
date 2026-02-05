@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, send_file
+from flask import Blueprint, render_template, request, send_file,jsonify
 from datetime import datetime, timedelta
 from functools import wraps
 from flask_login import login_required
@@ -32,33 +32,7 @@ def login_required_decorator(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def _criar_mock_request(data_inicio=None, data_fim=None, centro_custo_ids=None, status_pagamento=None):
-    """Cria um objeto MockRequest para usar com api_get_dados_notas_fiscais"""
-    class MockRequest:
-        def __init__(self):
-            self.args = {}
-            if data_inicio:
-                self.args['data_emissao_inicio'] = data_inicio
-            if data_fim:
-                self.args['data_emissao_fim'] = data_fim
-            if centro_custo_ids:
-                # Adicionar centro_custo ao args para o filtro funcionar
-                self.args['centro_custo'] = centro_custo_ids
-            if status_pagamento:
-                self.args['status_pagamento'] = status_pagamento
-            self.args['emitente'] = 'Matriz'
-            self.args['tipo_operacao'] = 'venda'
-        
-        def getlist(self, key, default=None):
-            """Implementar getlist para compatibilidade"""
-            if key in self.args:
-                value = self.args[key]
-                if isinstance(value, list):
-                    return value
-                return [value]
-            return default or []
-    
-    return MockRequest()
+
 
 def _processar_notas_fiscais(query):
     """
@@ -163,14 +137,16 @@ def _processar_notas_fiscais(query):
             data_prevista = data_prevista.strftime('%d/%m/%Y') if data_prevista else 'Não definido'
         dados_relatorio.append({
             'id': nf.id,
-            'Data': nf.data_emissao.strftime('%d/%m/%Y'),
-            'Centro de Custo': centro_custo_codigo,
-            'Nota Fiscal': nf.numero_nf,
-            'Valor': Decimal(nf.valor_total),
-            'Quantidade': quantidade,
-            'Data Prevista': data_prevista,
-            'Pago': pago_str,
-            'Status': nf.status_processamento
+            'data': nf.data_emissao.strftime('%d/%m/%Y'),
+            'centro_custo': centro_custo_codigo,
+            'nf': nf.numero_nf,
+            'valor': float(Decimal(nf.valor_total)),  # Converter Decimal para float para JSON
+            'quantidade': quantidade,
+            'data_prevista': data_prevista,
+            'pago': pago_str,
+            'status': nf.status_processamento,
+            
+
         })
     
     return dados_relatorio
@@ -204,28 +180,48 @@ def index():
 @login_required_decorator
 def api_dados():
     """Endpoint AJAX para buscar dados do relatório"""
-    data_inicio = request.args.get('data_inicio')
-    data_fim = request.args.get('data_fim')
-    centro_custo_ids = request.args.getlist('centro_custo')
-    status_pagamento = request.args.get('status_pagamento')
-    
+    data_inicio = request.args.get('data_inicio', None)
+    data_fim = request.args.get('data_fim', None)
+    # Tentar getlist primeiro (para múltiplos valores)
+    centro_custo_ids = request.args.getlist('centro_custo', [])
+    # Se getlist retornar vazio, tentar get (para um único valor)
+    if not centro_custo_ids:
+        centro_custo_single = request.args.get('centro_custo', None)
+        if centro_custo_single:
+            centro_custo_ids = [centro_custo_single]
+    status_pagamento = request.args.get('status_pagamento', None)
+
+    print(f'request.args: {request.args}')
+    print(f'centro_custo_ids (getlist): {request.args.getlist("centro_custo")}')
+    print(f'centro_custo_ids (get): {request.args.get("centro_custo")}')
+    print(f'centro_custo_ids (final): {centro_custo_ids}')
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
     
     time_start = time.time()
     # Criar um objeto request mock para api_get_dados_notas_fiscais
-    mock_request = _criar_mock_request(data_inicio, data_fim, centro_custo_ids_int if centro_custo_ids_int else None, status_pagamento)
     print(f'tempo de criação do mock request: {time.time() - time_start}')
     time_start = time.time()
-    query = api_get_dados_notas_fiscais(mock_request)
+    print(f'centro_custo_ids: {centro_custo_ids}')
+    json_request = {
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'centro_custo_ids': centro_custo_ids_int,
+        'status_pagamento': status_pagamento,
+        #'plano_conta_id': 44,
+        'emitente': 'Matriz',
+        'tipo_operacao': 'venda',
+        'pagamento_5percent': True
+    }
+    query = api_get_dados_notas_fiscais(json_request)
     print(f'tempo de execução da query: {time.time() - time_start}')
     time_start = time.time()
     dados_relatorio = _processar_notas_fiscais(query)
     print(f'tempo de processamento dos dados: {time.time() - time_start}')
     # Calcular totais por categoria
-    total_valor = sum([d['Valor'] if d['Status'] != 'cancelada' else 0 for d in dados_relatorio])
-    total_quantidade = sum([d['Quantidade'] if d['Status'] != 'cancelada' else 0 for d in dados_relatorio])
+    total_valor = sum([d['valor'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
+    total_quantidade = sum([d['quantidade'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
     
     # Calcular quantidade total de placas dos contratos (material)
     query_placas = db.session.query(
@@ -238,18 +234,18 @@ def api_dados():
     total_placas_contratos = query_placas.scalar() or 0
     
     # Calcular valores faturados (emitidos)
-    valor_faturado = sum([d['Valor'] if d['Status'] != 'cancelada' else 0 for d in dados_relatorio])
+    valor_faturado = sum([d['valor'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
     
     # Calcular valores recebidos (pagos)
     valor_recebido = sum([
-        d['Valor'] for d in dados_relatorio
-        if d['Pago'] != 'Não' and d['Pago'] != 'Não definido' and d['Status'] != 'cancelada'
+        d['valor'] for d in dados_relatorio
+        if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
     ])
     
     # Calcular quantidades de placas recebidas (pagos)
     quantidade_recebida = sum([
-        d['Quantidade'] for d in dados_relatorio
-        if d['Pago'] != 'Não' and d['Pago'] != 'Não definido' and d['Status'] != 'cancelada'
+        d['quantidade'] for d in dados_relatorio
+        if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
     ])
     
     # Calcular valores a faturar (emitidos mas não pagos)
@@ -268,22 +264,22 @@ def api_dados():
         query_contratos_mat = query_contratos_mat.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))
         query_contratos_ser = query_contratos_ser.filter(Contrato.centro_custo_id.in_(centro_custo_ids_int))
     
-    valor_total_contratos = query_contratos_total.scalar() or 0
-    valor_total_material = query_contratos_mat.scalar() or 0
-    valor_total_servico = query_contratos_ser.scalar() or 0
+    valor_total_contratos = float(query_contratos_total.scalar()) or 0
+    valor_total_material = float(query_contratos_mat.scalar()) or 0
+    valor_total_servico = float(query_contratos_ser.scalar()) or 0
     
     # As notas fiscais são sempre de material, então:
     # Material: valor das notas fiscais
     # Serviço: valor total de serviço dos contratos (não tem notas fiscais)
-    valor_material_faturado = valor_faturado  # NFE são sempre material
+    valor_material_faturado = float(valor_faturado)  # NFE são sempre material
     valor_servico_faturado = 0  # Serviços não têm notas fiscais
     
     # Calcular valores ainda não faturados
-    valor_material_nao_faturado = valor_total_material - valor_material_faturado
-    valor_servico_nao_faturado = valor_total_servico - valor_servico_faturado
+    valor_material_nao_faturado = float(valor_total_material) - float(valor_material_faturado)
+    valor_servico_nao_faturado = float(valor_total_servico) - float(valor_servico_faturado)
     
     # Calcular quantidades de placas não faturadas
-    quantidade_material_nao_faturada = total_placas_contratos - total_quantidade
+    quantidade_material_nao_faturada = float(total_placas_contratos) - float(total_quantidade)
     
     # Calcular percentuais para material
     percentual_material_faturado = (valor_material_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
@@ -297,34 +293,38 @@ def api_dados():
     percentual_servico_a_faturar = 0
     percentual_servico_nao_faturado = 100 if valor_total_servico > 0 else 0
     
-    return render_template(
-        'relatorios/notas/tabela.html',
-        relatorio=dados_relatorio,
-        total_valor=total_valor if total_valor else 0,
-        total_quantidade=total_quantidade if total_quantidade else 0,
-        total_placas_contratos=total_placas_contratos,
-        quantidade_recebida=quantidade_recebida,
-        quantidade_a_faturar=quantidade_a_faturar,
-        quantidade_material_nao_faturada=quantidade_material_nao_faturada,
-        valor_faturado=valor_faturado,
-        valor_recebido=valor_recebido,
-        valor_a_faturar=valor_a_faturar,
-        valor_total_contratos=valor_total_contratos,
-        valor_total_material=valor_total_material,
-        valor_total_servico=valor_total_servico,
-        valor_material_faturado=valor_material_faturado,
-        valor_servico_faturado=valor_servico_faturado,
-        valor_material_nao_faturado=valor_material_nao_faturado,
-        valor_servico_nao_faturado=valor_servico_nao_faturado,
-        percentual_material_faturado=percentual_material_faturado,
-        percentual_material_recebido=percentual_material_recebido,
-        percentual_material_a_faturar=percentual_material_a_faturar,
-        percentual_material_nao_faturado=percentual_material_nao_faturado,
-        percentual_servico_faturado=percentual_servico_faturado,
-        percentual_servico_recebido=percentual_servico_recebido,
-        percentual_servico_a_faturar=percentual_servico_a_faturar,
-        percentual_servico_nao_faturado=percentual_servico_nao_faturado
-    )
+    dados_relatorio_aux = {
+        'valor_total_material': valor_total_material,
+        'total_placas_contratos': total_placas_contratos,
+        'total_quantidade': total_quantidade,  # Quantidade de placas faturadas
+        'quantidade_recebida': quantidade_recebida,
+        'quantidade_a_faturar': quantidade_a_faturar,
+        'quantidade_material_nao_faturada': quantidade_material_nao_faturada,
+        'valor_faturado': valor_faturado,
+        'valor_recebido': valor_recebido,
+        'valor_a_faturar': valor_a_faturar,
+        'valor_total_contratos': valor_total_contratos,
+        'valor_total_servico': valor_total_servico,
+        'valor_material_faturado': valor_material_faturado,
+        'valor_servico_faturado': valor_servico_faturado,
+        'valor_material_nao_faturado': valor_material_nao_faturado,
+        'valor_servico_nao_faturado': valor_servico_nao_faturado,
+        'percentual_material_faturado': percentual_material_faturado,
+        'percentual_material_recebido': percentual_material_recebido,
+        'percentual_material_a_faturar': percentual_material_a_faturar,
+        'percentual_material_nao_faturado': percentual_material_nao_faturado,
+        'percentual_servico_faturado': percentual_servico_faturado,
+        'percentual_servico_recebido': percentual_servico_recebido,
+        'percentual_servico_a_faturar': percentual_servico_a_faturar,
+        'percentual_servico_nao_faturado': percentual_servico_nao_faturado
+        }
+
+    return jsonify({    
+        'data': dados_relatorio,
+        'recordsTotal': len(dados_relatorio),
+        'recordsFiltered': len(dados_relatorio),
+        'dados_relatorio_aux': dados_relatorio_aux
+    })
 
 @notas_bp.route('/exportar/zip', methods=['GET'])
 @login_required_decorator
@@ -340,8 +340,16 @@ def exportar_zip():
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
     
     # Criar um objeto request mock para api_get_dados_notas_fiscais
-    mock_request = _criar_mock_request(data_inicio, data_fim, centro_custo_ids_int if centro_custo_ids_int else None, status_pagamento)
-    query = api_get_dados_notas_fiscais(mock_request)
+    json_request = {
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'centro_custo_ids': centro_custo_ids_int,
+        'status_pagamento': status_pagamento,
+        'emitente': 'Matriz',
+        'tipo_operacao': 'venda',
+        'pagamento_5percent': True
+    }
+    query = api_get_dados_notas_fiscais(json_request)
     
     # Buscar dados do relatório (notas filtradas)
     dados_relatorio = _processar_notas_fiscais(query)
@@ -413,8 +421,16 @@ def exportar_pdf():
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
 
     # Criar um objeto request mock para api_get_dados_notas_fiscais
-    mock_request = _criar_mock_request(data_inicio, data_fim, centro_custo_ids_int if centro_custo_ids_int else None, status_pagamento)
-    query = api_get_dados_notas_fiscais(mock_request)
+    json_request = {
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'centro_custo_ids': centro_custo_ids_int,
+        'status_pagamento': status_pagamento,
+        'emitente': 'Matriz',
+        'tipo_operacao': 'venda',
+        'pagamento_5percent': True
+    }
+    query = api_get_dados_notas_fiscais(json_request)
     
     # Buscar dados do relatório (notas filtradas)
     dados_relatorio = _processar_notas_fiscais(query)
@@ -464,8 +480,16 @@ def exportar_excel():
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
 
     # Criar um objeto request mock para api_get_dados_notas_fiscais
-    mock_request = _criar_mock_request(data_inicio, data_fim, centro_custo_ids_int if centro_custo_ids_int else None, status_pagamento)
-    query = api_get_dados_notas_fiscais(mock_request)
+    json_request = {
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'centro_custo_ids': centro_custo_ids_int,
+        'status_pagamento': status_pagamento,
+        'emitente': 'Matriz',
+        'tipo_operacao': 'venda',
+        'pagamento_5percent': True
+    }
+    query = api_get_dados_notas_fiscais(json_request)
     
     dados_relatorio = _processar_notas_fiscais(query)
 
@@ -486,18 +510,18 @@ def _get_dataframe(dados_relatorio):
     """Helper function para criar DataFrame do relatório"""
     df = pd.DataFrame(dados_relatorio)
     # Ordenar por data de emissão
-    df['Valor'] = df['Valor'].apply(
+    df['valor'] = df['valor'].apply(
         lambda x: 'R$ ' + '{:,.2f}'.format(x).replace(',', 'X').replace('.', ',').replace('X', '.')
     )
-    df['Quantidade'] = df['Quantidade'].apply(lambda x: int(x))
+    df['quantidade'] = df['quantidade'].apply(lambda x: int(x))
     df.rename(columns={
-        'Data Prevista': 'VENCIMENTO',
-        'Data': 'DATA EMISSÃO',
-        'Nota Fiscal': 'NF',
-        'Quantidade': 'QTDE DE PLACA',
-        'Valor': 'VALOR',
-        'Status': 'STATUS',
-        'Pago': 'PAGO'
+        'data_prevista': 'VENCIMENTO',
+        'data': 'DATA EMISSÃO',
+        'nf': 'NF',
+        'quantidade': 'QTDE DE PLACA',
+        'valor': 'VALOR',
+        'status': 'STATUS',
+        'pago': 'PAGO'
     }, inplace=True)
 
     return df[['DATA EMISSÃO', 'NF', 'QTDE DE PLACA', 'VALOR', 'STATUS', 'VENCIMENTO', 'PAGO']]

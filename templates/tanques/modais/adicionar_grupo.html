@@ -1,0 +1,102 @@
+<!-- Modal para Adicionar Tanques a Grupo -->
+<div class="modal fade" id="modalAdicionarGrupo" tabindex="-1" aria-labelledby="modalAdicionarGrupoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAdicionarGrupoLabel">Adicionar Tanques a Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAdicionarGrupo" method="POST" action="{{ url_for('tanque.adicionar_tanques_grupo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-3">
+                        <label for="grupoSelecionado" class="form-label">Selecione o Grupo</label>
+                        <select class="form-select" id="grupoSelecionado" name="grupo_id" required>
+                            <option value="">Selecione um grupo...</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo.id }}">{{ grupo.nome }} ({{ grupo.total_tanques }} tanques)</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Ou <a href="#" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo" onclick="document.getElementById('modalAdicionarGrupo').classList.remove('show');">crie um novo grupo</a></small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <strong>Tanques selecionados:</strong>
+                        <div id="tanquesSelecionadosList" class="mt-2">
+                            <small class="text-muted">Nenhum tanque selecionado</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Campos hidden para os IDs dos tanques selecionados serão adicionados via JavaScript -->
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarAdicionarGrupo">
+                    <i class="fas fa-plus"></i> Adicionar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Botão de adicionar a grupo
+        const btnConfirmarAdicionarGrupo = document.getElementById('btnConfirmarAdicionarGrupo');
+        if (btnConfirmarAdicionarGrupo) {
+            btnConfirmarAdicionarGrupo.addEventListener('click', function() {
+                const form = document.getElementById('formAdicionarGrupo');
+                const grupoId = document.getElementById('grupoSelecionado').value;
+                const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
+                
+                if (!grupoId) {
+                    alert('Por favor, selecione um grupo.');
+                    return;
+                }
+                
+                if (checkboxes.length === 0) {
+                    alert('Por favor, selecione pelo menos um tanque.');
+                    return;
+                }
+                
+                // Limpar campos hidden anteriores
+                const camposAntigos = form.querySelectorAll('input[name="tanque_ids"]');
+                camposAntigos.forEach(campo => campo.remove());
+                
+                // Adicionar IDs dos tanques selecionados ao formulário
+                checkboxes.forEach(checkbox => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'tanque_ids';
+                    input.value = checkbox.value;
+                    form.appendChild(input);
+                });
+                
+                // Enviar formulário
+                form.submit();
+            });
+        }
+        
+        // Atualizar lista quando o modal for aberto
+        const modalAdicionarGrupo = document.getElementById('modalAdicionarGrupo');
+        if (modalAdicionarGrupo) {
+            modalAdicionarGrupo.addEventListener('show.bs.modal', function() {
+                atualizarListaTanquesSelecionados();
+            });
+            
+            // Atualizar lista quando checkboxes mudarem enquanto modal estiver aberto
+            document.querySelectorAll('.tanque-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    if (modalAdicionarGrupo.classList.contains('show')) {
+                        atualizarListaTanquesSelecionados();
+                    }
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,373 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Painel Administrativo - Resumo do Banco de Dados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-2 text-gray-800">
+        <i class="fas fa-database"></i> Resumo do Banco de Dados
+    </h1>
+    <p class="mb-4">Visão geral das tabelas, quantidade de registros e armazenamento utilizado.</p>
+
+    <!-- Cards de Resumo Geral -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Tabelas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_tabelas }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-table fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Total de Registros
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ "{:,.0f}".format(total_registros_geral) }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Armazenamento Total
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {% if total_tamanho_geral >= 1024 %}
+                                    {{ "%.2f"|format(total_tamanho_geral / 1024) }} GB
+                                {% else %}
+                                    {{ "%.2f"|format(total_tamanho_geral) }} MB
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hdd fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Tamanho Médio/Tabela
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {% if total_tabelas > 0 %}
+                                    {% set media = total_tamanho_geral / total_tabelas %}
+                                    {% if media >= 1024 %}
+                                        {{ "%.2f"|format(media / 1024) }} GB
+                                    {% else %}
+                                        {{ "%.2f"|format(media) }} MB
+                                    {% endif %}
+                                {% else %}
+                                    0 MB
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-pie fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Resumo das Tabelas -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-table"></i> Resumo das Tabelas
+            </h6>
+            <div class="input-group" style="width: 300px;">
+                <input type="text" class="form-control" id="searchTable" placeholder="Buscar tabela...">
+                <div class="input-group-append">
+                    <span class="input-group-text">
+                        <i class="fas fa-search"></i>
+                    </span>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabelaResumo" width="100%" cellspacing="0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th style="width: 5%;">#</th>
+                            <th style="width: 40%;">Nome da Tabela</th>
+                            <th style="width: 20%;" class="text-right">Total de Registros</th>
+                            <th style="width: 20%;" class="text-right">Tamanho</th>
+                            <th style="width: 15%;" class="text-center">% do Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if tabelas_info %}
+                            {% for tabela in tabelas_info %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>
+                                    <strong>{{ tabela.nome }}</strong>
+                                    {% if tabela.get('erro') %}
+                                        <br><small class="text-danger">
+                                            <i class="fas fa-exclamation-triangle"></i> {{ tabela.erro }}
+                                        </small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-right">
+                                    <span class="badge badge-info">{{ "{:,.0f}".format(tabela.total_registros) }}</span>
+                                </td>
+                                <td class="text-right">
+                                    {% if tabela.tamanho_mb >= 1024 %}
+                                        <span class="badge badge-warning">
+                                            {{ "%.2f"|format(tabela.tamanho_mb / 1024) }} GB
+                                        </span>
+                                    {% elif tabela.tamanho_mb > 0 %}
+                                        <span class="badge badge-secondary">
+                                            {{ "%.2f"|format(tabela.tamanho_mb) }} MB
+                                        </span>
+                                    {% else %}
+                                        <span class="badge badge-light">0 MB</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if total_tamanho_geral > 0 %}
+                                        {% set percentual = (tabela.tamanho_mb / total_tamanho_geral * 100) %}
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar 
+                                                {% if percentual > 20 %}bg-danger
+                                                {% elif percentual > 10 %}bg-warning
+                                                {% elif percentual > 5 %}bg-info
+                                                {% else %}bg-success{% endif %}" 
+                                                role="progressbar" 
+                                                style="width: {{ percentual }}%"
+                                                aria-valuenow="{{ percentual }}" 
+                                                aria-valuemin="0" 
+                                                aria-valuemax="100">
+                                                {{ "%.1f"|format(percentual) }}%
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">
+                                    <i class="fas fa-info-circle"></i> Nenhuma tabela encontrada.
+                                </td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                    <tfoot class="thead-light">
+                        <tr>
+                            <th colspan="2" class="text-right"><strong>TOTAL</strong></th>
+                            <th class="text-right">
+                                <strong>{{ "{:,.0f}".format(total_registros_geral) }}</strong>
+                            </th>
+                            <th class="text-right">
+                                <strong>
+                                    {% if total_tamanho_geral >= 1024 %}
+                                        {{ "%.2f"|format(total_tamanho_geral / 1024) }} GB
+                                    {% else %}
+                                        {{ "%.2f"|format(total_tamanho_geral) }} MB
+                                    {% endif %}
+                                </strong>
+                            </th>
+                            <th class="text-center"><strong>100%</strong></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Seção Especial: Uploads por Tipo -->
+    {% if uploads_por_tipo %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-upload"></i> Tabela Uploads - Detalhamento por Tipo
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for tipo_nome, dados in uploads_por_tipo.items() %}
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="card border-left-info shadow h-100">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        {{ tipo_nome }}
+                                    </div>
+                                    <div class="h6 mb-0 font-weight-bold text-gray-800">
+                                        {{ "{:,.0f}".format(dados.total) }} arquivo(s)
+                                    </div>
+                                    <div class="text-xs text-muted mt-1">
+                                        {% if dados.tamanho_mb >= 1024 %}
+                                            {{ "%.2f"|format(dados.tamanho_mb / 1024) }} GB
+                                        {% elif dados.tamanho_mb > 0 %}
+                                            {{ "%.2f"|format(dados.tamanho_mb) }} MB
+                                        {% else %}
+                                            < 0.01 MB
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-file-upload fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Tabela Detalhada de Uploads por Tipo -->
+            <div class="table-responsive mt-4">
+                <table class="table table-bordered table-sm">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th class="text-right">Total de Arquivos</th>
+                            <th class="text-right">Tamanho Total</th>
+                            <th class="text-center">% do Total de Uploads</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set total_uploads = uploads_por_tipo.values()|sum(attribute='total') %}
+                        {% set total_tamanho_uploads = uploads_por_tipo.values()|sum(attribute='tamanho_mb') %}
+                        {% for tipo_nome, dados in uploads_por_tipo.items() %}
+                        <tr>
+                            <td><strong>{{ tipo_nome }}</strong></td>
+                            <td class="text-right">
+                                <span class="badge badge-primary">{{ "{:,.0f}".format(dados.total) }}</span>
+                            </td>
+                            <td class="text-right">
+                                {% if dados.tamanho_mb >= 1024 %}
+                                    <span class="badge badge-warning">
+                                        {{ "%.2f"|format(dados.tamanho_mb / 1024) }} GB
+                                    </span>
+                                {% elif dados.tamanho_mb > 0 %}
+                                    <span class="badge badge-secondary">
+                                        {{ "%.2f"|format(dados.tamanho_mb) }} MB
+                                    </span>
+                                {% else %}
+                                    <span class="badge badge-light">< 0.01 MB</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                {% if total_uploads > 0 %}
+                                    {% set percentual = (dados.total / total_uploads * 100) %}
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar bg-info" 
+                                            role="progressbar" 
+                                            style="width: {{ percentual }}%"
+                                            aria-valuenow="{{ percentual }}" 
+                                            aria-valuemin="0" 
+                                            aria-valuemax="100">
+                                            {{ "%.1f"|format(percentual) }}%
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="thead-light">
+                        <tr>
+                            <th>TOTAL</th>
+                            <th class="text-right">
+                                <strong>{{ "{:,.0f}".format(total_uploads) }}</strong>
+                            </th>
+                            <th class="text-right">
+                                <strong>
+                                    {% if total_tamanho_uploads >= 1024 %}
+                                        {{ "%.2f"|format(total_tamanho_uploads / 1024) }} GB
+                                    {% else %}
+                                        {{ "%.2f"|format(total_tamanho_uploads) }} MB
+                                    {% endif %}
+                                </strong>
+                            </th>
+                            <th class="text-center"><strong>100%</strong></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    // Inicializar DataTable
+    var table = $('#tabelaResumo').DataTable({
+        "language": {
+            "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
+        },
+        "pageLength": 25,
+        "order": [[3, "desc"]], // Ordenar por tamanho (maior primeiro)
+        "columnDefs": [
+            { "orderable": false, "targets": 0 } // Desabilitar ordenação na coluna #
+        ]
+    });
+
+    // Busca personalizada
+    $('#searchTable').on('keyup', function() {
+        table.search(this.value).draw();
+    });
+});
+</script>
+{% endblock %}

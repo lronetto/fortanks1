@@ -42,6 +42,7 @@ def api_get_dados_notas_fiscais(request):
     emitente = json_filtros.get("emitente", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     destinatario = json_filtros.get("destinatario", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     status_pagamento = json_filtros.get("status_pagamento", "")
+    pagamento_5percent = json_filtros.get("pagamento_5percent", False)
     data_emissao_inicio = json_filtros.get("data_emissao_inicio", "")
     data_emissao_fim = json_filtros.get("data_emissao_fim", "")
     tipo_nfe = json_filtros.get("tipo_nfe", "")
@@ -56,12 +57,10 @@ def api_get_dados_notas_fiscais(request):
     valor_minimo = json_filtros.get("valor_minimo", "")
     valor_maximo = json_filtros.get("valor_maximo", "")
     valor_exato = json_filtros.get("valor_exato", "")
+    plano_conta_id = json_filtros.get("plano_conta_id", "")
     notas_selecionadas = json_filtros.get("notas_selecionadas", [])
-    centro_custo_ids = json_filtros.getlist("centro_custo") if hasattr(json_filtros, "getlist") else json_filtros.get("centro_custo", [])
-    if isinstance(centro_custo_ids, str):
-        centro_custo_ids = [centro_custo_ids] if centro_custo_ids else []
-    elif not isinstance(centro_custo_ids, list):
-        centro_custo_ids = [centro_custo_ids] if centro_custo_ids else []
+    centro_custo_ids = json_filtros.get("centro_custo_ids", [])
+   
     reembolso_id = json_filtros.get("reembolso_id", "")
     if reembolso_id:
         try:
@@ -80,7 +79,8 @@ def api_get_dados_notas_fiscais(request):
         .where(
             and_(
                 NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
-                DadoAnalitico.valor == NotaFiscal.valor_total,
+                DadoAnalitico.valor >= NotaFiscal.valor_total*0.95,
+                DadoAnalitico.valor <= NotaFiscal.valor_total*1.05,
                 documento_normalizado == numero_nf_normalizado,
             )
         )
@@ -89,7 +89,39 @@ def api_get_dados_notas_fiscais(request):
         .scalar_subquery()
         .label("pagamento")
     )
-
+    if pagamento_5percent:
+        pc_column = (
+            select(DadoAnalitico.plano_conta_id)
+            .select_from(DadoAnalitico)
+            .where(
+                and_(
+                    NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
+                    DadoAnalitico.valor >= NotaFiscal.valor_total*0.95,
+                    DadoAnalitico.valor <= NotaFiscal.valor_total*1.05,
+                    documento_normalizado == numero_nf_normalizado,
+                )
+            )
+            .limit(1)
+            .correlate(NotaFiscal)
+            .scalar_subquery()
+            .label("pc")
+        )
+    else:
+        pc_column = (
+            select(DadoAnalitico.plano_conta_id)
+            .select_from(DadoAnalitico)
+            .where(
+                and_(
+                    NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
+                    NotaFiscal.valor_total == DadoAnalitico.valor,
+                    documento_normalizado == numero_nf_normalizado,
+                )
+            )
+            .limit(1)
+            .correlate(NotaFiscal)
+            .scalar_subquery()
+            .label("pc")
+        )
     # Subquery centro de custo - retorna o ID do centro de custo se houver relação, NULL caso contrário
     centro_custo_column = (
         select(CentroCusto.id)
@@ -180,6 +212,7 @@ def api_get_dados_notas_fiscais(request):
             percentual_importacao_column,
             reembolso_column,
             liberada_column,
+            pc_column,
         )
         .select_from(NotaFiscal)
         .filter(NotaFiscal.status_processamento != "cancelada")
@@ -195,6 +228,8 @@ def api_get_dados_notas_fiscais(request):
             )
         )
 
+    if plano_conta_id:
+        query = query.filter(pc_column == plano_conta_id)
     if item_nome:
         query = query.join(NotaFiscalItem).filter(NotaFiscalItem.descricao.ilike(f"%{item_nome}%"))
 
@@ -334,6 +369,7 @@ def api_get_dados_notas_fiscais(request):
     if centro_custo_ids:
         centro_custo_ids_int = [int(cc_id) for cc_id in centro_custo_ids if cc_id]
         if centro_custo_ids_int:
+            print(f'centro_custo_ids_int: {centro_custo_ids_int}')
             query = query.filter(centro_custo_column.in_(centro_custo_ids_int))
 
     if status_pagamento:

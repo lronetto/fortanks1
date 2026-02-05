@@ -2,90 +2,6 @@
 
 {% block title %}Tanques - Sistema de Gestão - Pré-moldados{% endblock %}
 
-{% block extra_css %}
-<style>
-    /* Melhorias de visibilidade para a tabela de tanques */
-    #dataTable {
-        font-size: 0.875rem;
-    }
-    
-    #dataTable thead th {
-        font-size: 0.8rem;
-        font-weight: 600;
-        padding: 0.5rem 0.4rem;
-        white-space: nowrap;
-        vertical-align: middle;
-    }
-    
-    #dataTable tbody td {
-        font-size: 0.85rem;
-        padding: 0.4rem 0.4rem;
-        vertical-align: middle;
-    }
-    
-    /* Ajuste para links de contrato */
-    #dataTable tbody td a {
-        font-size: 0.85rem;
-        word-break: break-word;
-        line-height: 1.3;
-    }
-    
-    /* Ajuste para coluna de dimensões */
-    #dataTable tbody td:nth-child(5) {
-        font-size: 0.8rem;
-        word-break: break-word;
-        line-height: 1.3;
-    }
-    
-    /* Botões de ação mais compactos */
-    #dataTable tbody td .btn {
-        padding: 0.2rem 0.4rem;
-        font-size: 0.75rem;
-        margin: 0.1rem;
-    }
-    
-    #dataTable tbody td .btn i {
-        font-size: 0.8rem;
-    }
-    
-    /* Ajuste para coluna de ações */
-    #dataTable tbody td:last-child {
-        white-space: nowrap;
-        width: 120px;
-    }
-    
-    /* Melhor espaçamento geral */
-    .table-responsive {
-        font-size: 0.875rem;
-    }
-    
-    /* Ajuste para valores numéricos */
-    #dataTable tbody td:nth-child(6),
-    #dataTable tbody td:nth-child(7),
-    #dataTable tbody td:nth-child(8),
-    #dataTable tbody td:nth-child(9),
-    #dataTable tbody td:nth-child(10),
-    #dataTable tbody td:nth-child(11),
-    #dataTable tbody td:nth-child(12) {
-        text-align: center;
-        white-space: nowrap;
-    }
-    
-    /* Ajuste para ID */
-    #dataTable tbody td:nth-child(2) {
-        text-align: center;
-        font-weight: 600;
-        width: 50px;
-    }
-    
-    /* Ajuste para checkbox */
-    #dataTable thead th:first-child,
-    #dataTable tbody td:first-child {
-        text-align: center;
-        width: 40px;
-    }
-</style>
-{% endblock %}
 
 {% block content %}
 <!-- Campo global para CSRF token -->
@@ -142,94 +58,17 @@
                             <th>Contrato</th>
                             <th>Nome</th>
                             <th>Grupo</th>
-                            <th>Sistema</th>
-                            <th>Dimensões</th>
                             <th>Altura Total</th>
-                            <th>Altura Útil</th>
-                            <th>Quantidade</th>
                             <th>Placas Normais</th>
                             <th>Placas de Fecho</th>
                             <th>Bainhas </th>
                             <th>Item NF</th>
+                            <th>Valor Unitário</th>
                             <th class="text-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for tanque in tanques %}
-                        <tr>
-                            <td>
-                                <input type="checkbox" class="tanque-checkbox" value="{{ tanque.id }}" 
-                                       data-tanque-id="{{ tanque.id }}"
-                                       data-quantidade="{{ tanque.quantidade }}"
-                                       data-placas-normais="{{ tanque.placas_normais or 0 }}"
-                                       data-placas-fecho="{{ tanque.placas_fecho or 0 }}"
-                                       data-bainhas="{{ tanque.quantidade_bainhas or 0 }}"
-                                       data-altura-total="{{ tanque.altura_total }}"
-                                       data-sistema="{{ tanque.sistema }}">
-                            </td>
-                            <td>{{ tanque.id }}</td>
-                            <td>
-                                <a href="{{ url_for('contrato.visualizar', id=tanque.contrato_id) }}" 
-                                   style="text-decoration: none; display: block; max-width: 200px;">
-                                    {{ tanque.contrato.nome }}
-                                </a>
-                            </td>
-                            <td>{{ tanque.nome }}</td>
-                            <td>
-                                {% if tanque.grupos %}
-                                    {% for grupo in tanque.grupos %}
-                                        {% set cor_grupo = grupo.cor if grupo.cor else '#007bff' %}
-                                        {% set icone_grupo = grupo.icone if grupo.icone else 'fas fa-water' %}
-                                        <span class="badge" data-cor="{{ cor_grupo }}">
-                                            <i class="{{ icone_grupo }}"></i> {{ grupo.nome }}
-                                        </span>
-                                    {% endfor %}
-                                {% else %}
-                                    <span class="text-muted">-</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ tanque.sistema }}</td>
-                            <td style="max-width: 120px; word-break: break-word;">{{ tanque.dimensoes }}</td>
-                            <td>{{ tanque.altura_total }} m</td>
-                            <td>{{ tanque.altura_util }} m</td>
-                            <td>{{ tanque.quantidade }}</td>
-                            <td>{{ tanque.placas_normais or '-' }}</td>
-                            <td>{{ tanque.placas_fecho or '-' }}</td>
-                            <td>{{ tanque.quantidade_bainhas or '-' }}</td>
-                            <td>{{ tanque.item_nf or '-' }}</td>
-                            <td class="text-center">
-                                <button class="btn btn-info btn-sm btn-visualizar-tanque" 
-                                    data-id="{{ tanque.id }}" 
-                                    data-contrato-nome="{{ tanque.contrato.nome }}"
-                                    title="Visualizar">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-primary btn-sm btn-editar-tanque" 
-                                    data-id="{{ tanque.id }}"
-                                    title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-warning btn-sm btn-duplicar-tanque" 
-                                    data-id="{{ tanque.id }}"
-                                    data-nome="{{ tanque.nome }}"
-                                    data-url="{{ url_for('tanque.duplicar', id=tanque.id) }}"
-                                    title="Duplicar">
-                                    <i class="fas fa-copy"></i>
-                                </button>
-                                <button class="btn btn-success btn-sm" title="Adicionar Peças"
-                                    onclick="abrirModalAdicionarPecas('{{ tanque.id }}', '{{ tanque.nome }}')">
-                                    <i class="fas fa-plus-circle"></i>
-                                </button>
-                                <form action="{{ url_for('tanque.excluir', id=tanque.id) }}" method="POST"
-                                    class="d-inline form-excluir">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                        <!-- Dados carregados via AJAX -->
                     </tbody>
                 </table>
             </div>
@@ -241,341 +80,10 @@
 {% include 'tanques/modais/novo_tanque.html' %}
 {% include 'tanques/modais/editar_tanque.html' %}
 {% include 'tanques/modais/visualizar_tanque.html' %}
-
-<!-- Modal para Adicionar Peças -->
-<div class="modal fade" id="modalAdicionarPecas" tabindex="-1" aria-labelledby="modalAdicionarPecasLabel"
-    aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalAdicionarPecasLabel">Adicionar Peças ao Tanque: <span
-                        id="nomeTanque"></span></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <ul class="nav nav-tabs" id="pecasTab" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="manual-tab" data-bs-toggle="tab"
-                            data-bs-target="#manual-content" type="button" role="tab" aria-controls="manual-content"
-                            aria-selected="true">Adição Manual</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="importar-tab" data-bs-toggle="tab"
-                            data-bs-target="#importar-content" type="button" role="tab" aria-controls="importar-content"
-                            aria-selected="false">Importar por Excel</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="gerador-tab" data-bs-toggle="tab" data-bs-target="#gerador-content"
-                            type="button" role="tab" aria-controls="gerador-content" aria-selected="false">Gerador
-                            Automático</button>
-                    </li>
-                </ul>
-                <div class="tab-content p-3 border border-top-0 rounded-bottom" id="pecasTabContent">
-                    <!-- Abas para Adição Manual -->
-                    <div class="tab-pane fade show active" id="manual-content" role="tabpanel"
-                        aria-labelledby="manual-tab">
-                        <form id="formAdicionarPeca" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" id="tanqueId" name="tanque_id">
-                            <input type="hidden" id="proximoSequencial" name="numero_sequencial">
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="tipo" class="form-label">Tipo</label>
-                                    <input type="text" class="form-control" id="tipo" name="tipo" required>
-                                    <small class="form-text text-muted">Exemplo: Viga, Pilar, Placa, etc.</small>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="nome" class="form-label">Nome</label>
-                                    <input type="text" class="form-control" id="nome" name="nome" required>
-                                    <small class="form-text text-muted">Nome ou identificação da peça</small>
-                                </div>
-                            </div>
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="quantidade" class="form-label">Quantidade</label>
-                                    <input type="number" class="form-control" id="quantidade" name="quantidade" min="1"
-                                        value="1" required>
-                                    <small class="form-text text-muted">Número de peças iguais a adicionar</small>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <!-- Aba para Importação por Excel -->
-                    <div class="tab-pane fade" id="importar-content" role="tabpanel" aria-labelledby="importar-tab">
-                        <form id="formImportarPecas" enctype="multipart/form-data">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" id="tanqueIdImport" name="tanque_id">
-                            <div class="mb-3">
-                                <label for="arquivoExcel" class="form-label">Selecione o arquivo Excel</label>
-                                <input type="file" class="form-control" id="arquivoExcel" name="arquivo"
-                                    accept=".xlsx, .xls" required>
-                                <small class="form-text text-muted">Formatos aceitos: .xlsx, .xls</small>
-                            </div>
-                            <div class="alert alert-info">
-                                <h6 class="alert-heading">Formato do arquivo Excel:</h6>
-                                <p class="mb-0">O arquivo deve conter as seguintes colunas:</p>
-                                <ul>
-                                    <li><strong>TIPO</strong>: Tipo da peça (Viga, Pilar, etc.)</li>
-                                    <li><strong>NOME</strong>: Nome ou identificação da peça</li>
-                                    <li><strong>QUANTIDADE</strong>: (Opcional) Quantidade de peças iguais</li>
-                                </ul>
-                                <p>
-                                    <a href="#" class="alert-link" id="downloadModelo">Baixar modelo de planilha</a>
-                                </p>
-                            </div>
-                        </form>
-                    </div>
-                    <!-- Aba para Gerador Automático de Placas -->
-                    <div class="tab-pane fade" id="gerador-content" role="tabpanel" aria-labelledby="gerador-tab">
-                        <form id="formGerarPlacas">
-                            <input type="hidden" id="tanqueIdGerador" name="tanque_id">
-                            <input type="hidden" id="tanquePlacasNormais" name="placas_normais">
-                            <input type="hidden" id="tanquePlacasFecho" name="placas_fecho">
-                            <input type="hidden" id="tanqueQuantidade" name="quantidade">
-
-                            <div class="alert alert-info mb-3">
-                                <p>Esta ferramenta vai gerar automaticamente:</p>
-                                <ul>
-                                    <li><strong id="placas-pn-count">0</strong> peças do tipo "PN" (Placas Normais)</li>
-                                    <li><strong id="placas-pf-count">0</strong> peças do tipo "PF" (Placas de Fecho) - 1
-                                        a cada <span id="intervalo-display">40</span> PN</li>
-                                </ul>
-                                <li>Total por tanque: <strong id="placas-total-count">0</strong> peças</li>
-                                <li>Total Geral: <strong id="placas-total-geral">0</strong> peças</li>
-                                <div id="sem-placas-config" class="text-datnger" style="display: none;">
-                                    <i class="fas fa-exclamation-triangle"></i> Este tanque não tem configuração de
-                                    placas.
-                                </div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="prefixo-pn" class="form-label">Prefixo para Placas Normais</label>
-                                    <input type="text" class="form-control" id="prefixo-pn" name="prefixo_pn"
-                                        value="PN">
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="prefixo-pf" class="form-label">Prefixo para Placas de Fecho</label>
-                                    <input type="text" class="form-control" id="prefixo-pf" name="prefixo_pf"
-                                        value="PF">
-                                </div>
-                            </div>
-
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="numero-inicial" class="form-label">Número Inicial</label>
-                                    <input type="number" class="form-control" id="numero-inicial" name="numero_inicial"
-                                        value="1" min="1">
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="intervalo-pf" class="form-label">Inserir PF a cada quantas PN?</label>
-                                    <input type="number" class="form-control" id="intervalo-pf" name="intervalo_pf"
-                                        value="40" min="1">
-                                </div>
-                            </div>
-
-                            <div class="d-grid gap-2 mt-3 mb-3">
-                                <button type="button" class="btn btn-outline-primary" id="btnVisualizarPlacas">
-                                    <i class="fas fa-eye"></i> Visualizar placas a serem geradas
-                                </button>
-                            </div>
-
-                            <!-- Área de prévia das peças -->
-                            <div id="previewPlacas" class="border rounded p-3 mb-3"
-                                style="display: none; max-height: 300px; overflow-y: auto;">
-                                <h6>Prévia das placas a serem geradas:</h6>
-                                <div class="row mb-2">
-                                    <div class="col-md-12">
-                                        <div class="alert alert-secondary">
-                                            <small>As peças abaixo serão geradas quando você clicar em "Gerar e
-                                                Adicionar Placas".</small>
-                                        </div>
-                                    </div>
-                                </div>
-                                <table class="table table-sm table-striped">
-                                    <thead>
-                                        <tr>
-                                            <th>Tipo</th>
-                                            <th>Nome</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="previewPlacasBody">
-                                        <!-- Aqui serão adicionadas as linhas com as peças -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnAdicionarPeca">Adicionar Peça</button>
-                <button type="button" class="btn btn-primary" id="btnImportarPecas" style="display: none;">Importar
-                    Peças</button>
-                <button type="button" class="btn btn-primary" id="btnGerarPlacas" style="display: none;">Gerar e
-                    Adicionar Placas</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal para Duplicar Tanque -->
-<div class="modal fade" id="modalDuplicarTanque" tabindex="-1" aria-labelledby="modalDuplicarTanqueLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalDuplicarTanqueLabel">Duplicar Tanque: <span
-                        id="nomeTanqueDuplicar"></span></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <form id="formDuplicarTanque">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" id="tanqueIdDuplicar" name="tanque_id">
-                    
-                    <div class="mb-3">
-                        <label for="quantidadeDuplicar" class="form-label">Quantidade de cópias</label>
-                        <input type="number" class="form-control" id="quantidadeDuplicar" name="quantidade" 
-                               min="1" max="100" value="1" required>
-                        <small class="form-text text-muted">Quantas cópias deseja criar deste tanque?</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="formatoNome" class="form-label">Formato do nome</label>
-                        <select class="form-select" id="formatoNome" name="formato_nome">
-                            <option value="sequencial">Número sequencial na frente (1 - Nome, 2 - Nome, ...)</option>
-                            <option value="nome_zero">Nome com zero à esquerda (Nome 01, Nome 02, ...)</option>
-                            <option value="apenas_numero">Apenas número com zero (01, 02, 03, ...)</option>
-                            <option value="copia">Adicionar (Cópia) no final (Nome (Cópia), Nome (Cópia 2), ...)</option>
-                            <option value="sequencial_copia">Número sequencial + (Cópia) (1 - Nome (Cópia), 2 - Nome (Cópia), ...)</option>
-                        </select>
-                        <small class="form-text text-muted">Como os nomes das cópias serão formatados?</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="numeroInicial" class="form-label">Número inicial</label>
-                        <input type="number" class="form-control" id="numeroInicial" name="numero_inicial" 
-                               min="1" value="1" required>
-                        <small class="form-text text-muted">Número inicial para a sequência</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="renomearOriginal" name="renomear_original" value="1">
-                            <label class="form-check-label" for="renomearOriginal">
-                                Renomear tanque original para o primeiro número
-                            </label>
-                        </div>
-                        <small class="form-text text-muted">Se marcado, o tanque original será renomeado para "Nome 01" e as cópias começarão em "Nome 02"</small>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <strong>Prévia:</strong>
-                        <div id="previewNomes" class="mt-2">
-                            <small>As cópias serão criadas com os nomes acima.</small>
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-warning" id="btnConfirmarDuplicar">
-                    <i class="fas fa-copy"></i> Duplicar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal para Criar Novo Grupo -->
-<div class="modal fade" id="modalNovoGrupo" tabindex="-1" aria-labelledby="modalNovoGrupoLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalNovoGrupoLabel">Novo Grupo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <form id="formNovoGrupo" method="POST" action="{{ url_for('tanque.grupos') }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="nomeGrupo" class="form-label">Nome do Grupo *</label>
-                        <input type="text" class="form-control" id="nomeGrupo" name="nome" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="descricaoGrupo" class="form-label">Descrição</label>
-                        <textarea class="form-control" id="descricaoGrupo" name="descricao" rows="3"></textarea>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="corGrupo" class="form-label">Cor</label>
-                                <input type="color" class="form-control form-control-color" id="corGrupo" name="cor" value="#007bff">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="iconeGrupo" class="form-label">Ícone (classe FontAwesome)</label>
-                                <input type="text" class="form-control" id="iconeGrupo" name="icone" value="fas fa-water" placeholder="fas fa-water">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Criar Grupo</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Modal para Adicionar Tanques a Grupo -->
-<div class="modal fade" id="modalAdicionarGrupo" tabindex="-1" aria-labelledby="modalAdicionarGrupoLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalAdicionarGrupoLabel">Adicionar Tanques a Grupo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
-            <div class="modal-body">
-                <form id="formAdicionarGrupo" method="POST" action="{{ url_for('tanque.adicionar_tanques_grupo') }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    
-                    <div class="mb-3">
-                        <label for="grupoSelecionado" class="form-label">Selecione o Grupo</label>
-                        <select class="form-select" id="grupoSelecionado" name="grupo_id" required>
-                            <option value="">Selecione um grupo...</option>
-                            {% for grupo in grupos %}
-                            <option value="{{ grupo.id }}">{{ grupo.nome }} ({{ grupo.total_tanques }} tanques)</option>
-                            {% endfor %}
-                        </select>
-                        <small class="form-text text-muted">Ou <a href="#" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo" onclick="document.getElementById('modalAdicionarGrupo').classList.remove('show');">crie um novo grupo</a></small>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <strong>Tanques selecionados:</strong>
-                        <div id="tanquesSelecionadosList" class="mt-2">
-                            <small class="text-muted">Nenhum tanque selecionado</small>
-                        </div>
-                    </div>
-                    
-                    <!-- Campos hidden para os IDs dos tanques selecionados serão adicionados via JavaScript -->
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnConfirmarAdicionarGrupo">
-                    <i class="fas fa-plus"></i> Adicionar
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+{% include 'tanques/modais/adicionar_pecas.html' %}
+{% include 'tanques/modais/duplicar_tanque.html' %}
+{% include 'tanques/modais/novo_grupo.html' %}
+{% include 'tanques/modais/adicionar_grupo.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -754,8 +262,8 @@
         atualizarListaTanquesSelecionados();
     }
     
-    // Função para atualizar lista de tanques selecionados no modal
-    function atualizarListaTanquesSelecionados() {
+    // Função global para atualizar lista de tanques selecionados no modal
+    window.atualizarListaTanquesSelecionados = function() {
         const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
         const listaDiv = document.getElementById('tanquesSelecionadosList');
         
@@ -770,7 +278,7 @@
         checkboxes.forEach(checkbox => {
             const row = checkbox.closest('tr');
             if (row) {
-                // Nome está na 4ª coluna (após checkbox, ID, Contrato)
+                // Nome está na 4ª coluna (após checkbox, ID, Contrato) - não mudou após remover colunas
                 const nomeCell = row.querySelector('td:nth-child(4)');
                 const nome = nomeCell ? nomeCell.textContent.trim() : 'Tanque';
                 html += `<li><small>${nome}</small></li>`;
@@ -778,7 +286,7 @@
         });
         html += '</ul>';
         listaDiv.innerHTML = html;
-    }
+    };
 
     // Selecionar/Deselecionar todos
     function setupSelectAll() {
@@ -808,8 +316,8 @@
         });
     }
 
-    // Função para obter o token CSRF
-    function getCSRFToken() {
+    // Função global para obter o token CSRF
+    window.getCSRFToken = function() {
         const tokenGlobal = document.getElementById('csrf_token_global');
         if (tokenGlobal) {
             return tokenGlobal.value;
@@ -819,7 +327,7 @@
             return tokenField.value;
         }
         return '';
-    }
+    };
 
     // Gerar relatório
     function gerarRelatorio() {
@@ -854,536 +362,125 @@
         form.submit();
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        // Configurar seleção de tanques
-        setupSelectAll();
-        
-        // Aplicar cores dos badges de grupos
+    // Função para aplicar cores dos badges após carregar dados
+    function aplicarCoresBadges() {
         document.querySelectorAll('.badge[data-cor]').forEach(badge => {
             const cor = badge.getAttribute('data-cor');
             badge.style.backgroundColor = cor;
         });
+    }
+
+    // Função para reconfigurar eventos após redesenhar a tabela
+    function reconfigurarEventos() {
+        // Reconfigurar seleção de tanques
+        setupSelectAll();
         
+        // Aplicar cores dos badges
+        aplicarCoresBadges();
+        
+        // Reconfigurar eventos de exclusão
+        const formsExcluir = document.querySelectorAll('.form-excluir');
+        formsExcluir.forEach(form => {
+            // Remover listeners antigos se existirem
+            const newForm = form.cloneNode(true);
+            form.parentNode.replaceChild(newForm, form);
+            
+            // Adicionar novo listener
+            newForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                if (confirm('Tem certeza que deseja excluir este tanque? Esta ação não pode ser desfeita.')) {
+                    newForm.submit();
+                }
+            });
+        });
+
+        // Reconfigurar eventos dos botões de duplicar
+        document.querySelectorAll('.btn-duplicar-tanque').forEach(btn => {
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+            
+            newBtn.addEventListener('click', function() {
+                const tanqueId = this.getAttribute('data-id');
+                const tanqueNome = this.getAttribute('data-nome');
+                abrirModalDuplicarTanque(tanqueId, tanqueNome);
+            });
+        });
+    }
+    
+
+    document.addEventListener('DOMContentLoaded', function () {
         // Botão de gerar relatório
         const btnGerarRelatorio = document.getElementById('btnGerarRelatorio');
         if (btnGerarRelatorio) {
             btnGerarRelatorio.addEventListener('click', gerarRelatorio);
         }
         
-        // Inicializa o DataTables com configurações para português
+        // Inicializa o DataTables com AJAX
         if (typeof $.fn.DataTable !== 'undefined') {
-            $('#dataTable').DataTable({
+            const table = $('#dataTable').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: '/tanques/api/datatables',
+                    type: 'GET',
+                    dataSrc: function(json) {
+                        if (json.error) {
+                            console.error('Erro ao carregar dados:', json.error);
+                            return [];
+                        }
+                        return json.data;
+                    },
+                    error: function(xhr, error, thrown) {
+                        console.error('Erro AJAX:', error);
+                        alert('Erro ao carregar dados da tabela. Verifique o console para mais detalhes.');
+                    }
+                },
                 language: {
                     url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
                 },
-                order: [[0, 'desc']],
+                order: [[1, 'desc']], // Ordenar por ID
                 pageLength: 25,
                 lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
                 scrollX: true,
                 autoWidth: false,
+                columns: [
+                    { orderable: false, searchable: false },  // Checkbox
+                    { orderable: true, searchable: false },   // ID
+                    { orderable: true, searchable: true },    // Contrato
+                    { orderable: true, searchable: true },    // Nome
+                    { orderable: false, searchable: false },  // Grupo
+                    { orderable: true, searchable: false },    // Altura Total
+                    { orderable: true, searchable: false },    // Placas Normais
+                    { orderable: true, searchable: false },    // Placas Fecho
+                    { orderable: true, searchable: false },    // Bainhas
+                    { orderable: true, searchable: false },    // Item NF
+                    { orderable: true, searchable: false },    // Valor Unitário
+                    { orderable: false, searchable: false }    // Ações
+                ],
+                
                 columnDefs: [
                     { width: "40px", targets: 0 },  // Checkbox
                     { width: "50px", targets: 1 },  // ID
                     { width: "200px", targets: 2 }, // Contrato
                     { width: "120px", targets: 3 }, // Nome
                     { width: "150px", targets: 4 }, // Grupo
-                    { width: "80px", targets: 5 },  // Sistema
-                    { width: "120px", targets: 6 }, // Dimensões
-                    { width: "90px", targets: 7 },  // Altura Total
-                    { width: "90px", targets: 8 },  // Altura Útil
-                    { width: "80px", targets: 9 },  // Quantidade
-                    { width: "100px", targets: 10 }, // Placas Normais
-                    { width: "110px", targets: 11 }, // Placas de Fecho
-                    { width: "80px", targets: 12 },  // Bainhas
-                    { width: "80px", targets: 13 },  // Item NF
-                    { width: "120px", targets: 14 }  // Ações
-                ]
-            });
-        } else {
-            // console.error('DataTable não está disponível');
-        }
-
-        // Confirmação para exclusão
-        const formsExcluir = document.querySelectorAll('.form-excluir');
-        formsExcluir.forEach(form => {
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-                if (confirm('Tem certeza que deseja excluir este tanque? Esta ação não pode ser desfeita.')) {
-                    form.submit();
-                }
-            });
-        });
-
-        // Função para atualizar prévia dos nomes
-        function atualizarPreviewNomes() {
-            const tanqueNome = document.getElementById('nomeTanqueDuplicar').textContent;
-            const quantidade = parseInt(document.getElementById('quantidadeDuplicar').value) || 1;
-            const formatoNome = document.getElementById('formatoNome').value;
-            const numeroInicial = parseInt(document.getElementById('numeroInicial').value) || 1;
-            const renomearOriginal = document.getElementById('renomearOriginal').checked;
-            
-            const previewDiv = document.getElementById('previewNomes');
-            let previewHTML = '<ul class="mb-0">';
-            
-            // Se renomear original, mostrar primeiro o original renomeado
-            if (renomearOriginal) {
-                const numeroOriginal = numeroInicial;
-                let nomeOriginalFormatado = '';
-                
-                if (formatoNome === 'sequencial') {
-                    nomeOriginalFormatado = `${numeroOriginal} - ${tanqueNome}`;
-                } else if (formatoNome === 'nome_zero') {
-                    const numeroFormatado = numeroOriginal.toString().padStart(2, '0');
-                    nomeOriginalFormatado = `${tanqueNome} ${numeroFormatado}`;
-                } else if (formatoNome === 'apenas_numero') {
-                    const numeroFormatado = numeroOriginal.toString().padStart(2, '0');
-                    nomeOriginalFormatado = numeroFormatado;
-                } else if (formatoNome === 'copia') {
-                    nomeOriginalFormatado = `${tanqueNome} (Cópia ${numeroOriginal})`;
-                } else if (formatoNome === 'sequencial_copia') {
-                    nomeOriginalFormatado = `${numeroOriginal} - ${tanqueNome} (Cópia)`;
-                }
-                
-                previewHTML += `<li><small><strong>Original: ${nomeOriginalFormatado}</strong></small></li>`;
-            }
-            
-            // Mostrar cópias (começando do número inicial + 1 se renomear original)
-            const inicioCopias = renomearOriginal ? numeroInicial + 1 : numeroInicial;
-            const quantidadeCopias = renomearOriginal ? quantidade : quantidade;
-            
-            for (let i = 0; i < quantidadeCopias && i < 10; i++) {
-                const numeroAtual = inicioCopias + i;
-                let nomeFormatado = '';
-                
-                if (formatoNome === 'sequencial') {
-                    nomeFormatado = `${numeroAtual} - ${tanqueNome}`;
-                } else if (formatoNome === 'nome_zero') {
-                    const numeroFormatado = numeroAtual.toString().padStart(2, '0');
-                    nomeFormatado = `${tanqueNome} ${numeroFormatado}`;
-                } else if (formatoNome === 'apenas_numero') {
-                    const numeroFormatado = numeroAtual.toString().padStart(2, '0');
-                    nomeFormatado = numeroFormatado;
-                } else if (formatoNome === 'copia') {
-                    if (quantidade === 1) {
-                        nomeFormatado = `${tanqueNome} (Cópia)`;
-                    } else {
-                        nomeFormatado = `${tanqueNome} (Cópia ${numeroAtual})`;
-                    }
-                } else if (formatoNome === 'sequencial_copia') {
-                    nomeFormatado = `${numeroAtual} - ${tanqueNome} (Cópia)`;
-                }
-                
-                previewHTML += `<li><small>${nomeFormatado}</small></li>`;
-            }
-            
-            if (quantidadeCopias > 10) {
-                previewHTML += `<li><small><em>... e mais ${quantidadeCopias - 10} cópia(s)</em></small></li>`;
-            }
-            
-            previewHTML += '</ul>';
-            previewDiv.innerHTML = previewHTML;
-        }
-
-        // Função para abrir modal de duplicação
-        function abrirModalDuplicarTanque(tanqueId, tanqueNome) {
-            document.getElementById('tanqueIdDuplicar').value = tanqueId;
-            document.getElementById('nomeTanqueDuplicar').textContent = tanqueNome;
-            document.getElementById('quantidadeDuplicar').value = 1;
-            document.getElementById('formatoNome').value = 'sequencial';
-            document.getElementById('numeroInicial').value = 1;
-            document.getElementById('renomearOriginal').checked = false;
-            
-            atualizarPreviewNomes();
-            
-            const modal = new bootstrap.Modal(document.getElementById('modalDuplicarTanque'));
-            modal.show();
-        }
-
-        // Botão de duplicar tanque
-        document.querySelectorAll('.btn-duplicar-tanque').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const tanqueId = this.getAttribute('data-id');
-                const tanqueNome = this.getAttribute('data-nome');
-                abrirModalDuplicarTanque(tanqueId, tanqueNome);
-            });
-        });
-
-        // Event listeners para atualizar prévia
-        const quantidadeInput = document.getElementById('quantidadeDuplicar');
-        const formatoSelect = document.getElementById('formatoNome');
-        const numeroInicialInput = document.getElementById('numeroInicial');
-        const renomearOriginalCheck = document.getElementById('renomearOriginal');
-        
-        if (quantidadeInput) {
-            quantidadeInput.addEventListener('input', atualizarPreviewNomes);
-        }
-        if (formatoSelect) {
-            formatoSelect.addEventListener('change', atualizarPreviewNomes);
-        }
-        if (numeroInicialInput) {
-            numeroInicialInput.addEventListener('input', atualizarPreviewNomes);
-        }
-        if (renomearOriginalCheck) {
-            renomearOriginalCheck.addEventListener('change', atualizarPreviewNomes);
-        }
-
-        // Botão de confirmar duplicação
-        const btnConfirmarDuplicar = document.getElementById('btnConfirmarDuplicar');
-        if (btnConfirmarDuplicar) {
-            btnConfirmarDuplicar.addEventListener('click', function() {
-                const form = document.getElementById('formDuplicarTanque');
-                const tanqueId = document.getElementById('tanqueIdDuplicar').value;
-                const quantidade = parseInt(document.getElementById('quantidadeDuplicar').value) || 1;
-                
-                if (quantidade < 1 || quantidade > 100) {
-                    alert('A quantidade deve ser entre 1 e 100.');
-                    return;
-                }
-                
-                // Construir URL usando o padrão das rotas
-                const url = `/tanques/duplicar/${tanqueId}`;
-                
-                // Criar formulário para enviar requisição POST
-                const submitForm = document.createElement('form');
-                submitForm.method = 'POST';
-                submitForm.action = url;
-                
-                // Adicionar CSRF token primeiro (garantir que está presente)
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = 'csrf_token';
-                csrfInput.value = getCSRFToken();
-                submitForm.appendChild(csrfInput);
-                
-                // Adicionar todos os campos do formulário
-                const formData = new FormData(form);
-                for (const [key, value] of formData.entries()) {
-                    // Pular csrf_token se já foi adicionado acima
-                    if (key === 'csrf_token') {
-                        continue;
-                    }
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = key;
-                    input.value = value;
-                    submitForm.appendChild(input);
-                }
-                
-                document.body.appendChild(submitForm);
-                submitForm.submit();
-            });
-        }
-
-        // Alternar entre as abas do modal (adição manual, importação, gerador)
-        document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(function (button) {
-            button.addEventListener('shown.bs.tab', function (event) { // Usar shown.bs.tab para garantir que a aba foi exibida
-                const targetId = button.getAttribute('data-bs-target');
-
-                document.getElementById('btnAdicionarPeca').style.display = 'none';
-                document.getElementById('btnImportarPecas').style.display = 'none';
-                document.getElementById('btnGerarPlacas').style.display = 'none';
-
-                if (targetId === '#manual-content') {
-                    document.getElementById('btnAdicionarPeca').style.display = 'block';
-                } else if (targetId === '#importar-content') {
-                    document.getElementById('btnImportarPecas').style.display = 'block';
-                } else if (targetId === '#gerador-content') {
-                    document.getElementById('btnGerarPlacas').style.display = 'block';
-                    atualizarContadoresPlacas();
-                }
-            });
-        });
-
-        // Adicionar peça manualmente
-        const btnAdicionarPecaEl = document.getElementById('btnAdicionarPeca');
-        if (btnAdicionarPecaEl) {
-            // console.log('Listener para btnAdicionarPeca ANEXADO DENTRO de DOMContentLoaded');
-            btnAdicionarPecaEl.addEventListener('click', function () {
-                const form = document.getElementById('formAdicionarPeca');
-                const tanqueId = document.getElementById('tanqueId').value;
-                const formData = new FormData(form);
-                // console.log('Dados do formulário manual (btnAdicionarPeca):', Object.fromEntries(formData.entries()));
-                
-                fetch(`/api/tanques/${tanqueId}/pecas/adicionar`, {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Peça(s) adicionada(s) com sucesso!');
-                        var myModal = bootstrap.Modal.getInstance(document.getElementById('modalAdicionarPecas'));
-                        if (myModal) myModal.hide();
-                        window.location.reload();
-                    } else {
-                        alert('Erro ao adicionar peça(s): ' + (data.message || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro AJAX ao adicionar peça:', error);
-                    alert('Erro ao adicionar peça(s). Verifique o console para mais detalhes.');
-                });
-            });
-        } else {
-            // console.error('Elemento btnAdicionarPeca NÃO encontrado no DOM (dentro do DOMContentLoaded).');
-        }
-
-        // Importar peças via Excel
-        const btnImportarPecasEl = document.getElementById('btnImportarPecas');
-        if (btnImportarPecasEl) {
-            // console.log('Listener para btnImportarPecas ANEXADO DENTRO de DOMContentLoaded');
-            btnImportarPecasEl.addEventListener('click', function (e) {
-                e.preventDefault();
-                const fileInput = document.getElementById('arquivoExcel');
-                const tanqueId = document.getElementById('tanqueIdImport').value;
-
-                if (!fileInput.files.length) {
-                    alert('Por favor, selecione um arquivo Excel para importar.');
-                    return;
-                }
-
-                const formData = new FormData(document.getElementById('formImportarPecas'));
-                
-                // console.log('Dados do formulário de importação (btnImportarPecas):', fileInput.files[0].name, 'para tanqueId:', tanqueId);
-
-                fetch(`/api/tanques/${tanqueId}/pecas/importar`, {
-                    method: 'POST',
-                    body: formData,
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert('Peças importadas com sucesso!');
-                        var myModal = bootstrap.Modal.getInstance(document.getElementById('modalAdicionarPecas'));
-                        if (myModal) myModal.hide();
-                        location.reload();
-                    } else {
-                        alert(`Erro ao importar peças: ${data.error || 'Erro desconhecido'}`);
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro AJAX ao importar peças:', error);
-                    alert(`Erro ao importar peças. Verifique o console.`);
-                });
-            });
-        } else {
-            // console.error('Elemento btnImportarPecas NÃO encontrado no DOM (dentro do DOMContentLoaded).');
-        }
-
-        // Link para download do modelo de planilha
-        const downloadModeloEl = document.getElementById('downloadModelo');
-        if (downloadModeloEl) {
-            downloadModeloEl.addEventListener('click', function (e) {
-                e.preventDefault();
-                window.location.href = '/api/pecas/modelo-planilha';
-            });
-        }
-
-        // Adicionar event listeners para os inputs do gerador
-        const intervaloPfEl = document.getElementById('intervalo-pf');
-        if (intervaloPfEl) intervaloPfEl.addEventListener('input', atualizarContadoresPlacas);
-        const numeroInicialEl = document.getElementById('numero-inicial');
-        if (numeroInicialEl) numeroInicialEl.addEventListener('input', atualizarContadoresPlacas);
-        const prefixoPnEl = document.getElementById('prefixo-pn');
-        if (prefixoPnEl) prefixoPnEl.addEventListener('input', atualizarContadoresPlacas);
-        const prefixoPfEl = document.getElementById('prefixo-pf');
-        if (prefixoPfEl) prefixoPfEl.addEventListener('input', atualizarContadoresPlacas);
-
-        // Event listener para o botão de visualizar placas
-        const btnVisualizarPlacasEl = document.getElementById('btnVisualizarPlacas');
-        if (btnVisualizarPlacasEl) {
-            btnVisualizarPlacasEl.addEventListener('click', function (e) {
-                e.preventDefault();
-                const resultado = gerarListaPecas();
-                if (!resultado.sucesso) {
-                    alert(resultado.mensagem);
-                    return;
-                }
-                const tbody = document.getElementById('previewPlacasBody');
-                tbody.innerHTML = '';
-                resultado.pecas.forEach(peca => {
-                    const tr = document.createElement('tr');
-                    const tdTipo = document.createElement('td');
-                    tdTipo.textContent = peca.tipo;
-                    const tdNome = document.createElement('td');
-                    tdNome.textContent = peca.nome;
-                    const tdTanque = document.createElement('td'); // Adicionado para exibir o tanque na prévia
-                    tdTanque.textContent = "Tanque " + peca.tanque;
-
-                    tr.appendChild(tdTipo);
-                    tr.appendChild(tdNome);
-                    tr.appendChild(tdTanque); // Adicionado
-                    tbody.appendChild(tr);
-                });
-                document.getElementById('previewPlacas').style.display = 'block';
-            });
-        }
-
-        // Event listener para o botão de gerar placas
-        const btnGerarPlacasEl = document.getElementById('btnGerarPlacas');
-        if (btnGerarPlacasEl) {
-            btnGerarPlacasEl.addEventListener('click', function (e) {
-                e.preventDefault();
-                const resultado = gerarListaPecas();
-                if (!resultado.sucesso) {
-                    alert(resultado.mensagem);
-                    return;
-                }
-                const tanqueId = document.getElementById('tanqueIdGerador').value;
-                // console.log('Enviando lote de placas:', resultado.pecas, 'para tanqueId:', tanqueId);
-
-                fetch(`/api/tanques/${tanqueId}/pecas/adicionar-lote`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pecas: resultado.pecas })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        alert(`${resultado.pecas.length} placas foram adicionadas com sucesso!`);
-                        var myModal = bootstrap.Modal.getInstance(document.getElementById('modalAdicionarPecas'));
-                        if (myModal) myModal.hide();
-                        location.reload();
-                    } else {
-                        alert(`Erro ao adicionar placas: ${data.error || 'Erro desconhecido'}`);
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro AJAX ao adicionar lote de placas:', error);
-                    alert(`Erro ao adicionar placas. Verifique o console.`);
-                });
-            });
-        }
-
-        // Inicialização para o modal (listener para 'shown.bs.modal')
-        const modalAdicionarPecas = document.getElementById('modalAdicionarPecas');
-        if (modalAdicionarPecas) {
-            modalAdicionarPecas.addEventListener('shown.bs.modal', function () {
-                const activeTab = document.querySelector('#pecasTab button.active'); // Correção no seletor
-                if (activeTab) {
-                    const targetId = activeTab.getAttribute('data-bs-target');
-                    if (targetId === '#gerador-content') {
-                        atualizarContadoresPlacas();
-                    }
-                    // Garante que o botão correto esteja visível com base na aba ativa ao mostrar o modal
-                     document.getElementById('btnAdicionarPeca').style.display = (targetId === '#manual-content') ? 'block' : 'none';
-                     document.getElementById('btnImportarPecas').style.display = (targetId === '#importar-content') ? 'block' : 'none';
-                     document.getElementById('btnGerarPlacas').style.display = (targetId === '#gerador-content') ? 'block' : 'none';
-                } else {
-                     // Se nenhuma aba estiver ativa (pouco provável com Bootstrap), mostrar o da primeira aba por padrão
-                    document.getElementById('btnAdicionarPeca').style.display = 'block';
-                    document.getElementById('btnImportarPecas').style.display = 'none';
-                    document.getElementById('btnGerarPlacas').style.display = 'none';
+                    { width: "90px", targets: 5 },  // Altura Total
+                    { width: "100px", targets: 6 }, // Placas Normais
+                    { width: "110px", targets: 7 }, // Placas de Fecho
+                    { width: "80px", targets: 8 },  // Bainhas
+                    { width: "80px", targets: 9 },  // Item NF
+                    { width: "100px", targets: 10 },  // Valor Unitário
+                    { width: "120px", targets: 11 }  // Ações
+                ],
+                drawCallback: function(settings) {
+                    // Reconfigurar eventos após cada redesenho da tabela
+                    reconfigurarEventos();
                 }
             });
         } else {
-            // console.warn('Elemento #modalAdicionarPecas não encontrado para listener shown.bs.modal.');
+            console.error('DataTable não está disponível');
         }
-        
-        // Botão de adicionar a grupo
-        const btnConfirmarAdicionarGrupo = document.getElementById('btnConfirmarAdicionarGrupo');
-        if (btnConfirmarAdicionarGrupo) {
-            btnConfirmarAdicionarGrupo.addEventListener('click', function() {
-                const form = document.getElementById('formAdicionarGrupo');
-                const grupoId = document.getElementById('grupoSelecionado').value;
-                const checkboxes = document.querySelectorAll('.tanque-checkbox:checked');
-                
-                if (!grupoId) {
-                    alert('Por favor, selecione um grupo.');
-                    return;
-                }
-                
-                if (checkboxes.length === 0) {
-                    alert('Por favor, selecione pelo menos um tanque.');
-                    return;
-                }
-                
-                // Limpar campos hidden anteriores
-                const camposAntigos = form.querySelectorAll('input[name="tanque_ids"]');
-                camposAntigos.forEach(campo => campo.remove());
-                
-                // Adicionar IDs dos tanques selecionados ao formulário
-                checkboxes.forEach(checkbox => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'tanque_ids';
-                    input.value = checkbox.value;
-                    form.appendChild(input);
-                });
-                
-                // Enviar formulário
-                form.submit();
-            });
-        }
-        
-        // Atualizar lista quando o modal for aberto
-        const modalAdicionarGrupo = document.getElementById('modalAdicionarGrupo');
-        if (modalAdicionarGrupo) {
-            modalAdicionarGrupo.addEventListener('show.bs.modal', function() {
-                atualizarListaTanquesSelecionados();
-            });
-            
-            // Atualizar lista quando checkboxes mudarem enquanto modal estiver aberto
-            document.querySelectorAll('.tanque-checkbox').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
-                    if (modalAdicionarGrupo.classList.contains('show')) {
-                        atualizarListaTanquesSelecionados();
-                    }
-                });
-            });
-        }
-        
-        // Criar novo grupo via AJAX
-        const formNovoGrupo = document.getElementById('formNovoGrupo');
-        if (formNovoGrupo) {
-            formNovoGrupo.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const formData = new FormData(formNovoGrupo);
-                const nome = formData.get('nome');
-                
-                if (!nome) {
-                    alert('O nome do grupo é obrigatório!');
-                    return;
-                }
-                
-                fetch('{{ url_for("tanque.grupos") }}', {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Adicionar novo grupo ao select
-                        const select = document.getElementById('grupoSelecionado');
-                        const option = document.createElement('option');
-                        option.value = data.grupo.id;
-                        option.textContent = `${data.grupo.nome} (${data.grupo.total_tanques} tanques)`;
-                        option.selected = true;
-                        select.appendChild(option);
-                        
-                        // Fechar modal de criar grupo
-                        const modalNovoGrupo = bootstrap.Modal.getInstance(document.getElementById('modalNovoGrupo'));
-                        if (modalNovoGrupo) modalNovoGrupo.hide();
-                        
-                        // Abrir modal de adicionar tanques
-                        const modalAdicionarGrupo = new bootstrap.Modal(document.getElementById('modalAdicionarGrupo'));
-                        modalAdicionarGrupo.show();
-                        
-                        alert(data.message);
-                    } else {
-                        alert('Erro ao criar grupo: ' + (data.error || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro ao criar grupo:', error);
-                    alert('Erro ao criar grupo. Verifique o console.');
-                });
-            });
-        }
+
     });
 </script>
 {% endblock %}

@@ -1,0 +1,106 @@
+<!-- Modal para Criar Novo Grupo -->
+<div class="modal fade" id="modalNovoGrupo" tabindex="-1" aria-labelledby="modalNovoGrupoLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoGrupoLabel">Novo Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formNovoGrupo" method="POST" action="{{ url_for('tanque.grupos') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nomeGrupo" class="form-label">Nome do Grupo *</label>
+                        <input type="text" class="form-control" id="nomeGrupo" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricaoGrupo" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricaoGrupo" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="corGrupo" class="form-label">Cor</label>
+                                <input type="color" class="form-control form-control-color" id="corGrupo" name="cor" value="#007bff">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="iconeGrupo" class="form-label">Ícone (classe FontAwesome)</label>
+                                <input type="text" class="form-control" id="iconeGrupo" name="icone" value="fas fa-water" placeholder="fas fa-water">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Criar Grupo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Criar novo grupo via AJAX
+        const formNovoGrupo = document.getElementById('formNovoGrupo');
+        if (formNovoGrupo) {
+            formNovoGrupo.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(formNovoGrupo);
+                const nome = formData.get('nome');
+                
+                if (!nome) {
+                    alert('O nome do grupo é obrigatório!');
+                    return;
+                }
+                
+                fetch('{{ url_for("tanque.grupos") }}', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Adicionar novo grupo ao select
+                        const select = document.getElementById('grupoSelecionado');
+                        if (select) {
+                            const option = document.createElement('option');
+                            option.value = data.grupo.id;
+                            option.textContent = `${data.grupo.nome} (${data.grupo.total_tanques} tanques)`;
+                            option.selected = true;
+                            select.appendChild(option);
+                        }
+                        
+                        // Fechar modal de criar grupo
+                        const modalNovoGrupo = bootstrap.Modal.getInstance(document.getElementById('modalNovoGrupo'));
+                        if (modalNovoGrupo) modalNovoGrupo.hide();
+                        
+                        // Abrir modal de adicionar tanques
+                        const modalAdicionarGrupo = document.getElementById('modalAdicionarGrupo');
+                        if (modalAdicionarGrupo) {
+                            const modal = new bootstrap.Modal(modalAdicionarGrupo);
+                            modal.show();
+                        }
+                        
+                        alert(data.message);
+                    } else {
+                        alert('Erro ao criar grupo: ' + (data.error || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao criar grupo:', error);
+                    alert('Erro ao criar grupo. Verifique o console.');
+                });
+            });
+        }
+    });
+</script>
+{% endblock %}

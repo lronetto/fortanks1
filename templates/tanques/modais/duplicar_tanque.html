@@ -1,0 +1,222 @@
+<!-- Modal para Duplicar Tanque -->
+<div class="modal fade" id="modalDuplicarTanque" tabindex="-1" aria-labelledby="modalDuplicarTanqueLabel"
+    aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDuplicarTanqueLabel">Duplicar Tanque: <span
+                        id="nomeTanqueDuplicar"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formDuplicarTanque">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="tanqueIdDuplicar" name="tanque_id">
+                    
+                    <div class="mb-3">
+                        <label for="quantidadeDuplicar" class="form-label">Quantidade de cópias</label>
+                        <input type="number" class="form-control" id="quantidadeDuplicar" name="quantidade" 
+                               min="1" max="100" value="1" required>
+                        <small class="form-text text-muted">Quantas cópias deseja criar deste tanque?</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="formatoNome" class="form-label">Formato do nome</label>
+                        <select class="form-select" id="formatoNome" name="formato_nome">
+                            <option value="sequencial">Número sequencial na frente (1 - Nome, 2 - Nome, ...)</option>
+                            <option value="nome_zero">Nome com zero à esquerda (Nome 01, Nome 02, ...)</option>
+                            <option value="apenas_numero">Apenas número com zero (01, 02, 03, ...)</option>
+                            <option value="copia">Adicionar (Cópia) no final (Nome (Cópia), Nome (Cópia 2), ...)</option>
+                            <option value="sequencial_copia">Número sequencial + (Cópia) (1 - Nome (Cópia), 2 - Nome (Cópia), ...)</option>
+                        </select>
+                        <small class="form-text text-muted">Como os nomes das cópias serão formatados?</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="numeroInicial" class="form-label">Número inicial</label>
+                        <input type="number" class="form-control" id="numeroInicial" name="numero_inicial" 
+                               min="1" value="1" required>
+                        <small class="form-text text-muted">Número inicial para a sequência</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="renomearOriginal" name="renomear_original" value="1">
+                            <label class="form-check-label" for="renomearOriginal">
+                                Renomear tanque original para o primeiro número
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">Se marcado, o tanque original será renomeado para "Nome 01" e as cópias começarão em "Nome 02"</small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <strong>Prévia:</strong>
+                        <div id="previewNomes" class="mt-2">
+                            <small>As cópias serão criadas com os nomes acima.</small>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarDuplicar">
+                    <i class="fas fa-copy"></i> Duplicar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Função global para abrir modal de duplicação
+    window.abrirModalDuplicarTanque = function(tanqueId, tanqueNome) {
+        document.getElementById('tanqueIdDuplicar').value = tanqueId;
+        document.getElementById('nomeTanqueDuplicar').textContent = tanqueNome;
+        document.getElementById('quantidadeDuplicar').value = 1;
+        document.getElementById('formatoNome').value = 'sequencial';
+        document.getElementById('numeroInicial').value = 1;
+        document.getElementById('renomearOriginal').checked = false;
+        
+        atualizarPreviewNomes();
+        
+        const modal = new bootstrap.Modal(document.getElementById('modalDuplicarTanque'));
+        modal.show();
+    };
+
+    // Função global para atualizar prévia dos nomes
+    window.atualizarPreviewNomes = function() {
+        const tanqueNome = document.getElementById('nomeTanqueDuplicar').textContent;
+        const quantidade = parseInt(document.getElementById('quantidadeDuplicar').value) || 1;
+        const formatoNome = document.getElementById('formatoNome').value;
+        const numeroInicial = parseInt(document.getElementById('numeroInicial').value) || 1;
+        const renomearOriginal = document.getElementById('renomearOriginal').checked;
+        
+        const previewDiv = document.getElementById('previewNomes');
+        let previewHTML = '<ul class="mb-0">';
+        
+        // Se renomear original, mostrar primeiro o original renomeado
+        if (renomearOriginal) {
+            const numeroOriginal = numeroInicial;
+            let nomeOriginalFormatado = '';
+            
+            if (formatoNome === 'sequencial') {
+                nomeOriginalFormatado = `${numeroOriginal} - ${tanqueNome}`;
+            } else if (formatoNome === 'nome_zero') {
+                const numeroFormatado = numeroOriginal.toString().padStart(2, '0');
+                nomeOriginalFormatado = `${tanqueNome} ${numeroFormatado}`;
+            } else if (formatoNome === 'apenas_numero') {
+                const numeroFormatado = numeroOriginal.toString().padStart(2, '0');
+                nomeOriginalFormatado = numeroFormatado;
+            } else if (formatoNome === 'copia') {
+                nomeOriginalFormatado = `${tanqueNome} (Cópia ${numeroOriginal})`;
+            } else if (formatoNome === 'sequencial_copia') {
+                nomeOriginalFormatado = `${numeroOriginal} - ${tanqueNome} (Cópia)`;
+            }
+            
+            previewHTML += `<li><small><strong>Original: ${nomeOriginalFormatado}</strong></small></li>`;
+        }
+        
+        // Mostrar cópias
+        const inicioCopias = renomearOriginal ? numeroInicial + 1 : numeroInicial;
+        const quantidadeCopias = renomearOriginal ? quantidade : quantidade;
+        
+        for (let i = 0; i < quantidadeCopias && i < 10; i++) {
+            const numeroAtual = inicioCopias + i;
+            let nomeFormatado = '';
+            
+            if (formatoNome === 'sequencial') {
+                nomeFormatado = `${numeroAtual} - ${tanqueNome}`;
+            } else if (formatoNome === 'nome_zero') {
+                const numeroFormatado = numeroAtual.toString().padStart(2, '0');
+                nomeFormatado = `${tanqueNome} ${numeroFormatado}`;
+            } else if (formatoNome === 'apenas_numero') {
+                const numeroFormatado = numeroAtual.toString().padStart(2, '0');
+                nomeFormatado = numeroFormatado;
+            } else if (formatoNome === 'copia') {
+                if (quantidade === 1) {
+                    nomeFormatado = `${tanqueNome} (Cópia)`;
+                } else {
+                    nomeFormatado = `${tanqueNome} (Cópia ${numeroAtual})`;
+                }
+            } else if (formatoNome === 'sequencial_copia') {
+                nomeFormatado = `${numeroAtual} - ${tanqueNome} (Cópia)`;
+            }
+            
+            previewHTML += `<li><small>${nomeFormatado}</small></li>`;
+        }
+        
+        if (quantidadeCopias > 10) {
+            previewHTML += `<li><small><em>... e mais ${quantidadeCopias - 10} cópia(s)</em></small></li>`;
+        }
+        
+        previewHTML += '</ul>';
+        previewDiv.innerHTML = previewHTML;
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Event listeners para atualizar prévia
+        const quantidadeInput = document.getElementById('quantidadeDuplicar');
+        const formatoSelect = document.getElementById('formatoNome');
+        const numeroInicialInput = document.getElementById('numeroInicial');
+        const renomearOriginalCheck = document.getElementById('renomearOriginal');
+        
+        if (quantidadeInput) {
+            quantidadeInput.addEventListener('input', atualizarPreviewNomes);
+        }
+        if (formatoSelect) {
+            formatoSelect.addEventListener('change', atualizarPreviewNomes);
+        }
+        if (numeroInicialInput) {
+            numeroInicialInput.addEventListener('input', atualizarPreviewNomes);
+        }
+        if (renomearOriginalCheck) {
+            renomearOriginalCheck.addEventListener('change', atualizarPreviewNomes);
+        }
+
+        // Botão de confirmar duplicação
+        const btnConfirmarDuplicar = document.getElementById('btnConfirmarDuplicar');
+        if (btnConfirmarDuplicar) {
+            btnConfirmarDuplicar.addEventListener('click', function() {
+                const form = document.getElementById('formDuplicarTanque');
+                const tanqueId = document.getElementById('tanqueIdDuplicar').value;
+                const quantidade = parseInt(document.getElementById('quantidadeDuplicar').value) || 1;
+                
+                if (quantidade < 1 || quantidade > 100) {
+                    alert('A quantidade deve ser entre 1 e 100.');
+                    return;
+                }
+                
+                const url = `/tanques/duplicar/${tanqueId}`;
+                
+                const submitForm = document.createElement('form');
+                submitForm.method = 'POST';
+                submitForm.action = url;
+                
+                // Adicionar CSRF token
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrf_token';
+                csrfInput.value = getCSRFToken();
+                submitForm.appendChild(csrfInput);
+                
+                // Adicionar todos os campos do formulário
+                const formData = new FormData(form);
+                for (const [key, value] of formData.entries()) {
+                    if (key === 'csrf_token') {
+                        continue;
+                    }
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = value;
+                    submitForm.appendChild(input);
+                }
+                
+                document.body.appendChild(submitForm);
+                submitForm.submit();
+            });
+        }
+    });
+</script>
+{% endblock %}

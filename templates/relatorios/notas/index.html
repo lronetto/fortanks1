@@ -194,158 +194,97 @@
         </div>
     </div>
     
-    <!-- Cards de Resumo - Material -->
-    <div id="cards-material" class="row mb-4" style="display: none;">
-        <div class="col-12">
-            <h4 class="text-primary mb-3">
-                <i class="fas fa-cubes"></i> Material (Notas Fiscais)
-            </h4>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-info card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-info">
-                        <i class="fas fa-file-contract"></i> Total Material
-                    </h5>
-                    <h3 class="text-info" id="valor-total-material">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="total-placas-material">0</span> placas
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-primary card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-primary">
-                        <i class="fas fa-file-invoice-dollar"></i> Faturado
-                    </h5>
-                    <h3 class="text-primary" id="valor-material-faturado">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="percentual-material-faturado">0%</span> do material
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-success card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-success">
-                        <i class="fas fa-check-circle"></i> Recebido
-                    </h5>
-                    <h3 class="text-success" id="valor-material-recebido">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="quantidade-material-recebido">0</span> placas - 
-                        <span id="percentual-material-recebido">0%</span> do material
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-warning card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-warning">
-                        <i class="fas fa-clock"></i> A Faturar
-                    </h5>
-                    <h3 class="text-warning" id="valor-material-a-faturar">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="quantidade-material-a-faturar">0</span> placas - 
-                        <span id="percentual-material-a-faturar">0%</span> do material
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Cards de Resumo - Serviço -->
-    <div id="cards-servico" class="row mb-4" style="display: none;">
-        <div class="col-12">
-            <h4 class="text-success mb-3">
-                <i class="fas fa-tools"></i> Serviço (Sem Notas Fiscais)
-            </h4>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-info card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-info">
-                        <i class="fas fa-file-contract"></i> Total Serviço
-                    </h5>
-                    <h3 class="text-info" id="valor-total-servico">R$ 0,00</h3>
-                    <p class="text-muted mb-0">Valor total dos serviços</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-secondary card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-secondary">
-                        <i class="fas fa-file-invoice-dollar"></i> Faturado
-                    </h5>
-                    <h3 class="text-secondary" id="valor-servico-faturado">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="percentual-servico-faturado">0%</span> do serviço
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-secondary card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-secondary">
-                        <i class="fas fa-check-circle"></i> Recebido
-                    </h5>
-                    <h3 class="text-secondary" id="valor-servico-recebido">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="percentual-servico-recebido">0%</span> do serviço
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-secondary card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-secondary">
-                        <i class="fas fa-clock"></i> A Faturar
-                    </h5>
-                    <h3 class="text-secondary" id="valor-servico-a-faturar">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="percentual-servico-a-faturar">0%</span> do serviço
-                    </p>
-                </div>
-            </div>
+    <!-- Tabela de Resumo -->
+    <div id="tabela-resumo" class="mb-4" style="display: none;">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th rowspan="2" class="align-middle text-center">Categoria</th>
+                        <th colspan="2" class="text-center">Total</th>
+                        <th colspan="3" class="text-center">Faturado</th>
+                        <th colspan="3" class="text-center">Recebido</th>
+                        <th colspan="3" class="text-center">A Faturar</th>
+                        <th colspan="2" class="text-center">Não Faturado</th>
+                    </tr>
+                    <tr>
+                        <th class="text-center">Valor (R$)</th>
+                        <th class="text-center">Quantidade</th>
+                        <th class="text-center">Valor (R$)</th>
+                        <th class="text-center">Quantidade</th>
+                        <th class="text-center">%</th>
+                        <th class="text-center">Valor (R$)</th>
+                        <th class="text-center">Quantidade</th>
+                        <th class="text-center">%</th>
+                        <th class="text-center">Valor (R$)</th>
+                        <th class="text-center">Quantidade</th>
+                        <th class="text-center">%</th>
+                        <th class="text-center">Valor (R$)</th>
+                        <th class="text-center">%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Material -->
+                    <tr class="table-info">
+                        <td class="fw-bold">
+                            <i class="fas fa-cubes text-primary"></i> Material (NFE)
+                        </td>
+                        <td class="text-end fw-bold" id="valor-total-material">R$ 0,00</td>
+                        <td class="text-center" id="total-placas-material">0</td>
+                        <td class="text-end" id="valor-material-faturado">R$ 0,00</td>
+                        <td class="text-center" id="quantidade-material-faturado">0</td>
+                        <td class="text-center" id="percentual-material-faturado">0%</td>
+                        <td class="text-end" id="valor-material-recebido">R$ 0,00</td>
+                        <td class="text-center" id="quantidade-material-recebido">0</td>
+                        <td class="text-center" id="percentual-material-recebido">0%</td>
+                        <td class="text-end" id="valor-material-a-faturar">R$ 0,00</td>
+                        <td class="text-center" id="quantidade-material-a-faturar">0</td>
+                        <td class="text-center" id="percentual-material-a-faturar">0%</td>
+                        <td class="text-end" id="valor-material-nao-faturado">R$ 0,00</td>
+                        <td class="text-center" id="percentual-material-nao-faturado">0%</td>
+                    </tr>
+                    <!-- Serviço -->
+                    <tr class="table-secondary">
+                        <td class="fw-bold">
+                            <i class="fas fa-tools text-secondary"></i> Serviço (Sem NFE)
+                        </td>
+                        <td class="text-end fw-bold" id="valor-total-servico">R$ 0,00</td>
+                        <td class="text-center">-</td>
+                        <td class="text-end" id="valor-servico-faturado">R$ 0,00</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center" id="percentual-servico-faturado">0%</td>
+                        <td class="text-end" id="valor-servico-recebido">R$ 0,00</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center" id="percentual-servico-recebido">0%</td>
+                        <td class="text-end" id="valor-servico-a-faturar">R$ 0,00</td>
+                        <td class="text-center">-</td>
+                        <td class="text-center" id="percentual-servico-a-faturar">0%</td>
+                        <td class="text-end" id="valor-servico-nao-faturado">R$ 0,00</td>
+                        <td class="text-center" id="percentual-servico-nao-faturado">0%</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
-    
-    <!-- Cards de Resumo - Não Faturado -->
-    <div id="cards-nao-faturado" class="row mb-4" style="display: none;">
-        <div class="col-md-6">
-            <div class="card border-warning card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-warning">
-                        <i class="fas fa-exclamation-triangle"></i> Material Não Faturado
-                    </h5>
-                    <h3 class="text-warning" id="valor-material-nao-faturado">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="percentual-material-nao-faturado">0%</span> do material - Ainda não emitido em NFE
-                    </p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="card border-danger card-resumo">
-                <div class="card-body text-center">
-                    <h5 class="card-title text-danger">
-                        <i class="fas fa-exclamation-triangle"></i> Serviço Não Faturado
-                    </h5>
-                    <h3 class="text-danger" id="valor-servico-nao-faturado">R$ 0,00</h3>
-                    <p class="text-muted mb-0">
-                        <span id="percentual-servico-nao-faturado">0%</span> do serviço - Serviços não têm NFE
-                    </p>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div id="relatorio-tabela"></div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-striped" id="tabelaRelatorioNotas" width="100%" cellspacing="0">
+            <thead>
+                <tr>
+                    <th>Data Emissão</th>
+                    <th>Centro de Custo</th>
+                    <th>Nº Nota Fiscal</th>
+                    <th>Quantidade (Placas)</th>
+                    <th>Valor (R$)</th>
+                    <th>Data Prevista Vencimento</th>
+                    <th>Pago em</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Dados serão carregados via AJAX -->
+            </tbody>
+        </table>
+
 </div>
 
 <!-- Modal para Visualizar Documentos -->
@@ -436,126 +375,290 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
+    // Função para formatar valor monetário
+    function formatarValor(valor) {
+        if (!valor) return 'R$ 0,00';
+        var num = parseFloat(valor);
+        return 'R$ ' + num.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    
+    // Registrar tipos de ordenação customizados
+    $.fn.dataTable.ext.type.order['date-br-pre'] = function(data) {
+        if (!data || typeof data !== 'string') return 0;
+        var match = data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        if (match) {
+            return parseInt(match[3] + match[2] + match[1], 10); // YYYYMMDD
+        }
+        return 0;
+    };
+    
+    $.fn.dataTable.ext.type.order['currency-pre'] = function(data) {
+        if (!data || typeof data !== 'string') return 0;
+        var num = data.replace(/R\$\s*/g, '').replace(/\./g, '').replace(',', '.');
+        return parseFloat(num) || 0;
+    };
+    
+    let tableRelatorioNotas = $('#tabelaRelatorioNotas').DataTable({
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+        },
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+        order: [[0, 'desc']], // Ordenar por data de emissão descendente por padrão
+        columnDefs: [
+            { 
+                targets: [0, 5], // Colunas de data
+                type: 'date-br'
+            },
+            { 
+                targets: [4], // Coluna de valor
+                type: 'currency'
+            },
+            { 
+                targets: [3], // Coluna de quantidade
+                type: 'num'
+            }
+        ],
+        serverSide: false, // Usar client-side pois já temos todos os dados
+        processing: true,
+        ajax: {
+            url: "{{ url_for('relatorios_notas.api_dados') }}",
+            type: 'GET',
+            data: function(d) {
+                // Limpar parâmetros do DataTables que não precisamos
+                delete d.draw;
+                delete d.start;
+                delete d.length;
+                delete d.search;
+                delete d.order;
+                delete d.columns;
+                delete d._;
+                
+                // Adicionar filtros do formulário
+                d.data_inicio = $('#data_inicio').val() || '';
+                d.data_fim = $('#data_fim').val() || '';
+                var centro_custo = $('#centro_custo').val();
+                console.log('Centro de Custo (Select2):', centro_custo);
+                
+                // Garantir que centro_custo seja um array
+                if (!Array.isArray(centro_custo)) {
+                    centro_custo = centro_custo ? [centro_custo] : [];
+                }
+                
+                // Adicionar cada centro_custo como parâmetro separado para garantir que funcione
+                if (centro_custo && centro_custo.length > 0) {
+                    // Limpar qualquer centro_custo anterior
+                    delete d.centro_custo;
+                    // Adicionar cada ID como parâmetro separado
+                    centro_custo.forEach(function(id) {
+                        if (!d.centro_custo) {
+                            d.centro_custo = [];
+                        }
+                        d.centro_custo.push(id);
+                    });
+                }
+                d.status_pagamento = $('#status_pagamento').val() || '';
+                console.log('Dados enviados:', d);
+            },
+            traditional: true, // Importante para serializar arrays como múltiplos parâmetros (centro_custo=1&centro_custo=2)
+            dataSrc: function(json) {
+                // Verificar se a resposta é válida
+                if (!json || !json.data) {
+                    console.error('Resposta inválida do servidor:', json);
+                    return [];
+                }
+                // Atualizar cards com dados auxiliares
+                if (json.dados_relatorio_aux) {
+                    var dados = json.dados_relatorio_aux;
+                    atualizarCards({
+                        totalMaterial: parseFloat(dados.valor_total_material || 0),
+                        totalPlacasMaterial: parseFloat(dados.total_placas_contratos || 0),
+                        quantidadeMaterialFaturado: parseFloat(dados.total_quantidade || 0),
+                        materialFaturado: parseFloat(dados.valor_material_faturado || 0),
+                        quantidadeMaterialRecebido: parseFloat(dados.quantidade_recebida || 0),
+                        quantidadeMaterialAFaturar: parseFloat(dados.quantidade_a_faturar || 0),
+                        quantidadeMaterialNaoFaturar: parseFloat(dados.quantidade_material_nao_faturada || 0),
+                        materialRecebido: parseFloat(dados.valor_recebido || 0),
+                        materialAFaturar: parseFloat(dados.valor_a_faturar || 0),
+                        materialNaoFaturado: parseFloat(dados.valor_material_nao_faturado || 0),
+                        percentualMaterialFaturado: parseFloat(dados.percentual_material_faturado || 0),
+                        percentualMaterialRecebido: parseFloat(dados.percentual_material_recebido || 0),
+                        percentualMaterialAFaturar: parseFloat(dados.percentual_material_a_faturar || 0),
+                        percentualMaterialNaoFaturado: parseFloat(dados.percentual_material_nao_faturado || 0),
+                        totalServico: parseFloat(dados.valor_total_servico || 0),
+                        servicoFaturado: parseFloat(dados.valor_servico_faturado || 0),
+                        servicoRecebido: 0,
+                        servicoAFaturar: 0,
+                        servicoNaoFaturado: parseFloat(dados.valor_servico_nao_faturado || 0),
+                        percentualServicoFaturado: parseFloat(dados.percentual_servico_faturado || 0),
+                        percentualServicoRecebido: 0,
+                        percentualServicoAFaturar: 0,
+                        percentualServicoNaoFaturado: parseFloat(dados.percentual_servico_nao_faturado || 0)
+                    });
+                }
+                return json.data || [];
+            },
+            error: function(xhr, error, thrown) {
+                console.error('Erro ao carregar dados:', error, thrown);
+                alert('Erro ao carregar dados do relatório. Por favor, tente novamente.');
+            }
+        },
+        columns: [
+            { 
+                data: 'data',
+                render: function(data, type, row) {
+                    return data || '';
+                }
+            },
+            { 
+                data: 'centro_custo',
+                render: function(data, type, row) {
+                    return data || 'Não definido';
+                }
+            },
+            { 
+                data: 'nf',
+                render: function(data, type, row) {
+                    if (type === 'sort' || type === 'type') {
+                        // Para ordenação, converter o número da NF (string) para inteiro
+                        var nfNum = parseInt(data) || 0;
+                        return nfNum;
+                    }
+                    return '<a href="#" class="link-nota-fiscal text-primary" data-id="' + row.id + '" data-numero="' + data + '" style="text-decoration: underline; cursor: pointer;">' + data + '</a>';
+                },
+                type: 'num' // Tipo numérico para ordenação correta
+            },
+            { 
+                data: 'quantidade',
+                render: function(data, type, row) {
+                    return data || 0;
+                }
+            },
+            { 
+                data: 'valor',
+                render: function(data, type, row) {
+                    return formatarValor(data);
+                }
+            },
+            { 
+                data: 'data_prevista',
+                render: function(data, type, row) {
+                    return data || 'Não definido';
+                }
+            },
+            { 
+                data: 'pago',
+                render: function(data, type, row) {
+                    if (data && data !== 'Não' && data !== 'Não definido') {
+                        return '<span class="badge bg-success">' + data + '</span>';
+                    } else {
+                        return '<span class="badge bg-warning text-dark">Não Pago</span>';
+                    }
+                }
+            },
+            { 
+                data: 'status',
+                render: function(data, type, row) {
+                    if (data === 'cancelada') {
+                        return '<span class="badge bg-danger">Cancelada</span>';
+                    } else {
+                        return '<span class="badge bg-primary">Importada</span>';
+                    }
+                }
+            }
+        ],
+        responsive: true,
+        dom: 'lrtip' // l = length, r = processing, t = table, i = information, p = pagination
+    });
     $('#centro_custo').select2({
         theme: 'bootstrap4',
         placeholder: 'Selecione um ou mais centros de custo',
         allowClear: true
     });
 
-    carregar_relatorio();
+
     
     function formatarMoeda(valor) {
         return 'R$ ' + valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
     
     function atualizarCards(dados) {
-        // Cards de Material
+        // Material - Total
         $('#valor-total-material').text(formatarMoeda(dados.totalMaterial || 0));
         $('#total-placas-material').text((dados.totalPlacasMaterial || 0).toLocaleString('pt-BR'));
-        $('#valor-material-faturado').text(formatarMoeda(dados.materialFaturado || 0));
-        $('#valor-material-recebido').text(formatarMoeda(dados.materialRecebido || 0));
-        $('#valor-material-a-faturar').text(formatarMoeda(dados.materialAFaturar || 0));
-        $('#valor-material-nao-faturar').text(formatarMoeda(dados.materialNaoFaturado || 0));
         
+        // Material - Faturado
+        $('#valor-material-faturado').text(formatarMoeda(dados.materialFaturado || 0));
+        $('#quantidade-material-faturado').text((dados.quantidadeMaterialFaturado || dados.totalPlacasMaterial || 0).toLocaleString('pt-BR'));
         $('#percentual-material-faturado').text((dados.percentualMaterialFaturado || 0).toFixed(1) + '%');
+        
+        // Material - Recebido
+        $('#valor-material-recebido').text(formatarMoeda(dados.materialRecebido || 0));
         $('#quantidade-material-recebido').text((dados.quantidadeMaterialRecebido || 0).toLocaleString('pt-BR'));
         $('#percentual-material-recebido').text((dados.percentualMaterialRecebido || 0).toFixed(1) + '%');
+        
+        // Material - A Faturar
+        $('#valor-material-a-faturar').text(formatarMoeda(dados.materialAFaturar || 0));
         $('#quantidade-material-a-faturar').text((dados.quantidadeMaterialAFaturar || 0).toLocaleString('pt-BR'));
         $('#percentual-material-a-faturar').text((dados.percentualMaterialAFaturar || 0).toFixed(1) + '%');
+        
+        // Material - Não Faturado
+        $('#valor-material-nao-faturado').text(formatarMoeda(dados.materialNaoFaturado || 0));
         $('#percentual-material-nao-faturado').text((dados.percentualMaterialNaoFaturado || 0).toFixed(1) + '%');
         
-        // Cards de Serviço
+        // Serviço - Total
         $('#valor-total-servico').text(formatarMoeda(dados.totalServico || 0));
-        $('#valor-servico-faturado').text(formatarMoeda(dados.servicoFaturado || 0));
-        $('#valor-servico-recebido').text(formatarMoeda(dados.servicoRecebido || 0));
-        $('#valor-servico-a-faturar').text(formatarMoeda(dados.servicoAFaturar || 0));
-        $('#valor-servico-nao-faturado').text(formatarMoeda(dados.servicoNaoFaturado || 0));
         
+        // Serviço - Faturado
+        $('#valor-servico-faturado').text(formatarMoeda(dados.servicoFaturado || 0));
         $('#percentual-servico-faturado').text((dados.percentualServicoFaturado || 0).toFixed(1) + '%');
+        
+        // Serviço - Recebido
+        $('#valor-servico-recebido').text(formatarMoeda(dados.servicoRecebido || 0));
         $('#percentual-servico-recebido').text((dados.percentualServicoRecebido || 0).toFixed(1) + '%');
+        
+        // Serviço - A Faturar
+        $('#valor-servico-a-faturar').text(formatarMoeda(dados.servicoAFaturar || 0));
         $('#percentual-servico-a-faturar').text((dados.percentualServicoAFaturar || 0).toFixed(1) + '%');
+        
+        // Serviço - Não Faturado
+        $('#valor-servico-nao-faturado').text(formatarMoeda(dados.servicoNaoFaturado || 0));
         $('#percentual-servico-nao-faturado').text((dados.percentualServicoNaoFaturado || 0).toFixed(1) + '%');
         
-        // Mostrar cards
-        $('#cards-material').show();
-        $('#cards-servico').show();
-        $('#cards-nao-faturado').show();
-    }
-    
-    function carregar_relatorio(){
-        let data_inicio = $('#data_inicio').val();
-        let data_fim = $('#data_fim').val();
-        let centro_custo = $('#centro_custo').val();
-        let status_pagamento = $('#status_pagamento').val();
-        $.ajax({
-            url: "{{ url_for('relatorios_notas.api_dados') }}",
-            type: 'GET',
-            data: {
-                data_inicio: data_inicio,
-                data_fim: data_fim,
-                centro_custo: centro_custo,
-                status_pagamento: status_pagamento
-            },
-            traditional: true,
-            success: function(response) {
-                $('#relatorio-tabela').html(response);
-                // Extrair dados dos cards do response se existirem
-                var cardsElement = $(response).find('#cards-data');
-                if (cardsElement.length > 0) {
-                    var cardsData = {
-                        // Material
-                        totalMaterial: parseFloat(cardsElement.data('total-material') || 0),
-                        totalPlacasMaterial: parseFloat(cardsElement.data('total-placas-material') || 0),
-                        materialFaturado: parseFloat(cardsElement.data('material-faturado') || 0),
-                        quantidadeMaterialRecebido: parseFloat(cardsElement.data('quantidade-material-recebido') || 0),
-                        quantidadeMaterialAFaturar: parseFloat(cardsElement.data('quantidade-material-a-faturar') || 0),
-                        quantidadeMaterialNaoFaturar: parseFloat(cardsElement.data('quantidade-material-nao-faturar') || 0),
-                        materialRecebido: parseFloat(cardsElement.data('material-recebido') || 0),
-                        materialAFaturar: parseFloat(cardsElement.data('material-a-faturar') || 0),
-                        materialNaoFaturado: parseFloat(cardsElement.data('material-nao-faturado') || 0),
-                        percentualMaterialFaturado: parseFloat(cardsElement.data('percentual-material-faturado') || 0),
-                        percentualMaterialRecebido: parseFloat(cardsElement.data('percentual-material-recebido') || 0),
-                        percentualMaterialAFaturar: parseFloat(cardsElement.data('percentual-material-a-faturar') || 0),
-                        percentualMaterialNaoFaturado: parseFloat(cardsElement.data('percentual-material-nao-faturado') || 0),
-                        
-                        // Serviço
-                        totalServico: parseFloat(cardsElement.data('total-servico') || 0),
-                        servicoFaturado: parseFloat(cardsElement.data('servico-faturado') || 0),
-                        servicoRecebido: parseFloat(cardsElement.data('servico-recebido') || 0),
-                        servicoAFaturar: parseFloat(cardsElement.data('servico-a-faturar') || 0),
-                        servicoNaoFaturado: parseFloat(cardsElement.data('servico-nao-faturado') || 0),
-                        percentualServicoFaturado: parseFloat(cardsElement.data('percentual-servico-faturado') || 0),
-                        percentualServicoRecebido: parseFloat(cardsElement.data('percentual-servico-recebido') || 0),
-                        percentualServicoAFaturar: parseFloat(cardsElement.data('percentual-servico-a-faturar') || 0),
-                        percentualServicoNaoFaturado: parseFloat(cardsElement.data('percentual-servico-nao-faturado') || 0)
-                    };
-                    atualizarCards(cardsData);
-                }
-            },
-            error: function() {
-                alert('Erro ao buscar dados do relatório.');
-            }
-        });
+        // Mostrar tabela de resumo
+        $('#tabela-resumo').show();
     }
     
     $('#filtro-relatorio').on('submit', function(e) {
         e.preventDefault();
-        $('#relatorio-tabela').html('Carregando...');
-        carregar_relatorio();
+        tableRelatorioNotas.ajax.reload();
     });
 
     function atualizarLinksExportacao() {
         let data_inicio = $('#data_inicio').val();
         let data_fim = $('#data_fim').val();
-        let centro_custo = $('#centro_custo').val();
+        let centro_custo = $('#centro_custo').val(); // Select2 retorna array quando multiple
         let status_pagamento = $('#status_pagamento').val();
         
-        let params = $.param({
-            data_inicio: data_inicio,
-            data_fim: data_fim,
-            centro_custo: centro_custo,
-            status_pagamento: status_pagamento
-        }, true);
+        // Garantir que centro_custo seja um array
+        if (!Array.isArray(centro_custo)) {
+            centro_custo = centro_custo ? [centro_custo] : [];
+        }
+        
+        // Construir objeto de parâmetros para $.param
+        let paramsObj = {
+            data_inicio: data_inicio || '',
+            data_fim: data_fim || '',
+            status_pagamento: status_pagamento || ''
+        };
+        
+        // Adicionar centro_custo como array ($.param com traditional serializa corretamente)
+        if (centro_custo && centro_custo.length > 0) {
+            paramsObj.centro_custo = centro_custo;
+        }
+        
+        // Usar traditional: true para serializar arrays corretamente
+        let params = $.param(paramsObj, true);
         
         $('#btn-exportar-zip').off('click').on('click', function() {
             let url = "{{ url_for('relatorios_notas.exportar_zip') }}?" + params;

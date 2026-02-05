@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatório de Usinagem</title>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ logo_path }}" alt="Logo" class="logo">
+        <h1>Relatório de Usinagem</h1>
+        <p>Período: {{ data_inicio.strftime('%d/%m/%Y') }} até {{ data_fim.strftime('%d/%m/%Y') }}</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Resumo</div>
+        <p><strong>Total de Usinagens:</strong> {{ total_usinagens }}</p>
+        <p><strong>Total de Volume:</strong> {{ total_volume|round(2) }} m³</p>
+        <p><strong>Data de Geração:</strong> {{ data_geracao }}</p>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Resumo por Mês</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Mês/Ano</th>
+                    <th>Quantidade</th>
+                    <th>Volume (m³)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for chave, valor in dados_mes.items() %}
+                <tr>
+                    <td>{% if valor.mes < 10 %}0{% endif %}{{ valor.mes }}/{{ valor.ano }}</td>
+                    <td>{{ valor.quantidade }}</td>
+                    <td>{{ valor.get('volume', 0)|round(2) }} m³</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td><strong>Total</strong></td>
+                    <td><strong>{{ total_usinagens }}</strong></td>
+                    <td><strong>{{ total_volume|round(2) }} m³</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Resumo por Semana</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Semana</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Quantidade</th>
+                    <th>Volume (m³)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for chave, valor in dados_semana.items() %}
+                <tr>
+                    <td>Sem {{ valor.semana }}/{{ valor.ano }}</td>
+                    <td>{{ valor.inicio_semana.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ valor.fim_semana.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ valor.quantidade }}</td>
+                    <td>{{ valor.get('volume', 0)|round(2) }} m³</td>
+                </tr>
+                {% endfor %}
+                <tr class="total-row">
+                    <td colspan="3"><strong>Total</strong></td>
+                    <td><strong>{{ total_usinagens }}</strong></td>
+                    <td><strong>{{ total_volume|round(2) }} m³</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Detalhamento de Usinagens</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Data Usinagem</th>
+                    <th>Série</th>
+                    <th>Volume (m³)</th>
+                    <th>Produto Composto</th>
+                    <th>Flow</th>
+                    <th>Nota</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in dados[:100] %}
+                <tr>
+                    <td>{{ item.data_usinagem.strftime('%d/%m/%Y') }}</td>
+                    <td>{{ item.serie }}</td>
+                    <td>{{ item.volume|round(2) }} m³</td>
+                    <td>{{ item.produto_composto_nome }}</td>
+                    <td>{{ item.flow }}</td>
+                    <td>{{ item.nota }}</td>
+                </tr>
+                {% endfor %}
+                {% if dados|length > 100 %}
+                <tr>
+                    <td colspan="6" class="text-center">
+                        <em>Mostrando apenas as primeiras 100 usinagens. Total: {{ total_usinagens }} usinagens.</em>
+                    </td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer">
+        <p>Relatório gerado em {{ data_geracao }}</p>
+    </div>
+</body>
+</html>

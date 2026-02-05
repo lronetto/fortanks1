@@ -3,6 +3,7 @@ from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 import logging
+from sqlalchemy import text, inspect
 
 from models.database import db
 from models.usuario import Usuario
@@ -15,6 +16,7 @@ from models.endereco import Endereco
 from models.logs import Logs
 from models.departamento import Departamento
 from models.cargo import Cargo
+from models.upload import Upload
 
 logger = logging.getLogger(__name__)
 
@@ -39,29 +41,122 @@ def verificar_admin():
 @admin_bp.route('/')
 def index():
     """
-    Página inicial da área administrativa
+    Página inicial da área administrativa com resumo das tabelas do banco de dados
     """
-    # Estatísticas gerais
-    total_usuarios = Usuario.query.count()
-    total_centros_custo = CentroCusto.query.count()
-    total_contratos = Contrato.query.count()
-    total_materiais = Materiais.query.count()
-    total_clientes = Cliente.query.count()
+    try:
+        # Obter todas as tabelas do banco de dados
+        inspector = inspect(db.engine)
+        tabelas = inspector.get_table_names()
+        
+        tabelas_info = []
+        uploads_por_tipo = {}
+        
+        # Mapeamento de tipos de upload
+        tipos_upload = {
+            0: 'Não definido',
+            1: 'Arquivei',
+            2: 'Protocolo',
+            3: 'Reembolso',
+            4: 'Avulso',
+            5: 'Certificado'
+        }
+        
+        # Para cada tabela, obter informações
+        for tabela in sorted(tabelas):
+            try:
+                # Contar registros
+                count_query = text(f"SELECT COUNT(*) as total FROM `{tabela}`")
+                result = db.session.execute(count_query)
+                total_registros = result.scalar() or 0
+                
+                # Obter tamanho da tabela (MySQL)
+                size_query = text("""
+                    SELECT 
+                        ROUND(((data_length + index_length) / 1024 / 1024), 2) AS size_mb
+                    FROM information_schema.TABLES 
+                    WHERE table_schema = DATABASE()
+                    AND table_name = :table_name
+                """)
+                size_result = db.session.execute(size_query, {'table_name': tabela})
+                size_row = size_result.fetchone()
+                tamanho_mb = float(size_row[0]) if size_row and size_row[0] else 0.0
+                
+                tabelas_info.append({
+                    'nome': tabela,
+                    'total_registros': total_registros,
+                    'tamanho_mb': tamanho_mb
+                })
+                
+                # Se for a tabela Uploads, obter informações por tipo
+                if tabela == 'Uploads':
+                    tipo_query = text("""
+                        SELECT 
+                            tipo,
+                            COUNT(*) as total,
+                            ROUND(SUM(LENGTH(`blob`)) / 1024 / 1024, 2) as tamanho_mb
+                        FROM Uploads
+                        GROUP BY tipo
+                        ORDER BY tipo
+                    """)
+                    tipo_result = db.session.execute(tipo_query)
+                    for row in tipo_result:
+                        tipo = row[0] if row[0] is not None else 0
+                        total = row[1]
+                        tamanho = float(row[2]) if row[2] else 0.0
+                        tipo_nome = tipos_upload.get(tipo, f'Tipo {tipo}')
+                        uploads_por_tipo[tipo_nome] = {
+                            'total': total,
+                            'tamanho_mb': tamanho
+                        }
+                    
+                    # Adicionar total de registros sem tipo
+                    sem_tipo_query = text("""
+                        SELECT 
+                            COUNT(*) as total,
+                            ROUND(SUM(LENGTH(`blob`)) / 1024 / 1024, 2) as tamanho_mb
+                        FROM Uploads 
+                        WHERE tipo IS NULL
+                    """)
+                    sem_tipo_result = db.session.execute(sem_tipo_query)
+                    sem_tipo_row = sem_tipo_result.fetchone()
+                    if sem_tipo_row and sem_tipo_row[0] and sem_tipo_row[0] > 0:
+                        uploads_por_tipo['Sem tipo'] = {
+                            'total': sem_tipo_row[0],
+                            'tamanho_mb': float(sem_tipo_row[1]) if sem_tipo_row[1] else 0.0
+                        }
+                
+            except Exception as e:
+                logger.warning(f"Erro ao obter informações da tabela {tabela}: {str(e)}")
+                tabelas_info.append({
+                    'nome': tabela,
+                    'total_registros': 0,
+                    'tamanho_mb': 0.0,
+                    'erro': str(e)
+                })
+        
+        # Calcular totais gerais
+        total_registros_geral = sum(t['total_registros'] for t in tabelas_info)
+        total_tamanho_geral = sum(t['tamanho_mb'] for t in tabelas_info)
+        
+        # Ordenar tabelas por tamanho (maior primeiro)
+        tabelas_info.sort(key=lambda x: x['tamanho_mb'], reverse=True)
+        
+        return render_template('admin/index.html',
+                            tabelas_info=tabelas_info,
+                            uploads_por_tipo=uploads_por_tipo,
+                            total_registros_geral=total_registros_geral,
+                            total_tamanho_geral=total_tamanho_geral,
+                            total_tabelas=len(tabelas_info))
     
-    # Usuários recentes
-    usuarios_recentes = Usuario.query.order_by(Usuario.criado_em.desc()).limit(5).all()
-    
-    # Clientes recentes
-    clientes_recentes = Cliente.query.order_by(Cliente.criado_em.desc()).limit(5).all()
-    
-    return render_template('admin/index.html',
-                          total_usuarios=total_usuarios,
-                          total_centros_custo=total_centros_custo,
-                          total_contratos=total_contratos,
-                          total_materiais=total_materiais,
-                          total_clientes=total_clientes,
-                          usuarios_recentes=usuarios_recentes,
-                          clientes_recentes=clientes_recentes)
+    except Exception as e:
+        logger.error(f"Erro ao carregar página de admin: {str(e)}")
+        flash(f'Erro ao carregar informações do banco de dados: {str(e)}', 'error')
+        return render_template('admin/index.html',
+                            tabelas_info=[],
+                            uploads_por_tipo={},
+                            total_registros_geral=0,
+                            total_tamanho_geral=0.0,
+                            total_tabelas=0)
 
 @admin_bp.route('/configuracoes')
 def configuracoes():

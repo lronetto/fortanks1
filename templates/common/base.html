@@ -222,7 +222,8 @@
                        window.location.pathname.includes('/conversao-unidade') ||
                        window.location.pathname.includes('/admin/unidades') ||
                        window.location.pathname.includes('/admin/permissoes') ||
-                       window.location.pathname.includes('/admin/logs')) {
+                       window.location.pathname.includes('/admin/logs') ||
+                       (window.location.pathname === '/admin' || window.location.pathname === '/admin/')) {
                        $('#adminCadastrosSubmenu').addClass('show');
                        $('#adminCadastrosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                        
@@ -484,6 +485,11 @@
                                 <i class="fas fa-cube"></i> Concretagem de Peças
                             </a>
                         </li>
+                        <li class="{{ is_active('relatorios/usinagem') }}">
+                            <a href="{{ url_for('relatorios_usinagem.index') }}">
+                                <i class="fas fa-cogs"></i> Usinagem
+                            </a>
+                        </li>
                         <li class="{{ is_active('relatorios_notas') }}">
                             <a href="{{ url_for('relatorios_notas.index') }}">
                                 <i class="fas fa-file-invoice-dollar"></i> Notas Fiscais
@@ -563,6 +569,12 @@
                         <i class="fas fa-user-shield"></i> Admin
                     </a>
                     <ul class="collapse list-unstyled" id="adminCadastrosSubmenu">
+                        <!-- Link para Resumo do Banco de Dados -->
+                        <li class="{{ is_active('admin.index') }}">
+                            <a href="{{ url_for('admin.index') }}">
+                                <i class="fas fa-database"></i> Resumo do Banco de Dados
+                            </a>
+                        </li>
                         <!-- Submenu Cadastros -->
                         <li>
                             <a href="#adminCadastrosSubmenuInner" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">

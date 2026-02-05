@@ -1,0 +1,17 @@
+[Unit]
+Description=Fortanks Scheduler Service - Serviço de agendamento de tarefas
+After=network.target
+
+[Service]
+User=sfortanks
+Group=www-data
+WorkingDirectory=/home/sfortanks/sfortanks
+Environment="PATH=/home/sfortanks/sfortanks/venv/bin:/usr/bin/pdf2ppm"
+ExecStart=/home/sfortanks/sfortanks/venv/bin/python /home/sfortanks/sfortanks/scheduler_service.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

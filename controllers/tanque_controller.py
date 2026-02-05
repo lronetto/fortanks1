@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file
 from flask_login import login_required, current_user
+from flask_wtf.csrf import generate_csrf
 from datetime import datetime
 import pandas as pd
 import io
@@ -24,17 +25,177 @@ def index():
     """
     Lista todos os tanques
     """
-    tanques = Tanques.query.order_by(Tanques.contrato_id, Tanques.nome).all()
-    tanques_com_pecas = []
-    for tanque in tanques:
-        pecas = TanquesPecas.query.filter_by(tanque_id=tanque.id).count()
-        tanque.pecas_cadastradas = pecas
-        tanques_com_pecas.append(tanque)
-    tanques = tanques_com_pecas
     contratos = Contrato.query.all()
     sistemas = ['SC-10', 'SC-14', 'SR-06']
     grupos = TanquesGrupos.get_all()
-    return render_template('tanques/index.html', tanques=tanques, contratos=contratos, sistemas=sistemas, grupos=grupos)
+    return render_template('tanques/index.html', contratos=contratos, sistemas=sistemas, grupos=grupos)
+
+@tanque_bp.route('/api/datatables', methods=['GET'])
+def api_datatables():
+    """
+    Endpoint AJAX para DataTables - retorna dados de tanques em formato JSON
+    """
+    try:
+        # Parâmetros do DataTables
+        draw = request.args.get('draw', 1, type=int)
+        start = request.args.get('start', 0, type=int)
+        length = request.args.get('length', 25, type=int)
+        search_value = request.args.get('search[value]', '', type=str).strip()
+        
+        # Parâmetros de ordenação
+        order_column_index = int(request.args.get('order[0][column]', 1))
+        order_dir = request.args.get('order[0][dir]', 'desc')
+        
+        # Mapear índice da coluna para campo de ordenação (após remover Sistema, Dimensões, Altura Útil e Quantidade)
+        column_mapping = {
+            1: Tanques.id,
+            2: Contrato.nome,
+            3: Tanques.nome,
+            4: Tanques.altura_total,
+            5: Tanques.placas_normais,
+            6: Tanques.placas_fecho,
+            7: Tanques.quantidade_bainhas,
+            8: Tanques.item_nf,
+            9: Tanques.valorUnitario
+        }
+        
+        # Query base com joins necessários
+        query = Tanques.query.join(Contrato, Tanques.contrato_id == Contrato.id)\
+            .options(db.joinedload(Tanques.contrato), db.joinedload(Tanques.grupos))
+        
+        # Aplicar busca (apenas nas colunas visíveis)
+        if search_value:
+            query = query.filter(
+                or_(
+                    Tanques.nome.ilike(f'%{search_value}%'),
+                    Contrato.nome.ilike(f'%{search_value}%')
+                )
+            )
+        
+        # Aplicar ordenação
+        order_column = column_mapping.get(order_column_index, Tanques.id)
+        if order_dir == 'desc':
+            query = query.order_by(order_column.desc())
+        else:
+            query = query.order_by(order_column.asc())
+        
+        # Contar total de registros (antes da paginação)
+        total_records = query.count()
+        
+        # Aplicar paginação
+        tanques = query.offset(start).limit(length).all()
+        
+        # Formatar dados para o DataTables
+        data = []
+        for tanque in tanques:
+            # Contar peças
+            pecas_count = TanquesPecas.query.filter_by(tanque_id=tanque.id).count()
+            
+            # Formatar grupos
+            grupos_html = ''
+            if tanque.grupos:
+                for grupo in tanque.grupos:
+                    cor_grupo = grupo.cor if grupo.cor else '#007bff'
+                    icone_grupo = grupo.icone if grupo.icone else 'fas fa-water'
+                    grupos_html += f'<span class="badge" data-cor="{cor_grupo}"><i class="{icone_grupo}"></i> {grupo.nome}</span> '
+            else:
+                grupos_html = '<span class="text-muted">-</span>'
+            
+            # Formatar valor unitário
+            valor_unitario_html = '-'
+            if tanque.valorUnitario:
+                valor_formatado = f"{tanque.valorUnitario:.2f}".replace('.', ',')
+                valor_unitario_html = f'R$ {valor_formatado}'
+            
+            # Gerar CSRF token
+            csrf_token = generate_csrf()
+            
+            # Escapar nome do tanque para JavaScript
+            tanque_nome_escaped = tanque.nome.replace("'", "\\'").replace('"', '\\"')
+            
+            # HTML das ações
+            acoes_html = f'''
+                <button class="btn btn-info btn-sm btn-visualizar-tanque" 
+                    data-id="{tanque.id}" 
+                    data-contrato-nome="{tanque.contrato.nome.replace('"', '&quot;')}"
+                    title="Visualizar">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button class="btn btn-primary btn-sm btn-editar-tanque" 
+                    data-id="{tanque.id}"
+                    title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-warning btn-sm btn-duplicar-tanque" 
+                    data-id="{tanque.id}"
+                    data-nome="{tanque_nome_escaped}"
+                    data-url="/tanques/duplicar/{tanque.id}"
+                    title="Duplicar">
+                    <i class="fas fa-copy"></i>
+                </button>
+                <button class="btn btn-success btn-sm" title="Adicionar Peças"
+                    onclick="abrirModalAdicionarPecas('{tanque.id}', '{tanque_nome_escaped}')">
+                    <i class="fas fa-plus-circle"></i>
+                </button>
+                <form action="/tanques/excluir/{tanque.id}" method="POST"
+                    class="d-inline form-excluir">
+                    <input type="hidden" name="csrf_token" value="{csrf_token}">
+                    <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </form>
+            '''
+            
+            # Checkbox com data attributes
+            checkbox_html = f'''
+                <input type="checkbox" class="tanque-checkbox" value="{tanque.id}" 
+                       data-tanque-id="{tanque.id}"
+                       data-quantidade="{tanque.quantidade}"
+                       data-placas-normais="{tanque.placas_normais or 0}"
+                       data-placas-fecho="{tanque.placas_fecho or 0}"
+                       data-bainhas="{tanque.quantidade_bainhas or 0}"
+                       data-altura-total="{tanque.altura_total}"
+                       data-sistema="{tanque.sistema}">
+            '''
+            
+            # Link do contrato
+            contrato_html = f'''
+                <a href="/contratos/visualizar/{tanque.contrato_id}" 
+                   style="text-decoration: none; display: block; max-width: 200px;">
+                    {tanque.contrato.nome}
+                </a>
+            '''
+            
+            data.append([
+                checkbox_html,  # 0 - Checkbox
+                str(tanque.id),  # 1 - ID
+                contrato_html,  # 2 - Contrato
+                tanque.nome,  # 3 - Nome
+                grupos_html,  # 4 - Grupo
+                f'{tanque.altura_total} m',  # 5 - Altura Total
+                str(tanque.placas_normais) if tanque.placas_normais else '-',  # 6 - Placas Normais
+                str(tanque.placas_fecho) if tanque.placas_fecho else '-',  # 7 - Placas Fecho
+                str(tanque.quantidade_bainhas) if tanque.quantidade_bainhas else '-',  # 8 - Bainhas
+                str(tanque.item_nf) if tanque.item_nf else '-',  # 9 - Item NF
+                valor_unitario_html,  # 10 - Valor Unitário
+                acoes_html  # 11 - Ações
+            ])
+        
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': total_records,
+            'data': data
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'draw': request.args.get('draw', 1, type=int),
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e)
+        }), 500
 
 @tanque_bp.route('/contrato/<int:contrato_id>')
 def listar_por_contrato(contrato_id):
@@ -72,6 +233,7 @@ def novo():
         quantidade_bainhas = request.form.get('quantidade_bainhas')
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
+        valor_unitario = request.form.get('valor_unitario')
         
         # Extrair valores numéricos das dimensões
         diametro = None
@@ -131,6 +293,12 @@ def novo():
             else:
                 quantidade_bainhas = 0
             
+            # Converter valor unitário se fornecido
+            if valor_unitario:
+                valor_unitario = float(valor_unitario)
+            else:
+                valor_unitario = None
+            
             # Criar novo tanque
             novo_tanque = Tanques(
                 # Definir o UN com base no método gerar_un
@@ -148,6 +316,7 @@ def novo():
                 quantidade_bainhas=quantidade_bainhas,
                 placas_normais=placas_normais,
                 placas_fecho=placas_fecho,
+                valorUnitario=valor_unitario,
                 contrato_id=contrato_id
             )
             
@@ -208,6 +377,7 @@ def editar(id):
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
         item_nf = request.form.get('item_nf')
+        valor_unitario = request.form.get('valor_unitario')
         dados_adicionais = request.form.get('dados_adicionais', '')
         
         # Extrair valores numéricos das dimensões
@@ -274,6 +444,12 @@ def editar(id):
             else:
                 item_nf = None
             
+            # Converter valor unitário se fornecido
+            if valor_unitario:
+                valor_unitario = float(valor_unitario)
+            else:
+                valor_unitario = None
+            
             # Atualizar o tanque
             tanque.nome = nome
             tanque.sistema = sistema
@@ -290,6 +466,7 @@ def editar(id):
             tanque.placas_fecho = placas_fecho
             tanque.contrato_id = contrato_id
             tanque.item_nf = item_nf
+            tanque.valorUnitario = valor_unitario
             tanque.dados_adicionais = dados_adicionais if dados_adicionais else None
             
             # Salvar as alterações

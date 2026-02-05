@@ -719,11 +719,12 @@ def _sanitizar_nome_aba(nome):
     
     return nome
 
-def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, caminho_atual=None):
+def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, caminho_atual=None, data_movimento=None):
     """
     Função recursiva para expandir todos os componentes de um produto composto
     até chegar apenas em materiais, considerando produtos compostos aninhados.
     Usa caminho_atual para evitar loops infinitos (mesmo produto na mesma cadeia).
+    Considera datas de início e término dos componentes se data_movimento for fornecida.
     """
     if caminho_atual is None:
         caminho_atual = []
@@ -740,11 +741,65 @@ def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, cami
     if not produto:
         return []
     
+    # Normalizar data_movimento para date se necessário
+    from datetime import date as date_type
+    if data_movimento is None:
+        data_movimento = None
+    elif isinstance(data_movimento, datetime):
+        data_movimento = data_movimento.date()
+    elif isinstance(data_movimento, str):
+        try:
+            data_movimento = datetime.strptime(data_movimento, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            data_movimento = None
+    elif not isinstance(data_movimento, date_type):
+        data_movimento = None
+    
     componentes_materiais = []
     
     for componente in produto.componentes:
         if not componente.estoque:
             continue
+        
+        # Verificar datas de início e término do componente
+        if componente.dados_adicionais and data_movimento:
+            try:
+                dados_adicionais = json.loads(componente.dados_adicionais)
+                datainicio = dados_adicionais.get('data_inicio')
+                if datainicio:
+                    # Tentar parse da data
+                    if isinstance(datainicio, str):
+                        datainicio = datetime.strptime(datainicio, '%Y-%m-%d').date()
+                    elif isinstance(datainicio, datetime):
+                        datainicio = datainicio.date()
+                    elif isinstance(datainicio, date_type):
+                        pass  # Já é date
+                    else:
+                        datainicio = None
+                    
+                    # Comparar apenas se datainicio foi parseado com sucesso
+                    if datainicio and data_movimento and datainicio > data_movimento:
+                        continue  # Componente ainda não está ativo nesta data
+                
+                datatermino = dados_adicionais.get('data_termino')
+                if datatermino:
+                    # Tentar parse da data
+                    if isinstance(datatermino, str):
+                        datatermino = datetime.strptime(datatermino, '%Y-%m-%d').date()
+                    elif isinstance(datatermino, datetime):
+                        datatermino = datatermino.date()
+                    elif isinstance(datatermino, date_type):
+                        pass  # Já é date
+                    else:
+                        datatermino = None
+                    
+                    # Comparar apenas se datatermino foi parseado com sucesso
+                    if datatermino and data_movimento and datatermino <= data_movimento:
+                        continue  # Componente já não está mais ativo nesta data
+            except (ValueError, TypeError) as e:
+                # Se houver erro no parse, logar e continuar processando o componente
+                logger.warning(f"Erro ao processar datas do componente {componente.id}: {str(e)}")
+                pass  # Continuar processando o componente mesmo com erro nas datas
             
         quantidade_componente = float(componente.quantidade) * quantidade_base
         
@@ -762,7 +817,8 @@ def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, cami
             componentes_aninhados = _expandir_componentes_produto_composto(
                 produto_composto_id, 
                 quantidade_componente,
-                novo_caminho  # Passar o caminho atual para detectar loops
+                novo_caminho,  # Passar o caminho atual para detectar loops
+                data_movimento  # Passar a data para os componentes aninhados
             )
             componentes_materiais.extend(componentes_aninhados)
     
@@ -818,6 +874,7 @@ def api_historico_custo(id):
                     NotaFiscal.numero_nf,
                     NotaFiscal.nome_emitente,
                     NotaFiscal.id.label("nota_id"),
+                    NotaFiscal.chave_acesso,
                 )
                 .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
                 .filter(NotaFiscal.status_processamento != "cancelada")
@@ -875,19 +932,32 @@ def api_historico_custo(id):
                         except Exception:
                             pass
                 
+                # Calcular valor_total do item (já convertido se houver fator)
+                valor_total_item = None
+                if item.valor_total is not None:
+                    if fator_aplicado:
+                        # Se houve conversão, o valor_total já está na unidade convertida
+                        # Mas precisamos manter o valor_total original do item para calcular com frete
+                        valor_total_item = float(item.valor_total)
+                    else:
+                        valor_total_item = float(item.valor_total)
+                
                 historico_formatado.append({
                     "quantidade": float(quantidade_final) if quantidade_final is not None else 0.0,
                     "valor_unitario": float(valor_unitario_final) if valor_unitario_final is not None else 0.0,
+                    "valor_total_item": valor_total_item,  # Valor total do item na nota (sem conversão de unidade)
                     "data_emissao": item.data_emissao.strftime("%Y-%m-%d") if item.data_emissao else None,
                     "numero_nf": item.numero_nf,
                     "nome_emitente": item.nome_emitente,
                     "nota_id": item.nota_id,
+                    "chave_acesso": item.chave_acesso,
                     "fator_conversao_aplicado": fator_aplicado,
                     "unidade_original": unidade_final
                 })
             
             historico_por_material[material_id] = historico_formatado
         
+        print(f'historico_por_material: {len(historico_por_material)}')
         # Agrupar por data e calcular custo total do produto composto
         # Usar um dicionário para agrupar por data
         custo_por_data = defaultdict(lambda: {
@@ -908,14 +978,41 @@ def api_historico_custo(id):
         todas_datas = sorted(todas_datas, reverse=True)
         
         # Para cada data, calcular o custo usando o preço mais recente disponível até aquela data
+        # IMPORTANTE: Para cada data, precisamos recalcular os componentes ativos considerando
+        # as datas de início e término de cada componente
         historico_custo = []
         precos_anteriores = {}  # material_id -> último preço conhecido
         
         for data in todas_datas:
+            # Converter data string para date object
+            try:
+                data_obj = datetime.strptime(data, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                continue
+            
+            # Expandir componentes considerando a data atual (filtra por data_inicio e data_termino)
+            componentes_materiais_data = _expandir_componentes_produto_composto(
+                produto.id, 
+                quantidade_base=1.0, 
+                caminho_atual=None, 
+                data_movimento=data_obj
+            )
+            
+            # Agrupar materiais por material_id e somar quantidades para esta data
+            componentes_agrupados_data = {}
+            for comp in componentes_materiais_data:
+                material_id = comp['material_id']
+                if material_id in componentes_agrupados_data:
+                    componentes_agrupados_data[material_id]['quantidade'] += comp['quantidade']
+                else:
+                    componentes_agrupados_data[material_id] = comp.copy()
+            
+            componentes_materiais_ativos = list(componentes_agrupados_data.values())
+            
             custo_total = 0.0
             componentes_data = []
             
-            for comp in componentes_materiais:
+            for comp in componentes_materiais_ativos:
                 material_id = comp['material_id']
                 quantidade_necessaria = comp['quantidade']
                 
@@ -923,6 +1020,9 @@ def api_historico_custo(id):
                 # O valor_unitario já está calculado considerando o fator de conversão aplicado
                 preco_atual = precos_anteriores.get(material_id)
                 historico_material = historico_por_material.get(material_id, [])
+                chave_acesso_nf_usada = None
+                quantidade_item_nf = None
+                valor_total_item_nf = None
                 
                 # Encontrar o preço mais recente até esta data
                 # O valor_unitario retornado já está na unidade padrão do material (após aplicar fator de conversão)
@@ -930,19 +1030,93 @@ def api_historico_custo(id):
                     if item['data_emissao'] and item['data_emissao'] <= data:
                         # valor_unitario já considera fator_conversao_aplicado se existir
                         preco_atual = item['valor_unitario']
+                        chave_acesso_nf_usada = item.get('chave_acesso')
+                        quantidade_item_nf = item.get('quantidade')  # Quantidade já convertida (se houver fator)
+                        valor_total_item_nf = item.get('valor_total_item')  # Valor total do item na nota
                         precos_anteriores[material_id] = preco_atual
                         break
                 
                 if preco_atual is not None and preco_atual > 0:
-                    # Cálculo do custo: quantidade_necessaria (já na unidade padrão) × preco_unitario (já convertido)
+                    # Buscar CTE (frete) relacionado à nota fiscal
+                    valor_frete = 0.0
+                    tem_frete = False
+                    if chave_acesso_nf_usada:
+                        try:
+                            # Buscar CTEs (tipo 2) que possam ter chave_nf correspondente nos dados_adicionais
+                            # Primeiro tenta busca direta por json_extract (mais eficiente)
+                            cte = (
+                                db.session.query(NotaFiscal)
+                                .filter(NotaFiscal.tipo == 2)
+                                .filter(NotaFiscal.status_processamento != "cancelada")
+                                .filter(
+                                    or_(
+                                        func.json_extract(NotaFiscal.dados_adicionais, "$.chave_nf") == chave_acesso_nf_usada,
+                       #                 NotaFiscal.dados_adicionais.like(f'%"chave_nf": "{chave_acesso_nf_usada}"%'),
+                        #                NotaFiscal.dados_adicionais.like(f'%"chave_nf":["{chave_acesso_nf_usada}"%')
+                                    )
+                                )
+                                .first()
+                            )
+                            print(f'cte: {cte}')
+                            if cte and cte.valor_total:
+                                valor_frete = float(cte.valor_total)
+                                tem_frete = True
+                            else:
+                                # Fallback: buscar todos e verificar manualmente (para casos de lista)
+                                ctes = (
+                                    db.session.query(NotaFiscal)
+                                    .filter(NotaFiscal.tipo == 2)
+                                    .filter(NotaFiscal.status_processamento != "cancelada")
+                                    .filter(NotaFiscal.dados_adicionais.like(f'%{chave_acesso_nf_usada}%'))
+                                    .all()
+                                )
+                                
+                                for cte_fallback in ctes:
+                                    if not cte_fallback.dados_adicionais:
+                                        continue
+                                    
+                                    try:
+                                        dados_adicionais = json.loads(cte_fallback.dados_adicionais)
+                                        chave_nf_cte = dados_adicionais.get('chave_nf')
+                                        
+                                        # Pode ser string ou lista
+                                        if isinstance(chave_nf_cte, str) and chave_nf_cte == chave_acesso_nf_usada:
+                                            if cte_fallback.valor_total:
+                                                valor_frete = float(cte_fallback.valor_total)
+                                                tem_frete = True
+                                            break
+                                        elif isinstance(chave_nf_cte, list) and chave_acesso_nf_usada in chave_nf_cte:
+                                            if cte_fallback.valor_total:
+                                                valor_frete = float(cte_fallback.valor_total)
+                                                tem_frete = True
+                                            break
+                                    except (json.JSONDecodeError, ValueError, TypeError):
+                                        continue
+                        except Exception as e:
+                            logger.warning(f"Erro ao buscar frete para chave_acesso {chave_acesso_nf_usada}: {str(e)}")
+                    
+                    # Recalcular preço unitário se houver frete
+                    # O custo unitário correto é: (valor_total_item + valor_frete) / quantidade_convertida
+                    if tem_frete and valor_total_item_nf is not None and quantidade_item_nf is not None and quantidade_item_nf > 0:
+                        preco_atual = (valor_total_item_nf + valor_frete) / quantidade_item_nf
+                    
+                    # Cálculo do custo: quantidade_necessaria (já na unidade padrão) × preco_unitario (já convertido, com frete se houver)
                     custo_componente = quantidade_necessaria * preco_atual
                     custo_total += custo_componente
+                    
+                    # Montar nome do material com "+ frete" se houver
+                    nome_material = comp['material_nome']
+                    if tem_frete:
+                        nome_material += " + frete"
+                    
                     componentes_data.append({
-                        'material_nome': comp['material_nome'],
+                        'material_nome': nome_material,
                         'quantidade': quantidade_necessaria,
-                        'preco_unitario': preco_atual,  # Já considera fator de conversão
+                        'preco_unitario': preco_atual,  # Já considera fator de conversão e frete se houver
                         'custo_componente': custo_componente,
-                        'unidade': comp['unidade']  # Unidade padrão do material
+                        'unidade': comp['unidade'],  # Unidade padrão do material
+                        'tem_frete': tem_frete,
+                        'valor_frete': valor_frete
                     })
             
             if custo_total > 0:
@@ -959,6 +1133,7 @@ def api_historico_custo(id):
                     'componentes': componentes_data
                 })
         
+        print(f'historico_custo: {len(historico_custo)}')
         return jsonify({
             'success': True,
             'produto_nome': produto.nome,

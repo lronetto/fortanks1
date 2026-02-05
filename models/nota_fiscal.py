@@ -160,25 +160,18 @@ class NotaFiscal(db.Model):
         self.data = data
         self.chave_acesso = chave_acesso
         self.id = id
+        self.tipo = tipo
         self.upload = None
         self.cancelada = cancelada
-        if self.data.get('xml',None) and tipo is None:
-            self.tipo = self.extrair_tipo_nota(self.xml_data)
+        if self.data.get('xml',None):
+            self.tipo = self.extrair_tipo_nota(self.data)
+            self.xml_data = self.data.get('xml',None)
             if self.tipo == 'nfe':
                 self.processar_nf()
             elif self.tipo == 'cte':
                 self.processar_cte()
-            
-        if self.data.get('xml',None) and tipo == 'nfe':
-            print(f'NotaFiscal xml')
-            self.processar_nf()
-        if self.data.get('xml',None) and tipo == 'nfse':
-            print(f'NotaFiscal nfse')
-            self.processar_nfse()
-                
-        if self.data.get('xml',None) and tipo == 'cte':
-            print(f'NotaFiscal cte')
-            return self,self.processar_cte()
+            elif self.tipo == 'nfse':
+                self.processar_nfse()
              
         if chave_acesso:
             nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==chave_acesso).first()
@@ -575,7 +568,7 @@ class NotaFiscal(db.Model):
             return False
     def extrair_dados_xml_cte(self):
 
-        root = ET.fromstring(base64.b64decode(self.data.get('xml',None)).decode('utf-8'))
+        root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
         ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
 
         # Caminhos principais
@@ -955,7 +948,7 @@ class NotaFiscal(db.Model):
         """
         try:
             # Parse do XML
-            root = ET.fromstring(base64.b64decode(self.data.get('xml',None)).decode('utf-8'))
+            root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
 
             dados_adicionais = {
                 'id': self.data.get('id',None),
