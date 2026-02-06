@@ -25,7 +25,7 @@ class Arquivei:
     log_info = None
     datas = []
     id = None
-    def __init__(self, data_inicial=None, chave_acesso=None, data_final=None, data=None, xml_data=None,cancelamento=False,send=False,tipo='nfe',pdf=None):
+    def __init__(self, data_inicial=None, chave_acesso=None, data_final=None, data=None, xml_data=None,cancelamento=False,send=False,tipo=None,pdf=None):
         self.data = data
         self.chave_acesso = chave_acesso
         if data:
@@ -44,7 +44,7 @@ class Arquivei:
         if xml_data:
             self.xml_data = xml_data
             self.upload()
-        if data_inicial and data_final:
+        if data_inicial and data_final and tipo:
             print(f'processando arquivei {tipo}')
             self.processar_arquivei()
             self.processar_arquivei(send=True)
@@ -193,8 +193,8 @@ class Arquivei:
                                 chave_acesso = item.get('access_key',None)
                                 if chave_acesso:
                                     data['chave_acesso'] = chave_acesso
-                                print(f'item: {id}')
-                                print(f'chave_acesso: {chave_acesso}')
+                                #print(f'item: {id}')
+                                #print(f'chave_acesso: {chave_acesso}')
                                 self.datas.append(data)
                                 notas_processadas += 1
                             #print(f'processando nota fiscal {i}')

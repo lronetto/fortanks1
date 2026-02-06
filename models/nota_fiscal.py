@@ -152,17 +152,21 @@ class NotaFiscal(db.Model):
     pdf = None
     inserido = False
     existente = False
-    log_info = None
+    logs = None
     data = None
 
     
-    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None):
+    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None,logs=None):
+       
+        self.logs = logs
         self.data = data
         self.chave_acesso = chave_acesso
         self.id = id
         self.tipo = tipo
         self.upload = None
         self.cancelada = cancelada
+        if data and not tipo:
+            self.tipo = self.extrair_tipo_nota(data)
         if not xml_data:
             if self.data.get('xml',None):
                 self.xml_data = self.data.get('xml',None)
@@ -179,7 +183,7 @@ class NotaFiscal(db.Model):
        
         if self.tipo:
             if self.tipo == 'nfe':
-                self.processar_nf()
+                self.processar_nfe()
             elif self.tipo == 'cte':
                 self.processar_cte()
             elif self.tipo == 'nfse':
@@ -325,61 +329,53 @@ class NotaFiscal(db.Model):
             pass
         
         return None        
-    def importar_arquivei(data_inicial,data_final,tipo='nfe'):
+    def importar_arquivei(data_inicial,data_final,tipo='nfe',logs=None):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
         total = len(notas.datas)
+        logs={
+            'tipo': tipo,
+            'total': 0,
+            'existente': 0,
+            'inserido': 0,
+            'erro': [],
+            'mensagem': [],
+            'existentes': [],
+            'inseridos': [],
+        }
+        logs['total'] = total
         i=0
-        existente=0
-        inseridos=0
-        notas_log = []
         notasn = []
         if total > 0:
             for data in notas.datas:
-                nf = NotaFiscal(data=data,tipo=tipo)
+                nf = NotaFiscal(data=data,tipo=tipo,logs=logs)
+                
                 notasn.append(nf)
-                existente+=(1 if nf.existente else 0)
-                inseridos+=(1 if nf.inserido else 0)
-                i+=1
-                # Coletar informações de log da nota processada
-                if hasattr(nf, 'log_info') and nf.log_info:
-                    notas_log.append(nf.log_info)
-        log = {
-            'arquivei': notas.log_info,
-            'total': total,
-            'existentes': existente,
-            'inseridos': inseridos,
-            'tipo': tipo,
-            'notas_processadas': i,
-            'notas': notas_log
-        }
-        Logs(local='importar_arquivei', data=datetime.now(), texto=json.dumps(log, ensure_ascii=False, default=str)) 
+            i+=1
         for nf in notasn:
+            print(f'nf: {nf.id}')
             nf.get_pdf()
+        print(f'logs: {logs}')
+        return logs
     def processar_cte(self):
         chave_acesso, dados = self.extrair_dados_xml_cte()
         #print(f'dados: {dados}')
         # Verifica se já existe
-        log = {
-            'existente': False,
-            'inserido': False,
-            'erro': None,
-            'chave_acesso': chave_acesso,
-            'numero_cte': dados.get('numero_cte'),
-            'tipo': 2,
-            'data_emissao': dados.get('data_emissao'),
-            'valor_total': dados.get('valor_total'),
-            'cnpj_emitente': dados.get('cnpj_emitente'),
-            'nome_emitente': dados.get('nome_emitente'),
-            'cnpj_destinatario': dados.get('cnpj_destinatario'),
-            'nome_destinatario': dados.get('nome_destinatario'),
-        }
+        
         existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
-            log['existente'] = True
+            self.logs['existente'] += 1
+            self.logs['existentes'].append({
+                'numero_nf':existente.numero_nf,
+                'tipo': 'cte',
+                'valor_total': existente.valor_total,
+                'cnpj_emitente': existente.cnpj_emitente,
+                'nome_emitente': existente.nome_emitente,
+                'cnpj_destinatario': existente.cnpj_destinatario,
+                'nome_destinatario': existente.nome_destinatario,
+                'dados_adicionais': existente.dados_adicionais,
+            })
             existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             existente.save()
-            existente.inserido = False
-            existente.log_info = log
             return existente
         try:
             self.tipo = 2
@@ -395,14 +391,13 @@ class NotaFiscal(db.Model):
             self.status_processamento = 'importado'
             self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             self.save()
-            self.inserido = True
-            log['inserido'] = True
-            self.log_info = log
-            return log
+            db.session.refresh(self)
+            self.logs['inserido'] += 1
+            self.logs['inseridos'].append(self.to_dict())
+
         except Exception as e:
             logger.error(f"Erro ao processar CT-e: {str(e)}")
-            log['erro'] = str(e)
-            self.log_info = log
+            self.logs['erro'] = str(e)
             return False
     def processar_nfse(self):
         chave_acesso, dados = self.extrair_dados_xml_nfse()
@@ -411,23 +406,13 @@ class NotaFiscal(db.Model):
         print(f'chave_acesso: {chave_acesso}')
         #print(f'dados: {dados}')
 
-        log = {
-            'existente': False,
-            'inserido': False,
-            'erro': None,
-            'chave_acesso': chave_acesso,
-            'numero_nfse': dados.get('Numero'),
-            'tipo': 3,
-            'data_emissao': dados.get('DataEmissao'),
-            'valor_total': dados.get('valores').get('ValorLiquidoNfse'),
-        }
+       
         existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
-            log['existente'] = True
+            self.logs['existente'] += 1
+            self.logs['existentes'].append(existente.to_dict())
             existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             existente.save()
-            existente.inserido = False
-            existente.log_info = log
             return existente
         try:
             self.tipo = 3
@@ -443,35 +428,20 @@ class NotaFiscal(db.Model):
             self.status_processamento = 'importado'
             self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             self.save()
-            self.inserido = True
-            log['inserido'] = True
-            self.log_info = log
-            return log
+            db.session.refresh(self)
+            self.logs['inserido'] += 1
+            self.logs['inseridos'].append(self.to_dict())
+            return self
         except Exception as e:
-            logger.error(f"Erro ao processar CT-e: {str(e)}")
-            log['erro'] = str(e)
-            self.log_info = log
+            logger.error(f"Erro ao processar NFSE: {str(e)}")
+            self.logs['erro'] = str(e)
             return False
-    def processar_nf(self):
+    def processar_nfe(self):
         """
         Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
         print(f'processar_nf: {self.id}')
-        self.inserido = False
-        self.existente = False
-        log = {
-                'existente': False,
-                'inserido': False,
-                'erro': None,
-                'chave_acesso': None,
-                'numero_nf': None,
-                'tipo': None,
-                'data_emissao': None,
-                'valor_total': None,
-                'cnpj_emitente': None,
-                'nome_emitente': None,
-                'estatisticas': [],
-            }
+        
         try:
             # Extrair dados do XML
             #self.xml_data = base64.b64encode(xml_text.encode('utf-8')).decode('utf-8')
@@ -481,36 +451,36 @@ class NotaFiscal(db.Model):
             #print('dados_nf: ',dados_nf)
             if not chave_acesso or not dados_nf:
                 logger.warning(f"Não foi possível extrair dados do XML")
-                log['erro'] = "Não foi possível extrair dados do XML"
-                self.log_info = log
+                self.logs['erro'] = "Não foi possível extrair dados do XML"
                 return False
             self.chave_acesso=chave_acesso
-            
-            # Atualizar log com dados extraídos
-            log['chave_acesso'] = chave_acesso
-            log['numero_nf'] = dados_nf.get('numero')
-            log['tipo'] = dados_nf.get('tipo')
-            log['data_emissao'] = dados_nf.get('data_emissao')
-            log['valor_total'] = dados_nf.get('valor_total')
-            log['cnpj_emitente'] = dados_nf.get('cnpj_emitente')
-            log['nome_emitente'] = dados_nf.get('nome_emitente')
+    
             
             # Verificar se a nota fiscal já existe
             nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             #print('nf: ',nf)
             #print('self: ',self)
+            log = {
+                'numero_nf': dados_nf.get('numero'),
+                'tipo': dados_nf.get('tipo'),
+                'valor_total': dados_nf.get('valor_total'),
+                'cnpj_emitente': dados_nf.get('cnpj_emitente'),
+                'nome_emitente': dados_nf.get('nome_emitente'),
+                'cnpj_destinatario': dados_nf.get('cnpj_destinatario'),
+                'nome_destinatario': dados_nf.get('nome_destinatario'),
+                'dados_adicionais': dados_nf.get('dados_adicionais'),
+                'estatisticas': []
+
+                }
             
             if nf:
-                log['existente'] = True
+                self.logs['existente'] += 1
+                self.logs['existentes'].append(nf.to_dict())
                 logger.info(f"Nota {chave_acesso} já existe no banco de dados")
-                nf.inserido = False
-                #print(f'num ={nf.numero_nf} dados_adicionais: {nf.dados_adicionais}')
                 if not nf.dados_adicionais:
-                   # print(f'num ={nf.numero_nf} dados_adicionais: {nf.dados_adicionais}')
+                    self.logs['mensagem'] = "Dados adicionais não encontrados adicionando"
                     nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
                     nf.save()
-                self.existente = True
-                self.log_info = log
                 return nf   
             
             self.xml_data=self.data.get('xml',None)
@@ -525,7 +495,6 @@ class NotaFiscal(db.Model):
             self.nome_destinatario=dados_nf.get('nome_destinatario')
             self.status_processamento='importado'
             self.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
-
             self.save()
             for item_nf in dados_nf.get('itens', []):
                 item_fiscal = NotaFiscalItem(
@@ -552,6 +521,7 @@ class NotaFiscal(db.Model):
                         centro_custo_id=None,
                         observacao= f"Importação da NF {self.numero_nf if self else 'N/A'}",
                     )
+                    log['estatisticas'].append(estatisticas)
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
@@ -561,22 +531,18 @@ class NotaFiscal(db.Model):
                     if estatisticas and estatisticas['importacao']['erros']:
                         for erro in estatisticas['importacao']['erros']:
                             print(f'erro: {erro}')
-                            #log['erro']+= f'{erro}\n'
+                            self.logs['erro'].append(erro)#log['erro']+= f'{erro}\n'
                     else:
                         print(f'estatisticas: {estatisticas}')
-                        log['erro']= str(mensagem)
-                    log['erro']= str(mensagem)
                 else:
                     log['estatisticas'].append(estatisticas)
 
-            self.inserido = True
-            log['inserido'] = True
-            self.log_info = log
+            self.logs['inserido'] += 1
+            self.logs['inseridos'].append(log)
             print(f'processar_nf: {self.id} finalizado')
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
-            log['erro'] = str(e)
-            self.log_info = log
+            self.logs['erro'].append(str(e))
             return False
     def extrair_dados_xml_cte(self):
 

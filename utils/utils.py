@@ -7,6 +7,8 @@ import re
 from PyPDF2 import PdfReader, PdfWriter
 import io
 import logging
+import json
+from decimal import Decimal
 def formatarMoeda(valor):
     """Formata valor como moeda brasileira"""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -238,3 +240,16 @@ def separar_pdf_por_paginas(payload, filename):
         logging.error(f"Erro ao separar PDF {filename} por páginas: {e}")
         # Em caso de erro, retorna o PDF original
         return [(payload, filename)]
+
+def json_dumps_safe(obj):
+    """
+    Serializa um objeto para JSON, convertendo objetos datetime e Decimal para formatos serializáveis.
+    """
+    def default_serializer(o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+        if isinstance(o, Decimal):
+            return float(o)
+        raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+    
+    return json.dumps(obj, default=default_serializer, ensure_ascii=False)

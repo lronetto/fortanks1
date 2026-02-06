@@ -4,6 +4,7 @@ import json
 import logging
 import zipfile
 from datetime import datetime
+from decimal import Decimal
 
 from flask import flash, jsonify, redirect, request, url_for
 from flask_login import current_user
@@ -19,8 +20,11 @@ from models.upload import Upload
 from scripts.processar_email1 import processar_emails
 
 from .. import nota_fiscal_bp
-
+from utils.utils import json_dumps_safe
 logger = logging.getLogger(__name__)
+
+
+
 
 
 @nota_fiscal_bp.route("/reprocessar-importacao")
@@ -43,6 +47,7 @@ def importar_arquivei():
     Importa notas fiscais da API do Arquivei (modal).
     """
     try:
+        logs = []
         csrf_token = request.form.get("csrf_token")
         if not csrf_token:
             flash("Token CSRF não fornecido", "danger")
@@ -57,13 +62,21 @@ def importar_arquivei():
             return redirect(url_for("nota_fiscal.index"))
 
         if tipo_documento == "todos":
-            NotaFiscal.importar_arquivei(data_inicial, data_final, "nfe")
-            NotaFiscal.importar_arquivei(data_inicial, data_final, "cte")
-            NotaFiscal.importar_arquivei(data_inicial, data_final, "nfse")
+            log=None
+            log=NotaFiscal.importar_arquivei(data_inicial, data_final, "nfe")
+            logs.append(log)
+            log=None
+            log=NotaFiscal.importar_arquivei(data_inicial, data_final, "cte")
+            logs.append(log)
+            log=None
+            log=NotaFiscal.importar_arquivei(data_inicial, data_final, "nfse")
+            logs.append(log)
         else:
-            NotaFiscal.importar_arquivei(data_inicial, data_final, tipo_documento)
-
-        return jsonify({"success": True, "message": "Notas fiscais importadas com sucesso!"})
+            log=None
+            log=NotaFiscal.importar_arquivei(data_inicial, data_final, tipo_documento)
+            logs.append(log)
+        Logs(local="importar_arquivei", data=datetime.now(), texto=json_dumps_safe(logs))
+        return jsonify({"success": True, "message": "Notas fiscais importadas com sucesso!", "logs": logs}), 200
     except Exception as e:
         logger.error(f"Erro ao importar notas fiscais: {str(e)}", exc_info=True)
         return jsonify({"success": False, "message": f"Erro ao importar notas fiscais: {str(e)}"}), 500
@@ -161,7 +174,7 @@ def importar_todas_pendentes():
             "notas_canceladas": notas_canceladas,
             "total_notas": total_notas,
         }
-        Logs(local="importar_todas_pendentes", data=datetime.now(), texto=json.dumps(log))
+        Logs(local="importar_todas_pendentes", data=datetime.now(), texto=json_dumps_safe(log))
         return redirect(url_for("nota_fiscal.index"))
     except Exception as e:
         logger.error(f"Erro ao importar notas pendentes: {str(e)}")
@@ -183,7 +196,7 @@ def importar_item_estoque_todas_notas(item_id):
         centro_custo_id=centro_custo_id if centro_custo_id else None,
         observacao=observacao or f"Importação da NF {item.nota_fiscal.numero_nf if item.nota_fiscal else 'N/A'}",
     )
-    Logs(local="importar_item_estoque", data=datetime.now(), texto=json.dumps(estatisticas))
+    Logs(local="importar_item_estoque", data=datetime.now(), texto=json_dumps_safe(estatisticas))
     return jsonify({"success": bool(sucesso), "message": mensagem})
 
 # Rotas de diagnóstico antigas removidas:
