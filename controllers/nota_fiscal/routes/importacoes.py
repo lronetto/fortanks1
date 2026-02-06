@@ -103,6 +103,7 @@ def importar_xml():
                                 else:
                                     mensagens.append(f"Erro ao importar {zipinfo.filename}")
             elif filename.lower().endswith(".xml"):
+                print("teste")
                 xml_bytes = arquivo.read()
                 xml_b64 = base64.b64encode(xml_bytes).decode("utf-8")
                 nf = NotaFiscal(xml_data=xml_b64)

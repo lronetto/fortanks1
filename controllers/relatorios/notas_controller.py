@@ -145,6 +145,7 @@ def _processar_notas_fiscais(query):
             'data_prevista': data_prevista,
             'pago': pago_str,
             'status': nf.status_processamento,
+            'destinatario': nf.nome_destinatario,
             
 
         })
@@ -252,7 +253,7 @@ def api_dados():
     valor_a_faturar = valor_faturado - valor_recebido
     
     # Calcular quantidades a faturar (emitidas mas não pagas)
-    quantidade_a_faturar = total_placas_contratos - total_quantidade
+    quantidade_a_faturar = total_placas_contratos - quantidade_recebida
     
     # Buscar valores dos contratos separados por material e serviço
     query_contratos_total = db.session.query(func.sum(Contrato.valor_total))
@@ -279,7 +280,7 @@ def api_dados():
     valor_servico_nao_faturado = float(valor_total_servico) - float(valor_servico_faturado)
     
     # Calcular quantidades de placas não faturadas
-    quantidade_material_nao_faturada = float(total_placas_contratos) - float(total_quantidade)
+    quantidade_material_nao_faturada = float(total_placas_contratos) - float()
     
     # Calcular percentuais para material
     percentual_material_faturado = (valor_material_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
@@ -521,8 +522,10 @@ def _get_dataframe(dados_relatorio):
         'quantidade': 'QTDE DE PLACA',
         'valor': 'VALOR',
         'status': 'STATUS',
-        'pago': 'PAGO'
+        'pago': 'PAGO',
+        'destinatario': 'DESTINATÁRIO'
+
     }, inplace=True)
 
-    return df[['DATA EMISSÃO', 'NF', 'QTDE DE PLACA', 'VALOR', 'STATUS', 'VENCIMENTO', 'PAGO']]
+    return df[['DATA EMISSÃO', 'NF', 'QTDE DE PLACA', 'VALOR', 'STATUS', 'VENCIMENTO', 'PAGO', 'DESTINATÁRIO']]
 

@@ -29,11 +29,12 @@ class Contrato(db.Model):
     centro_custo_id = db.Column(db.Integer, db.ForeignKey('centros_custo.id'), nullable=True)
     centro_custo = db.relationship('CentroCusto', back_populates='contratos',foreign_keys=[centro_custo_id])
     responsavel_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
-    
+    responsavel = db.relationship('Usuario', backref='contratos_como_responsavel')
     # Datas de controle
     data_cadastro = db.Column(db.DateTime, default=datetime.now)
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
+    conf = db.Column(db.Text, nullable=True)
     ativo = db.Column(db.Boolean, default=True)
     # Relacionamentos
     tanques = db.relationship('Tanques', back_populates='contrato')
@@ -60,7 +61,7 @@ class Contrato(db.Model):
             'prazo_pagamento_mat': self.prazo_pagamento_mat,
             'prazo_pagamento_ser': self.prazo_pagamento_ser,
             'centro_custo_id': self.centro_custo_id,
-            'responsavel_id': self.responsavel_id,
+            'responsavel': self.responsavel.nome,
             'data_cadastro': self.data_cadastro,
             'ultima_atualizacao': self.ultima_atualizacao
         }

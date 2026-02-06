@@ -47,6 +47,7 @@ class Arquivei:
         if data_inicial and data_final:
             print(f'processando arquivei {tipo}')
             self.processar_arquivei()
+            self.processar_arquivei(send=True)
             print(f'datas: {len(self.datas)}')
          
         if self.chave_acesso and cancelamento==False:
@@ -132,8 +133,11 @@ class Arquivei:
         if self.tipo=='cte':
             url='https://api.arquivei.com.br/v1/cte/taker'
         if self.tipo=='nfse':
-            url = 'https://api.arquivei.com.br/v1/nfse/received'
-        
+            if send:
+                url = 'https://api.arquivei.com.br/v1/nfse/emitted'
+            else:
+                url = 'https://api.arquivei.com.br/v1/nfse/received'
+    
         response = requests.get(url, headers=headers, params=params)
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 1')
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')

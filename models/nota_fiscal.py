@@ -156,16 +156,28 @@ class NotaFiscal(db.Model):
     data = None
 
     
-    def __init__(self, data=None, chave_acesso=None, id=None, cancelada=False,tipo=None):
+    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None):
         self.data = data
         self.chave_acesso = chave_acesso
         self.id = id
         self.tipo = tipo
         self.upload = None
         self.cancelada = cancelada
-        if self.data.get('xml',None):
-            self.tipo = self.extrair_tipo_nota(self.data)
-            self.xml_data = self.data.get('xml',None)
+        if not xml_data:
+            if self.data.get('xml',None):
+                self.xml_data = self.data.get('xml',None)
+                self.tipo = self.extrair_tipo_nota(self.data)
+        else:
+            self.xml_data = xml_data
+            dicta = self.get_xml_json()
+            if dicta['CompNfse']:
+                self.tipo = 'nfse'
+            elif dicta['NFe']:
+                self.tipo = 'nfe'
+            elif dicta['CTe']:
+                self.tipo = 'cte'
+       
+        if self.tipo:
             if self.tipo == 'nfe':
                 self.processar_nf()
             elif self.tipo == 'cte':

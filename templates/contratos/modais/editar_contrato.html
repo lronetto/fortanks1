@@ -1,0 +1,404 @@
+<!-- Modal de Editar Contrato -->
+<div class="modal fade" id="modalEditarContrato" tabindex="-1" aria-labelledby="modalEditarContratoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalEditarContratoLabel">
+                    <i class="fas fa-edit"></i> Editar Contrato
+                </h5>
+                <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="" id="form-editar-contrato">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="editar_contrato_id" name="contrato_id" value="">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="editar_nome" class="form-label">Nome do Contrato <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="editar_nome" name="nome" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="editar_centro_custo_id" class="form-label">Centro de Custo <span class="text-danger">*</span></label>
+                            <select class="form-select" id="editar_centro_custo_id" name="centro_custo_id" required>
+                                <option value="" disabled>Selecione um centro de custo</option>
+                                {% for centro in centros_custo %}
+                                <option value="{{ centro.id }}">{{ centro.codigo }} - {{ centro.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label for="editar_descricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="editar_descricao" name="descricao" rows="3"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editar_cliente_direto_id" class="form-label">Cliente Direto</label>
+                            <select class="form-select" id="editar_cliente_direto_id" name="cliente_direto_id">
+                                <option value="">Selecione um cliente</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}">{{ cliente.nome }} ({{ cliente.cnpj }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editar_cliente_final_id" class="form-label">Cliente Final</label>
+                            <select class="form-select" id="editar_cliente_final_id" name="cliente_final_id">
+                                <option value="">Selecione um cliente</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}">{{ cliente.nome }} ({{ cliente.cnpj }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="editar_estado" class="form-label">Estado</label>
+                            <select class="form-select" id="editar_estado" name="estado">
+                                <option value="">Selecione um estado</option>
+                                <option value="AC">Acre</option>
+                                <option value="AL">Alagoas</option>
+                                <option value="AP">Amapá</option>
+                                <option value="AM">Amazonas</option>
+                                <option value="BA">Bahia</option>
+                                <option value="CE">Ceará</option>
+                                <option value="DF">Distrito Federal</option>
+                                <option value="ES">Espírito Santo</option>
+                                <option value="GO">Goiás</option>
+                                <option value="MA">Maranhão</option>
+                                <option value="MT">Mato Grosso</option>
+                                <option value="MS">Mato Grosso do Sul</option>
+                                <option value="MG">Minas Gerais</option>
+                                <option value="PA">Pará</option>
+                                <option value="PB">Paraíba</option>
+                                <option value="PR">Paraná</option>
+                                <option value="PE">Pernambuco</option>
+                                <option value="PI">Piauí</option>
+                                <option value="RJ">Rio de Janeiro</option>
+                                <option value="RN">Rio Grande do Norte</option>
+                                <option value="RS">Rio Grande do Sul</option>
+                                <option value="RO">Rondônia</option>
+                                <option value="RR">Roraima</option>
+                                <option value="SC">Santa Catarina</option>
+                                <option value="SP">São Paulo</option>
+                                <option value="SE">Sergipe</option>
+                                <option value="TO">Tocantins</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="editar_cidade" class="form-label">Cidade</label>
+                            <input type="text" class="form-control" id="editar_cidade" name="cidade">
+                        </div>
+                        <div class="col-md-5">
+                            <label for="editar_data_base" class="form-label">Data Base</label>
+                            <input type="date" class="form-control" id="editar_data_base" name="data_base">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editar_venda_material" class="form-label">Valor Materiais (R$)</label>
+                            <input type="text" class="form-control mascara-moeda" id="editar_venda_material" name="venda_material">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editar_venda_servico" class="form-label">Valor Serviços (R$)</label>
+                            <input type="text" class="form-control mascara-moeda" id="editar_venda_servico" name="venda_servico">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label for="editar_cnpjs_associados" class="form-label">CNPJs Associados</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="editar_cnpj_input" placeholder="Digite o CNPJ e pressione Enter ou clique em Adicionar">
+                                <button type="button" class="btn btn-outline-secondary" id="editar_btn_adicionar_cnpj">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Adicione múltiplos CNPJs associados ao contrato</small>
+                            <div id="editar_cnpjs_lista" class="mt-2">
+                                <!-- CNPJs serão adicionados aqui como tags -->
+                            </div>
+                            <input type="hidden" id="editar_cnpjs_json" name="cnpjs_associados" value="">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="alert alert-info mb-0">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Valor Total do Contrato:</strong>
+                                <span id="editar_valor_total" class="ms-2">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Formatar valores monetários
+    function formatarMoeda(valor) {
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    // Converter valor formatado em número
+    function converterParaNumero(valorFormatado) {
+        if (!valorFormatado) return 0;
+        return parseFloat(valorFormatado.replace('R$', '')
+            .replace(/\./g, '')
+            .replace(/,/g, '.')
+            .trim());
+    }
+
+    // Calcular valor total
+    function calcularTotalEditar() {
+        const valorMaterial = converterParaNumero(document.getElementById('editar_venda_material').value);
+        const valorServico = converterParaNumero(document.getElementById('editar_venda_servico').value);
+        const total = valorMaterial + valorServico;
+        document.getElementById('editar_valor_total').textContent = formatarMoeda(total);
+    }
+
+    // Inicializar máscaras para valores monetários
+    if (typeof $.fn.maskMoney !== 'undefined') {
+        $('#editar_venda_material, #editar_venda_servico').maskMoney({
+            prefix: 'R$ ',
+            allowNegative: false,
+            thousands: '.',
+            decimal: ',',
+            affixesStay: true
+        });
+
+        // Recalcular total quando os valores são alterados
+        $('#editar_venda_material, #editar_venda_servico').on('keyup', calcularTotalEditar);
+    }
+
+    // Array para armazenar CNPJs
+    let cnpjsAssociados = [];
+
+    // Função para validar CNPJ
+    function validarCNPJ(cnpj) {
+        // Remove caracteres não numéricos
+        cnpj = cnpj.replace(/[^\d]/g, '');
+        // Verifica se tem 14 dígitos
+        return cnpj.length === 14;
+    }
+
+    // Função para formatar CNPJ
+    function formatarCNPJ(cnpj) {
+        cnpj = cnpj.replace(/[^\d]/g, '');
+        if (cnpj.length === 14) {
+            return cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+        }
+        return cnpj;
+    }
+
+    // Função para adicionar CNPJ à lista
+    function adicionarCNPJ(cnpj) {
+        const cnpjLimpo = cnpj.replace(/[^\d]/g, '');
+        
+        if (!cnpjLimpo) {
+            alert('Por favor, digite um CNPJ válido.');
+            return;
+        }
+
+        if (!validarCNPJ(cnpjLimpo)) {
+            alert('CNPJ inválido. Deve conter 14 dígitos.');
+            return;
+        }
+
+        if (cnpjsAssociados.includes(cnpjLimpo)) {
+            alert('Este CNPJ já foi adicionado.');
+            return;
+        }
+
+        cnpjsAssociados.push(cnpjLimpo);
+        atualizarListaCNPJs();
+        document.getElementById('editar_cnpj_input').value = '';
+    }
+
+    // Função para remover CNPJ da lista
+    function removerCNPJ(cnpj) {
+        cnpjsAssociados = cnpjsAssociados.filter(c => c !== cnpj);
+        atualizarListaCNPJs();
+    }
+
+    // Função para atualizar a lista visual de CNPJs
+    function atualizarListaCNPJs() {
+        const listaContainer = document.getElementById('editar_cnpjs_lista');
+        listaContainer.innerHTML = '';
+
+        cnpjsAssociados.forEach(cnpj => {
+            const tag = document.createElement('span');
+            tag.className = 'badge bg-primary me-2 mb-2';
+            tag.style.cssText = 'font-size: 0.9em; padding: 0.5em 0.75em; cursor: pointer;';
+            tag.innerHTML = `${formatarCNPJ(cnpj)} <i class="fas fa-times ms-2" style="cursor: pointer;"></i>`;
+            
+            tag.addEventListener('click', function(e) {
+                if (e.target.classList.contains('fa-times') || e.target.parentElement.classList.contains('fa-times')) {
+                    removerCNPJ(cnpj);
+                }
+            });
+
+            listaContainer.appendChild(tag);
+        });
+
+        // Atualizar campo hidden com JSON
+        document.getElementById('editar_cnpjs_json').value = JSON.stringify(cnpjsAssociados);
+    }
+
+    // Evento para adicionar CNPJ ao pressionar Enter
+    document.getElementById('editar_cnpj_input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            adicionarCNPJ(this.value);
+        }
+    });
+
+    // Evento para botão adicionar CNPJ
+    document.getElementById('editar_btn_adicionar_cnpj').addEventListener('click', function() {
+        const input = document.getElementById('editar_cnpj_input');
+        adicionarCNPJ(input.value);
+    });
+
+    // Função para abrir modal de edição
+    window.abrirModalEditar = function(contratoId) {
+        // Limpar lista de CNPJs
+        cnpjsAssociados = [];
+        
+        // Buscar dados do contrato via AJAX
+        fetch(`{{ url_for('contrato.editar', id=0) }}`.replace('/0', `/${contratoId}`), {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data && data.contrato) {
+                const contrato = data.contrato;
+                
+                // Preencher formulário
+                document.getElementById('editar_contrato_id').value = contrato.id;
+                document.getElementById('editar_nome').value = contrato.nome || '';
+                document.getElementById('editar_descricao').value = contrato.descricao || '';
+                document.getElementById('editar_centro_custo_id').value = contrato.centro_custo_id || '';
+                document.getElementById('editar_cliente_direto_id').value = contrato.cliente_direto_id || '';
+                document.getElementById('editar_cliente_final_id').value = contrato.cliente_final_id || '';
+                document.getElementById('editar_estado').value = contrato.estado || '';
+                document.getElementById('editar_cidade').value = contrato.cidade || '';
+                document.getElementById('editar_data_base').value = contrato.data_base || '';
+                
+                // Formatar e definir valores monetários
+                document.getElementById('editar_venda_material').value = formatarMoeda(contrato.valor_mat || 0);
+                document.getElementById('editar_venda_servico').value = formatarMoeda(contrato.valor_ser || 0);
+                calcularTotalEditar();
+                
+                // Carregar CNPJs associados
+                if (contrato.cnpjs_associados) {
+                    try {
+                        cnpjsAssociados = JSON.parse(contrato.cnpjs_associados);
+                        if (!Array.isArray(cnpjsAssociados)) {
+                            cnpjsAssociados = [];
+                        }
+                    } catch (e) {
+                        console.error('Erro ao parsear CNPJs:', e);
+                        cnpjsAssociados = [];
+                    }
+                } else {
+                    cnpjsAssociados = [];
+                }
+                atualizarListaCNPJs();
+                
+                // Atualizar action do formulário
+                document.getElementById('form-editar-contrato').action = `{{ url_for('contrato.editar', id=0) }}`.replace('/0', `/${contratoId}`);
+                
+                // Abrir modal
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarContrato'));
+                modal.show();
+            } else {
+                alert('Erro ao carregar dados do contrato.');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao carregar dados do contrato. Verifique o console para mais detalhes.');
+        });
+    };
+
+    // Validação e submit do formulário
+    document.getElementById('form-editar-contrato').addEventListener('submit', function (e) {
+        e.preventDefault();
+        
+        const nome = document.getElementById('editar_nome').value.trim();
+        const centroCusto = document.getElementById('editar_centro_custo_id').value;
+
+        if (!nome) {
+            alert('O nome do contrato é obrigatório!');
+            document.getElementById('editar_nome').focus();
+            return false;
+        }
+
+        if (!centroCusto) {
+            alert('O centro de custo é obrigatório!');
+            document.getElementById('editar_centro_custo_id').focus();
+            return false;
+        }
+
+        // Enviar via AJAX
+        const form = document.getElementById('form-editar-contrato');
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.reload();
+            } else {
+                return response.json();
+            }
+        })
+        .then(data => {
+            if (data && data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarContrato'));
+                if (modal) modal.hide();
+                // Recarregar DataTable
+                if (typeof $('#dataTable').DataTable !== 'undefined') {
+                    $('#dataTable').DataTable().ajax.reload(null, false);
+                } else {
+                    window.location.reload();
+                }
+            } else if (data && !data.success) {
+                alert(data.error || 'Erro ao atualizar o contrato.');
+            } else {
+                window.location.reload();
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao atualizar o contrato. Verifique o console para mais detalhes.');
+        });
+    });
+});
+</script>
