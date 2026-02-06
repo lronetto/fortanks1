@@ -656,6 +656,15 @@ def validar_chave_acesso(chave):
     # Remove espaços e caracteres especiais
     chave_limpa = chave.strip()
     
+    if len(chave_limpa) == 44:
+        tipo_nf = chave_limpa[20:22]
+        if tipo_nf not in ['55', '57']:
+            return False
+        return True
+    elif len(chave_limpa) == 50:
+        return True
+    else:
+        return False
     # Verifica se tem exatamente 44 caracteres
     if len(chave_limpa) != 44:
         return False
@@ -665,9 +674,7 @@ def validar_chave_acesso(chave):
         return False
     
     # Verifica se o tipo (posições 20:22) é válido (55 para NFE ou 57 para CTE)
-    tipo_nf = chave_limpa[20:22]
-    if tipo_nf not in ['55', '57']:
-        return False
+    
     
     return True
 
@@ -764,6 +771,9 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
     Processa uma página de PDF: tenta identificar por código de barras ou nome do arquivo.
     Retorna True se processou com sucesso, False caso contrário.
     """
+    dados_adicionais = {
+        'codbarras': None,
+    }
     anexo['codbarras'] = {
         'qtd': 0,
         'codigos': [],
@@ -802,6 +812,8 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                 'decodificado': dec.data.decode('utf-8'),
                 'tiponf': dec.type
             })
+        
+        dados_adicionais['codbarras'] = anexo['codbarras']['codigos']
         dec = [dec for dec in decs if dec.type == 'CODE128']
         if dec:
             dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
@@ -813,7 +825,11 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                 if "https://nfe.fazenda.sp.gov.br/CTeConsulta" in dec1:
                     dec1 = dec1.split('=')[1]
                     dec1 = dec1.split('&')[0]
-                tiponf ='57'
+                    tiponf ='57'
+                elif "https://www.nfse.gov.br/ConsultaPublica" in dec1:
+                    dec1 = dec1.split('&')[1]
+                    dec1 = dec1.split('=')[1]
+                    tiponf ='nfse'
     
     if dec1:
         # Valida se dec1 é uma chave de acesso válida antes de processar
@@ -831,10 +847,10 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
             })
             
             if nota:
-                processar_upload(anexo, nota, filename, payload, tipo)
+                processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais)
                 return True
             else:
-                tiponfc = ('nfe' if tiponf == '55' else 'cte' if tiponf == '57' else None)
+                tiponfc = ('nfe' if tiponf == '55' else 'cte' if tiponf == '57' else 'nfse' if tiponf == 'nfse' else None)
                 if tiponfc:
                     try:
                         arquivei = Arquivei(chave_acesso=dec1, tipo=tiponfc)
@@ -842,7 +858,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                             #logging.info(f"achado arquivei")
                             nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
                             if nota:
-                                processar_upload(anexo, nota, filename, payload, tipo)
+                                processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais)
                             return True
                     except Exception as e:
                         logging.error(f"Erro ao buscar no Arquivei com chave {dec1}: {e}")
@@ -945,7 +961,7 @@ def marcar_email_como_lido(uid, usar_imaplib, mail_marcar=None, imap=None):
         logging.warning(f'Erro ao marcar UID {uid} como lido: {e}')
         return False
 
-def processar_upload(anexo, nota, filename, payload, tipo):
+def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais):
     
     up = Upload.query.filter(Upload.filename==filename).first()
     if nota:
@@ -961,6 +977,8 @@ def processar_upload(anexo, nota, filename, payload, tipo):
     if not up:
         up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
         if up.id:
+            up.dados_adicionais = json.dumps(dados_adicionais)
+            up.save()
             anexo['upload'] = True
             logging.info(f"upload realizado {nota.numero_nf}")
             return True
@@ -970,12 +988,16 @@ def processar_upload(anexo, nota, filename, payload, tipo):
     else:
         if up.pai_id == nota.id and up.pai == 'NotaFiscal' and up.tipo == tipo and up.mimetype == 'application/pdf' and up.filename == file_name:
             anexo['upload'] = True
+            if not up.dados_adicionais:
+                up.dados_adicionais = json.dumps(dados_adicionais)
+                up.save()
             logging.info(f"upload ja existe {nota.numero_nf}")
         else:
             up.pai_id = nota.id
             up.pai = 'NotaFiscal'
             up.tipo = tipo
             up.mimetype = 'application/pdf'
+            up.dados_adicionais = json.dumps(dados_adicionais)
             up.save()
             logging.info(f"upload atualizado {nota.numero_nf}")
             anexo['upload'] = True
@@ -1213,8 +1235,12 @@ def processar_anexos_email(msg, tipo, log_email_entry):
     anexos_nao_processados = []
     for att in anexos_ordenados:
         filename = att["filename"]
-        if tipo != 3:   
-            if Upload.query.filter(Upload.filename == filename).first():
+        if tipo != 3:
+            up = Upload.query.filter(Upload.filename == filename).first()   
+            if up:
+                if not up.dados_adicionais and up.pai_id == 0:
+                    anexos_nao_processados.append(att)
+                    continue
                 logging.info(f"arquivo {filename} ja existe no db")
                 log_email_entry['anexos_existentes']['files'].append(filename)
                 log_email_entry['anexos_existentes']['qtd'] += 1

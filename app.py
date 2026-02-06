@@ -12,7 +12,7 @@ from controllers.material_controller import material_bp
 from controllers.contrato_controller import contrato_bp
 from controllers.centro_custo_controller import centro_custo_bp
 from controllers.dashboard_controller import dashboard_bp
-from controllers.admin_controller import admin_bp
+from controllers.admin import admin_bp
 from controllers.auth_controller import auth_bp
 from controllers.usinagem_concreto import usinagem_concreto
 from controllers.conversao_unidade_controller import conversao_unidade_bp

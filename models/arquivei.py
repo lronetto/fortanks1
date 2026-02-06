@@ -96,14 +96,34 @@ class Arquivei:
             'X-API-KEY': ARQUIVEI_API_KEY,
             'Content-Type': 'application/json'
         }
-        url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"
-        response = requests.get(url, headers=headers)
-        response=response.json()
-        if response.get('status').get('code') == 200:
-            if response.get('data'):
-                for event in response.get('data'):
-                    if event.get('type') == '110111':
-                        return True
+        if self.tipo == 'cte':
+            url = f"https://api.arquivei.com.br/v2/cte/events?access_key={self.chave_acesso}"
+            response = requests.get(url, headers=headers)
+            response=response.json()
+            if response.get('status').get('code') == 200:
+                if response.get('data'):
+                    for event in response.get('data'):
+                        if event.get('type') == '110111':
+                            return True
+        elif self.tipo == 'nfe':
+            url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"
+            response = requests.get(url, headers=headers)
+            response=response.json()
+            if response.get('status').get('code') == 200:
+                if response.get('data'):
+                    for event in response.get('data'):
+                        if event.get('type') == '110111':
+                            return True
+        elif self.tipo == 'nfse':
+            url = f"https://api.arquivei.com.br/v1/nfse/events?access_key={self.chave_acesso}"
+            response = requests.get(url, headers=headers)
+            response=response.json()
+            if response.get('status').get('code') == 200:
+                if response.get('data'):
+                    for event in response.get('data'):
+                        if event.get('type') == '101101':
+                            return True
+        
         return False
     
     def processar_arquivei(self,send=False):

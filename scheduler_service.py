@@ -461,7 +461,7 @@ def main():
         logger.info("Iniciando scheduler mesmo assim...")
     
     try:
-        job_diario()
+        #job_diario()
         scheduler = iniciar_scheduler()
         logger.info("Serviço de scheduler em execução. Pressione Ctrl+C para parar.")
         
