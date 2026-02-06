@@ -48,8 +48,9 @@ from bs4 import BeautifulSoup
 
 class ImportadorDadosAnaliticos:
     """Classe para importação de dados analíticos financeiros."""
-    
-    def __init__(self, usuario_id: int = None):
+    logs = None
+    def __init__(self, usuario_id: int = None,logs=None):
+        self.logs = logs
         """
         Inicializa o importador de dados analíticos.
         
@@ -125,8 +126,11 @@ class ImportadorDadosAnaliticos:
                 #await browser.close()
         
         if download_path:
+            self.logs['dados_analiticos']['mensagem'].append(f"Extração de dados concluída com sucesso")
             return download_path
         else:
+            self.logs['dados_analiticos']['erro'] = True
+            self.logs['dados_analiticos']['erro_mensagem'].append(f"Falha na extração dos dados")
             return None
        
     
@@ -330,10 +334,13 @@ class ImportadorDadosAnaliticos:
                     dados_extraidos.append(dados_linha)
             
             logger.info(f"Extração concluída do Excel. {len(dados_extraidos)} registros encontrados.")
+            self.logs['dados_analiticos']['mensagem'].append(f"Extração concluída do Excel. {len(dados_extraidos)} registros encontrados.")
             return dados_extraidos
             
         except Exception as e:
             logger.error(f"Erro ao processar arquivo Excel: {str(e)}", exc_info=True)
+            self.logs['dados_analiticos']['erro'] = True
+            self.logs['dados_analiticos']['erro_mensagem'].append(f"Erro ao processar arquivo Excel: {str(e)}")
             return []
     
     def importar_dados(self, dados_extraidos: List[Dict[str, Any]]) -> int:
@@ -347,6 +354,7 @@ class ImportadorDadosAnaliticos:
             Número de registros importados
         """
         logger.info(f"Iniciando importação de {len(dados_extraidos)} registros para o banco de dados")
+        self.logs['dados_analiticos']['mensagem'].append(f"Iniciando importação de {len(dados_extraidos)} registros para o banco de dados")
         contador = 0
         
 
@@ -465,11 +473,14 @@ class ImportadorDadosAnaliticos:
             # Commit final
             db.session.commit()
             logger.info(f"Importação concluída. {contador} registros importados com sucesso.")
+            self.logs['dados_analiticos']['mensagem'].append(f"Importação concluída. {contador} registros importados com sucesso.")
             return contador
             
         except Exception as e:
             db.session.rollback()
             logger.error(f"Erro ao importar dados: {str(e)}", exc_info=True)
+            self.logs['dados_analiticos']['erro'] = True
+            self.logs['dados_analiticos']['erro_mensagem'].append(f"Erro ao importar dados: {str(e)}")
             return 0
     
     def processar_arquivo_csv(self, arquivo_path: str) -> List[Dict[str, Any]]:
@@ -563,7 +574,7 @@ class ImportadorDadosAnaliticos:
 
 # Funções para usar fora da classe
 
-async def executar_importacao_async(usuario_id: int) -> Dict[str, Any]:
+async def executar_importacao_async(usuario_id: int,logs=None):
     """
     Executa a importação de dados de forma assíncrona.
     
@@ -573,7 +584,7 @@ async def executar_importacao_async(usuario_id: int) -> Dict[str, Any]:
     Returns:
         Dicionário com resultados da importação
     """
-    importador = ImportadorDadosAnaliticos(usuario_id)
+    importador = ImportadorDadosAnaliticos(usuario_id, logs)
     
     try:
         # Extrair dados

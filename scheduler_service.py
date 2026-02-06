@@ -15,10 +15,10 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 from urllib.parse import urlparse
-
+import json
 from models.database import db
 from models.upload import Upload
-
+from models.logs import Logs
 # Carregar variáveis de ambiente
 load_dotenv('.env')
 
@@ -87,12 +87,18 @@ def obter_usuario_sistema():
         return 0
 
 
-def fazer_backup_banco_dados():
+def fazer_backup_banco_dados(logs):
     """
     Faz backup completo do banco de dados MySQL.
     Salva o backup em uma pasta dedicada com timestamp no nome do arquivo.
     Remove backups antigos (mantém apenas os últimos 30 dias).
     """
+    logs['backup'] = {
+        'mensagem': [],
+        'erro': False,
+        'erro_mensagem': [],
+        'erro_traceback': []
+        }
     try:
         with app.app_context():
             logger.info("Iniciando backup do banco de dados...")
@@ -154,7 +160,7 @@ def fazer_backup_banco_dados():
             ]
             
             logger.info(f"Executando backup do banco de dados: {database}")
-            
+            logs['backup']['mensagem'].append(f"Executando backup do banco de dados: {database}")
             # Executar mysqldump e salvar em arquivo
             with open(backup_path, 'w', encoding='utf-8') as backup_file:
                 result = subprocess.run(
@@ -174,16 +180,20 @@ def fazer_backup_banco_dados():
             # Verificar se o arquivo foi criado e tem conteúdo
             if not os.path.exists(backup_path):
                 logger.error("Arquivo de backup não foi criado")
+                logs['backup']['erro'] = True
+                logs['backup']['erro_mensagem'].append(f"Arquivo de backup não foi criado")
                 return False
             
             file_size = os.path.getsize(backup_path)
             if file_size == 0:
                 logger.error("Arquivo de backup está vazio")
+                logs['backup']['erro'] = True
+                logs['backup']['erro_mensagem'].append(f"Arquivo de backup está vazio")
                 os.remove(backup_path)
                 return False
             
             logger.info(f"Backup criado com sucesso: {backup_filename} ({file_size / 1024 / 1024:.2f} MB)")
-            
+            logs['backup']['mensagem'].append(f"Backup do banco de dados criado com sucesso: {backup_filename} ({file_size / 1024 / 1024:.2f} MB)")
             # Comprimir o backup para economizar espaço (opcional)
             try:
                 compressed_path = f"{backup_path}.gz"
@@ -196,21 +206,27 @@ def fazer_backup_banco_dados():
                 compressed_size = os.path.getsize(compressed_path)
                 logger.info(f"Backup comprimido: {backup_filename}.gz ({compressed_size / 1024 / 1024:.2f} MB)")
                 backup_path = compressed_path
-                Logs('scheduler_service', datetime.now(), f'Backup do banco de dados concluído com sucesso: {backup_filename}.gz ({compressed_size / 1024 / 1024:.2f} MB)')
+                logs['backup']['mensagem'].append(f"Backup do banco de dados comprimido com sucesso: {backup_filename}.gz ({compressed_size / 1024 / 1024:.2f} MB)")
             except Exception as e:
                 logger.warning(f"Não foi possível comprimir o backup: {str(e)}")
+                logs['backup']['erro'] = True
+                logs['backup']['erro_mensagem'].append(f"Não foi possível comprimir o backup: {str(e)}")
             
             # Limpar backups antigos (manter apenas os últimos 30 dias)
             try:
                 limpar_backups_antigos(backup_dir, dias_manter=30)
             except Exception as e:
                 logger.warning(f"Erro ao limpar backups antigos: {str(e)}")
-            
+                logs['backup']['erro'] = True
+                logs['backup']['erro_mensagem'].append(f"Erro ao limpar backups antigos: {str(e)}")
             logger.info("Backup do banco de dados concluído com sucesso")
+            logs['backup']['mensagem'].append(f"Backup do banco de dados concluído com sucesso")
             return True
             
     except Exception as e:
         logger.error(f"Erro ao fazer backup do banco de dados: {str(e)}", exc_info=True)
+        logs['backup']['erro'] = True
+        logs['backup']['erro_mensagem'].append(f"Erro ao fazer backup do banco de dados: {str(e)}")
         return False
 
 
@@ -326,6 +342,20 @@ def job_email15min():
 
 def job_diario():
     """Job que executa uma vez por dia"""
+    logs = {
+        'backup': {
+            'mensagem': [],
+            'erro': False,
+            'erro_mensagem': [],
+            'erro_traceback': []
+        },
+        'dados_analiticos': {
+            'mensagem': [],
+            'erro': False,
+            'erro_mensagem': [],
+            'erro_traceback': []
+        }
+    }
     try:
         with app.app_context():
             logger.info("Executando job diário...")
@@ -340,7 +370,7 @@ def job_diario():
             
             # Fazer backup do banco de dados
             logger.info("Iniciando backup do banco de dados...")
-            backup_sucesso = fazer_backup_banco_dados()
+            backup_sucesso = fazer_backup_banco_dados(logs)
             if backup_sucesso:
                 logger.info("Backup do banco de dados concluído com sucesso")
             else:
@@ -356,10 +386,11 @@ def job_diario():
             asyncio.set_event_loop(loop)
             logger.info("Iniciando extração de dados analíticos...")
             resultado = loop.run_until_complete(
-                executar_importacao_async(usuario_id)
+                executar_importacao_async(usuario_id, logs)
             )
             logger.info(f"Resultado da extração: {resultado}")
             loop.close()
+            Logs('scheduler_service', datetime.now(),json.dumps(logs))
             logger.info("Job diário concluído")
     except Exception as e:
         logger.error(f"Erro no job diário: {str(e)}", exc_info=True)
@@ -430,6 +461,7 @@ def main():
         logger.info("Iniciando scheduler mesmo assim...")
     
     try:
+        job_diario()
         scheduler = iniciar_scheduler()
         logger.info("Serviço de scheduler em execução. Pressione Ctrl+C para parar.")
         

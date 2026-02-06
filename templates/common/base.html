@@ -237,10 +237,9 @@
                            $('#adminCadastrosSubmenuInner').addClass('show');
                        }
                        
-                       // Auto-abrir submenu interno de Permissões e Logs
-                       if (window.location.pathname.includes('/admin/permissoes') ||
-                           window.location.pathname.includes('/admin/logs')) {
-                           $('#adminPermissoesLogsSubmenu').addClass('show');
+                       // Auto-abrir submenu interno de Permissões
+                       if (window.location.pathname.includes('/admin/permissoes')) {
+                           $('#adminPermissoesSubmenu').addClass('show');
                        }
                    }
                    
@@ -530,7 +529,7 @@
                         </li>
                     </ul>
                 </li>
-                <!-- Módulo Administrativo -->
+                <!-- Módulo Gerencial -->
                 {% if current_user.is_permissao('gerencial') %}
                 <li class="{{ is_active('gerencial') }}">
                     <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
@@ -613,23 +612,29 @@
                                 </li>
                             </ul>
                         </li>
-                        <!-- Submenu Permissões e Logs -->
+                        <!-- Submenu Permissões -->
                         <li>
-                            <a href="#adminPermissoesLogsSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                                <i class="fas fa-shield-alt"></i> Permissões e Logs
+                            <a href="#adminPermissoesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                                <i class="fas fa-shield-alt"></i> Permissões
                             </a>
-                            <ul class="collapse list-unstyled" id="adminPermissoesLogsSubmenu">
+                            <ul class="collapse list-unstyled" id="adminPermissoesSubmenu">
                                 <li class="{{ is_active('admin/permissoes') }}">
                                     <a href="{{ url_for('admin.permissoes_index') }}">
                                         <i class="fas fa-key"></i> Permissões
                                     </a>
                                 </li>
-                                <li class="{{ is_active('admin/logs') }}">
-                                    <a href="{{ url_for('admin.logs') }}">
-                                        <i class="fas fa-file-alt"></i> Logs
+                                <li class="{{ is_active('admin/permissoes/modulos') }}">
+                                    <a href="{{ url_for('admin.permissoes_modulos') }}">
+                                        <i class="fas fa-cubes"></i> Módulos
                                     </a>
                                 </li>
                             </ul>
+                        </li>
+                        <!-- Link para Logs -->
+                        <li class="{{ is_active('admin/logs') }}">
+                            <a href="{{ url_for('admin.logs') }}">
+                                <i class="fas fa-file-alt"></i> Logs
+                            </a>
                         </li>
                     </ul>
                 </li>
