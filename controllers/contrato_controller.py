@@ -277,8 +277,8 @@ def editar(id):
     contrato = Contrato.query.get_or_404(id)
     centros_custo = CentroCusto.query.filter_by(ativo=True).all()
     clientes = Cliente.query.filter_by(ativo=True).all()
-    
     if request.method == 'POST':
+        print(f'request.form: {request.form}');
         centro_custo_id = request.form.get('centro_custo_id')
         nome = request.form.get('nome')
         descricao = request.form.get('descricao')
@@ -287,7 +287,7 @@ def editar(id):
         cliente_direto_id = request.form.get('cliente_direto_id')
         cliente_final_id = request.form.get('cliente_final_id')
         data_base = request.form.get('data_base', '0')
-        
+        cnpjs_associados = request.form.get('cnpjs_associados', '[]')
         # Validação básica
         if not centro_custo_id or not nome:
             flash('Por favor, preencha todos os campos obrigatórios.', 'danger')
@@ -325,9 +325,9 @@ def editar(id):
             contrato.valor_ser = valor_servico_float
             # Calcular o valor total somando os valores de material e serviço
             contrato.valor_total = valor_material_float + valor_servico_float
-            
+
             # Outros campos aqui...
-            
+            contrato.conf = json.dumps({'cnpjs_associados': cnpjs_associados})
             db.session.commit()
             
             # Verificar se é requisição AJAX

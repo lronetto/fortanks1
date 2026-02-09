@@ -108,7 +108,7 @@
 <script>
     // Dicionário para armazenar dados das bobinas (número -> {data_fabricacao, ncertificado})
     let bobinasData = {};
-    
+    let alongamentosid = 0;
     // Função para preencher dados da bobina quando selecionada
     function preencherDadosBobina($input) {
         const numeroBobina = $input.val().trim();
@@ -230,9 +230,9 @@
         // Salvar alongamentos
         $('#formAlongamentos').on('submit', function(e) {
             e.preventDefault();
-            
-            const concretagemId = $('#concretagem_id_alongamentos').val();
-            
+            console.log('submit');
+            const concretagemId = alongamentosid;
+            console.log(`concretagemId: ${concretagemId}`);
             // Coletar alongamentos das duas linhas - formato array [350, 351, ...]
             const alongamentos = new Array(24).fill(null);
             $('.alongamento-input').each(function() {
@@ -304,8 +304,8 @@
     });
 
     function carregarDadosAlongamentos(id) {
-        $('#concretagem_id_alongamentos').val(id);
-        
+        alongamentosid = id;
+        console.log(`/concretagens/api/${id}`);
         $.get(`/concretagens/api/${id}`, function(data) {
             if (data.cordoalhas) {
                 try {

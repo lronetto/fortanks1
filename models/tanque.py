@@ -210,10 +210,26 @@ class Tanques(db.Model):
             if peca.qualidade:
                 try:
                     qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento'] and (qualidade_dict['acabamento'] != '' and qualidade_dict['acabamento'] != 'null'):
-                        pecas_acabadas += 1
-                    if 'transporte' in qualidade_dict and qualidade_dict['transporte'] and (qualidade_dict['transporte']['data_transporte'] != '' and qualidade_dict['transporte']['data_transporte'] != 'null'):
-                        pecas_transportadas += 1
+                    # Verificar acabamento
+                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
+                        acabamento = qualidade_dict['acabamento']
+                        if isinstance(acabamento, dict):
+                            if acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null':
+                                pecas_acabadas += 1
+                        elif isinstance(acabamento, str):
+                            if acabamento != '' and acabamento != 'null':
+                                pecas_acabadas += 1
+                        else:
+                            if bool(acabamento):
+                                pecas_acabadas += 1
+                    
+                    # Verificar transporte
+                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
+                        transporte = qualidade_dict['transporte']
+                        if isinstance(transporte, dict):
+                            data_transporte = transporte.get('data_transporte')
+                            if data_transporte is not None and data_transporte != '' and data_transporte != 'null':
+                                pecas_transportadas += 1
                     if peca.data_concretagem:
                         pecas_concretadas += 1
 

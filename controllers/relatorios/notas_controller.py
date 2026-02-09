@@ -41,6 +41,7 @@ def _processar_notas_fiscais(query):
     - pagamento_column: data de pagamento (datetime.date) ou NULL
     - centro_custo_column: ID do centro de custo ou NULL
     """
+    import json
     # Executar query e obter IDs das notas
     # Resultado da query: (NotaFiscal, pagamento_column, centro_custo_column, upload_column, ...)
     resultados = query.all()
@@ -49,25 +50,61 @@ def _processar_notas_fiscais(query):
     if not nf_ids:
         return []
     
+    # Separar notas de material (tipo 0, 1) e notas de serviço (tipo 3)
+    notas_material_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo in [0, 1]]
+    notas_servico_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo == 3]
+    
     # Buscar todos os itens de nota fiscal relacionados de uma vez (para quantidade e data prevista)
+    # Apenas para notas de material
     nf_items_dict = {}
-    nf_items_query = db.session.query(NotaFiscalItem, Tanques, Contrato)\
-        .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)\
-        .join(Contrato, Contrato.id == Tanques.contrato_id)\
-        .filter(NotaFiscalItem.nf_id.in_(nf_ids))\
-        .group_by(NotaFiscalItem.nf_id).all()
+    if notas_material_ids:
+        nf_items_query = db.session.query(NotaFiscalItem, Tanques, Contrato)\
+            .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)\
+            .join(Contrato, Contrato.id == Tanques.contrato_id)\
+            .filter(NotaFiscalItem.nf_id.in_(notas_material_ids))\
+            .group_by(NotaFiscalItem.nf_id).all()
+        
+        for nf_item, tanque, contrato in nf_items_query:
+            if nf_item.nf_id not in nf_items_dict:
+                nf_items_dict[nf_item.nf_id] = {
+                    'tanque': tanque,
+                    'contrato': contrato,
+                    'quantidade': nf_item.quantidade
+                }
+            else:
+                # Se houver múltiplos itens, somar a quantidade
+                nf_items_dict[nf_item.nf_id]['quantidade'] += nf_item.quantidade
     
-    for nf_item, tanque, contrato in nf_items_query:
-        if nf_item.nf_id not in nf_items_dict:
-            nf_items_dict[nf_item.nf_id] = {
-                'tanque': tanque,
-                'contrato': contrato,
-                'quantidade': nf_item.quantidade
-            }
-        else:
-            # Se houver múltiplos itens, somar a quantidade
-            nf_items_dict[nf_item.nf_id]['quantidade'] += nf_item.quantidade
+    # Buscar contratos associados para notas de serviço (tipo 3) via CNPJs
+    nf_servico_contratos_dict = {}
+    if notas_servico_ids:
+        # Buscar todas as notas de serviço
+        notas_servico = {nf.id: nf for nf in [r[0] for r in resultados] if nf.tipo == 3}
+        
+        # Buscar todos os contratos que têm cnpjs_associados
+        contratos_com_cnpjs = db.session.query(Contrato)\
+            .filter(Contrato.conf.isnot(None))\
+            .all()
+        print(f'notas_servico: {notas_servico}')
+        # Para cada nota de serviço, encontrar o contrato associado
+        for nf_id, nf in notas_servico.items():
+            for contrato in contratos_com_cnpjs:
+                if contrato.conf:
+                    try:
+                        conf_data = json.loads(contrato.conf) if isinstance(contrato.conf, str) else contrato.conf
+                        cnpjs_associados = conf_data.get('cnpjs_associados', [])
+                        if isinstance(cnpjs_associados, str):
+                            cnpjs_associados = json.loads(cnpjs_associados)
+                        
+                        # Verificar se o CNPJ do emitente ou destinatário está na lista
+                        if (nf.cnpj_emitente in cnpjs_associados or 
+                            nf.cnpj_destinatario in cnpjs_associados):
+                            nf_servico_contratos_dict[nf_id] = contrato
+                            break
+                    except (json.JSONDecodeError, TypeError):
+                        continue
     
+    print(f'nf_servico_contratos_dict: {nf_servico_contratos_dict}')
     # Buscar todos os centros de custo de uma vez (otimização)
     centro_custo_ids_unicos = set()
     for resultado in resultados:
@@ -91,28 +128,43 @@ def _processar_notas_fiscais(query):
         nf = resultado[0]  # NotaFiscal
         data_pagamento = resultado[1]  # pagamento_column (data de pagamento ou NULL)
         centro_custo_id = resultado[2]  # centro_custo_column (ID do centro de custo ou NULL)
-        
+        centro_custo_codigo = 'Não definido'
         # Evitar processar a mesma NF múltiplas vezes
         if nf.id in nf_processadas:
             continue
         nf_processadas.add(nf.id)
         
         # Obter dados relacionados
-        nf_data = nf_items_dict.get(nf.id, {})
-        tanque = nf_data.get('tanque')
-        contrato = nf_data.get('contrato')
-        quantidade = nf_data.get('quantidade', 0)
+        # Para notas de material: via itens -> tanques -> contrato
+        # Para notas de serviço: via CNPJs associados
+        if nf.tipo == 3:
+            # Nota de serviço
+            contrato = nf_servico_contratos_dict.get(nf.id)
+            
+            tanque = None
+            quantidade = 0  # Notas de serviço não têm quantidade de placas
+        else:
+            # Nota de material
+            nf_data = nf_items_dict.get(nf.id, {})
+            tanque = nf_data.get('tanque')
+            contrato = nf_data.get('contrato')
+            quantidade = nf_data.get('quantidade', 0)
         
         # Calcular data prevista
         data_prevista = None
-        if tanque and contrato:
-            data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
+        if contrato:
+            centro_custo_codigo = contrato.centro_custo.codigo
+            if nf.tipo == 3:
+               
+                # Para notas de serviço, usar prazo_pagamento_ser
+                if contrato.prazo_pagamento_ser:
+                    data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_ser)
+            elif tanque:
+                # Para notas de material, usar prazo_pagamento_mat
+                if contrato.prazo_pagamento_mat:
+                    data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
         
-        # Buscar centro de custo pelo ID retornado na coluna (já buscado em batch)
-        centro_custo_codigo = 'Não definido'
-        if centro_custo_id and centro_custo_id in centros_custo_dict:
-            centro_custo_codigo = centros_custo_dict[centro_custo_id]
-        
+       
         # Usar data_pagamento diretamente da coluna
         pago_str = 'Não'
         if data_pagamento:
@@ -146,8 +198,7 @@ def _processar_notas_fiscais(query):
             'pago': pago_str,
             'status': nf.status_processamento,
             'destinatario': nf.nome_destinatario,
-            
-
+            'tipo_nf': nf.tipo,  # Adicionar tipo da nota para separar material e serviço
         })
     
     return dados_relatorio
@@ -191,6 +242,7 @@ def api_dados():
         if centro_custo_single:
             centro_custo_ids = [centro_custo_single]
     status_pagamento = request.args.get('status_pagamento', None)
+    tipo_nota = request.args.get('tipo_nota', None)
 
     print(f'request.args: {request.args}')
     print(f'centro_custo_ids (getlist): {request.args.getlist("centro_custo")}')
@@ -199,6 +251,14 @@ def api_dados():
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+    
+    # Converter filtro tipo_nota para tipo_nfe
+    tipo_nfe = None
+    if tipo_nota == 'material':
+        tipo_nfe = '0'  # Tipo 0 ou 1 (NFE)
+    elif tipo_nota == 'servico':
+        tipo_nfe = '3'  # Tipo 3 (NFSe)
+    # Se tipo_nota for vazio ou None, tipo_nfe permanece None (inclui todos)
     
     time_start = time.time()
     # Criar um objeto request mock para api_get_dados_notas_fiscais
@@ -213,7 +273,8 @@ def api_dados():
         #'plano_conta_id': 44,
         'emitente': 'Matriz',
         'tipo_operacao': 'venda',
-        'pagamento_5percent': True
+        'pagamento_5percent': True,
+        'tipo_nfe': tipo_nfe  # Filtro de tipo de nota (None = todos, '0' = material, '3' = serviço)
     }
     query = api_get_dados_notas_fiscais(json_request)
     print(f'tempo de execução da query: {time.time() - time_start}')
@@ -234,7 +295,7 @@ def api_dados():
     
     total_placas_contratos = query_placas.scalar() or 0
     
-    # Calcular valores faturados (emitidos)
+    # Calcular valores faturados (emitidos) - inclui material e serviço
     valor_faturado = sum([d['valor'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
     
     # Calcular valores recebidos (pagos)
@@ -269,18 +330,27 @@ def api_dados():
     valor_total_material = float(query_contratos_mat.scalar()) or 0
     valor_total_servico = float(query_contratos_ser.scalar()) or 0
     
-    # As notas fiscais são sempre de material, então:
-    # Material: valor das notas fiscais
-    # Serviço: valor total de serviço dos contratos (não tem notas fiscais)
-    valor_material_faturado = float(valor_faturado)  # NFE são sempre material
-    valor_servico_faturado = 0  # Serviços não têm notas fiscais
+    # Separar valores de material e serviço das notas fiscais
+    valor_material_faturado = sum([
+        d['valor'] for d in dados_relatorio
+        if d['status'] != 'cancelada' and d.get('tipo_nf', None) in [0, 1]
+    ])
+    valor_servico_faturado = sum([
+        d['valor'] for d in dados_relatorio
+        if d['status'] != 'cancelada' and d.get('tipo_nf', None) == 3
+    ])
+    
+    # Se não houver tipo_nf no dicionário (compatibilidade), usar valor_faturado como material
+    if valor_material_faturado == 0 and valor_servico_faturado == 0:
+        valor_material_faturado = float(valor_faturado)
+        valor_servico_faturado = 0
     
     # Calcular valores ainda não faturados
     valor_material_nao_faturado = float(valor_total_material) - float(valor_material_faturado)
     valor_servico_nao_faturado = float(valor_total_servico) - float(valor_servico_faturado)
     
     # Calcular quantidades de placas não faturadas
-    quantidade_material_nao_faturada = float(total_placas_contratos) - float()
+    quantidade_material_nao_faturada = float(total_placas_contratos) - float(total_quantidade)
     
     # Calcular percentuais para material
     percentual_material_faturado = (valor_material_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
@@ -288,11 +358,16 @@ def api_dados():
     percentual_material_a_faturar = (valor_a_faturar / valor_total_material * 100) if valor_total_material > 0 else 0
     percentual_material_nao_faturado = (valor_material_nao_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
     
-    # Calcular percentuais para serviço (sempre 0% faturado pois não há NFE)
-    percentual_servico_faturado = 0
-    percentual_servico_recebido = 0
-    percentual_servico_a_faturar = 0
-    percentual_servico_nao_faturado = 100 if valor_total_servico > 0 else 0
+    # Calcular percentuais para serviço
+    percentual_servico_faturado = (valor_servico_faturado / valor_total_servico * 100) if valor_total_servico > 0 else 0
+    valor_servico_recebido = sum([
+        d['valor'] for d in dados_relatorio
+        if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada' and d.get('tipo_nf', None) == 3
+    ])
+    valor_servico_a_faturar = valor_servico_faturado - valor_servico_recebido
+    percentual_servico_recebido = (valor_servico_recebido / valor_total_servico * 100) if valor_total_servico > 0 else 0
+    percentual_servico_a_faturar = (valor_servico_a_faturar / valor_total_servico * 100) if valor_total_servico > 0 else 0
+    percentual_servico_nao_faturado = (valor_servico_nao_faturado / valor_total_servico * 100) if valor_total_servico > 0 else 0
     
     dados_relatorio_aux = {
         'valor_total_material': valor_total_material,
@@ -336,6 +411,15 @@ def exportar_zip():
     data_fim = request.args.get('data_fim')
     centro_custo_ids = request.args.getlist('centro_custo')
     status_pagamento = request.args.get('status_pagamento')
+    tipo_nota = request.args.get('tipo_nota', None)
+    
+    # Converter filtro tipo_nota para tipo_nfe
+    tipo_nfe = None
+    if tipo_nota == 'material':
+        tipo_nfe = '0'  # Tipo 0 ou 1 (NFE)
+    elif tipo_nota == 'servico':
+        tipo_nfe = '3'  # Tipo 3 (NFSe)
+    
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
@@ -348,7 +432,8 @@ def exportar_zip():
         'status_pagamento': status_pagamento,
         'emitente': 'Matriz',
         'tipo_operacao': 'venda',
-        'pagamento_5percent': True
+        'pagamento_5percent': True,
+        'tipo_nfe': tipo_nfe  # Filtro de tipo de nota (None = todos, '0' = material, '3' = serviço)
     }
     query = api_get_dados_notas_fiscais(json_request)
     
@@ -429,7 +514,8 @@ def exportar_pdf():
         'status_pagamento': status_pagamento,
         'emitente': 'Matriz',
         'tipo_operacao': 'venda',
-        'pagamento_5percent': True
+        'pagamento_5percent': True,
+        'tipo_nfe': None  # Incluir todos os tipos (0, 1, 3)
     }
     query = api_get_dados_notas_fiscais(json_request)
     
@@ -488,7 +574,8 @@ def exportar_excel():
         'status_pagamento': status_pagamento,
         'emitente': 'Matriz',
         'tipo_operacao': 'venda',
-        'pagamento_5percent': True
+        'pagamento_5percent': True,
+        'tipo_nfe': None  # Incluir todos os tipos (0, 1, 3)
     }
     query = api_get_dados_notas_fiscais(json_request)
     
@@ -528,4 +615,5 @@ def _get_dataframe(dados_relatorio):
     }, inplace=True)
 
     return df[['DATA EMISSÃO', 'NF', 'QTDE DE PLACA', 'VALOR', 'STATUS', 'VENCIMENTO', 'PAGO', 'DESTINATÁRIO']]
+
 

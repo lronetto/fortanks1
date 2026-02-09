@@ -305,7 +305,7 @@ class Arquivei:
             url = f"https://api.arquivei.com.br/v1/nfe/danfe?access_key={self.chave_acesso}"
         elif self.tipo == 'nfse':
 
-            url = f"https://api.arquivei.com.br/v1/nfse/danfse?id={self.id}"
+            url = f"https://api.arquivei.com.br/v1/nfse/danfse?id={self.chave_acesso}"
         response = requests.get(url, headers=headers)
         response_data = response.json() 
         #print('get pdf')

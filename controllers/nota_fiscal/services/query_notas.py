@@ -60,6 +60,7 @@ def api_get_dados_notas_fiscais(request):
     plano_conta_id = json_filtros.get("plano_conta_id", "")
     notas_selecionadas = json_filtros.get("notas_selecionadas", [])
     centro_custo_ids = json_filtros.get("centro_custo_ids", [])
+    cancelada = json_filtros.get("cancelada", "")
    
     reembolso_id = json_filtros.get("reembolso_id", "")
     if reembolso_id:
@@ -123,18 +124,47 @@ def api_get_dados_notas_fiscais(request):
             .label("pc")
         )
     # Subquery centro de custo - retorna o ID do centro de custo se houver relação, NULL caso contrário
-    centro_custo_column = (
+    # Para notas de material (tipo 0 ou 1): via NotaFiscalItem -> Tanques -> Contrato
+    centro_custo_column_material = (
         select(CentroCusto.id)
         .select_from(NotaFiscalItem)
         .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)
         .join(Contrato, Contrato.id == Tanques.contrato_id)
         .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
-        .where(NotaFiscalItem.nf_id == NotaFiscal.id)
+        .where(
+            and_(
+                NotaFiscalItem.nf_id == NotaFiscal.id,
+                NotaFiscal.tipo.in_([0, 1])
+            )
+        )
         .limit(1)
         .correlate(NotaFiscal)
         .scalar_subquery()
-        .label("centro_custo")
     )
+    
+    # Subquery para notas de serviço (tipo 3) via CNPJs associados
+    # Verifica se o CNPJ do emitente ou destinatário está na lista cnpjs_associados do contrato
+    # Usa JSON_EXTRACT para buscar o array e verifica se contém o CNPJ
+    centro_custo_column_servico = (
+        select(CentroCusto.id)
+        .select_from(Contrato)
+        .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
+        .where(
+            and_(
+                NotaFiscal.tipo == 3,
+                Contrato.conf.isnot(None),
+                    # Verifica se o CNPJ do destinatário está no array cnpjs_associados
+                func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_destinatario}"%')
+                
+            )
+        )
+        .limit(1)
+        .correlate(NotaFiscal)
+        .scalar_subquery()
+    )
+    
+    # Combinar ambas as subqueries usando COALESCE
+    centro_custo_column = func.coalesce(centro_custo_column_material, centro_custo_column_servico).label("centro_custo")
     # Subquery centro de custo via EXISTS (verifica se item da NF está em Tanques.item_nf)
    
     # Uploads via EXISTS
@@ -217,7 +247,7 @@ def api_get_dados_notas_fiscais(request):
         .select_from(NotaFiscal)
         .filter(NotaFiscal.status_processamento != "cancelada")
     )
-
+    
     if busca:
         busca_like = f"%{busca}%"
         query = query.filter(
@@ -239,7 +269,13 @@ def api_get_dados_notas_fiscais(request):
             query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)))
         elif tipo_operacao == "venda":
             cfops_lista = [str(cfop) for cfop in CFOPS_VENDA]
-            query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)))
+            # Incluir notas de serviço (tipo 3) além das notas de material com CFOP de venda
+            query = query.filter(
+                or_(
+                    NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)),
+                    NotaFiscal.tipo == 3  # Notas de serviço são sempre de venda
+                )
+            )
         elif tipo_operacao == "transferencia":
             cfops_lista = [str(cfop) for cfop in CFOPS_TRANSFERENCIA]
             query = query.filter(NotaFiscal.itens.any(NotaFiscalItem.cfop.in_(cfops_lista)))

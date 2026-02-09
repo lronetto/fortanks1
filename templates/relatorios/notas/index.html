@@ -150,12 +150,20 @@
                         <label for="data_fim" class="form-label">Data Final</label>
                         <input type="date" class="form-control" id="data_fim" name="data_fim">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="centro_custo" class="form-label">Centro de Custo</label>
                         <select class="form-select" id="centro_custo" name="centro_custo" multiple>
                             {% for cc in centros_custo %}
                             <option value="{{ cc.id }}">{{ cc.codigo }} - {{ cc.nome }}</option>
                             {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="tipo_nota" class="form-label">Tipo de Nota</label>
+                        <select class="form-select" id="tipo_nota" name="tipo_nota">
+                            <option value="">Todos</option>
+                            <option value="material">Material (NFE)</option>
+                            <option value="servico">Serviço (NFSe)</option>
                         </select>
                     </div>
                     <div class="col-md-2">
@@ -457,6 +465,7 @@ $(document).ready(function() {
                         d.centro_custo.push(id);
                     });
                 }
+                d.tipo_nota = $('#tipo_nota').val() || '';
                 d.status_pagamento = $('#status_pagamento').val() || '';
                 console.log('Dados enviados:', d);
             },
@@ -638,6 +647,7 @@ $(document).ready(function() {
         let data_inicio = $('#data_inicio').val();
         let data_fim = $('#data_fim').val();
         let centro_custo = $('#centro_custo').val(); // Select2 retorna array quando multiple
+        let tipo_nota = $('#tipo_nota').val();
         let status_pagamento = $('#status_pagamento').val();
         
         // Garantir que centro_custo seja um array
@@ -649,6 +659,7 @@ $(document).ready(function() {
         let paramsObj = {
             data_inicio: data_inicio || '',
             data_fim: data_fim || '',
+            tipo_nota: tipo_nota || '',
             status_pagamento: status_pagamento || ''
         };
         

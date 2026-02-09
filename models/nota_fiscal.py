@@ -275,8 +275,15 @@ class NotaFiscal(db.Model):
                     up.save()
                     self.upload = up
                 else:
-                    print(f'get_pdf: {self.id} chave: {self.chave_acesso} len: {len(self.chave_acesso)} pdf=True')
-                    pdf_data = Arquivei(chave_acesso=self.chave_acesso,pdf=True)
+                    if self.dados_adicionais:
+                        dados_json = json.loads(self.dados_adicionais) if isinstance(self.dados_adicionais, str) else self.dados_adicionais
+                        if isinstance(dados_json, dict):
+                            if dados_json.get('id'):
+                                pdf_data = Arquivei(chave_acesso=dados_json.get('id'),pdf=True)
+                            else:
+                                pdf_data = Arquivei(chave_acesso=self.chave_acesso,pdf=True)
+                    else:
+                        pdf_data = Arquivei(chave_acesso=self.chave_acesso,pdf=True)
                     if pdf_data.pdf:
                         self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
                     else:
@@ -415,6 +422,10 @@ class NotaFiscal(db.Model):
             existente.save()
             return existente
         try:
+            if dados.get('dados_adicionais').get('cancelada'):
+                self.status_processamento = 'cancelada'
+            else:
+                self.status_processamento = 'importado'
             self.tipo = 3
             self.xml_data = self.data.get('xml',None)
             self.numero_nf = dados.get('Numero')
@@ -425,7 +436,6 @@ class NotaFiscal(db.Model):
             self.nome_emitente = dados.get('nome_emitente')
             self.cnpj_destinatario = dados.get('cnpj_destinatario')
             self.nome_destinatario = dados.get('nome_destinatario')
-            self.status_processamento = 'importado'
             self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             self.save()
             db.session.refresh(self)
@@ -930,6 +940,7 @@ class NotaFiscal(db.Model):
 
             dados_adicionais = {
                 'id': self.data.get('id',None),
+                'cancelada': False,
                 'Rps': {
                     'Numero': None,
                     'Serie': None,
@@ -963,6 +974,9 @@ class NotaFiscal(db.Model):
             ns = {
                 'CompNfse': 'http://www.abrasf.org.br/nfse.xsd'
             }
+            NfseCancelamento = root.find('.//CompNfse:NfseCancelamento', ns) or root.find('.//NfseCancelamento', ns)
+            if NfseCancelamento is not None:
+                dados_adicionais['cancelada'] = True
             Nfse = root.find('.//CompNfse:Nfse', ns)
             if Nfse is None:
                 print(f'Nfse is None')

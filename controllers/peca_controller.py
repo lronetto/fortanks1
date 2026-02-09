@@ -54,23 +54,14 @@ def verificar_permissao():
 def index():
     """Lista todas as peças do sistema em uma única tabela com filtros"""
     # Obter filtros da query string
-    tanque_id = request.args.get('tanque_id', type=int)
+    tanque_ids = request.args.getlist('tanque_ids[]', type=int)
+    # Fallback para formato antigo (tanque_id único)
+    if not tanque_ids:
+        tanque_id = request.args.get('tanque_id', type=int)
+        if tanque_id:
+            tanque_ids = [tanque_id]
+    
     projeto_id = request.args.get('projeto_id', type=int)  # projeto_id = contrato_id
-    
-    # Query base com join para incluir tanque e contrato
-    query = db.session.query(TanquesPecas)\
-        .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
-        .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
-    
-    # Aplicar filtros
-    if tanque_id:
-        query = query.filter(TanquesPecas.tanque_id == tanque_id)
-    
-    if projeto_id:
-        query = query.filter(Tanques.contrato_id == projeto_id)
-    
-    # Ordenar por tanque e número sequencial
-    pecas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial).all()
     
     # Buscar todos os tanques e contratos para os filtros
     tanques = Tanques.query.order_by(Tanques.nome).all()
@@ -80,13 +71,267 @@ def index():
     tipos_peca = db.session.query(TanquesPecas.tipo).distinct().order_by(TanquesPecas.tipo).all()
     tipos_peca = [t[0] for t in tipos_peca if t[0]]
     
+    # Para o template, passar o primeiro tanque_id se houver (para compatibilidade)
+    tanque_id_filtro = tanque_ids[0] if tanque_ids else None
+    
     return render_template('pecas/index.html', 
-                         pecas=pecas, 
+                         pecas=[],  # Não passar peças mais, será carregado via AJAX
                          tanques=tanques, 
                          contratos=contratos,
                          tipos_peca=tipos_peca,
-                         tanque_id_filtro=tanque_id,
+                         tanque_id_filtro=tanque_id_filtro,
+                         tanque_ids_filtro=tanque_ids,  # Passar lista completa também
                          projeto_id_filtro=projeto_id)
+
+@peca.route('/api/pecas')
+@login_required
+def api_pecas():
+    """API para DataTables - retorna peças em formato JSON"""
+    try:
+        # Parâmetros do DataTables
+        draw = request.args.get('draw', type=int)
+        start = request.args.get('start', type=int, default=0)
+        length = request.args.get('length', type=int, default=25)
+        search_value = request.args.get('search[value]', type=str, default='')
+        
+        # Filtros customizados
+        tanque_ids = request.args.getlist('tanque_ids[]', type=int)
+        # Fallback para formato antigo (tanque_id único)
+        if not tanque_ids:
+            tanque_id = request.args.get('tanque_id', type=int)
+            if tanque_id:
+                tanque_ids = [tanque_id]
+        
+        # Garantir que todos os IDs são inteiros válidos
+        tanque_ids = [int(tid) for tid in tanque_ids if tid is not None and str(tid).strip() != '']
+        
+        projeto_id = request.args.get('projeto_id', type=int)
+        
+        # Query base com join para incluir tanque e contrato
+        query = db.session.query(TanquesPecas)\
+            .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
+            .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
+        
+        # Aplicar filtros
+        if tanque_ids:
+            query = query.filter(TanquesPecas.tanque_id.in_(tanque_ids))
+        
+        if projeto_id:
+            query = query.filter(Tanques.contrato_id == projeto_id)
+        
+        # Aplicar busca global
+        if search_value:
+            search_filter = db.or_(
+                TanquesPecas.nome.like(f'%{search_value}%'),
+                TanquesPecas.tipo.like(f'%{search_value}%'),
+                Tanques.nome.like(f'%{search_value}%'),
+                Tanques.sistema.like(f'%{search_value}%'),
+                Contrato.nome.like(f'%{search_value}%')
+            )
+            query = query.filter(search_filter)
+        
+        # Contar total de registros (antes da paginação)
+        total_records = query.count()
+        
+        # Ordenar e paginar
+        pecas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial)\
+            .offset(start)\
+            .limit(length)\
+            .all()
+        
+        # Formatar dados para resposta
+        data = []
+        for peca in pecas:
+            # Verificar status
+            concretado = peca.data_concretagem is not None
+            
+            acabada = False
+            transportado = False
+            
+            if peca.qualidade:
+                try:
+                    qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                    
+                    # Verificar acabamento
+                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
+                        acabamento = qualidade_dict['acabamento']
+                        if isinstance(acabamento, dict):
+                            acabada = acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null'
+                        elif isinstance(acabamento, str):
+                            acabada = acabamento != '' and acabamento != 'null'
+                        else:
+                            acabada = bool(acabamento)
+                    
+                    # Verificar transporte
+                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
+                        transporte = qualidade_dict['transporte']
+                        if isinstance(transporte, dict):
+                            data_transporte = transporte.get('data_transporte')
+                            transportado = data_transporte is not None and data_transporte != '' and data_transporte != 'null'
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    pass
+            
+            # Montar badges de status
+            status_badges = []
+            if concretado:
+                status_badges.append('<span class="badge bg-success me-1"><i class="fas fa-check-circle"></i> Concretado</span>')
+            if acabada:
+                status_badges.append('<span class="badge bg-info me-1"><i class="fas fa-check"></i> Acabada</span>')
+            if transportado:
+                status_badges.append('<span class="badge bg-primary me-1"><i class="fas fa-truck"></i> Transportado</span>')
+            
+            status_html = ' '.join(status_badges) if status_badges else '<span class="text-muted">-</span>'
+            
+            # URLs das ações
+            url_visualizar = url_for('peca.visualizar', id=peca.id)
+            url_editar = url_for('peca.editar', id=peca.id)
+            
+            acoes_html = f'''
+                <div class="btn-group" role="group">
+                    <a href="{url_visualizar}" class="btn btn-info btn-sm" title="Visualizar">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="{url_editar}" class="btn btn-warning btn-sm" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    <button type="button" class="btn btn-danger btn-sm btn-excluir-peca" data-peca-id="{peca.id}" data-peca-nome="{peca.nome}" data-tanque-nome="{peca.tanque.nome if peca.tanque else 'N/A'}" data-numero-seq="{peca.numero_sequencial}" title="Excluir">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            '''
+            
+            data.append({
+                'DT_RowId': f'peca_{peca.id}',
+                'numero_sequencial': peca.numero_sequencial,
+                'tanque_nome': peca.tanque.nome if peca.tanque else 'N/A',
+                'tanque_sistema': peca.tanque.sistema if peca.tanque else '',
+                'tanque_id': peca.tanque_id,
+                'projeto_nome': peca.tanque.contrato.nome if peca.tanque and peca.tanque.contrato else 'Sem projeto',
+                'tipo': peca.tipo or '',
+                'nome': peca.nome or '',
+                'data_cadastro': peca.data_cadastro.strftime('%d/%m/%Y %H:%M') if peca.data_cadastro else '',
+                'status': status_html,
+                'acoes': acoes_html
+            })
+        
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': total_records,
+            'data': data
+        })
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f'Erro na API de peças: {str(e)}\n{traceback.format_exc()}')
+        return jsonify({
+            'draw': request.args.get('draw', type=int, default=0),
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e)
+        }), 500
+
+@peca.route('/api/pecas/estatisticas')
+@login_required
+def api_pecas_estatisticas():
+    """API para retornar estatísticas de peças (concretadas, acabadas, transportadas)"""
+    try:
+        # Filtros
+        tanque_ids = request.args.getlist('tanque_ids[]', type=int)
+        # Fallback para formato antigo (tanque_id único)
+        if not tanque_ids:
+            tanque_id = request.args.get('tanque_id', type=int)
+            if tanque_id:
+                tanque_ids = [tanque_id]
+        
+        # Garantir que todos os IDs são inteiros válidos
+        tanque_ids = [int(tid) for tid in tanque_ids if tid is not None and str(tid).strip() != '']
+        
+        projeto_id = request.args.get('projeto_id', type=int)
+        search_value = request.args.get('search', type=str, default='')
+        
+        # Query base com join para incluir tanque e contrato
+        query = db.session.query(TanquesPecas)\
+            .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
+            .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
+        # Aplicar filtros
+        if tanque_ids:
+            query = query.filter(TanquesPecas.tanque_id.in_(tanque_ids))
+        
+        if projeto_id:
+            query = query.filter(Tanques.contrato_id == projeto_id)
+        
+        # Aplicar busca global se houver
+        if search_value:
+            search_filter = db.or_(
+                TanquesPecas.nome.like(f'%{search_value}%'),
+                TanquesPecas.tipo.like(f'%{search_value}%'),
+                Tanques.nome.like(f'%{search_value}%'),
+                Tanques.sistema.like(f'%{search_value}%'),
+                Contrato.nome.like(f'%{search_value}%')
+            )
+            query = query.filter(search_filter)
+        
+        # Buscar todas as peças (sem paginação)
+        pecas = query.all()
+        
+        # Contadores
+        total_pecas = len(pecas)
+        concretadas = 0
+        acabadas = 0
+        transportadas = 0
+        
+        for peca in pecas:
+            # Verificar concretado
+            if peca.data_concretagem is not None:
+                concretadas += 1
+            
+            # Verificar acabada e transportada
+            if peca.qualidade:
+                try:
+                    qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                    
+                    # Verificar acabamento
+                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
+                        acabamento = qualidade_dict['acabamento']
+                        if isinstance(acabamento, dict):
+                            if acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null':
+                                acabadas += 1
+                        elif isinstance(acabamento, str):
+                            if acabamento != '' and acabamento != 'null':
+                                acabadas += 1
+                        else:
+                            if bool(acabamento):
+                                acabadas += 1
+                    
+                    # Verificar transporte
+                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
+                        transporte = qualidade_dict['transporte']
+                        if isinstance(transporte, dict):
+                            data_transporte = transporte.get('data_transporte')
+                            if data_transporte is not None and data_transporte != '' and data_transporte != 'null':
+                                transportadas += 1
+                except (json.JSONDecodeError, TypeError, AttributeError):
+                    pass
+        
+        return jsonify({
+            'success': True,
+            'total': total_pecas,
+            'concretadas': concretadas,
+            'acabadas': acabadas,
+            'transportadas': transportadas
+        })
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f'Erro na API de estatísticas: {str(e)}\n{traceback.format_exc()}')
+        return jsonify({
+            'success': False,
+            'total': 0,
+            'concretadas': 0,
+            'acabadas': 0,
+            'transportadas': 0,
+            'error': str(e)
+        }), 500
 
 @peca.route('/tanque/<int:tanque_id>')
 def listar_por_tanque(tanque_id):

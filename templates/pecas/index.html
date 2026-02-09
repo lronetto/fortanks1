@@ -3,6 +3,26 @@
 {% block title %}Peças de Tanques - Sistema de Gestão - Pré-moldados{% endblock %}
 
 {% block content %}
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-xs {
+        font-size: 0.7rem;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+</style>
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3"><i class="fas fa-cogs"></i> Peças de Tanques</h1>
@@ -47,17 +67,17 @@
                         </select>
                     </div>
                     <div class="col-md-5">
-                        <label for="tanque_id" class="form-label">Tanque</label>
-                        <select class="form-select" id="tanque_id" name="tanque_id">
-                            <option value="">Todos os tanques</option>
+                        <label for="tanque_id" class="form-label">Tanque(s) <small class="text-muted">(Ctrl+Click para múltipla seleção)</small></label>
+                        <select class="form-select" id="tanque_id" name="tanque_ids[]" multiple size="5">
                             {% for tanque in tanques %}
                             <option value="{{ tanque.id }}" 
                                     data-projeto-id="{{ tanque.contrato_id if tanque.contrato_id else '' }}"
-                                    {% if tanque_id_filtro == tanque.id %}selected{% endif %}>
+                                    {% if tanque_ids_filtro and tanque.id in tanque_ids_filtro %}selected{% elif tanque_id_filtro and tanque_id_filtro == tanque.id %}selected{% endif %}>
                                 {{ tanque.nome }} ({{ tanque.sistema }})
                             </option>
                             {% endfor %}
                         </select>
+                        <small class="text-muted">Selecione um ou mais tanques. Use Ctrl (ou Cmd no Mac) para seleção múltipla.</small>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
@@ -78,16 +98,87 @@
         </div>
     </div>
 
+    <!-- Card de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Total de Peças
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statTotal">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Concretadas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statConcretadas">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Acabadas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statAcabadas">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Transportadas
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statTransportadas">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-truck fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabela de Peças -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">
                 <i class="fas fa-list"></i> Peças Cadastradas
             </h6>
-            <span class="badge bg-info">{{ pecas|length }} peça(s)</span>
+            <span class="badge bg-info" id="badgeTotalPecas">0 peça(s)</span>
         </div>
         <div class="card-body">
-            {% if pecas %}
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" id="tabelaPecas" width="100%" cellspacing="0">
                     <thead>
@@ -97,87 +188,39 @@
                             <th>Projeto</th>
                             <th>Tipo</th>
                             <th>Nome</th>
+                            <th>Status</th>
                             <th>Data de Cadastro</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for peca in pecas %}
-                        <tr>
-                            <td class="text-center">
-                                <span class="badge bg-primary">{{ peca.numero_sequencial }}</span>
-                            </td>
-                            <td>
-                                <a href="{{ url_for('tanque.visualizar', id=peca.tanque.id) }}" class="text-decoration-none">
-                                    {{ peca.tanque.nome }} ({{ peca.tanque.sistema }})
-                                </a>
-                            </td>
-                            <td>
-                                {% if peca.tanque.contrato %}
-                                    {{ peca.tanque.contrato.nome }}
-                                {% else %}
-                                    <span class="text-muted">Sem projeto</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ peca.tipo }}</td>
-                            <td>{{ peca.nome }}</td>
-                            <td>{{ peca.data_cadastro.strftime('%d/%m/%Y %H:%M') }}</td>
-                            <td>
-                                <div class="btn-group" role="group">
-                                    <a href="{{ url_for('peca.visualizar', id=peca.id) }}" class="btn btn-info btn-sm" title="Visualizar">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <a href="{{ url_for('peca.editar', id=peca.id) }}" class="btn btn-warning btn-sm" title="Editar">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal"
-                                        data-bs-target="#excluirModal{{ peca.id }}" title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-
-                                <!-- Modal de Exclusão -->
-                                <div class="modal fade" id="excluirModal{{ peca.id }}" tabindex="-1"
-                                    aria-labelledby="excluirModalLabel{{ peca.id }}" aria-hidden="true">
-                                    <div class="modal-dialog">
-                                        <div class="modal-content">
-                                            <div class="modal-header">
-                                                <h5 class="modal-title" id="excluirModalLabel{{ peca.id }}">Confirmar Exclusão</h5>
-                                                <button type="button" class="btn-close" data-bs-dismiss="modal"
-                                                    aria-label="Close"></button>
-                                            </div>
-                                            <div class="modal-body">
-                                                <p>Tem certeza que deseja excluir a peça <strong>{{ peca.nome }}</strong> 
-                                                    (Nº {{ peca.numero_sequencial }}) do tanque <strong>{{ peca.tanque.nome }}</strong>?
-                                                </p>
-                                                <p class="text-danger">Esta ação não pode ser desfeita!</p>
-                                            </div>
-                                            <div class="modal-footer">
-                                                <button type="button" class="btn btn-secondary"
-                                                    data-bs-dismiss="modal">Cancelar</button>
-                                                <form action="{{ url_for('peca.excluir', id=peca.id) }}" method="post">
-                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                    <button type="submit" class="btn btn-danger">Excluir</button>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                        <!-- Dados serão carregados via AJAX -->
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle"></i> Não há peças cadastradas com os filtros selecionados.
-                {% if tanque_id_filtro or projeto_id_filtro %}
-                <a href="{{ url_for('peca.index') }}" class="alert-link">Limpar filtros</a> ou
-                {% endif %}
-                <a href="{{ url_for('tanque.index') }}" class="alert-link">selecione um tanque para adicionar peças</a>.
+        </div>
+    </div>
+    
+    <!-- Modal de Exclusão Genérico (será usado dinamicamente) -->
+    <div class="modal fade" id="excluirModalGenerico" tabindex="-1" aria-labelledby="excluirModalLabelGenerico" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="excluirModalLabelGenerico">Confirmar Exclusão</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="excluirModalTexto">Tem certeza que deseja excluir esta peça?</p>
+                    <p class="text-danger">Esta ação não pode ser desfeita!</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form id="excluirModalForm" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger">Excluir</button>
+                    </form>
+                </div>
             </div>
-            {% endif %}
         </div>
     </div>
 </div>
@@ -195,31 +238,190 @@
 {% block scripts %}
 <script>
     $(document).ready(function () {
-        // Inicializar DataTable
-        $('#tabelaPecas').DataTable({
+        // Obter filtros iniciais (tanque_id agora pode ser array)
+        var tanqueIdFiltro = $('#tanque_id').val() || [];
+        var projetoIdFiltro = $('#projeto_id').val() || '';
+        
+        // Função para obter tanque_ids como array
+        function getTanqueIds() {
+            var valores = $('#tanque_id').val();
+            var ids = Array.isArray(valores) ? valores : (valores ? [valores] : []);
+            // Garantir que são números
+            ids = ids.map(function(id) {
+                return parseInt(id, 10);
+            }).filter(function(id) {
+                return !isNaN(id) && id > 0;
+            });
+            console.log('Tanque IDs obtidos:', ids);
+            return ids;
+        }
+        
+        // Função para carregar estatísticas
+        function carregarEstatisticas() {
+            var tanqueIds = getTanqueIds();
+            var params = {};
+            
+            // Adicionar tanque_ids se houver seleção
+            if (tanqueIds.length > 0) {
+                params['tanque_ids[]'] = tanqueIds;
+            }
+            
+            // Adicionar projeto_id se houver
+            if (projetoIdFiltro) {
+                params.projeto_id = projetoIdFiltro;
+            }
+            
+            // Adicionar busca se houver
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                var searchValue = $('#tabelaPecas').DataTable().search();
+                if (searchValue) {
+                    params.search = searchValue;
+                }
+            }
+            
+            $.ajax({
+                url: '{{ url_for("peca.api_pecas_estatisticas") }}',
+                method: 'GET',
+                data: params,
+                traditional: true, // Necessário para enviar arrays corretamente
+                success: function(response) {
+                    if (response.success) {
+                        $('#statTotal').text(response.total || 0);
+                        $('#statConcretadas').text(response.concretadas || 0);
+                        $('#statAcabadas').text(response.acabadas || 0);
+                        $('#statTransportadas').text(response.transportadas || 0);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar estatísticas:', error);
+                }
+            });
+        }
+        
+        // Carregar estatísticas iniciais
+        carregarEstatisticas();
+        
+        // Inicializar DataTable com AJAX
+        var table = $('#tabelaPecas').DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: '{{ url_for("peca.api_pecas") }}',
+                type: 'GET',
+                traditional: true, // Necessário para enviar arrays corretamente
+                data: function(d) {
+                    // Adicionar filtros customizados
+                    var tanqueIds = getTanqueIds();
+                    if (tanqueIds.length > 0) {
+                        // Enviar como array com nome correto para o backend
+                        d['tanque_ids[]'] = tanqueIds;
+                        console.log('Enviando tanque_ids[] para DataTables:', tanqueIds);
+                    }
+                    if (projetoIdFiltro) {
+                        d.projeto_id = projetoIdFiltro;
+                    }
+                },
+                dataSrc: function(json) {
+                    // Atualizar badge de total
+                    $('#badgeTotalPecas').text(json.recordsFiltered + ' peça(s)');
+                    // Atualizar estatísticas após carregar dados
+                    setTimeout(carregarEstatisticas, 100);
+                    return json.data;
+                },
+                error: function(xhr, error, thrown) {
+                    console.error('Erro ao carregar dados:', error);
+                    alert('Erro ao carregar dados da tabela. Tente recarregar a página.');
+                }
+            },
             language: {
                 url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
             },
             order: [[1, 'asc'], [0, 'asc']], // Ordenar por tanque e depois por número sequencial
             pageLength: 25,
             lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            columns: [
+                { 
+                    data: 'numero_sequencial',
+                    render: function(data, type, row) {
+                        return '<span class="badge bg-primary">' + data + '</span>';
+                    }
+                },
+                { 
+                    data: 'tanque_nome',
+                    render: function(data, type, row) {
+                        var sistema = row.tanque_sistema ? ' (' + row.tanque_sistema + ')' : '';
+                        return '<a href="/tanques/visualizar/' + row.tanque_id + '" class="text-decoration-none">' + 
+                               data + sistema + '</a>';
+                    }
+                },
+                { data: 'projeto_nome' },
+                { data: 'tipo' },
+                { data: 'nome' },
+                { 
+                    data: 'status',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return data; // Já vem formatado do servidor
+                    }
+                },
+                { data: 'data_cadastro' },
+                { 
+                    data: 'acoes',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return data; // Já vem formatado do servidor
+                    }
+                }
+            ],
             columnDefs: [
-                { orderable: false, targets: 6 } // Desabilitar ordenação na coluna de ações
-            ]
+                { orderable: false, targets: [5, 7] }, // Desabilitar ordenação nas colunas de status e ações
+                { className: 'text-center', targets: [0] } // Centralizar número sequencial
+            ],
+            drawCallback: function(settings) {
+                // Adicionar eventos aos botões de exclusão após desenhar a tabela
+                $(document).off('click', '.btn-excluir-peca').on('click', '.btn-excluir-peca', function() {
+                    var pecaId = $(this).data('peca-id');
+                    var pecaNome = $(this).data('peca-nome');
+                    var tanqueNome = $(this).data('tanque-nome');
+                    var numeroSeq = $(this).data('numero-seq');
+                    
+                    $('#excluirModalTexto').html(
+                        'Tem certeza que deseja excluir a peça <strong>' + pecaNome + '</strong> ' +
+                        '(Nº ' + numeroSeq + ') do tanque <strong>' + tanqueNome + '</strong>?'
+                    );
+                    $('#excluirModalForm').attr('action', '/pecas/excluir/' + pecaId);
+                    $('#excluirModalGenerico').modal('show');
+                });
+            }
+        });
+        
+        // Atualizar estatísticas quando a busca for realizada
+        $('#tabelaPecas').on('search.dt', function() {
+            setTimeout(carregarEstatisticas, 300);
+        });
+        
+        // Recarregar tabela quando os filtros mudarem
+        $('#filtroForm').on('submit', function(e) {
+            e.preventDefault();
+            tanqueIdFiltro = getTanqueIds();
+            projetoIdFiltro = $('#projeto_id').val() || '';
+            table.ajax.reload();
+            carregarEstatisticas();
         });
 
         // Armazenar todas as opções de tanques
         var todasOpcoesTanques = $('#tanque_id option').clone();
-        var tanqueSelecionado = $('#tanque_id').val();
 
         // Função para filtrar tanques por projeto
         function filtrarTanquesPorProjeto(projetoId) {
             var selectTanque = $('#tanque_id');
-            var valorSelecionado = selectTanque.val();
+            var valoresSelecionados = selectTanque.val() || [];
+            if (!Array.isArray(valoresSelecionados)) {
+                valoresSelecionados = valoresSelecionados ? [valoresSelecionados] : [];
+            }
             
-            // Limpar o select
+            // Limpar o select (não incluir opção "Todos os tanques" pois é multiple)
             selectTanque.empty();
-            selectTanque.append('<option value="">Todos os tanques</option>');
             
             if (projetoId) {
                 // Filtrar apenas tanques do projeto selecionado
@@ -227,23 +429,32 @@
                     var option = $(this);
                     var projetoIdOption = option.data('projeto-id');
                     
-                    if (option.val() === '' || projetoIdOption == projetoId || projetoIdOption === '') {
-                        // Incluir opção "Todos os tanques" e tanques do projeto ou sem projeto
+                    // Não incluir opção vazia em select multiple
+                    if (option.val() !== '' && (projetoIdOption == projetoId || projetoIdOption === '')) {
                         selectTanque.append(option.clone());
                     }
                 });
             } else {
-                // Mostrar todos os tanques
+                // Mostrar todos os tanques (exceto opção vazia)
                 todasOpcoesTanques.each(function() {
-                    selectTanque.append($(this).clone());
+                    if ($(this).val() !== '') {
+                        selectTanque.append($(this).clone());
+                    }
                 });
             }
             
-            // Restaurar seleção anterior se ainda existir
-            if (valorSelecionado && selectTanque.find('option[value="' + valorSelecionado + '"]').length > 0) {
-                selectTanque.val(valorSelecionado);
+            // Restaurar seleções anteriores se ainda existirem
+            var valoresParaRestaurar = [];
+            valoresSelecionados.forEach(function(valor) {
+                if (selectTanque.find('option[value="' + valor + '"]').length > 0) {
+                    valoresParaRestaurar.push(valor);
+                }
+            });
+            
+            if (valoresParaRestaurar.length > 0) {
+                selectTanque.val(valoresParaRestaurar);
             } else {
-                selectTanque.val('');
+                selectTanque.val(null);
             }
         }
 
@@ -251,6 +462,21 @@
         $('#projeto_id').on('change', function() {
             var projetoId = $(this).val();
             filtrarTanquesPorProjeto(projetoId);
+            // Recarregar tabela se já estiver inicializada
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                projetoIdFiltro = projetoId || '';
+                $('#tabelaPecas').DataTable().ajax.reload();
+                carregarEstatisticas();
+            }
+        });
+        
+        // Evento quando o tanque é alterado
+        $('#tanque_id').on('change', function() {
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                tanqueIdFiltro = getTanqueIds();
+                $('#tabelaPecas').DataTable().ajax.reload();
+                carregarEstatisticas();
+            }
         });
 
         // Aplicar filtro inicial se houver projeto selecionado
