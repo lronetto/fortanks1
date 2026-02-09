@@ -110,16 +110,18 @@
                         const tanqueId = pecaItem.tanque || pecaItem.tanque_id || '';
                         
                         // Buscar séries já referenciadas nesta peça
-                        // Suporta tanto formato antigo (array de strings) quanto novo (array de objetos)
+                        // Formato: lista de strings ['1', '2', '-C3', ...] onde '-C' indica segunda concretagem
                         const seriesReferenciadas = pecaObj.qualidade?.series || [];
                         let seriesTexto = '<span class="text-muted">Nenhuma</span>';
                         if (seriesReferenciadas.length > 0) {
                             const seriesFormatadas = seriesReferenciadas.map(function(s) {
-                                if (typeof s === 'object' && s !== null) {
-                                    const texto = s.serie || s;
-                                    return s.segunda_concretagem ? `${texto} (2ª conc.)` : texto;
+                                const serieStr = String(s);
+                                // Se começa com '-C', é segunda concretagem
+                                if (serieStr.startsWith('-C')) {
+                                    const serieSemPrefixo = serieStr.substring(2); // Remove '-C'
+                                    return `${serieSemPrefixo} (2ª conc.)`;
                                 }
-                                return String(s);
+                                return serieStr;
                             });
                             seriesTexto = seriesFormatadas.join(', ');
                         }
@@ -208,19 +210,22 @@
                         const serieStr = String(serie.serie);
                         
                         // Verificar se a série já está referenciada
-                        // Suporta tanto formato antigo (array de strings) quanto novo (array de objetos)
+                        // Formato: lista de strings ['1', '2', '-C3', ...] onde '-C' indica segunda concretagem
                         let jaReferenciada = false;
                         let segundaConcretagem = false;
                         
                         if (Array.isArray(seriesReferenciadas)) {
                             jaReferenciada = seriesReferenciadas.some(function(s) {
-                                if (typeof s === 'string' || typeof s === 'number') {
-                                    return String(s) === serieStr;
-                                } else if (typeof s === 'object' && s !== null) {
-                                    if (String(s.serie || s) === serieStr) {
-                                        segundaConcretagem = s.segunda_concretagem || false;
-                                        return true;
-                                    }
+                                const serieRefStr = String(s);
+                                // Verificar se é a série normal ou com prefixo '-C'
+                                if (serieRefStr === serieStr) {
+                                    // Série normal encontrada
+                                    segundaConcretagem = false;
+                                    return true;
+                                } else if (serieRefStr === `${serieStr}-C`) {
+                                    // Série com segunda concretagem encontrada
+                                    segundaConcretagem = true;
+                                    return true;
                                 }
                                 return false;
                             });

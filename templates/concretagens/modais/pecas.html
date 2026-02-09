@@ -40,6 +40,9 @@
                     </button>
                 </div>
                 <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="btnExportarPecasPDF" title="Exportar Peças para PDF">
+                        <i class="fas fa-file-pdf"></i> Exportar PDF
+                    </button>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Salvar</button>
                 </div>
@@ -349,5 +352,29 @@
         
         // Expor função globalmente para uso externo
         window.carregarDadosPecas = carregarDadosPecas;
+        
+        // Exportar PDF de peças
+        $('#btnExportarPecasPDF').on('click', function() {
+            const concretagemId = $('#concretagem_id_pecas').val();
+            if (!concretagemId) {
+                alert('Nenhuma concretagem selecionada. Por favor, selecione uma concretagem primeiro.');
+                return;
+            }
+            
+            // Desabilitar botão durante o processamento
+            const btn = $(this);
+            const originalHtml = btn.html();
+            btn.prop('disabled', true);
+            btn.html('<i class="fas fa-spinner fa-spin"></i> Gerando PDF...');
+            
+            // Redirecionar para a rota de exportação
+            window.location.href = `/concretagens/api/${concretagemId}/pecas/exportar-pdf`;
+            
+            // Reabilitar botão após um tempo (caso haja erro)
+            setTimeout(function() {
+                btn.prop('disabled', false);
+                btn.html(originalHtml);
+            }, 5000);
+        });
     });
 </script>

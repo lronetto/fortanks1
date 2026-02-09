@@ -28,6 +28,7 @@
                             <th>Data</th>
                             <th>Pista</th>
                             <th>Peças</th>
+                            <th>Status</th>
                             <th>Cadastro</th>
                             <th>Ações</th>
                         </tr>
@@ -94,6 +95,16 @@
                     title: 'Peças',
                     render: function(data) {
                         return data || 0;
+                    }
+                },
+                {
+                    data: null,
+                    title: 'Status',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        const along = row.tem_alongamentos ? '<span class="text-success" title="Alongamentos associados"><i class="fas fa-check"></i> Along.</span>' : '<span class="text-muted" title="Sem alongamentos"><i class="fas fa-minus"></i> Along.</span>';
+                        const usin = row.tem_usinagens ? '<span class="text-success" title="Usinagens associadas"><i class="fas fa-check"></i> Usin.</span>' : '<span class="text-muted" title="Sem usinagens"><i class="fas fa-minus"></i> Usin.</span>';
+                        return along + ' &nbsp; ' + usin;
                     }
                 },
                 { 

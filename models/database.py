@@ -27,12 +27,12 @@ def init_db():
     logger.info("Inicializando banco de dados...")
     
     # Criar todas as tabelas se não existirem
-    logger.info("Criando tabelas se não existirem...")
-    db.create_all()
-    logger.info("Tabelas criadas/verificadas com sucesso!")
+    #logger.info("Criando tabelas se não existirem...")
+    #db.create_all()
+    #logger.info("Tabelas criadas/verificadas com sucesso!")
     
     # Verificar e criar usuário admin se não existir
-    criar_usuario_admin()
+    #criar_usuario_admin()
     
     logger.info("Inicialização do banco de dados concluída com sucesso!")
 

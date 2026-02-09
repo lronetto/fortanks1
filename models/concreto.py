@@ -1,13 +1,13 @@
 from datetime import datetime
 
 from flask_login import current_user
+from sqlalchemy.event import attr
 from sqlalchemy.sql import func
 from sqlalchemy import JSON
 from models.database import db
 from sqlalchemy.orm import relationship
 from decimal import Decimal
 from models.produto_composto import ProdutoComposto
-from models.tanque import TanquesPecas
 from models.unidade import Unidades
 from models.material import Materiais
 from models.estoque import EstoqueMovimentacoes
@@ -52,8 +52,11 @@ class ConcretoConcretagens(db.Model):
                 if not seriesb:
                     continue
                 for seriea in seriesb:
-                    if seriea not in series:
-                        series.append(seriea)
+                    if isinstance(seriea, dict):
+                        seriea = seriea['serie']
+                    series.append(seriea)
+
+        print(f'[_get_volume_total] Series: {series}')
         volume_total = db.session.query(func.sum(ConcretoUsinagens.volume)).\
             filter(ConcretoUsinagens.serie.in_(series)).scalar() or 0
         return volume_total

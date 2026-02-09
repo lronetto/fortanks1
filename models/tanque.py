@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+from models.concreto import ConcretoConcretagens
 from models.database import db
 from sqlalchemy.orm import relationship
 
@@ -371,8 +372,8 @@ class TanquesPecas(db.Model):
         # Se for uma nova peça, atribui o próximo número sequencial
         if not self.id and not self.numero_sequencial:
             # Encontra o maior número sequencial para o tanque atual
-            maior_sequencial = db.session.query(db.func.max(Peca.numero_sequencial))\
-                .filter(Peca.tanque_id == self.tanque_id).scalar() or 0
+            maior_sequencial = db.session.query(db.func.max(TanquesPecas.numero_sequencial))\
+                .filter(TanquesPecas.tanque_id == self.tanque_id).scalar() or 0
             # Incrementa para obter o próximo número
             self.numero_sequencial = maior_sequencial + 1
             
@@ -380,7 +381,7 @@ class TanquesPecas(db.Model):
             db.session.add(self)
         db.session.commit()
         return self
-    
+   
     def delete(self):
         db.session.delete(self)
         db.session.commit()
