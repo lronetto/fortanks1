@@ -1,0 +1,54 @@
+{# Modal de transporte aberto pelo botão de ação da linha (peça/tanque já definidos) #}
+<div class="modal fade" id="modalTransporteLinha" tabindex="-1" aria-labelledby="modalTransporteLinhaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <style>
+        #modalTransporteLinha .ui-autocomplete { z-index: 10000 !important; }
+      </style>
+      <form id="formTransporteLinha" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="transporte-tanque_ids[]" id="transporte_linha-tanque_id" value="">
+        <input type="hidden" name="transporte-peca_ids[]" id="transporte_linha-peca_id" value="">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTransporteLinhaLabel"><i class="fas fa-truck"></i> Transporte da peça</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Tanque</label>
+            <p class="form-control-plaintext fw-semibold" id="transporte_linha-tanque_nome"></p>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Peça</label>
+            <p class="form-control-plaintext fw-semibold" id="transporte_linha-peca_nome"></p>
+          </div>
+          <div class="mb-3">
+            <label for="nota_fiscal_linha" class="form-label">Nota Fiscal (venda matriz)</label>
+            <input type="text" class="form-control" id="nota_fiscal_linha" name="nota_fiscal" required placeholder="Digite o número da NF para buscar" autocomplete="off">
+            <input type="hidden" id="nota_fiscal_chave_linha" value="">
+          </div>
+          <div class="mb-3">
+            <label for="cte_frete_linha" class="form-label">CT-e / Frete (vinculado à NF)</label>
+            <input type="text" class="form-control" id="cte_frete_linha" placeholder="Selecione a nota para carregar CT-e" autocomplete="off" readonly>
+          </div>
+          <div class="mb-3">
+            <label for="placa_carreta_linha" class="form-label">Placa da Carreta</label>
+            <input type="text" class="form-control" id="placa_carreta_linha" name="placa_carreta" required>
+          </div>
+          <div class="mb-3">
+            <label for="data_transporte_linha" class="form-label">Data do Transporte</label>
+            <input type="date" class="form-control" id="data_transporte_linha" name="data_transporte" value="{{ now }}">
+          </div>
+          <div class="mb-3">
+            <label for="transportadora_linha" class="form-label">Transportadora</label>
+            <input type="text" class="form-control" id="transportadora_linha" name="transportadora" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

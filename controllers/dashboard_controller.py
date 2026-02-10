@@ -91,7 +91,7 @@ def meu_dashboard():
     
     exibir_card_resumo_placas = False
     resumo_placas = []
-    agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'false').lower() == 'true'
+    agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'true').lower() == 'true'
     if current_user.colaborador and current_user.is_permissao('dashboard_resumo_placas'):
         print("exibir_card_resumo_placas")
         exibir_card_resumo_placas = True
@@ -502,7 +502,7 @@ def api_resumo_placas():
     """
     API para retornar resumo de placas com opção de agrupar por grupo
     """
-    agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'false').lower() == 'true'
+    agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'true').lower() == 'true'
     
     if not (current_user.colaborador and current_user.colaborador.departamento_id == 4):
         return jsonify({'success': False, 'error': 'Acesso negado'}), 403

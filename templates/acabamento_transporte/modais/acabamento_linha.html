@@ -1,0 +1,34 @@
+{# Modal de acabamento aberto pelo botão de ação da linha (peça/tanque já definidos) #}
+<div class="modal fade" id="modalAcabamentoLinha" tabindex="-1" aria-labelledby="modalAcabamentoLinhaLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formAcabamentoLinha" method="post" action="{{ url_for('acabamento_transporte.acabamento') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="acabamento-tanque_id" id="acabamento_linha-tanque_id" value="">
+        <input type="hidden" name="acabamento-peca_ids[]" id="acabamento_linha-peca_id" value="">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalAcabamentoLinhaLabel"><i class="fas fa-paint-roller"></i> Acabamento da peça</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Tanque</label>
+            <p class="form-control-plaintext fw-semibold" id="acabamento_linha-tanque_nome"></p>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Peça</label>
+            <p class="form-control-plaintext fw-semibold" id="acabamento_linha-peca_nome"></p>
+          </div>
+          <div class="mb-3">
+            <label for="acabamento_linha-data_acabamento" class="form-label">Data do Acabamento</label>
+            <input type="date" class="form-control" id="acabamento_linha-data_acabamento" name="data_acabamento" value="{{ now }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -12,6 +12,10 @@
         #modalTransporte .select2-dropdown {
           z-index: 9999;
         }
+        /* Autocomplete (nota fiscal e CT-e) deve aparecer acima do modal */
+        #modalTransporte .ui-autocomplete {
+          z-index: 10000 !important;
+        }
       </style>
       <form id="formTransporte" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -42,8 +46,15 @@
             </select>
           </div>
           <div class="mb-3">
-            <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
-            <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal" required>
+            <label for="nota_fiscal" class="form-label">Nota Fiscal (venda matriz)</label>
+            <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal" required placeholder="Digite o número da NF para buscar" autocomplete="off">
+            <input type="hidden" id="nota_fiscal_chave" name="nota_fiscal_chave" value="">
+            <small class="text-muted">Busca por notas de venda emitidas pela matriz.</small>
+          </div>
+          <div class="mb-3">
+            <label for="cte_frete" class="form-label">CT-e / Frete (vinculado à NF)</label>
+            <input type="text" class="form-control" id="cte_frete" placeholder="Selecione a nota acima para carregar CT-e" autocomplete="off" readonly>
+            <small class="text-muted">CT-e vinculado à nota fiscal selecionada. Ao selecionar, placa e transportadora são preenchidos.</small>
           </div>
           <div class="mb-3">
             <label for="placa_carreta" class="form-label">Placa da Carreta</label>

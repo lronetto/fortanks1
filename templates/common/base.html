@@ -474,41 +474,56 @@
                         <i class="fas fa-file-alt"></i> Relatórios
                     </a>
                     <ul class="collapse list-unstyled" id="relatoriosSubmenu">
-                        <li class="{{ is_active('relatorios_acabamento_pecas') }}">
-                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}">
-                                <i class="fas fa-paint-roller"></i> Acabamento de Peças
-                            </a>
-                        </li>
-                        <li class="{{ is_active('relatorios_concretagem_pecas') }}">
-                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}">
-                                <i class="fas fa-cube"></i> Concretagem de Peças
-                            </a>
-                        </li>
-                        <li class="{{ is_active('relatorios/usinagem') }}">
-                            <a href="{{ url_for('relatorios_usinagem.index') }}">
-                                <i class="fas fa-cogs"></i> Usinagem
-                            </a>
-                        </li>
+                        {% if current_user.is_permissao('relatorios_notas') %}
                         <li class="{{ is_active('relatorios_notas') }}">
                             <a href="{{ url_for('relatorios_notas.index') }}">
                                 <i class="fas fa-file-invoice-dollar"></i> Notas Fiscais
                             </a>
                         </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_acabamento_pecas') %}
+                        <li class="{{ is_active('relatorios_acabamento_pecas') }}">
+                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}">
+                                <i class="fas fa-paint-roller"></i> Acabamento de Peças
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_concretagem_pecas') %}
+                        <li class="{{ is_active('relatorios_concretagem_pecas') }}">
+                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}">
+                                <i class="fas fa-cube"></i> Concretagem de Peças
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_usinagem') %}
+                        <li class="{{ is_active('relatorios/usinagem') }}">
+                            <a href="{{ url_for('relatorios_usinagem.index') }}">
+                                <i class="fas fa-cogs"></i> Usinagem
+                            </a>
+                        </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_tanques') %}
                         <li class="{{ is_active('relatorios_tanques') }}">
                             <a href="{{ url_for('relatorios_tanques.index') }}">
                                 <i class="fas fa-water"></i> Tanques
                             </a>
                         </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_capacidade_producao') %}
                         <li class="{{ is_active('relatorios_capacidade_producao') }}">
                             <a href="{{ url_for('relatorios_capacidade_producao.index') }}">
                                 <i class="fas fa-industry"></i> Capacidade de Produção
                             </a>
                         </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_estoque_grupos') %}
                         <li class="{{ is_active('relatorios_estoque_grupos.index') }}">
                             <a href="{{ url_for('relatorios_estoque_grupos.index') }}">
                                 <i class="fas fa-chart-bar"></i> Estoque por Grupo
                             </a>
                         </li>
+                        {% endif %}
+                        {% if current_user.is_permissao('relatorios_databook') %}
                         <li class="{{ is_active('relatorios_databook') }}">
                             <a href="#databookSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                                 class="dropdown-toggle">
@@ -527,6 +542,7 @@
                                 </li>
                             </ul>
                         </li>
+                        {% endif %}
                     </ul>
                 </li>
                 <!-- Módulo Gerencial -->

@@ -1,10 +1,13 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
+from sqlalchemy import func
 from models.concreto import ConcretoConcretagensTanques, ConcretoUsinagens
 from models.database import db
 from models.tanque import Tanques, TanquesPecas
+from models.nota_fiscal import NotaFiscal, CNPJS_MATRIZ
 
 from flask_wtf.csrf import generate_csrf
 from datetime import datetime
+import html
 import json
 import pandas as pd
 
@@ -65,24 +68,14 @@ def get_pecas(filtros):
 @acabamento_transporte_bp.route('/')
 def index():
     filtros = request.args.to_dict()
-    pecas = get_pecas(filtros)
-    page = int(request.args.get('page', 1))
-    per_page = 20
     tanques = Tanques.query.order_by(Tanques.nome).all()
-    # Paginação
-    total = len(pecas)
-    start = (page - 1) * per_page
-    end = start + per_page
-    pecas_paginadas = pecas[start:end]
-    total_pages = (total + per_page - 1) // per_page
-    return render_template('acabamento_transporte/index.html', 
-                           pecas=pecas_paginadas,
+    filtro = filtros.get('filtro', 'todos')
+    nome_peca = filtros.get('nome_peca', '')
+    return render_template('acabamento_transporte/index.html',
                            tanques=tanques,
                            now=datetime.now().strftime('%Y-%m-%d'),
-                           filtro=filtros,
-                           page=page,
-                           total_pages=total_pages,
-                           nome_peca=filtros.get('nome_peca', ''))
+                           filtro=filtro,
+                           nome_peca=nome_peca)
 
 @acabamento_transporte_bp.route('/acabamento', methods=['GET', 'POST'])
 def acabamento():
@@ -157,6 +150,106 @@ def transporte():
                            now=datetime.now().strftime('%Y-%m-%d'))
 
 
+@acabamento_transporte_bp.route('/api/datatables', methods=['GET'])
+def api_datatables():
+    """
+    Endpoint AJAX para DataTables - retorna peças de acabamento/transporte em formato JSON.
+    """
+    try:
+        draw = request.args.get('draw', 1, type=int)
+        start = request.args.get('start', 0, type=int)
+        length = request.args.get('length', 25, type=int)
+        search_value = request.args.get('search[value]', '', type=str).strip()
+        order_column_index = int(request.args.get('order[0][column]', 0))
+        order_dir = request.args.get('order[0][dir]', 'asc')
+
+        filtros = {
+            'filtro': request.args.get('filtro', 'todos'),
+            'nome_peca': request.args.get('nome_peca', '').strip(),
+        }
+        pecas = get_pecas(filtros)
+
+        # Converter para lista de dicts para busca/ordenação/paginação
+        column_keys = ('tanque', 'nome', 'acabamento', 'data_transporte', 'transportadora', 'placa_carreta', 'nota_fiscal')
+        rows = []
+        for peca in pecas:
+            tanque_nome = peca.tanque.nome if peca.tanque else ''
+            peca_nome = peca.nome or ''
+            acabamento = peca.acabamento or ''
+            data_transporte = peca.transporte or ''
+            transportadora = peca.transportadora or ''
+            placa = peca.placa_carreta or ''
+            nota = peca.nota_fiscal or ''
+            tanque_id = peca.tanque_id if peca.tanque_id else (peca.tanque.id if peca.tanque else None)
+            peca_id = getattr(peca, 'id', None)
+            # Botões de ação (escapar nomes para atributos HTML)
+            nome_esc = html.escape(peca_nome)
+            tanque_esc = html.escape(tanque_nome)
+            acoes = (
+                '<div class="btn-group btn-group-sm" role="group">'
+                '<button type="button" class="btn btn-success btn-acao-acabamento" '
+                'data-peca-id="{}" data-tanque-id="{}" data-peca-nome="{}" data-tanque-nome="{}" '
+                'title="Registrar acabamento"><i class="fas fa-paint-roller"></i></button>'
+                '<button type="button" class="btn btn-primary btn-acao-transporte" '
+                'data-peca-id="{}" data-tanque-id="{}" data-peca-nome="{}" data-tanque-nome="{}" '
+                'title="Registrar transporte"><i class="fas fa-truck"></i></button>'
+                '</div>'
+            ).format(peca_id or '', tanque_id or '', nome_esc, tanque_esc, peca_id or '', tanque_id or '', nome_esc, tanque_esc)
+            rows.append({
+                'tanque': tanque_nome,
+                'nome': peca_nome,
+                'acabamento': acabamento,
+                'data_transporte': data_transporte,
+                'transportadora': transportadora,
+                'placa_carreta': placa,
+                'nota_fiscal': nota,
+                'peca_id': peca_id,
+                'tanque_id': tanque_id,
+                'acoes': acoes,
+            })
+
+        records_total = len(rows)
+
+        # Busca global (search[value])
+        if search_value:
+            search_lower = search_value.lower()
+            rows = [
+                r for r in rows
+                if search_lower in (r['tanque'] or '').lower()
+                or search_lower in (r['nome'] or '').lower()
+                or search_lower in (r['acabamento'] or '').lower()
+                or search_lower in (r['data_transporte'] or '').lower()
+                or search_lower in (r['transportadora'] or '').lower()
+                or search_lower in (r['placa_carreta'] or '').lower()
+                or search_lower in (r['nota_fiscal'] or '').lower()
+            ]
+        records_filtered = len(rows)
+
+        # Ordenação
+        if 0 <= order_column_index < len(column_keys):
+            key = column_keys[order_column_index]
+            reverse = order_dir == 'desc'
+            rows.sort(key=lambda r: (r[key] or '').lower() if isinstance(r[key], str) else (r[key] or ''), reverse=reverse)
+
+        # Paginação
+        data = rows[start:start + length]
+
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': records_total,
+            'recordsFiltered': records_filtered,
+            'data': data,
+        })
+    except Exception as e:
+        return jsonify({
+            'draw': request.args.get('draw', 1, type=int),
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e),
+        }), 500
+
+
 @acabamento_transporte_bp.route('/api/pecas', methods=['GET'])
 def api_pecas():
     """Retorna peças filtradas por tanques e nome (AJAX)"""
@@ -182,6 +275,82 @@ def api_tanques():
     """Retorna tanques filtradas por tanques (AJAX)"""
     tanques = Tanques.query.all()
     return jsonify([tanque.to_dict() for tanque in tanques])
+
+
+@acabamento_transporte_bp.route('/api/notas-venda-matriz', methods=['GET'])
+def api_notas_venda_matriz():
+    """
+    Busca notas fiscais de venda emitidas pela matriz (NFe tipo 0 ou 1, cnpj_emitente matriz).
+    Parâmetro: q (texto para filtrar por número da NF ou chave). Se vazio, retorna as mais recentes.
+    """
+    q = (request.args.get('q') or '').strip()
+    query = (
+        NotaFiscal.query.filter(
+            NotaFiscal.tipo.in_([0, 1]),
+            NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ),
+            NotaFiscal.status_processamento != 'cancelada',
+        )
+    )
+    if q:
+        termo = f'%{q}%'
+        query = query.filter(
+            (NotaFiscal.numero_nf.ilike(termo)) | (NotaFiscal.chave_acesso.ilike(termo))
+        )
+    query = query.order_by(NotaFiscal.data_emissao.desc()).limit(30)
+    notas = query.all()
+    return jsonify([
+        {
+            'id': n.id,
+            'numero_nf': str(n.numero_nf) if n.numero_nf is not None else '',
+            'chave_acesso': n.chave_acesso or '',
+            'valor_total': float(n.valor_total) if n.valor_total else 0,
+            'data_emissao': n.data_emissao.strftime('%d/%m/%Y') if n.data_emissao else '',
+            'nome_destinatario': (n.nome_destinatario or '')[:100],
+        }
+        for n in notas
+    ])
+
+
+@acabamento_transporte_bp.route('/api/cte-por-nota', methods=['GET'])
+def api_cte_por_nota():
+    """
+    Busca CT-e (frete) vinculado à nota fiscal pela chave da NFe.
+    Parâmetro: chave_nf (chave de 44 caracteres da NFe).
+    """
+    print(f'[_api_cte_por_nota] Request: {request.args}')
+    chave_nf = (request.args.get('chave_nf') or '').strip()
+    if not chave_nf or len(chave_nf) < 10:
+        return jsonify([])
+    ctes = (
+        NotaFiscal.query.filter(
+            NotaFiscal.tipo == 2,
+            NotaFiscal.status_processamento != 'cancelada',
+            func.json_extract(NotaFiscal.dados_adicionais, '$.chave_nf') == chave_nf,
+        )
+        .order_by(NotaFiscal.data_emissao.desc())
+        .all()
+    )
+    print(f'[_api_cte_por_nota] CT-es: {ctes}')
+    resultado = []
+    for cte in ctes:
+        dados = {}
+        if cte.dados_adicionais:
+            try:
+                dados = json.loads(cte.dados_adicionais) if isinstance(cte.dados_adicionais, str) else cte.dados_adicionais
+            except Exception:
+                pass
+        resultado.append({
+            'id': cte.id,
+            'numero_nf': cte.numero_nf,
+            'chave_acesso': cte.chave_acesso,
+            'valor_total': float(cte.valor_total) if cte.valor_total else 0,
+            'data_emissao': cte.data_emissao.strftime('%d/%m/%Y') if cte.data_emissao else '',
+            'nome_emitente': cte.nome_emitente or '',
+            'placa': (dados.get('placa') or '').strip(),
+            'motorista': (dados.get('motorista') or '').strip(),
+        })
+    return jsonify(resultado)
+
 
 @acabamento_transporte_bp.route('/exportar_excel')
 def exportar_excel():

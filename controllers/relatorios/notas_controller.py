@@ -75,18 +75,15 @@ def _processar_notas_fiscais(query):
                 # Se houver múltiplos itens, somar a quantidade
                 nf_items_dict[nf_item.nf_id]['quantidade'] += nf_item.quantidade
     
-    # Buscar contratos associados para notas de serviço (tipo 3) via CNPJs
+    # Buscar todos os contratos que têm cnpjs_associados (usado para serviço e material por CNPJ)
+    contratos_com_cnpjs = db.session.query(Contrato)\
+        .filter(Contrato.conf.isnot(None))\
+        .all()
+    
+    # Buscar contratos associados para notas de serviço (tipo 3) via CNPJs (emitente ou destinatário)
     nf_servico_contratos_dict = {}
     if notas_servico_ids:
-        # Buscar todas as notas de serviço
         notas_servico = {nf.id: nf for nf in [r[0] for r in resultados] if nf.tipo == 3}
-        
-        # Buscar todos os contratos que têm cnpjs_associados
-        contratos_com_cnpjs = db.session.query(Contrato)\
-            .filter(Contrato.conf.isnot(None))\
-            .all()
-        print(f'notas_servico: {notas_servico}')
-        # Para cada nota de serviço, encontrar o contrato associado
         for nf_id, nf in notas_servico.items():
             for contrato in contratos_com_cnpjs:
                 if contrato.conf:
@@ -95,16 +92,32 @@ def _processar_notas_fiscais(query):
                         cnpjs_associados = conf_data.get('cnpjs_associados', [])
                         if isinstance(cnpjs_associados, str):
                             cnpjs_associados = json.loads(cnpjs_associados)
-                        
-                        # Verificar se o CNPJ do emitente ou destinatário está na lista
-                        if (nf.cnpj_emitente in cnpjs_associados or 
-                            nf.cnpj_destinatario in cnpjs_associados):
+                        if (nf.cnpj_emitente in cnpjs_associados or nf.cnpj_destinatario in cnpjs_associados):
                             nf_servico_contratos_dict[nf_id] = contrato
                             break
                     except (json.JSONDecodeError, TypeError):
                         continue
     
-    print(f'nf_servico_contratos_dict: {nf_servico_contratos_dict}')
+    # Buscar contratos para notas de material (tipo 0, 1) associadas apenas por CNPJ
+    # Apenas destinatário: cnpj_destinatario deve estar em cnpjs_associados
+    nf_material_contratos_dict = {}
+    notas_material_sem_itens = [nf.id for nf in [r[0] for r in resultados] if nf.tipo in [0, 1] and nf.id not in nf_items_dict]
+    for nf_id in notas_material_sem_itens:
+        nf = next((r[0] for r in resultados if r[0].id == nf_id), None)
+        if not nf:
+            continue
+        for contrato in contratos_com_cnpjs:
+            if contrato.conf:
+                try:
+                    conf_data = json.loads(contrato.conf) if isinstance(contrato.conf, str) else contrato.conf
+                    cnpjs_associados = conf_data.get('cnpjs_associados', [])
+                    if isinstance(cnpjs_associados, str):
+                        cnpjs_associados = json.loads(cnpjs_associados)
+                    if nf.cnpj_destinatario in cnpjs_associados:
+                        nf_material_contratos_dict[nf_id] = contrato
+                        break
+                except (json.JSONDecodeError, TypeError):
+                    continue
     # Buscar todos os centros de custo de uma vez (otimização)
     centro_custo_ids_unicos = set()
     for resultado in resultados:
@@ -135,32 +148,33 @@ def _processar_notas_fiscais(query):
         nf_processadas.add(nf.id)
         
         # Obter dados relacionados
-        # Para notas de material: via itens -> tanques -> contrato
-        # Para notas de serviço: via CNPJs associados
+        # Para notas de material: via itens -> tanques -> contrato OU via cnpj_destinatario em cnpjs_associados
+        # Para notas de serviço: via CNPJs associados (emitente ou destinatário)
         if nf.tipo == 3:
-            # Nota de serviço
             contrato = nf_servico_contratos_dict.get(nf.id)
-            
             tanque = None
             quantidade = 0  # Notas de serviço não têm quantidade de placas
         else:
-            # Nota de material
+            # Nota de material: primeiro por itens, depois por CNPJ destinatário
             nf_data = nf_items_dict.get(nf.id, {})
             tanque = nf_data.get('tanque')
-            contrato = nf_data.get('contrato')
+            contrato = nf_data.get('contrato') or nf_material_contratos_dict.get(nf.id)
             quantidade = nf_data.get('quantidade', 0)
+        
+        # Centro de custo: do contrato se houver, senão do resultado da query
+        if contrato:
+            centro_custo_codigo = contrato.centro_custo.codigo if contrato.centro_custo else 'Não definido'
+        elif centro_custo_id and centro_custo_id in centros_custo_dict:
+            centro_custo_codigo = centros_custo_dict[centro_custo_id]
         
         # Calcular data prevista
         data_prevista = None
         if contrato:
-            centro_custo_codigo = contrato.centro_custo.codigo
             if nf.tipo == 3:
-               
-                # Para notas de serviço, usar prazo_pagamento_ser
                 if contrato.prazo_pagamento_ser:
                     data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_ser)
-            elif tanque:
-                # Para notas de material, usar prazo_pagamento_mat
+            else:
+                # Para notas de material (com ou sem tanque), usar prazo_pagamento_mat
                 if contrato.prazo_pagamento_mat:
                     data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
         

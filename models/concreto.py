@@ -45,6 +45,7 @@ class ConcretoConcretagens(db.Model):
             return 0
         volume_total = 0
         series = []
+        from models.tanque import TanquesPecas
         for peca in pecas:
             peca = TanquesPecas.query.filter(TanquesPecas.nome == peca['nome'],TanquesPecas.tanque_id == peca['tanque_id']).first()
             if peca:

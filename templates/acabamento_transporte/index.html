@@ -18,25 +18,28 @@
     </div>
     <div class="alert alert-info">Selecione uma das opções acima para registrar acabamento ou transporte de peças.</div>
     <div class="row mb-3">
-      <form method="get" class="form-inline">
-        <div class="form-group me-2">
+      <div class="form-inline d-flex flex-wrap align-items-center gap-2">
+        <div class="form-group">
           <label for="filtro" class="me-2">Filtrar:</label>
-          <select name="filtro" id="filtro" class="form-select form-select-sm" onchange="this.form.submit()">
-            <option value="todos" {% if filtro == 'todos' %}selected{% endif %}>Todos</option>
+          <select id="filtro" class="form-select form-select-sm">
+            <option value="todos" {% if filtro == 'todos' or not filtro %}selected{% endif %}>Todos</option>
             <option value="acabadas" {% if filtro == 'acabadas' %}selected{% endif %}>Apenas Acabadas</option>
             <option value="transportadas" {% if filtro == 'transportadas' %}selected{% endif %}>Apenas Transportadas</option>
             <option value="acabada_nao_transportada" {% if filtro == 'acabada_nao_transportada' %}selected{% endif %}>Acabada e Não Transportada</option>
           </select>
         </div>
-        <div class="form-group me-2">
+        <div class="form-group">
           <label for="nome_peca" class="me-2">Nome da Peça:</label>
-          <input type="text" name="nome_peca" id="nome_peca" class="form-control form-control-sm" value="{{ nome_peca|default('') }}" placeholder="Digite o nome da peça" onchange="this.form.submit()">
+          <input type="text" id="nome_peca" class="form-control form-control-sm" value="{{ nome_peca|default('') }}" placeholder="Digite o nome da peça">
         </div>
-      </form>
+        <button type="button" id="btnFiltrar" class="btn btn-sm btn-secondary">
+          <i class="fas fa-filter"></i> Filtrar
+        </button>
+      </div>
       <div class="col text-end">
-        <form method="get" action="{{ url_for('acabamento_transporte.exportar_excel') }}" style="display:inline">
-          <input type="hidden" name="filtro" value="{{ filtro }}">
-          <input type="hidden" name="nome_peca" value="{{ nome_peca }}">
+        <form method="get" action="{{ url_for('acabamento_transporte.exportar_excel') }}" id="formExportarExcel" style="display:inline">
+          <input type="hidden" name="filtro" id="exportFiltro" value="{{ filtro|default('todos') }}">
+          <input type="hidden" name="nome_peca" id="exportNomePeca" value="{{ nome_peca|default('') }}">
           <button type="submit" class="btn btn-outline-success btn-sm">
             <i class="fas fa-file-excel"></i> Exportar Excel
           </button>
@@ -44,53 +47,249 @@
       </div>
     </div>
     <div class="row">
-       <table class="table table-bordered">
-        <thead>
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped" id="tabelaAcabamentoTransporte" width="100%" cellspacing="0">
+          <thead>
             <tr>
-                <th>Tanque</th>
-                <th>Peça</th>
-                <th>Acabamento</th>
-                <th>Data</th>
-                <th>Transportadora</th>
-                <th>Placa</th>
-                <th>Nota Fiscal</th>
+              <th>Tanque</th>
+              <th>Peça</th>
+              <th>Acabamento</th>
+              <th>Data</th>
+              <th>Transportadora</th>
+              <th>Placa</th>
+              <th>Nota Fiscal</th>
+              <th class="text-center">Ações</th>
             </tr>
-        </thead>
-        <tbody>
-            {% for peca in pecas %}
-            <tr>
-                <td>{{ peca.tanque.nome }}</td>
-                <td>{{ peca.nome }}</td>
-                <td>{{ peca.acabamento if peca.acabamento else '' }}</td>
-                <td>{{ peca.transporte if peca.transporte else '' }}</td>
-                <td>{{ peca.transportadora if peca.transportadora else '' }}</td>
-                <td>{{ peca.placa_carreta if peca.placa_carreta else '' }}</td>
-                <td>{{ peca.nota_fiscal if peca.nota_fiscal else '' }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+          </thead>
+          <tbody>
+            <!-- Dados carregados via AJAX -->
+          </tbody>
         </table>
-       </div>
+      </div>
     </div>
-    <nav aria-label="Paginação">
-      <ul class="pagination">
-        <li class="page-item {% if page == 1 %}disabled{% endif %}">
-          <a class="page-link" href="?filtro={{ filtro }}&page={{ page-1 }}">Anterior</a>
-        </li>
-        {% for p in range(1, total_pages+1) %}
-        <li class="page-item {% if p == page %}active{% endif %}"><a class="page-link" href="?filtro={{ filtro }}&page={{ p }}">{{ p }}</a></li>
-        {% endfor %}
-        <li class="page-item {% if page == total_pages %}disabled{% endif %}">
-          <a class="page-link" href="?filtro={{ filtro }}&page={{ page+1 }}">Próxima</a>
-        </li>
-      </ul>
-    </nav>
 </div>
 {% include 'acabamento_transporte/modais/acabamento.html' %}
 {% include 'acabamento_transporte/modais/transporte.html' %}
+{% include 'acabamento_transporte/modais/acabamento_linha.html' %}
+{% include 'acabamento_transporte/modais/transporte_linha.html' %}
 {% endblock %}
 
 {% block scripts %}
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
 <script src="{{ url_for('static', filename='js/acabamento-transporte.js') }}"></script>
+<script>
+$(document).ready(function() {
+    function syncExportForm() {
+        $('#exportFiltro').val($('#filtro').val());
+        $('#exportNomePeca').val($('#nome_peca').val());
+    }
+
+    const table = $('#tabelaAcabamentoTransporte').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '{{ url_for("acabamento_transporte.api_datatables") }}',
+            type: 'GET',
+            data: function(d) {
+                d.filtro = $('#filtro').val();
+                d.nome_peca = $('#nome_peca').val();
+            },
+            dataSrc: function(json) {
+                if (json.error) {
+                    console.error('Erro ao carregar dados:', json.error);
+                    return [];
+                }
+                syncExportForm();
+                return json.data;
+            },
+            error: function(xhr, error, thrown) {
+                console.error('Erro AJAX:', error);
+                alert('Erro ao carregar dados da tabela. Verifique o console.');
+            }
+        },
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+        },
+        order: [[0, 'asc']],
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+        columns: [
+            { data: 'tanque' },
+            { data: 'nome' },
+            { data: 'acabamento' },
+            { data: 'data_transporte' },
+            { data: 'transportadora' },
+            { data: 'placa_carreta' },
+            { data: 'nota_fiscal' },
+            { data: 'acoes', orderable: false, searchable: false, className: 'text-center' }
+        ]
+    });
+
+    // Abrir modal de Acabamento da linha (modal específico para ação individual)
+    $(document).on('click', '.btn-acao-acabamento', function() {
+        var pecaId = $(this).data('peca-id');
+        var tanqueId = $(this).data('tanque-id');
+        var pecaNome = $(this).data('peca-nome');
+        var tanqueNome = $(this).data('tanque-nome');
+        if (!pecaId || !tanqueId) return;
+        $('#acabamento_linha-tanque_id').val(tanqueId);
+        $('#acabamento_linha-peca_id').val(pecaId);
+        $('#acabamento_linha-tanque_nome').text(tanqueNome || '');
+        $('#acabamento_linha-peca_nome').text(pecaNome || '');
+        var modalEl = document.getElementById('modalAcabamentoLinha');
+        if (typeof bootstrap !== 'undefined' && modalEl) {
+            new bootstrap.Modal(modalEl).show();
+        } else {
+            $(modalEl).modal('show');
+        }
+    });
+
+    // Abrir modal de Transporte da linha (modal específico para ação individual)
+    $(document).on('click', '.btn-acao-transporte', function() {
+        var pecaId = $(this).data('peca-id');
+        var tanqueId = $(this).data('tanque-id');
+        var pecaNome = $(this).data('peca-nome');
+        var tanqueNome = $(this).data('tanque-nome');
+        if (!pecaId || !tanqueId) return;
+        $('#transporte_linha-tanque_id').val(tanqueId);
+        $('#transporte_linha-peca_id').val(pecaId);
+        $('#transporte_linha-tanque_nome').text(tanqueNome || '');
+        $('#transporte_linha-peca_nome').text(pecaNome || '');
+        $('#nota_fiscal_linha, #cte_frete_linha, #placa_carreta_linha, #transportadora_linha').val('');
+        $('#nota_fiscal_chave_linha').val('');
+        $('#cte_frete_linha').prop('readonly', true).attr('placeholder', 'Selecione a nota para carregar CT-e');
+        if ($('#cte_frete_linha').autocomplete('instance')) {
+            $('#cte_frete_linha').autocomplete('destroy');
+        }
+        var modalEl = document.getElementById('modalTransporteLinha');
+        if (typeof bootstrap !== 'undefined' && modalEl) {
+            new bootstrap.Modal(modalEl).show();
+        } else {
+            $(modalEl).modal('show');
+        }
+    });
+
+    // Submit do modal Acabamento Linha (AJAX + recarregar tabela)
+    $('#formAcabamentoLinha').on('submit', function(e) {
+        e.preventDefault();
+        var form = $(this);
+        $.post(form.attr('action'), form.serialize())
+            .done(function(resp) {
+                if (resp.success) {
+                    var modalAcab = document.getElementById('modalAcabamentoLinha');
+                    if (modalAcab) { var inst = bootstrap.Modal.getInstance(modalAcab); if (inst) inst.hide(); }
+                    table.ajax.reload(null, false);
+                    alert('Acabamento registrado com sucesso!');
+                } else {
+                    alert(resp.message || 'Erro ao registrar acabamento.');
+                }
+            })
+            .fail(function(xhr) {
+                alert('Erro: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao registrar acabamento.'));
+            });
+    });
+
+    // Submit do modal Transporte Linha (AJAX + recarregar tabela)
+    $('#formTransporteLinha').on('submit', function(e) {
+        e.preventDefault();
+        var form = $(this);
+        $.post(form.attr('action'), form.serialize())
+            .done(function(resp) {
+                if (resp.success) {
+                    var modalTrans = document.getElementById('modalTransporteLinha');
+                    if (modalTrans) { var inst = bootstrap.Modal.getInstance(modalTrans); if (inst) inst.hide(); }
+                    table.ajax.reload(null, false);
+                    alert('Transporte registrado com sucesso!');
+                } else {
+                    alert(resp.message || 'Erro ao registrar transporte.');
+                }
+            })
+            .fail(function(xhr) {
+                alert('Erro: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao registrar transporte.'));
+            });
+    });
+
+    // Autocomplete Nota Fiscal no modal Transporte Linha
+    $('#nota_fiscal_linha').autocomplete({
+        source: function(request, response) {
+            $.get('{{ url_for("acabamento_transporte.api_notas_venda_matriz") }}', { q: request.term || '' }, function(data) {
+                var list = Array.isArray(data) ? data : (data && typeof data === 'object' && !Array.isArray(data) ? [data] : []);
+                var items = list.map(function(n) {
+                    var num = n.numero_nf != null ? String(n.numero_nf) : '';
+                    var dest = (n.nome_destinatario || '').substring(0, 40);
+                    var dataEmissao = n.data_emissao || '';
+                    return {
+                        label: 'NF ' + num + ' - ' + dest + (dataEmissao ? ' (' + dataEmissao + ')' : ''),
+                        value: num,
+                        chave_acesso: n.chave_acesso || '',
+                        numero_nf: num
+                    };
+                });
+                response(items);
+            }).fail(function() { response([]); });
+        },
+        minLength: 0,
+        delay: 0,
+        appendTo: '#modalTransporteLinha .modal-body',
+        select: function(event, ui) {
+            $('#nota_fiscal_linha').val(ui.item.numero_nf);
+            $('#nota_fiscal_chave_linha').val(ui.item.chave_acesso || '');
+            $('#cte_frete_linha').val('').prop('readonly', false).attr('placeholder', 'Carregando CT-e...');
+            var chave = ui.item.chave_acesso;
+            if (chave) {
+                $.get('{{ url_for("acabamento_transporte.api_cte_por_nota") }}', { chave_nf: chave }, function(ctes) {
+                    if ($('#cte_frete_linha').autocomplete('instance')) {
+                        $('#cte_frete_linha').autocomplete('destroy');
+                    }
+                    var itensCte = (ctes || []).map(function(c) {
+                        var desc = 'CT-e ' + c.numero_nf;
+                        if (c.placa) desc += ' - Placa ' + c.placa;
+                        if (c.nome_emitente) desc += ' - ' + c.nome_emitente;
+                        return { label: desc, value: c.numero_nf, placa: c.placa || '', transportadora: c.nome_emitente || '' };
+                    });
+                    if (itensCte.length === 0) {
+                        $('#cte_frete_linha').attr('placeholder', 'Nenhum CT-e vinculado a esta NF');
+                        return;
+                    }
+                    $('#cte_frete_linha').attr('placeholder', 'Selecione o CT-e (opcional)');
+                    $('#cte_frete_linha').autocomplete({
+                        source: itensCte,
+                        minLength: 0,
+                        appendTo: '#modalTransporteLinha .modal-body',
+                        select: function(ev, u) {
+                            if (u.item.placa) $('#placa_carreta_linha').val(u.item.placa);
+                            if (u.item.transportadora) $('#transportadora_linha').val(u.item.transportadora);
+                        }
+                    });
+                }).fail(function() {
+                    $('#cte_frete_linha').attr('placeholder', 'Erro ao carregar CT-e');
+                });
+            } else {
+                $('#cte_frete_linha').attr('placeholder', 'Selecione a nota para carregar CT-e');
+            }
+            return false;
+        }
+    });
+    $('#nota_fiscal_linha').on('focus', function() {
+        var $el = $(this);
+        if ($el.autocomplete('instance')) {
+            $el.autocomplete('search', $el.val() || '');
+        }
+    });
+
+    $('#filtro').on('change', function() {
+        table.ajax.reload();
+    });
+    $('#btnFiltrar').on('click', function() {
+        table.ajax.reload();
+    });
+    $('#nome_peca').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            table.ajax.reload();
+        }
+    });
+    syncExportForm();
+});
+</script>
 {% endblock %} 

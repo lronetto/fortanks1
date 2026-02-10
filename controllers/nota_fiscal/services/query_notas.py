@@ -142,9 +142,26 @@ def api_get_dados_notas_fiscais(request):
         .scalar_subquery()
     )
     
+    # Subquery para notas de material (tipo 0, 1) via CNPJs associados
+    # Apenas o destinatário pode associar: cnpj_destinatario deve estar em cnpjs_associados do contrato
+    centro_custo_column_material_cnpj = (
+        select(CentroCusto.id)
+        .select_from(Contrato)
+        .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
+        .where(
+            and_(
+                NotaFiscal.tipo.in_([0, 1]),
+                Contrato.conf.isnot(None),
+                func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_destinatario}"%')
+            )
+        )
+        .limit(1)
+        .correlate(NotaFiscal)
+        .scalar_subquery()
+    )
+    
     # Subquery para notas de serviço (tipo 3) via CNPJs associados
     # Verifica se o CNPJ do emitente ou destinatário está na lista cnpjs_associados do contrato
-    # Usa JSON_EXTRACT para buscar o array e verifica se contém o CNPJ
     centro_custo_column_servico = (
         select(CentroCusto.id)
         .select_from(Contrato)
@@ -153,9 +170,10 @@ def api_get_dados_notas_fiscais(request):
             and_(
                 NotaFiscal.tipo == 3,
                 Contrato.conf.isnot(None),
-                    # Verifica se o CNPJ do destinatário está no array cnpjs_associados
-                func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_destinatario}"%')
-                
+                or_(
+                    func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_emitente}"%'),
+                    func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_destinatario}"%')
+                )
             )
         )
         .limit(1)
@@ -163,8 +181,12 @@ def api_get_dados_notas_fiscais(request):
         .scalar_subquery()
     )
     
-    # Combinar ambas as subqueries usando COALESCE
-    centro_custo_column = func.coalesce(centro_custo_column_material, centro_custo_column_servico).label("centro_custo")
+    # Combinar: material (itens) -> material (cnpj destinatário) -> serviço (cnpj)
+    centro_custo_column = func.coalesce(
+        centro_custo_column_material,
+        centro_custo_column_material_cnpj,
+        centro_custo_column_servico
+    ).label("centro_custo")
     # Subquery centro de custo via EXISTS (verifica se item da NF está em Tanques.item_nf)
    
     # Uploads via EXISTS

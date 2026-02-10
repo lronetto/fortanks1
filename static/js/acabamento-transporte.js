@@ -169,6 +169,84 @@ $(function() {
     $('#peca_id').val(null).trigger('change');
   });
 
+  // --- Nota Fiscal: autocomplete com notas de venda da matriz ---
+  $('#nota_fiscal').autocomplete({
+    source: function(request, response) {
+      $.get('/acabamento-transporte/api/notas-venda-matriz', { q: request.term || '' }, function(data) {
+        var list = Array.isArray(data) ? data : (data && typeof data === 'object' && !Array.isArray(data) ? [data] : []);
+        var items = list.map(function(n) {
+          var num = n.numero_nf != null ? String(n.numero_nf) : '';
+          var dest = (n.nome_destinatario || '').substring(0, 40);
+          var dataEmissao = n.data_emissao || '';
+          return {
+            label: 'NF ' + num + ' - ' + dest + (dataEmissao ? ' (' + dataEmissao + ')' : ''),
+            value: num,
+            chave_acesso: n.chave_acesso || '',
+            numero_nf: num
+          };
+        });
+        response(items);
+      }).fail(function() { response([]); });
+    },
+    minLength: 0,
+    delay: 0,
+    appendTo: '#modalTransporte .modal-body',
+    select: function(event, ui) {
+      $('#nota_fiscal').val(ui.item.numero_nf);
+      $('#nota_fiscal_chave').val(ui.item.chave_acesso || '');
+      $('#cte_frete').val('').prop('readonly', false).attr('placeholder', 'Carregando CT-e...');
+      var chave = ui.item.chave_acesso;
+      if (chave) {
+        $.get('/acabamento-transporte/api/cte-por-nota', { chave_nf: chave }, function(ctes) {
+          if ($('#cte_frete').autocomplete('instance')) {
+            $('#cte_frete').autocomplete('destroy');
+          }
+          var itensCte = (ctes || []).map(function(c) {
+            var desc = 'CT-e ' + c.numero_nf;
+            if (c.placa) desc += ' - Placa ' + c.placa;
+            if (c.nome_emitente) desc += ' - ' + c.nome_emitente;
+            return { label: desc, value: c.numero_nf, placa: c.placa || '', transportadora: c.nome_emitente || '' };
+          });
+          if (itensCte.length === 0) {
+            $('#cte_frete').attr('placeholder', 'Nenhum CT-e vinculado a esta NF');
+            return;
+          }
+          $('#cte_frete').attr('placeholder', 'Selecione o CT-e (opcional)');
+          $('#cte_frete').autocomplete({
+            source: itensCte,
+            minLength: 0,
+            appendTo: '#modalTransporte .modal-body',
+            select: function(ev, u) {
+              if (u.item.placa) $('#placa_carreta').val(u.item.placa);
+              if (u.item.transportadora) $('#transportadora').val(u.item.transportadora);
+            }
+          });
+        }).fail(function() {
+          $('#cte_frete').attr('placeholder', 'Erro ao carregar CT-e');
+        });
+      } else {
+        $('#cte_frete').attr('placeholder', 'Selecione a nota acima para carregar CT-e');
+      }
+      return false;
+    }
+  });
+  // Ao focar no campo, abrir lista (com minLength 0 mostra as últimas notas mesmo sem digitar)
+  $('#nota_fiscal').on('focus', function() {
+    var $el = $(this);
+    if ($el.autocomplete('instance')) {
+      $el.autocomplete('search', $el.val() || '');
+    }
+  });
+
+  // Ao abrir o modal de transporte, limpar chave e CT-e
+  $('#modalTransporte').on('show.bs.modal', function() {
+    $('#nota_fiscal_chave').val('');
+    $('#cte_frete').val('').prop('readonly', true).attr('placeholder', 'Selecione a nota acima para carregar CT-e');
+    if ($('#cte_frete').autocomplete('instance')) {
+      $('#cte_frete').autocomplete('destroy');
+    }
+  });
+
   // Remover autocomplete/datalist antigo do campo de peça no acabamento, se existir
   $('#peca_nome').autocomplete && $('#peca_nome').autocomplete('destroy');
   $('#datalistPecas').remove();
