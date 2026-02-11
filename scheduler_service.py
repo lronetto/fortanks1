@@ -300,16 +300,26 @@ def processar_arquivei():
     """Processa importações do Arquivei"""
     try:
         with app.app_context():
+            logs = []
             logger.info("Iniciando processamento do Arquivei...")
-            NotaFiscal.importar_arquivei(
+            log=NotaFiscal.importar_arquivei(
                 data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
-                data_final=(datetime.now()).strftime('%Y-%m-%d')
+                data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='nfe'
             )
-            NotaFiscal.importar_arquivei(
+            logs.append(log)
+            log=NotaFiscal.importar_arquivei(
                 data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
                 data_final=(datetime.now()).strftime('%Y-%m-%d'),
                 tipo='cte'
             )
+            logs.append(log)
+            log=NotaFiscal.importar_arquivei(
+                data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
+                data_final=(datetime.now()).strftime('%Y-%m-%d'),
+                tipo='nfse'
+            )
+            logs.append(log)
+            Logs(local="processar_arquivei_automatico", data=datetime.now(), texto=json.dumps(logs))
             logger.info("Processamento do Arquivei concluído com sucesso")
     except Exception as e:
         logger.error(f"Erro ao processar Arquivei: {str(e)}", exc_info=True)
