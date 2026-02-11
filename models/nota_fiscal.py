@@ -156,9 +156,18 @@ class NotaFiscal(db.Model):
     data = None
 
     
-    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None,logs=None):
+    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None):
        
-        self.logs = logs
+        self.logs = {
+            'erro': [],
+            'mensagem': [],
+            'existente': 0,
+            'existentes': [],
+            'inserido': 0,
+            'inseridos': [],
+            'importacao': [],
+            'vinculacao': [],
+        }
         self.data = data
         self.chave_acesso = chave_acesso
         self.id = id
@@ -355,8 +364,15 @@ class NotaFiscal(db.Model):
         notasn = []
         if total > 0:
             for data in notas.datas:
-                nf = NotaFiscal(data=data,tipo=tipo,logs=logs)
-                
+                nf = NotaFiscal(data=data,tipo=tipo)
+                if nf.logs['erro']:
+                    logs['erro'].append(nf.logs['erro'])
+                if nf.logs['mensagem']:
+                    logs['mensagem'].append(nf.logs['mensagem'])
+                if nf.logs['existentes']:
+                    logs['existentes'].append(nf.logs)
+                if nf.logs['inseridos']:
+                    logs['inseridos'].append(nf.logs)
                 notasn.append(nf)
             i+=1
         for nf in notasn:
@@ -491,22 +507,15 @@ class NotaFiscal(db.Model):
             nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             #print('nf: ',nf)
             #print('self: ',self)
-            log = {
-                'numero_nf': dados_nf.get('numero'),
-                'tipo': dados_nf.get('tipo'),
-                'valor_total': dados_nf.get('valor_total'),
-                'cnpj_emitente': dados_nf.get('cnpj_emitente'),
-                'nome_emitente': dados_nf.get('nome_emitente'),
-                'cnpj_destinatario': dados_nf.get('cnpj_destinatario'),
-                'nome_destinatario': dados_nf.get('nome_destinatario'),
-                'dados_adicionais': dados_nf.get('dados_adicionais'),
-                'estatisticas': []
-
-                }
             
             if nf:
                 self.logs['existente'] += 1
-                self.logs['existentes'].append(nf.to_dict())
+                self.logs['existentes'].append({
+                    'numero_nf': nf.numero_nf,
+                    'tipo': nf.tipo,
+                    'valor_total': nf.valor_total,
+                    'dados_adicionais': nf.dados_adicionais,
+                })
                 logger.info(f"Nota {chave_acesso} já existe no banco de dados")
                 if not nf.dados_adicionais:
                     self.logs['mensagem'] = "Dados adicionais não encontrados adicionando"
@@ -552,24 +561,22 @@ class NotaFiscal(db.Model):
                         centro_custo_id=None,
                         observacao= f"Importação da NF {self.numero_nf if self else 'N/A'}",
                     )
-                    log['estatisticas'].append(estatisticas)
+                    self.logs['vinculacao'].append(estatisticas['vinculacao'])
+                    self.logs['importacao'].append(estatisticas['importacao'])
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
                     logger.error(f"Erro ao vincular e importar item {item.id}: {str(e)}")
-                if not sucesso:
-                    logger.error(f"Erro ao importar item {item.id}: {mensagem}")
-                    if estatisticas and estatisticas['importacao']['erros']:
-                        for erro in estatisticas['importacao']['erros']:
-                            print(f'erro: {erro}')
-                            self.logs['erro'].append(erro)#log['erro']+= f'{erro}\n'
-                    else:
-                        print(f'estatisticas: {estatisticas}')
-                else:
-                    log['estatisticas'].append(estatisticas)
+                    self.logs['erro'].append(f'Erro ao vincular e importar item {item.id}: {str(e)}')
 
             self.logs['inserido'] += 1
-            self.logs['inseridos'].append(log)
+            self.logs['inseridos'].append({
+                'id': self.id,
+                'numero_nf': self.numero_nf,
+                'tipo': self.tipo,
+                'valor_total': self.valor_total,
+                'dados_adicionais': self.dados_adicionais,
+            })
             print(f'processar_nf: {self.id} finalizado')
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
@@ -1267,26 +1274,10 @@ class NotaFiscal(db.Model):
                         itens_vinculados += 1
                 else:
                     print(f'item {item.id} não vinculado a um material do sistema')
-                    
-        log={
-            "itens": len(self.itens),
-            "itens_vinculados": itens_vinculados
-        }
-        Logs("vinculacao_automatica",datetime.now(),json.dumps(log))
-        print(f'itens_vinculados: {itens_vinculados}')
+                    self.logs['erro'].append(f'item {item.id} não vinculado a um material do sistema')
+        self.logs['itens_vinculados'] = itens_vinculados
         return itens_vinculados
     def importar_itens_para_estoque(self, usuario_id=None, centro_custo_id=None, observacao=None):
-        """
-        Importa todos os itens da nota fiscal para o estoque usando a lógica de localização padrão.
-        
-        Args:
-            usuario_id: ID do usuário realizando a importação
-            centro_custo_id: ID do centro de custo (opcional)
-            observacao: Observação para a importação (opcional)
-        
-        Returns:
-            dict: Dicionário com estatísticas da operação
-        """
         estatisticas = {
             'total_processados': 0,
             'total_importados': 0,

@@ -496,8 +496,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 formData.forEach(function(item) {
                     d[item.name] = item.value;
                 });
+            },
+            dataSrc: function(json) {
+                console.log('Dados recebidos:', json);
+                return json.data;
+            },
+            error: function(xhr, error, thrown) {
+                console.error('Erro AJAX:', error);
+                alert('Erro ao carregar dados da tabela. Verifique o console para mais detalhes.');
             }
         },
+            
         columns: [
             { data: 0, name: 'numero_nf' },
             { data: 1, name: 'data_emissao' },

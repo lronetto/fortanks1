@@ -150,6 +150,7 @@ def logs():
     
     # Parâmetros de filtro
     local_filtro = request.args.get('local', '').strip()
+    conteudo_filtro = request.args.get('conteudo', '').strip()
     data_inicial = request.args.get('data_inicial', '')
     data_final = request.args.get('data_final', '')
     
@@ -159,6 +160,9 @@ def logs():
     # Aplicar filtros
     if local_filtro:
         query = query.filter(Logs.local.ilike(f'%{local_filtro}%'))
+    
+    if conteudo_filtro:
+        query = query.filter(Logs.texto.ilike(f'%{conteudo_filtro}%'))
     
     if data_inicial:
         try:

@@ -14,18 +14,24 @@
         </div>
         <div class="card-body">
             <form method="get" action="{{ url_for('admin.logs') }}" class="row">
-                <div class="col-md-4 mb-3">
+                <div class="col-md-3 mb-3">
                     <label for="local">Local</label>
                     <input type="text" class="form-control" id="local" name="local" 
                            value="{{ request.args.get('local', '') }}" 
                            placeholder="Filtrar por local">
                 </div>
                 <div class="col-md-3 mb-3">
+                    <label for="conteudo">Conteúdo</label>
+                    <input type="text" class="form-control" id="conteudo" name="conteudo" 
+                           value="{{ request.args.get('conteudo', '') }}" 
+                           placeholder="Filtrar por conteúdo do log">
+                </div>
+                <div class="col-md-2 mb-3">
                     <label for="data_inicial">Data Inicial</label>
                     <input type="date" class="form-control" id="data_inicial" name="data_inicial" 
                            value="{{ request.args.get('data_inicial', '') }}">
                 </div>
-                <div class="col-md-3 mb-3">
+                <div class="col-md-2 mb-3">
                     <label for="data_final">Data Final</label>
                     <input type="date" class="form-control" id="data_final" name="data_final" 
                            value="{{ request.args.get('data_final', '') }}">
@@ -89,7 +95,7 @@
                 <ul class="pagination justify-content-center">
                     {% if pagination.has_prev %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('admin.logs', page=pagination.prev_num, local=request.args.get('local', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
+                        <a class="page-link" href="{{ url_for('admin.logs', page=pagination.prev_num, local=request.args.get('local', ''), conteudo=request.args.get('conteudo', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
                             Anterior
                         </a>
                     </li>
@@ -107,7 +113,7 @@
                             </li>
                             {% else %}
                             <li class="page-item">
-                                <a class="page-link" href="{{ url_for('admin.logs', page=page_num, local=request.args.get('local', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
+                                <a class="page-link" href="{{ url_for('admin.logs', page=page_num, local=request.args.get('local', ''), conteudo=request.args.get('conteudo', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
                                     {{ page_num }}
                                 </a>
                             </li>
@@ -121,7 +127,7 @@
 
                     {% if pagination.has_next %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('admin.logs', page=pagination.next_num, local=request.args.get('local', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
+                        <a class="page-link" href="{{ url_for('admin.logs', page=pagination.next_num, local=request.args.get('local', ''), conteudo=request.args.get('conteudo', ''), data_inicial=request.args.get('data_inicial', ''), data_final=request.args.get('data_final', '')) }}">
                             Próxima
                         </a>
                     </li>
