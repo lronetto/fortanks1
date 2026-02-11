@@ -1,15 +1,13 @@
-{% extends "base.html" %}
+{% extends "common/base.html" %}
 
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1>{{ unidade.id|default(false) and 'Editar' or 'Nova' }} Unidade</h1>
-        <a href="{{ url_for('unidade.listar') }}" class="btn btn-secondary">
+        <a href="{{ url_for('unidade.index') }}" class="btn btn-secondary">
             <i class="fas fa-arrow-left"></i> Voltar
         </a>
     </div>
-
-    {% include "partials/flash_messages.html" %}
 
     <div class="card">
         <div class="card-body">

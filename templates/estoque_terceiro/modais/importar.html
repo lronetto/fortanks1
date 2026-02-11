@@ -1,0 +1,201 @@
+<!-- Modal de Importação de Estoque Terceiro -->
+<div class="modal fade" id="modalImportarEstoqueTerceiro" tabindex="-1" aria-labelledby="modalImportarEstoqueTerceiroLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarEstoqueTerceiroLabel">Importar Estoque de Terceiros</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formImportarEstoqueTerceiro" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Formato esperado:</strong> Planilha Excel com as seguintes colunas:
+                        <ul class="mb-0 mt-2">
+                            <li>codigo alterdata</li>
+                            <li>tipo item</li>
+                            <li>nome</li>
+                            <li>unidade</li>
+                            <li>quantidade</li>
+                            <li>valor unitario</li>
+                            <li>valor total</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="data_importacao" class="form-label">Data do Estoque <span class="text-danger">*</span></label>
+                        <input type="date" id="data_importacao" name="data" class="form-control" required>
+                        <small class="form-text text-muted">Data de referência do estoque importado.</small>
+                    </div>
+                    
+                    <div class="form-group mb-3">
+                        <label for="arquivo_importacao" class="form-label">Arquivo Excel <span class="text-danger">*</span></label>
+                        <input type="file" id="arquivo_importacao" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
+                        <small class="form-text text-muted">Apenas arquivos Excel (.xlsx ou .xls) são permitidos.</small>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" id="btnImportarEstoqueTerceiro" class="btn btn-primary">
+                        <i class="fas fa-file-upload"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const formImportarEstoqueTerceiro = document.getElementById('formImportarEstoqueTerceiro');
+    if (formImportarEstoqueTerceiro) {
+        formImportarEstoqueTerceiro.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validações
+            const dataImportacao = document.getElementById('data_importacao').value;
+            const arquivo = document.getElementById('arquivo_importacao').files[0];
+            
+            if (!dataImportacao) {
+                alert('A data é obrigatória.');
+                return false;
+            }
+            
+            if (!arquivo) {
+                alert('Selecione um arquivo para importar.');
+                return false;
+            }
+            
+            // Validar extensão do arquivo
+            const extensao = arquivo.name.split('.').pop().toLowerCase();
+            if (!['xlsx', 'xls'].includes(extensao)) {
+                alert('Apenas arquivos Excel (.xlsx ou .xls) são permitidos.');
+                return false;
+            }
+            
+            // Preparar FormData
+            const formData = new FormData(formImportarEstoqueTerceiro);
+            
+            // Garantir que o CSRF token está incluído
+            let csrfToken = formData.get('csrf_token');
+            if (!csrfToken) {
+                // Tentar obter da meta tag
+                csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                if (csrfToken) {
+                    formData.append('csrf_token', csrfToken);
+                } else {
+                    // Tentar obter do formulário
+                    const csrfInput = formImportarEstoqueTerceiro.querySelector('input[name="csrf_token"]');
+                    if (csrfInput) {
+                        csrfToken = csrfInput.value;
+                        formData.set('csrf_token', csrfToken);
+                    }
+                }
+            }
+            
+            if (!csrfToken) {
+                alert('Erro: Token CSRF não encontrado. Recarregue a página e tente novamente.');
+                return false;
+            }
+            
+            // Mostrar loading
+            const btnSubmit = document.getElementById('btnImportarEstoqueTerceiro');
+            const textoOriginal = btnSubmit.innerHTML;
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+            
+            // Enviar requisição
+            fetch('{{ url_for("estoque_terceiro.importar") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                // Tentar ler a resposta como JSON primeiro
+                return response.json().then(data => {
+                    if (!response.ok) {
+                        // Se a resposta não está OK, lançar erro com a mensagem do servidor
+                        throw new Error(data.message || `Erro de rede: ${response.status}`);
+                    }
+                    return data;
+                }).catch(err => {
+                    // Se não conseguir fazer parse do JSON, lançar erro com status
+                    if (!response.ok) {
+                        throw new Error(`Erro de rede: ${response.status}`);
+                    }
+                    throw err;
+                });
+            })
+            .then(data => {
+                if (data.success) {
+                    // Fechar modal
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('modalImportarEstoqueTerceiro'));
+                    if (modal) modal.hide();
+                    
+                    // Mostrar mensagem de sucesso
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Sucesso!',
+                            text: data.message,
+                            icon: 'success',
+                            confirmButtonText: 'OK'
+                        }).then(() => {
+                            // Recarregar tabela
+                            if (typeof table !== 'undefined' && table.ajax) {
+                                table.ajax.reload();
+                            } else {
+                                window.location.reload();
+                            }
+                        });
+                    } else {
+                        alert('Sucesso: ' + data.message);
+                        window.location.reload();
+                    }
+                } else {
+                    // Mostrar erro
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            title: 'Erro!',
+                            text: data.message,
+                            icon: 'error',
+                            confirmButtonText: 'OK'
+                        });
+                    } else {
+                        alert('Erro: ' + data.message);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao importar estoque terceiro:', error);
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        title: 'Erro!',
+                        text: 'Ocorreu um erro ao importar o estoque: ' + error.message,
+                        icon: 'error',
+                        confirmButtonText: 'OK'
+                    });
+                } else {
+                    alert('Erro ao importar: ' + error.message);
+                }
+            })
+            .finally(() => {
+                // Restaurar botão
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = textoOriginal;
+            });
+        });
+    }
+    
+    // Definir data padrão como hoje quando abrir o modal
+    const modalImportar = document.getElementById('modalImportarEstoqueTerceiro');
+    if (modalImportar) {
+        modalImportar.addEventListener('show.bs.modal', function() {
+            const hoje = new Date();
+            document.getElementById('data_importacao').value = hoje.toISOString().split('T')[0];
+            document.getElementById('arquivo_importacao').value = '';
+        });
+    }
+});
+</script>

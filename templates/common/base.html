@@ -287,6 +287,12 @@
                        $('#databookSubmenu').addClass('show');
                        $('#databookSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
+                   
+                   // Auto-abrir o submenu de Contabilidade se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/estoque-terceiro')) {
+                       $('#contabilidadeSubmenu').addClass('show');
+                       $('#contabilidadeSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
    
                    // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em um link
                    if (window.innerWidth <= 768) {
@@ -622,7 +628,7 @@
                                     </a>
                                 </li>
                                 <li class="{{ is_active('admin/unidades') }}">
-                                    <a href="{{ url_for('unidade.listar') }}">
+                                    <a href="{{ url_for('unidade.index') }}">
                                         <i class="fas fa-ruler"></i> Unidades
                                     </a>
                                 </li>
@@ -907,6 +913,23 @@
                         <li class="{{ is_active('nota_fiscal.analise_transferencias') }}">
                             <a href="{{ url_for('nota_fiscal.analise_transferencias') }}">
                                 <i class="fas fa-random"></i> Análise de Transferências
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+                
+                <!-- Módulo de Contabilidade -->
+                {% if current_user.is_permissao('estoque') %}
+                <li class="{{ is_active('estoque_terceiro') }}">
+                    <a href="#contabilidadeSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-calculator"></i> Contabilidade
+                    </a>
+                    <ul class="collapse list-unstyled" id="contabilidadeSubmenu">
+                        <li class="{{ is_active('estoque_terceiro.index') }}">
+                            <a href="{{ url_for('estoque_terceiro.index') }}">
+                                <i class="fas fa-balance-scale"></i> Comparativo Estoque
                             </a>
                         </li>
                     </ul>

@@ -1,0 +1,53 @@
+<!-- Modal de Edição de Unidade -->
+<div class="modal fade" id="modalEditarUnidade" tabindex="-1" aria-labelledby="modalEditarUnidadeLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formEditarUnidade" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="unidade_id_editar" name="id">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarUnidadeLabel">
+                        <i class="fas fa-edit"></i> Editar Unidade
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nome_editar" class="form-label">Nome <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="nome_editar" name="nome" 
+                            maxlength="10" required>
+                        <div class="form-text">Nome da unidade (máximo 10 caracteres). Ex: KG, L, M, etc.</div>
+                        <div class="invalid-feedback">
+                            Por favor, informe o nome da unidade.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="descricao_editar" class="form-label">Descrição</label>
+                        <input type="text" class="form-control" id="descricao_editar" name="descricao" 
+                            maxlength="100">
+                        <div class="form-text">Descrição detalhada da unidade. Ex: Quilograma, Litro, Metro.</div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="ativo_editar" name="ativo">
+                        <label class="form-check-label" for="ativo_editar">Ativo</label>
+                        <div class="form-text">Se desativada, a unidade não aparecerá em novos registros.</div>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="padrao_editar" name="padrao">
+                        <label class="form-check-label" for="padrao_editar">Definir como unidade padrão</label>
+                        <div class="form-text">A unidade padrão será usada quando nenhuma outra for especificada.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

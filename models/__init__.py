@@ -31,6 +31,7 @@ from .departamento import Departamento
 # Importamos material e solicitacao explicitamente
 from .material import Materiais, MateriaisGrupos
 from .estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
+from .estoque_terceiro import EstoqueTerceiro
 from .nota_fiscal import NotaFiscal, NotaFiscalItem
 
 # Importamos os novos modelos de usinagem de concreto
@@ -80,6 +81,7 @@ __all__ = [
     'Solicitacoes', 'SolicitacoesItens', 
     'Cargo','Departamento','Colaborador','DadosBancarios', 
     'Estoque', 'EstoqueMovimentacoes', 'EstoqueInventarios', 'EstoqueInventariosItens',
+    'EstoqueTerceiro',
     'NotaFiscal', 'NotaFiscalItem', 
     'Cliente', 'Endereco', 
     'Tanques', 'TanquesGrupos', 'TanquesPecas',

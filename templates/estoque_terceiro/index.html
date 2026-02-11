@@ -1,0 +1,389 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Comparativo de Estoques{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="d-flex justify-content-between align-items-center mb-4 cabecalho">
+        <div>
+            <h1 class="h3 text-gray-800">Comparativo de Estoques</h1>
+            <p class="mb-0">Compare o estoque do sistema com o estoque de terceiros.</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImportarEstoqueTerceiro">
+                <i class="fas fa-file-upload"></i> Importar Estoque Terceiro
+            </button>
+        </div>
+    </div>
+
+    <!-- Cards de Estatísticas -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Diferença Total (Quantidade)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardDiferencaTotal">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Diferença Total (Valor)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardDiferencaValor">R$ 0,00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Percentual Médio Diferença
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardPercentualMedio">0%</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-percentage fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Total de Itens Comparados
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardTotalItens">0</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label for="filtro_data" class="form-label">Data do Estoque Terceiro</label>
+                    <select id="filtro_data" class="form-select">
+                        <option value="">Todas as datas</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="button" class="btn btn-secondary" id="btnLimparFiltros">
+                        <i class="fas fa-times"></i> Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela Comparativa -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Comparativo de Estoques</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table id="tabelaComparativo" class="table table-bordered table-striped table-hover" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Código ERP</th>
+                            <th>Material</th>
+                            <th>Tipo</th>
+                            <th>Unidade Sistema</th>
+                            <th>Unidade Terceiro</th>
+                            <th class="text-end">Estoque Sistema</th>
+                            <th class="text-end">Estoque Terceiro</th>
+                            <th class="text-end">Diferença</th>
+                            <th class="text-end">Diferença %</th>
+                            <th class="text-end">Valor Unitário</th>
+                            <th class="text-end">Valor Total</th>
+                            <th>Data Estoque Terceiro</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados carregados via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Importação -->
+{% include 'estoque_terceiro/modais/importar.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+    let table;
+    
+    // Carregar datas disponíveis
+    function carregarDatasDisponiveis() {
+        fetch('{{ url_for("estoque_terceiro.api_datas_disponiveis") }}')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const select = $('#filtro_data');
+                    select.empty();
+                    select.append('<option value="">Todas as datas</option>');
+                    data.datas.forEach(data => {
+                        const dataFormatada = new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+                        select.append(`<option value="${data}">${dataFormatada}</option>`);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar datas:', error);
+            });
+    }
+    
+    // Inicializar DataTable
+    function inicializarDataTable() {
+        table = $('#tabelaComparativo').DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: '{{ url_for("estoque_terceiro.api_comparativo") }}',
+                type: 'GET',
+                data: function(d) {
+                    // Adicionar filtro de data
+                    const dataFiltro = $('#filtro_data').val();
+                    if (dataFiltro) {
+                        d.data_filtro = dataFiltro;
+                    }
+                },
+                dataSrc: function(json) {
+                    if (json.error) {
+                        console.error('Erro ao carregar dados:', json.error);
+                        return [];
+                    }
+                    // Atualizar cards com estatísticas
+                    atualizarCardsEstatisticas(json.data);
+                    return json.data;
+                },
+                error: function(xhr, error, thrown) {
+                    console.error('Erro AJAX:', error);
+                    alert('Erro ao carregar dados da tabela. Verifique o console para mais detalhes.');
+                }
+            },
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            },
+            order: [[1, 'asc']], // Ordenar por nome do material
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            scrollX: true,
+            columns: [
+                { data: 'codigo_erp', name: 'codigo_erp' },
+                { data: 'material_nome', name: 'material_nome' },
+                { data: 'tipo', name: 'tipo' },
+                { 
+                    data: 'unidade_sistema', 
+                    name: 'unidade_sistema',
+                    render: function(data, type, row) {
+                        return data || '-';
+                    }
+                },
+                { 
+                    data: 'unidade_terceiro', 
+                    name: 'unidade_terceiro',
+                    render: function(data, type, row) {
+                        let html = data || '-';
+                        if (row.unidade_convertida && row.fator_conversao !== 1.0) {
+                            html += ' <i class="fas fa-exchange-alt text-info" title="Convertido: ' + 
+                                   parseFloat(row.estoque_terceiro_original).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + 
+                                   ' ' + data + ' × ' + parseFloat(row.fator_conversao).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 6 }) + 
+                                   ' = ' + parseFloat(row.estoque_terceiro).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + 
+                                   ' ' + (row.unidade_sistema || '') + '"></i>';
+                        }
+                        return html;
+                    }
+                },
+                { 
+                    data: 'estoque_sistema', 
+                    name: 'estoque_sistema',
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        return parseFloat(data).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+                    }
+                },
+                { 
+                    data: 'estoque_terceiro', 
+                    name: 'estoque_terceiro',
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        return parseFloat(data).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+                    }
+                },
+                { 
+                    data: 'diferenca', 
+                    name: 'diferenca',
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data);
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`;
+                    }
+                },
+                { 
+                    data: 'diferenca_percentual', 
+                    name: 'diferenca_percentual',
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data);
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>`;
+                    }
+                },
+                { 
+                    data: 'valor_unitario', 
+                    name: 'valor_unitario',
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    }
+                },
+                { 
+                    data: 'valor_total', 
+                    name: 'valor_total',
+                    className: 'text-end',
+                    render: function(data, type, row) {
+                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    }
+                },
+                { 
+                    data: 'data_estoque_terceiro', 
+                    name: 'data_estoque_terceiro',
+                    render: function(data, type, row) {
+                        if (!data) return '-';
+                        const dataFormatada = new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
+                        return dataFormatada;
+                    }
+                }
+            ],
+            drawCallback: function() {
+                // Inicializar tooltips após desenhar a tabela
+                $('[data-bs-toggle="tooltip"]').tooltip();
+            }
+        });
+    }
+    
+    // Evento de mudança no filtro de data
+    $('#filtro_data').on('change', function() {
+        if (table) {
+            table.ajax.reload();
+        }
+    });
+    
+    // Botão limpar filtros
+    $('#btnLimparFiltros').on('click', function() {
+        $('#filtro_data').val('');
+        if (table) {
+            table.ajax.reload();
+        }
+    });
+    
+    // Função para atualizar cards com estatísticas
+    function atualizarCardsEstatisticas(dados) {
+        if (!dados || dados.length === 0) {
+            $('#cardDiferencaTotal').text('0');
+            $('#cardDiferencaValor').text('R$ 0,00');
+            $('#cardPercentualMedio').text('0%');
+            $('#cardTotalItens').text('0');
+            return;
+        }
+        
+        let diferencaTotal = 0;
+        let diferencaValorTotal = 0;
+        let somaPercentuais = 0;
+        let itensComPercentual = 0;
+        let totalItens = dados.length;
+        
+        dados.forEach(function(item) {
+            const diferenca = parseFloat(item.diferenca) || 0;
+            const diferencaPercentual = parseFloat(item.diferenca_percentual) || 0;
+            const valorUnitario = parseFloat(item.valor_unitario) || 0;
+            
+            diferencaTotal += diferenca;
+            
+            // Calcular diferença em valor (diferença * valor unitário)
+            if (valorUnitario > 0) {
+                diferencaValorTotal += diferenca * valorUnitario;
+            }
+            
+            // Somar percentuais para calcular média
+            if (!isNaN(diferencaPercentual) && isFinite(diferencaPercentual)) {
+                somaPercentuais += Math.abs(diferencaPercentual);
+                itensComPercentual++;
+            }
+        });
+        
+        // Atualizar card de diferença total (quantidade)
+        const classeDiferenca = diferencaTotal < 0 ? 'text-danger' : (diferencaTotal > 0 ? 'text-success' : 'text-gray-800');
+        $('#cardDiferencaTotal').removeClass('text-danger text-success text-gray-800').addClass(classeDiferenca);
+        $('#cardDiferencaTotal').text(diferencaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }));
+        
+        // Atualizar card de diferença total (valor)
+        const classeValor = diferencaValorTotal < 0 ? 'text-danger' : (diferencaValorTotal > 0 ? 'text-success' : 'text-gray-800');
+        $('#cardDiferencaValor').removeClass('text-danger text-success text-gray-800').addClass(classeValor);
+        $('#cardDiferencaValor').text(diferencaValorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        
+        // Atualizar card de percentual médio
+        const percentualMedio = itensComPercentual > 0 ? (somaPercentuais / itensComPercentual) : 0;
+        $('#cardPercentualMedio').text(percentualMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%');
+        
+        // Atualizar card de total de itens
+        $('#cardTotalItens').text(totalItens.toLocaleString('pt-BR'));
+    }
+    
+    // Carregar datas e inicializar tabela
+    carregarDatasDisponiveis();
+    inicializarDataTable();
+    
+    // Recarregar tabela após fechar modal de importação
+    $('#modalImportarEstoqueTerceiro').on('hidden.bs.modal', function() {
+        carregarDatasDisponiveis();
+        if (table) {
+            table.ajax.reload();
+        }
+    });
+});
+</script>
+{% endblock %}
