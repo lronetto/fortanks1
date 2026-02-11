@@ -62,7 +62,9 @@ def api_listar_documentos(nota_id):
             if not documentos:
                 try:
                     nota.get_pdf()
-                except Exception:
+                    print(f'nota.pdf: {nota.pdf}')
+                except Exception as e:
+                    print(f'Erro ao buscar PDF no Arquivei: {str(e)}')
                     pass
 
         for doc in documentos:

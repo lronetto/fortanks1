@@ -74,25 +74,9 @@ def api_get_dados_notas_fiscais(request):
     # Subquery pagamento - retorna a data de pagamento se houver, NULL caso contrário
     documento_normalizado = func.cast(func.replace(DadoAnalitico.documento, ".", ""), Integer)
     numero_nf_normalizado = func.cast(NotaFiscal.numero_nf, Integer)
-    pagamento_column = (
-        select(DadoAnalitico.data_pagamento)
-        .select_from(DadoAnalitico)
-        .where(
-            and_(
-                NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
-                DadoAnalitico.valor >= NotaFiscal.valor_total*0.95,
-                DadoAnalitico.valor <= NotaFiscal.valor_total*1.05,
-                documento_normalizado == numero_nf_normalizado,
-            )
-        )
-        .limit(1)
-        .correlate(NotaFiscal)
-        .scalar_subquery()
-        .label("pagamento")
-    )
-    if pagamento_5percent:
-        pc_column = (
-            select(DadoAnalitico.plano_conta_id)
+    if True:
+        pagamento_column = (
+            select(DadoAnalitico.data_pagamento)
             .select_from(DadoAnalitico)
             .where(
                 and_(
@@ -105,151 +89,157 @@ def api_get_dados_notas_fiscais(request):
             .limit(1)
             .correlate(NotaFiscal)
             .scalar_subquery()
-            .label("pc")
+            .label("pagamento")
         )
-    else:
-        pc_column = (
-            select(DadoAnalitico.plano_conta_id)
-            .select_from(DadoAnalitico)
+        if pagamento_5percent:
+            pc_column = (
+                select(DadoAnalitico.plano_conta_id)
+                .select_from(DadoAnalitico)
+                .where(
+                    and_(
+                        NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
+                        DadoAnalitico.valor >= NotaFiscal.valor_total*0.95,
+                        DadoAnalitico.valor <= NotaFiscal.valor_total*1.05,
+                        documento_normalizado == numero_nf_normalizado,
+                    )
+                )
+                .limit(1)
+                .correlate(NotaFiscal)
+                .scalar_subquery()
+                .label("pc")
+            )
+        else:
+            pc_column = (
+                select(DadoAnalitico.plano_conta_id)
+                .select_from(DadoAnalitico)
+                .where(
+                    and_(
+                        NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
+                        NotaFiscal.valor_total == DadoAnalitico.valor,
+                        documento_normalizado == numero_nf_normalizado,
+                    )
+                )
+                .limit(1)
+                .correlate(NotaFiscal)
+                .scalar_subquery()
+                .label("pc")
+            )
+        # Subquery centro de custo - retorna o ID do centro de custo se houver relação, NULL caso contrário
+        # Para notas de material (tipo 0 ou 1): via NotaFiscalItem -> Tanques -> Contrato
+        
+        
+        # Expressão reutilizável: conf contém cnpj em cnpjs_associados (evita mix de collations)
+        # json_extract retorna o array inteiro; LIKE no texto garante match por CNPJ e collation uniforme
+        _conf_cnpjs = func.json_extract(Contrato.conf, '$.cnpjs_associados')
+        _cnpj_pattern = func.concat('%"', NotaFiscal.cnpj_destinatario, '"%')
+        _conf_cnpjs_c = _conf_cnpjs.collate('utf8mb4_unicode_ci')
+        _cnpj_pattern_c = _cnpj_pattern.collate('utf8mb4_unicode_ci')
+
+        # Subquery para notas de material (tipo 0, 1) via CNPJs associados
+        # Destinatário deve estar em cnpjs_associados do contrato
+        centro_custo_column_material_cnpj = (
+            select(CentroCusto.id)
+            .select_from(Contrato)
+            .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
             .where(
                 and_(
-                    NotaFiscal.data_emissao <= DadoAnalitico.data_pagamento,
-                    NotaFiscal.valor_total == DadoAnalitico.valor,
-                    documento_normalizado == numero_nf_normalizado,
+                    NotaFiscal.tipo.in_([0, 1]),
+                    Contrato.conf.isnot(None),
+                    _conf_cnpjs_c.like(_cnpj_pattern_c)
                 )
             )
             .limit(1)
             .correlate(NotaFiscal)
             .scalar_subquery()
-            .label("pc")
         )
-    # Subquery centro de custo - retorna o ID do centro de custo se houver relação, NULL caso contrário
-    # Para notas de material (tipo 0 ou 1): via NotaFiscalItem -> Tanques -> Contrato
-    centro_custo_column_material = (
-        select(CentroCusto.id)
-        .select_from(NotaFiscalItem)
-        .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)
-        .join(Contrato, Contrato.id == Tanques.contrato_id)
-        .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
-        .where(
-            and_(
-                NotaFiscalItem.nf_id == NotaFiscal.id,
-                NotaFiscal.tipo.in_([0, 1])
-            )
-        )
-        .limit(1)
-        .correlate(NotaFiscal)
-        .scalar_subquery()
-    )
-    
-    # Subquery para notas de material (tipo 0, 1) via CNPJs associados
-    # Apenas o destinatário pode associar: cnpj_destinatario deve estar em cnpjs_associados do contrato
-    centro_custo_column_material_cnpj = (
-        select(CentroCusto.id)
-        .select_from(Contrato)
-        .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
-        .where(
-            and_(
-                NotaFiscal.tipo.in_([0, 1]),
-                Contrato.conf.isnot(None),
-                func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_destinatario}"%')
-            )
-        )
-        .limit(1)
-        .correlate(NotaFiscal)
-        .scalar_subquery()
-    )
-    
-    # Subquery para notas de serviço (tipo 3) via CNPJs associados
-    # Verifica se o CNPJ do emitente ou destinatário está na lista cnpjs_associados do contrato
-    centro_custo_column_servico = (
-        select(CentroCusto.id)
-        .select_from(Contrato)
-        .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
-        .where(
-            and_(
-                NotaFiscal.tipo == 3,
-                Contrato.conf.isnot(None),
-                or_(
-                    func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_emitente}"%'),
-                    func.json_extract(Contrato.conf, '$.cnpjs_associados').like(f'%"{NotaFiscal.cnpj_destinatario}"%')
+
+        # Subquery para notas de serviço (tipo 3) via CNPJs associados
+        # Mesmo critério: cnpj_destinatario contido em cnpjs_associados (json_extract retorna array, usa LIKE)
+        centro_custo_column_servico = (
+            select(CentroCusto.id)
+            .select_from(Contrato)
+            .join(CentroCusto, CentroCusto.id == Contrato.centro_custo_id)
+            .where(
+                and_(
+                    NotaFiscal.tipo == 3,
+                    Contrato.conf.isnot(None),
+                    _conf_cnpjs_c.like(_cnpj_pattern_c)
                 )
             )
+            .limit(1)
+            .correlate(NotaFiscal)
+            .scalar_subquery()
         )
-        .limit(1)
-        .correlate(NotaFiscal)
-        .scalar_subquery()
-    )
+        
+        # Combinar: material (itens) -> material (cnpj destinatário) -> serviço (cnpj)
+        centro_custo_column = func.coalesce(
+
+            centro_custo_column_material_cnpj,
+            centro_custo_column_servico
+        ).label("centro_custo")
+        # Subquery centro de custo via EXISTS (verifica se item da NF está em Tanques.item_nf)
     
-    # Combinar: material (itens) -> material (cnpj destinatário) -> serviço (cnpj)
-    centro_custo_column = func.coalesce(
-        centro_custo_column_material,
-        centro_custo_column_material_cnpj,
-        centro_custo_column_servico
-    ).label("centro_custo")
-    # Subquery centro de custo via EXISTS (verifica se item da NF está em Tanques.item_nf)
-   
-    # Uploads via EXISTS
-    def _upload_exists(tipo=None):
-        conditions = [Upload.pai_id == NotaFiscal.id, Upload.pai == "NotaFiscal"]
-        if tipo is not None:
-            conditions.append(Upload.tipo == tipo)
-        return exists(select(1).select_from(Upload).where(and_(*conditions)))
+        # Uploads via EXISTS
+        def _upload_exists(tipo=None):
+            conditions = [Upload.pai_id == NotaFiscal.id, Upload.pai == "NotaFiscal"]
+            if tipo is not None:
+                conditions.append(Upload.tipo == tipo)
+            return exists(select(1).select_from(Upload).where(and_(*conditions)))
 
-    upload_column = case((_upload_exists(), 1), else_=0).label("upload")
-    upload_arquivei_column = case((_upload_exists(1), 1), else_=0).label("upload_arquivei")
-    upload_protocolo_column = case((_upload_exists(2), 1), else_=0).label("upload_protocolo")
-    upload_reembolso_column = case((_upload_exists(3), 1), else_=0).label("upload_reembolso")
-    if reembolso_id:
-        reembolso_column = case((exists(select(1).select_from(ReembolsosDocumentos).where(ReembolsosDocumentos.nota_fiscal_id == NotaFiscal.id, ReembolsosDocumentos.reembolso_id == reembolso_id)), 1), else_=0).label("reembolso")
-    else:
-        reembolso_column = None
+        upload_column = case((_upload_exists(), 1), else_=0).label("upload")
+        upload_arquivei_column = case((_upload_exists(1), 1), else_=0).label("upload_arquivei")
+        upload_protocolo_column = case((_upload_exists(2), 1), else_=0).label("upload_protocolo")
+        upload_reembolso_column = case((_upload_exists(3), 1), else_=0).label("upload_reembolso")
+        if reembolso_id:
+            reembolso_column = case((exists(select(1).select_from(ReembolsosDocumentos).where(ReembolsosDocumentos.nota_fiscal_id == NotaFiscal.id, ReembolsosDocumentos.reembolso_id == reembolso_id)), 1), else_=0).label("reembolso")
+        else:
+            reembolso_column = None
 
 
-    # Percentual de importação por NF
-    percentual_importacao_column = (
-        select(
+        # Percentual de importação por NF
+        percentual_importacao_column = (
+            select(
+                case(
+                    (
+                        func.count(NotaFiscalItem.id) > 0,
+                        (
+                            func.sum(case((NotaFiscalItem.importado_estoque.is_(True), 1), else_=0)).cast(
+                                db.Numeric(15, 2)
+                            )
+                            / func.count(NotaFiscalItem.id).cast(db.Numeric(15, 2))
+                        )
+                        * 100,
+                    ),
+                    else_=0,
+                )
+            )
+            .select_from(NotaFiscalItem)
+            .where(NotaFiscalItem.nf_id == NotaFiscal.id)
+            .correlate(NotaFiscal)
+            .scalar_subquery()
+            .label("percentual_importacao")
+        )
+
+        # Status de liberação extraído de dados_adicionais
+        # Usa CASE para tratar valores booleanos/numéricos do JSON
+        # Verifica se o campo liberada existe e é verdadeiro (1, true, ou "true")
+        liberada_column = (
             case(
                 (
-                    func.count(NotaFiscalItem.id) > 0,
-                    (
-                        func.sum(case((NotaFiscalItem.importado_estoque.is_(True), 1), else_=0)).cast(
-                            db.Numeric(15, 2)
-                        )
-                        / func.count(NotaFiscalItem.id).cast(db.Numeric(15, 2))
-                    )
-                    * 100,
+                    and_(
+                        NotaFiscal.dados_adicionais.isnot(None),
+                        or_(
+                            func.cast(func.json_extract(NotaFiscal.dados_adicionais, "$.liberada"), Integer) == 1,
+                            func.json_extract(NotaFiscal.dados_adicionais, "$.liberada") == 'true',
+                        ),
+                    ),
+                    1,
                 ),
                 else_=0,
             )
+            .cast(Integer)
+            .label("liberada")
         )
-        .select_from(NotaFiscalItem)
-        .where(NotaFiscalItem.nf_id == NotaFiscal.id)
-        .correlate(NotaFiscal)
-        .scalar_subquery()
-        .label("percentual_importacao")
-    )
-
-    # Status de liberação extraído de dados_adicionais
-    # Usa CASE para tratar valores booleanos/numéricos do JSON
-    # Verifica se o campo liberada existe e é verdadeiro (1, true, ou "true")
-    liberada_column = (
-        case(
-            (
-                and_(
-                    NotaFiscal.dados_adicionais.isnot(None),
-                    or_(
-                        func.cast(func.json_extract(NotaFiscal.dados_adicionais, "$.liberada"), Integer) == 1,
-                        func.json_extract(NotaFiscal.dados_adicionais, "$.liberada") == 'true',
-                    ),
-                ),
-                1,
-            ),
-            else_=0,
-        )
-        .cast(Integer)
-        .label("liberada")
-    )
 
 
     query = (
@@ -373,6 +363,8 @@ def api_get_dados_notas_fiscais(request):
             tipo = [2]
         elif tipo_nfe == "3":
             tipo = [3]
+        elif tipo_nfe == "4":
+            tipo = [1,3]
         else:
             tipo = None
         if tipo is not None:

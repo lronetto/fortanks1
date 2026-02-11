@@ -49,7 +49,8 @@ def _processar_notas_fiscais(query):
     
     if not nf_ids:
         return []
-    
+            
+        #print(f'resultado: {resultado}')
     # Separar notas de material (tipo 0, 1) e notas de serviço (tipo 3)
     notas_material_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo in [0, 1]]
     notas_servico_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo == 3]
@@ -267,17 +268,13 @@ def api_dados():
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
     
     # Converter filtro tipo_nota para tipo_nfe
-    tipo_nfe = None
+    tipo_nfe = '4'
     if tipo_nota == 'material':
         tipo_nfe = '0'  # Tipo 0 ou 1 (NFE)
     elif tipo_nota == 'servico':
         tipo_nfe = '3'  # Tipo 3 (NFSe)
     # Se tipo_nota for vazio ou None, tipo_nfe permanece None (inclui todos)
     
-    time_start = time.time()
-    # Criar um objeto request mock para api_get_dados_notas_fiscais
-    print(f'tempo de criação do mock request: {time.time() - time_start}')
-    time_start = time.time()
     print(f'centro_custo_ids: {centro_custo_ids}')
     json_request = {
         'data_inicio': data_inicio,
@@ -286,15 +283,13 @@ def api_dados():
         'status_pagamento': status_pagamento,
         #'plano_conta_id': 44,
         'emitente': 'Matriz',
-        'tipo_operacao': 'venda',
         'pagamento_5percent': True,
         'tipo_nfe': tipo_nfe  # Filtro de tipo de nota (None = todos, '0' = material, '3' = serviço)
     }
+    print(f'json_request: {json_request}')
     query = api_get_dados_notas_fiscais(json_request)
-    print(f'tempo de execução da query: {time.time() - time_start}')
-    time_start = time.time()
+   
     dados_relatorio = _processar_notas_fiscais(query)
-    print(f'tempo de processamento dos dados: {time.time() - time_start}')
     # Calcular totais por categoria
     total_valor = sum([d['valor'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
     total_quantidade = sum([d['quantidade'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])

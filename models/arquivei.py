@@ -57,14 +57,17 @@ class Arquivei:
                     self.tipo = 'cte'
                 elif int(self.chave_acesso[20:22]) == 55:
                     self.tipo = 'nfe'
-            else:
-                if len(self.chave_acesso) == 50:
-                    from models.nota_fiscal import NotaFiscal
-                    nota = NotaFiscal.query.filter_by(chave_acesso=self.chave_acesso).first()
-                    json_nota = json.loads(nota.dados_adicionais)
-                    id = json_nota.get('id',None)
-                    self.id = id
-                    self.tipo = 'nfse'
+            elif len(self.chave_acesso) == 50:
+                from models.nota_fiscal import NotaFiscal
+                nota = NotaFiscal.query.filter_by(chave_acesso=self.chave_acesso).first()
+                json_nota = json.loads(nota.dados_adicionais)
+                id = json_nota.get('id',None)
+                self.id = id
+                self.tipo = 'nfse'
+            #52b7814201c4afacb5fe6f90f73b41cb   
+            elif len(self.chave_acesso) == 32:
+                self.tipo = 'nfse'
+
             if pdf:
                 self.get_pdf()
         if self.chave_acesso and cancelamento:
@@ -298,18 +301,17 @@ class Arquivei:
             'X-API-KEY': ARQUIVEI_API_KEY,
             'Content-Type': 'application/json'
         }
-        #print(f'tipo: {self.tipo}')
+        print(f'tipo: {self.tipo}')
         if self.tipo == 'cte':
             url = f"https://api.arquivei.com.br//v1/cte/dacte?access_key={self.chave_acesso}"
         elif self.tipo == 'nfe':
             url = f"https://api.arquivei.com.br/v1/nfe/danfe?access_key={self.chave_acesso}"
         elif self.tipo == 'nfse':
-
             url = f"https://api.arquivei.com.br/v1/nfse/danfse?id={self.chave_acesso}"
         response = requests.get(url, headers=headers)
         response_data = response.json() 
         #print('get pdf')
-        #print(f'response_data: {response_data}')
+        print(f'response_data: {response_data}')
         if response_data.get('status').get('code') == 200:
             self.pdf = response_data.get('data').get('encoded_pdf')
             #print('pdf: ',self._pdf)

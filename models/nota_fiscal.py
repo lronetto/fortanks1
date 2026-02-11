@@ -174,13 +174,14 @@ class NotaFiscal(db.Model):
         else:
             self.xml_data = xml_data
             dicta = self.get_xml_json()
-            if dicta['CompNfse']:
+            print(f'dicta: {dicta}')
+            if dicta.get('CompNfse') or dicta.get('tcListaNFse') or dicta.get('ListaNfse') or dicta.get('NFSe'):
                 self.tipo = 'nfse'
-            elif dicta['NFe']:
+            elif dicta.get('NFe'):
                 self.tipo = 'nfe'
-            elif dicta['CTe']:
+            elif dicta.get('CTe'):
                 self.tipo = 'cte'
-       
+        print(f'self.tipo: {self.tipo}')
         if self.tipo:
             if self.tipo == 'nfe':
                 self.processar_nfe()
@@ -407,44 +408,64 @@ class NotaFiscal(db.Model):
             self.logs['erro'] = str(e)
             return False
     def processar_nfse(self):
+        import traceback
         chave_acesso, dados = self.extrair_dados_xml_nfse()
-        if not chave_acesso or not dados:
-            return False
         print(f'chave_acesso: {chave_acesso}')
-        #print(f'dados: {dados}')
+        print(f'dados: {dados}')
+        if not chave_acesso or not dados:
+            logger.warning("processar_nfse: extração retornou chave ou dados vazios")
+            return False
 
-       
-        existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
-        if existente:
-            self.logs['existente'] += 1
-            self.logs['existentes'].append(existente.to_dict())
-            existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
-            existente.save()
-            return existente
         try:
-            if dados.get('dados_adicionais').get('cancelada'):
+            existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
+            if existente:
+                #self.logs['existente'] += 1
+                #self.logs['existentes'].append(existente.to_dict())
+                existente.dados_adicionais = json.dumps(dados.get('dados_adicionais') or {}, ensure_ascii=False)
+                existente.save()
+                return existente
+        except Exception as e:
+            logger.error(f"processar_nfse [nota existente]: {e}", exc_info=True)
+            #self.logs['erro'] = f"Ao atualizar nota existente: {str(e)}"
+            return False
+
+        dados_adicionais = dados.get('dados_adicionais') or {}
+        try:
+            if dados_adicionais.get('cancelada'):
                 self.status_processamento = 'cancelada'
             else:
                 self.status_processamento = 'importado'
             self.tipo = 3
-            self.xml_data = self.data.get('xml',None)
+            self.xml_data =base64.b64encode(self.xml_data.encode('utf-8')).decode('utf-8')
             self.numero_nf = dados.get('Numero')
             self.chave_acesso = chave_acesso
             self.data_emissao = dados.get('DataEmissao')
-            self.valor_total = dados.get('valores').get('ValorLiquidoNfse')
+            self.valor_total = (dados.get('valores') or {}).get('ValorLiquidoNfse') or '0'
             self.cnpj_emitente = dados.get('cnpj_emitente')
             self.nome_emitente = dados.get('nome_emitente')
             self.cnpj_destinatario = dados.get('cnpj_destinatario')
             self.nome_destinatario = dados.get('nome_destinatario')
-            self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
+            self.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"processar_nfse [atribuir campos]: {e}", exc_info=True)
+            #self.logs['erro'] = f"Ao atribuir campos da NFSe: {str(e)}\n{traceback.format_exc()}"
+            return False
+
+        try:
             self.save()
             db.session.refresh(self)
-            self.logs['inserido'] += 1
-            self.logs['inseridos'].append(self.to_dict())
-            return self
         except Exception as e:
-            logger.error(f"Erro ao processar NFSE: {str(e)}")
-            self.logs['erro'] = str(e)
+            logger.error(f"processar_nfse [save/refresh]: {e}", exc_info=True)
+            #self.logs['erro'] = f"Ao salvar NFSe no banco: {str(e)}\n{traceback.format_exc()}"
+            return False
+
+        try:
+            pass
+            #self.logs['inserido'] += 1
+            #self.logs['inseridos'].append(self.to_dict())
+        except Exception as e:
+            logger.error(f"processar_nfse [to_dict/inserido]: {e}", exc_info=True)
+            #self.logs['erro'] = f"Ao registrar log de inserção (to_dict): {str(e)}\n{traceback.format_exc()}"
             return False
     def processar_nfe(self):
         """
@@ -929,146 +950,295 @@ class NotaFiscal(db.Model):
         except Exception as e:
             logger.error(f"Erro ao extrair dados do XML: {str(e)}")
             return None, None
+    def _nfse_dict_get(self, obj, *path):
+        """Obtém valor aninhado em dict do xmltodict, suportando chaves com namespace e listas de 1 elemento."""
+        for key in path:
+            if obj is None or not isinstance(obj, dict):
+                return None
+            val = obj.get(key)
+            if val is None and isinstance(obj, dict):
+                for k, v in obj.items():
+                    if k == key or (k.startswith('{') and k.endswith('}' + key)):
+                        val = v
+                        break
+            if val is not None and isinstance(val, list) and len(val) == 1:
+                val = val[0]
+            obj = val
+        return obj
+
+    def _nfse_text(self, val):
+        """Extrai texto de valor do xmltodict (string, dict com #text ou atributo @id)."""
+        if val is None:
+            return ''
+        if isinstance(val, str):
+            return val.strip()
+        if isinstance(val, dict):
+            return (val.get('#text') or val.get('@Id') or '').strip() if isinstance(val.get('#text') or val.get('@Id'), str) else ''
+        return str(val).strip() if val else ''
+
+    def _nfse_val(self, d, key):
+        """Obtém valor de d por key ou por chave com namespace (ex.: {uri}key)."""
+        if not d or not isinstance(d, dict):
+            return None
+        if d.get(key) is not None:
+            return d.get(key)
+        for k, v in d.items():
+            if isinstance(k, str) and (k == key or k.endswith('}' + key)):
+                return v
+        return None
+
+    def _extrair_nfse_lista_nfse(self, root):
+        """Formato ListaNfse > CompNfse > Nfse > InfNfse (ex.: XML 40 - VALE)."""
+        comp = self._nfse_dict_get(root, 'ListaNfse', 'CompNfse')
+        nfse_el = self._nfse_dict_get(comp, 'Nfse') if comp else None
+        inf = self._nfse_dict_get(nfse_el, 'InfNfse') if nfse_el else None
+        if not inf:
+            return None, None
+        if isinstance(inf, list):
+            inf = inf[0] if inf else None
+        if not inf or not isinstance(inf, dict):
+            return None, None
+        chave = (inf.get('@Id') or '').strip()
+        if chave.startswith('NFS'):
+            chave = chave[3:]
+        decl = self._nfse_dict_get(inf, 'DeclaracaoPrestacaoServico', 'InfDeclaracaoPrestacaoServico')
+        if isinstance(decl, list):
+            decl = decl[0] if decl else None
+        dados_adicionais = {
+            'id': chave,
+            'cancelada': self._nfse_text(inf.get('Status')) == '2',
+            'Rps': {'Numero': None, 'Serie': None, 'DataEmissao': None, 'DataVencimento': None},
+            'Servico': {'Valores': {'Aliquota': None, 'ValorConfins': None, 'ValorIss': None, 'ValorPis': None, 'ValorServicos': None}, 'IssRetido': None, 'Discriminacao': None},
+        }
+        valores_nfse = self._nfse_dict_get(inf, 'ValoresNfse')
+        valores = None
+        if valores_nfse and isinstance(valores_nfse, dict):
+            valores = {
+                'BaseCalculo': self._nfse_text(valores_nfse.get('BaseCalculo')),
+                'Aliquota': self._nfse_text(valores_nfse.get('Aliquota')),
+                'ValorIss': self._nfse_text(valores_nfse.get('ValorIss')),
+                'ValorLiquidoNfse': self._nfse_text(valores_nfse.get('ValorLiquidoNfse')),
+            }
+        prestador = self._nfse_dict_get(inf, 'PrestadorServico')
+        cnpj_emitente = None
+        nome_emitente = self._nfse_text(prestador.get('RazaoSocial')) if prestador else ''
+        if decl:
+            prest = self._nfse_dict_get(decl, 'Prestador')
+            if prest:
+                cpf_cnpj = self._nfse_dict_get(prest, 'CpfCnpj')
+                if cpf_cnpj:
+                    cnpj_emitente = self._nfse_text(cpf_cnpj.get('Cnpj')) or self._nfse_text(cpf_cnpj.get('Cpf'))
+            if not nome_emitente and prestador:
+                nome_emitente = self._nfse_text(prestador.get('RazaoSocial'))
+        tomador_el = self._nfse_dict_get(decl, 'TomadorServico') if decl else None
+        cnpj_dest = None
+        nome_dest = ''
+        if tomador_el:
+            id_tom = self._nfse_dict_get(tomador_el, 'IdentificacaoTomador', 'CpfCnpj')
+            if id_tom and isinstance(id_tom, dict):
+                cnpj_dest = self._nfse_text(id_tom.get('Cnpj')) or self._nfse_text(id_tom.get('Cpf'))
+            nome_dest = self._nfse_text(tomador_el.get('RazaoSocial'))
+        if decl:
+            serv = self._nfse_dict_get(decl, 'Servico')
+            if serv:
+                vals = self._nfse_dict_get(serv, 'Valores')
+                if vals and isinstance(vals, dict):
+                    dados_adicionais['Servico']['Valores']['Aliquota'] = self._nfse_text(vals.get('Aliquota'))
+                    dados_adicionais['Servico']['Valores']['ValorConfins'] = self._nfse_text(vals.get('ValorCofins'))
+                    dados_adicionais['Servico']['Valores']['ValorIss'] = self._nfse_text(vals.get('ValorIss'))
+                    dados_adicionais['Servico']['Valores']['ValorPis'] = self._nfse_text(vals.get('ValorPis'))
+                    dados_adicionais['Servico']['Valores']['ValorServicos'] = self._nfse_text(vals.get('ValorServicos'))
+                dados_adicionais['Servico']['IssRetido'] = self._nfse_text(serv.get('IssRetido'))
+                dados_adicionais['Servico']['Discriminacao'] = self._nfse_text(serv.get('Discriminacao'))
+            inf_comp = self._nfse_dict_get(decl, 'InformacoesComplementares')
+            if inf_comp:
+                dados_adicionais['InformacoesComplementares'] = self._nfse_text(inf_comp) if isinstance(inf_comp, str) else (inf_comp.get('#text') or '')
+        dados_nfse = {
+            'Numero': self._nfse_text(inf.get('Numero')),
+            'cnpj_emitente': cnpj_emitente,
+            'nome_emitente': nome_emitente or self._nfse_text(prestador.get('RazaoSocial')) if prestador else '',
+            'cnpj_destinatario': cnpj_dest,
+            'nome_destinatario': nome_dest,
+            'DataEmissao': self._nfse_text(inf.get('DataEmissao')),
+            'valores': valores,
+            'dados_adicionais': dados_adicionais,
+        }
+        return chave, dados_nfse
+
+    def _extrair_nfse_tc_lista(self, root):
+        """Formato tcListaNFse (EL) com namespace - ex.: NF 35 - VALE."""
+        for key in list(root.keys()):
+            if key == 'tcListaNFse' or (isinstance(key, str) and key.endswith('}tcListaNFse')):
+                tc = root[key]
+                break
+        else:
+            return None, None
+        nfse_el = self._nfse_dict_get(tc, 'Nfse')
+        if not nfse_el or not isinstance(nfse_el, dict):
+            return None, None
+        chave = self._nfse_text(self._nfse_val(nfse_el, 'Id'))
+        ident = self._nfse_dict_get(nfse_el, 'IdentificacaoNfse')
+        numero = self._nfse_text(self._nfse_val(ident, 'Numero')) if ident else self._nfse_text(self._nfse_val(nfse_el, 'Numero'))
+        data_emissao = self._nfse_text(self._nfse_val(nfse_el, 'DataEmissao'))
+        if data_emissao and 'T' in data_emissao:
+            data_emissao = data_emissao[:10]
+        dados_adicionais = {
+            'id': chave,
+            'cancelada': self._nfse_text(self._nfse_val(nfse_el, 'Status')) == '2',
+            'Rps': {'Numero': self._nfse_text(self._nfse_val(ident, 'NumeroRps')) if ident else None, 'Serie': self._nfse_text(self._nfse_val(ident, 'Serie')) if ident else None, 'DataEmissao': None, 'DataVencimento': None},
+            'Servico': {'Valores': {'Aliquota': None, 'ValorConfins': None, 'ValorIss': None, 'ValorPis': None, 'ValorServicos': None}, 'IssRetido': None, 'Discriminacao': None},
+        }
+        valores_el = self._nfse_dict_get(nfse_el, 'Valores')
+        valores = None
+        if valores_el and isinstance(valores_el, dict):
+            valores = {
+                'BaseCalculo': '',
+                'Aliquota': self._nfse_text(self._nfse_val(valores_el, 'Aliquota')),
+                'ValorIss': self._nfse_text(self._nfse_val(valores_el, 'ValorIss')),
+                'ValorLiquidoNfse': self._nfse_text(self._nfse_val(valores_el, 'ValorLiquidoNfse')),
+            }
+        servicos_el = self._nfse_dict_get(nfse_el, 'Servicos')
+        if servicos_el and isinstance(servicos_el, dict):
+            dados_adicionais['Servico']['Valores']['Aliquota'] = self._nfse_text(self._nfse_val(servicos_el, 'Aliquota'))
+            dados_adicionais['Servico']['Valores']['ValorServicos'] = self._nfse_text(self._nfse_val(servicos_el, 'ValorServico') or self._nfse_val(valores_el, 'ValorServicos') if valores_el else None)
+            dados_adicionais['Servico']['Discriminacao'] = self._nfse_text(self._nfse_val(servicos_el, 'Descricao'))
+        if valores_el and isinstance(valores_el, dict) and not dados_adicionais['Servico']['Valores']['ValorServicos']:
+            dados_adicionais['Servico']['Valores']['ValorServicos'] = self._nfse_text(self._nfse_val(valores_el, 'ValorServicos'))
+        dados_adicionais['Servico']['IssRetido'] = self._nfse_text(self._nfse_val(nfse_el, 'IssRetido'))
+        obs = self._nfse_text(self._nfse_val(nfse_el, 'Observacao'))
+        if obs:
+            dados_adicionais['InformacoesComplementares'] = obs
+        prest = self._nfse_dict_get(nfse_el, 'DadosPrestador', 'IdentificacaoPrestador')
+        cnpj_emitente = self._nfse_text(self._nfse_val(prest, 'CpfCnpj')) if prest and isinstance(prest, dict) else ''
+        if not cnpj_emitente:
+            prest_root = self._nfse_dict_get(nfse_el, 'DadosPrestador')
+            cnpj_emitente = self._nfse_text(self._nfse_val(prest_root, 'CpfCnpj')) if prest_root and isinstance(prest_root, dict) else ''
+        dados_prest = self._nfse_dict_get(nfse_el, 'DadosPrestador')
+        nome_emitente = self._nfse_text(self._nfse_val(dados_prest, 'RazaoSocial')) if dados_prest else ''
+        tomador = self._nfse_dict_get(nfse_el, 'DadosTomador')
+        id_tom = self._nfse_dict_get(tomador, 'IdentificacaoTomador') if tomador else None
+        cnpj_dest = self._nfse_text(self._nfse_val(id_tom, 'CpfCnpj')) if id_tom and isinstance(id_tom, dict) else ''
+        if not cnpj_dest and tomador:
+            cnpj_dest = self._nfse_text(self._nfse_val(tomador, 'CpfCnpj'))
+        nome_dest = self._nfse_text(self._nfse_val(tomador, 'RazaoSocial')) if tomador and isinstance(tomador, dict) else ''
+        dados_nfse = {
+            'Numero': numero,
+            'cnpj_emitente': cnpj_emitente,
+            'nome_emitente': nome_emitente,
+            'cnpj_destinatario': cnpj_dest,
+            'nome_destinatario': nome_dest,
+            'DataEmissao': data_emissao,
+            'valores': valores,
+            'dados_adicionais': dados_adicionais,
+        }
+        return chave, dados_nfse
+
+    def _extrair_nfse_sped(self, root):
+        """Formato NFSe SPED (namespace sped.fazenda.gov.br/nfse) - ex.: 27126...8.xml."""
+        for key in list(root.keys()):
+            if key == 'NFSe' or (isinstance(key, str) and key.endswith('}NFSe')):
+                nfse_root = root[key]
+                break
+        else:
+            return None, None
+        inf_nfse = self._nfse_dict_get(nfse_root, 'infNFSe')
+        if not inf_nfse or not isinstance(inf_nfse, dict):
+            return None, None
+        chave = self._nfse_text(inf_nfse.get('@Id') or '')
+        if chave.startswith('NFS'):
+            chave = chave[3:]
+        numero = self._nfse_text(self._nfse_val(inf_nfse, 'nNFSe'))
+        data_emissao = ''
+        emit = self._nfse_dict_get(inf_nfse, 'emit')
+        cnpj_emitente = self._nfse_text(self._nfse_val(emit, 'CNPJ')) if emit and isinstance(emit, dict) else ''
+        nome_emitente = self._nfse_text(self._nfse_val(emit, 'xNome')) if emit and isinstance(emit, dict) else ''
+        valores_raiz = self._nfse_dict_get(inf_nfse, 'valores')
+        v_liq = self._nfse_text(self._nfse_val(valores_raiz, 'vLiq')) if valores_raiz and isinstance(valores_raiz, dict) else ''
+        dps = self._nfse_dict_get(inf_nfse, 'DPS', 'infDPS')
+        if isinstance(dps, list):
+            dps = dps[0] if dps else None
+        if dps and isinstance(dps, dict):
+            data_emissao = self._nfse_text(self._nfse_val(dps, 'dhEmi'))
+            if data_emissao and 'T' in data_emissao:
+                data_emissao = data_emissao[:10]
+            toma = self._nfse_dict_get(dps, 'toma')
+            cnpj_dest = self._nfse_text(self._nfse_val(toma, 'CNPJ')) if toma and isinstance(toma, dict) else ''
+            nome_dest = self._nfse_text(self._nfse_val(toma, 'xNome')) if toma and isinstance(toma, dict) else ''
+        else:
+            cnpj_dest = ''
+            nome_dest = ''
+        v_serv = ''
+        if dps and isinstance(dps, dict):
+            v_serv_prest = self._nfse_dict_get(dps, 'valores', 'vServPrest')
+            if v_serv_prest and isinstance(v_serv_prest, dict):
+                v_serv = self._nfse_text(self._nfse_val(v_serv_prest, 'vServ'))
+        valores = {
+            'BaseCalculo': '',
+            'Aliquota': '',
+            'ValorIss': '',
+            'ValorLiquidoNfse': v_liq or '',
+        }
+        dados_adicionais = {
+            'id': chave,
+            'cancelada': False,
+            'Rps': {'Numero': None, 'Serie': None, 'DataEmissao': None, 'DataVencimento': None},
+            'Servico': {'Valores': {'Aliquota': None, 'ValorConfins': None, 'ValorIss': None, 'ValorPis': None, 'ValorServicos': v_serv or None}, 'IssRetido': None, 'Discriminacao': None},
+        }
+        dados_nfse = {
+            'Numero': numero,
+            'cnpj_emitente': cnpj_emitente,
+            'nome_emitente': nome_emitente,
+            'cnpj_destinatario': cnpj_dest,
+            'nome_destinatario': nome_dest,
+            'DataEmissao': data_emissao,
+            'valores': valores,
+            'dados_adicionais': dados_adicionais,
+        }
+        return chave, dados_nfse
+
     def extrair_dados_xml_nfse(self):
         """
-        Extrai os dados de uma nota fiscal a partir do XML
-        Retorna a chave de acesso e um dicionário com os dados da nota fiscal
+        Extrai os dados de uma nota fiscal de serviço (NFSe) a partir do XML.
+        Suporta três formatos: ListaNfse (padrão ABRASF), tcListaNFse (EL) e NFSe SPED.
+        Retorna a chave de acesso e um dicionário com os dados da nota fiscal.
         """
         try:
-            # Parse do XML
-            root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
+            root = self.get_xml_json()
+            if not root or not isinstance(root, dict):
+                logger.warning("extrair_dados_xml_nfse: XML inválido ou vazio")
+                return None, None
 
-            dados_adicionais = {
-                'id': self.data.get('id',None),
-                'cancelada': False,
-                'Rps': {
-                    'Numero': None,
-                    'Serie': None,
-                    'DataEmissao': None,
-                    'DataVencimento': None,
-                },
-                'Servico': {
-                    'Valores': {
-                        'Aliquota': None,
-                        'ValorConfins': None,
-                        'ValorIss': None,
-                        'ValorPis': None,
-                        'ValorServicos': None,
-                    },
-                    'IssRetido': None,
-                    'Discriminacao': None,
-                },
-            }
-            dados_nfse = {
-                'Numero': None,
-                'cnpj_emitente': None,
-                'nome_emitente': None,
-                'cnpj_destinatario': None,
-                'nome_destinatario': None,
-                'DataEmissao': None,
-                'valores': None,
-                'dados_adicionais': dados_adicionais,
-            }
-            
-            # Definir os namespaces
-            ns = {
-                'CompNfse': 'http://www.abrasf.org.br/nfse.xsd'
-            }
-            NfseCancelamento = root.find('.//CompNfse:NfseCancelamento', ns) or root.find('.//NfseCancelamento', ns)
-            if NfseCancelamento is not None:
-                dados_adicionais['cancelada'] = True
-            Nfse = root.find('.//CompNfse:Nfse', ns)
-            if Nfse is None:
-                print(f'Nfse is None')
-                return None, None
-            # Extrair dados da nota
-            inf_nfe = Nfse.find('.//CompNfse:InfNfse', ns) or Nfse.find('.//InfNfse', ns)
-            if inf_nfe is None:
-                print(f'inf_nfe is None')
-                return None, None
-            chave_acesso = inf_nfe.attrib.get('Id', '')
-            #print(f'chave_acesso: {chave_acesso}')
-            if chave_acesso.startswith('NFS'):
-                chave_acesso = chave_acesso[3:]
-            numero = inf_nfe.findtext('.//CompNfse:Numero', default='', namespaces=ns) or inf_nfe.findtext('.//Numero', default='', namespaces=ns)
-            dados_nfse['Numero'] = numero
-            data_emissao = inf_nfe.findtext('.//CompNfse:DataEmissao', default='', namespaces=ns) or inf_nfe.findtext('.//DataEmissao', default='', namespaces=ns)
-            dados_nfse['DataEmissao'] = data_emissao
-            ValoresNfse = inf_nfe.find('.//CompNfse:ValoresNfse', ns) or inf_nfe.find('.//ValoresNfse', ns)
-            if ValoresNfse is not None:
-                valores = {
-                'BaseCalculo': ValoresNfse.findtext('.//CompNfse:BaseCalculo', default='', namespaces=ns) or ValoresNfse.findtext('.//BaseCalculo', default='', namespaces=ns),
-                'Aliquota': ValoresNfse.findtext('.//CompNfse:Aliquota', default='', namespaces=ns) or ValoresNfse.findtext('.//Aliquota', default='', namespaces=ns),
-                'ValorIss': ValoresNfse.findtext('.//CompNfse:ValorIss', default='', namespaces=ns) or ValoresNfse.findtext('.//ValorIss', default='', namespaces=ns),
-                'ValorLiquidoNfse': ValoresNfse.findtext('.//CompNfse:ValorLiquidoNfse', default='', namespaces=ns) or ValoresNfse.findtext('.//ValorLiquidoNfse', default='', namespaces=ns),
-                }
-                dados_nfse['valores'] = valores
+            def _tem_chave(d, *keys):
+                for k in keys:
+                    if d.get(k) is not None:
+                        return True
+                    for key in d:
+                        if isinstance(key, str) and (key == k or key.endswith('}' + k)):
+                            return True
+                return False
+
+            if _tem_chave(root, 'ListaNfse'):
+                chave, dados = self._extrair_nfse_lista_nfse(root)
+            elif _tem_chave(root, 'tcListaNFse'):
+                chave, dados = self._extrair_nfse_tc_lista(root)
+            elif _tem_chave(root, 'NFSe'):
+                chave, dados = self._extrair_nfse_sped(root)
             else:
-                valores = None
-            PrestadorServico = inf_nfe.find('.//CompNfse:PrestadorServico', ns) or inf_nfe.find('.//PrestadorServico', ns)
-            if PrestadorServico is not None:
-                IdentificacaoPrestador = PrestadorServico.find('.//CompNfse:IdentificacaoPrestador', ns) or PrestadorServico.find('.//IdentificacaoPrestador', ns)
-                if IdentificacaoPrestador is not None:
-                    CpfCnpj = IdentificacaoPrestador.find('.//CompNfse:CpfCnpj', ns) or IdentificacaoPrestador.find('.//CpfCnpj', ns)
-                    if CpfCnpj is not None:
-                        cpf = CpfCnpj.findtext('.//CompNfse:Cpf', default='', namespaces=ns) or CpfCnpj.findtext('.//Cpf', default='', namespaces=ns)
-                        cnpj = CpfCnpj.findtext('.//CompNfse:Cnpj', default='', namespaces=ns) or CpfCnpj.findtext('.//Cnpj', default='', namespaces=ns)
-                        if cpf or cnpj is not None:
-                            cnpj_emitente = cpf if cpf else cnpj
-                        else:
-                            cnpj_emitente = None
-                nome_emitente = PrestadorServico.findtext('.//CompNfse:RazaoSocial', default='', namespaces=ns) or PrestadorServico.findtext('.//RazaoSocial', default='', namespaces=ns)
-                dados_nfse['cnpj_emitente'] = cnpj_emitente
-                dados_nfse['nome_emitente'] = nome_emitente
-            DeclaracaoPrestacaoServico = inf_nfe.find('.//CompNfse:DeclaracaoPrestacaoServico', ns) or inf_nfe.find('.//DeclaracaoPrestacaoServico', ns)
-            if DeclaracaoPrestacaoServico is not None:
-                InfDeclaracaoPrestacaoServico = DeclaracaoPrestacaoServico.find('.//CompNfse:InfDeclaracaoPrestacaoServico', ns) or DeclaracaoPrestacaoServico.find('.//InfDeclaracaoPrestacaoServico', ns)
-                if InfDeclaracaoPrestacaoServico is not None:
-                    Rps = InfDeclaracaoPrestacaoServico.find('.//CompNfse:Rps', ns) or InfDeclaracaoPrestacaoServico.find('.//Rps', ns)
-                    if Rps is not None:
-                        IdentificacaoRps = Rps.find('.//CompNfse:IdentificacaoRps', ns) or Rps.find('.//IdentificacaoRps', ns)
-                        if IdentificacaoRps is not None:
-                            dados_adicionais['Rps']['Numero'] = IdentificacaoRps.findtext('.//CompNfse:Numero', default='', namespaces=ns) or IdentificacaoRps.findtext('.//Numero', default='', namespaces=ns)
-                            dados_adicionais['Rps']['Serie'] = IdentificacaoRps.findtext('.//CompNfse:Serie', default='', namespaces=ns) or IdentificacaoRps.findtext('.//Serie', default='', namespaces=ns)
-                        dados_adicionais['Rps']['DataEmissao'] = IdentificacaoRps.findtext('.//CompNfse:DataEmissao', default='', namespaces=ns) or IdentificacaoRps.findtext('.//DataEmissao', default='', namespaces=ns)
-                        dados_adicionais['Rps']['DataVencimento'] = IdentificacaoRps.findtext('.//CompNfse:DataVencimento', default='', namespaces=ns) or IdentificacaoRps.findtext('.//DataVencimento', default='', namespaces=ns)
-                    Servico = InfDeclaracaoPrestacaoServico.find('.//CompNfse:Servico', ns) or InfDeclaracaoPrestacaoServico.find('.//Servico', ns)
-                    if Servico is not None:
-                        Valores = Servico.find('.//CompNfse:Valores', ns) or Servico.find('.//Valores', ns)
-                        if Valores is not None:
-                            aliquota = Valores.findtext('.//CompNfse:BaseCalculo', default='', namespaces=ns) or Valores.findtext('.//BaseCalculo', default='', namespaces=ns)
-                            dados_adicionais['Servico']['Valores']['Aliquota'] = aliquota
-                            ValorConfins = Valores.findtext('.//CompNfse:ValorConfins', default='', namespaces=ns) or Valores.findtext('.//ValorConfins', default='', namespaces=ns)
-                            dados_adicionais['Servico']['Valores']['ValorConfins'] = ValorConfins
-                            ValorPis = Valores.findtext('.//CompNfse:ValorPis', default='', namespaces=ns) or Valores.findtext('.//ValorPis', default='', namespaces=ns)
-                            dados_adicionais['Servico']['Valores']['ValorPis'] = ValorPis
-                            ValorServicos = Valores.findtext('.//CompNfse:ValorServicos', default='', namespaces=ns) or Valores.findtext('.//ValorServicos', default='', namespaces=ns)
-                            dados_adicionais['Servico']['Valores']['ValorServicos'] = ValorServicos
-                        IssRetido = Servico.findtext('.//CompNfse:IssRetido', default='', namespaces=ns) or Servico.findtext('.//IssRetido', default='', namespaces=ns)
-                        dados_adicionais['Servico']['IssRetido'] = IssRetido
-                        Discriminacao = Servico.findtext('.//CompNfse:Discriminacao', default='', namespaces=ns) or Servico.findtext('.//Discriminacao', default='', namespaces=ns)
-                        dados_adicionais['Servico']['Discriminacao'] = Discriminacao
-                Tomador = inf_nfe.find('.//CompNfse:Tomador', ns) or inf_nfe.find('.//Tomador', ns)
-                if Tomador is not None:
-                    IdentificacaoTomador = Tomador.find('.//CompNfse:IdentificacaoTomador', ns) or Tomador.find('.//IdentificacaoTomador', ns)
-                    if IdentificacaoTomador is not None:
-                        CpfCnpj = IdentificacaoTomador.find('.//CompNfse:CpfCnpj', ns) or IdentificacaoTomador.find('.//CpfCnpj', ns)
-                        if CpfCnpj is not None:
-                            cpf = CpfCnpj.findtext('.//CompNfse:Cpf', default='', namespaces=ns) or CpfCnpj.findtext('.//Cpf', default='', namespaces=ns)
-                            cnpj = CpfCnpj.findtext('.//CompNfse:Cnpj', default='', namespaces=ns) or CpfCnpj.findtext('.//Cnpj', default='', namespaces=ns)
-                            if cpf or cnpj is not None:
-                                cnpj_destinatario = cpf if cpf else cnpj
-                            else:
-                                cnpj_destinatario = None
-                    nome_destinatario = Tomador.findtext('.//CompNfse:RazaoSocial', default='', namespaces=ns) or Tomador.findtext('.//RazaoSocial', default='', namespaces=ns)
-                    dados_nfse['cnpj_destinatario'] = cnpj_destinatario
-                    dados_nfse['nome_destinatario'] = nome_destinatario
-            dados_nfse['dados_adicionais'] = dados_adicionais
-            return chave_acesso, dados_nfse
+                logger.warning("extrair_dados_xml_nfse: Formato de XML NFSe não reconhecido")
+                return None, None
+
+            if not chave or not dados:
+                return None, None
+            if not dados.get('valores') or not self._nfse_text(dados['valores'].get('ValorLiquidoNfse')):
+                if dados.get('valores') is None:
+                    dados['valores'] = {'BaseCalculo': '', 'Aliquota': '', 'ValorIss': '', 'ValorLiquidoNfse': '0'}
+                elif not dados['valores'].get('ValorLiquidoNfse'):
+                    dados['valores']['ValorLiquidoNfse'] = '0'
+            return chave, dados
         except Exception as e:
             import traceback
             traceback.print_exc()
-            logger.error(f"Erro ao extrair dados do XML: {str(e)}")
+            logger.error(f"Erro ao extrair dados do XML NFSe: {str(e)}")
             return None, None
     def vincular_automaticamente(self):
         """
