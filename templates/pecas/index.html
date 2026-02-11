@@ -55,7 +55,7 @@
         <div class="card-body">
             <form method="GET" action="{{ url_for('peca.index') }}" id="filtroForm">
                 <div class="row">
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <label for="projeto_id" class="form-label">Projeto (Contrato)</label>
                         <select class="form-select" id="projeto_id" name="projeto_id">
                             <option value="">Todos os projetos</option>
@@ -66,7 +66,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <label for="tanque_id" class="form-label">Tanque(s) <small class="text-muted">(Ctrl+Click para múltipla seleção)</small></label>
                         <select class="form-select" id="tanque_id" name="tanque_ids[]" multiple size="5">
                             {% for tanque in tanques %}
@@ -79,8 +79,31 @@
                         </select>
                         <small class="text-muted">Selecione um ou mais tanques. Use Ctrl (ou Cmd no Mac) para seleção múltipla.</small>
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">
+                    <div class="col-md-4">
+                        <label class="form-label">Filtros de Status</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filtro_concretado" name="filtro_concretado" value="1" {% if filtro_concretado %}checked{% endif %}>
+                            <label class="form-check-label" for="filtro_concretado">
+                                <span class="badge bg-success"><i class="fas fa-check-circle"></i> Concretado</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filtro_acabado" name="filtro_acabado" value="1" {% if filtro_acabado %}checked{% endif %}>
+                            <label class="form-check-label" for="filtro_acabado">
+                                <span class="badge bg-info"><i class="fas fa-check"></i> Acabado</span>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="filtro_transportado" name="filtro_transportado" value="1" {% if filtro_transportado %}checked{% endif %}>
+                            <label class="form-check-label" for="filtro_transportado">
+                                <span class="badge bg-primary"><i class="fas fa-truck"></i> Transportado</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
                             <i class="fas fa-search"></i> Filtrar
                         </button>
                     </div>
@@ -241,6 +264,16 @@
         // Obter filtros iniciais (tanque_id agora pode ser array)
         var tanqueIdFiltro = $('#tanque_id').val() || [];
         var projetoIdFiltro = $('#projeto_id').val() || '';
+        var filtroConcretado = $('#filtro_concretado').is(':checked');
+        var filtroAcabado = $('#filtro_acabado').is(':checked');
+        var filtroTransportado = $('#filtro_transportado').is(':checked');
+        
+        // Inicializar filtros de status a partir dos valores do formulário
+        function atualizarFiltrosStatus() {
+            filtroConcretado = $('#filtro_concretado').is(':checked');
+            filtroAcabado = $('#filtro_acabado').is(':checked');
+            filtroTransportado = $('#filtro_transportado').is(':checked');
+        }
         
         // Função para obter tanque_ids como array
         function getTanqueIds() {
@@ -269,6 +302,17 @@
             // Adicionar projeto_id se houver
             if (projetoIdFiltro) {
                 params.projeto_id = projetoIdFiltro;
+            }
+            
+            // Adicionar filtros de status
+            if (filtroConcretado) {
+                params.filtro_concretado = '1';
+            }
+            if (filtroAcabado) {
+                params.filtro_acabado = '1';
+            }
+            if (filtroTransportado) {
+                params.filtro_transportado = '1';
             }
             
             // Adicionar busca se houver
@@ -319,6 +363,16 @@
                     }
                     if (projetoIdFiltro) {
                         d.projeto_id = projetoIdFiltro;
+                    }
+                    // Adicionar filtros de status
+                    if (filtroConcretado) {
+                        d.filtro_concretado = '1';
+                    }
+                    if (filtroAcabado) {
+                        d.filtro_acabado = '1';
+                    }
+                    if (filtroTransportado) {
+                        d.filtro_transportado = '1';
                     }
                 },
                 dataSrc: function(json) {
@@ -405,8 +459,18 @@
             e.preventDefault();
             tanqueIdFiltro = getTanqueIds();
             projetoIdFiltro = $('#projeto_id').val() || '';
+            atualizarFiltrosStatus();
             table.ajax.reload();
             carregarEstatisticas();
+        });
+        
+        // Recarregar tabela quando os checkboxes de status mudarem
+        $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
+            atualizarFiltrosStatus();
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload();
+                carregarEstatisticas();
+            }
         });
 
         // Armazenar todas as opções de tanques

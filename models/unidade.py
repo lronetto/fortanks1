@@ -3,7 +3,7 @@ import json
 
 from .database import db
 UNIDADES_IGUAIS = [
-    ['UN','UND','UNIDADE','UNIDADES','UNID','UNID.','PAR','PR','PC','PA','Unida'],
+    ['UN','UND','UNIDADE','UNIDADES','UNID','UNID.','PAR','PR','PC','PA','UNIDA'],
     ['KG','KILOS','Kg'],
     ['GALAO','GALAO','Galao'],
     ['PCT','PCT','Pct'],
@@ -15,7 +15,7 @@ UNIDADES_IGUAIS = [
     ['G','G','G'],
     ['ML','ML','Ml'],
     ['CM','CM','Cm'],
-    ['MIL','MIL','Mil'],
+    ['MIL','MIL','Mil','MI'],
 ]
 def comparar_unidades(unidade_entrada, unidade_saida):
     unidade_entrada = unidade_entrada.upper()

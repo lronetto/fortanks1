@@ -16,6 +16,8 @@ from models.estoque import Estoque
 from models.estoque_terceiro import EstoqueTerceiro
 from models.material import Materiais
 from models.unidade import get_conversao_unidade, normalizar_unidade, comparar_unidades
+from models.tanque import TanquesPecas, TanquesProdutoComposto, Tanques
+from models.produto_composto import ProdutoComposto
 
 logger = logging.getLogger(__name__)
 
@@ -239,6 +241,10 @@ def api_comparativo():
         length = int(request.args.get('length', 25))
         search_value = request.args.get('search[value]', '').strip()
         
+        # Parâmetros de ordenação
+        order_column_index = int(request.args.get('order[0][column]', 1))
+        order_dir = request.args.get('order[0][dir]', 'asc')
+        
         # Filtro de data (opcional)
         data_filtro = request.args.get('data_filtro', '')
         data_filtro_date = None
@@ -283,17 +289,14 @@ def api_comparativo():
                 )
             )
         
-        # Contar total de registros antes da paginação
+        # Contar total de registros antes da paginação e ordenação
         total_records = query.count()
         
-        # Aplicar paginação
-        query = query.order_by(Materiais.nome)
-        registros = query.offset(start).limit(length).all()
-        
-        # Preparar dados para resposta
+        # Preparar dados para resposta ANTES da ordenação (precisa calcular diferenças primeiro)
         # Calcular estoque do sistema baseado em movimentações para cada registro
-        data = []
-        for registro in registros:
+        registros_temp = query.all()
+        data_temp = []
+        for registro in registros_temp:
             # Buscar o material completo para obter a unidade do sistema
             material = Materiais.query.get(registro.material_id)
             unidade_sistema = None
@@ -356,7 +359,75 @@ def api_comparativo():
             else:
                 diferenca_percentual = 0
             
-            data.append({
+            # Calcular consumo futuro para este material
+            consumo_futuro_material = 0.0
+            if data_filtro_date:
+                try:
+                    # Buscar peças não produzidas agrupadas por produto composto
+                    pecas_consumo = db.session.query(
+                        TanquesPecas,
+                        TanquesProdutoComposto
+                    ).join(
+                        TanquesProdutoComposto,
+                        db.and_(
+                            TanquesPecas.tanque_id == TanquesProdutoComposto.tanque_id,
+                            TanquesPecas.tipo == TanquesProdutoComposto.tipo_peca
+                        )
+                    ).filter(
+                        TanquesPecas.data_concretagem.is_(None),
+                        func.date(TanquesPecas.data_cadastro) >= data_filtro_date
+                    ).all()
+                    
+                    # Agrupar peças por produto composto
+                    pecas_por_produto = {}
+                    for peca_cons, vinculacao_cons in pecas_consumo:
+                        produto_id = vinculacao_cons.produto_composto_id
+                        if produto_id not in pecas_por_produto:
+                            pecas_por_produto[produto_id] = []
+                        pecas_por_produto[produto_id].append(peca_cons)
+                    
+                    # Calcular consumo usando o método produzir do produto composto
+                    for produto_id, pecas_list in pecas_por_produto.items():
+                        produto_composto_cons = ProdutoComposto.query.get(produto_id)
+                        if not produto_composto_cons:
+                            continue
+                        
+                        quantidade_pecas = len(pecas_list)
+                        
+                        # Calcular materiais necessários usando o método produzir
+                        materiais_necessarios = {}
+                        produtos_processados = set()
+                        
+                        try:
+                            produto_composto_cons.produzir(
+                                quantidade=quantidade_pecas,
+                                data_movimento=datetime.now().date(),
+                                usuario_id=current_user.id if current_user else 1,
+                                log=False,
+                                produtos_processados=produtos_processados,
+                                materiais_necessarios=materiais_necessarios
+                            )
+                            
+                            # Buscar consumo deste material específico
+                            for estoque_id, info in materiais_necessarios.items():
+                                estoque = info['estoque']
+                                if (estoque and 
+                                    estoque.material_id == registro.material_id and
+                                    estoque.tipo_item == 'material'):
+                                    consumo_futuro_material += float(info['quantidade']) or 0
+                        except Exception as e:
+                            logger.warning(f'Erro ao calcular consumo para produto composto {produto_id}: {str(e)}')
+                            continue
+                except Exception as e:
+                    logger.warning(f'Erro ao calcular consumo futuro para material {registro.material_id}: {str(e)}')
+            
+            # Calcular estoque futuro (estoque atual - consumo futuro)
+            estoque_futuro = estoque_sistema_float - consumo_futuro_material
+            
+            # Calcular diferença futura (estoque terceiro - estoque futuro)
+            diferenca_futura = estoque_terceiro_convertido - estoque_futuro
+            
+            data_temp.append({
                 'material_id': registro.material_id,
                 'material_nome': registro.material_nome or '',
                 'codigo_erp': registro.codigo_erp or '',
@@ -365,6 +436,9 @@ def api_comparativo():
                 'estoque_terceiro_original': estoque_terceiro_original,  # Valor original do terceiro
                 'diferenca': diferenca,
                 'diferenca_percentual': round(diferenca_percentual, 2),
+                'consumo_futuro': consumo_futuro_material,
+                'estoque_futuro': estoque_futuro,
+                'diferenca_futura': diferenca_futura,
                 'tipo': registro.tipo or '',
                 'unidade_sistema': unidade_sistema or '',
                 'unidade_terceiro': unidade_terceiro or '',
@@ -375,10 +449,56 @@ def api_comparativo():
                 'data_estoque_terceiro': registro.data_estoque_terceiro.isoformat() if registro.data_estoque_terceiro else ''
             })
         
+        # Mapeamento de colunas para ordenação
+        # 0: codigo_erp, 1: material_nome, 2: tipo, 3: unidade_sistema, 4: unidade_terceiro,
+        # 5: estoque_sistema, 6: estoque_terceiro, 7: diferenca, 8: diferenca_percentual,
+        # 9: consumo_futuro, 10: estoque_futuro, 11: diferenca_futura,
+        # 12: valor_unitario, 13: valor_total, 14: data_estoque_terceiro
+        column_map = {
+            0: 'codigo_erp',
+            1: 'material_nome',
+            2: 'tipo',
+            3: 'unidade_sistema',
+            4: 'unidade_terceiro',
+            5: 'estoque_sistema',
+            6: 'estoque_terceiro',
+            7: 'diferenca',
+            8: 'diferenca_percentual',
+            9: 'consumo_futuro',
+            10: 'estoque_futuro',
+            11: 'diferenca_futura',
+            12: 'valor_unitario',
+            13: 'valor_total',
+            14: 'data_estoque_terceiro'
+        }
+        
+        # Aplicar ordenação
+        if order_column_index in column_map:
+            sort_key = column_map[order_column_index]
+            reverse = order_dir == 'desc'
+            
+            # Ordenar por chave numérica ou string
+            if sort_key == 'diferenca_percentual':
+                # Ordenar pelo módulo (valor absoluto) da diferença percentual
+                data_temp.sort(key=lambda x: abs(float(x.get(sort_key, 0)) or 0), reverse=reverse)
+            elif sort_key in ['estoque_sistema', 'estoque_terceiro', 'diferenca', 'consumo_futuro', 'estoque_futuro', 'diferenca_futura', 'valor_unitario', 'valor_total']:
+                data_temp.sort(key=lambda x: float(x.get(sort_key, 0)) or 0, reverse=reverse)
+            elif sort_key == 'data_estoque_terceiro':
+                data_temp.sort(key=lambda x: x.get(sort_key, '') or '', reverse=reverse)
+            else:
+                data_temp.sort(key=lambda x: str(x.get(sort_key, '')).lower(), reverse=reverse)
+        else:
+            # Ordenação padrão por nome do material
+            data_temp.sort(key=lambda x: str(x.get('material_nome', '')).lower())
+        
+        # Aplicar paginação após ordenação
+        records_filtered = len(data_temp)
+        data = data_temp[start:start + length]
+        
         return jsonify({
             'draw': draw,
             'recordsTotal': total_records,
-            'recordsFiltered': total_records,
+            'recordsFiltered': records_filtered,
             'data': data
         }), 200
         
@@ -413,6 +533,193 @@ def api_datas_disponiveis():
         
     except Exception as e:
         logger.error(f'Erro ao buscar datas disponíveis: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+@estoque_terceiro_bp.route('/api/pecas-nao-produzidas', methods=['GET'])
+@login_required
+def api_pecas_nao_produzidas():
+    """
+    Retorna peças não produzidas agrupadas por tanque, filtradas pela data do estoque terceiro até hoje
+    """
+    try:
+        # Parâmetro de data do estoque terceiro
+        data_estoque_str = request.args.get('data_estoque', '')
+        data_hoje = datetime.now().date()
+        
+        if not data_estoque_str:
+            return jsonify({
+                'success': True,
+                'pecas': []
+            }), 200
+        
+        try:
+            data_estoque = datetime.strptime(data_estoque_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'message': 'Data inválida'
+            }), 400
+        
+        # Buscar peças não produzidas (sem data_concretagem) que têm vinculação com produto composto
+        # e que foram cadastradas entre a data do estoque terceiro e hoje
+        pecas_query = db.session.query(
+            TanquesPecas,
+            TanquesProdutoComposto,
+            Tanques
+        ).join(
+            TanquesProdutoComposto,
+            db.and_(
+                TanquesPecas.tanque_id == TanquesProdutoComposto.tanque_id,
+                TanquesPecas.tipo == TanquesProdutoComposto.tipo_peca
+            )
+        ).join(
+            Tanques,
+            TanquesPecas.tanque_id == Tanques.id
+        ).filter(
+            TanquesPecas.data_concretagem.is_(None),
+            func.date(TanquesPecas.data_cadastro) >= data_estoque,
+            func.date(TanquesPecas.data_cadastro) <= data_hoje
+        ).order_by(
+            Tanques.nome,
+            TanquesPecas.tipo,
+            TanquesPecas.numero_sequencial
+        ).all()
+        
+        # Agrupar por tanque
+        pecas_por_tanque = {}
+        for peca, vinculacao, tanque in pecas_query:
+            tanque_id = tanque.id
+            if tanque_id not in pecas_por_tanque:
+                pecas_por_tanque[tanque_id] = {
+                    'tanque_id': tanque_id,
+                    'tanque_nome': tanque.nome,
+                    'pecas': []
+                }
+            
+            pecas_por_tanque[tanque_id]['pecas'].append({
+                'id': peca.id,
+                'nome': peca.nome,
+                'tipo': peca.tipo,
+                'numero_sequencial': peca.numero_sequencial,
+                'produto_composto_id': vinculacao.produto_composto_id,
+                'produto_composto_nome': vinculacao.produto_composto.nome if vinculacao.produto_composto else '',
+                'data_cadastro': peca.data_cadastro.isoformat() if peca.data_cadastro else None
+            })
+        
+        resultado = list(pecas_por_tanque.values())
+        
+        return jsonify({
+            'success': True,
+            'pecas': resultado
+        }), 200
+        
+    except Exception as e:
+        logger.error(f'Erro ao buscar peças não produzidas: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
+
+@estoque_terceiro_bp.route('/api/calcular-consumo-futuro', methods=['GET'])
+@login_required
+def api_calcular_consumo_futuro():
+    """
+    Calcula o consumo futuro de materiais baseado em peças não produzidas
+    """
+    try:
+        # Parâmetros
+        data_estoque_str = request.args.get('data_estoque', '')
+        material_ids = request.args.getlist('material_ids[]')  # Lista de IDs de materiais
+        
+        if not data_estoque_str:
+            return jsonify({
+                'success': True,
+                'consumo_futuro': {}
+            }), 200
+        
+        try:
+            data_estoque = datetime.strptime(data_estoque_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'message': 'Data inválida'
+            }), 400
+        
+        data_hoje = datetime.now().date()
+        
+        # Buscar peças não produzidas com vinculação
+        pecas_query = db.session.query(
+            TanquesPecas,
+            TanquesProdutoComposto
+        ).join(
+            TanquesProdutoComposto,
+            db.and_(
+                TanquesPecas.tanque_id == TanquesProdutoComposto.tanque_id,
+                TanquesPecas.tipo == TanquesProdutoComposto.tipo_peca
+            )
+        ).filter(
+            TanquesPecas.data_concretagem.is_(None),
+            func.date(TanquesPecas.data_cadastro) >= data_estoque,
+            func.date(TanquesPecas.data_cadastro) <= data_hoje
+        ).all()
+        
+        # Calcular consumo futuro por material
+        consumo_futuro = {}  # material_id -> quantidade total
+        
+        # Agrupar peças por produto composto para otimizar
+        pecas_por_produto = {}
+        for peca, vinculacao in pecas_query:
+            produto_id = vinculacao.produto_composto_id
+            if produto_id not in pecas_por_produto:
+                pecas_por_produto[produto_id] = []
+            pecas_por_produto[produto_id].append(peca)
+        
+        # Para cada produto composto, calcular consumo de materiais
+        for produto_id, pecas_list in pecas_por_produto.items():
+            produto_composto = ProdutoComposto.query.get(produto_id)
+            if not produto_composto:
+                continue
+            
+            quantidade_pecas = len(pecas_list)
+            
+            # Calcular materiais necessários usando o método produzir (sem executar movimentações)
+            materiais_necessarios = {}
+            produtos_processados = set()
+            
+            try:
+                produto_composto.produzir(
+                    quantidade=quantidade_pecas,
+                    data_movimento=data_hoje,
+                    usuario_id=current_user.id if current_user else 1,
+                    log=False,
+                    produtos_processados=produtos_processados,
+                    materiais_necessarios=materiais_necessarios
+                )
+            except Exception as e:
+                logger.warning(f'Erro ao calcular consumo para produto composto {produto_id}: {str(e)}')
+                continue
+            
+            # Acumular consumo por material
+            for estoque_id, info in materiais_necessarios.items():
+                estoque = info['estoque']
+                if estoque and estoque.material_id:
+                    material_id = estoque.material_id
+                    quantidade = float(info['quantidade']) or 0
+                    
+                    if material_id not in consumo_futuro:
+                        consumo_futuro[material_id] = 0
+                    consumo_futuro[material_id] += quantidade
+        
+        return jsonify({
+            'success': True,
+            'consumo_futuro': consumo_futuro
+        }), 200
+        
+    except Exception as e:
+        logger.error(f'Erro ao calcular consumo futuro: {str(e)}', exc_info=True)
         return jsonify({
             'success': False,
             'message': str(e)

@@ -39,6 +39,38 @@ def converter_decimal_para_float(obj):
     else:
         return obj
 
+# Função auxiliar para verificar status de uma peça
+def verificar_status_peca(peca):
+    """Verifica se uma peça está concretada, acabada ou transportada"""
+    concretado = peca.data_concretagem is not None
+    acabada = False
+    transportado = False
+    
+    if peca.qualidade:
+        try:
+            qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+            
+            # Verificar acabamento
+            if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
+                acabamento = qualidade_dict['acabamento']
+                if isinstance(acabamento, dict):
+                    acabada = acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null'
+                elif isinstance(acabamento, str):
+                    acabada = acabamento != '' and acabamento != 'null'
+                else:
+                    acabada = bool(acabamento)
+            
+            # Verificar transporte
+            if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
+                transporte = qualidade_dict['transporte']
+                if isinstance(transporte, dict):
+                    data_transporte = transporte.get('data_transporte')
+                    transportado = data_transporte is not None and data_transporte != '' and data_transporte != 'null'
+        except (json.JSONDecodeError, TypeError, AttributeError):
+            pass
+    
+    return concretado, acabada, transportado
+
 # Criação do blueprint
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
 @peca.before_request
@@ -63,6 +95,11 @@ def index():
     
     projeto_id = request.args.get('projeto_id', type=int)  # projeto_id = contrato_id
     
+    # Filtros de status
+    filtro_concretado = request.args.get('filtro_concretado', type=str) == '1'
+    filtro_acabado = request.args.get('filtro_acabado', type=str) == '1'
+    filtro_transportado = request.args.get('filtro_transportado', type=str) == '1'
+    
     # Buscar todos os tanques e contratos para os filtros
     tanques = Tanques.query.order_by(Tanques.nome).all()
     contratos = Contrato.query.order_by(Contrato.nome).all()
@@ -81,7 +118,10 @@ def index():
                          tipos_peca=tipos_peca,
                          tanque_id_filtro=tanque_id_filtro,
                          tanque_ids_filtro=tanque_ids,  # Passar lista completa também
-                         projeto_id_filtro=projeto_id)
+                         projeto_id_filtro=projeto_id,
+                         filtro_concretado=filtro_concretado,
+                         filtro_acabado=filtro_acabado,
+                         filtro_transportado=filtro_transportado)
 
 @peca.route('/api/pecas')
 @login_required
@@ -107,6 +147,11 @@ def api_pecas():
         
         projeto_id = request.args.get('projeto_id', type=int)
         
+        # Filtros de status
+        filtro_concretado = request.args.get('filtro_concretado', type=str) == '1'
+        filtro_acabado = request.args.get('filtro_acabado', type=str) == '1'
+        filtro_transportado = request.args.get('filtro_transportado', type=str) == '1'
+        
         # Query base com join para incluir tanque e contrato
         query = db.session.query(TanquesPecas)\
             .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
@@ -119,6 +164,10 @@ def api_pecas():
         if projeto_id:
             query = query.filter(Tanques.contrato_id == projeto_id)
         
+        # Aplicar filtro de concretado diretamente na query (mais eficiente)
+        if filtro_concretado:
+            query = query.filter(TanquesPecas.data_concretagem.isnot(None))
+        
         # Aplicar busca global
         if search_value:
             search_filter = db.or_(
@@ -130,46 +179,35 @@ def api_pecas():
             )
             query = query.filter(search_filter)
         
-        # Contar total de registros (antes da paginação)
-        total_records = query.count()
+        # Buscar todas as peças (sem paginação) para aplicar filtros de status que dependem de JSON
+        pecas_todas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial).all()
         
-        # Ordenar e paginar
-        pecas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial)\
-            .offset(start)\
-            .limit(length)\
-            .all()
+        # Aplicar filtros de status que dependem de JSON
+        pecas_filtradas = []
+        for peca in pecas_todas:
+            concretado, acabada, transportado = verificar_status_peca(peca)
+            
+            # Aplicar filtros
+            if filtro_concretado and not concretado:
+                continue
+            if filtro_acabado and not acabada:
+                continue
+            if filtro_transportado and not transportado:
+                continue
+            
+            pecas_filtradas.append(peca)
+        
+        # Contar total de registros após filtros
+        total_records = len(pecas_filtradas)
+        
+        # Aplicar paginação
+        pecas = pecas_filtradas[start:start + length]
         
         # Formatar dados para resposta
         data = []
         for peca in pecas:
-            # Verificar status
-            concretado = peca.data_concretagem is not None
-            
-            acabada = False
-            transportado = False
-            
-            if peca.qualidade:
-                try:
-                    qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-                    
-                    # Verificar acabamento
-                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
-                        acabamento = qualidade_dict['acabamento']
-                        if isinstance(acabamento, dict):
-                            acabada = acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null'
-                        elif isinstance(acabamento, str):
-                            acabada = acabamento != '' and acabamento != 'null'
-                        else:
-                            acabada = bool(acabamento)
-                    
-                    # Verificar transporte
-                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
-                        transporte = qualidade_dict['transporte']
-                        if isinstance(transporte, dict):
-                            data_transporte = transporte.get('data_transporte')
-                            transportado = data_transporte is not None and data_transporte != '' and data_transporte != 'null'
-                except (json.JSONDecodeError, TypeError, AttributeError):
-                    pass
+            # Verificar status usando função auxiliar
+            concretado, acabada, transportado = verificar_status_peca(peca)
             
             # Montar badges de status
             status_badges = []
@@ -250,6 +288,11 @@ def api_pecas_estatisticas():
         projeto_id = request.args.get('projeto_id', type=int)
         search_value = request.args.get('search', type=str, default='')
         
+        # Filtros de status
+        filtro_concretado = request.args.get('filtro_concretado', type=str) == '1'
+        filtro_acabado = request.args.get('filtro_acabado', type=str) == '1'
+        filtro_transportado = request.args.get('filtro_transportado', type=str) == '1'
+        
         # Query base com join para incluir tanque e contrato
         query = db.session.query(TanquesPecas)\
             .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
@@ -260,6 +303,10 @@ def api_pecas_estatisticas():
         
         if projeto_id:
             query = query.filter(Tanques.contrato_id == projeto_id)
+        
+        # Aplicar filtro de concretado diretamente na query (mais eficiente)
+        if filtro_concretado:
+            query = query.filter(TanquesPecas.data_concretagem.isnot(None))
         
         # Aplicar busca global se houver
         if search_value:
@@ -273,46 +320,37 @@ def api_pecas_estatisticas():
             query = query.filter(search_filter)
         
         # Buscar todas as peças (sem paginação)
-        pecas = query.all()
+        pecas_todas = query.all()
+        
+        # Aplicar filtros de status que dependem de JSON
+        pecas_filtradas = []
+        for peca in pecas_todas:
+            concretado, acabada, transportado = verificar_status_peca(peca)
+            
+            # Aplicar filtros
+            if filtro_concretado and not concretado:
+                continue
+            if filtro_acabado and not acabada:
+                continue
+            if filtro_transportado and not transportado:
+                continue
+            
+            pecas_filtradas.append(peca)
         
         # Contadores
-        total_pecas = len(pecas)
+        total_pecas = len(pecas_filtradas)
         concretadas = 0
         acabadas = 0
         transportadas = 0
         
-        for peca in pecas:
-            # Verificar concretado
-            if peca.data_concretagem is not None:
+        for peca in pecas_filtradas:
+            concretado, acabada, transportado = verificar_status_peca(peca)
+            if concretado:
                 concretadas += 1
-            
-            # Verificar acabada e transportada
-            if peca.qualidade:
-                try:
-                    qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-                    
-                    # Verificar acabamento
-                    if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
-                        acabamento = qualidade_dict['acabamento']
-                        if isinstance(acabamento, dict):
-                            if acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null':
-                                acabadas += 1
-                        elif isinstance(acabamento, str):
-                            if acabamento != '' and acabamento != 'null':
-                                acabadas += 1
-                        else:
-                            if bool(acabamento):
-                                acabadas += 1
-                    
-                    # Verificar transporte
-                    if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
-                        transporte = qualidade_dict['transporte']
-                        if isinstance(transporte, dict):
-                            data_transporte = transporte.get('data_transporte')
-                            if data_transporte is not None and data_transporte != '' and data_transporte != 'null':
-                                transportadas += 1
-                except (json.JSONDecodeError, TypeError, AttributeError):
-                    pass
+            if acabada:
+                acabadas += 1
+            if transportado:
+                transportadas += 1
         
         return jsonify({
             'success': True,
@@ -424,6 +462,44 @@ def visualizar(id):
     """Visualiza detalhes de uma peça"""
     peca = TanquesPecas.query.get_or_404(id)
     return render_template('pecas/visualizar.html', peca=peca)
+
+@peca.route('/<int:id>/marcar-produzida', methods=['POST'])
+@login_required
+def marcar_produzida(id):
+    """
+    Marca uma peça como produzida, atualizando a data_concretagem
+    """
+    try:
+        peca = TanquesPecas.query.get_or_404(id)
+        
+        # Obter data de concretagem do request
+        data = request.get_json()
+        data_concretagem_str = data.get('data_concretagem') if data else None
+        
+        if data_concretagem_str:
+            try:
+                data_concretagem = datetime.strptime(data_concretagem_str, '%Y-%m-%d').date()
+            except ValueError:
+                data_concretagem = datetime.now().date()
+        else:
+            data_concretagem = datetime.now().date()
+        
+        # Atualizar data de concretagem
+        peca.data_concretagem = datetime.combine(data_concretagem, datetime.min.time())
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Peça marcada como produzida com sucesso'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f'Erro ao marcar peça como produzida: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'message': str(e)
+        }), 500
 
 @peca.route('/excluir/<int:id>', methods=['POST'])
 def excluir(id):
@@ -1533,6 +1609,30 @@ def processar_producao_manual(log, usuario_id=1):
             except Exception as e:
                 logging.error(f"Erro ao processar produto composto {produto_composto.id}: {str(e)}")
                 continue
+            data_producao = datetime.now().isoformat() if isinstance(dia_date, date_type) else (datetime.now().strftime('%Y-%m-%d') if isinstance(dia_date, datetime) else str(datetime.now()))
+            # Marcar data de produção nas peças processadas
+            for peca in pecas_grupo:
+                try:
+                    # Carregar qualidade existente ou criar novo dict
+                    qualidade_dict = {}
+                    if peca.qualidade:
+                        try:
+                            qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                        except (json.JSONDecodeError, TypeError):
+                            qualidade_dict = {}
+                    
+                    # Adicionar data_producao nos dados_adicionais
+                    if 'data_producao' not in qualidade_dict:
+                        qualidade_dict['data_producao'] = None
+                    
+                    qualidade_dict['data_producao'] = data_producao
+                    
+                    # Salvar qualidade atualizada
+                    peca.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
+                    db.session.add(peca)
+                except Exception as e:
+                    logging.warning(f"Erro ao salvar data_producao na peça {peca.id}: {str(e)}")
+                    continue
 
         print(f"Materiais necessários: {len(materiais_necessarios)}")
         if materiais_necessarios:
@@ -1919,6 +2019,12 @@ def processar_arquivo_inspecao(xlsx_path):
         ).first()
         
         if not peca_existe:
+            # Garantir que dados_adicionais existe com data_producao null
+            if 'dados_adicionais' not in peca['qualidade']:
+                peca['qualidade']['dados_adicionais'] = {}
+            if 'data_producao' not in peca['qualidade']['dados_adicionais']:
+                peca['qualidade']['dados_adicionais']['data_producao'] = None
+            
             qualidade_serializada = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
             log['novas'] += 1
             peca_dict = TanquesPecas(

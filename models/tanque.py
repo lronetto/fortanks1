@@ -376,6 +376,33 @@ class TanquesPecas(db.Model):
                 .filter(TanquesPecas.tanque_id == self.tanque_id).scalar() or 0
             # Incrementa para obter o próximo número
             self.numero_sequencial = maior_sequencial + 1
+        
+        # Se for uma nova peça e não tem qualidade definida, inicializar com data_producao null
+        if not self.id:
+            if not self.qualidade:
+                qualidade_dict = {
+                    'dados_adicionais': {
+                        'data_producao': None
+                    }
+                }
+                self.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
+            else:
+                # Se já tem qualidade, garantir que dados_adicionais.data_producao existe
+                try:
+                    qualidade_dict = json.loads(self.qualidade) if isinstance(self.qualidade, str) else self.qualidade
+                    if 'dados_adicionais' not in qualidade_dict:
+                        qualidade_dict['dados_adicionais'] = {}
+                    if 'data_producao' not in qualidade_dict['dados_adicionais']:
+                        qualidade_dict['dados_adicionais']['data_producao'] = None
+                    self.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
+                except (json.JSONDecodeError, TypeError):
+                    # Se não conseguir parsear, criar novo dict
+                    qualidade_dict = {
+                        'dados_adicionais': {
+                            'data_producao': None
+                        }
+                    }
+                    self.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
             
         if not self.id:
             db.session.add(self)

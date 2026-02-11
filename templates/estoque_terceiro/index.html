@@ -111,6 +111,21 @@
         </div>
     </div>
 
+    <!-- Peças Não Produzidas por Tanque -->
+    <div class="card shadow mb-4" id="cardPecasNaoProduzidas" style="display: none;">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-cog"></i> Peças Não Produzidas por Tanque
+                <small class="text-muted">(Da data do estoque terceiro até hoje)</small>
+            </h6>
+        </div>
+        <div class="card-body">
+            <div id="pecasNaoProduzidasContainer">
+                <!-- Conteúdo será carregado via JavaScript -->
+            </div>
+        </div>
+    </div>
+
     <!-- Tabela Comparativa -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
@@ -130,6 +145,9 @@
                             <th class="text-end">Estoque Terceiro</th>
                             <th class="text-end">Diferença</th>
                             <th class="text-end">Diferença %</th>
+                            <th class="text-end">Consumo Futuro</th>
+                            <th class="text-end">Estoque Futuro</th>
+                            <th class="text-end">Diferença Futura</th>
                             <th class="text-end">Valor Unitário</th>
                             <th class="text-end">Valor Total</th>
                             <th>Data Estoque Terceiro</th>
@@ -207,7 +225,7 @@ $(document).ready(function() {
                 url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
             },
             order: [[1, 'asc']], // Ordenar por nome do material
-            pageLength: 25,
+            pageLength: 100,
             lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
             scrollX: true,
             columns: [
@@ -240,7 +258,11 @@ $(document).ready(function() {
                     data: 'estoque_sistema', 
                     name: 'estoque_sistema',
                     className: 'text-end',
+                    type: 'num',
                     render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0.00;
+                        }
                         return parseFloat(data).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
                     }
                 },
@@ -248,7 +270,11 @@ $(document).ready(function() {
                     data: 'estoque_terceiro', 
                     name: 'estoque_terceiro',
                     className: 'text-end',
+                    type: 'num',
                     render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
                         return parseFloat(data).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
                     }
                 },
@@ -256,8 +282,12 @@ $(document).ready(function() {
                     data: 'diferenca', 
                     name: 'diferenca',
                     className: 'text-end',
+                    type: 'num',
                     render: function(data, type, row) {
-                        const valor = parseFloat(data);
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
                         const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
                         return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`;
                     }
@@ -266,17 +296,66 @@ $(document).ready(function() {
                     data: 'diferenca_percentual', 
                     name: 'diferenca_percentual',
                     className: 'text-end',
+                    type: 'num',
                     render: function(data, type, row) {
-                        const valor = parseFloat(data);
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
                         const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
                         return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>`;
+                    }
+                },
+                { 
+                    data: 'consumo_futuro', 
+                    name: 'consumo_futuro',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        return valor > 0 ? `<span class="text-warning">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>` : '-';
+                    }
+                },
+                { 
+                    data: 'estoque_futuro', 
+                    name: 'estoque_futuro',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`;
+                    }
+                },
+                { 
+                    data: 'diferenca_futura', 
+                    name: 'diferenca_futura',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`;
                     }
                 },
                 { 
                     data: 'valor_unitario', 
                     name: 'valor_unitario',
                     className: 'text-end',
+                    type: 'num',
                     render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
                         return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     }
                 },
@@ -284,7 +363,11 @@ $(document).ready(function() {
                     data: 'valor_total', 
                     name: 'valor_total',
                     className: 'text-end',
+                    type: 'num',
                     render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
                         return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     }
                 },
@@ -305,11 +388,132 @@ $(document).ready(function() {
         });
     }
     
+    // Carregar peças não produzidas quando houver filtro de data
+    function carregarPecasNaoProduzidas() {
+        const dataFiltro = $('#filtro_data').val();
+        if (!dataFiltro) {
+            $('#cardPecasNaoProduzidas').hide();
+            return;
+        }
+        
+        fetch(`{{ url_for("estoque_terceiro.api_pecas_nao_produzidas") }}?data_estoque=${dataFiltro}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.pecas && data.pecas.length > 0) {
+                    let html = '';
+                    data.pecas.forEach(function(tanque) {
+                        html += `
+                            <div class="mb-3 border rounded p-3">
+                                <h6 class="mb-2">
+                                    <i class="fas fa-tank"></i> ${tanque.tanque_nome}
+                                    <small class="text-muted">(${tanque.pecas.length} peça(s))</small>
+                                </h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Nome</th>
+                                                <th>Tipo</th>
+                                                <th>Nº Sequencial</th>
+                                                <th>Produto Composto</th>
+                                                <th>Data Cadastro</th>
+                                                <th>Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                        `;
+                        tanque.pecas.forEach(function(peca) {
+                            const dataCadastro = peca.data_cadastro ? new Date(peca.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                            html += `
+                                <tr data-peca-id="${peca.id}">
+                                    <td>${peca.nome}</td>
+                                    <td>${peca.tipo}</td>
+                                    <td>${peca.numero_sequencial}</td>
+                                    <td>${peca.produto_composto_nome}</td>
+                                    <td>${dataCadastro}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-primary btn-marcar-produzida" data-peca-id="${peca.id}" data-peca-nome="${peca.nome}">
+                                            <i class="fas fa-check"></i> Marcar como Produzida
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        html += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    $('#pecasNaoProduzidasContainer').html(html);
+                    $('#cardPecasNaoProduzidas').show();
+                } else {
+                    $('#cardPecasNaoProduzidas').hide();
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar peças não produzidas:', error);
+                $('#cardPecasNaoProduzidas').hide();
+            });
+    }
+    
+    // Evento para marcar peça como produzida
+    $(document).on('click', '.btn-marcar-produzida', function() {
+        const pecaId = $(this).data('peca-id');
+        const pecaNome = $(this).data('peca-nome');
+        const dataHoje = new Date().toISOString().split('T')[0];
+        
+        if (!confirm(`Deseja marcar a peça "${pecaNome}" como produzida na data de hoje (${new Date().toLocaleDateString('pt-BR')})?`)) {
+            return;
+        }
+        
+        // Obter token CSRF
+        let csrfToken = $('meta[name="csrf-token"]').attr('content');
+        if (!csrfToken) {
+            csrfToken = $('input[name="csrf_token"]').first().val();
+        }
+        
+        if (!csrfToken) {
+            alert('Erro: Token CSRF não encontrado. Recarregue a página e tente novamente.');
+            return;
+        }
+        
+        // Chamar API para atualizar peça
+        fetch(`/pecas/${pecaId}/marcar-produzida`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                data_concretagem: dataHoje
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Peça marcada como produzida com sucesso!');
+                carregarPecasNaoProduzidas();
+                if (table) {
+                    table.ajax.reload();
+                }
+            } else {
+                alert('Erro ao marcar peça como produzida: ' + (data.message || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao marcar peça como produzida. Verifique o console para mais detalhes.');
+        });
+    });
+    
     // Evento de mudança no filtro de data
     $('#filtro_data').on('change', function() {
         if (table) {
             table.ajax.reload();
         }
+        carregarPecasNaoProduzidas();
     });
     
     // Botão limpar filtros
@@ -318,6 +522,7 @@ $(document).ready(function() {
         if (table) {
             table.ajax.reload();
         }
+        $('#cardPecasNaoProduzidas').hide();
     });
     
     // Função para atualizar cards com estatísticas
