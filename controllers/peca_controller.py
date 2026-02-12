@@ -235,7 +235,10 @@ def api_pecas():
                 'nome': peca.nome or '',
                 'data_cadastro': peca.data_cadastro.strftime('%d/%m/%Y %H:%M') if peca.data_cadastro else '',
                 'status': status_html,
-                'acoes': acoes_html
+                'acoes': acoes_html,
+                'concretado': concretado,
+                'acabada': acabada,
+                'transportado': transportado
             })
         
         return jsonify({

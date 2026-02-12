@@ -183,6 +183,36 @@
         </div>
     </div>
 
+    <!-- Card Resumo por Tipo -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-layer-group"></i> Resumo por Tipo
+            </h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0" id="tabelaResumoPorTipo">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th class="text-center">Total</th>
+                            <th class="text-center"><span class="badge bg-success">Concretadas</span></th>
+                            <th class="text-center"><span class="badge bg-info">Acabadas</span></th>
+                            <th class="text-center"><span class="badge bg-primary">Transportadas</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="resumoPorTipoContainer">
+                        <tr><td colspan="5" class="text-center text-muted">Carregando...</td></tr>
+                    </tbody>
+                    <tfoot id="resumoPorTipoSubtotais" class="table-light fw-bold">
+                        <tr><td colspan="5" class="text-center text-muted small">—</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabela de Peças -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -251,7 +281,8 @@
 {% block scripts %}
 <script>
     $(document).ready(function () {
-        // Variáveis globais para armazenar dados de filtros
+        // Variáveis no escopo do ready (acessíveis aos eventos de filtro)
+        var table;
         var todosContratos = [];
         var todosTanques = [];
         var filtrosIniciais = {{ filtros_iniciais_json|safe }};
@@ -485,6 +516,55 @@
             atualizarFiltrosStatus();
         }
         
+        // Função para atualizar a tabela de resumo por tipo (Total, Concretadas, Acabadas, Transportadas)
+        function atualizarResumoPorTipo(data) {
+            var tbody = $('#resumoPorTipoContainer');
+            var tfoot = $('#resumoPorTipoSubtotais');
+            if (!data || data.length === 0) {
+                tbody.html('<tr><td colspan="5" class="text-center text-muted">Nenhuma peça para exibir</td></tr>');
+                tfoot.html('<tr><td colspan="5" class="text-center text-muted small">—</td></tr>');
+                return;
+            }
+            var porTipo = {};
+            data.forEach(function(row) {
+                var t = (row.tipo && row.tipo.toString().trim()) ? row.tipo : 'Sem tipo';
+                if (!porTipo[t]) {
+                    porTipo[t] = { total: 0, concretadas: 0, acabadas: 0, transportadas: 0 };
+                }
+                porTipo[t].total += 1;
+                if (row.concretado) porTipo[t].concretadas += 1;
+                if (row.acabada) porTipo[t].acabadas += 1;
+                if (row.transportado) porTipo[t].transportadas += 1;
+            });
+            var tiposOrdenados = Object.keys(porTipo).sort();
+            var stTotal = 0, stConcretadas = 0, stAcabadas = 0, stTransportadas = 0;
+            var html = '';
+            tiposOrdenados.forEach(function(tipo) {
+                var o = porTipo[tipo];
+                stTotal += o.total;
+                stConcretadas += o.concretadas;
+                stAcabadas += o.acabadas;
+                stTransportadas += o.transportadas;
+                html += '<tr>' +
+                    '<td class="fw-bold">' + tipo + '</td>' +
+                    '<td class="text-center">' + o.total + '</td>' +
+                    '<td class="text-center">' + o.concretadas + '</td>' +
+                    '<td class="text-center">' + o.acabadas + '</td>' +
+                    '<td class="text-center">' + o.transportadas + '</td>' +
+                    '</tr>';
+            });
+            tbody.html(html || '<tr><td colspan="5" class="text-center text-muted">Nenhum tipo encontrado</td></tr>');
+            // Linha de subtotais
+            var footHtml = '<tr>' +
+                '<td>Subtotal</td>' +
+                '<td class="text-center">' + stTotal + '</td>' +
+                '<td class="text-center">' + stConcretadas + '</td>' +
+                '<td class="text-center">' + stAcabadas + '</td>' +
+                '<td class="text-center">' + stTransportadas + '</td>' +
+                '</tr>';
+            tfoot.html(footHtml);
+        }
+        
         // Função para inicializar DataTable
         function inicializarDataTable() {
             // Atualizar variáveis de filtro dos selects
@@ -493,8 +573,8 @@
             // Carregar estatísticas iniciais
             carregarEstatisticas();
             
-            // Inicializar DataTable com AJAX
-            var table = $('#tabelaPecas').DataTable({
+            // Inicializar DataTable com AJAX (atribuir à variável table do escopo externo)
+            table = $('#tabelaPecas').DataTable({
                 processing: true,
                 serverSide: false,
                 ajax: {
@@ -502,31 +582,30 @@
                     type: 'GET',
                     traditional: true, // Necessário para enviar arrays corretamente
                     data: function(d) {
-                        // Adicionar filtros customizados
+                        // Ler filtros diretamente do formulário em cada requisição
                         var tanqueIds = getTanqueIds();
                         if (tanqueIds.length > 0) {
-                            // Enviar como array com nome correto para o backend
                             d['tanque_ids[]'] = tanqueIds;
-                            console.log('Enviando tanque_ids[] para DataTables:', tanqueIds);
                         }
-                        if (projetoIdFiltro) {
-                            d.projeto_id = projetoIdFiltro;
+                        var projId = $('#projeto_id').val();
+                        if (projId) {
+                            d.projeto_id = projId;
                         }
-                        // Adicionar filtros de status
-                        if (filtroConcretado) {
+                        if ($('#filtro_concretado').is(':checked')) {
                             d.filtro_concretado = '1';
                         }
-                        if (filtroAcabado) {
+                        if ($('#filtro_acabado').is(':checked')) {
                             d.filtro_acabado = '1';
                         }
-                        if (filtroTransportado) {
+                        if ($('#filtro_transportado').is(':checked')) {
                             d.filtro_transportado = '1';
                         }
                     },
                     dataSrc: function(json) {
-                        console.log('Dados recebidos:', json);
                         // Atualizar badge de total
                         $('#badgeTotalPecas').text(json.recordsFiltered + ' peça(s)');
+                        // Atualizar resumo por tipo
+                        atualizarResumoPorTipo(json.data || []);
                         // Atualizar estatísticas após carregar dados
                         setTimeout(carregarEstatisticas, 100);
                         return json.data;
@@ -605,20 +684,20 @@
             setTimeout(carregarEstatisticas, 300);
         });
         
-        // Recarregar tabela quando os filtros mudarem
+        // Recarregar tabela quando clicar em Filtrar
         $('#filtroForm').on('submit', function(e) {
             e.preventDefault();
             atualizarVariaveisFiltro();
-            table.ajax.reload();
-            carregarEstatisticas();
+            table.ajax.reload(null, false); // false = manter na mesma página
+            setTimeout(carregarEstatisticas, 500);
         });
         
         // Recarregar tabela quando os checkboxes de status mudarem
         $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
-            atualizarFiltrosStatus();
+            atualizarVariaveisFiltro();
             if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                table.ajax.reload();
-                carregarEstatisticas();
+                table.ajax.reload(null, false);
+                setTimeout(carregarEstatisticas, 500);
             }
         });
 
@@ -627,10 +706,9 @@
             var projetoId = $(this).val();
             popularTanques(projetoId);
             atualizarVariaveisFiltro();
-            // Recarregar tabela se já estiver inicializada
             if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                table.ajax.reload();
-                carregarEstatisticas();
+                table.ajax.reload(null, false);
+                setTimeout(carregarEstatisticas, 500);
             }
         });
         
@@ -638,8 +716,8 @@
         $('#tanque_id').on('change', function() {
             atualizarVariaveisFiltro();
             if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                table.ajax.reload();
-                carregarEstatisticas();
+                table.ajax.reload(null, false);
+                setTimeout(carregarEstatisticas, 500);
             }
         });
 // Carregar dados de filtros ao inicializar

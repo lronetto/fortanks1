@@ -84,15 +84,15 @@
                         </select>
                     </div>
                     <div class="col-md-3">
-                        <label for="tanque_id" class="form-label">Tanque</label>
-                        <select class="form-select" id="tanque_id" name="tanque_id">
-                            <option value="">Todos os tanques</option>
+                        <label for="tanque_id" class="form-label">Tanque(s)</label>
+                        <select class="form-select" id="tanque_id" name="tanque_id" multiple>
                             {% for tanque in tanques %}
                             <option value="{{ tanque.id }}">
                                 {{ tanque.nome }}
                             </option>
                             {% endfor %}
                         </select>
+                        <small class="text-muted">Segure Ctrl para selecionar vários</small>
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button type="button" id="btnFiltrar" class="btn btn-primary w-100">
@@ -135,6 +135,14 @@
                             <tbody id="conteudo-produtos-compostos">
                                 <!-- Conteúdo será preenchido via JavaScript -->
                             </tbody>
+                            <tfoot class="table-dark">
+                                <tr>
+                                    <th class="text-end">SUBTOTAL</th>
+                                    <th class="text-end" id="subtotal-produtos-prevista">0</th>
+                                    <th class="text-end" id="subtotal-produtos-consumido">0</th>
+                                    <th class="text-end" id="subtotal-produtos-restante">0</th>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
@@ -208,8 +216,9 @@ $(document).ready(function() {
 
     $('#tanque_id').select2({
         theme: 'bootstrap4',
-        placeholder: 'Selecione um tanque',
-        allowClear: true
+        placeholder: 'Selecione um ou mais tanques',
+        allowClear: true,
+        closeOnSelect: false
     });
 
     // Verificar se a tabela existe antes de inicializar
@@ -238,7 +247,11 @@ $(document).ready(function() {
             type: 'GET',
             data: function(d) {
                 d.contrato_id = $('#contrato_id').val() || null;
-                d.tanque_id = $('#tanque_id').val() || null;
+                var tanques = $('#tanque_id').val();
+                if (tanques && tanques.length > 0) {
+                    d.tanque_id = tanques;
+                }
+                // quando vazio, não envia tanque_id (backend considera todos)
             },
             dataSrc: function(json) {
                 // Verificar se json e json.totais existem
@@ -254,12 +267,15 @@ $(document).ready(function() {
                 return json && json.data ? json.data : [];
             },
             error: function(xhr, error, thrown) {
+                // Ignorar abort (quando uma nova requisição substitui a anterior)
+                if (error === 'abort') {
+                    return;
+                }
                 console.error('Erro ao carregar dados:', error);
                 console.error('Detalhes:', thrown);
-                // Mostrar mensagem de erro ao usuário
                 if ($('#tabelaMateriais').length) {
                     $('#tabelaMateriais tbody').html(
-                        '<tr><td colspan="11" class="text-center text-danger">Erro ao carregar dados. Por favor, tente novamente.</td></tr>'
+                        '<tr><td colspan="10" class="text-center text-danger">Erro ao carregar dados. Por favor, tente novamente.</td></tr>'
                     );
                 }
             }
@@ -396,18 +412,34 @@ $(document).ready(function() {
         }
         
         let html = '';
+        let subtotalPrevista = 0;
+        let subtotalConsumido = 0;
+        let subtotalRestante = 0;
         
         produtosCompostos.forEach(function(produto) {
+            const prevista = parseInt(produto.total_quantidade_prevista) || 0;
+            const consumido = parseInt(produto.total_quantidade_concretada) || 0;
+            const restante = parseInt(produto.total_quantidade_restante) || 0;
+            
+            subtotalPrevista += prevista;
+            subtotalConsumido += consumido;
+            subtotalRestante += restante;
+            
             html += '<tr>';
             html += '<td><strong><i class="fas fa-cube"></i> ' + produto.produto_composto_nome + '</strong></td>';
-            // Totais são unitários (número de peças), então formatamos como inteiro
-            html += '<td class="text-end text-primary"><strong>' + parseInt(produto.total_quantidade_prevista).toLocaleString('pt-BR') + '</strong></td>';
-            html += '<td class="text-end text-success"><strong>' + parseInt(produto.total_quantidade_concretada).toLocaleString('pt-BR') + '</strong></td>';
-            html += '<td class="text-end text-warning"><strong>' + parseInt(produto.total_quantidade_restante).toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-primary"><strong>' + prevista.toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-success"><strong>' + consumido.toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-warning"><strong>' + restante.toLocaleString('pt-BR') + '</strong></td>';
             html += '</tr>';
         });
         
         conteudoElement.html(html);
+        
+        // Atualizar subtotais no rodapé
+        $('#subtotal-produtos-prevista').text(subtotalPrevista.toLocaleString('pt-BR'));
+        $('#subtotal-produtos-consumido').text(subtotalConsumido.toLocaleString('pt-BR'));
+        $('#subtotal-produtos-restante').text(subtotalRestante.toLocaleString('pt-BR'));
+        
         cardElement.show();
     }
 
@@ -419,7 +451,7 @@ $(document).ready(function() {
             type: 'GET',
             data: { contrato_id: contratoId },
             success: function(response) {
-                $('#tanque_id').empty().append('<option value="">Todos os tanques</option>');
+                $('#tanque_id').empty();
                 response.tanques.forEach(function(tanque) {
                     $('#tanque_id').append(
                         $('<option></option>').val(tanque.id).text(tanque.nome)
@@ -458,11 +490,15 @@ $(document).ready(function() {
 
     function atualizarLinksExportacao() {
         const contratoId = $('#contrato_id').val();
-        const tanqueId = $('#tanque_id').val();
+        const tanqueIds = $('#tanque_id').val(); // array quando multiple
         
         let params = new URLSearchParams();
         if (contratoId) params.append('contrato_id', contratoId);
-        if (tanqueId) params.append('tanque_id', tanqueId);
+        if (tanqueIds && tanqueIds.length > 0) {
+            tanqueIds.forEach(function(id) {
+                params.append('tanque_id', id);
+            });
+        }
         
         const queryString = params.toString();
         const baseUrl = "{{ url_for('relatorios_capacidade_producao.exportar_pdf') }}";

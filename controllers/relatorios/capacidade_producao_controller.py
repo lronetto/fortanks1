@@ -76,14 +76,17 @@ def _expandir_materiais_produto_composto(produto_id, quantidade_base=1.0, caminh
     
     return materiais_agrupados
 
-def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None, incluir_produtos_compostos=False):
+def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None, tanque_ids=None, incluir_produtos_compostos=False):
     """
-    Busca dados de materiais agrupados por material, com somatórios nas colunas
+    Busca dados de materiais agrupados por material, com somatórios nas colunas.
+    tanque_id: um único tanque (legado). tanque_ids: lista de IDs para múltipla seleção.
     """
     query = Tanques.query
     
-    # Aplicar filtros
-    if tanque_id:
+    # Aplicar filtros (tanque_ids tem prioridade sobre tanque_id)
+    if tanque_ids:
+        query = query.filter(Tanques.id.in_(tanque_ids))
+    elif tanque_id:
         query = query.filter(Tanques.id == tanque_id)
     
     if contrato_id:
@@ -219,14 +222,17 @@ def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None, incluir_prod
     
     return dados
 
-def get_dados_capacidade_producao(contrato_id=None, tanque_id=None):
+def get_dados_capacidade_producao(contrato_id=None, tanque_id=None, tanque_ids=None):
     """
-    Busca dados de capacidade de produção por tanque, considerando produto composto vinculado
+    Busca dados de capacidade de produção por tanque, considerando produto composto vinculado.
+    tanque_id: um único tanque (legado). tanque_ids: lista de IDs para múltipla seleção.
     """
     query = Tanques.query
     
     # Aplicar filtros
-    if tanque_id:
+    if tanque_ids:
+        query = query.filter(Tanques.id.in_(tanque_ids))
+    elif tanque_id:
         query = query.filter(Tanques.id == tanque_id)
     
     if contrato_id:
@@ -583,15 +589,35 @@ def api_dados():
         'percentual_geral_conclusao': percentual_geral_conclusao
     })
 
+def _parse_tanque_ids():
+    """Obtém lista de IDs de tanques a partir da requisição (suporta múltipla seleção)."""
+    tanque_ids = request.args.getlist('tanque_id') or request.args.getlist('tanque_id[]')
+    if not tanque_ids:
+        return None
+    result = []
+    for tid in tanque_ids:
+        try:
+            result.append(int(tid))
+        except (TypeError, ValueError):
+            continue
+    return result if result else None
+
+
 @capacidade_producao_bp.route('/api/dados-materiais', methods=['GET'])
 @login_required
 def api_dados_materiais():
     """Endpoint AJAX para buscar dados de materiais em formato DataTables"""
     contrato_id = request.args.get('contrato_id', type=int)
-    tanque_id = request.args.get('tanque_id', type=int)
+    tanque_ids = _parse_tanque_ids()
+    tanque_id = request.args.get('tanque_id', type=int) if not tanque_ids else None
     
     # Buscar dados com informações de produtos compostos
-    dados = get_dados_materiais_agrupados(contrato_id=contrato_id, tanque_id=tanque_id, incluir_produtos_compostos=True)
+    dados = get_dados_materiais_agrupados(
+        contrato_id=contrato_id,
+        tanque_id=tanque_id,
+        tanque_ids=tanque_ids,
+        incluir_produtos_compostos=True
+    )
     # Calcular totais
     total_estoque_atual = sum([item['estoque_atual'] for item in dados])
     total_quantidade_necessaria = sum([item['quantidade_necessaria'] for item in dados])
@@ -606,7 +632,9 @@ def api_dados_materiais():
     
     # Buscar tanques novamente para calcular totais unitários por produto composto
     query_tanques = Tanques.query
-    if tanque_id:
+    if tanque_ids:
+        query_tanques = query_tanques.filter(Tanques.id.in_(tanque_ids))
+    elif tanque_id:
         query_tanques = query_tanques.filter(Tanques.id == tanque_id)
     if contrato_id:
         query_tanques = query_tanques.filter(Tanques.contrato_id == contrato_id)
@@ -723,9 +751,15 @@ def api_dados_materiais():
 def exportar_excel():
     """Exportar relatório em formato Excel"""
     contrato_id = request.args.get('contrato_id', type=int)
-    tanque_id = request.args.get('tanque_id', type=int)
+    tanque_ids = _parse_tanque_ids()
+    tanque_id = request.args.get('tanque_id', type=int) if not tanque_ids else None
     
-    dados = get_dados_materiais_agrupados(contrato_id=contrato_id, tanque_id=tanque_id, incluir_produtos_compostos=False)
+    dados = get_dados_materiais_agrupados(
+        contrato_id=contrato_id,
+        tanque_id=tanque_id,
+        tanque_ids=tanque_ids,
+        incluir_produtos_compostos=False
+    )
     
     if not dados:
         from flask import flash, redirect, url_for
@@ -810,9 +844,14 @@ def exportar_excel():
 def exportar_pdf():
     """Exportar relatório em formato PDF"""
     contrato_id = request.args.get('contrato_id', type=int)
-    tanque_id = request.args.get('tanque_id', type=int)
+    tanque_ids = _parse_tanque_ids()
+    tanque_id = request.args.get('tanque_id', type=int) if not tanque_ids else None
     
-    dados = get_dados_capacidade_producao(contrato_id=contrato_id, tanque_id=tanque_id)
+    dados = get_dados_capacidade_producao(
+        contrato_id=contrato_id,
+        tanque_id=tanque_id,
+        tanque_ids=tanque_ids
+    )
     projetos = agrupar_por_projeto(dados)
     
     # Calcular totais
