@@ -12,8 +12,9 @@ class EstoqueTerceiro(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     data = db.Column(db.Date, nullable=False)
-    codigo_erp = db.Column(db.String(50), nullable=False)
-    tipo = db.Column(db.String(50), nullable=True)
+    codigo_erp = db.Column(db.Integer, nullable=False)
+    nome = db.Column(db.String(200), nullable=True)  # Nome do material na planilha do terceiro
+    tipo = db.Column(db.Integer, nullable=True)
     unidade = db.Column(db.String(20), nullable=True)
     quantidade = db.Column(db.Numeric(15, 4), nullable=False, default=0)
     ValorUnitario = db.Column(db.Numeric(15, 4), nullable=True)
@@ -32,6 +33,7 @@ class EstoqueTerceiro(db.Model):
             'id': self.id,
             'data': self.data.isoformat() if self.data else None,
             'codigo_erp': self.codigo_erp,
+            'nome': self.nome,
             'tipo': self.tipo,
             'unidade': self.unidade,
             'quantidade': float(self.quantidade) if self.quantidade else 0,

@@ -1,11 +1,14 @@
+import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import func, distinct
+from sqlalchemy import or_
 from flask_login import login_required, current_user
 from models.unidade import UnidadesConversao, Unidades
+from models.material import Materiais
 from utils.decorators import role_required
 from datetime import datetime
 from models.database import db
+
 conversao_unidade_bp = Blueprint('conversao_unidade', __name__)
 
 def inserir_conversoes_padrao():
@@ -70,10 +73,21 @@ def obter_unidades_unicas():
 @login_required
 @role_required(['admin', 'gerente'])
 def index():
-    """Lista todas as conversões de unidades."""
-    conversoes = UnidadesConversao.query.all()
+    """Lista todas as conversões de unidades (tabela carregada via DataTables AJAX)."""
     unidades = obter_unidades_unicas()
-    return render_template('conversao_unidades/index.html', conversoes=conversoes, unidades=unidades)
+    return render_template('conversao_unidades/index.html', unidades=unidades)
+
+def _parse_materiais_form():
+    """Extrai lista de IDs de materiais do form (materiais[] ou materiais)."""
+    ids = request.form.getlist('materiais[]')
+    if not ids and request.form.get('materiais'):
+        raw = request.form.get('materiais')
+        try:
+            ids = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            ids = []
+    return [int(x) for x in ids if x and str(x).isdigit()]
+
 
 @conversao_unidade_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
@@ -92,11 +106,14 @@ def novo():
         
         try:
             fator = float(fator)
+            materiais_ids = _parse_materiais_form()
+            dados_adicionais = json.dumps({'materiais': materiais_ids}, ensure_ascii=False)
             nova_conversao = UnidadesConversao(
                 nome=nome,
                 unidade_entrada=unidade_entrada,
                 unidade_saida=unidade_saida,
-                fator=fator
+                fator=fator,
+                dados_adicionais=dados_adicionais
             )
             db.session.add(nova_conversao)
             db.session.commit()
@@ -133,6 +150,8 @@ def editar(id):
             conversao.unidade_entrada = unidade_entrada
             conversao.unidade_saida = unidade_saida
             conversao.fator = fator
+            materiais_ids = _parse_materiais_form()
+            conversao.dados_adicionais = json.dumps({'materiais': materiais_ids}, ensure_ascii=False)
             
             db.session.commit()
             flash('Conversão de unidade atualizada com sucesso!', 'success')
@@ -299,12 +318,88 @@ def converter():
 @login_required
 @role_required(['admin', 'gerente'])
 def obter_conversao(id):
-    """Retorna os dados de uma conversão específica."""
+    """Retorna os dados de uma conversão específica (inclui materiais de dados_adicionais)."""
     conversao = UnidadesConversao.query.get_or_404(id)
+    materiais = []
+    if conversao.dados_adicionais:
+        try:
+            da = json.loads(conversao.dados_adicionais)
+            materiais = da.get('materiais') or []
+        except (TypeError, ValueError):
+            pass
     return jsonify({
         'id': conversao.id,
         'nome': conversao.nome,
         'unidade_entrada': conversao.unidade_entrada,
         'unidade_saida': conversao.unidade_saida,
-        'fator': conversao.fator
-    }) 
+        'fator': conversao.fator,
+        'materiais': materiais
+    })
+
+
+@conversao_unidade_bp.route('/api/datatables', methods=['GET'], endpoint='datatables')
+@login_required
+@role_required(['admin', 'gerente'])
+def api_datatables():
+    """API para DataTables - retorna conversões em formato JSON."""
+    draw = int(request.args.get('draw', 1))
+    start = int(request.args.get('start', 0))
+    length = int(request.args.get('length', 25))
+    search_value = request.args.get('search[value]', '').strip()
+    order_column_index = int(request.args.get('order[0][column]', 0))
+    order_dir = request.args.get('order[0][dir]', 'asc')
+
+    column_map = {
+        0: UnidadesConversao.nome,
+        1: UnidadesConversao.unidade_entrada,
+        2: UnidadesConversao.unidade_saida,
+        3: UnidadesConversao.fator,
+    }
+
+    query = UnidadesConversao.query
+    if search_value:
+        query = query.filter(
+            or_(
+                UnidadesConversao.nome.ilike(f'%{search_value}%'),
+                UnidadesConversao.unidade_entrada.ilike(f'%{search_value}%'),
+                UnidadesConversao.unidade_saida.ilike(f'%{search_value}%'),
+            )
+        )
+
+    total_records = UnidadesConversao.query.count()
+    records_filtered = query.count()
+
+    if order_column_index in column_map:
+        order_col = column_map[order_column_index]
+        query = query.order_by(order_col.desc() if order_dir == 'desc' else order_col.asc())
+    else:
+        query = query.order_by(UnidadesConversao.nome.asc())
+
+    conversoes = query.offset(start).limit(length).all()
+    data = []
+    for c in conversoes:
+        materiais_txt = ''
+        if c.dados_adicionais:
+            try:
+                da = json.loads(c.dados_adicionais)
+                ids = da.get('materiais') or []
+                if ids:
+                    materiais = Materiais.query.filter(Materiais.id.in_(ids)).order_by(Materiais.nome).all()
+                    materiais_txt = ', '.join((m.codigo + ' - ' if m.codigo else '') + (m.nome or '') for m in materiais)
+            except (TypeError, ValueError):
+                pass
+        data.append({
+            'id': c.id,
+            'nome': c.nome,
+            'unidade_entrada': c.unidade_entrada,
+            'unidade_saida': c.unidade_saida,
+            'fator': c.fator,
+            'materiais': materiais_txt or None,
+        })
+
+    return jsonify({
+        'draw': draw,
+        'recordsTotal': total_records,
+        'recordsFiltered': records_filtered,
+        'data': data
+    })

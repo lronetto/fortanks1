@@ -53,37 +53,43 @@ def get_conversao_unidade(material_id=None,unidade_entrada=None, unidade_saida=N
         material = Materiais.query.filter_by(id=material_id).first()
         if not material:
             return False
-        if material.dados_adicionais:
-           
-            dados_adicionais = json.loads(material.dados_adicionais)
-            unidade_material = material.unidade_obj.nome if material.unidade_obj else None
-            if unidade_material == unidade_entrada:
-                return 1.0
-            if dados_adicionais and dados_adicionais.get('conversao'):
-                for conversao in dados_adicionais.get('conversao'):
-                    conversor = UnidadesConversao.query.filter_by(id=conversao).first()
-                    print(f"material.nome: {material.nome}, conversao: {conversao}, conversor.unidade_saida: {conversor.unidade_saida}, conversor.unidade_entrada: {conversor.unidade_entrada}, unidade_saida: {unidade_saida}, unidade_entrada: {unidade_entrada},conversor.fator: {conversor.fator}")
-                    if conversor.unidade_saida == unidade_saida and unidade_saida is not None:
-                        return conversor.fator
-                    elif conversor.unidade_entrada == unidade_entrada and unidade_entrada is not None:
-                        return 1.0 / conversor.fator
-        if unidade_saida is not None:
+        unidade_material = material.unidade_obj.nome if material.unidade_obj else None
+        if unidade_material == unidade_entrada:
+            return 1.0
+        # Buscar conversões que tenham este material em dados_adicionais.materiais ou genéricas (sem materiais)
+        for conversor in UnidadesConversao.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida).all():
+            materiais_conv = []
+            if conversor.dados_adicionais:
+                try:
+                    da = json.loads(conversor.dados_adicionais)
+                    materiais_conv = da.get('materiais') or []
+                except (TypeError, ValueError):
+                    pass
+            if not materiais_conv or material_id in materiais_conv:
+                return conversor.fator
+        # Conversão inversa (entrada/saída trocados)
+        for conversor in UnidadesConversao.query.filter_by(unidade_entrada=unidade_saida, unidade_saida=unidade_entrada).all():
+            materiais_conv = []
+            if conversor.dados_adicionais:
+                try:
+                    da = json.loads(conversor.dados_adicionais)
+                    materiais_conv = da.get('materiais') or []
+                except (TypeError, ValueError):
+                    pass
+            if not materiais_conv or material_id in materiais_conv:
+                return 1.0 / conversor.fator
+        if unidade_saida is not None and material.unidade_obj:
             if normalizar_unidade(unidade_saida) == material.unidade_obj.nome:
                 return 1.0
-
             conversao = UnidadesConversao.query.filter_by(unidade_entrada=material.unidade_obj.nome, unidade_saida=unidade_saida).first()
             if conversao:
                 return conversao.fator
-            else:
-                return False
-        if unidade_entrada is not None:
+        if unidade_entrada is not None and material.unidade_obj:
             if normalizar_unidade(unidade_entrada) == material.unidade_obj.nome:
                 return 1.0
             conversao = UnidadesConversao.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=material.unidade_obj.nome).first()
             if conversao:
                 return conversao.fator
-            else:
-                return False
         return False
     else:
         conversao = UnidadesConversao.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida).first()
@@ -198,9 +204,8 @@ class UnidadesConversao(db.Model):
     unidade_origem = db.relationship('Unidades', foreign_keys=[unidade_origem_id], back_populates='conversoes_origem', lazy=True)
     unidade_destino = db.relationship('Unidades', foreign_keys=[unidade_destino_id], back_populates='conversoes_destino', lazy=True)
     
-    # Material associado à conversão (opcional)
-    material_id = db.Column(db.Integer, db.ForeignKey('Materiais.id'), nullable=True)
-    material = db.relationship('Materiais', backref='conversoes_unidade', lazy=True)
+    # Dados adicionais em JSON (ex.: {"materiais": [1, 2, 3]} para vincular materiais à conversão)
+    dados_adicionais = db.Column(db.Text, nullable=True)
     
     # Fator de conversão
     fator = db.Column(db.Float, nullable=False)
@@ -231,100 +236,74 @@ class UnidadesConversao(db.Model):
                     return None
         
     @classmethod
+    def _conversao_aplica_material(cls, conv, material_id):
+        """Verifica se a conversão se aplica ao material (dados_adicionais.materiais ou genérica)."""
+        if not material_id:
+            return True
+        if not conv.dados_adicionais:
+            return True
+        try:
+            da = json.loads(conv.dados_adicionais)
+            materiais = da.get('materiais') or []
+            return not materiais or material_id in materiais
+        except (TypeError, ValueError):
+            return True
+
+    @classmethod
     def obter_por_unidades(cls, unidade_entrada, unidade_saida, material_id=None):
-        """Busca uma conversão com base nas unidades de entrada e saída e material opcional"""
-        query = cls.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida)
-        
-        if material_id:
-            # Primeiro tenta encontrar uma conversão específica para o material
-            conversao = query.filter_by(material_id=material_id).first()
-            if conversao:
-                return conversao
-                
-        # Se não encontrar específica ou não tiver material, busca genérica
-        return query.filter_by(material_id=None).first()
-    
+        """Busca uma conversão com base nas unidades de entrada e saída e material opcional."""
+        candidatas = cls.query.filter_by(unidade_entrada=unidade_entrada, unidade_saida=unidade_saida).all()
+        for conv in candidatas:
+            if cls._conversao_aplica_material(conv, material_id):
+                return conv
+        return None
+
     @classmethod
     def obter_por_ids(cls, unidade_origem_id, unidade_destino_id, material_id=None):
-        """Busca uma conversão com base nos IDs das unidades e material opcional"""
-        query = cls.query.filter_by(unidade_origem_id=unidade_origem_id, 
-                                    unidade_destino_id=unidade_destino_id)
-        
-        if material_id:
-            # Primeiro tenta encontrar uma conversão específica para o material
-            conversao = query.filter_by(material_id=material_id).first()
-            if conversao:
-                return conversao
-                
-        # Se não encontrar específica ou não tiver material, busca genérica
-        return query.filter_by(material_id=None).first()
-    
+        """Busca uma conversão com base nos IDs das unidades e material opcional."""
+        candidatas = cls.query.filter_by(
+            unidade_origem_id=unidade_origem_id,
+            unidade_destino_id=unidade_destino_id
+        ).all()
+        for conv in candidatas:
+            if cls._conversao_aplica_material(conv, material_id):
+                return conv
+        return None
+
     @classmethod
     def listar_para_material(cls, material_id):
-        """Lista todas as conversões disponíveis para um material"""
-        # Busca conversões específicas para o material
-        conversoes_especificas = cls.query.filter_by(material_id=material_id).all()
-        
-        # Busca conversões genéricas (sem material associado)
-        conversoes_genericas = cls.query.filter_by(material_id=None).all()
-        
-        # Combina os resultados (conversões específicas têm prioridade)
+        """Lista todas as conversões disponíveis para um material (genéricas ou com material em dados_adicionais)."""
+        todas = cls.query.all()
         conversoes = {}
-        
-        # Adiciona as conversões genéricas
-        for conv in conversoes_genericas:
+        for conv in todas:
+            if not cls._conversao_aplica_material(conv, material_id):
+                continue
             chave = (conv.unidade_entrada, conv.unidade_saida)
-            conversoes[chave] = conv
-            
-        # Adiciona as conversões específicas (substituindo as genéricas se existirem)
-        for conv in conversoes_especificas:
-            chave = (conv.unidade_entrada, conv.unidade_saida)
-            conversoes[chave] = conv
-            
+            try:
+                tem_material = bool(conv.dados_adicionais and material_id in (json.loads(conv.dados_adicionais).get('materiais') or []))
+            except (TypeError, ValueError):
+                tem_material = False
+            if chave not in conversoes or tem_material:
+                conversoes[chave] = conv
         return list(conversoes.values())
 
     @classmethod
     def obter_fator_conversao(cls, unidade_origem_id: int, unidade_destino_id: int, material_id: int = None) -> float | None:
-        """ Tenta obter um fator de conversão entre duas unidades (por ID), considerando material específico e conversões inversas.
-            Retorna o fator para multiplicar pela quantidade na unidade_origem para obter a quantidade na unidade_destino.
-        """
+        """Obtém fator de conversão entre duas unidades (por ID), considerando material e conversões inversas."""
         if unidade_origem_id == unidade_destino_id:
             return 1.0
-
-        # 1. Tenta conversão direta específica para o material
-        conversao = cls.query.filter_by(
+        # Direta
+        for conversao in cls.query.filter_by(
             unidade_origem_id=unidade_origem_id,
-            unidade_destino_id=unidade_destino_id,
-            material_id=material_id
-        ).first()
-        if conversao:
-            return conversao.fator
-
-        # 2. Tenta conversão direta genérica (sem material_id)
-        conversao = cls.query.filter_by(
-            unidade_origem_id=unidade_origem_id,
-            unidade_destino_id=unidade_destino_id,
-            material_id=None
-        ).first()
-        if conversao:
-            return conversao.fator
-
-        # 3. Tenta conversão inversa específica para o material
-        conversao_inversa = cls.query.filter_by(
-            unidade_origem_id=unidade_destino_id, # Invertido
-            unidade_destino_id=unidade_origem_id, # Invertido
-            material_id=material_id
-        ).first()
-        if conversao_inversa and conversao_inversa.fator != 0:
-            return 1.0 / conversao_inversa.fator
-
-        # 4. Tenta conversão inversa genérica
-        conversao_inversa = cls.query.filter_by(
-            unidade_origem_id=unidade_destino_id, # Invertido
-            unidade_destino_id=unidade_origem_id, # Invertido
-            material_id=None
-        ).first()
-        if conversao_inversa and conversao_inversa.fator != 0:
-            return 1.0 / conversao_inversa.fator
-            
-        return None # Nenhuma conversão encontrada 
+            unidade_destino_id=unidade_destino_id
+        ).all():
+            if cls._conversao_aplica_material(conversao, material_id):
+                return conversao.fator
+        # Inversa
+        for conversao_inversa in cls.query.filter_by(
+            unidade_origem_id=unidade_destino_id,
+            unidade_destino_id=unidade_origem_id
+        ).all():
+            if cls._conversao_aplica_material(conversao_inversa, material_id) and conversao_inversa.fator != 0:
+                return 1.0 / conversao_inversa.fator
+        return None

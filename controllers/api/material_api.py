@@ -25,7 +25,7 @@ def register(material_bp):
         # Verificar se deve filtrar apenas materiais sem estoque
         apenas_sem_estoque = request.args.get('sem_estoque', 'false').lower() == 'true'
         
-        query = Materiais.query.filter_by(ativo=True)
+        query = Materiais.query.filter_by(ativo=True).order_by(Materiais.nome)
         
         if apenas_sem_estoque:
             # Buscar IDs de materiais que já têm estoque

@@ -3,6 +3,15 @@
 {% block title %}Comparativo de Estoques{% endblock %}
 
 {% block content %}
+<style>
+    /* Barra de rolagem vertical no topo do DataTable */
+    #tabelaComparativo_wrapper .dataTables_scrollBody {
+        transform: scaleY(-1);
+    }
+    #tabelaComparativo_wrapper .dataTables_scrollBody table {
+        transform: scaleY(-1);
+    }
+</style>
 <div class="container-fluid">
     <!-- Cabeçalho -->
     <div class="d-flex justify-content-between align-items-center mb-4 cabecalho">
@@ -10,7 +19,10 @@
             <h1 class="h3 text-gray-800">Comparativo de Estoques</h1>
             <p class="mb-0">Compare o estoque do sistema com o estoque de terceiros.</p>
         </div>
-        <div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-success" id="btnExportarExcel" title="Exportar dados visíveis para Excel">
+                <i class="fas fa-file-excel"></i> Exportar para Excel
+            </button>
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalImportarEstoqueTerceiro">
                 <i class="fas fa-file-upload"></i> Importar Estoque Terceiro
             </button>
@@ -25,12 +37,12 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Diferença Total (Quantidade)
+                                Valor total do sistema
                             </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardDiferencaTotal">0</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardValorTotalSistema">R$ 0,00</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-balance-scale fa-2x text-gray-300"></i>
+                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -42,6 +54,23 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Valor total do terceiro
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardValorTotalTerceiro">R$ 0,00</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-truck-loading fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-secondary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
                                 Diferença Total (Valor)
                             </div>
                             <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardDiferencaValor">R$ 0,00</div>
@@ -96,13 +125,31 @@
         </div>
         <div class="card-body">
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label for="filtro_data" class="form-label">Data do Estoque Terceiro</label>
                     <select id="filtro_data" class="form-select">
                         <option value="">Todas as datas</option>
                     </select>
                 </div>
-                <div class="col-md-4 d-flex align-items-end">
+                <div class="col-md-3 d-flex flex-column justify-content-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro_quantidade_zero" value="1">
+                        <label class="form-check-label" for="filtro_quantidade_zero">Excluir quantidade 0 (sistema e terceiro)</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex flex-column justify-content-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro_sem_material_sistema" value="1">
+                        <label class="form-check-label" for="filtro_sem_material_sistema">Sem material no sistema</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex flex-column justify-content-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro_ter_os_dois" value="1">
+                        <label class="form-check-label" for="filtro_ter_os_dois">Ter os dois (sistema e terceiro)</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
                     <button type="button" class="btn btn-secondary" id="btnLimparFiltros">
                         <i class="fas fa-times"></i> Limpar Filtros
                     </button>
@@ -111,13 +158,16 @@
         </div>
     </div>
 
-    <!-- Peças Não Produzidas por Tanque -->
+    <!-- Peças Não Produzidas por Tipo/Produto Composto -->
     <div class="card shadow mb-4" id="cardPecasNaoProduzidas" style="display: none;">
-        <div class="card-header py-3">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-cog"></i> Peças Não Produzidas por Tanque
+                <i class="fas fa-cog"></i> Peças Não Produzidas por Tipo/Produto Composto
                 <small class="text-muted">(Da data do estoque terceiro até hoje)</small>
             </h6>
+            <button type="button" class="btn btn-sm btn-secondary" id="btnResetarSimulacoes">
+                <i class="fas fa-undo"></i> Resetar Simulações
+            </button>
         </div>
         <div class="card-body">
             <div id="pecasNaoProduzidasContainer">
@@ -138,19 +188,19 @@
                         <tr>
                             <th>Código ERP</th>
                             <th>Material</th>
-                            <th>Tipo</th>
                             <th>Unidade Sistema</th>
                             <th>Unidade Terceiro</th>
                             <th class="text-end">Estoque Sistema</th>
                             <th class="text-end">Estoque Terceiro</th>
+                            <th class="text-end">Valor Unitário</th>
                             <th class="text-end">Diferença</th>
                             <th class="text-end">Diferença %</th>
+                            <th class="text-end">Valor da Diferença</th>
                             <th class="text-end">Consumo Futuro</th>
                             <th class="text-end">Estoque Futuro</th>
                             <th class="text-end">Diferença Futura</th>
-                            <th class="text-end">Valor Unitário</th>
-                            <th class="text-end">Valor Total</th>
-                            <th>Data Estoque Terceiro</th>
+                            <th class="text-end">Valor Sistema</th>
+                            <th class="text-end">Valor Terceiro</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -171,6 +221,8 @@
 <script>
 $(document).ready(function() {
     let table;
+    let quantidadesSimuladas = {};
+    let lastConsumoPorPecaTipo = [];
     
     // Carregar datas disponíveis
     function carregarDatasDisponiveis() {
@@ -192,19 +244,41 @@ $(document).ready(function() {
             });
     }
     
-    // Inicializar DataTable
+    // Filtros customizados (aplicados no frontend)
+    $.fn.dataTable.ext.search.push(
+        function(settings, searchData, dataIndex) {
+            if (settings.nTable.id !== 'tabelaComparativo') return true;
+            var api = new $.fn.dataTable.Api(settings);
+            var row = api.row(dataIndex).data();
+            if (!row) return true;
+            if ($('#filtro_quantidade_zero').is(':checked')) {
+                var sys = parseFloat(row.estoque_sistema) || 0;
+                var ter = parseFloat(row.estoque_terceiro) || 0;
+                if (sys === 0 && ter === 0) return false;
+            }
+            if ($('#filtro_sem_material_sistema').is(':checked')) {
+                if (row.material_id != null && row.material_id !== '') return false;
+            }
+            if ($('#filtro_ter_os_dois').is(':checked')) {
+                if (row.material_id == null || row.material_id === '') return false;
+            }
+            return true;
+        }
+    );
+    
+    // Inicializar DataTable (client-side: filtros e ordenação no frontend)
     function inicializarDataTable() {
         table = $('#tabelaComparativo').DataTable({
             processing: true,
-            serverSide: true,
+            serverSide: false,
             ajax: {
                 url: '{{ url_for("estoque_terceiro.api_comparativo") }}',
                 type: 'GET',
                 data: function(d) {
-                    // Adicionar filtro de data
-                    const dataFiltro = $('#filtro_data').val();
-                    if (dataFiltro) {
-                        d.data_filtro = dataFiltro;
+                    var dataFiltro = $('#filtro_data').val();
+                    if (dataFiltro) d.data_filtro = dataFiltro;
+                    if (Object.keys(quantidadesSimuladas).length > 0) {
+                        d.quantidades_simuladas = JSON.stringify(quantidadesSimuladas);
                     }
                 },
                 dataSrc: function(json) {
@@ -212,7 +286,24 @@ $(document).ready(function() {
                         console.error('Erro ao carregar dados:', json.error);
                         return [];
                     }
-                    // Atualizar cards com estatísticas
+                    var consumoPorPecaTipo = json.consumo_por_peca_tipo || [];
+                    lastConsumoPorPecaTipo = consumoPorPecaTipo.length ? consumoPorPecaTipo : [];
+                    json.data.forEach(function(row) {
+                        var consumoFuturo = 0;
+                        if (consumoPorPecaTipo.length > 0) {
+                            consumoPorPecaTipo.forEach(function(grupo) {
+                                var qtd = grupo.materiais && grupo.materiais[row.material_id];
+                                consumoFuturo += (typeof qtd === 'number' ? qtd : parseFloat(qtd) || 0);
+                            });
+                        } else {
+                            consumoFuturo = parseFloat(row.consumo_futuro) || 0;
+                        }
+                        var estoqueSistema = parseFloat(row.estoque_sistema) || 0;
+                        var estoqueTerceiro = parseFloat(row.estoque_terceiro) || 0;
+                        row.consumo_futuro = consumoFuturo;
+                        row.estoque_futuro = estoqueSistema - consumoFuturo;
+                        row.diferenca_futura = estoqueTerceiro - row.estoque_futuro;
+                    });
                     atualizarCardsEstatisticas(json.data);
                     return json.data;
                 },
@@ -224,14 +315,14 @@ $(document).ready(function() {
             language: {
                 url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
             },
-            order: [[1, 'asc']], // Ordenar por nome do material
-            pageLength: 100,
+            order: [[1, 'asc']],
+            pageLength: -1,
             lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
             scrollX: true,
+            scrollY: false,
             columns: [
                 { data: 'codigo_erp', name: 'codigo_erp' },
                 { data: 'material_nome', name: 'material_nome' },
-                { data: 'tipo', name: 'tipo' },
                 { 
                     data: 'unidade_sistema', 
                     name: 'unidade_sistema',
@@ -279,6 +370,18 @@ $(document).ready(function() {
                     }
                 },
                 { 
+                    data: 'valor_unitario', 
+                    name: 'valor_unitario',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
+                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    }
+                },
+                { 
                     data: 'diferenca', 
                     name: 'diferenca',
                     className: 'text-end',
@@ -304,6 +407,20 @@ $(document).ready(function() {
                         }
                         const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
                         return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>`;
+                    }
+                },
+                { 
+                    data: 'valor_diferenca', 
+                    name: 'valor_diferenca',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>`;
                     }
                 },
                 { 
@@ -348,8 +465,8 @@ $(document).ready(function() {
                     }
                 },
                 { 
-                    data: 'valor_unitario', 
-                    name: 'valor_unitario',
+                    data: 'valor_sistema', 
+                    name: 'valor_sistema',
                     className: 'text-end',
                     type: 'num',
                     render: function(data, type, row) {
@@ -360,8 +477,8 @@ $(document).ready(function() {
                     }
                 },
                 { 
-                    data: 'valor_total', 
-                    name: 'valor_total',
+                    data: 'valor_terceiro', 
+                    name: 'valor_terceiro',
                     className: 'text-end',
                     type: 'num',
                     render: function(data, type, row) {
@@ -369,21 +486,16 @@ $(document).ready(function() {
                             return parseFloat(data) || 0;
                         }
                         return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-                    }
-                },
-                { 
-                    data: 'data_estoque_terceiro', 
-                    name: 'data_estoque_terceiro',
-                    render: function(data, type, row) {
-                        if (!data) return '-';
-                        const dataFormatada = new Date(data + 'T00:00:00').toLocaleDateString('pt-BR');
-                        return dataFormatada;
                     }
                 }
             ],
             drawCallback: function() {
-                // Inicializar tooltips após desenhar a tabela
                 $('[data-bs-toggle="tooltip"]').tooltip();
+                // Atualizar cards com dados visíveis (após filtros e busca do frontend)
+                if (table) {
+                    var dadosVisiveis = table.rows({ search: 'applied' }).data().toArray();
+                    atualizarCardsEstatisticas(dadosVisiveis);
+                }
             }
         });
     }
@@ -399,49 +511,41 @@ $(document).ready(function() {
         fetch(`{{ url_for("estoque_terceiro.api_pecas_nao_produzidas") }}?data_estoque=${dataFiltro}`)
             .then(response => response.json())
             .then(data => {
-                if (data.success && data.pecas && data.pecas.length > 0) {
+                if (data.success && data.grupos && data.grupos.length > 0) {
                     let html = '';
-                    data.pecas.forEach(function(tanque) {
+                    data.grupos.forEach(function(grupo) {
+                        const chaveGrupo = `${grupo.tipo}_${grupo.produto_composto_id}`;
+                        const quantidadeAtual = quantidadesSimuladas[chaveGrupo] !== undefined ? quantidadesSimuladas[chaveGrupo] : grupo.quantidade_real;
+                        
                         html += `
-                            <div class="mb-3 border rounded p-3">
-                                <h6 class="mb-2">
-                                    <i class="fas fa-tank"></i> ${tanque.tanque_nome}
-                                    <small class="text-muted">(${tanque.pecas.length} peça(s))</small>
-                                </h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-bordered mb-0">
-                                        <thead>
-                                            <tr>
-                                                <th>Nome</th>
-                                                <th>Tipo</th>
-                                                <th>Nº Sequencial</th>
-                                                <th>Produto Composto</th>
-                                                <th>Data Cadastro</th>
-                                                <th>Ações</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                        `;
-                        tanque.pecas.forEach(function(peca) {
-                            const dataCadastro = peca.data_cadastro ? new Date(peca.data_cadastro + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
-                            html += `
-                                <tr data-peca-id="${peca.id}">
-                                    <td>${peca.nome}</td>
-                                    <td>${peca.tipo}</td>
-                                    <td>${peca.numero_sequencial}</td>
-                                    <td>${peca.produto_composto_nome}</td>
-                                    <td>${dataCadastro}</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-primary btn-marcar-produzida" data-peca-id="${peca.id}" data-peca-nome="${peca.nome}">
-                                            <i class="fas fa-check"></i> Marcar como Produzida
-                                        </button>
-                                    </td>
-                                </tr>
-                            `;
-                        });
-                        html += `
-                                        </tbody>
-                                    </table>
+                            <div class="mb-2 border rounded p-3 grupo-pecas" data-chave-grupo="${chaveGrupo}">
+                                <div class="row align-items-center">
+                                    <div class="col-md-5">
+                                        <h6 class="mb-0">
+                                            <i class="fas fa-cube"></i> <strong>${grupo.tipo}</strong>
+                                            <br>
+                                            <small class="text-muted">${grupo.produto_composto_nome}</small>
+                                        </h6>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="mb-0">
+                                            <strong>Quantidade Real:</strong> <span class="badge bg-info">${grupo.quantidade_real}</span>
+                                        </label>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="input-group">
+                                            <span class="input-group-text"><small>Qtd Simulada:</small></span>
+                                            <input type="number" 
+                                                   class="form-control form-control-sm quantidade-simulada" 
+                                                   data-chave-grupo="${chaveGrupo}"
+                                                   value="${quantidadeAtual}" 
+                                                   min="0" 
+                                                   step="1"
+                                                   data-quantidade-real="${grupo.quantidade_real}"
+                                                   title="Altere este valor para simular diferentes quantidades de produção">
+                                            ${quantidadeAtual != grupo.quantidade_real ? `<span class="input-group-text bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i></span>` : ''}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -458,114 +562,142 @@ $(document).ready(function() {
             });
     }
     
-    // Evento para marcar peça como produzida
-    $(document).on('click', '.btn-marcar-produzida', function() {
-        const pecaId = $(this).data('peca-id');
-        const pecaNome = $(this).data('peca-nome');
-        const dataHoje = new Date().toISOString().split('T')[0];
-        
-        if (!confirm(`Deseja marcar a peça "${pecaNome}" como produzida na data de hoje (${new Date().toLocaleDateString('pt-BR')})?`)) {
-            return;
-        }
-        
-        // Obter token CSRF
-        let csrfToken = $('meta[name="csrf-token"]').attr('content');
-        if (!csrfToken) {
-            csrfToken = $('input[name="csrf_token"]').first().val();
-        }
-        
-        if (!csrfToken) {
-            alert('Erro: Token CSRF não encontrado. Recarregue a página e tente novamente.');
-            return;
-        }
-        
-        // Chamar API para atualizar peça
-        fetch(`/pecas/${pecaId}/marcar-produzida`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({
-                data_concretagem: dataHoje
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Peça marcada como produzida com sucesso!');
-                carregarPecasNaoProduzidas();
-                if (table) {
-                    table.ajax.reload();
-                }
-            } else {
-                alert('Erro ao marcar peça como produzida: ' + (data.message || 'Erro desconhecido'));
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Erro ao marcar peça como produzida. Verifique o console para mais detalhes.');
+    // Recalcula consumo por material a partir do breakdown por peça/tipo com quantidades simuladas atuais
+    function recalcularConsumoPorMaterial() {
+        const consumoPorMaterial = {};
+        if (!lastConsumoPorPecaTipo.length) return consumoPorMaterial;
+        lastConsumoPorPecaTipo.forEach(function(grupo) {
+            const newQty = (grupo.chave_grupo in quantidadesSimuladas)
+                ? (parseFloat(quantidadesSimuladas[grupo.chave_grupo]) || 0)
+                : (parseFloat(grupo.quantidade_pecas) || 0);
+            const baseQty = parseFloat(grupo.quantidade_pecas) || 0;
+            const scale = baseQty !== 0 ? newQty / baseQty : 0;
+            if (!grupo.materiais) return;
+            Object.keys(grupo.materiais).forEach(function(mid) {
+                const q = grupo.materiais[mid];
+                const val = (typeof q === 'number' ? q : parseFloat(q) || 0) * scale;
+                consumoPorMaterial[mid] = (consumoPorMaterial[mid] || 0) + val;
+            });
         });
+        return consumoPorMaterial;
+    }
+    
+    // Evento para atualizar quantidade simulada e recalcular no frontend (sem recarregar a tabela)
+    $(document).on('change', '.quantidade-simulada', function() {
+        const chaveGrupo = $(this).data('chave-grupo');
+        const quantidade = parseFloat($(this).val()) || 0;
+        
+        quantidadesSimuladas[chaveGrupo] = quantidade;
+        
+        if (!table) return;
+        if (!lastConsumoPorPecaTipo.length) {
+            table.ajax.reload();
+            return;
+        }
+        const consumoPorMaterial = recalcularConsumoPorMaterial();
+        table.rows({ page: 'current' }).every(function() {
+            const row = this.data();
+            const consumoFuturo = consumoPorMaterial[row.material_id] || 0;
+            const estoqueSistema = parseFloat(row.estoque_sistema) || 0;
+            const estoqueTerceiro = parseFloat(row.estoque_terceiro) || 0;
+            row.consumo_futuro = consumoFuturo;
+            row.estoque_futuro = estoqueSistema - consumoFuturo;
+            row.diferenca_futura = estoqueTerceiro - row.estoque_futuro;
+            this.data(row);
+        });
+        table.draw(false);
+        atualizarCardsEstatisticas(table.rows({ page: 'current' }).data().toArray());
     });
+    
     
     // Evento de mudança no filtro de data
     $('#filtro_data').on('change', function() {
-        if (table) {
-            table.ajax.reload();
-        }
+        if (table) table.ajax.reload();
         carregarPecasNaoProduzidas();
+    });
+    
+    // Filtros aplicados no frontend: só redesenha a tabela (sem nova requisição ao backend)
+    $('#filtro_quantidade_zero, #filtro_sem_material_sistema, #filtro_ter_os_dois').on('change', function() {
+        if (table) table.draw(false);
     });
     
     // Botão limpar filtros
     $('#btnLimparFiltros').on('click', function() {
         $('#filtro_data').val('');
-        if (table) {
-            table.ajax.reload();
-        }
+        $('#filtro_quantidade_zero').prop('checked', false);
+        $('#filtro_sem_material_sistema').prop('checked', false);
+        $('#filtro_ter_os_dois').prop('checked', false);
+        quantidadesSimuladas = {};
+        if (table) table.draw(false);
+
         $('#cardPecasNaoProduzidas').hide();
+    });
+    
+    // Exportar para Excel: mesma URL da API com format=excel e mesmos parâmetros (data_filtro, quantidades_simuladas, filtros)
+    $('#btnExportarExcel').on('click', function() {
+        var url = '{{ url_for("estoque_terceiro.api_comparativo") }}';
+        var params = { format: 'excel' };
+        var dataFiltro = $('#filtro_data').val();
+        if (dataFiltro) params.data_filtro = dataFiltro;
+        if (Object.keys(quantidadesSimuladas).length > 0) {
+            params.quantidades_simuladas = JSON.stringify(quantidadesSimuladas);
+        }
+        if ($('#filtro_quantidade_zero').is(':checked')) params.filtro_quantidade_zero = '1';
+        if ($('#filtro_sem_material_sistema').is(':checked')) params.filtro_sem_material_sistema = '1';
+        if ($('#filtro_ter_os_dois').is(':checked')) params.filtro_ter_os_dois = '1';
+        window.location.href = url + '?' + $.param(params);
+    });
+    
+    // Botão resetar simulações
+    $('#btnResetarSimulacoes').on('click', function() {
+        quantidadesSimuladas = {};
+        carregarPecasNaoProduzidas();
+        if (table) {
+            table.draw(false);
+        }
     });
     
     // Função para atualizar cards com estatísticas
     function atualizarCardsEstatisticas(dados) {
         if (!dados || dados.length === 0) {
-            $('#cardDiferencaTotal').text('0');
+            $('#cardValorTotalSistema').text('R$ 0,00');
+            $('#cardValorTotalTerceiro').text('R$ 0,00');
             $('#cardDiferencaValor').text('R$ 0,00');
             $('#cardPercentualMedio').text('0%');
             $('#cardTotalItens').text('0');
             return;
         }
         
-        let diferencaTotal = 0;
+        let valorTotalSistema = 0;
+        let valorTotalTerceiro = 0;
         let diferencaValorTotal = 0;
         let somaPercentuais = 0;
         let itensComPercentual = 0;
         let totalItens = dados.length;
         
         dados.forEach(function(item) {
+            const estoqueSistema = parseFloat(item.estoque_sistema) || 0;
+            const estoqueTerceiro = parseFloat(item.estoque_terceiro) || 0;
+            const valorUnitario = parseFloat(item.valor_unitario) || 0;
+            const valorSistema = parseFloat(item.valor_sistema) || 0;
+            const valorTerceiro = parseFloat(item.valor_terceiro) || 0;
             const diferenca = parseFloat(item.diferenca) || 0;
             const diferencaPercentual = parseFloat(item.diferenca_percentual) || 0;
-            const valorUnitario = parseFloat(item.valor_unitario) || 0;
             
-            diferencaTotal += diferenca;
-            
-            // Calcular diferença em valor (diferença * valor unitário)
+            valorTotalSistema += valorSistema;
+            valorTotalTerceiro += valorTerceiro;
             if (valorUnitario > 0) {
                 diferencaValorTotal += diferenca * valorUnitario;
             }
-            
-            // Somar percentuais para calcular média
             if (!isNaN(diferencaPercentual) && isFinite(diferencaPercentual)) {
                 somaPercentuais += Math.abs(diferencaPercentual);
                 itensComPercentual++;
             }
         });
         
-        // Atualizar card de diferença total (quantidade)
-        const classeDiferenca = diferencaTotal < 0 ? 'text-danger' : (diferencaTotal > 0 ? 'text-success' : 'text-gray-800');
-        $('#cardDiferencaTotal').removeClass('text-danger text-success text-gray-800').addClass(classeDiferenca);
-        $('#cardDiferencaTotal').text(diferencaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }));
+        $('#cardValorTotalSistema').text(valorTotalSistema.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        $('#cardValorTotalTerceiro').text(valorTotalTerceiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         
-        // Atualizar card de diferença total (valor)
         const classeValor = diferencaValorTotal < 0 ? 'text-danger' : (diferencaValorTotal > 0 ? 'text-success' : 'text-gray-800');
         $('#cardDiferencaValor').removeClass('text-danger text-success text-gray-800').addClass(classeValor);
         $('#cardDiferencaValor').text(diferencaValorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));

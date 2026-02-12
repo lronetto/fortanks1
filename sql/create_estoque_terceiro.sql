@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS `EstoqueTerceiro` (
     `id` INT(11) NOT NULL AUTO_INCREMENT,
     `data` DATE NOT NULL,
     `codigo_erp` VARCHAR(50) NOT NULL,
+    `nome` VARCHAR(200) NULL DEFAULT NULL COMMENT 'Nome do material na planilha do terceiro',
     `tipo` VARCHAR(50) NULL DEFAULT NULL,
     `unidade` VARCHAR(20) NULL DEFAULT NULL,
     `quantidade` DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
@@ -26,3 +27,6 @@ CREATE TABLE IF NOT EXISTS `EstoqueTerceiro` (
 -- Comentários sobre a tabela
 ALTER TABLE `EstoqueTerceiro` 
     COMMENT = 'Tabela para armazenar estoques de terceiros importados via planilha';
+
+-- Migração: adicionar coluna nome se a tabela já existir sem ela (execute se necessário)
+-- ALTER TABLE `EstoqueTerceiro` ADD COLUMN `nome` VARCHAR(200) NULL DEFAULT NULL COMMENT 'Nome do material na planilha do terceiro' AFTER `codigo_erp`;

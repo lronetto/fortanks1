@@ -1,0 +1,216 @@
+<!-- Modal para Cadastro/Edição de Conversão -->
+<div class="modal fade" id="conversaoModal" tabindex="-1" aria-labelledby="conversaoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="conversaoModalLabel">Nova Conversão de Unidade</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formConversao" method="POST" action="{{ url_for('conversao_unidade.novo') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" id="conversao_id" name="conversao_id" value="">
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group mb-3">
+                                <label for="nome" class="form-label">Nome da Conversão <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="nome" name="nome" placeholder="Ex: Quilograma para Grama" required>
+                                <small class="form-text text-muted">Um nome descritivo para a conversão.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="unidade_entrada" class="form-label">Unidade de Entrada <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="unidade_entrada" name="unidade_entrada" required>
+                                        <option value="">Selecione uma unidade</option>
+                                        {% for unidade in unidades %}
+                                        <option value="{{ unidade }}">{{ unidade }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" id="btn-nova-unidade-entrada">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Selecione ou adicione uma nova unidade de origem.</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="unidade_saida" class="form-label">Unidade de Saída <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <select class="form-select" id="unidade_saida" name="unidade_saida" required>
+                                        <option value="">Selecione uma unidade</option>
+                                        {% for unidade in unidades %}
+                                        <option value="{{ unidade }}">{{ unidade }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-outline-secondary" type="button" id="btn-nova-unidade-saida">
+                                        <i class="fas fa-plus"></i>
+                                    </button>
+                                </div>
+                                <small class="form-text text-muted">Selecione ou adicione uma nova unidade de destino.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="fator" class="form-label">Fator de Conversão <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="fator" name="fator" placeholder="Ex: 1000" required>
+                                <small class="form-text text-muted">O número pelo qual o valor original deve ser multiplicado para obter o valor na unidade de destino.</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12 mt-3">
+                            <h6 class="fw-bold">Materiais vinculados (opcional)</h6>
+                            <p class="text-muted small">Adicione materiais para que esta conversão seja aplicada apenas a eles. Deixe vazio para conversão genérica.</p>
+                            <div class="input-group mb-2">
+                                <select class="form-select select2-material-conversao" id="selectMaterialConversao" style="width: 100%;">
+                                    <option value="">Selecione um material...</option>
+                                </select>
+                                <button class="btn btn-outline-primary" type="button" id="btnAdicionarMaterialConversao">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+                            <ul id="listaMateriaisConversao" class="list-group list-group-flush mb-2" style="max-height: 120px; overflow-y: auto;"></ul>
+                            <input type="hidden" name="materiais" id="materiaisConversaoInput" value="[]">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-12 mt-3">
+                            <h6 class="fw-bold">Exemplo de Conversão:</h6>
+                            <div id="exemplo-conversao" class="alert alert-info">
+                                Digite os valores acima para ver um exemplo de conversão.
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvar">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Select2 dentro do modal de conversão */
+#conversaoModal .select2-container { z-index: 9999 !important; }
+#conversaoModal .select2-dropdown { z-index: 9999 !important; }
+</style>
+<script>
+(function() {
+    var materiaisConversaoIds = [];
+    var materiaisDisponiveis = [];
+
+    function atualizarInputMateriais() {
+        document.getElementById('materiaisConversaoInput').value = JSON.stringify(materiaisConversaoIds);
+    }
+
+    function labelMaterial(m) {
+        return (m.codigo ? m.codigo + ' - ' : '') + (m.nome || '');
+    }
+
+    function renderListaMateriais() {
+        var ul = document.getElementById('listaMateriaisConversao');
+        ul.innerHTML = '';
+        materiaisConversaoIds.forEach(function(id) {
+            var m = materiaisDisponiveis.find(function(x) { return x.id === id; });
+            var nome = m ? labelMaterial(m) : 'ID ' + id;
+            var li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            li.innerHTML = '<span>' + nome + '</span><button type="button" class="btn btn-sm btn-outline-danger btn-remover-material" data-id="' + id + '"><i class="fas fa-times"></i></button>';
+            ul.appendChild(li);
+        });
+        atualizarInputMateriais();
+    }
+
+    function initSelect2Material() {
+        var $sel = $('#selectMaterialConversao');
+        if ($sel.length === 0) return;
+        if ($.fn.select2 && $sel.hasClass('select2-hidden-accessible')) {
+            $sel.select2('destroy');
+        }
+        if ($.fn.select2) {
+            $sel.select2({
+                placeholder: 'Buscar material por nome ou código...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#conversaoModal'),
+                language: {
+                    noResults: function() { return 'Nenhum material encontrado'; },
+                    searching: function() { return 'Buscando...'; }
+                }
+            });
+        }
+    }
+
+    function carregarMateriais() {
+        var url = "{{ url_for('material.listar_json') }}";
+        fetch(url).then(function(r) { return r.json(); }).then(function(arr) {
+            materiaisDisponiveis = arr;
+            arr.sort(function(a, b) { return (a.nome || '').localeCompare(b.nome || ''); });
+            var sel = document.getElementById('selectMaterialConversao');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">Selecione um material...</option>';
+            arr.forEach(function(m) {
+                if (materiaisConversaoIds.indexOf(m.id) === -1) {
+                    var opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = labelMaterial(m);
+                    sel.appendChild(opt);
+                }
+            });
+            initSelect2Material();
+        }).catch(function() {});
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btnAdd = document.getElementById('btnAdicionarMaterialConversao');
+        if (btnAdd) {
+            btnAdd.addEventListener('click', function() {
+                var id = parseInt($('#selectMaterialConversao').val(), 10);
+                if (id && materiaisConversaoIds.indexOf(id) === -1) {
+                    materiaisConversaoIds.push(id);
+                    renderListaMateriais();
+                    carregarMateriais();
+                }
+            });
+        }
+
+        document.getElementById('listaMateriaisConversao').addEventListener('click', function(e) {
+            var btn = e.target.closest('.btn-remover-material');
+            if (btn) {
+                var id = parseInt(btn.getAttribute('data-id'), 10);
+                materiaisConversaoIds = materiaisConversaoIds.filter(function(x) { return x !== id; });
+                renderListaMateriais();
+                carregarMateriais();
+            }
+        });
+
+        window.conversaoModalMateriais = {
+            setMateriais: function(ids) {
+                materiaisConversaoIds = ids || [];
+                renderListaMateriais();
+                carregarMateriais();
+            },
+            reset: function() {
+                materiaisConversaoIds = [];
+                renderListaMateriais();
+                carregarMateriais();
+            },
+            carregarSelect: carregarMateriais
+        };
+    });
+})();
+</script>

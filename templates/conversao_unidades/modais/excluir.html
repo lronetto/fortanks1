@@ -1,0 +1,32 @@
+<!-- Modal de Exclusão de Conversão -->
+<div class="modal fade" id="modalExcluirConversao" tabindex="-1" aria-labelledby="modalExcluirConversaoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirConversaoLabel">Confirmação de Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p>Deseja realmente excluir a conversão <strong id="excluirConversaoNome"></strong>?</p>
+                <p class="text-danger">Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluirConversao" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    window.abrirModalExclusaoConversao = function(id, nome) {
+        document.getElementById('excluirConversaoNome').textContent = nome || 'esta';
+        var form = document.getElementById('formExcluirConversao');
+        form.action = "{{ url_for('conversao_unidade.excluir', id=0) }}".replace('0', id);
+    };
+})();
+</script>

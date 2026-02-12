@@ -157,6 +157,9 @@ class ProdutoComposto(db.Model):
         if produtos_processados is None:
             produtos_processados = set()
         
+        # Normalizar quantidade para Decimal para evitar float * Decimal
+        if not isinstance(quantidade, Decimal):
+            quantidade = Decimal(str(quantidade))
         
         # Verificar se este produto já foi processado (evita loops infinitos)
         if self.id in produtos_processados:
