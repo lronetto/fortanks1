@@ -59,23 +59,13 @@
                         <label for="projeto_id" class="form-label">Projeto (Contrato)</label>
                         <select class="form-select" id="projeto_id" name="projeto_id">
                             <option value="">Todos os projetos</option>
-                            {% for contrato in contratos %}
-                            <option value="{{ contrato.id }}" {% if projeto_id_filtro == contrato.id %}selected{% endif %}>
-                                {{ contrato.nome }}
-                            </option>
-                            {% endfor %}
+                            <!-- Dados serão carregados via AJAX -->
                         </select>
                     </div>
                     <div class="col-md-4">
                         <label for="tanque_id" class="form-label">Tanque(s) <small class="text-muted">(Ctrl+Click para múltipla seleção)</small></label>
                         <select class="form-select" id="tanque_id" name="tanque_ids[]" multiple size="5">
-                            {% for tanque in tanques %}
-                            <option value="{{ tanque.id }}" 
-                                    data-projeto-id="{{ tanque.contrato_id if tanque.contrato_id else '' }}"
-                                    {% if tanque_ids_filtro and tanque.id in tanque_ids_filtro %}selected{% elif tanque_id_filtro and tanque_id_filtro == tanque.id %}selected{% endif %}>
-                                {{ tanque.nome }} ({{ tanque.sistema }})
-                            </option>
-                            {% endfor %}
+                            <!-- Dados serão carregados via AJAX -->
                         </select>
                         <small class="text-muted">Selecione um ou mais tanques. Use Ctrl (ou Cmd no Mac) para seleção múltipla.</small>
                     </div>
@@ -261,12 +251,165 @@
 {% block scripts %}
 <script>
     $(document).ready(function () {
+        // Variáveis globais para armazenar dados de filtros
+        var todosContratos = [];
+        var todosTanques = [];
+        var filtrosIniciais = {
+            projeto_id: {{ projeto_id_filtro|default('null') }},
+            tanque_ids: {{ tanque_ids_filtro|tojson|safe if tanque_ids_filtro else '[]' }},
+            tanque_id: {{ tanque_id_filtro|default('null') }},
+            filtro_concretado: {{ 'true' if filtro_concretado else 'false' }},
+            filtro_acabado: {{ 'true' if filtro_acabado else 'false' }},
+            filtro_transportado: {{ 'true' if filtro_transportado else 'false' }}
+        };
+        
+        // Função para carregar dados de filtros
+        function carregarDadosFiltros() {
+            try {
+                console.log('Carregando dados de filtros...');
+                var apiUrl = '{{ url_for("peca.api_filtros") }}';
+                console.log('URL da API:', apiUrl);
+                
+                // Verificar se os elementos existem
+                if ($('#projeto_id').length === 0 || $('#tanque_id').length === 0) {
+                    console.error('Elementos de filtro não encontrados no DOM!');
+                    setTimeout(carregarDadosFiltros, 100); // Tentar novamente após 100ms
+                    return;
+                }
+                
+                $.ajax({
+                    url: apiUrl,
+                    method: 'GET',
+                    dataType: 'json',
+                    success: function(response) {
+                        try {
+                            console.log('Resposta da API:', response);
+                            if (response && response.success) {
+                                todosContratos = response.contratos || [];
+                                todosTanques = response.tanques || [];
+                                
+                                console.log('Contratos carregados:', todosContratos.length);
+                                console.log('Tanques carregados:', todosTanques.length);
+                                
+                                // Popular select de projetos
+                                var selectProjeto = $('#projeto_id');
+                                if (selectProjeto.length === 0) {
+                                    console.error('Select de projeto não encontrado!');
+                                    return;
+                                }
+                                selectProjeto.empty();
+                                selectProjeto.append('<option value="">Todos os projetos</option>');
+                                todosContratos.forEach(function(contrato) {
+                                    var option = $('<option></option>')
+                                        .attr('value', contrato.id)
+                                        .text(contrato.nome);
+                                    // Comparar como números para evitar problemas de tipo
+                                    if (filtrosIniciais.projeto_id && parseInt(filtrosIniciais.projeto_id) == parseInt(contrato.id)) {
+                                        option.prop('selected', true);
+                                    }
+                                    selectProjeto.append(option);
+                                });
+                                console.log('Projetos populados:', selectProjeto.find('option').length);
+                                
+                                // Popular select de tanques (com filtro inicial se houver)
+                                var projetoInicial = filtrosIniciais.projeto_id || null;
+                                popularTanques(projetoInicial);
+                                
+                                // Aplicar filtros iniciais se houver
+                                aplicarFiltrosIniciais();
+                                
+                                // Inicializar DataTable após carregar filtros
+                                inicializarDataTable();
+                            } else {
+                                console.error('Resposta da API sem success:', response);
+                                alert('Erro ao carregar dados de filtros: ' + (response.error || 'Resposta inválida da API'));
+                            }
+                        } catch (e) {
+                            console.error('Erro ao processar resposta:', e);
+                            alert('Erro ao processar dados de filtros: ' + e.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Erro AJAX ao carregar dados de filtros:', {
+                            status: status,
+                            error: error,
+                            responseText: xhr.responseText,
+                            statusCode: xhr.status,
+                            url: apiUrl
+                        });
+                        var errorMsg = 'Erro ao carregar dados de filtros. ';
+                        if (xhr.status === 404) {
+                            errorMsg += 'API não encontrada. Verifique se a rota está correta.';
+                        } else if (xhr.status === 500) {
+                            errorMsg += 'Erro no servidor. Verifique os logs.';
+                        } else {
+                            errorMsg += 'Status: ' + xhr.status + ', Erro: ' + error;
+                        }
+                        alert(errorMsg);
+                    }
+                });
+            } catch (e) {
+                console.error('Erro ao executar carregarDadosFiltros:', e);
+                alert('Erro ao iniciar carregamento de filtros: ' + e.message);
+            }
+        }
+        
+        // Função para popular tanques no select
+        function popularTanques(projetoIdFiltro) {
+            var selectTanque = $('#tanque_id');
+            if (selectTanque.length === 0) {
+                console.error('Select de tanque não encontrado!');
+                return;
+            }
+            selectTanque.empty();
+            
+            var tanquesParaMostrar = todosTanques;
+            if (projetoIdFiltro) {
+                tanquesParaMostrar = todosTanques.filter(function(tanque) {
+                    return tanque.projeto_id == projetoIdFiltro || !tanque.projeto_id;
+                });
+            }
+            
+            console.log('Populando tanques. Total:', tanquesParaMostrar.length, 'Filtro projeto:', projetoIdFiltro);
+            tanquesParaMostrar.forEach(function(tanque) {
+                var option = $('<option></option>')
+                    .attr('value', tanque.id)
+                    .attr('data-projeto-id', tanque.projeto_id || '')
+                    .text(tanque.nome + (tanque.sistema ? ' (' + tanque.sistema + ')' : ''));
+                selectTanque.append(option);
+            });
+            console.log('Tanques populados:', selectTanque.find('option').length);
+        }
+        
+        // Função para aplicar filtros iniciais
+        function aplicarFiltrosIniciais() {
+            // Aplicar filtros de status
+            if (filtrosIniciais.filtro_concretado) {
+                $('#filtro_concretado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_acabado) {
+                $('#filtro_acabado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_transportado) {
+                $('#filtro_transportado').prop('checked', true);
+            }
+            
+            // Aplicar seleção de tanques se houver
+            if (filtrosIniciais.tanque_ids && filtrosIniciais.tanque_ids.length > 0) {
+                filtrosIniciais.tanque_ids.forEach(function(tanqueId) {
+                    $('#tanque_id option[value="' + tanqueId + '"]').prop('selected', true);
+                });
+            } else if (filtrosIniciais.tanque_id) {
+                $('#tanque_id option[value="' + filtrosIniciais.tanque_id + '"]').prop('selected', true);
+            }
+        }
+        
         // Obter filtros iniciais (tanque_id agora pode ser array)
-        var tanqueIdFiltro = $('#tanque_id').val() || [];
-        var projetoIdFiltro = $('#projeto_id').val() || '';
-        var filtroConcretado = $('#filtro_concretado').is(':checked');
-        var filtroAcabado = $('#filtro_acabado').is(':checked');
-        var filtroTransportado = $('#filtro_transportado').is(':checked');
+        var tanqueIdFiltro = [];
+        var projetoIdFiltro = '';
+        var filtroConcretado = false;
+        var filtroAcabado = false;
+        var filtroTransportado = false;
         
         // Inicializar filtros de status a partir dos valores do formulário
         function atualizarFiltrosStatus() {
@@ -342,13 +485,25 @@
             });
         }
         
-        // Carregar estatísticas iniciais
-        carregarEstatisticas();
+        // Função para atualizar variáveis de filtro
+        function atualizarVariaveisFiltro() {
+            tanqueIdFiltro = getTanqueIds();
+            projetoIdFiltro = $('#projeto_id').val() || '';
+            atualizarFiltrosStatus();
+        }
         
-        // Inicializar DataTable com AJAX
-        var table = $('#tabelaPecas').DataTable({
+        // Função para inicializar DataTable
+        function inicializarDataTable() {
+            // Atualizar variáveis de filtro dos selects
+            atualizarVariaveisFiltro();
+            
+            // Carregar estatísticas iniciais
+            carregarEstatisticas();
+            
+            // Inicializar DataTable com AJAX
+            var table = $('#tabelaPecas').DataTable({
             processing: true,
-            serverSide: true,
+            serverSide: false,
             ajax: {
                 url: '{{ url_for("peca.api_pecas") }}',
                 type: 'GET',
@@ -447,107 +602,54 @@
                     $('#excluirModalGenerico').modal('show');
                 });
             }
-        });
-        
-        // Atualizar estatísticas quando a busca for realizada
-        $('#tabelaPecas').on('search.dt', function() {
-            setTimeout(carregarEstatisticas, 300);
-        });
-        
-        // Recarregar tabela quando os filtros mudarem
-        $('#filtroForm').on('submit', function(e) {
-            e.preventDefault();
-            tanqueIdFiltro = getTanqueIds();
-            projetoIdFiltro = $('#projeto_id').val() || '';
-            atualizarFiltrosStatus();
-            table.ajax.reload();
-            carregarEstatisticas();
-        });
-        
-        // Recarregar tabela quando os checkboxes de status mudarem
-        $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
-            atualizarFiltrosStatus();
-            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+            
+            // Atualizar estatísticas quando a busca for realizada
+            $('#tabelaPecas').on('search.dt', function() {
+                setTimeout(carregarEstatisticas, 300);
+            });
+            
+            // Recarregar tabela quando os filtros mudarem
+            $('#filtroForm').on('submit', function(e) {
+                e.preventDefault();
+                atualizarVariaveisFiltro();
                 table.ajax.reload();
                 carregarEstatisticas();
-            }
-        });
+            });
+            
+            // Recarregar tabela quando os checkboxes de status mudarem
+            $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
+                atualizarFiltrosStatus();
+                if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                    table.ajax.reload();
+                    carregarEstatisticas();
+                }
+            });
 
-        // Armazenar todas as opções de tanques
-        var todasOpcoesTanques = $('#tanque_id option').clone();
-
-        // Função para filtrar tanques por projeto
-        function filtrarTanquesPorProjeto(projetoId) {
-            var selectTanque = $('#tanque_id');
-            var valoresSelecionados = selectTanque.val() || [];
-            if (!Array.isArray(valoresSelecionados)) {
-                valoresSelecionados = valoresSelecionados ? [valoresSelecionados] : [];
-            }
-            
-            // Limpar o select (não incluir opção "Todos os tanques" pois é multiple)
-            selectTanque.empty();
-            
-            if (projetoId) {
-                // Filtrar apenas tanques do projeto selecionado
-                todasOpcoesTanques.each(function() {
-                    var option = $(this);
-                    var projetoIdOption = option.data('projeto-id');
-                    
-                    // Não incluir opção vazia em select multiple
-                    if (option.val() !== '' && (projetoIdOption == projetoId || projetoIdOption === '')) {
-                        selectTanque.append(option.clone());
-                    }
-                });
-            } else {
-                // Mostrar todos os tanques (exceto opção vazia)
-                todasOpcoesTanques.each(function() {
-                    if ($(this).val() !== '') {
-                        selectTanque.append($(this).clone());
-                    }
-                });
-            }
-            
-            // Restaurar seleções anteriores se ainda existirem
-            var valoresParaRestaurar = [];
-            valoresSelecionados.forEach(function(valor) {
-                if (selectTanque.find('option[value="' + valor + '"]').length > 0) {
-                    valoresParaRestaurar.push(valor);
+            // Evento quando o projeto é alterado
+            $('#projeto_id').on('change', function() {
+                var projetoId = $(this).val();
+                popularTanques(projetoId);
+                atualizarVariaveisFiltro();
+                // Recarregar tabela se já estiver inicializada
+                if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                    table.ajax.reload();
+                    carregarEstatisticas();
                 }
             });
             
-            if (valoresParaRestaurar.length > 0) {
-                selectTanque.val(valoresParaRestaurar);
-            } else {
-                selectTanque.val(null);
-            }
+            // Evento quando o tanque é alterado
+            $('#tanque_id').on('change', function() {
+                atualizarVariaveisFiltro();
+                if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                    table.ajax.reload();
+                    carregarEstatisticas();
+                }
+            });
         }
-
-        // Evento quando o projeto é alterado
-        $('#projeto_id').on('change', function() {
-            var projetoId = $(this).val();
-            filtrarTanquesPorProjeto(projetoId);
-            // Recarregar tabela se já estiver inicializada
-            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                projetoIdFiltro = projetoId || '';
-                $('#tabelaPecas').DataTable().ajax.reload();
-                carregarEstatisticas();
-            }
-        });
         
-        // Evento quando o tanque é alterado
-        $('#tanque_id').on('change', function() {
-            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                tanqueIdFiltro = getTanqueIds();
-                $('#tabelaPecas').DataTable().ajax.reload();
-                carregarEstatisticas();
-            }
-        });
-
-        // Aplicar filtro inicial se houver projeto selecionado
-        var projetoInicial = $('#projeto_id').val();
-        if (projetoInicial) {
-            filtrarTanquesPorProjeto(projetoInicial);
-        }
+        // Carregar dados de filtros ao inicializar
+        console.log('Inicializando página, carregando dados de filtros...');
+        carregarDadosFiltros();
 
         // ========== SCRIPTS DO MODAL DE VINCULAÇÃO ==========
         var timeoutBusca;

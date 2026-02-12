@@ -76,7 +76,7 @@ def _expandir_materiais_produto_composto(produto_id, quantidade_base=1.0, caminh
     
     return materiais_agrupados
 
-def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None):
+def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None, incluir_produtos_compostos=False):
     """
     Busca dados de materiais agrupados por material, com somatórios nas colunas
     """
@@ -93,29 +93,39 @@ def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None):
     
     # Dicionário para agrupar materiais: material_id -> dados do material
     materiais_agrupados = {}
+    # Dicionário para rastrear produtos compostos por material
+    produtos_compostos_por_material = {}  # material_id -> lista de produtos compostos
     
     for tanque in tanques:
-        # Calcular quantidade prevista: (placas_normais + placas_fecho) * quantidade
-        placas_normais = tanque.placas_normais or 0
-        placas_fecho = tanque.placas_fecho or 0
-        quantidade_tanques = tanque.quantidade or 1
-        quantidade_prevista = (placas_normais + placas_fecho) * quantidade_tanques
-        
-        # Buscar peças concretadas (com data_concretagem não nula)
-        pecas_concretadas = TanquesPecas.query.filter(
-            TanquesPecas.tanque_id == tanque.id,
-            TanquesPecas.data_concretagem.isnot(None),
-        ).count()
-        
-        pecas_restantes = quantidade_prevista - pecas_concretadas
-        
-        # Buscar produto composto vinculado ao tanque
-        vinculacao = TanquesProdutoComposto.query.filter_by(
+        # Buscar TODOS os produtos compostos vinculados ao tanque
+        vinculacoes = TanquesProdutoComposto.query.filter_by(
             tanque_id=tanque.id
-        ).first()
+        ).all()
         
-        if vinculacao and vinculacao.produto_composto:
+        # Processar cada produto composto vinculado
+        for vinculacao in vinculacoes:
+            if not vinculacao or not vinculacao.produto_composto:
+                continue
+                
             produto_composto = vinculacao.produto_composto
+            tipo_peca = vinculacao.tipo_peca
+            
+            # Buscar quantidade de peças por tipo cadastradas em TanquesPecas
+            # Quantidade prevista: total de peças deste tipo no tanque
+            quantidade_prevista = TanquesPecas.query.filter(
+                TanquesPecas.tanque_id == tanque.id,
+                TanquesPecas.tipo == tipo_peca
+            ).count()
+            
+            # Quantidade concretada: peças deste tipo com data_concretagem não nula
+            pecas_concretadas = TanquesPecas.query.filter(
+                TanquesPecas.tanque_id == tanque.id,
+                TanquesPecas.tipo == tipo_peca,
+                TanquesPecas.data_concretagem.isnot(None)
+            ).count()
+            
+            pecas_restantes = quantidade_prevista - pecas_concretadas
+            
             # Expandir materiais recursivamente para 1 peça (para calcular quantidade por peça)
             materiais_por_peca = _expandir_materiais_produto_composto(produto_composto.id, 1.0)
             
@@ -144,6 +154,25 @@ def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None):
                         'quantidade_concretada_total': 0.0,
                         'quantidade_restante_total': 0.0
                     }
+                    produtos_compostos_por_material[material_id] = []
+                
+                # Rastrear produto composto para este material
+                if incluir_produtos_compostos:
+                    produto_info = {
+                        'produto_composto_id': produto_composto.id,
+                        'produto_composto_nome': produto_composto.nome,
+                        'tanque_id': tanque.id,
+                        'tanque_nome': tanque.nome,
+                        'tipo_peca': tipo_peca,
+                        'quantidade_por_peca': float(quantidade_por_peca),
+                        'quantidade_prevista': quantidade_prevista,
+                        'pecas_concretadas': pecas_concretadas,
+                        'pecas_restantes': pecas_restantes,
+                        'quantidade_prevista_total': float(quantidade_por_peca) * float(quantidade_prevista),
+                        'quantidade_concretada_total': float(quantidade_por_peca) * float(pecas_concretadas),
+                        'quantidade_restante_total': float(quantidade_por_peca) * float(pecas_restantes)
+                    }
+                    produtos_compostos_por_material[material_id].append(produto_info)
                 
                 # Somar quantidades (garantir que são floats)
                 quantidade_por_peca_float = float(quantidade_por_peca)
@@ -166,7 +195,7 @@ def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None):
         estoque_disponivel = estoque_atual - quantidade_necessaria
         percentual_uso = (quantidade_necessaria / estoque_atual * 100) if estoque_atual > 0 else 0
         
-        dados.append({
+        item_dados = {
             'material_id': material_id,
             'material_nome': info['material_nome'],
             'unidade': info['unidade'],
@@ -178,7 +207,12 @@ def get_dados_materiais_agrupados(contrato_id=None, tanque_id=None):
             'estoque_disponivel': round(estoque_disponivel, 2),
             'percentual_uso': round(percentual_uso, 2),
             'suficiente': estoque_disponivel >= 0
-        })
+        }
+        
+        if incluir_produtos_compostos and material_id in produtos_compostos_por_material:
+            item_dados['produtos_compostos'] = produtos_compostos_por_material[material_id]
+        
+        dados.append(item_dados)
     
     # Ordenar por nome do material
     dados.sort(key=lambda x: x['material_nome'])
@@ -214,11 +248,13 @@ def get_dados_capacidade_producao(contrato_id=None, tanque_id=None):
             TanquesPecas.data_concretagem.isnot(None),
         ).count()
         
-        # Buscar produto composto vinculado ao tanque
-        vinculacao = TanquesProdutoComposto.query.filter_by(
+        # Buscar TODOS os produtos compostos vinculados ao tanque
+        vinculacoes = TanquesProdutoComposto.query.filter_by(
             tanque_id=tanque.id
-        ).first()
+        ).all()
         
+        # Para esta função, vamos considerar apenas o primeiro produto composto
+        # (mantendo compatibilidade com código existente)
         produto_composto = None
         tempo_producao_por_peca = 0
         tempo_total_estimado = 0
@@ -227,8 +263,8 @@ def get_dados_capacidade_producao(contrato_id=None, tanque_id=None):
         capacidade_restante_pecas = 0
         percentual_utilizacao = 0
         
-        if vinculacao and vinculacao.produto_composto:
-            produto_composto = vinculacao.produto_composto
+        if vinculacoes and len(vinculacoes) > 0 and vinculacoes[0].produto_composto:
+            produto_composto = vinculacoes[0].produto_composto
             # Tempo de produção por peça (em horas)
             tempo_producao_por_peca = float(produto_composto.tempo_producao or 0)
             
@@ -328,7 +364,7 @@ def index():
     tanques = tanques_query.order_by(Tanques.nome).all()
     
     # Buscar dados agrupados por material
-    dados = get_dados_materiais_agrupados(contrato_id=contrato_id)
+    dados = get_dados_materiais_agrupados(contrato_id=contrato_id, incluir_produtos_compostos=False)
     
     # Calcular totais
     total_estoque_atual = sum([item['estoque_atual'] for item in dados])
@@ -388,10 +424,10 @@ def api_detalhes_tanque(tanque_id):
             TanquesPecas.data_concretagem.isnot(None),
         ).count()
         
-        # Buscar produto composto vinculado
-        vinculacao = TanquesProdutoComposto.query.filter_by(
+        # Buscar TODOS os produtos compostos vinculados
+        vinculacoes = TanquesProdutoComposto.query.filter_by(
             tanque_id=tanque.id
-        ).first()
+        ).all()
         
         produto_composto = None
         componentes = []
@@ -402,8 +438,9 @@ def api_detalhes_tanque(tanque_id):
         capacidade_restante_pecas = 0
         percentual_utilizacao = 0
         
-        if vinculacao and vinculacao.produto_composto:
-            produto_composto = vinculacao.produto_composto
+        # Para esta função de detalhes, vamos considerar apenas o primeiro produto composto
+        if vinculacoes and len(vinculacoes) > 0 and vinculacoes[0].produto_composto:
+            produto_composto = vinculacoes[0].produto_composto
             tempo_producao_por_peca = float(produto_composto.tempo_producao or 0)
             tempo_total_estimado = tempo_producao_por_peca * quantidade_prevista
             tempo_utilizado = tempo_producao_por_peca * pecas_concretadas
@@ -546,6 +583,141 @@ def api_dados():
         'percentual_geral_conclusao': percentual_geral_conclusao
     })
 
+@capacidade_producao_bp.route('/api/dados-materiais', methods=['GET'])
+@login_required
+def api_dados_materiais():
+    """Endpoint AJAX para buscar dados de materiais em formato DataTables"""
+    contrato_id = request.args.get('contrato_id', type=int)
+    tanque_id = request.args.get('tanque_id', type=int)
+    
+    # Buscar dados com informações de produtos compostos
+    dados = get_dados_materiais_agrupados(contrato_id=contrato_id, tanque_id=tanque_id, incluir_produtos_compostos=True)
+    # Calcular totais
+    total_estoque_atual = sum([item['estoque_atual'] for item in dados])
+    total_quantidade_necessaria = sum([item['quantidade_necessaria'] for item in dados])
+    total_quantidade_prevista = sum([item['quantidade_prevista_total'] for item in dados])
+    total_quantidade_concretada = sum([item['quantidade_concretada_total'] for item in dados])
+    total_quantidade_restante = sum([item['quantidade_restante_total'] for item in dados])
+    total_estoque_disponivel = sum([item['estoque_disponivel'] for item in dados])
+    
+    # Agrupar produtos compostos únicos baseado nos tanques, não nos materiais
+    # Precisamos recalcular os totais diretamente dos tanques vinculados
+    produtos_compostos_agregados = {}
+    
+    # Buscar tanques novamente para calcular totais unitários por produto composto
+    query_tanques = Tanques.query
+    if tanque_id:
+        query_tanques = query_tanques.filter(Tanques.id == tanque_id)
+    if contrato_id:
+        query_tanques = query_tanques.filter(Tanques.contrato_id == contrato_id)
+    
+    tanques_para_calculo = query_tanques.order_by(Tanques.nome).all()
+    
+    for tanque in tanques_para_calculo:
+        # Buscar TODOS os produtos compostos vinculados ao tanque
+        vinculacoes = TanquesProdutoComposto.query.filter_by(
+            tanque_id=tanque.id
+        ).all()
+        
+        # Processar cada produto composto vinculado
+        for vinculacao in vinculacoes:
+            if not vinculacao or not vinculacao.produto_composto:
+                continue
+                
+            produto_composto = vinculacao.produto_composto
+            produto_id = produto_composto.id
+            tipo_peca = vinculacao.tipo_peca
+            
+            # Buscar quantidade de peças por tipo cadastradas em TanquesPecas
+            # Quantidade prevista: total de peças deste tipo no tanque
+            quantidade_prevista = TanquesPecas.query.filter(
+                TanquesPecas.tanque_id == tanque.id,
+                TanquesPecas.tipo == tipo_peca
+            ).count()
+            
+            # Quantidade concretada: peças deste tipo com data_concretagem não nula
+            pecas_concretadas = TanquesPecas.query.filter(
+                TanquesPecas.tanque_id == tanque.id,
+                TanquesPecas.tipo == tipo_peca,
+                TanquesPecas.data_concretagem.isnot(None)
+            ).count()
+            
+            pecas_restantes = quantidade_prevista - pecas_concretadas
+            
+            if produto_id not in produtos_compostos_agregados:
+                produtos_compostos_agregados[produto_id] = {
+                    'produto_composto_id': produto_id,
+                    'produto_composto_nome': produto_composto.nome,
+                    'tanques': [],
+                    'total_pecas_previstas': 0,
+                    'total_pecas_concretadas': 0,
+                    'total_pecas_restantes': 0
+                }
+            
+            # Adicionar informações do tanque
+            tanque_info = {
+                'tanque_id': tanque.id,
+                'tanque_nome': tanque.nome,
+                'tipo_peca': tipo_peca,
+                'quantidade_prevista': quantidade_prevista,
+                'pecas_concretadas': pecas_concretadas,
+                'pecas_restantes': pecas_restantes
+            }
+            produtos_compostos_agregados[produto_id]['tanques'].append(tanque_info)
+            
+            # Acumular totais de peças (unitários por produto composto)
+            produtos_compostos_agregados[produto_id]['total_pecas_previstas'] += quantidade_prevista
+            produtos_compostos_agregados[produto_id]['total_pecas_concretadas'] += pecas_concretadas
+            produtos_compostos_agregados[produto_id]['total_pecas_restantes'] += pecas_restantes
+    
+    # Converter para lista - os totais são unitários (por peça)
+    # Como são totais unitários, mostramos apenas as peças, não quantidades de materiais
+    produtos_compostos_lista = []
+    for produto_id, info in produtos_compostos_agregados.items():
+        # Os totais são unitários: representam o número de peças do produto composto
+        # Não são somas de materiais, mas sim contagens de peças
+        produtos_compostos_lista.append({
+            'produto_composto_id': info['produto_composto_id'],
+            'produto_composto_nome': info['produto_composto_nome'],
+            'tanques': info['tanques'],
+            'total_quantidade_prevista': info['total_pecas_previstas'],  # Unitário: número de peças
+            'total_quantidade_concretada': info['total_pecas_concretadas'],  # Unitário: número de peças
+            'total_quantidade_restante': info['total_pecas_restantes'],  # Unitário: número de peças
+            'total_pecas_previstas': info['total_pecas_previstas'],
+            'total_pecas_concretadas': info['total_pecas_concretadas'],
+            'total_pecas_restantes': info['total_pecas_restantes']
+        })
+    
+    # Formatar dados para DataTables
+    data = []
+    for item in dados:
+        data.append({
+            'material_id': item['material_id'],
+            'material_nome': item['material_nome'],
+            'unidade': item['unidade'] or '-',
+            'estoque_atual': item['estoque_atual'],
+            'quantidade_prevista_total': item['quantidade_prevista_total'],
+            'quantidade_concretada_total': item['quantidade_concretada_total'],
+            'quantidade_restante_total': item['quantidade_restante_total'],
+            'quantidade_necessaria': item['quantidade_necessaria'],
+            'estoque_disponivel': item['estoque_disponivel'],
+            'percentual_uso': item['percentual_uso'],
+            'suficiente': item['suficiente']
+        })
+    
+    return jsonify({
+        'data': data,
+        'totais': {
+            'estoque_atual': round(total_estoque_atual, 2),
+            'quantidade_necessaria': round(total_quantidade_necessaria, 2),
+            'quantidade_prevista': round(total_quantidade_prevista, 2),
+            'quantidade_concretada': round(total_quantidade_concretada, 2),
+            'quantidade_restante': round(total_quantidade_restante, 2),
+            'estoque_disponivel': round(total_estoque_disponivel, 2)
+        },
+        'produtos_compostos': produtos_compostos_lista
+    })
+
 @capacidade_producao_bp.route('/exportar/excel', methods=['GET'])
 @login_required
 def exportar_excel():
@@ -553,7 +725,7 @@ def exportar_excel():
     contrato_id = request.args.get('contrato_id', type=int)
     tanque_id = request.args.get('tanque_id', type=int)
     
-    dados = get_dados_materiais_agrupados(contrato_id=contrato_id, tanque_id=tanque_id)
+    dados = get_dados_materiais_agrupados(contrato_id=contrato_id, tanque_id=tanque_id, incluir_produtos_compostos=False)
     
     if not dados:
         from flask import flash, redirect, url_for

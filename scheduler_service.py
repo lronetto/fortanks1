@@ -19,6 +19,7 @@ import json
 from models.database import db
 from models.upload import Upload
 from models.logs import Logs
+from utils.utils import json_dumps_safe
 # Carregar variáveis de ambiente
 load_dotenv('.env')
 
@@ -319,7 +320,7 @@ def processar_arquivei():
                 tipo='nfse'
             )
             logs.append(log)
-            Logs(local="processar_arquivei_automatico", data=datetime.now(), texto=json.dumps(logs))
+            Logs(local="processar_arquivei_automatico", data=datetime.now(), texto=json_dumps_safe(logs))
             logger.info("Processamento do Arquivei concluído com sucesso")
     except Exception as e:
         logger.error(f"Erro ao processar Arquivei: {str(e)}", exc_info=True)

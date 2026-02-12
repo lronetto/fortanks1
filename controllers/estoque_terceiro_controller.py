@@ -500,6 +500,7 @@ def api_comparativo():
                 'material_id': registro.material_id,
                 'material_nome': material_nome_exib,
                 'codigo_erp': (registro.codigo_erp or '').replace('.0', '') if registro.codigo_erp else '',
+                'tipo': str(registro.tipo) if registro.tipo else '',
                 'estoque_sistema': estoque_sistema_float,
                 'estoque_terceiro': estoque_terceiro_convertido,  # Valor convertido para unidade do sistema
                 'estoque_terceiro_original': estoque_terceiro_original,  # Valor original do terceiro
@@ -517,6 +518,7 @@ def api_comparativo():
                 'valor_unitario_original': valor_unitario_original,
                 'valor_sistema': valor_sistema,
                 'valor_terceiro': valor_terceiro,
+                'data_estoque_terceiro': registro.data_estoque_terceiro.isoformat() if registro.data_estoque_terceiro else ''
             })
         
         # Exportação Excel: aplicar filtros opcionais e gerar arquivo

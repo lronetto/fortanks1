@@ -3,7 +3,6 @@
 {% block title %}Relatório de Capacidade de Produção{% endblock %}
 
 {% block extra_css %}
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <style>
     .chart-container {
         position: relative;
@@ -41,6 +40,20 @@
     .badge-progress {
         font-size: 0.85rem;
         padding: 0.4em 0.6em;
+    }
+    .btn-detalhes {
+        cursor: pointer;
+    }
+    .produto-composto-item {
+        border-left: 3px solid #007bff;
+        padding-left: 10px;
+        margin-bottom: 10px;
+    }
+    #card-produtos-compostos .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    #card-produtos-compostos .card-header {
+        font-weight: 600;
     }
 </style>
 {% endblock %}
@@ -101,6 +114,34 @@
         </div>
     </div>
 
+    <!-- Tabela de Produtos Compostos -->
+    <div class="row mb-3" id="card-produtos-compostos" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-cubes"></i> Produtos Compostos Considerados</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Produto Composto</th>
+                                    <th class="text-end">Total Previsto</th>
+                                    <th class="text-end">Total Consumido</th>
+                                    <th class="text-end">Total Restante</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conteudo-produtos-compostos">
+                                <!-- Conteúdo será preenchido via JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tabela -->
     <div class="row">
         <div class="col-12">
@@ -110,7 +151,7 @@
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-bordered table-hover align-middle">
+                        <table id="tabelaMateriais" class="table table-bordered table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
                                     <th>Material</th>
@@ -126,39 +167,18 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for item in dados %}
-                                <tr>
-                                    <td><strong>{{ item.material_nome }}</strong></td>
-                                    <td>{{ item.unidade or '-' }}</td>
-                                    <td class="text-end">{{ item.estoque_atual|replace('.', ',') }}</td>
-                                    <td class="text-end">{{ item.quantidade_prevista_total|replace('.', ',') }}</td>
-                                    <td class="text-end">{{ item.quantidade_concretada_total|replace('.', ',') }}</td>
-                                    <td class="text-end">{{ item.quantidade_restante_total|replace('.', ',') }}</td>
-                                    <td class="text-end"><strong class="text-warning">{{ item.quantidade_necessaria|replace('.', ',') }}</strong></td>
-                                    <td class="text-end {% if item.suficiente %}text-success{% else %}text-danger{% endif %}">
-                                        <strong>{{ item.estoque_disponivel|replace('.', ',') }}</strong>
-                                    </td>
-                                    <td class="text-end">{{ item.percentual_uso }}%</td>
-                                    <td>
-                                        {% if item.suficiente %}
-                                            <span class="badge bg-success">Suficiente</span>
-                                        {% else %}
-                                            <span class="badge bg-danger">Insuficiente</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
                             </tbody>
                             <tfoot class="table-dark">
                                 <tr>
                                     <th colspan="2" class="text-end">TOTAL</th>
-                                    <th class="text-end">{{ total_estoque_atual|replace('.', ',') }}</th>
-                                    <th class="text-end">{{ total_quantidade_prevista|replace('.', ',') }}</th>
-                                    <th class="text-end">{{ total_quantidade_concretada|replace('.', ',') }}</th>
-                                    <th class="text-end">{{ total_quantidade_restante|replace('.', ',') }}</th>
-                                    <th class="text-end">{{ total_quantidade_necessaria|replace('.', ',') }}</th>
-                                    <th class="text-end">{{ total_estoque_disponivel|replace('.', ',') }}</th>
-                                    <th colspan="2"></th>
+                                    <th class="text-end" id="total-estoque-atual">0,00</th>
+                                    <th class="text-end" id="total-quantidade-prevista">0,00</th>
+                                    <th class="text-end" id="total-quantidade-consumida">0,00</th>
+                                    <th class="text-end" id="total-quantidade-restante">0,00</th>
+                                    <th class="text-end" id="total-quantidade-necessaria">0,00</th>
+                                    <th class="text-end" id="total-estoque-disponivel">0,00</th>
+                                    <th></th>
+                                    <th></th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -171,12 +191,14 @@
 
 <!-- Incluir modal de análise -->
 {% include 'relatorios/capacidade_producao/modais/analise.html' %}
+
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
+    let tabelaMateriais;
+    
     // Inicializar Select2
     $('#contrato_id').select2({
         theme: 'bootstrap4',
@@ -190,6 +212,162 @@ $(document).ready(function() {
         allowClear: true
     });
 
+    // Verificar se a tabela existe antes de inicializar
+    const tabelaElement = $('#tabelaMateriais');
+    if (tabelaElement.length === 0) {
+        console.error('Tabela #tabelaMateriais não encontrada');
+        return;
+    }
+
+    // Verificar se o tfoot existe
+    const tfootElement = tabelaElement.find('tfoot');
+    if (tfootElement.length === 0) {
+        console.warn('Tfoot não encontrado na tabela');
+    }
+
+    // Inicializar DataTable
+    try {
+        tabelaMateriais = tabelaElement.DataTable({
+        language: {
+            url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json'
+        },
+        processing: true,
+        serverSide: false,
+        ajax: {
+            url: "{{ url_for('relatorios_capacidade_producao.api_dados_materiais') }}",
+            type: 'GET',
+            data: function(d) {
+                d.contrato_id = $('#contrato_id').val() || null;
+                d.tanque_id = $('#tanque_id').val() || null;
+            },
+            dataSrc: function(json) {
+                // Verificar se json e json.totais existem
+                if (json && json.totais) {
+                    // Atualizar totais no rodapé
+                    atualizarTotais(json.totais);
+                }
+                // Atualizar card de produtos compostos
+                if (json && json.produtos_compostos) {
+                    atualizarCardProdutosCompostos(json.produtos_compostos);
+                }
+                // Retornar dados ou array vazio
+                return json && json.data ? json.data : [];
+            },
+            error: function(xhr, error, thrown) {
+                console.error('Erro ao carregar dados:', error);
+                console.error('Detalhes:', thrown);
+                // Mostrar mensagem de erro ao usuário
+                if ($('#tabelaMateriais').length) {
+                    $('#tabelaMateriais tbody').html(
+                        '<tr><td colspan="11" class="text-center text-danger">Erro ao carregar dados. Por favor, tente novamente.</td></tr>'
+                    );
+                }
+            }
+        },
+        columns: [
+            { data: 'material_nome', name: 'material_nome' },
+            { data: 'unidade', name: 'unidade' },
+            { 
+                data: 'estoque_atual', 
+                name: 'estoque_atual',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '0,00';
+                    return parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            },
+            { 
+                data: 'quantidade_prevista_total', 
+                name: 'quantidade_prevista_total',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '0,00';
+                    return parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            },
+            { 
+                data: 'quantidade_concretada_total', 
+                name: 'quantidade_concretada_total',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '0,00';
+                    return parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            },
+            { 
+                data: 'quantidade_restante_total', 
+                name: 'quantidade_restante_total',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '0,00';
+                    return parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            },
+            { 
+                data: 'quantidade_necessaria', 
+                name: 'quantidade_necessaria',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '<strong class="text-warning">0,00</strong>';
+                    return '<strong class="text-warning">' + parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</strong>';
+                }
+            },
+            { 
+                data: 'estoque_disponivel', 
+                name: 'estoque_disponivel',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '<strong class="text-danger">0,00</strong>';
+                    if (!row) return '<strong>0,00</strong>';
+                    const classe = row.suficiente ? 'text-success' : 'text-danger';
+                    return '<strong class="' + classe + '">' + parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '</strong>';
+                }
+            },
+            { 
+                data: 'percentual_uso', 
+                name: 'percentual_uso',
+                className: 'text-end',
+                render: function(data, type, row) {
+                    if (data === null || data === undefined) return '0,00%';
+                    return parseFloat(data).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + '%';
+                }
+            },
+            { 
+                data: 'suficiente', 
+                name: 'suficiente',
+                render: function(data) {
+                    if (data) {
+                        return '<span class="badge bg-success">Suficiente</span>';
+                    } else {
+                        return '<span class="badge bg-danger">Insuficiente</span>';
+                    }
+                }
+            }
+        ],
+        order: [[0, 'asc']],
+        pageLength: 25,
+        responsive: true,
+        drawCallback: function(settings) {
+            // Garantir que o tfoot existe após o desenho
+            try {
+                const api = this.api();
+                const table = api.table();
+                if (table && table.footer) {
+                    const footer = $(table.footer());
+                    if (footer.length === 0) {
+                        console.warn('Tfoot não encontrado após desenho');
+                    }
+                }
+            } catch (e) {
+                console.warn('Erro ao verificar tfoot:', e);
+            }
+        }
+    });
+    } catch (e) {
+        console.error('Erro ao inicializar DataTable:', e);
+        return;
+    }
+
     // Atualizar tanques quando projeto mudar
     $('#contrato_id').on('change', function() {
         atualizarTanquesPorProjeto();
@@ -197,11 +375,41 @@ $(document).ready(function() {
 
     // Filtrar dados
     $('#btnFiltrar').on('click', function() {
-        filtrarDados();
+        if (tabelaMateriais) {
+            tabelaMateriais.ajax.reload(null, false); // false = manter página atual
+            atualizarLinksExportacao();
+        }
     });
 
-    // Atualizar links de exportação
-    atualizarLinksExportacao();
+    // Atualizar links de exportação quando filtros mudarem
+    $('#contrato_id, #tanque_id').on('change', function() {
+        atualizarLinksExportacao();
+    });
+
+    function atualizarCardProdutosCompostos(produtosCompostos) {
+        const cardElement = $('#card-produtos-compostos');
+        const conteudoElement = $('#conteudo-produtos-compostos');
+        
+        if (!produtosCompostos || produtosCompostos.length === 0) {
+            cardElement.hide();
+            return;
+        }
+        
+        let html = '';
+        
+        produtosCompostos.forEach(function(produto) {
+            html += '<tr>';
+            html += '<td><strong><i class="fas fa-cube"></i> ' + produto.produto_composto_nome + '</strong></td>';
+            // Totais são unitários (número de peças), então formatamos como inteiro
+            html += '<td class="text-end text-primary"><strong>' + parseInt(produto.total_quantidade_prevista).toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-success"><strong>' + parseInt(produto.total_quantidade_concretada).toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-warning"><strong>' + parseInt(produto.total_quantidade_restante).toLocaleString('pt-BR') + '</strong></td>';
+            html += '</tr>';
+        });
+        
+        conteudoElement.html(html);
+        cardElement.show();
+    }
 
     function atualizarTanquesPorProjeto() {
         const contratoId = $('#contrato_id').val();
@@ -222,17 +430,31 @@ $(document).ready(function() {
         });
     }
 
-    function filtrarDados() {
-        // Recarregar a página com os filtros
-        const contratoId = $('#contrato_id').val();
-        const tanqueId = $('#tanque_id').val();
+    function atualizarTotais(totais) {
+        if (!totais) {
+            console.warn('Totais não disponíveis');
+            return;
+        }
         
-        let params = new URLSearchParams();
-        if (contratoId) params.append('contrato_id', contratoId);
-        if (tanqueId) params.append('tanque_id', tanqueId);
+        // Verificar se os elementos existem antes de atualizar
+        const elementos = {
+            'total-estoque-atual': totais.estoque_atual,
+            'total-quantidade-prevista': totais.quantidade_prevista,
+            'total-quantidade-consumida': totais.quantidade_concretada,
+            'total-quantidade-restante': totais.quantidade_restante,
+            'total-quantidade-necessaria': totais.quantidade_necessaria,
+            'total-estoque-disponivel': totais.estoque_disponivel
+        };
         
-        window.location.href = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        Object.keys(elementos).forEach(function(id) {
+            const elemento = $('#' + id);
+            if (elemento.length) {
+                const valor = parseFloat(elementos[id]) || 0;
+                elemento.text(valor.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            }
+        });
     }
+
 
     function atualizarLinksExportacao() {
         const contratoId = $('#contrato_id').val();
@@ -249,6 +471,9 @@ $(document).ready(function() {
         $('#btnExportarPdf').attr('href', baseUrl + (queryString ? '?' + queryString : ''));
         $('#btnExportarExcel').attr('href', excelUrl + (queryString ? '?' + queryString : ''));
     }
+
+    // Carregar dados iniciais
+    atualizarLinksExportacao();
 });
 </script>
 {% endblock %}

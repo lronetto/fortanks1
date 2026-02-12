@@ -100,22 +100,12 @@ def index():
     filtro_acabado = request.args.get('filtro_acabado', type=str) == '1'
     filtro_transportado = request.args.get('filtro_transportado', type=str) == '1'
     
-    # Buscar todos os tanques e contratos para os filtros
-    tanques = Tanques.query.order_by(Tanques.nome).all()
-    contratos = Contrato.query.order_by(Contrato.nome).all()
-    
-    # Buscar tipos de peças únicos das peças cadastradas para o modal
-    tipos_peca = db.session.query(TanquesPecas.tipo).distinct().order_by(TanquesPecas.tipo).all()
-    tipos_peca = [t[0] for t in tipos_peca if t[0]]
-    
     # Para o template, passar o primeiro tanque_id se houver (para compatibilidade)
     tanque_id_filtro = tanque_ids[0] if tanque_ids else None
     
+    # Nota: tanques e contratos agora são carregados via AJAX no client-side
+    # Apenas passamos os filtros iniciais para aplicar quando a página carregar
     return render_template('pecas/index.html', 
-                         pecas=[],  # Não passar peças mais, será carregado via AJAX
-                         tanques=tanques, 
-                         contratos=contratos,
-                         tipos_peca=tipos_peca,
                          tanque_id_filtro=tanque_id_filtro,
                          tanque_ids_filtro=tanque_ids,  # Passar lista completa também
                          projeto_id_filtro=projeto_id,
@@ -595,6 +585,46 @@ def transporte():
     tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
     return render_template('pecas/modais/transporte.html', tanques=tanques, csrf_token=csrf_token)
+
+@peca.route('/api/filtros')
+@login_required
+def api_filtros():
+    """API para retornar todos os dados de filtro (contratos e tanques)"""
+    try:
+        # Buscar todos os contratos
+        contratos = Contrato.query.order_by(Contrato.nome).all()
+        contratos_json = []
+        for contrato in contratos:
+            contratos_json.append({
+                'id': contrato.id,
+                'nome': contrato.nome
+            })
+        
+        # Buscar todos os tanques com projeto_id
+        tanques = Tanques.query.order_by(Tanques.nome).all()
+        tanques_json = []
+        for tanque in tanques:
+            tanques_json.append({
+                'id': tanque.id,
+                'nome': tanque.nome,
+                'sistema': tanque.sistema or '',
+                'projeto_id': tanque.contrato_id if tanque.contrato_id else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'contratos': contratos_json,
+            'tanques': tanques_json
+        })
+    except Exception as e:
+        import traceback
+        current_app.logger.error(f'Erro na API de filtros: {str(e)}\n{traceback.format_exc()}')
+        return jsonify({
+            'success': False,
+            'contratos': [],
+            'tanques': [],
+            'error': str(e)
+        }), 500
 
 @peca.route('/api/tanques-por-projeto')
 def api_tanques_por_projeto():
