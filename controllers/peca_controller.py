@@ -103,6 +103,18 @@ def index():
     # Para o template, passar o primeiro tanque_id se houver (para compatibilidade)
     tanque_id_filtro = tanque_ids[0] if tanque_ids else None
     
+    # Montar filtros iniciais como JSON para evitar problemas de escape no JavaScript
+    import json as json_module
+    filtros_iniciais_dict = {
+        'projeto_id': projeto_id,
+        'tanque_ids': tanque_ids,
+        'tanque_id': tanque_id_filtro,
+        'filtro_concretado': filtro_concretado,
+        'filtro_acabado': filtro_acabado,
+        'filtro_transportado': filtro_transportado,
+    }
+    filtros_iniciais_json = json_module.dumps(filtros_iniciais_dict)
+    
     # Nota: tanques e contratos agora são carregados via AJAX no client-side
     # Apenas passamos os filtros iniciais para aplicar quando a página carregar
     return render_template('pecas/index.html', 
@@ -111,18 +123,16 @@ def index():
                          projeto_id_filtro=projeto_id,
                          filtro_concretado=filtro_concretado,
                          filtro_acabado=filtro_acabado,
-                         filtro_transportado=filtro_transportado)
+                         filtro_transportado=filtro_transportado,
+                         filtros_iniciais_json=filtros_iniciais_json)
 
 @peca.route('/api/pecas')
 @login_required
 def api_pecas():
-    """API para DataTables - retorna peças em formato JSON"""
+    """API para DataTables - retorna todas as peças em JSON (paginação no frontend)"""
     try:
-        # Parâmetros do DataTables
+        # Parâmetros do DataTables (draw mantido para compatibilidade; start/length ignorados)
         draw = request.args.get('draw', type=int)
-        start = request.args.get('start', type=int, default=0)
-        length = request.args.get('length', type=int, default=25)
-        search_value = request.args.get('search[value]', type=str, default='')
         
         # Filtros customizados
         tanque_ids = request.args.getlist('tanque_ids[]', type=int)
@@ -147,7 +157,7 @@ def api_pecas():
             .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
             .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
         
-        # Aplicar filtros
+        # Aplicar filtros (busca global feita no frontend)
         if tanque_ids:
             query = query.filter(TanquesPecas.tanque_id.in_(tanque_ids))
         
@@ -158,18 +168,7 @@ def api_pecas():
         if filtro_concretado:
             query = query.filter(TanquesPecas.data_concretagem.isnot(None))
         
-        # Aplicar busca global
-        if search_value:
-            search_filter = db.or_(
-                TanquesPecas.nome.like(f'%{search_value}%'),
-                TanquesPecas.tipo.like(f'%{search_value}%'),
-                Tanques.nome.like(f'%{search_value}%'),
-                Tanques.sistema.like(f'%{search_value}%'),
-                Contrato.nome.like(f'%{search_value}%')
-            )
-            query = query.filter(search_filter)
-        
-        # Buscar todas as peças (sem paginação) para aplicar filtros de status que dependem de JSON
+        # Buscar todas as peças (sem paginação no backend)
         pecas_todas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial).all()
         
         # Aplicar filtros de status que dependem de JSON
@@ -187,15 +186,12 @@ def api_pecas():
             
             pecas_filtradas.append(peca)
         
-        # Contar total de registros após filtros
+        # Total de registros (todos enviados; paginação no frontend)
         total_records = len(pecas_filtradas)
         
-        # Aplicar paginação
-        pecas = pecas_filtradas[start:start + length]
-        
-        # Formatar dados para resposta
+        # Formatar dados para resposta (todos os registros, sem slice)
         data = []
-        for peca in pecas:
+        for peca in pecas_filtradas:
             # Verificar status usando função auxiliar
             concretado, acabada, transportado = verificar_status_peca(peca)
             

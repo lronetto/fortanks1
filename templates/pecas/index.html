@@ -254,14 +254,7 @@
         // Variáveis globais para armazenar dados de filtros
         var todosContratos = [];
         var todosTanques = [];
-        var filtrosIniciais = {
-            projeto_id: {{ projeto_id_filtro|default('null') }},
-            tanque_ids: {{ tanque_ids_filtro|tojson|safe if tanque_ids_filtro else '[]' }},
-            tanque_id: {{ tanque_id_filtro|default('null') }},
-            filtro_concretado: {{ 'true' if filtro_concretado else 'false' }},
-            filtro_acabado: {{ 'true' if filtro_acabado else 'false' }},
-            filtro_transportado: {{ 'true' if filtro_transportado else 'false' }}
-        };
+        var filtrosIniciais = {{ filtros_iniciais_json|safe }};
         
         // Função para carregar dados de filtros
         function carregarDadosFiltros() {
@@ -502,152 +495,154 @@
             
             // Inicializar DataTable com AJAX
             var table = $('#tabelaPecas').DataTable({
-            processing: true,
-            serverSide: false,
-            ajax: {
-                url: '{{ url_for("peca.api_pecas") }}',
-                type: 'GET',
-                traditional: true, // Necessário para enviar arrays corretamente
-                data: function(d) {
-                    // Adicionar filtros customizados
-                    var tanqueIds = getTanqueIds();
-                    if (tanqueIds.length > 0) {
-                        // Enviar como array com nome correto para o backend
-                        d['tanque_ids[]'] = tanqueIds;
-                        console.log('Enviando tanque_ids[] para DataTables:', tanqueIds);
-                    }
-                    if (projetoIdFiltro) {
-                        d.projeto_id = projetoIdFiltro;
-                    }
-                    // Adicionar filtros de status
-                    if (filtroConcretado) {
-                        d.filtro_concretado = '1';
-                    }
-                    if (filtroAcabado) {
-                        d.filtro_acabado = '1';
-                    }
-                    if (filtroTransportado) {
-                        d.filtro_transportado = '1';
-                    }
-                },
-                dataSrc: function(json) {
-                    // Atualizar badge de total
-                    $('#badgeTotalPecas').text(json.recordsFiltered + ' peça(s)');
-                    // Atualizar estatísticas após carregar dados
-                    setTimeout(carregarEstatisticas, 100);
-                    return json.data;
-                },
-                error: function(xhr, error, thrown) {
-                    console.error('Erro ao carregar dados:', error);
-                    alert('Erro ao carregar dados da tabela. Tente recarregar a página.');
-                }
-            },
-            language: {
-                url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
-            },
-            order: [[1, 'asc'], [0, 'asc']], // Ordenar por tanque e depois por número sequencial
-            pageLength: 25,
-            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
-            columns: [
-                { 
-                    data: 'numero_sequencial',
-                    render: function(data, type, row) {
-                        return '<span class="badge bg-primary">' + data + '</span>';
+                processing: true,
+                serverSide: false,
+                ajax: {
+                    url: '{{ url_for("peca.api_pecas") }}',
+                    type: 'GET',
+                    traditional: true, // Necessário para enviar arrays corretamente
+                    data: function(d) {
+                        // Adicionar filtros customizados
+                        var tanqueIds = getTanqueIds();
+                        if (tanqueIds.length > 0) {
+                            // Enviar como array com nome correto para o backend
+                            d['tanque_ids[]'] = tanqueIds;
+                            console.log('Enviando tanque_ids[] para DataTables:', tanqueIds);
+                        }
+                        if (projetoIdFiltro) {
+                            d.projeto_id = projetoIdFiltro;
+                        }
+                        // Adicionar filtros de status
+                        if (filtroConcretado) {
+                            d.filtro_concretado = '1';
+                        }
+                        if (filtroAcabado) {
+                            d.filtro_acabado = '1';
+                        }
+                        if (filtroTransportado) {
+                            d.filtro_transportado = '1';
+                        }
+                    },
+                    dataSrc: function(json) {
+                        console.log('Dados recebidos:', json);
+                        // Atualizar badge de total
+                        $('#badgeTotalPecas').text(json.recordsFiltered + ' peça(s)');
+                        // Atualizar estatísticas após carregar dados
+                        setTimeout(carregarEstatisticas, 100);
+                        return json.data;
+                    },
+                    error: function(xhr, error, thrown) {
+                        console.error('Erro ao carregar dados:', error);
+                        alert('Erro ao carregar dados da tabela. Tente recarregar a página.');
                     }
                 },
-                { 
-                    data: 'tanque_nome',
-                    render: function(data, type, row) {
-                        var sistema = row.tanque_sistema ? ' (' + row.tanque_sistema + ')' : '';
-                        return '<a href="/tanques/visualizar/' + row.tanque_id + '" class="text-decoration-none">' + 
-                               data + sistema + '</a>';
-                    }
+                language: {
+                    url: "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
                 },
-                { data: 'projeto_nome' },
-                { data: 'tipo' },
-                { data: 'nome' },
-                { 
-                    data: 'status',
-                    orderable: false,
-                    render: function(data, type, row) {
-                        return data; // Já vem formatado do servidor
+                order: [[1, 'asc'], [0, 'asc']], // Ordenar por tanque e depois por número sequencial
+                pageLength: 100,
+                lengthMenu: [[10, 25, 50, 100, 500, -1], [10, 25, 50, 100, 500, "Todos"]],
+                columns: [
+                    { 
+                        data: 'numero_sequencial',
+                        render: function(data, type, row) {
+                            return '<span class="badge bg-primary">' + data + '</span>';
+                        }
+                    },
+                    { 
+                        data: 'tanque_nome',
+                        render: function(data, type, row) {
+                            var sistema = row.tanque_sistema ? ' (' + row.tanque_sistema + ')' : '';
+                            return '<a href="/tanques/visualizar/' + row.tanque_id + '" class="text-decoration-none">' + 
+                                data + sistema + '</a>';
+                        }
+                    },
+                    { data: 'projeto_nome' },
+                    { data: 'tipo' },
+                    { data: 'nome' },
+                    { 
+                        data: 'status',
+                        orderable: false,
+                        render: function(data, type, row) {
+                            return data; // Já vem formatado do servidor
+                        }
+                    },
+                    { data: 'data_cadastro' },
+                    { 
+                        data: 'acoes',
+                        orderable: false,
+                        render: function(data, type, row) {
+                            return data; // Já vem formatado do servidor
+                        }
                     }
-                },
-                { data: 'data_cadastro' },
-                { 
-                    data: 'acoes',
-                    orderable: false,
-                    render: function(data, type, row) {
-                        return data; // Já vem formatado do servidor
-                    }
-                }
-            ],
-            columnDefs: [
-                { orderable: false, targets: [5, 7] }, // Desabilitar ordenação nas colunas de status e ações
-                { className: 'text-center', targets: [0] } // Centralizar número sequencial
-            ],
-            drawCallback: function(settings) {
-                // Adicionar eventos aos botões de exclusão após desenhar a tabela
-                $(document).off('click', '.btn-excluir-peca').on('click', '.btn-excluir-peca', function() {
-                    var pecaId = $(this).data('peca-id');
-                    var pecaNome = $(this).data('peca-nome');
-                    var tanqueNome = $(this).data('tanque-nome');
-                    var numeroSeq = $(this).data('numero-seq');
-                    
-                    $('#excluirModalTexto').html(
-                        'Tem certeza que deseja excluir a peça <strong>' + pecaNome + '</strong> ' +
-                        '(Nº ' + numeroSeq + ') do tanque <strong>' + tanqueNome + '</strong>?'
-                    );
-                    $('#excluirModalForm').attr('action', '/pecas/excluir/' + pecaId);
-                    $('#excluirModalGenerico').modal('show');
-                });
-            }
-            
-            // Atualizar estatísticas quando a busca for realizada
-            $('#tabelaPecas').on('search.dt', function() {
-                setTimeout(carregarEstatisticas, 300);
-            });
-            
-            // Recarregar tabela quando os filtros mudarem
-            $('#filtroForm').on('submit', function(e) {
-                e.preventDefault();
-                atualizarVariaveisFiltro();
-                table.ajax.reload();
-                carregarEstatisticas();
-            });
-            
-            // Recarregar tabela quando os checkboxes de status mudarem
-            $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
-                atualizarFiltrosStatus();
-                if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                    table.ajax.reload();
-                    carregarEstatisticas();
-                }
-            });
-
-            // Evento quando o projeto é alterado
-            $('#projeto_id').on('change', function() {
-                var projetoId = $(this).val();
-                popularTanques(projetoId);
-                atualizarVariaveisFiltro();
-                // Recarregar tabela se já estiver inicializada
-                if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                    table.ajax.reload();
-                    carregarEstatisticas();
-                }
-            });
-            
-            // Evento quando o tanque é alterado
-            $('#tanque_id').on('change', function() {
-                atualizarVariaveisFiltro();
-                if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                    table.ajax.reload();
-                    carregarEstatisticas();
+                ],
+                columnDefs: [
+                    { orderable: false, targets: [5, 7] }, // Desabilitar ordenação nas colunas de status e ações
+                    { className: 'text-center', targets: [0] } // Centralizar número sequencial
+                ],
+                drawCallback: function(settings) {
+                    // Adicionar eventos aos botões de exclusão após desenhar a tabela
+                    $(document).off('click', '.btn-excluir-peca').on('click', '.btn-excluir-peca', function() {
+                        var pecaId = $(this).data('peca-id');
+                        var pecaNome = $(this).data('peca-nome');
+                        var tanqueNome = $(this).data('tanque-nome');
+                        var numeroSeq = $(this).data('numero-seq');
+                        
+                        $('#excluirModalTexto').html(
+                            'Tem certeza que deseja excluir a peça <strong>' + pecaNome + '</strong> ' +
+                            '(Nº ' + numeroSeq + ') do tanque <strong>' + tanqueNome + '</strong>?'
+                        );
+                        $('#excluirModalForm').attr('action', '/pecas/excluir/' + pecaId);
+                        $('#excluirModalGenerico').modal('show');
+                    });
                 }
             });
         }
+            
+            
+    // Atualizar estatísticas quando a busca for realizada
+        $('#tabelaPecas').on('search.dt', function() {
+            setTimeout(carregarEstatisticas, 300);
+        });
         
-        // Carregar dados de filtros ao inicializar
+        // Recarregar tabela quando os filtros mudarem
+        $('#filtroForm').on('submit', function(e) {
+            e.preventDefault();
+            atualizarVariaveisFiltro();
+            table.ajax.reload();
+            carregarEstatisticas();
+        });
+        
+        // Recarregar tabela quando os checkboxes de status mudarem
+        $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
+            atualizarFiltrosStatus();
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload();
+                carregarEstatisticas();
+            }
+        });
+
+        // Evento quando o projeto é alterado
+        $('#projeto_id').on('change', function() {
+            var projetoId = $(this).val();
+            popularTanques(projetoId);
+            atualizarVariaveisFiltro();
+            // Recarregar tabela se já estiver inicializada
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload();
+                carregarEstatisticas();
+            }
+        });
+        
+        // Evento quando o tanque é alterado
+        $('#tanque_id').on('change', function() {
+            atualizarVariaveisFiltro();
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload();
+                carregarEstatisticas();
+            }
+        });
+// Carregar dados de filtros ao inicializar
         console.log('Inicializando página, carregando dados de filtros...');
         carregarDadosFiltros();
 
@@ -801,7 +796,8 @@
                                     ' <span class="badge bg-light text-dark">' + item.total_tanques + '</span>'
                                 )
                                 .on('click', function() {
-                                    inputTipoPeca.val(item.tipo).focus();
+                                    inputTipoPeca.val(item.tipo);
+                                    inputTipoPeca.focus();
                                 });
                             
                             listaTiposAgrupados.append(badge);
