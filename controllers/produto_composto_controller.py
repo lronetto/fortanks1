@@ -1067,7 +1067,7 @@ def api_historico_custo(id):
                                     db.session.query(NotaFiscal)
                                     .filter(NotaFiscal.tipo == 2)
                                     .filter(NotaFiscal.status_processamento != "cancelada")
-                                    .filter(NotaFiscal.dados_adicionais.like(f'%{chave_acesso_nf_usada}%'))
+                                    .filter(func.json_extract(NotaFiscal.dados_adicionais, "$.chave_nf") == chave_acesso_nf_usada)
                                     .all()
                                 )
                                 

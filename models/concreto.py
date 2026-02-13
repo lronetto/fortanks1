@@ -548,11 +548,10 @@ class ConcretoUsinagens(db.Model):
         if usuario_id is None:
             usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
         
-        print(f"Produzindo usinagem de concreto #{self.id} - Série: {self.serie} - Data: {self.data_usinagem} - Volume: {self.volume}")
-        if not self.produto_composto:
-            return False
+        print(f"Produzindo usinagem de concreto #{self.id} - Série: {self.serie} - Data: {self.data_usinagem} - Volume: {self.volume} - Produto composto ID: {self.produtoCompostoId}")
         produto = ProdutoComposto.query.get(self.produtoCompostoId)
         if not produto:
+            print(f"  AVISO: Usinagem de concreto #{self.id} - Série: {self.serie} - Data: {self.data_usinagem} - Volume: {self.volume} - Produto composto não encontrado. 1")
             return False
         _produtos_processados = set()
         _materiais_necessarios = {}
@@ -563,7 +562,7 @@ class ConcretoUsinagens(db.Model):
                     log=True,
                     produtos_processados=_produtos_processados,
                     materiais_necessarios=_materiais_necessarios,
-                    traco=True
+                    traco=False
                 )
         print(f"Materiais necessários: {len(_materiais_necessarios)}")
         if _materiais_necessarios:

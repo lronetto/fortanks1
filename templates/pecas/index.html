@@ -39,6 +39,9 @@
             <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalImportacaoInspecao">
                 <i class="fas fa-file-excel"></i> Importar Inspeção
             </button>
+            <button type="button" class="btn btn-success me-2" id="btnExportarExcel" title="Exportar peças filtradas para Excel">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
             <a href="{{ url_for('tanque.index') }}" class="btn btn-secondary">
                 <i class="fas fa-water"></i> Ver Todos os Tanques
             </a>
@@ -71,23 +74,61 @@
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Filtros de Status</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="filtro_concretado" name="filtro_concretado" value="1" {% if filtro_concretado %}checked{% endif %}>
-                            <label class="form-check-label" for="filtro_concretado">
-                                <span class="badge bg-success"><i class="fas fa-check-circle"></i> Concretado</span>
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="filtro_acabado" name="filtro_acabado" value="1" {% if filtro_acabado %}checked{% endif %}>
-                            <label class="form-check-label" for="filtro_acabado">
-                                <span class="badge bg-info"><i class="fas fa-check"></i> Acabado</span>
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="filtro_transportado" name="filtro_transportado" value="1" {% if filtro_transportado %}checked{% endif %}>
-                            <label class="form-check-label" for="filtro_transportado">
-                                <span class="badge bg-primary"><i class="fas fa-truck"></i> Transportado</span>
-                            </label>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted d-block mb-2"><strong>Com Status:</strong></small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_concretado" name="filtro_concretado" value="1" {% if filtro_concretado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_concretado">
+                                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> Concretado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_produzido" name="filtro_produzido" value="1" {% if filtro_produzido %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_produzido">
+                                        <span class="badge bg-warning"><i class="fas fa-industry"></i> Produzido</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_acabado" name="filtro_acabado" value="1" {% if filtro_acabado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_acabado">
+                                        <span class="badge bg-info"><i class="fas fa-check"></i> Acabado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_transportado" name="filtro_transportado" value="1" {% if filtro_transportado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_transportado">
+                                        <span class="badge bg-primary"><i class="fas fa-truck"></i> Transportado</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block mb-2"><strong>Sem Status:</strong></small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_concretado" name="filtro_nao_concretado" value="1" {% if filtro_nao_concretado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_concretado">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Concretado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_produzido" name="filtro_nao_produzido" value="1" {% if filtro_nao_produzido %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_produzido">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Produzido</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_acabado" name="filtro_nao_acabado" value="1" {% if filtro_nao_acabado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_acabado">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Acabado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_transportado" name="filtro_nao_transportado" value="1" {% if filtro_nao_transportado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_transportado">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Transportado</span>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -111,78 +152,6 @@
         </div>
     </div>
 
-    <!-- Card de Estatísticas -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Total de Peças
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statTotal">0</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-list fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Concretadas
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statConcretadas">0</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-check-circle fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Acabadas
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statAcabadas">0</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-check fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Transportadas
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="statTransportadas">0</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-truck fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Card Resumo por Tipo -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
@@ -198,15 +167,16 @@
                             <th>Tipo</th>
                             <th class="text-center">Total</th>
                             <th class="text-center"><span class="badge bg-success">Concretadas</span></th>
+                            <th class="text-center"><span class="badge bg-warning">Produzidas</span></th>
                             <th class="text-center"><span class="badge bg-info">Acabadas</span></th>
                             <th class="text-center"><span class="badge bg-primary">Transportadas</span></th>
                         </tr>
                     </thead>
                     <tbody id="resumoPorTipoContainer">
-                        <tr><td colspan="5" class="text-center text-muted">Carregando...</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
                     </tbody>
                     <tfoot id="resumoPorTipoSubtotais" class="table-light fw-bold">
-                        <tr><td colspan="5" class="text-center text-muted small">—</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted small">—</td></tr>
                     </tfoot>
                 </table>
             </div>
@@ -407,15 +377,32 @@
         
         // Função para aplicar filtros iniciais
         function aplicarFiltrosIniciais() {
-            // Aplicar filtros de status
+            // Aplicar filtros de status (positivos)
             if (filtrosIniciais.filtro_concretado) {
                 $('#filtro_concretado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_produzido) {
+                $('#filtro_produzido').prop('checked', true);
             }
             if (filtrosIniciais.filtro_acabado) {
                 $('#filtro_acabado').prop('checked', true);
             }
             if (filtrosIniciais.filtro_transportado) {
                 $('#filtro_transportado').prop('checked', true);
+            }
+            
+            // Aplicar filtros de status (negativos)
+            if (filtrosIniciais.filtro_nao_concretado) {
+                $('#filtro_nao_concretado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_produzido) {
+                $('#filtro_nao_produzido').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_acabado) {
+                $('#filtro_nao_acabado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_transportado) {
+                $('#filtro_nao_transportado').prop('checked', true);
             }
             
             // Aplicar seleção de tanques se houver
@@ -432,14 +419,24 @@
         var tanqueIdFiltro = [];
         var projetoIdFiltro = '';
         var filtroConcretado = false;
+        var filtroProduzido = false;
         var filtroAcabado = false;
         var filtroTransportado = false;
+        var filtroNaoConcretado = false;
+        var filtroNaoProduzido = false;
+        var filtroNaoAcabado = false;
+        var filtroNaoTransportado = false;
         
         // Inicializar filtros de status a partir dos valores do formulário
         function atualizarFiltrosStatus() {
             filtroConcretado = $('#filtro_concretado').is(':checked');
+            filtroProduzido = $('#filtro_produzido').is(':checked');
             filtroAcabado = $('#filtro_acabado').is(':checked');
             filtroTransportado = $('#filtro_transportado').is(':checked');
+            filtroNaoConcretado = $('#filtro_nao_concretado').is(':checked');
+            filtroNaoProduzido = $('#filtro_nao_produzido').is(':checked');
+            filtroNaoAcabado = $('#filtro_nao_acabado').is(':checked');
+            filtroNaoTransportado = $('#filtro_nao_transportado').is(':checked');
         }
         
         // Função para obter tanque_ids como array
@@ -456,57 +453,10 @@
             return ids;
         }
         
-        // Função para carregar estatísticas
+        // Função para carregar estatísticas (mantida para uso futuro, cards removidos)
         function carregarEstatisticas() {
-            var tanqueIds = getTanqueIds();
-            var params = {};
-            
-            // Adicionar tanque_ids se houver seleção
-            if (tanqueIds.length > 0) {
-                params['tanque_ids[]'] = tanqueIds;
-            }
-            
-            // Adicionar projeto_id se houver
-            if (projetoIdFiltro) {
-                params.projeto_id = projetoIdFiltro;
-            }
-            
-            // Adicionar filtros de status
-            if (filtroConcretado) {
-                params.filtro_concretado = '1';
-            }
-            if (filtroAcabado) {
-                params.filtro_acabado = '1';
-            }
-            if (filtroTransportado) {
-                params.filtro_transportado = '1';
-            }
-            
-            // Adicionar busca se houver
-            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
-                var searchValue = $('#tabelaPecas').DataTable().search();
-                if (searchValue) {
-                    params.search = searchValue;
-                }
-            }
-            
-            $.ajax({
-                url: '{{ url_for("peca.api_pecas_estatisticas") }}',
-                method: 'GET',
-                data: params,
-                traditional: true, // Necessário para enviar arrays corretamente
-                success: function(response) {
-                    if (response.success) {
-                        $('#statTotal').text(response.total || 0);
-                        $('#statConcretadas').text(response.concretadas || 0);
-                        $('#statAcabadas').text(response.acabadas || 0);
-                        $('#statTransportadas').text(response.transportadas || 0);
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.error('Erro ao carregar estatísticas:', error);
-                }
-            });
+            // Cards de estatísticas foram removidos, função mantida para uso futuro se necessário
+            // A API ainda está disponível em '{{ url_for("peca.api_pecas_estatisticas") }}'
         }
         
         // Função para atualizar variáveis de filtro
@@ -516,49 +466,53 @@
             atualizarFiltrosStatus();
         }
         
-        // Função para atualizar a tabela de resumo por tipo (Total, Concretadas, Acabadas, Transportadas)
+        // Função para atualizar a tabela de resumo por tipo (Total, Concretadas, Produzidas, Acabadas, Transportadas)
         function atualizarResumoPorTipo(data) {
             var tbody = $('#resumoPorTipoContainer');
             var tfoot = $('#resumoPorTipoSubtotais');
             if (!data || data.length === 0) {
-                tbody.html('<tr><td colspan="5" class="text-center text-muted">Nenhuma peça para exibir</td></tr>');
-                tfoot.html('<tr><td colspan="5" class="text-center text-muted small">—</td></tr>');
+                tbody.html('<tr><td colspan="6" class="text-center text-muted">Nenhuma peça para exibir</td></tr>');
+                tfoot.html('<tr><td colspan="6" class="text-center text-muted small">—</td></tr>');
                 return;
             }
             var porTipo = {};
             data.forEach(function(row) {
                 var t = (row.tipo && row.tipo.toString().trim()) ? row.tipo : 'Sem tipo';
                 if (!porTipo[t]) {
-                    porTipo[t] = { total: 0, concretadas: 0, acabadas: 0, transportadas: 0 };
+                    porTipo[t] = { total: 0, concretadas: 0, produzidas: 0, acabadas: 0, transportadas: 0 };
                 }
                 porTipo[t].total += 1;
                 if (row.concretado) porTipo[t].concretadas += 1;
+                if (row.produzido) porTipo[t].produzidas += 1;
                 if (row.acabada) porTipo[t].acabadas += 1;
                 if (row.transportado) porTipo[t].transportadas += 1;
             });
             var tiposOrdenados = Object.keys(porTipo).sort();
-            var stTotal = 0, stConcretadas = 0, stAcabadas = 0, stTransportadas = 0;
+            var stTotal = 0, stConcretadas = 0, stProduzidas = 0, stAcabadas = 0, stTransportadas = 0;
             var html = '';
             tiposOrdenados.forEach(function(tipo) {
                 var o = porTipo[tipo];
                 stTotal += o.total;
                 stConcretadas += o.concretadas;
+                stProduzidas += o.produzidas;
                 stAcabadas += o.acabadas;
                 stTransportadas += o.transportadas;
                 html += '<tr>' +
                     '<td class="fw-bold">' + tipo + '</td>' +
                     '<td class="text-center">' + o.total + '</td>' +
                     '<td class="text-center">' + o.concretadas + '</td>' +
+                    '<td class="text-center">' + o.produzidas + '</td>' +
                     '<td class="text-center">' + o.acabadas + '</td>' +
                     '<td class="text-center">' + o.transportadas + '</td>' +
                     '</tr>';
             });
-            tbody.html(html || '<tr><td colspan="5" class="text-center text-muted">Nenhum tipo encontrado</td></tr>');
+            tbody.html(html || '<tr><td colspan="6" class="text-center text-muted">Nenhum tipo encontrado</td></tr>');
             // Linha de subtotais
             var footHtml = '<tr>' +
                 '<td>Subtotal</td>' +
                 '<td class="text-center">' + stTotal + '</td>' +
                 '<td class="text-center">' + stConcretadas + '</td>' +
+                '<td class="text-center">' + stProduzidas + '</td>' +
                 '<td class="text-center">' + stAcabadas + '</td>' +
                 '<td class="text-center">' + stTransportadas + '</td>' +
                 '</tr>';
@@ -591,14 +545,31 @@
                         if (projId) {
                             d.projeto_id = projId;
                         }
+                        // Filtros positivos
                         if ($('#filtro_concretado').is(':checked')) {
                             d.filtro_concretado = '1';
+                        }
+                        if ($('#filtro_produzido').is(':checked')) {
+                            d.filtro_produzido = '1';
                         }
                         if ($('#filtro_acabado').is(':checked')) {
                             d.filtro_acabado = '1';
                         }
                         if ($('#filtro_transportado').is(':checked')) {
                             d.filtro_transportado = '1';
+                        }
+                        // Filtros negativos
+                        if ($('#filtro_nao_concretado').is(':checked')) {
+                            d.filtro_nao_concretado = '1';
+                        }
+                        if ($('#filtro_nao_produzido').is(':checked')) {
+                            d.filtro_nao_produzido = '1';
+                        }
+                        if ($('#filtro_nao_acabado').is(':checked')) {
+                            d.filtro_nao_acabado = '1';
+                        }
+                        if ($('#filtro_nao_transportado').is(':checked')) {
+                            d.filtro_nao_transportado = '1';
                         }
                     },
                     dataSrc: function(json) {
@@ -693,7 +664,7 @@
         });
         
         // Recarregar tabela quando os checkboxes de status mudarem
-        $('#filtro_concretado, #filtro_acabado, #filtro_transportado').on('change', function() {
+        $('#filtro_concretado, #filtro_produzido, #filtro_acabado, #filtro_transportado, #filtro_nao_concretado, #filtro_nao_produzido, #filtro_nao_acabado, #filtro_nao_transportado').on('change', function() {
             atualizarVariaveisFiltro();
             if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
                 table.ajax.reload(null, false);
@@ -720,6 +691,33 @@
                 setTimeout(carregarEstatisticas, 500);
             }
         });
+
+        // Exportar para Excel (usa os mesmos filtros da listagem)
+        $('#btnExportarExcel').on('click', function() {
+            var params = [];
+            var projId = $('#projeto_id').val();
+            if (projId) {
+                params.push('projeto_id=' + encodeURIComponent(projId));
+            }
+            var tanqueIds = getTanqueIds();
+            if (tanqueIds.length > 0) {
+                tanqueIds.forEach(function(id) {
+                    params.push('tanque_ids[]=' + encodeURIComponent(id));
+                });
+            }
+            $('#filtro_concretado').is(':checked') && params.push('filtro_concretado=1');
+            $('#filtro_produzido').is(':checked') && params.push('filtro_produzido=1');
+            $('#filtro_acabado').is(':checked') && params.push('filtro_acabado=1');
+            $('#filtro_transportado').is(':checked') && params.push('filtro_transportado=1');
+            $('#filtro_nao_concretado').is(':checked') && params.push('filtro_nao_concretado=1');
+            $('#filtro_nao_produzido').is(':checked') && params.push('filtro_nao_produzido=1');
+            $('#filtro_nao_acabado').is(':checked') && params.push('filtro_nao_acabado=1');
+            $('#filtro_nao_transportado').is(':checked') && params.push('filtro_nao_transportado=1');
+            var queryString = params.join('&');
+            var url = '{{ url_for("peca.exportar_excel") }}' + (queryString ? '?' + queryString : '');
+            window.location.href = url;
+        });
+
 // Carregar dados de filtros ao inicializar
         console.log('Inicializando página, carregando dados de filtros...');
         carregarDadosFiltros();
