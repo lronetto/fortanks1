@@ -474,6 +474,7 @@ def main():
         }
     }
     fazer_backup_banco_dados(logs)
+    print(logs)
 
 
 if __name__ == '__main__':
