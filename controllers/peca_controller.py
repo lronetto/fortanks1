@@ -1672,7 +1672,7 @@ def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
                         origem_id=produto_id, 
                         origem_tipo='producao_peca', 
                         usuario_id=usuario_id,
-                        motivo=f'Produção das peças: {", ".join(todas_pecas_processadas[:10])} - Quantidade total: {quantidade_total}',
+                        motivo=f'Produção das peças: {", ".join(todas_pecas_processadas)} - Quantidade total: {quantidade_total} - len: {len(todas_pecas_processadas)}',
                         log=log
                     )
                     # Definir data_movimento se fornecida
