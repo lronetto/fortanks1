@@ -470,6 +470,8 @@ def main():
     if sistema != 'linux':
         logger.warning(f"Sistema operacional detectado: {sistema}. Scheduler normalmente roda apenas em Linux.")
         logger.info("Iniciando scheduler mesmo assim...")
+
+    job_diario()
     
     try:
         #job_diario()
