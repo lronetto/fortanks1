@@ -1584,7 +1584,7 @@ def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
             usinagens = ConcretoUsinagens.query.filter(ConcretoUsinagens.data_usinagem.like(f'%{dia_date}%')).all()
             for usinagem in usinagens:
                 try:
-                    usinagem.produzir(usuario_id=usuario_id)
+                    usinagem.produzir(usuario_id=usuario_id,total=total)
                 except Exception as e:
                     logging.error(f"Erro ao processar usinagem {usinagem.id}: {str(e)}")
                     continue
