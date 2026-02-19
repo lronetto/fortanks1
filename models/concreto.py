@@ -543,15 +543,21 @@ class ConcretoUsinagens(db.Model):
             return "01"
         else:
             return str(self.serie-primeira_serie+1)
-    def produzir(self, usuario_id=None):
+    def produzir(self, usuario_id=None,total=False):
         """Produz a usinagem de concreto"""
         # Obter usuario_id do parâmetro ou do current_user
         if usuario_id is None:
             usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
+        dados_adicionais = {}
         if self.dados_adicionais:
-            dados_adicionais = json.loads(self.dados_adicionais)
-            if 'data_producao' in dados_adicionais and dados_adicionais['data_producao'] is not None:
-                return False
+            try:
+                dados_adicionais = json.loads(self.dados_adicionais) if isinstance(self.dados_adicionais, str) else self.dados_adicionais
+            except (json.JSONDecodeError, TypeError):
+                dados_adicionais = {}
+            if 'data_producao' in dados_adicionais and dados_adicionais.get('data_producao') is not None:
+                if not total:
+                    return False
+                
         print(f"Produzindo usinagem de concreto #{self.id} - Série: {self.serie} - Data: {self.data_usinagem} - Volume: {self.volume} - Produto composto ID: {self.produtoCompostoId}")
         produto = ProdutoComposto.query.get(self.produtoCompostoId)
         if not produto:
@@ -586,9 +592,11 @@ class ConcretoUsinagens(db.Model):
                     log=True)
                 mov.data_movimento = self.data_usinagem
                 mov.save()
-        dados_adicionais['data_producao'] = self.data_usinagem.isoformat()
-        self.dados_adicionais = json.dumps(dados_adicionais)
+
+        dados_adicionais['data_producao'] = datetime.now().isoformat()
+        self.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
         self.save()
+        db.session.commit()
         return True
 class ConcretoUsinagensMateriais(db.Model):
     """
