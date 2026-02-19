@@ -465,7 +465,15 @@ def iniciar_scheduler():
 
 def main():
     """Função principal para executar o serviço"""
-    fazer_backup_banco_dados()
+    logs = {
+        'backup': {
+            'mensagem': [],
+            'erro': False,
+            'erro_mensagem': [],
+            'erro_traceback': []
+        }
+    }
+    fazer_backup_banco_dados(logs)
 
 
 if __name__ == '__main__':
