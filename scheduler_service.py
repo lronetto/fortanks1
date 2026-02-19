@@ -395,21 +395,21 @@ def job_diario():
                 logger.info("Backup do banco de dados concluído com sucesso")
             else:
                 logger.error("Falha no backup do banco de dados")
-            
-            # Executar importação de dados analíticos
-            usuario_id = obter_usuario_sistema()
-            if usuario_id == 0:
-                logger.error("Não foi possível obter usuário para executar importação")
-                return
-            
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            logger.info("Iniciando extração de dados analíticos...")
-            resultado = loop.run_until_complete(
-                executar_importacao_async(usuario_id, logs)
-            )
-            logger.info(f"Resultado da extração: {resultado}")
-            loop.close()
+            if False:
+                # Executar importação de dados analíticos
+                usuario_id = obter_usuario_sistema()
+                if usuario_id == 0:
+                    logger.error("Não foi possível obter usuário para executar importação")
+                    return
+                
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                logger.info("Iniciando extração de dados analíticos...")
+                resultado = loop.run_until_complete(
+                    executar_importacao_async(usuario_id, logs)
+                )
+                logger.info(f"Resultado da extração: {resultado}")
+                loop.close()
             Logs('scheduler_service', datetime.now(),json.dumps(logs))
             logger.info("Job diário concluído")
     except Exception as e:
