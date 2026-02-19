@@ -164,13 +164,20 @@ def fazer_backup_banco_dados(logs):
             logs['backup']['mensagem'].append(f"Executando backup do banco de dados: {database}")
             # Executar mysqldump e salvar em arquivo
             with open(backup_path, 'w', encoding='utf-8') as backup_file:
-                result = subprocess.run(
+                try:
+                    result = subprocess.run(
                     cmd,
                     stdout=backup_file,
                     stderr=subprocess.PIPE,
                     text=True
-                )
-            
+                    )
+                except Exception as e:
+                    import traceback
+                    logger.error(f"Erro ao executar mysqldump: {str(e)}")
+                    logs['backup']['erro'] = True
+                    logs['backup']['erro_mensagem'].append(f"Erro ao executar mysqldump: {str(e)}")
+                    logs['backup']['erro_traceback'].append(traceback.format_exc())
+                    return False
             if result.returncode != 0:
                 logger.error(f"Erro ao executar mysqldump: {result.stderr}")
                 # Remover arquivo de backup parcial se houver erro
@@ -209,9 +216,11 @@ def fazer_backup_banco_dados(logs):
                 backup_path = compressed_path
                 logs['backup']['mensagem'].append(f"Backup do banco de dados comprimido com sucesso: {backup_filename}.gz ({compressed_size / 1024 / 1024:.2f} MB)")
             except Exception as e:
+                import traceback
                 logger.warning(f"Não foi possível comprimir o backup: {str(e)}")
                 logs['backup']['erro'] = True
                 logs['backup']['erro_mensagem'].append(f"Não foi possível comprimir o backup: {str(e)}")
+                logs['backup']['erro_traceback'].append(traceback.format_exc())
             
             # Limpar backups antigos (manter apenas os últimos 30 dias)
             try:
