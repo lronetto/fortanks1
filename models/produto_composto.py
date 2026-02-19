@@ -270,10 +270,11 @@ class ProdutoComposto(db.Model):
             
             elif componente.estoque.tipo_item == 'produto_composto':
                 if traco:
-                    if componente.estoque.produto_composto.traco:
+                    if not componente.estoque.produto_composto.traco:
                         print(f"  AVISO: Produto composto {componente.estoque.produto_composto.nome} (ID: {componente.estoque.produto_composto.id}) é um traço. Pulando para evitar loop infinito.")
-                        continue
-                produtos_compostos.append(componente)
+                        produtos_compostos.append(componente)
+                else:
+                    produtos_compostos.append(componente)
             else:
                 if log:
                     print(f"  AVISO: Tipo de item {componente.estoque.tipo_item} não suportado")
