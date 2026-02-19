@@ -1509,7 +1509,7 @@ def processar_producao(log=False,total=True,usinagem=True):
         # Obter usuario_id do current_user ou usar fallback
         usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
         
-       # processar_producao_manual(log=log, usuario_id=usuario_id,total=total,usinagem=usinagem)
+        processar_producao_manual(log=log, usuario_id=usuario_id,total=total,usinagem=usinagem)
         return jsonify({
             'success': True,
             'message': 'Produção processada com sucesso!'
