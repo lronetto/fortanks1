@@ -1,7 +1,7 @@
 import json
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from sqlalchemy import func, desc, case, and_
 from decimal import Decimal
 from models import UnidadesConversao
@@ -14,7 +14,7 @@ from models.centro_custo import CentroCusto
 from models.contrato import Contrato
 from models.solicitacao import Solicitacoes, SolicitacoesItens
 from models.estoque import Estoque, EstoqueMovimentacoes
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais
+from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais, ConcretoUsinagens
 from models.unidade import Unidades
 from models.dados_analiticos import DadoAnalitico
 from models.epi import Epi, EpiEntregas
@@ -179,18 +179,19 @@ def card_historico_concretagem_semanal():
             inicio_periodo = fim_periodo - timedelta(days=6)
 
         qtd_concretagens = 0
-        volume_total_periodo_usinagem = 0
         concretagens = ConcretoConcretagens.query.filter(
             ConcretoConcretagens.data_concretagem >= inicio_periodo,
             ConcretoConcretagens.data_concretagem <= fim_periodo
         ).all()
         for concretagem in concretagens:
             qtd_concretagens += 1
-            volume_total_periodo_usinagem += concretagem.get_volume_total()
-       
         
-        # Cálculo do volume usinado (baseado na data da usinagem)
+        # Cálculo do volume usinado diretamente de ConcretoUsinagens (baseado na data da usinagem)
         # Usamos func.date para comparar a parte da data de data_usinagem (DateTime) com inicio_periodo e fim_periodo (date)
+        volume_total_periodo_usinagem = db.session.query(func.sum(ConcretoUsinagens.volume)).filter(
+            func.date(ConcretoUsinagens.data_usinagem) >= inicio_periodo,
+            func.date(ConcretoUsinagens.data_usinagem) <= fim_periodo
+        ).scalar() or 0
 
         
         if i == 0:
@@ -210,10 +211,49 @@ def card_historico_concretagem_semanal():
     
     concretagens_semanais_api.reverse()
     volume_usinado_semanal_api.reverse()
+
+    # Volume usinado mensal (últimos 12 meses)
+    num_meses = 12
+    volume_usinado_mensal_api = []
+    for i in range(num_meses):
+        # i=0: mês atual (do dia 1 até hoje); i>=1: mês completo (i meses atrás)
+        if i == 0:
+            inicio_periodo = hoje.replace(day=1)
+            fim_periodo = hoje
+            rotulo_mes = f"{inicio_periodo.strftime('%b/%Y')} (atual)"
+        else:
+            # Primeiro dia do mês i meses atrás
+            ano = hoje.year
+            mes = hoje.month - i
+            while mes <= 0:
+                mes += 12
+                ano -= 1
+            inicio_periodo = date(ano, mes, 1)
+            # Último dia do mês
+            if mes == 12:
+                fim_periodo = date(ano, 12, 31)
+            else:
+                fim_periodo = date(ano, mes + 1, 1) - timedelta(days=1)
+            rotulo_mes = inicio_periodo.strftime('%b/%Y')
+
+        # Cálculo do volume usinado mensal diretamente de ConcretoUsinagens
+        volume_total_mes = db.session.query(func.sum(ConcretoUsinagens.volume)).filter(
+            func.date(ConcretoUsinagens.data_usinagem) >= inicio_periodo,
+            func.date(ConcretoUsinagens.data_usinagem) <= fim_periodo
+        ).scalar() or 0
+        volume_usinado_mensal_api.append({
+            'mes': rotulo_mes,
+            'volume': float(volume_total_mes)
+        })
+
+    volume_usinado_mensal_api.reverse()
     return {
-        'concretagens_semanais':concretagens_semanais_api,
-        'volume_usinado_semanal':volume_usinado_semanal_api
+        'concretagens_semanais': concretagens_semanais_api,
+        'volume_usinado_semanal': volume_usinado_semanal_api,
+        'volume_usinado_mensal': volume_usinado_mensal_api
     }
+
+
 def card_historico_semanal_concretagens():
     """Retorna dados de concretagens semanais para o gráfico"""
     num_semanas = 20

@@ -1,0 +1,66 @@
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Volume Usinado Mensal</h6>
+    </div>
+    <div class="card-body">
+        <div class="chart-area">
+            <canvas id="historicoConcretagemMensalVolumeChart"></canvas>
+        </div>
+    </div>
+</div>
+{% block scripts %}
+<script>
+    $(document).ready(function() {
+        loadHistoricoConcretagemMensalVolumeChart();
+    });
+
+    function loadHistoricoConcretagemMensalVolumeChart() {
+        const dados = {{ cards.historico_concretagem_semanal.dados|tojson }};
+        if (dados.volume_usinado_mensal && dados.volume_usinado_mensal.length) {
+            const ctx = document.getElementById("historicoConcretagemMensalVolumeChart");
+            if (ctx) {
+                const volumeMensalData = dados.volume_usinado_mensal;
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: volumeMensalData.map(item => item.mes),
+                        datasets: [{
+                            label: 'Volume Usinado Mensal',
+                            lineTension: 0.3,
+                            backgroundColor: "rgba(40, 167, 69, 0.05)",
+                            borderColor: "rgba(40, 167, 69, 1)",
+                            pointRadius: 3,
+                            pointBackgroundColor: "rgba(40, 167, 69, 1)",
+                            pointBorderColor: "rgba(40, 167, 69, 1)",
+                            pointHoverRadius: 5,
+                            pointHoverBackgroundColor: "rgba(40, 167, 69, 1)",
+                            pointHoverBorderColor: "rgba(40, 167, 69, 1)",
+                            pointHitRadius: 10,
+                            data: volumeMensalData.map(item => item.volume),
+                        }],
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+</script>
+{% endblock %}

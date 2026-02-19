@@ -1,6 +1,6 @@
 <div class="card shadow mb-4">
     <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary">Histórico de Concretagens Volume Semanais</h6>
+        <h6 class="m-0 font-weight-bold text-primary">Volume Usinado Semanal</h6>
     </div>
     <div class="card-body">
         <div class="chart-area">
@@ -16,9 +16,8 @@
     });
     function loadHistoricoConcretagemSemanalVolumeChart() {
 
-        dados = {{ cards.historico_concretagem_semanal.dados|tojson }}
-        console.log(dados);
-        if (dados.concretagens_semanais && dados.volume_usinado_semanal) {
+        const dados = {{ cards.historico_concretagem_semanal.dados|tojson }};
+        if (dados.volume_usinado_semanal && dados.volume_usinado_semanal.length) {
             const ctxHistoricoConcretagemSemanalVolumeChart = document.getElementById("historicoConcretagemSemanalVolumeChart");
             if (ctxHistoricoConcretagemSemanalVolumeChart) {
                 const volumeUsinadoData = dados.volume_usinado_semanal;
