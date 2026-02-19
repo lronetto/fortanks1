@@ -1523,7 +1523,7 @@ def processar_producao(log=False):
         }), 500
 
     
-def processar_producao_manual(log, usuario_id=1,total=True,usinagem=True):
+def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
     from datetime import date as date_type
