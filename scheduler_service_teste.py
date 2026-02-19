@@ -473,9 +473,9 @@ def main():
             'erro_traceback': []
         }
     }
-    fazer_backup_banco_dados(logs)
+    output = fazer_backup_banco_dados(logs)
+    print(output)
     print(logs)
-
 
 if __name__ == '__main__':
     main()
