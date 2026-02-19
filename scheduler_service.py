@@ -141,11 +141,35 @@ def fazer_backup_banco_dados(logs):
         backup_filename = f"backup_{database}_{timestamp}.sql"
         backup_path = os.path.join(backup_dir, backup_filename)
         
+        # Encontrar o caminho completo do mysqldump
+        # Quando executado como serviço, o PATH pode não incluir o diretório do MySQL
+        mysqldump_path = shutil.which('mysqldump')
+        if not mysqldump_path:
+            # Tentar caminhos comuns do MySQL no Linux
+            caminhos_comuns = [
+                '/usr/bin/mysqldump',
+                '/usr/local/bin/mysqldump',
+                '/opt/mysql/bin/mysqldump',
+                '/usr/local/mysql/bin/mysqldump'
+            ]
+            for caminho in caminhos_comuns:
+                if os.path.exists(caminho) and os.access(caminho, os.X_OK):
+                    mysqldump_path = caminho
+                    break
+        
+        if not mysqldump_path:
+            logger.error("mysqldump não encontrado no sistema. Verifique se o MySQL está instalado.")
+            logs['backup']['erro'] = True
+            logs['backup']['erro_mensagem'].append("mysqldump não encontrado no sistema. Verifique se o MySQL está instalado.")
+            return False
+        
+        logger.info(f"Usando mysqldump em: {mysqldump_path}")
+        
         # Comando mysqldump
         # Usar --single-transaction para garantir consistência sem bloquear tabelas
         # Usar --routines e --triggers para incluir procedures e triggers
         cmd = [
-            'mysqldump',
+            mysqldump_path,
             f'--host={host}',
             f'--port={port}',
             f'--user={username}',
