@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from flask import json
 from flask_login import current_user
 from sqlalchemy.event import attr
 from sqlalchemy.sql import func
@@ -547,7 +548,10 @@ class ConcretoUsinagens(db.Model):
         # Obter usuario_id do parâmetro ou do current_user
         if usuario_id is None:
             usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
-        
+        if self.dados_adicionais:
+            dados_adicionais = json.loads(self.dados_adicionais)
+            if 'data_producao' in dados_adicionais and dados_adicionais['data_producao'] is not None:
+                return False
         print(f"Produzindo usinagem de concreto #{self.id} - Série: {self.serie} - Data: {self.data_usinagem} - Volume: {self.volume} - Produto composto ID: {self.produtoCompostoId}")
         produto = ProdutoComposto.query.get(self.produtoCompostoId)
         if not produto:
@@ -582,6 +586,9 @@ class ConcretoUsinagens(db.Model):
                     log=True)
                 mov.data_movimento = self.data_usinagem
                 mov.save()
+        dados_adicionais['data_producao'] = self.data_usinagem.isoformat()
+        self.dados_adicionais = json.dumps(dados_adicionais)
+        self.save()
         return True
 class ConcretoUsinagensMateriais(db.Model):
     """

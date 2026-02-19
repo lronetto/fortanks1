@@ -1495,20 +1495,21 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
 
 @peca.route('/processar-producao', methods=['POST'])
 @login_required
-def processar_producao(log=False):
+def processar_producao(log=False,total=True,usinagem=True):
 
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia"""
     try:
         print("Processando produção...")
-        EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
-        EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%usinagem_concreto%')).delete()
-        db.session.commit()
+        if total:
+            EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
+            EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%usinagem_concreto%')).delete()
+            db.session.commit()
         
         # Obter usuario_id do current_user ou usar fallback
         usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
         
-        processar_producao_manual(log=log, usuario_id=usuario_id)
+        processar_producao_manual(log=log, usuario_id=usuario_id,total=total,usinagem=usinagem)
         return jsonify({
             'success': True,
             'message': 'Produção processada com sucesso!'
@@ -2041,10 +2042,8 @@ def processar_arquivo_inspecao(xlsx_path):
         
         if not peca_existe:
             # Garantir que dados_adicionais existe com data_producao null
-            if 'dados_adicionais' not in peca['qualidade']:
-                peca['qualidade']['dados_adicionais'] = {}
-            if 'data_producao' not in peca['qualidade']['dados_adicionais']:
-                peca['qualidade']['dados_adicionais']['data_producao'] = None
+            if 'data_producao' not in peca['qualidade']:
+                peca['qualidade']['data_producao'] = None
             
             qualidade_serializada = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
             log['novas'] += 1
