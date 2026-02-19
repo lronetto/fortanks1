@@ -418,7 +418,7 @@ def job_diario():
                 logger.info("Backup do banco de dados concluído com sucesso")
             else:
                 logger.error("Falha no backup do banco de dados")
-            if False:
+            if True:
                 # Executar importação de dados analíticos
                 usuario_id = obter_usuario_sistema()
                 if usuario_id == 0:
@@ -503,7 +503,7 @@ def main():
         logger.warning(f"Sistema operacional detectado: {sistema}. Scheduler normalmente roda apenas em Linux.")
         logger.info("Iniciando scheduler mesmo assim...")
 
-    job_diario()
+    #job_diario()
     
     try:
         #job_diario()
