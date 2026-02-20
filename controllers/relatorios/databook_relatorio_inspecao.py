@@ -20,6 +20,7 @@ import tempfile
 import zipfile
 import openpyxl
 from openpyxl import load_workbook
+from models.concreto import ConcretoUsinagensRompimentos
 import json
 import subprocess
 import platform
@@ -458,11 +459,12 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                             if len(series) > 0:
                                 for serie in series:
                                     if serie not in series_concretadas:
-                                        usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == serie).first()
-                                        if usinagem:
-                                            data = usinagem.data_usinagem
+                                        rompimento = ConcretoUsinagensRompimentos.query.filter(ConcretoUsinagensRompimentos.numero_serie == serie).order_by(ConcretoUsinagensRompimentos.data_rompimento.desc()).first()
+                                        if rompimento:
+                                            data = rompimento.data_rompimento
                                             if data:
                                                 data_conclusao = data
+                                       
                                         series_concretadas.append(serie)
         else:
             pecas_concretadasb = concretagem.get_pecas()
@@ -480,9 +482,9 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                         pecas_concretadas.append(peca)
                         for serie in series:
                             if serie not in series_concretadas:
-                                usinagem = ConcretoUsinagens.query.filter(ConcretoUsinagens.serie == serie).first()
-                                if usinagem:
-                                    data = usinagem.data_usinagem
+                                rompimento = ConcretoUsinagensRompimentos.query.filter(ConcretoUsinagensRompimentos.numero_serie == serie).order_by(ConcretoUsinagensRompimentos.data_rompimento.desc()).first()
+                                if rompimento:
+                                    data = rompimento.data_rompimento
                                     if data:
                                         data_conclusao = data
                                 series_concretadas.append(serie)
@@ -587,10 +589,12 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                         formas = [0,1,2,3,4,5,6,7,8,9,10,11,12]
                         for forma in formas:
                             count = 0
+                            #print(f'[_processar_ods_template_inspecao] Formas: {forma}')
                             for peca in pecas_concretadas:
+                                #print(f'[_processar_ods_template_inspecao] Pecas: {peca[f'forma']} {forma}')
                                 if peca['forma'] is not None:
                                     forma_peca = peca['forma']
-                                    if forma_peca == forma:
+                                    if int(forma_peca) == int(forma):
                                         new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
                                         new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
                                         new_value = new_value.replace(f'{{{31+forma}}}', str(peca['tipo']))
@@ -686,6 +690,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
 
                         if alongamentos_total > 0:
                             for alongamento in alongamentos_lista:
+                                alongamento = int(alongamento)
                                 alongamentos_soma += alongamento
                                 if alongamento > alongamento_maior:
                                     alongamento_maior = alongamento
@@ -753,6 +758,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                         else:
                             new_value = new_value.replace('{120}', '')
 
+                        new_value = new_value.replace('{121}', str(data_conclusao.strftime('%d/%m/%Y')))
                         # Atualizar o texto da célula
                         if new_value != original_text:
                             # Limpar todos os parágrafos existentes
