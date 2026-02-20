@@ -1525,20 +1525,18 @@ def processar_producao(log=True,total=True,usinagem=True):
         }), 500
 
     
-def processar_producao_manual(log, usuario_id=1,total=False,_usinagem=True):
+def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
     from datetime import date as date_type
     if not total:
         dias = TanquesPecas.query.filter(
             TanquesPecas.data_concretagem.isnot(None),
-            TanquesPecas.data_concretagem >= datetime.now().date() - timedelta(days=30),
             func.json_extract(TanquesPecas.qualidade, '$.data_producao').is_(None)
             ).group_by(TanquesPecas.data_concretagem).all()
     else:
         dias = TanquesPecas.query.filter(
             TanquesPecas.data_concretagem.isnot(None),
-            TanquesPecas.data_concretagem >= datetime.now().date() - timedelta(days=15),
             ).group_by(TanquesPecas.data_concretagem).all()
     logging.info(f"Processando {len(dias)} dias")
     for dia_obj in dias:
