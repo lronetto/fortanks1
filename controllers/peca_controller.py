@@ -1506,6 +1506,31 @@ def processar_producao(log=True,total=True,usinagem=True):
             EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
             EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%usinagem_concreto%')).delete()
             db.session.commit()
+            # Atualiza apenas data_producao para null no JSON qualidade, preservando o resto
+            for peca in TanquesPecas.query.all():
+                if not peca.qualidade:
+                    peca.qualidade = json.dumps({'data_producao': None}, ensure_ascii=False)
+                else:
+                    try:
+                        q = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                        q['data_producao'] = None
+                        peca.qualidade = json.dumps(q, ensure_ascii=False)
+                    except (json.JSONDecodeError, TypeError):
+                        peca.qualidade = json.dumps({'data_producao': None}, ensure_ascii=False)
+                db.session.add(peca)
+            for concreto in ConcretoUsinagens.query.all():
+                if not concreto.dados_adicionais:
+                    concreto.dados_adicionais = json.dumps({'data_producao': None}, ensure_ascii=False)
+                else:
+                    try:
+                        d = json.loads(concreto.dados_adicionais) if isinstance(concreto.dados_adicionais, str) else concreto.dados_adicionais
+                        d['data_producao'] = None
+                        concreto.dados_adicionais = json.dumps(d, ensure_ascii=False)
+                    except (json.JSONDecodeError, TypeError):
+                        concreto.dados_adicionais = json.dumps({'data_producao': None}, ensure_ascii=False)
+                db.session.add(concreto)
+            db.session.commit()
+               
         
         # Obter usuario_id do current_user ou usar fallback
         usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
