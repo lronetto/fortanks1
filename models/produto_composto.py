@@ -153,6 +153,7 @@ class ProdutoComposto(db.Model):
             log: Se True, imprime logs de debug
             produtos_processados: Conjunto de IDs de produtos compostos já processados (para evitar loops infinitos)
         """
+        print(f"Produzindo produto composto {self.nome} (ID: {self.id}) - Quantidade: {quantidade}")
         # Inicializar conjunto de produtos processados se não foi fornecido
         if produtos_processados is None:
             produtos_processados = set()
@@ -179,8 +180,7 @@ class ProdutoComposto(db.Model):
         # acumulador compartilhado entre recursões
         if materiais_necessarios is None:
             materiais_necessarios = {}
-        if log:
-            print(f"  -> Componente composto: {self.nome} (ID: {self.id}) - Quantidade: {quantidade}")
+        
         
         # Normalizar data_movimento para date se necessário
         from datetime import date as date_type
@@ -269,10 +269,16 @@ class ProdutoComposto(db.Model):
                     }
             
             elif componente.estoque.tipo_item == 'produto_composto':
+                if log:
+                    print(f"  -> Componente composto: {componente.estoque.produto_composto.nome} (ID: {componente.estoque.produto_composto.id}) - Quantidade: {quantidade*componente.quantidade}")
                 if traco:
                     if not componente.estoque.produto_composto.traco:
-                        print(f"  AVISO: Produto composto {componente.estoque.produto_composto.nome} (ID: {componente.estoque.produto_composto.id}) é um traço. Pulando para evitar loop infinito.")
+                        if log:
+                            print(f" AVISO: Produto composto {componente.estoque.produto_composto.nome} (ID: {componente.estoque.produto_composto.id}) nao é um traço. adicionando ao processamento.")
                         produtos_compostos.append(componente)
+                    else:
+                        if log:
+                            print(f" AVISO: Produto composto {componente.estoque.produto_composto.nome} (ID: {componente.estoque.produto_composto.id}) é um traço. Pulando para evitar loop infinito.")
                 else:
                     produtos_compostos.append(componente)
             else:
@@ -314,7 +320,8 @@ class ProdutoComposto(db.Model):
                 usuario_id=usuario_id, 
                 log=log,
                 produtos_processados=produtos_processados,
-                materiais_necessarios=materiais_necessarios  # Passar o mesmo conjunto para evitar loops
+                materiais_necessarios=materiais_necessarios,  # Passar o mesmo conjunto para evitar loops
+                traco=traco
             )
         
 class ProdutoCompostoItem(db.Model):

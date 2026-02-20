@@ -399,8 +399,10 @@ def datatables_notas():
             elif pagamento == '6':
                 json_filtros['status_pagamento'] = 'reembolso_e_nao_pago_e_nao_selecionados'
             elif pagamento == '7':
-                json_filtros['status_upload'] = '3nao'
-                json_filtros['status_pagamento'] = 'selecionados'
+                json_filtros['status_upload'] = '3'
+                json_filtros['reembolso'] = '0'
+                json_filtros['status_pagamento'] = 'nao_pago'
+
         
 
         print(json.dumps(json_filtros, indent=4))

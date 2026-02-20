@@ -569,7 +569,7 @@ class ConcretoUsinagens(db.Model):
                     quantidade=self.volume, 
                     data_movimento=self.data_usinagem, 
                     usuario_id=usuario_id, 
-                    log=True,
+                    log=False,
                     produtos_processados=_produtos_processados,
                     materiais_necessarios=_materiais_necessarios,
                     traco=False

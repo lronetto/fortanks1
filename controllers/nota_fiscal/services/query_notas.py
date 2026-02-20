@@ -61,8 +61,9 @@ def api_get_dados_notas_fiscais(request):
     notas_selecionadas = json_filtros.get("notas_selecionadas", [])
     centro_custo_ids = json_filtros.get("centro_custo_ids", [])
     cancelada = json_filtros.get("cancelada", "")
-   
+    
     reembolso_id = json_filtros.get("reembolso_id", "")
+    reembolso = json_filtros.get("reembolso", "")
     if reembolso_id:
         try:
             reembolso_id = int(reembolso_id)
@@ -190,10 +191,7 @@ def api_get_dados_notas_fiscais(request):
         upload_arquivei_column = case((_upload_exists(1), 1), else_=0).label("upload_arquivei")
         upload_protocolo_column = case((_upload_exists(2), 1), else_=0).label("upload_protocolo")
         upload_reembolso_column = case((_upload_exists(3), 1), else_=0).label("upload_reembolso")
-        if reembolso_id:
-            reembolso_column = case((exists(select(1).select_from(ReembolsosDocumentos).where(ReembolsosDocumentos.nota_fiscal_id == NotaFiscal.id, ReembolsosDocumentos.reembolso_id == reembolso_id)), 1), else_=0).label("reembolso")
-        else:
-            reembolso_column = None
+        
 
 
         # Percentual de importação por NF
@@ -240,8 +238,8 @@ def api_get_dados_notas_fiscais(request):
             .cast(Integer)
             .label("liberada")
         )
-
-
+        # JSON reembolso extraído de dados_adicionais (um objeto por nota)
+        reembolso_column = func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").label("reembolso")
     query = (
         db.session.query(
             NotaFiscal,
@@ -259,7 +257,15 @@ def api_get_dados_notas_fiscais(request):
         .select_from(NotaFiscal)
         .filter(NotaFiscal.status_processamento != "cancelada")
     )
-    
+    if reembolso:
+        if reembolso == "1":
+            query = query.filter(
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.enviado") == 1
+            )
+        elif reembolso == "0":
+            query = query.filter(
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None)
+            )
     if busca:
         busca_like = f"%{busca}%"
         query = query.filter(
@@ -444,10 +450,16 @@ def api_get_dados_notas_fiscais(request):
         elif status_pagamento == "reembolso_e_nao_pago":
             query = query.filter(upload_reembolso_column == 1, pagamento_column.is_(None))
         elif status_pagamento == "selecionados":
-            query = query.filter(reembolso_column == 1)
+            query = query.filter(
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").isnot(None)
+            )
         elif status_pagamento == "reembolso_e_nao_pago_e_nao_selecionados":
             nsel = [item.get("id") for item in notas_selecionadas if item.get("id")]
-            query = query.filter(upload_reembolso_column == 1, pagamento_column.is_(None), reembolso_column == 0)
+            query = query.filter(
+                upload_reembolso_column == 1,
+                pagamento_column.is_(None),
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None),
+            )
 
     # Ordenação
     order_by = json_filtros.get("order_by", "data_emissao")

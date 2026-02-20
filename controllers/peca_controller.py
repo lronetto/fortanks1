@@ -1,5 +1,6 @@
 from itertools import groupby
 from flask import Blueprint, render_template, redirect, url_for, request, flash, jsonify, current_app, send_file
+from pandas.core.dtypes.dtypes import time
 from sqlalchemy import func
 from models import db
 from models.contrato import Contrato
@@ -19,7 +20,7 @@ import pandas as pd
 from models.logs import Logs
 import logging
 from models.permissoes import Permissao
-
+from datetime import timedelta
 from utils.utils import (
     get_value_datetime,
     get_value_str,
@@ -1495,7 +1496,7 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
 
 @peca.route('/processar-producao', methods=['POST'])
 @login_required
-def processar_producao(log=False,total=True,usinagem=True):
+def processar_producao(log=True,total=True,usinagem=True):
 
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia"""
@@ -1509,7 +1510,7 @@ def processar_producao(log=False,total=True,usinagem=True):
         # Obter usuario_id do current_user ou usar fallback
         usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
         
-        processar_producao_manual(log=log, usuario_id=usuario_id,total=total,usinagem=usinagem)
+        processar_producao_manual(log=log, usuario_id=usuario_id,total=total,_usinagem=usinagem)
         return jsonify({
             'success': True,
             'message': 'Produção processada com sucesso!'
@@ -1524,18 +1525,20 @@ def processar_producao(log=False,total=True,usinagem=True):
         }), 500
 
     
-def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
+def processar_producao_manual(log, usuario_id=1,total=False,_usinagem=True):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia, tipo e tanque"""
     from datetime import date as date_type
     if not total:
         dias = TanquesPecas.query.filter(
             TanquesPecas.data_concretagem.isnot(None),
+            TanquesPecas.data_concretagem >= datetime.now().date() - timedelta(days=30),
             func.json_extract(TanquesPecas.qualidade, '$.data_producao').is_(None)
             ).group_by(TanquesPecas.data_concretagem).all()
     else:
         dias = TanquesPecas.query.filter(
             TanquesPecas.data_concretagem.isnot(None),
+            TanquesPecas.data_concretagem >= datetime.now().date() - timedelta(days=15),
             ).group_by(TanquesPecas.data_concretagem).all()
     logging.info(f"Processando {len(dias)} dias")
     for dia_obj in dias:
@@ -1580,14 +1583,14 @@ def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
             grupos[chave].append(peca)
 
         # Buscar usinagens do dia
-        if usinagem:
+        if _usinagem:
             usinagens = ConcretoUsinagens.query.filter(ConcretoUsinagens.data_usinagem.like(f'%{dia_date}%')).all()
             for usinagem in usinagens:
                 try:
                     usinagem.produzir(usuario_id=usuario_id,total=total)
                 except Exception as e:
                     logging.error(f"Erro ao processar usinagem {usinagem.id}: {str(e)}")
-                    continue
+                    
         
         materiais_necessarios = {}
         todas_pecas_processadas = []
@@ -1612,7 +1615,7 @@ def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
             todas_pecas_processadas.extend(nomes_pecas_grupo)
             
             if log:
-                print(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s)")
+                print(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s) dia: {dia_date}")
             
             produtos_processados = set()  # isolado por grupo para não pular composições entre grupos
             try:
@@ -1623,7 +1626,7 @@ def processar_producao_manual(log, usuario_id=1,total=False,usinagem=True):
                     log=True,
                     produtos_processados=produtos_processados,
                     materiais_necessarios=materiais_necessarios,
-                    traco=usinagem
+                    traco=_usinagem
                 )
             except Exception as e:
                 logging.error(f"Erro ao processar produto composto {produto_composto.id}: {str(e)}")
