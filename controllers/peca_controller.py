@@ -2037,26 +2037,27 @@ def processar_arquivo_inspecao(xlsx_path):
     print(f"Total de séries novas: {novas} e atualizadas: {atualizadas}")
     atualizadas = 0
     novas = 0
-    for alongamento in alongamentos:
-        concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.conc==alongamento['concretagem']).first()
-        if not concretagem:
-            concretagem = ConcretoConcretagens(
-                conc=alongamento['concretagem'],
-                data_concretagem=alongamento['data_concretagem'],
-                pista=alongamento['pista'],
-                cordoalhas=json.dumps(alongamento['cordoalhas']),
-                pecas=json.dumps(alongamento['pecas']),
-            )
-            concretagem.save()
-            novas += 1
-        else:
-            concretagem.data_concretagem = alongamento['data_concretagem']
-            concretagem.pista = alongamento['pista']
-            concretagem.cordoalhas = json.dumps(alongamento['cordoalhas'])
-            concretagem.pecas = json.dumps(alongamento['pecas'])
-            concretagem.save()
-            atualizadas += 1
-    print(f"Total de concretagens novas: {novas} e atualizadas: {atualizadas}")
+    if False:
+        for alongamento in alongamentos:
+            concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.conc==alongamento['concretagem']).first()
+            if not concretagem:
+                concretagem = ConcretoConcretagens(
+                    conc=alongamento['concretagem'],
+                    data_concretagem=alongamento['data_concretagem'],
+                    pista=alongamento['pista'],
+                    cordoalhas=json.dumps(alongamento['cordoalhas']),
+                    pecas=json.dumps(alongamento['pecas']),
+                )
+                concretagem.save()
+                novas += 1
+            else:
+                concretagem.data_concretagem = alongamento['data_concretagem']
+                concretagem.pista = alongamento['pista']
+                concretagem.cordoalhas = json.dumps(alongamento['cordoalhas'])
+                concretagem.pecas = json.dumps(alongamento['pecas'])
+                concretagem.save()
+                atualizadas += 1
+        print(f"Total de concretagens novas: {novas} e atualizadas: {atualizadas}")
     atualizadas = 0
     novas = 0
     # Processar peças
@@ -2093,6 +2094,62 @@ def processar_arquivo_inspecao(xlsx_path):
             peca_existe.save()
             atualizadas += 1
     print(f"Total de peças novas: {novas} e atualizadas: {atualizadas}")
+
+    # Agrupar peças por concretagem para ConcretoConcretagens (alongamentos em branco quando não houver)
+    from collections import defaultdict
+    pecas_por_concretagem = defaultdict(list)
+    for peca in pecas:
+        conc = peca.get('concretagem')
+        if conc is not None and str(conc).strip() != '':
+            pecas_por_concretagem[conc].append(peca)
+
+    # Mapa de concretagens que já têm alongamentos (planilha ALONG)
+    alongamentos_por_conc = {str(a['concretagem']): a for a in alongamentos}
+    novas_conc = 0
+    atualizadas_conc = 0
+
+    for conc, lista_pecas in pecas_por_concretagem.items():
+        conc_str = str(conc)
+        pecas_json = [
+            {'nome': p['nome'], 'tanque_id': p['tanque_id'], 'forma': p.get('forma')}
+            for p in lista_pecas
+        ]
+        data_conc = lista_pecas[0]['data_concretagem'] if lista_pecas else None
+        pista = (lista_pecas[0].get('qualidade') or {}).get('pista') if lista_pecas else None
+        if pista is None:
+            pista = ''
+
+        concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.conc == conc).first()
+        if not concretagem:
+            # Nova concretagem: usar alongamentos se existir, senão em branco
+            cordoalhas = None
+            if conc_str in alongamentos_por_conc:
+                cordoalhas = json.dumps(alongamentos_por_conc[conc_str]['cordoalhas'])
+            else:
+                cordoalhas = json.dumps({'alongamentos': [], 'bobinas': []})
+            concretagem = ConcretoConcretagens(
+                conc=conc,
+                data_concretagem=data_conc,
+                pista=pista or '',
+                cordoalhas=cordoalhas,
+                pecas=json.dumps(pecas_json),
+            )
+            concretagem.save()
+            novas_conc += 1
+        else:
+            # Atualizar data, pista e peças; alongamentos só se já tiver (não sobrescrever com vazio)
+            concretagem.data_concretagem = data_conc
+            concretagem.pista = pista or concretagem.pista or ''
+            concretagem.pecas = json.dumps(pecas_json)
+            if conc_str in alongamentos_por_conc:
+                concretagem.cordoalhas = json.dumps(alongamentos_por_conc[conc_str]['cordoalhas'])
+            # se não está em alongamentos_por_conc, deixa cordoalhas em branco (ou mantém se já existia)
+            elif concretagem.cordoalhas is None or concretagem.cordoalhas == '':
+                concretagem.cordoalhas = json.dumps({'alongamentos': [], 'bobinas': []})
+            concretagem.save()
+            atualizadas_conc += 1
+
+    print(f"Total de concretagens (agrupadas por peças) novas: {novas_conc} e atualizadas: {atualizadas_conc}")
     # Salvar log
     Logs(local='importar_inspecao', data=datetime.now(), texto=json.dumps(log))
     db.session.commit()

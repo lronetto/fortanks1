@@ -18,6 +18,26 @@
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Concretagens Registradas</h6>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <label class="mb-0 small text-muted">Status:</label>
+                <select id="filtroStatus" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Todos</option>
+                    <option value="concluido">Concluído</option>
+                    <option value="em_andamento">Em andamento</option>
+                </select>
+                <label class="mb-0 small text-muted ms-2">Alongamento:</label>
+                <select id="filtroAlongamento" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Todos</option>
+                    <option value="com">Com alongamento</option>
+                    <option value="sem">Sem alongamento</option>
+                </select>
+                <label class="mb-0 small text-muted ms-2">Usinagem:</label>
+                <select id="filtroUsinagem" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Todos</option>
+                    <option value="com">Com usinagem</option>
+                    <option value="sem">Sem usinagem</option>
+                </select>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -69,7 +89,8 @@
             ajax: {
                 url: "{{ url_for('concretagem.api_listar') }}",
                 type: "GET",
-                dataSrc: "data"
+                dataSrc: "data",
+                
             },
             columns: [
                 { data: 'concretagem', title: 'Concretagem' },
@@ -102,9 +123,13 @@
                     title: 'Status',
                     orderable: false,
                     render: function(data, type, row) {
+                        const concluido = row.concluida === true || row.status === 'concluido';
+                        const badge = concluido
+                            ? '<span class="badge bg-success me-1" title="Formas, alongamentos e séries preenchidos"><i class="fas fa-check-circle"></i> Concluído</span>'
+                            : '<span class="badge bg-secondary me-1" title="Pendente de formas, alongamentos ou séries"><i class="fas fa-clock"></i> Em andamento</span>';
                         const along = row.tem_alongamentos ? '<span class="text-success" title="Alongamentos associados"><i class="fas fa-check"></i> Along.</span>' : '<span class="text-muted" title="Sem alongamentos"><i class="fas fa-minus"></i> Along.</span>';
                         const usin = row.tem_usinagens ? '<span class="text-success" title="Usinagens associadas"><i class="fas fa-check"></i> Usin.</span>' : '<span class="text-muted" title="Sem usinagens"><i class="fas fa-minus"></i> Usin.</span>';
-                        return along + ' &nbsp; ' + usin;
+                        return badge + ' ' + along + ' &nbsp; ' + usin;
                     }
                 },
                 { 
@@ -158,10 +183,38 @@
             dtOptions.language = dataTablePortugueseTranslation;
         }
 
-        $('#tabelaConcretagens').DataTable(dtOptions);
+        var table = $('#tabelaConcretagens').DataTable(dtOptions);
+
+        // Filtros no cliente: status, alongamento, usinagem
+        $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+            if (settings.nTable.id !== 'tabelaConcretagens') return true;
+            var api = new $.fn.dataTable.Api(settings);
+            var row = api.row(dataIndex).data();
+            if (!row) return true;
+            var filtroStatus = $('#filtroStatus').val();
+            if (filtroStatus) {
+                var status = row.status || (row.concluida ? 'concluido' : 'em_andamento');
+                if (status !== filtroStatus) return false;
+            }
+            var filtroAlong = $('#filtroAlongamento').val();
+            if (filtroAlong) {
+                var temAlong = !!row.tem_alongamentos;
+                if (filtroAlong === 'com' && !temAlong) return false;
+                if (filtroAlong === 'sem' && temAlong) return false;
+            }
+            var filtroUsin = $('#filtroUsinagem').val();
+            if (filtroUsin) {
+                var temUsin = !!row.tem_usinagens;
+                if (filtroUsin === 'com' && !temUsin) return false;
+                if (filtroUsin === 'sem' && temUsin) return false;
+            }
+            return true;
+        });
+
+        return table;
     }
 
-    $(document).ready(function() {
+        $(document).ready(function() {
         // Carregar tradução do DataTables
         $.getJSON("{{ url_for('static', filename='js/datatables-pt-BR.json') }}", function(json) {
             dataTablePortugueseTranslation = json;
@@ -169,6 +222,13 @@
         }).fail(function() {
             console.warn("Tradução do DataTables não carregada");
             initializeDataTable();
+        });
+
+        // Filtros: status, alongamento, usinagem (redesenha a tabela sem nova requisição)
+        $(document).on('change', '#filtroStatus, #filtroAlongamento, #filtroUsinagem', function() {
+            if ($.fn.DataTable.isDataTable('#tabelaConcretagens')) {
+                $('#tabelaConcretagens').DataTable().draw();
+            }
         });
 
         // Registrar formato de data

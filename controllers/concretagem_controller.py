@@ -63,10 +63,10 @@ def get_pecas_por_tanque():
         
         # Obter todas as peças do tanque
         pecas = TanquesPecas.query.filter(TanquesPecas.tanque_id == tanque_id)
-        
+        pecas_ids = tanque.get_pecas_id_concretadas()
         # Filtrar apenas peças não concretadas se solicitado
         if mostrar_nao_concretadas:
-            pecas = pecas.filter(TanquesPecas.data_concretagem.is_(None))
+            pecas = pecas.filter(TanquesPecas.id.notin_(pecas_ids))
         
         print(f"[API] Pista: {pista}")
         if pista:
@@ -99,17 +99,42 @@ def get_pecas_por_tanque():
 
 # Novas rotas AJAX simplificadas
 
-def _concretagem_tem_alongamentos(conc):
-    """Retorna True se a concretagem tem alongamentos (cordoalhas) associados."""
+def _parse_cordoalhas(conc):
+    """Retorna o dict parseado de cordoalhas ou None. Formato esperado: {"alongamentos": [...], "bobinas": [...]}."""
     if not conc.cordoalhas or not conc.cordoalhas.strip():
-        return False
+        return None
     try:
         cord = json.loads(conc.cordoalhas) if isinstance(conc.cordoalhas, str) else conc.cordoalhas
-        if isinstance(cord, list):
-            return len(cord) > 0
-        return bool(cord)
+        return cord if isinstance(cord, dict) else None
     except (TypeError, json.JSONDecodeError):
+        return None
+
+
+def _concretagem_tem_alongamentos(conc):
+    """Retorna True se a concretagem tem cordoalhas válidas: 16+ alongamentos válidos e 1+ bobina(s)."""
+    cord = _parse_cordoalhas(conc)
+    if not cord:
         return False
+    along = cord.get('alongamentos')
+    if not isinstance(along, list):
+        return False
+    validos = 0
+    for a in along:
+        if a is None or a == '' or (isinstance(a, str) and str(a).strip() == ''):
+            continue
+        try:
+            v = float(a) if not isinstance(a, (int, float)) else a
+            if v == 0:
+                continue
+            validos += 1
+        except (ValueError, TypeError):
+            continue
+    if validos < 16:
+        return False
+    bobinas = cord.get('bobinas')
+    if not isinstance(bobinas, list) or len(bobinas) < 1:
+        return False
+    return True
 
 
 def _concretagem_tem_usinagens(conc):
@@ -132,15 +157,72 @@ def _concretagem_tem_usinagens(conc):
     return False
 
 
+def _concretagem_formas_ok(conc):
+    """Retorna True se todas as peças têm forma definida (diferente de 0 e em branco) e todas as formas são diferentes entre si."""
+    pecas = conc.get_pecas()
+    if not pecas:
+        return False
+    formas = []
+    for peca_item in pecas:
+        forma = peca_item.get('forma')
+        if forma is None or forma == '' or forma == 0 or str(forma).strip() == '':
+            return False
+        try:
+            f = int(forma) if not isinstance(forma, int) else forma
+            formas.append(f)
+        except (ValueError, TypeError):
+            return False
+    return len(formas) == len(set(formas))
+
+
+def _concretagem_alongamentos_ok(conc):
+    """Retorna True se cordoalhas é válido: 16+ alongamentos válidos (não nulos, não vazios, ≠ 0) e 1+ bobina(s)."""
+    return _concretagem_tem_alongamentos(conc)
+
+
+def _concretagem_todas_pecas_tem_serie(conc):
+    """Retorna True se todas as peças da concretagem estão associadas a pelo menos uma série."""
+    pecas = conc.get_pecas()
+    if not pecas:
+        return False
+    for peca_item in pecas:
+        nome = peca_item.get('nome') or peca_item.get('placa')
+        tanque_id = peca_item.get('tanque_id') or peca_item.get('tanque')
+        if not nome or tanque_id is None:
+            return False
+        try:
+            tid = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
+            peca = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
+            if not peca or not peca.get_series_de_pecas():
+                return False
+        except (ValueError, TypeError):
+            return False
+    return True
+
+
+def _concretagem_concluida(conc):
+    """Concretagem está concluída quando: todas as formas colocadas (diferentes entre si), alongamentos preenchidos (≠0 e não em branco) e todas as peças associadas à série."""
+    return (
+        _concretagem_formas_ok(conc)
+        and _concretagem_alongamentos_ok(conc)
+        and _concretagem_todas_pecas_tem_serie(conc)
+    )
+
+
 @concretagem.route('/api/listar')
 @login_required
 def api_listar():
-    """Retorna lista de concretagens para DataTables"""
+    """Retorna lista de concretagens para DataTables. Aceita ?status=concluido|em_andamento para filtrar."""
     try:
         concretagens = ConcretoConcretagens.query.order_by(ConcretoConcretagens.data_concretagem.desc()).all()
-        
+        filtro_status = request.args.get('status', '').strip().lower()
+
         data = []
         for conc in concretagens:
+            concluida = _concretagem_concluida(conc)
+            status_val = 'concluido' if concluida else 'em_andamento'
+            if filtro_status and status_val != filtro_status:
+                continue
             data.append({
                 'concretagem': conc.conc,
                 'id': conc.id,
@@ -149,9 +231,11 @@ def api_listar():
                 'quantidade_pecas': len(conc.get_pecas()),
                 'tem_alongamentos': _concretagem_tem_alongamentos(conc),
                 'tem_usinagens': _concretagem_tem_usinagens(conc),
+                'status': status_val,
+                'concluida': concluida,
                 'data_cadastro': conc.data_cadastro.isoformat() if conc.data_cadastro else None
             })
-        
+
         return jsonify({'data': data})
     except Exception as e:
         logging.error(f"Erro ao listar concretagens: {str(e)}", exc_info=True)
@@ -354,6 +438,7 @@ def api_pecas(id):
                                             'tanque_nome': peca.tanque.nome if peca.tanque else None,
                                             'qualidade': qualidade
                                         }
+                                        peca_obj['tem_usinagem'] = bool(peca.get_series_de_pecas())
                                         
                                         # Se não tinha tanque_obj, buscar usando o tanque_id da peça
                                         if not peca_obj.get('tanque_obj') and peca.tanque:
@@ -363,10 +448,13 @@ def api_pecas(id):
                                                 'sistema': peca.tanque.sistema
                                             }
                                     else:
+                                        peca_obj['tem_usinagem'] = False
                                         print(f"[API] Peça não encontrada: nome='{peca_nome}', tanque_id={tanque_id_int}")
                                 except (ValueError, TypeError) as e:
                                     print(f"[API] Erro ao processar peça: {str(e)}")
                             
+                            if 'tem_usinagem' not in peca_obj:
+                                peca_obj['tem_usinagem'] = False
                             pecas_data.append(peca_obj)
                         
                         print(f"[API] Retornando {len(pecas_data)} peças com objetos completos para concretagem {id}")
@@ -374,7 +462,8 @@ def api_pecas(id):
                     print(f"[API] Erro ao parsear peças: {str(e)}")
                     logging.error(f"Erro ao parsear peças da concretagem {id}: {str(e)}")
             
-            return jsonify({'pecas': pecas_data})
+            tem_alongamentos = _concretagem_tem_alongamentos(concretagem)
+            return jsonify({'pecas': pecas_data, 'tem_alongamentos': tem_alongamentos})
     except Exception as e:
         db.session.rollback()
         logging.error(f"Erro ao processar peças: {str(e)}", exc_info=True)

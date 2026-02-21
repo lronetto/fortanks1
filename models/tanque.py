@@ -183,6 +183,22 @@ class Tanques(db.Model):
         except (ValueError, IndexError) as e:
             print(f"Erro ao extrair dimensões numéricas para o tanque {self.id}: {str(e)}")
             return False 
+    def get_pecas_id_concretadas(self):
+        """
+        Retorna as peças concretadas do tanque
+        """
+        concretagens = ConcretoConcretagens.query.all()
+        pecas_ids = []
+        if concretagens:
+            for concretagem in concretagens:
+                pecas = concretagem.get_pecas()
+                if pecas:
+                    for peca in pecas:
+                        if peca['tanque_id'] == self.id:
+                            peca = TanquesPecas.query.filter(TanquesPecas.tanque_id == self.id, TanquesPecas.nome == peca['nome']).first()
+                            if peca and peca.id not in pecas_ids:
+                                pecas_ids.append(peca.id)
+        return pecas_ids
     def get_pecas_concretadas(self):
         """
         Retorna o total de peças concretadas do tanque
@@ -428,6 +444,7 @@ class TanquesPecas(db.Model):
             return []
         except (json.JSONDecodeError, TypeError, AttributeError):
             return []
+    
     def is_PF(self):
         return self.tipo == 'PF'
     def to_dict(self):
