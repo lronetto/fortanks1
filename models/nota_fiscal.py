@@ -156,7 +156,7 @@ class NotaFiscal(db.Model):
     data = None
 
     
-    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None):
+    def __init__(self, data=None, xml_data=None,chave_acesso=None, id=None, cancelada=False,tipo=None,pdf_data=None):
        
         self.logs = {
             'erro': [],
@@ -183,12 +183,12 @@ class NotaFiscal(db.Model):
         else:
             self.xml_data = xml_data
             dicta = self.get_xml_json()
-            print(f'dicta: {dicta}')
+            #print(f'dicta: {dicta}')
             if dicta.get('CompNfse') or dicta.get('tcListaNFse') or dicta.get('ListaNfse') or dicta.get('NFSe'):
                 self.tipo = 'nfse'
-            elif dicta.get('NFe'):
+            elif dicta.get('nfeProc').get('NFe'):
                 self.tipo = 'nfe'
-            elif dicta.get('CTe'):
+            elif dicta.get('nfeProc').get('CTe'):
                 self.tipo = 'cte'
         print(f'self.tipo: {self.tipo}')
         if self.tipo:
@@ -487,7 +487,7 @@ class NotaFiscal(db.Model):
         """
         Cria e salva uma nota fiscal e seus itens a partir dos dados extraídos do XML.
         """
-        print(f'processar_nf: {self.id}')
+        print(f'processar_nfe inicio')
         
         try:
             # Extrair dados do XML
@@ -507,7 +507,8 @@ class NotaFiscal(db.Model):
             nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             #print('nf: ',nf)
             #print('self: ',self)
-            
+            if not nf:
+                print(f'dados_nf: {dados_nf}')
             if nf:
                 self.logs['existente'] += 1
                 self.logs['existentes'].append({
@@ -522,8 +523,8 @@ class NotaFiscal(db.Model):
                     nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
                     nf.save()
                 return nf   
-            
-            self.xml_data=self.data.get('xml',None)
+            if not self.xml_data:
+                self.xml_data=self.data.get('xml',None)
             self.numero_nf=dados_nf.get('numero')
             self.tipo=dados_nf.get('tipo')
             self.chave_acesso=chave_acesso
@@ -577,7 +578,7 @@ class NotaFiscal(db.Model):
                 'valor_total': self.valor_total,
                 'dados_adicionais': self.dados_adicionais,
             })
-            print(f'processar_nf: {self.id} finalizado')
+            print(f'processar_nfe finalizado')
         except Exception as e:
             logger.error(f"Erro ao processar nota fiscal: {str(e)}")
             self.logs['erro'].append(str(e))

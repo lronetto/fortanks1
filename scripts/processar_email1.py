@@ -28,6 +28,7 @@ from email.header import decode_header
 import zipfile
 import shutil
 import logging
+import sys
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -771,6 +772,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
     Processa uma página de PDF: tenta identificar por código de barras ou nome do arquivo.
     Retorna True se processou com sucesso, False caso contrário.
     """
+    print(f"processar_anexo_pdf_pagina inicio")
     dados_adicionais = {
         'codbarras': None,
     }
@@ -783,19 +785,23 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
     if 'protocolo' in filename.lower():
         logging.info(f"Ignorando arquivo de protocolo: {filename}")
         return False
-    
-    #logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
+    logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
+    if sys.platform == 'linux':
+        poppler_path = '/usr/bin'
+    else:
+        poppler_path = None
     try:
-        img = convert_from_bytes(payload, 500,poppler_path='/usr/bin')[0]
+        img = convert_from_bytes(payload, 500,poppler_path=poppler_path)[0]
     except Exception as e:
         logging.error(f"Erro ao converter o arquivo {filename} para imagem: {e}")
         anexo['codbarras']['erro'].append(str(e))
-        img = convert_from_bytes(payload, 500)[0]
+        img = convert_from_bytes(payload, 500,poppler_path=poppler_path)[0]
         
     
     decs = []
     try:
-        decs = decode(img)
+        print(f"decodando imagem")
+        decs = decode(img,)
         anexo['codbarras']['qtd'] = len(decs)
     except Exception as e:
         logging.error(f"Erro ao decodificar o arquivo {filename}: {e}")

@@ -22,7 +22,7 @@ from scripts.processar_email1 import processar_emails
 from .. import nota_fiscal_bp
 from utils.utils import json_dumps_safe
 logger = logging.getLogger(__name__)
-
+from scripts.processar_email1 import processar_anexo_pdf_pagina
 
 
 
@@ -100,8 +100,8 @@ def importar_xml():
         if not arquivos:
             return jsonify({"success": False, "message": "Nenhum arquivo enviado."})
 
-        
-        for arquivo in arquivos:
+        logs = []
+        for i, arquivo in enumerate(arquivos):
             filename = secure_filename(arquivo.filename)
             if filename.lower().endswith(".zip"):
                 with zipfile.ZipFile(arquivo) as z:
@@ -116,7 +116,7 @@ def importar_xml():
                                 else:
                                     mensagens.append(f"Erro ao importar {zipinfo.filename}")
             elif filename.lower().endswith(".xml"):
-                print("teste")
+                print(f"processando {i}/{len(arquivos)}")
                 xml_bytes = arquivo.read()
                 xml_b64 = base64.b64encode(xml_bytes).decode("utf-8")
                 nf = NotaFiscal(xml_data=xml_b64)
@@ -124,8 +124,25 @@ def importar_xml():
                     total_importadas += 1
                 else:
                     total_erros += 1
-            else:
-                total_erros += 1
+            elif filename.lower().endswith(".pdf"):
+                print(f"processando {i}/{len(arquivos)}")
+                pdf_bytes = arquivo.read()
+                anexo = {
+                    'filename': filename,
+                    'tamanho_mb': '',
+                    'codbarras': {'qtd': 0, 'codigos': []},
+                    'db': [],
+                    'upload': False,
+                    'nao_identificados': 0
+                }
+                out = processar_anexo_pdf_pagina(anexo, filename, pdf_bytes, 1)
+                logs.append(anexo)
+                print(f"log: {anexo}")
+                if not out:
+                    total_erros += 1
+        print(f"logs: {logs}")
+        #Logs(local="importar_xml", data=datetime.now(), texto=json_dumps_safe(logs))
+
         return jsonify({"success": True, "message": f"{total_importadas} nota(s) fiscal(is) importada(s) com sucesso!", "total_erros": total_erros}), 200
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro ao importar XML: {str(e)}", "total_erros": 0}), 500
