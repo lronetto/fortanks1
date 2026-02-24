@@ -333,26 +333,83 @@ def processar_arquivei():
     """Processa importações do Arquivei"""
     try:
         with app.app_context():
-            logs = []
+            logs = {
+                'total': 0,
+                'erro': 0,
+                'erros': [],
+                'existente': 0,
+                'existentes': [],
+                'inserido': 0,
+                'inseridos': [],
+                'nfe': {
+                    'mensagem': [],
+                    'erro': 0,
+                    'erros': [],
+                    'existente': 0,
+                    'existentes': [],
+                    'inserido': 0,
+                    'inseridos': [],
+                },
+                'cte': {
+                    'mensagem': [],
+                    'erro': 0,
+                    'erros': [],
+                    'existente': 0,
+                    'existentes': [],
+                    'inserido': 0,
+                    'inseridos': [],
+                },
+                'nfse': {
+                    'mensagem': [],
+                    'erro': 0,
+                    'erros': [],
+                    'existente': 0,
+                    'existentes': [],
+                    'inserido': 0,
+                    'inseridos': [],
+                }
+            }
             logger.info("Iniciando processamento do Arquivei...")
             log=NotaFiscal.importar_arquivei(
                 data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
                 data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='nfe'
             )
-            logs.append(log)
+            logs['nfe'] = log
+            logs['total'] += log['total']
+            logs['erro'] += log['erro']
+            logs['erros'].extend(log['erros'])
+            logs['existente'] += log['existente']
+            logs['existentes'].extend(log['existentes'])
+            logs['inserido'] += log['inserido']
+            logs['inseridos'].extend(log['inseridos'])
             log=NotaFiscal.importar_arquivei(
                 data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
                 data_final=(datetime.now()).strftime('%Y-%m-%d'),
                 tipo='cte'
             )
-            logs.append(log)
+            logs['cte'] = log
+            logs['total'] += log['total']
+            logs['erro'] += log['erro']
+            logs['erros'].extend(log['erros'])
+            logs['existente'] += log['existente']
+            logs['existentes'].extend(log['existentes'])
+            logs['inserido'] += log['inserido']
+            logs['inseridos'].extend(log['inseridos'])
             log=NotaFiscal.importar_arquivei(
                 data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
                 data_final=(datetime.now()).strftime('%Y-%m-%d'),
                 tipo='nfse'
             )
-            logs.append(log)
-            Logs(local="processar_arquivei_automatico", data=datetime.now(), texto=json_dumps_safe(logs))
+            logs['nfse'] = log
+            logs['total'] += log['total']
+            logs['erro'] += log['erro']
+            logs['erros'].extend(log['erros'])
+            logs['existente'] += log['existente']
+            logs['existentes'].extend(log['existentes'])
+            logs['inserido'] += log['inserido']
+            logs['inseridos'].extend(log['inseridos'])
+            if logs['erro'] > 0 or logs['inserido'] > 0:
+                Logs(local="processar_arquivei_automatico", data=datetime.now(), texto=json_dumps_safe(logs))
             logger.info("Processamento do Arquivei concluído com sucesso")
     except Exception as e:
         logger.error(f"Erro ao processar Arquivei: {str(e)}", exc_info=True)

@@ -354,7 +354,8 @@ class NotaFiscal(db.Model):
             'total': 0,
             'existente': 0,
             'inserido': 0,
-            'erro': [],
+            'erro': 0,
+            'erros': [],
             'mensagem': [],
             'existentes': [],
             'inseridos': [],
@@ -366,12 +367,15 @@ class NotaFiscal(db.Model):
             for data in notas.datas:
                 nf = NotaFiscal(data=data,tipo=tipo)
                 if nf.logs['erro']:
-                    logs['erro'].append(nf.logs['erro'])
+                    logs['erro'] += 1
+                    logs['erros'].append(nf.logs['erro'])
                 if nf.logs['mensagem']:
                     logs['mensagem'].append(nf.logs['mensagem'])
                 if nf.logs['existentes']:
+                    logs['existente'] += 1
                     logs['existentes'].append(nf.logs)
                 if nf.logs['inseridos']:
+                    logs['inserido'] += 1
                     logs['inseridos'].append(nf.logs)
                 notasn.append(nf)
             i+=1
