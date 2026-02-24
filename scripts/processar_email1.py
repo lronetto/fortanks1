@@ -785,6 +785,12 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
     if 'protocolo' in filename.lower():
         logging.info(f"Ignorando arquivo de protocolo: {filename}")
         return False
+    up = db.session.query(Upload.id,Upload.pai,Upload.pai_id,Upload.tipo,Upload.filename,Upload.mimetype,Upload.dados_adicionais).filter(Upload.filename==filename).first()
+    if up:
+        logging.info(f"upload filename {filename} existe")
+        return True
+    else:
+        logging.info(f"upload filename {filename} nao existe")
     logging.info(f"tentando a chave por codigo de barras do arquivo {filename}")
     if sys.platform == 'linux':
         poppler_path = '/usr/bin'
@@ -853,6 +859,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
             })
             
             if nota:
+                logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
                 processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais)
                 return True
             else:
@@ -877,7 +884,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                     dec1 = None
     
     # Se não conseguiu identificar pela chave de acesso, tenta pelo número e fornecedor
-    if not dec1:
+    else:
         # Tenta pelo número e fornecedor
         logging.info(f"tentando pelo numero e fornecedor {filename}")
         numero_nf, fornecedor = extrair_numero_fornecedor_do_nome(filename)
@@ -967,9 +974,13 @@ def marcar_email_como_lido(uid, usar_imaplib, mail_marcar=None, imap=None):
         logging.warning(f'Erro ao marcar UID {uid} como lido: {e}')
         return False
 
-def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais):
-    
-    up = Upload.query.filter(Upload.filename==filename).first()
+def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais='{}'):
+    tinicia_tempo = time.time()
+    up = db.session.query(Upload.id,Upload.pai,Upload.pai_id,Upload.tipo,Upload.filename,Upload.mimetype,Upload.dados_adicionais).filter(Upload.filename==filename).first()
+    tempo_fim = time.time()
+    tempo_execucao = tempo_fim - tinicia_tempo
+    logging.info(f"tempo de execucao 1: {tempo_execucao} segundos")
+    tinicia_tempo = time.time()
     if nota:
         json_nota = json.loads(nota.dados_adicionais)
         json_nota['liberada'] = True
@@ -977,14 +988,27 @@ def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais):
         json_nota['liberada_por'] = 'email'
         nota.dados_adicionais = json.dumps(json_nota)
         nota.save()
+    tempo_fim = time.time()
+    tempo_execucao = tempo_fim - tinicia_tempo
+    logging.info(f"tempo de execucao 2: {tempo_execucao} segundos")
     logging.info(f"fazendo o upload da nota: {nota}")
     file_name = f'{nota.id}_{tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
-    logging.info(f"file_name: {file_name}")
+    #logging.info(f"file_name: {file_name}")
     if not up:
-        up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
+        logging.info(f"upload filename {filename} nao existe")
+        tinicia_tempo = time.time()
+        logging.info(f"tentando file_name: {file_name}")
+        up = db.session.query(Upload.id,Upload.pai,Upload.pai_id,Upload.tipo,Upload.filename,Upload.mimetype).filter(Upload.filename==file_name).first()
+        if not up:
+            logging.info(f"upload filename {file_name} nao existe criando")
+            up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
+            tempo_fim = time.time()
+            tempo_execucao = tempo_fim - tinicia_tempo
+            logging.info(f"tempo de execucao 3: {tempo_execucao} segundos")
         if up.id:
-            up.dados_adicionais = json.dumps(dados_adicionais)
-            up.save()
+            #logging.info(f"upload filename {file_name} existe atualizando")
+            #up.dados_adicionais = json.dumps(dados_adicionais)
+            #up.save()
             anexo['upload'] = True
             logging.info(f"upload realizado {nota.numero_nf}")
             return True
@@ -992,21 +1016,9 @@ def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais):
             logging.info(f"upload ja existe {nota.numero_nf}")
             return False
     else:
-        if up.pai_id == nota.id and up.pai == 'NotaFiscal' and up.tipo == tipo and up.mimetype == 'application/pdf' and up.filename == file_name:
-            anexo['upload'] = True
-            if not up.dados_adicionais:
-                up.dados_adicionais = json.dumps(dados_adicionais)
-                up.save()
-            logging.info(f"upload ja existe {nota.numero_nf}")
-        else:
-            up.pai_id = nota.id
-            up.pai = 'NotaFiscal'
-            up.tipo = tipo
-            up.mimetype = 'application/pdf'
-            up.dados_adicionais = json.dumps(dados_adicionais)
-            up.save()
-            logging.info(f"upload atualizado {nota.numero_nf}")
-            anexo['upload'] = True
+        logging.info(f"upload existe")
+        
+        anexo['upload'] = True
 
 def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
     """

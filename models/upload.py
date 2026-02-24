@@ -33,7 +33,6 @@ class Upload(db.Model):
         #print('pai_id: ',pai_id)
         #print('tipo: ',tipo)
         up = Upload.query.filter(Upload.pai==pai, Upload.pai_id==pai_id, Upload.tipo==tipo, Upload.filename==filename, Upload.mimetype==mimetype).first()
-        print('up: ',up)
         if up:
             return False
             #print('upload: ',self)

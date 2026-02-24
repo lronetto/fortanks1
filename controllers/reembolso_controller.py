@@ -1115,6 +1115,8 @@ def editar(reembolso_id):
                     doc_existente.ndocumento = nota.numero_nf
                     doc_existente.data_documento = nota.data_emissao
                     doc_existente.centro_custo_id = nota_data.get('centro_custo_id')
+                   
+                    
                     doc = doc_existente
                 else:
                     # Criar novo documento
@@ -1131,7 +1133,13 @@ def editar(reembolso_id):
                         centro_custo_id=nota_data.get('centro_custo_id')
                     )
                     db.session.add(doc)
-                
+                dados_adicionais = json.loads(nota.dados_adicionais) if isinstance(nota.dados_adicionais, str) else nota.dados_adicionais
+                dados_adicionais['reembolso'] = {
+                    'id': reembolso_id,
+                    'enviado': False
+                }
+                nota.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
+                nota.save()
                 valor_total += float(nota.valor_total)
             # Adicionar documentos avulsos
             for idx, avulso_data in enumerate(avulsos_data):

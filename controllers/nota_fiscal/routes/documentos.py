@@ -6,6 +6,7 @@ from datetime import datetime
 
 from flask import flash, jsonify, make_response, redirect, request, send_file, url_for
 from flask_login import current_user, login_required
+from PyPDF2 import PdfMerger
 from sqlalchemy import case, func
 
 from models.arquivei import Arquivei
@@ -220,6 +221,103 @@ def estatisticas_pdfs():
     except Exception as e:
         logger.error(f"Erro ao obter estatísticas de PDFs: {str(e)}")
         return jsonify({"error": "Erro ao obter estatísticas"}), 500
+
+
+@nota_fiscal_bp.route("/exportar-pdf-originais", methods=["POST"])
+@login_required
+def exportar_pdf_originais():
+    """
+    Recebe uma lista de IDs de notas fiscais, junta os PDFs originais (tipo=1)
+    em um único PDF e retorna para download.
+    """
+    try:
+        ids = request.form.getlist("ids[]") or request.form.getlist("ids")
+        if not ids:
+            return jsonify({"success": False, "message": "Nenhuma nota fiscal selecionada."}), 400
+        try:
+            nota_ids = [int(i) for i in ids if i]
+        except (ValueError, TypeError):
+            return jsonify({"success": False, "message": "IDs inválidos."}), 400
+        if not nota_ids:
+            return jsonify({"success": False, "message": "Nenhuma nota fiscal selecionada."}), 400
+
+        merger = PdfMerger()
+        adicionados = 0
+        erros = []
+
+        for nid in nota_ids:
+            nota = NotaFiscal.query.get(nid)
+            if not nota:
+                erros.append(f"Nota {nid} não encontrada")
+                continue
+            upload_original = (
+                db.session.query(Upload)
+                .filter(
+                    Upload.pai == "NotaFiscal",
+                    Upload.pai_id == nid,
+                    Upload.tipo == 1,
+                )
+                .first()
+            )
+            pdf_bytes = None
+            if upload_original:
+                try:
+                    pdf_bytes = base64.b64decode(upload_original.blob)
+                except Exception as e:
+                    erros.append(f"Nota {nota.numero_nf}: erro ao decodificar PDF - {e}")
+                    continue
+            else:
+                if nota.chave_acesso:
+                    try:
+                        arquivei = Arquivei(chave_acesso=nota.chave_acesso)
+                        if arquivei.pdf:
+                            pdf_bytes = base64.b64decode(arquivei.pdf)
+                            u = Upload(
+                                pai="NotaFiscal",
+                                pai_id=nota.id,
+                                tipo=1,
+                                filename=f"{nota.chave_acesso}.pdf",
+                                mimetype="application/pdf",
+                                blob=arquivei.pdf,
+                            )
+                            db.session.add(u)
+                            db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        erros.append(f"Nota {nota.numero_nf}: erro ao obter PDF - {e}")
+                        continue
+                else:
+                    erros.append(f"Nota {nota.numero_nf}: sem PDF original")
+                    continue
+            if pdf_bytes:
+                try:
+                    merger.append(io.BytesIO(pdf_bytes))
+                    adicionados += 1
+                except Exception as e:
+                    erros.append(f"Nota {nota.numero_nf}: erro ao juntar PDF - {e}")
+
+        if adicionados == 0:
+            return jsonify({
+                "success": False,
+                "message": "Nenhum PDF original encontrado para as notas selecionadas."
+                + (" " + "; ".join(erros[:3]) if erros else ""),
+            }), 400
+
+        pdf_buffer = io.BytesIO()
+        merger.write(pdf_buffer)
+        merger.close()
+        pdf_buffer.seek(0)
+
+        nome_arquivo = f"notas_fiscais_originais_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        return send_file(
+            pdf_buffer,
+            download_name=nome_arquivo,
+            as_attachment=True,
+            mimetype="application/pdf",
+        )
+    except Exception as e:
+        logger.exception("Erro ao exportar PDF originais")
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 @nota_fiscal_bp.route("/download-pdfs-sem-protocolo", methods=["GET"])

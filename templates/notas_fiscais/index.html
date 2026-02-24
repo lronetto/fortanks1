@@ -34,6 +34,9 @@
             <button type="button" class="btn btn-success" id="btnExportarZip">
                 <i class="fas fa-file-zip"></i> Exportar Zip
             </button>
+            <button type="button" class="btn btn-danger" id="btnExportarPdf">
+                <i class="fas fa-file-pdf"></i> Exportar PDF (originais)
+            </button>
         </div>
     </div>
 
@@ -191,6 +194,7 @@
                 <table class="table table-bordered" id="tabelaNotasFiscais" style="width:100%">
                     <thead>
                         <tr>
+                            <th width="40"><input type="checkbox" class="form-check-input" id="selectAllNotas" title="Selecionar todos da página" aria-label="Selecionar todos"></th>
                             <th>Número NF</th>
                             <th>Data Emissão</th>
                             <th>Data Vencimento</th>
@@ -307,6 +311,80 @@ document.addEventListener('DOMContentLoaded', function() {
         // Abrir modal ao invés de redirecionar
         var modal = new bootstrap.Modal(document.getElementById('modalExportarZip'));
         modal.show();
+    });
+
+    // Selecionar / desmarcar todos os checkboxes da página (DataTables)
+    $(document).on('change', '#selectAllNotas', function() {
+        var checked = this.checked;
+        $('#tabelaNotasFiscais').find('.nf-checkbox').each(function() {
+            this.checked = checked;
+        });
+    });
+
+    // Exportar PDF: junção dos PDFs originais (tipo 1) das notas selecionadas
+    $('#btnExportarPdf').on('click', function() {
+        var ids = [];
+        $('#tabelaNotasFiscais').find('.nf-checkbox:checked').each(function() {
+            var id = $(this).data('id') || $(this).val();
+            if (id) ids.push(id);
+        });
+        if (ids.length === 0) {
+            mostrarAlerta('Atenção', 'Selecione ao menos uma nota fiscal para exportar o PDF.', 'warning');
+            return;
+        }
+        var csrf = $('meta[name="csrf-token"]').attr('content') || $('input[name="csrf_token"]').first().val();
+        var formData = new FormData();
+        if (csrf) formData.append('csrf_token', csrf);
+        ids.forEach(function(id) { formData.append('ids[]', id); });
+        $.ajax({
+            url: '{{ url_for("nota_fiscal.exportar_pdf_originais") }}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhrFields: { responseType: 'blob' },
+            success: function(blob, status, xhr) {
+                var contentType = xhr.getResponseHeader('Content-Type') || '';
+                if (contentType.indexOf('application/json') === 0) {
+                    var reader = new FileReader();
+                    reader.onload = function() {
+                        try {
+                            var json = JSON.parse(reader.result);
+                            mostrarAlerta('Erro', json.message || 'Erro ao exportar PDF.', 'error');
+                        } catch (e) {
+                            mostrarAlerta('Erro', 'Resposta inválida do servidor.', 'error');
+                        }
+                    };
+                    reader.readAsText(blob);
+                    return;
+                }
+                var nome = 'notas_fiscais_originais.pdf';
+                var disp = xhr.getResponseHeader('Content-Disposition');
+                if (disp && disp.indexOf('filename=') !== -1) {
+                    var m = disp.match(/filename="?([^";]+)"?/);
+                    if (m) nome = m[1].trim();
+                }
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = nome;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            },
+            error: function(xhr) {
+                var msg = 'Erro ao exportar PDF.';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                else if (xhr.responseText) {
+                    try {
+                        var j = JSON.parse(xhr.responseText);
+                        if (j.message) msg = j.message;
+                    } catch (e) {}
+                }
+                mostrarAlerta('Erro', msg, 'error');
+            }
+        });
     });
     
     $('#btnReprocessarImportacao').on('click', function() {
@@ -508,24 +586,26 @@ document.addEventListener('DOMContentLoaded', function() {
         },
             
         columns: [
-            { data: 0, name: 'numero_nf' },
-            { data: 1, name: 'data_emissao' },
-            { data: 2, name: 'vencimento' },
-            { data: 3, name: 'emitente' },
-            { data: 4, name: 'destinatario' },
-            { data: 5, name: 'fornecedor', orderable: false },
-            { data: 6, name: 'valor_total' },
-            { data: 7, name: 'status', orderable: false },
-            { data: 8, name: 'acoes', orderable: false, searchable: false }
+            { data: 0, name: 'select', orderable: false, searchable: false, className: 'text-center' },
+            { data: 1, name: 'numero_nf' },
+            { data: 2, name: 'data_emissao' },
+            { data: 3, name: 'vencimento' },
+            { data: 4, name: 'emitente' },
+            { data: 5, name: 'destinatario' },
+            { data: 6, name: 'fornecedor', orderable: false },
+            { data: 7, name: 'valor_total' },
+            { data: 8, name: 'status', orderable: false },
+            { data: 9, name: 'acoes', orderable: false, searchable: false }
         ],
-        order: [[1, 'desc']], // Ordenar por data de emissão descendente por padrão
+        order: [[2, 'desc']], // Ordenar por data de emissão descendente por padrão
         pageLength: 50,
         language: {
             url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
         },
         drawCallback: function() {
-            // Reativar eventos dos botões após redesenhar a tabela
             reiniciarEventosBotoes();
+            var $cb = $('#selectAllNotas');
+            if ($cb.length) $cb.prop('checked', false);
         }
     });
 

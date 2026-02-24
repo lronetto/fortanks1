@@ -137,7 +137,7 @@ def importar_xml():
                 }
                 out = processar_anexo_pdf_pagina(anexo, filename, pdf_bytes, 1)
                 logs.append(anexo)
-                print(f"log: {anexo}")
+                #print(f"log: {anexo}")
                 if not out:
                     total_erros += 1
         print(f"logs: {logs}")

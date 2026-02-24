@@ -451,7 +451,8 @@ def api_get_dados_notas_fiscais(request):
             query = query.filter(upload_reembolso_column == 1, pagamento_column.is_(None))
         elif status_pagamento == "selecionados":
             query = query.filter(
-                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").isnot(None)
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").isnot(None),
+                func.cast(func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.id"), Integer) == int(reembolso_id)
             )
         elif status_pagamento == "reembolso_e_nao_pago_e_nao_selecionados":
             nsel = [item.get("id") for item in notas_selecionadas if item.get("id")]

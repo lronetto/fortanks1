@@ -52,19 +52,19 @@ def register(nota_fiscal_bp):
         page = (start // length) + 1
         per_page = length
 
-        # Processar ordenação do DataTables
-        order_column_index = int(request.args.get('order[0][column]', 1))
+        # Processar ordenação do DataTables (coluna 0 = checkbox, não ordenável)
+        order_column_index = int(request.args.get('order[0][column]', 2))
         order_dir = request.args.get('order[0][dir]', 'desc')
         
-        # Mapear índice da coluna para campo de ordenação
+        # Mapear índice da coluna para campo de ordenação (0 = checkbox)
         column_mapping = {
-            0: 'numero_nf',
-            1: 'data_emissao',
-            2: 'vencimento',
-            3: 'cnpj_emitente',
-            4: 'cnpj_destinatario',
-            5: 'nome_emitente',
-            6: 'valor_total'
+            1: 'numero_nf',
+            2: 'data_emissao',
+            3: 'vencimento',
+            4: 'cnpj_emitente',
+            5: 'cnpj_destinatario',
+            6: 'nome_emitente',
+            7: 'valor_total'
         }
         
         order_by = column_mapping.get(order_column_index, 'data_emissao')
@@ -213,7 +213,13 @@ def register(nota_fiscal_bp):
                 </a>
             '''
 
+            checkbox_html = (
+                f'<input type="checkbox" class="form-check-input nf-checkbox" '
+                f'value="{nota.NotaFiscal.id}" data-id="{nota.NotaFiscal.id}" '
+                f'aria-label="Selecionar nota {nota.NotaFiscal.numero_nf}">'
+            )
             data.append([
+                checkbox_html,
                 nota.NotaFiscal.numero_nf or '',
                 nota.NotaFiscal.data_emissao.strftime('%d/%m/%Y') if nota.NotaFiscal.data_emissao else '',
                 vencimento_formatado,
