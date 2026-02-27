@@ -9,6 +9,10 @@ import io
 import logging
 import json
 from decimal import Decimal
+from pdf2image import convert_from_bytes
+from pyzbar.pyzbar import decode
+import sys
+
 def formatarMoeda(valor):
     """Formata valor como moeda brasileira"""
     return f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -253,3 +257,94 @@ def json_dumps_safe(obj):
         raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
     
     return json.dumps(obj, default=default_serializer, ensure_ascii=False)
+
+def validar_chave_acesso(chave):
+    """
+    Valida se uma string é uma chave de acesso válida de nota fiscal.
+    Uma chave de acesso válida deve ter 44 caracteres e conter apenas dígitos numéricos.
+    Retorna True se válida, False caso contrário.
+    """
+    if not chave:
+        return False
+    
+    # Remove espaços e caracteres especiais
+    chave_limpa = chave.strip()
+    
+    if len(chave_limpa) == 44:
+        tipo_nf = chave_limpa[20:22]
+        if tipo_nf not in ['55', '57']:
+            return False
+        return True
+    elif len(chave_limpa) == 50:
+        return True
+    else:
+        return False
+    # Verifica se tem exatamente 44 caracteres
+    if len(chave_limpa) != 44:
+        return False
+    
+    # Verifica se contém apenas dígitos numéricos
+    if not chave_limpa.isdigit():
+        return False
+    
+    # Verifica se o tipo (posições 20:22) é válido (55 para NFE ou 57 para CTE)
+    
+    
+    return True
+
+def extrair_chave_do_pdf(payload: bytes) -> str | None:
+    """
+    Extrai a chave de acesso da primeira página do PDF (código de barras ou QR).
+    Mesma lógica usada em processar_anexo_pdf_pagina.
+    """
+    if sys.platform == "linux":
+        poppler_path = "/usr/bin"
+    else:
+        poppler_path = None
+
+    try:
+        images = convert_from_bytes(payload, 500, poppler_path=poppler_path)
+    except Exception:
+        return None
+
+    if not images:
+        return None
+
+    dec1 = None
+    for img in images:
+        try:
+            decs = decode(img)
+        except Exception:
+            continue
+
+        if not decs:
+            continue
+
+        # Preferir CODE128 (chave direta)
+        code128 = [d for d in decs if d.type == "CODE128"]
+        if code128:
+            dec1 = code128[0].data.decode("utf-8") if code128[0].data else None
+            break
+
+        # Senão, tentar QRCODE (pode ser URL)
+        qr = [d for d in decs if d.type == "QRCODE"]
+        if qr:
+            dec1 = qr[0].data.decode("utf-8") if qr[0].data else None
+            if dec1 and "https://nfe.fazenda.sp.gov.br/CTeConsulta" in dec1:
+                dec1 = dec1.split("=")[1].split("&")[0]
+                break
+            if dec1 and "https://www.nfse.gov.br/ConsultaPublica" in dec1:
+                dec1 = dec1.split("&")[1].split("=")[1]
+                break
+            # Pode ser a chave em texto
+            break
+
+        if dec1:
+            break
+
+    if not dec1:
+        return None
+    if not validar_chave_acesso(dec1):
+        return None
+    return dec1
+

@@ -61,7 +61,7 @@ def api_get_dados_notas_fiscais(request):
     notas_selecionadas = json_filtros.get("notas_selecionadas", [])
     centro_custo_ids = json_filtros.get("centro_custo_ids", [])
     cancelada = json_filtros.get("cancelada", "")
-    
+    liberada = json_filtros.get("liberada", "")
     reembolso_id = json_filtros.get("reembolso_id", "")
     reembolso = json_filtros.get("reembolso", "")
     if reembolso_id:
@@ -264,8 +264,16 @@ def api_get_dados_notas_fiscais(request):
             )
         elif reembolso == "0":
             query = query.filter(
-                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None)
+                or_(
+                    func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None),
+                    func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.enviado") == 0
+                )
             )
+    if liberada:
+        if liberada == "liberada":
+            query = query.filter(liberada_column == 1)
+        elif liberada == "nao_liberada":
+            query = query.filter(or_(liberada_column == 0, liberada_column.is_(None)))
     if busca:
         busca_like = f"%{busca}%"
         query = query.filter(

@@ -18,6 +18,7 @@ from utils.relatorio_financeiro import gerar_relatorio_financeiro
 from models.nota_fiscal import NotaFiscal
 from models.upload import Upload
 from models.arquivei import Arquivei
+from utils.utils import validar_chave_acesso
 import re
 import unicodedata
 import json
@@ -29,6 +30,8 @@ import zipfile
 import shutil
 import logging
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -140,6 +143,7 @@ TAMANHO_MAX_ANEXO_MB = float(os.getenv('TAMANHO_MAX_ANEXO_MB', '10.0'))  # Taman
 PROCESSAR_APENAS_PDF_XML = os.getenv('PROCESSAR_APENAS_PDF_XML', 'true').lower() == 'true'  # Processar apenas PDF e XML
 PRIORIZAR_XML = os.getenv('PRIORIZAR_XML', 'true').lower() == 'true'  # Processar XML antes de PDF
 ORDENAR_EMAILS_POR_ANEXOS = os.getenv('ORDENAR_EMAILS_POR_ANEXOS', 'true').lower() == 'true'  # Ordenar emails por quantidade de anexos (menos primeiro)
+MAX_WORKERS_ANEXOS = int(os.getenv('MAX_WORKERS_ANEXOS', '8'))  # Número de tarefas paralelas para processar anexos do mesmo email
 
 def normalizar_texto(texto):
     """
@@ -645,40 +649,6 @@ def buscar_emails_por_uids(env, uids_ordenados, contagem_anexos=None):
     
     return emails_para_processar
 
-def validar_chave_acesso(chave):
-    """
-    Valida se uma string é uma chave de acesso válida de nota fiscal.
-    Uma chave de acesso válida deve ter 44 caracteres e conter apenas dígitos numéricos.
-    Retorna True se válida, False caso contrário.
-    """
-    if not chave:
-        return False
-    
-    # Remove espaços e caracteres especiais
-    chave_limpa = chave.strip()
-    
-    if len(chave_limpa) == 44:
-        tipo_nf = chave_limpa[20:22]
-        if tipo_nf not in ['55', '57']:
-            return False
-        return True
-    elif len(chave_limpa) == 50:
-        return True
-    else:
-        return False
-    # Verifica se tem exatamente 44 caracteres
-    if len(chave_limpa) != 44:
-        return False
-    
-    # Verifica se contém apenas dígitos numéricos
-    if not chave_limpa.isdigit():
-        return False
-    
-    # Verifica se o tipo (posições 20:22) é válido (55 para NFE ou 57 para CTE)
-    
-    
-    return True
-
 
 
 def processar_anexo_pdf(anexo, filename, payload, tipo):
@@ -930,10 +900,11 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                     logging.info(f"upload realizado sem nota {numero_nf}")
                 return True
 
-def processar_anexo_xml(filename, payload,log_email_entry):
+def processar_anexo_xml(filename, payload, log_email_entry, lock=None):
     """
     Processa um anexo XML: cria NotaFiscal e Arquivei.
     Retorna True se processou com sucesso, False caso contrário.
+    Se lock for passado, usa-o ao atualizar log_email_entry (thread-safe).
     """
     try:
         chave_acesso = filename.split('.')[0]
@@ -943,12 +914,17 @@ def processar_anexo_xml(filename, payload,log_email_entry):
         nf = NotaFiscal(xml_data=base64.b64encode(payload).decode('utf-8'), tipo=tipo)
         if nf.inserido:
             try:
-                resp= Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
-                log_email_entry['arquivei'].append({
+                resp = Arquivei(xml_data=base64.b64encode(payload).decode('utf-8'))
+                entry = {
                     'arquivei': resp.json(),
                     'chave_acesso': chave_acesso,
                     'tipo': tipo,
-                })
+                }
+                if lock:
+                    with lock:
+                        log_email_entry.setdefault('arquivei', []).append(entry)
+                else:
+                    log_email_entry.setdefault('arquivei', []).append(entry)
                 return True
             except Exception as e:
                 logging.error(f"Erro ao processar arquivo xml {filename}: {e}")
@@ -1020,10 +996,11 @@ def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais='{}'
         
         anexo['upload'] = True
 
-def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
+def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=None):
     """
     Processa um anexo ZIP ou RAR: extrai arquivos e processa conforme o tipo.
     Se tipo == 3 (reembolso), processa PDFs extraídos usando processar_anexo_pdf.
+    Se lock for passado, usa-o ao atualizar log_email_entry (thread-safe).
     Retorna True se processou com sucesso, False caso contrário.
     """
     # Garante que o anexo tem a estrutura correta
@@ -1074,7 +1051,7 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
                         
                         # Processa os arquivos
                         resultado = _processar_arquivos_comprimidos(
-                            rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
+                            rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo, lock=lock
                         )
                 except rarfile.RarCannotExec as e:
                     erro_msg = f"Ferramenta unrar não encontrada ou não pode ser executada. Erro: {str(e)}. Verifique se unrar está instalado e no PATH."
@@ -1103,7 +1080,7 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
                 
                 # Processa os arquivos
                 resultado = _processar_arquivos_comprimidos(
-                    zip_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo
+                    zip_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo, lock=lock
                 )
         
         return resultado
@@ -1126,9 +1103,10 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry):
         anexo['codbarras']['erro'].append(f"Erro ao processar {tipo_erro}: {str(e)}")
         return False
 
-def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, log_email_entry, tipo_arquivo):
+def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, log_email_entry, tipo_arquivo, lock=None):
     """
     Função auxiliar para processar arquivos dentro de ZIP ou RAR.
+    Se lock for passado, usa-o ao atualizar log_email_entry (thread-safe).
     """
     # Garante que o anexo tem a estrutura correta
     if 'codbarras' not in anexo:
@@ -1179,8 +1157,12 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
                             anexo['upload'] = True
                         anexo['nao_identificados'] += anexo_pdf.get('nao_identificados', 0)
                         
-                        # Adiciona o anexo PDF ao log
-                        log_email_entry['anexos'].append(anexo_pdf)
+                        # Adiciona o anexo PDF ao log (thread-safe se lock for passado)
+                        if lock is not None:
+                            with lock:
+                                log_email_entry['anexos'].append(anexo_pdf)
+                        else:
+                            log_email_entry['anexos'].append(anexo_pdf)
                         logging.info(f"PDF {arquivo_nome} extraído do {tipo_arquivo} e processado com sucesso")
                     else:
                         logging.warning(f"Falha ao processar PDF {arquivo_nome} extraído do {tipo_arquivo}")
@@ -1217,44 +1199,88 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
         # Para outros tipos, apenas registra que o arquivo foi encontrado
         logging.info(f"{tipo_arquivo} encontrado para tipo {tipo}, mas processamento específico não implementado")
         return False
+
+
+def _processar_um_anexo(att, tipo, log_email_entry, lock):
+    """
+    Processa um único anexo (worker para execução paralela).
+    Retorna: (anexos_processados, ignorado) onde cada um é 0 ou 1.
+    """
+    filename = att["filename"]
+    try:
+        payload = att["content"].getvalue()
+        tamanho_mb = len(payload) / (1024 * 1024)
+        if tamanho_mb > TAMANHO_MAX_ANEXO_MB:
+            logging.warning(f'Anexo {filename} muito grande ({tamanho_mb:.2f} MB). Limite: {TAMANHO_MAX_ANEXO_MB} MB. Pulando.')
+            return (0, 1)
+    except Exception as e:
+        logging.error(f'Erro ao verificar tamanho do anexo {filename}: {e}')
+        return (0, 0)
+
+    anexo = {
+        'filename': filename,
+        'tamanho_mb': round(tamanho_mb, 2),
+        'codbarras': {'qtd': 0, 'codigos': []},
+        'db': [],
+        'upload': False,
+        'nao_identificados': 0
+    }
+
+    if filename.lower().endswith('.pdf'):
+        processar_anexo_pdf(anexo, filename, payload, tipo)
+        with lock:
+            log_email_entry['anexos'].append(anexo)
+        return (1, 0)
+    elif filename.lower().endswith('.xml'):
+        processar_anexo_xml(filename, payload, log_email_entry, lock=lock)
+        return (1, 0)
+    elif filename.lower().endswith('.zip') or filename.lower().endswith('.rar'):
+        processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=lock)
+        if tipo != 3:
+            with lock:
+                log_email_entry['anexos'].append(anexo)
+        return (1, 0)
+    return (0, 0)
+
+
 def processar_anexos_email(msg, tipo, log_email_entry):
     """
-    Processa todos os anexos de um email.
+    Processa todos os anexos de um email em paralelo (uma task por anexo).
     Retorna: (anexos_processados, ignorado, total_nao_processados)
     """
     if not msg.attachments or len(msg.attachments) == 0:
         return 0, 0, 0
-    
+
+    log_email_entry.setdefault('arquivei', [])
+
     # Filtra e ordena anexos
     anexos_filtrados = msg.attachments
     if PROCESSAR_APENAS_PDF_XML:
-        # Inclui ZIPs também quando PROCESSAR_APENAS_PDF_XML está ativo
         anexos_filtrados = [att for att in msg.attachments if att["filename"].lower().endswith(('.pdf', '.xml', '.zip', '.rar'))]
         if len(anexos_filtrados) < len(msg.attachments):
             logging.info(f'Filtrados {len(msg.attachments) - len(anexos_filtrados)} anexos não-PDF/XML/ZIP de {len(msg.attachments)} totais')
-    
-    # Ordena anexos (inclui ZIPs na ordenação)
+
     if PRIORIZAR_XML:
         anexos_ordenados = sorted(anexos_filtrados, key=lambda att: (
             0 if att["filename"].lower().endswith('.xml') else
             1 if att["filename"].lower().endswith('.pdf') else
-            2 if att["filename"].lower().endswith('.zip') else 
+            2 if att["filename"].lower().endswith('.zip') else
             3 if att["filename"].lower().endswith('.rar') else 4
         ))
     else:
         anexos_ordenados = sorted(anexos_filtrados, key=lambda att: (
             0 if att["filename"].lower().endswith('.pdf') else
             1 if att["filename"].lower().endswith('.xml') else
-            2 if att["filename"].lower().endswith('.zip') else 
+            2 if att["filename"].lower().endswith('.zip') else
             3 if att["filename"].lower().endswith('.rar') else 4
         ))
-    
-    # Filtra anexos já processados
+
+    # Filtra anexos já processados (consulta ao DB em sequência para evitar condições de corrida)
     anexos_nao_processados = []
     for att in anexos_ordenados:
         filename = att["filename"]
         if tipo != 3:
-            up = Upload.query.filter(Upload.filename == filename).first()   
+            up = Upload.query.filter(Upload.filename == filename).first()
             if up:
                 if not up.dados_adicionais and up.pai_id == 0:
                     anexos_nao_processados.append(att)
@@ -1267,65 +1293,40 @@ def processar_anexos_email(msg, tipo, log_email_entry):
 
     total_anexos = len(anexos_ordenados)
     total_nao_processados = len(anexos_nao_processados)
-    
+
     if total_anexos > MAX_ANEXOS_POR_EMAIL:
         logging.warning(f'Email tem {total_anexos} anexos. Limite máximo por email: {MAX_ANEXOS_POR_EMAIL}.')
-    
-    # Processa apenas um número limitado de anexos por execução
+
     anexos_para_processar = anexos_nao_processados[:MAX_ANEXOS_POR_EMAIL_PROCESSAR]
-    
+
     if total_nao_processados > MAX_ANEXOS_POR_EMAIL_PROCESSAR:
         logging.info(f'Email tem {total_nao_processados} anexos não processados. Processando apenas {MAX_ANEXOS_POR_EMAIL_PROCESSAR} nesta execução.')
-    
+
+    if not anexos_para_processar:
+        return 0, 0, total_nao_processados
+
+    # Processamento paralelo: uma task por anexo
+    lock = threading.Lock()
+    workers = min(MAX_WORKERS_ANEXOS, len(anexos_para_processar))
     anexos_processados = 0
     ignorado = 0
-    
-    for att in anexos_para_processar:
-        if anexos_processados >= MAX_ANEXOS_POR_EMAIL_PROCESSAR:
-            logging.warning(f'Limite de {MAX_ANEXOS_POR_EMAIL_PROCESSAR} anexos por email por execução atingido.')
-            break
-        
-        filename = att["filename"]
-        
-        # Verifica tamanho do anexo
-        try:
-            payload = att["content"].getvalue()
-            tamanho_mb = len(payload) / (1024 * 1024)
-            
-            if tamanho_mb > TAMANHO_MAX_ANEXO_MB:
-                logging.warning(f'Anexo {filename} muito grande ({tamanho_mb:.2f} MB). Limite: {TAMANHO_MAX_ANEXO_MB} MB. Pulando.')
-                ignorado += 1
-                continue
-        except Exception as e:
-            logging.error(f'Erro ao verificar tamanho do anexo {filename}: {e}')
-            continue
-        
-        anexo = {
-            'filename': filename,
-            'tamanho_mb': round(tamanho_mb, 2),
-            'codbarras': {'qtd': 0, 'codigos': []},
-            'db': [],
-            'upload': False,
-            'nao_identificados': 0
+
+    logging.info(f'Processando {len(anexos_para_processar)} anexos em paralelo (até {workers} workers).')
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(_processar_um_anexo, att, tipo, log_email_entry, lock): att
+            for att in anexos_para_processar
         }
-        
-        anexos_processados += 1
-        
-        # Processa PDF, XML ou ZIP
-        if filename.lower().endswith('.pdf'):
-            processar_anexo_pdf(anexo, filename, payload, tipo)
-            log_email_entry['anexos'].append(anexo)
-        elif filename.lower().endswith('.xml'):
-            processar_anexo_xml(filename, payload, log_email_entry)
-            # XML não adiciona ao anexo pois já é processado separadamente
-        elif filename.lower().endswith('.zip') or filename.lower().endswith('.rar'):
-            # Para ZIPs, o processamento pode adicionar múltiplos anexos ao log
-            # Se for tipo 3 (reembolso), os PDFs extraídos já são adicionados ao log dentro de processar_anexo_zip
-            processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry)
-            # Adiciona o anexo ZIP ao log apenas se não for tipo 3 (pois tipo 3 já adiciona os PDFs)
-            if tipo != 3:
-                log_email_entry['anexos'].append(anexo)
-    
+        for future in as_completed(futures):
+            try:
+                p, i = future.result()
+                anexos_processados += p
+                ignorado += i
+            except Exception as e:
+                att = futures[future]
+                logging.error(f'Erro ao processar anexo {att.get("filename", "?")}: {e}')
+
     return anexos_processados, ignorado, total_nao_processados
 
 def processar_emails():
@@ -1428,7 +1429,8 @@ def processar_emails():
                         'qtd': 0
                     },
                     'tipo': tipo,
-                    'anexos': []
+                    'anexos': [],
+                    'arquivei': []
                 })
                 if tipo > 0:
                     log_email_entry = log_email['email'][-1]

@@ -324,7 +324,7 @@ def limpar_uploads_antigos():
     try:
         with app.app_context():
             logger.info("Iniciando limpeza de uploads antigos...")
-            db.session.query(Upload).filter(Upload.tipo == 1, Upload.data < datetime.now() - timedelta(days=60)).delete(synchronize_session=False)
+            db.session.query(Upload).filter(Upload.tipo == 1, Upload.data < datetime.now() - timedelta(days=180)).delete(synchronize_session=False)
             db.session.commit()
             logger.info("Limpeza de uploads antigos concluída com sucesso")
     except Exception as e:
