@@ -1205,6 +1205,7 @@ def _processar_um_anexo(att, tipo, log_email_entry, lock):
     """
     Processa um único anexo (worker para execução paralela).
     Retorna: (anexos_processados, ignorado) onde cada um é 0 ou 1.
+    Cada worker roda dentro do app context do Flask para acessar db e modelos.
     """
     filename = att["filename"]
     try:
@@ -1217,29 +1218,32 @@ def _processar_um_anexo(att, tipo, log_email_entry, lock):
         logging.error(f'Erro ao verificar tamanho do anexo {filename}: {e}')
         return (0, 0)
 
-    anexo = {
-        'filename': filename,
-        'tamanho_mb': round(tamanho_mb, 2),
-        'codbarras': {'qtd': 0, 'codigos': []},
-        'db': [],
-        'upload': False,
-        'nao_identificados': 0
-    }
+    # Workers rodam em threads separadas; precisam do app context para db/Flask
+    from app import app
+    with app.app_context():
+        anexo = {
+            'filename': filename,
+            'tamanho_mb': round(tamanho_mb, 2),
+            'codbarras': {'qtd': 0, 'codigos': []},
+            'db': [],
+            'upload': False,
+            'nao_identificados': 0
+        }
 
-    if filename.lower().endswith('.pdf'):
-        processar_anexo_pdf(anexo, filename, payload, tipo)
-        with lock:
-            log_email_entry['anexos'].append(anexo)
-        return (1, 0)
-    elif filename.lower().endswith('.xml'):
-        processar_anexo_xml(filename, payload, log_email_entry, lock=lock)
-        return (1, 0)
-    elif filename.lower().endswith('.zip') or filename.lower().endswith('.rar'):
-        processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=lock)
-        if tipo != 3:
+        if filename.lower().endswith('.pdf'):
+            processar_anexo_pdf(anexo, filename, payload, tipo)
             with lock:
                 log_email_entry['anexos'].append(anexo)
-        return (1, 0)
+            return (1, 0)
+        elif filename.lower().endswith('.xml'):
+            processar_anexo_xml(filename, payload, log_email_entry, lock=lock)
+            return (1, 0)
+        elif filename.lower().endswith('.zip') or filename.lower().endswith('.rar'):
+            processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=lock)
+            if tipo != 3:
+                with lock:
+                    log_email_entry['anexos'].append(anexo)
+            return (1, 0)
     return (0, 0)
 
 
