@@ -37,6 +37,12 @@
                     <option value="com">Com usinagem</option>
                     <option value="sem">Sem usinagem</option>
                 </select>
+                <label class="mb-0 small text-muted ms-2">Produzido:</label>
+                <select id="filtroProduzido" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Todos</option>
+                    <option value="sim">Produzido</option>
+                    <option value="nao">Pendente</option>
+                </select>
             </div>
         </div>
         <div class="card-body">
@@ -129,7 +135,8 @@
                             : '<span class="badge bg-secondary me-1" title="Pendente de formas, alongamentos ou séries"><i class="fas fa-clock"></i> Em andamento</span>';
                         const along = row.tem_alongamentos ? '<span class="text-success" title="Alongamentos associados"><i class="fas fa-check"></i> Along.</span>' : '<span class="text-muted" title="Sem alongamentos"><i class="fas fa-minus"></i> Along.</span>';
                         const usin = row.tem_usinagens ? '<span class="text-success" title="Usinagens associadas"><i class="fas fa-check"></i> Usin.</span>' : '<span class="text-muted" title="Sem usinagens"><i class="fas fa-minus"></i> Usin.</span>';
-                        return badge + ' ' + along + ' &nbsp; ' + usin;
+                        const prod = row.produzida ? '<span class="text-success" title="Produção processada"><i class="fas fa-check"></i> Produzido</span>' : '<span class="text-muted" title="Pendente de produção"><i class="fas fa-minus"></i> Produzido</span>';
+                        return badge + ' ' + along + ' &nbsp; ' + usin + ' &nbsp; ' + prod;
                     }
                 },
                 { 
@@ -161,6 +168,9 @@
                                 </button>
                                 <button type="button" class="btn btn-secondary btn-usinagens" data-id="${row.id}" title="Referenciar Usinagens">
                                     <i class="fas fa-industry"></i>
+                                </button>
+                                <button type="button" class="btn btn-primary btn-producao" data-id="${row.id}" title="Fazer produção das peças">
+                                    <i class="fas fa-cogs"></i>
                                 </button>
                                 <button type="button" class="btn btn-danger btn-excluir" data-id="${row.id}" title="Excluir">
                                     <i class="fas fa-trash"></i>
@@ -208,6 +218,12 @@
                 if (filtroUsin === 'com' && !temUsin) return false;
                 if (filtroUsin === 'sem' && temUsin) return false;
             }
+            var filtroProd = $('#filtroProduzido').val();
+            if (filtroProd) {
+                var produzida = !!row.produzida;
+                if (filtroProd === 'sim' && !produzida) return false;
+                if (filtroProd === 'nao' && produzida) return false;
+            }
             return true;
         });
 
@@ -224,8 +240,8 @@
             initializeDataTable();
         });
 
-        // Filtros: status, alongamento, usinagem (redesenha a tabela sem nova requisição)
-        $(document).on('change', '#filtroStatus, #filtroAlongamento, #filtroUsinagem', function() {
+        // Filtros: status, alongamento, usinagem, produzido (redesenha a tabela sem nova requisição)
+        $(document).on('change', '#filtroStatus, #filtroAlongamento, #filtroUsinagem, #filtroProduzido', function() {
             if ($.fn.DataTable.isDataTable('#tabelaConcretagens')) {
                 $('#tabelaConcretagens').DataTable().draw();
             }
@@ -270,6 +286,41 @@
                 carregarDadosUsinagens(id);
             }
             $('#modalUsinagens').modal('show');
+        });
+
+        $(document).on('click', '.btn-producao', function() {
+            const id = $(this).data('id');
+            const $btn = $(this);
+            if (!$btn.data('confirmado') && !confirm('Processar a produção das peças desta concretagem? Será consumido estoque e marcada a data de produção.')) {
+                return;
+            }
+            $btn.prop('disabled', true).find('i').removeClass('fa-cogs').addClass('fa-spinner fa-spin');
+            $.ajax({
+                url: "{{ url_for('concretagem.api_processar_producao', id=0) }}".replace('/0', '/' + id),
+                type: 'POST',
+                contentType: 'application/json',
+                headers: { 'X-CSRFToken': $('#csrf_token_global').val() },
+                data: JSON.stringify({}),
+                success: function(res) {
+                    if (res.success) {
+                        if ($.fn.DataTable.isDataTable('#tabelaConcretagens')) {
+                            $('#tabelaConcretagens').DataTable().ajax.reload(null, false);
+                        }
+                        alert(res.message || 'Produção processada com sucesso!');
+                    } else {
+                        alert(res.message || 'Erro ao processar produção.');
+                    }
+                },
+                error: function(xhr) {
+                    let msg = 'Erro ao processar produção.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    else if (xhr.responseText) try { var j = JSON.parse(xhr.responseText); if (j.message) msg = j.message; } catch(e) {}
+                    alert(msg);
+                },
+                complete: function() {
+                    $btn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-cogs');
+                }
+            });
         });
     });
 

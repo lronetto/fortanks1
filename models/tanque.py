@@ -432,7 +432,15 @@ class TanquesPecas(db.Model):
     
     def __repr__(self):
         return f'<Peca {self.nome} ({self.tipo}) - #{self.numero_sequencial}>' 
-    
+    def produzir(self):
+        """
+        Produz a peça
+        """
+        if not self.qualidade:
+            return False
+        qualidade = json.loads(self.qualidade)
+        if qualidade and 'data_producao' in qualidade:
+            return True
     def get_series_de_pecas(self):
         """
         Retorna as séries de peças do tanque

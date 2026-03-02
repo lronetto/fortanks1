@@ -1718,6 +1718,9 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
     
     return True
 
+
+
+
 @peca.route('/importar-inspecao', methods=['POST'])
 @login_required
 def importar_inspecao():
@@ -2089,6 +2092,7 @@ def processar_arquivo_inspecao(xlsx_path):
             log['atualizadas'] += 1
             #peca_existe.qualidade = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
             peca_existe.data_concretagem = peca['data_concretagem']
+            peca_existe.nome = peca['nome']
             peca_existe.tipo = peca['tipo']
             peca_existe.numero_tanque = peca['numero_tanque']
             peca_existe.save()

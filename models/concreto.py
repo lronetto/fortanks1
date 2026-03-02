@@ -13,6 +13,122 @@ from models.unidade import Unidades
 from models.material import Materiais
 from models.estoque import EstoqueMovimentacoes
 import traceback
+import logging
+def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=True):
+    """Processa a produção para uma lista específica de peças (ex.: peças de uma concretagem).
+    Consome estoque, marca data_producao e processa usinagens do dia. Retorna True se ok, False se lista vazia."""
+    from datetime import date as date_type
+    print(f"[_processar_producao_por_pecas] Pecas: {pecas_list}")
+    if not pecas_list:
+        return False
+    dia = pecas_list[0].data_concretagem
+    if not dia:
+        return False
+    if isinstance(dia, datetime):
+        dia_date = dia.date()
+    elif isinstance(dia, date_type):
+        dia_date = dia
+    else:
+        try:
+            dia_date = datetime.strptime(str(dia), '%Y-%m-%d').date() if isinstance(dia, str) else dia
+        except (ValueError, TypeError):
+            logging.warning(f"Erro ao converter data: {dia}")
+            return False
+    grupos = {}
+    for peca in pecas_list:
+        chave = (peca.tanque_id, peca.tipo)
+        if chave not in grupos:
+            grupos[chave] = []
+        grupos[chave].append(peca)
+    if _usinagem:
+        usinagens = ConcretoUsinagens.query.filter(ConcretoUsinagens.data_usinagem.like(f'%{dia_date}%')).all()
+        for usinagem in usinagens:
+            try:
+                usinagem.produzir(usuario_id=usuario_id, total=True)
+            except Exception as e:
+                logging.error(f"Erro ao processar usinagem {usinagem.id}: {str(e)}")
+    materiais_necessarios = {}
+    todas_pecas_processadas = []
+    from models.tanque import TanquesProdutoComposto
+    for (tanque_id, tipo_peca), pecas_grupo in grupos.items():
+        vinculacao = TanquesProdutoComposto.query.filter_by(
+            tanque_id=tanque_id,
+            tipo_peca=tipo_peca
+        ).first()
+        if not vinculacao:
+            nomes_pecas_grupo = [p.nome or f"Peça {p.id}" for p in pecas_grupo]
+            if log:
+                print(f"Peças {', '.join(nomes_pecas_grupo)} sem vinculação de produto composto (Tanque: {tanque_id}, Tipo: {tipo_peca})")
+            continue
+        produto_composto = ProdutoComposto.query.get(vinculacao.produto_composto_id)
+        if not produto_composto:
+            continue
+        quantidade_grupo = len(pecas_grupo)
+        nomes_pecas_grupo = [p.nome or f"Peça {p.id}" for p in pecas_grupo]
+        todas_pecas_processadas.extend(nomes_pecas_grupo)
+        if log:
+            print(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s) dia: {dia_date}")
+        produtos_processados = set()
+        try:
+            produto_composto.produzir(
+                quantidade=quantidade_grupo,
+                data_movimento=dia_date,
+                usuario_id=usuario_id,
+                log=True,
+                produtos_processados=produtos_processados,
+                materiais_necessarios=materiais_necessarios,
+                traco=_usinagem
+            )
+        except Exception as e:
+            logging.error(f"Erro ao processar produto composto {produto_composto.id}: {str(e)}")
+            continue
+        data_producao = datetime.now().isoformat() if isinstance(dia_date, date_type) else (datetime.now().strftime('%Y-%m-%d') if isinstance(dia_date, datetime) else str(datetime.now()))
+        for peca in pecas_grupo:
+            try:
+                qualidade_dict = {}
+                if peca.qualidade:
+                    try:
+                        qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+                    except (json.JSONDecodeError, TypeError):
+                        qualidade_dict = {}
+                if 'data_producao' not in qualidade_dict:
+                    qualidade_dict['data_producao'] = None
+                qualidade_dict['data_producao'] = data_producao
+                peca.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
+                db.session.add(peca)
+            except Exception as e:
+                logging.warning(f"Erro ao salvar data_producao na peça {peca.id}: {str(e)}")
+                continue
+    if materiais_necessarios:
+        for info in materiais_necessarios.values():
+            try:
+                estoque = info['estoque']
+                quantidade_total = info['quantidade']
+                produto_id = info['produto_id']
+                if log:
+                    print(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
+                mov = EstoqueMovimentacoes()
+                mov.remover(
+                    quantidade=quantidade_total,
+                    estoque_id=estoque.id,
+                    origem_id=produto_id,
+                    origem_tipo='producao_peca',
+                    usuario_id=usuario_id,
+                    motivo=f'Produção das peças: {", ".join(todas_pecas_processadas)} - Quantidade total: {quantidade_total} - len: {len(todas_pecas_processadas)}',
+                    log=log
+                )
+                mov.data_movimento = dia_date
+                mov.save()
+            except Exception as e:
+                logging.error(f"Erro ao criar movimentação de estoque: {str(e)}")
+                continue
+    try:
+        db.session.commit()
+    except Exception as e:
+        logging.error(f"Erro ao fazer commit: {str(e)}")
+        db.session.rollback()
+        return False
+    return True
 
 class ConcretoConcretagens(db.Model):
     """
@@ -139,7 +255,27 @@ class ConcretoConcretagens(db.Model):
     
     def __repr__(self):
         return f'<ConcretoConcretagens {self.id} - Pista {self.pista} - {self.data_concretagem}>' 
-        
+    
+    def produzir(self):
+        """
+        Produz a concretagem
+        """
+        pecas_str = self.pecas
+        if not pecas_str:
+            return False
+        pecas = json.loads(pecas_str) if isinstance(pecas_str, str) else pecas_str
+        if not pecas:
+            return False
+        print(f"[_produzir] Pecas: {pecas}")
+        from models.tanque import TanquesPecas
+        pecas_concretadas = []
+        for peca in pecas:
+            peca_obj = TanquesPecas.query.filter_by(nome=peca['nome'], tanque_id=int(peca['tanque_id'])).first()
+            if not peca_obj:
+                continue
+            pecas_concretadas.append(peca_obj)
+        processar_producao_por_pecas(pecas_concretadas, usuario_id=current_user.id or None, log=True, _usinagem=False)
+        return True
 # Nova tabela de associação entre concretagem e tanques
 class ConcretoConcretagensTanques(db.Model):
     """

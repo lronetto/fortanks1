@@ -682,7 +682,7 @@ def calcular_idade_cp(data_moldagem_dt, data_rompimento_dt):
     if not data_moldagem_dt or not data_rompimento_dt:
         return 0.0
     diff_hours = (data_rompimento_dt - data_moldagem_dt).total_seconds() / 3600
-    return float(diff_hours / 24) if diff_hours >= 24 else float(diff_hours)
+    return float(diff_hours / 24) if diff_hours >= 72 else float(diff_hours)
 def mapear_tipo_rompimento(tipo_rompimento, campos_base):
     """
     Mapeia o tipo de rompimento para os campos correspondentes.

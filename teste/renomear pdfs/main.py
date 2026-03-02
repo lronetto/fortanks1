@@ -147,9 +147,7 @@ def main():
     base = Path(__file__).resolve().parent
     input_dir = base / "input"
     output_dir = base / "output"
-    nomes_sem_extensao = listar_nomes_sem_extensao()
-    for nome in nomes_sem_extensao:
-        print(f"{nome}")
+   
     if not input_dir.is_dir():
         input_dir = base
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -200,6 +198,8 @@ def main():
                 except Exception as e:
                     print(f"  ERRO {path.name}: {e}")
 
-
+    nomes_sem_extensao = listar_nomes_sem_extensao()
+    for nome in nomes_sem_extensao:
+        print(f"{nome}")
 if __name__ == "__main__":
     main()

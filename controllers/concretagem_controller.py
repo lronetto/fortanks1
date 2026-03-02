@@ -5,7 +5,7 @@ from models.tanque import Tanques, TanquesPecas, TanquesProdutoComposto
 from models.contrato import Contrato
 from models.centro_custo import CentroCusto
 from models.database import db
-from flask_login import login_required
+from flask_login import login_required, current_user
 #from flask_wtf.csrf import csrf_exempt
 import json
 from datetime import datetime
@@ -200,6 +200,31 @@ def _concretagem_todas_pecas_tem_serie(conc):
     return True
 
 
+def _concretagem_produzida(conc):
+    """Retorna True se a concretagem tem peças e todas elas já têm data_producao preenchida (produção processada)."""
+    pecas = conc.get_pecas()
+    if not pecas:
+        return False
+    for peca_item in pecas:
+        nome = peca_item.get('nome') or peca_item.get('placa')
+        tanque_id = peca_item.get('tanque_id') or peca_item.get('tanque')
+        if not nome or tanque_id is None:
+            return False
+        try:
+            tid = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
+            peca = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
+            if not peca:
+                return False
+            if not peca.qualidade:
+                return False
+            q = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
+            if not q or not q.get('data_producao'):
+                return False
+        except (ValueError, TypeError, json.JSONDecodeError):
+            return False
+    return True
+
+
 def _concretagem_concluida(conc):
     """Concretagem está concluída quando: todas as formas colocadas (diferentes entre si), alongamentos preenchidos (≠0 e não em branco) e todas as peças associadas à série."""
     return (
@@ -231,6 +256,7 @@ def api_listar():
                 'quantidade_pecas': len(conc.get_pecas()),
                 'tem_alongamentos': _concretagem_tem_alongamentos(conc),
                 'tem_usinagens': _concretagem_tem_usinagens(conc),
+                'produzida': _concretagem_produzida(conc),
                 'status': status_val,
                 'concluida': concluida,
                 'data_cadastro': conc.data_cadastro.isoformat() if conc.data_cadastro else None
@@ -306,6 +332,22 @@ def api_editar(id):
         db.session.rollback()
         logging.error(f"Erro ao editar concretagem: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': f'Erro ao atualizar concretagem: {str(e)}'}), 500
+
+@concretagem.route('/api/<int:id>/processar-producao', methods=['POST'])
+@login_required
+def api_processar_producao(id):
+    """Processa a produção das peças desta concretagem (consumo de estoque e marca data_producao)."""
+    try:
+        concretagem = ConcretoConcretagens.query.get_or_404(id)
+        ok=concretagem.produzir()
+        if not ok:
+            return jsonify({'success': False, 'message': 'Erro ao processar produção.'}), 500
+        return jsonify({'success': True, 'message': 'Produção da concretagem processada com sucesso!'})
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Erro ao processar produção da concretagem: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
+
 
 @concretagem.route('/api/<int:id>/excluir', methods=['POST'])
 @login_required
