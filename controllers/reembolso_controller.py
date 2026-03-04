@@ -926,7 +926,7 @@ def exportar_pdf(id):
 
             for doc in docs:
                 if doc.tipo == 'nota' and doc.nota_fiscal:
-                    doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).first()
+                    doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).distinct(Upload.blob).all()
                 
                 if doc.tipo == 'nota' and doc.nota_fiscal and doc.nota_fiscal.uploads:
                     for upload in doc.nota_fiscal.uploads:
