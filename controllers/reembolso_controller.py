@@ -919,14 +919,14 @@ def exportar_pdf(id):
             valor_total = sum(doc.valor for doc in docs)
             # Calcula o número de dias desde 1900
             dias = dias_desde_1900(reembolso.data.date())
-            nrel = valor_total + dias
+            nrel = int(round(valor_total + dias, 2)*100)
             html = render_template('reembolsos/pdf_template.html', docs=docs, reembolso=reembolso, nrel=nrel, valor_total=valor_total)
             pdf_bytes = HTML(string=html, base_url=request.base_url).write_pdf()
             pdf_writer.append_pages_from_reader(PdfReader(BytesIO(pdf_bytes)))
 
             for doc in docs:
                 if doc.tipo == 'nota' and doc.nota_fiscal:
-                    doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).all()
+                    doc.nota_fiscal.uploads = Upload.query.filter_by(pai_id=doc.nota_fiscal.id, pai='NotaFiscal', tipo=3).first()
                 
                 if doc.tipo == 'nota' and doc.nota_fiscal and doc.nota_fiscal.uploads:
                     for upload in doc.nota_fiscal.uploads:
@@ -964,10 +964,10 @@ def exportar_pdf(id):
             pdf_writer.write(pdf_output)
             pdf_output.seek(0)
             
-            # Criar nome do arquivo baseado no centro de custo e ano
-            # Limpar caracteres inválidos do nome do arquivo
-            nome_arquivo = f"{centro_custo.codigo} - {centro_custo.nome} - {int(ano)}".replace('/', '_').replace('\\', '_').replace(':', '_')
-            nome_arquivo = f"{nome_arquivo}.pdf"
+            # Criar nome do arquivo com nrel, data e centro de custo
+            data_str = reembolso.data.strftime('%Y-%m-%d') if reembolso.data else ''
+            cc_nome_limpo = f"{centro_custo.codigo} - {centro_custo.nome}".replace('/', '_').replace('\\', '_').replace(':', '_')
+            nome_arquivo = f"{nrel}_{data_str}_{cc_nome_limpo}.pdf"
             
             # Adicionar PDF ao ZIP
             zip_file.writestr(nome_arquivo, pdf_output.getvalue())
