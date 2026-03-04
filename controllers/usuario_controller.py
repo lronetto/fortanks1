@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
-from werkzeug.security import generate_password_hash
+from utils.password import hash_password
 from datetime import datetime
 
 from models.database import db
@@ -225,7 +225,7 @@ def novo():
         novo_usuario = Usuario(
             nome=nome,
             email=email,
-            senha=generate_password_hash(senha),
+            senha=hash_password(senha),
             departamento_id=int(departamento_id),
             cargo_id=int(cargo_id),
             colaborador_id=int(colaborador_id) if colaborador_id else None
@@ -335,7 +335,7 @@ def resetar_senha(id):
             return render_template('usuarios/resetar_senha.html', usuario=usuario)
         
         # Atualiza a senha
-        usuario.senha = generate_password_hash(nova_senha)
+        usuario.senha = hash_password(nova_senha)
         db.session.commit()
         
         if is_ajax:

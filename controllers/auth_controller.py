@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from werkzeug.security import check_password_hash
 from datetime import datetime
 import logging
 from models.database import db
 from models.usuario import Usuario
+from utils.password import is_argon2_hash
 
 
 auth_bp = Blueprint('auth', __name__)
@@ -39,9 +39,11 @@ def login():
             if usuario.colaborador.status != 'Ativo':
                 flash('Colaborador inativo. Por favor, contate o administrador.', 'danger')
                 return redirect(url_for('auth.login'))
+            # Migra hash legado (scrypt/pbkdf2) para Argon2id no próximo login
+            if not is_argon2_hash(usuario.senha):
+                usuario.set_senha(senha)
             # Realiza o login
             login_user(usuario)
-            
             # Atualiza a data do último login
             usuario.ultimo_login = datetime.utcnow()
             db.session.commit()

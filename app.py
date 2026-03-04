@@ -40,7 +40,6 @@ from models.database import db, init_db
 from config.config import Config
 from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import sys
 from datetime import datetime

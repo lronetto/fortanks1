@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from numpy._core.numeric import False_
+
 # Path do projeto (raiz fortanks_novo) para imports
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:

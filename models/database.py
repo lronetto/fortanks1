@@ -1,6 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from werkzeug.security import generate_password_hash
+from utils.password import hash_password
 import logging
 
 # Configurar logger
@@ -53,7 +53,7 @@ def criar_usuario_admin():
             admin = Usuario(
                 nome='Administrador',
                 email='admin@exemplo.com',
-                senha=generate_password_hash('admin123'),
+                senha=hash_password('admin123'),
                 cargo='admin',
                 departamento='Administrativo',
             )

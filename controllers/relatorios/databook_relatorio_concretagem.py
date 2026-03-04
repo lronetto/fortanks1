@@ -830,74 +830,80 @@ def _processar_ods_template(ods_path, numero_serie, cliente_nome, tanque_nome, d
                                 new_value = new_value.replace('{23}', pecas_str)
                             else:
                                 new_value = new_value.replace('{23}', "N/A")
+                            romps = len(rompimentos)
+                            romps_data = [] 
+                            if romps == 4:
+                                romps_data.append(rompimentos[0])
+                                romps_data.append(rompimentos[1])
+                                romps_data.append(rompimentos[2])
+                                romps_data.append(rompimentos[3])
+                            elif romps > 4 and rompimentos[len(rompimentos)-1].data_rompimento and \
+                                rompimentos[len(rompimentos)-1].data_moldagem and \
+                                calcular_idade_cp(rompimentos[romps-1].data_moldagem, rompimentos[romps-1].data_rompimento) >= 25 and \
+                                rompimentos[len(rompimentos)-1].resultado:
+                                romps_data.append(rompimentos[0])
+                                romps_data.append(rompimentos[1])
+                                romps_data.append(rompimentos[2])
+                                romps_data.append(rompimentos[3])
+
+                            # Rompimento 1
+                            if romps_data[0].data_rompimento:
+                                new_value = new_value.replace('{30}', str(rompimentos[0].data_rompimento.strftime('%d/%m/%Y')))
+                            if romps_data[0].data_moldagem and romps_data[0].data_rompimento:
+                                idade = calcular_idade_cp(romps_data[0].data_moldagem, romps_data[0].data_rompimento)
+                                if idade is not None:
+                                    new_value = new_value.replace('{31}', format_float(idade))
+                            if romps_data[0].data_rompimento:
+                                new_value = new_value.replace('{32}', str(romps_data[0].data_rompimento.strftime('%H:%M')))
+                            if romps_data[0].resultado:
+                                resultado_1 = float(romps_data[0].resultado) 
+                                new_value = new_value.replace('{34}', format_float(resultado_1))
                             
-                            # Processar rompimentos (mesma lógica do código XLSX)
-                            if (len(rompimentos) >= 4 and 
-                                rompimentos[len(rompimentos)-1].data_moldagem and 
-                                rompimentos[len(rompimentos)-1].data_rompimento and
-                                calcular_idade_cp(rompimentos[len(rompimentos)-1].data_moldagem, rompimentos[len(rompimentos)-1].data_rompimento) >= 25):
-                                
-                                # Rompimento 1
-                                if rompimentos[0].data_rompimento:
-                                    new_value = new_value.replace('{30}', str(rompimentos[0].data_rompimento.strftime('%d/%m/%Y')))
-                                if rompimentos[0].data_moldagem and rompimentos[0].data_rompimento:
-                                    idade = calcular_idade_cp(rompimentos[0].data_moldagem, rompimentos[0].data_rompimento)
-                                    if idade is not None:
-                                        new_value = new_value.replace('{31}', format_float(idade))
-                                if rompimentos[0].data_rompimento:
-                                    new_value = new_value.replace('{32}', str(rompimentos[0].data_rompimento.strftime('%H:%M')))
-                                if rompimentos[0].resultado:
-                                    resultado_1 = float(rompimentos[0].resultado) 
-                                    new_value = new_value.replace('{34}', format_float(resultado_1))
-                                
-                                tipo_romp_1 = mapear_tipo_rompimento(rompimentos[0].tipo_rompimento, [35, 36, 37, 38, 39])
-                                for campo, valor in tipo_romp_1.items():
-                                    new_value = new_value.replace('{'+str(campo)+'}', valor)
-                                
-                                # Rompimento 2
-                                if rompimentos[1].resultado:
-                                    resultado_2 = float(rompimentos[1].resultado)
-                                    new_value = new_value.replace('{41}', format_float(resultado_2))
-                                tipo_romp_2 = mapear_tipo_rompimento(rompimentos[1].tipo_rompimento, [42, 43, 44, 45, 46])
-                                for campo, valor in tipo_romp_2.items():
-                                    new_value = new_value.replace('{'+str(campo)+'}', valor)
-                                
-                                # Rompimento 3
-                                if rompimentos[2].data_rompimento:
-                                    new_value = new_value.replace('{47}', str(rompimentos[2].data_rompimento.strftime('%d/%m/%Y')))
-                                if rompimentos[2].data_rompimento:
-                                    new_value = new_value.replace('{48}', str(rompimentos[2].data_rompimento.strftime('%H:%M')))
-                                if rompimentos[2].resultado:
-                                    resultado_3 = float(rompimentos[2].resultado)
-                                    new_value = new_value.replace('{49}', format_float(resultado_3))
-                                tipo_romp_3 = mapear_tipo_rompimento(rompimentos[2].tipo_rompimento, [50, 51, 52, 53, 54])
-                                for campo, valor in tipo_romp_3.items():
-                                    new_value = new_value.replace('{'+str(campo)+'}', valor)
-                                
-                                # Rompimento 4
-                                if rompimentos[3].resultado:
-                                    resultado_4 = float(rompimentos[3].resultado)
-                                    new_value = new_value.replace('{55}', format_float(resultado_4))
-                                tipo_romp_4 = mapear_tipo_rompimento(rompimentos[3].tipo_rompimento, [56, 57, 58, 59, 60])
-                                for campo, valor in tipo_romp_4.items():
-                                    new_value = new_value.replace('{'+str(campo)+'}', valor)
-                                
-                                # Resistências finais
-                                if rompimentos[0].resultado and rompimentos[1].resultado:
-                                    resultado_0 = (rompimentos[0].resultado or 0)
-                                    resultado_1 = (rompimentos[1].resultado or 0)
-                                    resistencia_final_1 = max(resultado_0, resultado_1)
-                                    new_value = new_value.replace('{61}', format_float(resistencia_final_1))
-                                
-                                if rompimentos[2].resultado and rompimentos[3].resultado:
-                                    resultado_2 = (rompimentos[2].resultado or 0)
-                                    resultado_3 = (rompimentos[3].resultado or 0)
-                                    resistencia_final_2 = max(resultado_2, resultado_3)
-                                    new_value = new_value.replace('{63}', format_float(resistencia_final_2))
-                            else:
-                                # Limpar campos de rompimento se não houver dados suficientes
-                                for i in range(30, 64):
-                                    new_value = new_value.replace('{'+str(i)+'}', "")
+                            tipo_romp_1 = mapear_tipo_rompimento(romps_data[0].tipo_rompimento, [35, 36, 37, 38, 39])
+                            for campo, valor in tipo_romp_1.items():
+                                new_value = new_value.replace('{'+str(campo)+'}', valor)
+                            
+                            # Rompimento 2
+                            if romps_data[1].resultado:
+                                resultado_2 = float(romps_data[1].resultado)
+                                new_value = new_value.replace('{41}', format_float(resultado_2))
+                            tipo_romp_2 = mapear_tipo_rompimento(rompimentos[1].tipo_rompimento, [42, 43, 44, 45, 46])
+                            for campo, valor in tipo_romp_2.items():
+                                new_value = new_value.replace('{'+str(campo)+'}', valor)
+                            
+                            # Rompimento 3
+                            if romps_data[2].data_rompimento:
+                                new_value = new_value.replace('{47}', str(romps_data[2].data_rompimento.strftime('%d/%m/%Y')))
+                            if romps_data[2].data_rompimento:
+                                new_value = new_value.replace('{48}', str(romps_data[2].data_rompimento.strftime('%H:%M')))
+                            if romps_data[2].resultado:
+                                resultado_3 = float(romps_data[2].resultado)
+                                new_value = new_value.replace('{49}', format_float(resultado_3))
+                            tipo_romp_3 = mapear_tipo_rompimento(romps_data[2].tipo_rompimento, [50, 51, 52, 53, 54])
+                            for campo, valor in tipo_romp_3.items():
+                                new_value = new_value.replace('{'+str(campo)+'}', valor)
+                            
+                            # Rompimento 4
+                            if romps_data[3].resultado:
+                                resultado_4 = float(romps_data[3].resultado)
+                                new_value = new_value.replace('{55}', format_float(resultado_4))
+                            tipo_romp_4 = mapear_tipo_rompimento(romps_data[3].tipo_rompimento, [56, 57, 58, 59, 60])
+                            for campo, valor in tipo_romp_4.items():
+                                new_value = new_value.replace('{'+str(campo)+'}', valor)
+                            
+                            # Resistências finais
+                            if romps_data[0].resultado and romps_data[1].resultado:
+                                resultado_0 = (romps_data[0].resultado or 0)
+                                resultado_1 = (romps_data[1].resultado or 0)
+                                resistencia_final_1 = max(resultado_0, resultado_1)
+                                new_value = new_value.replace('{61}', format_float(resistencia_final_1))
+                            
+                            if romps_data[2].resultado and romps_data[3].resultado:
+                                resultado_2 = (romps_data[2].resultado or 0)
+                                resultado_3 = (romps_data[3].resultado or 0)
+                                resistencia_final_2 = max(resultado_2, resultado_3)
+                                new_value = new_value.replace('{63}', format_float(resistencia_final_2))
+                        
                             
                             # Atualizar o texto da célula
                             if new_value != original_text:
@@ -945,7 +951,8 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
             print(f'[_gerar_excel_temp] Buscando rompimentos com numero_serie_int: {numero_serie_int}')
             rompimentos = ConcretoUsinagensRompimentos.query\
                 .filter(ConcretoUsinagensRompimentos.numero_serie == numero_serie_int)\
-                .order_by(ConcretoUsinagensRompimentos.data_rompimento.asc())\
+                .filter(ConcretoUsinagensRompimentos.resultado >=24.0)\
+                .order_by(ConcretoUsinagensRompimentos.resultado.asc())\
                 .all()
             print(f'[_gerar_excel_temp] Rompimentos encontrados (int): {len(rompimentos)}')
         else:

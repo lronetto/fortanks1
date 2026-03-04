@@ -1,6 +1,6 @@
 from datetime import datetime
 from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
+from utils.password import hash_password, check_password
 
 from models.database import db  
 
@@ -35,12 +35,12 @@ class Usuario(db.Model, UserMixin):
         """Retorna o nome do cargo para compatibilidade"""
         return self.cargo_rel.nome if self.cargo_rel else ''
     def set_senha(self, senha):
-        """Define a senha do usuário com hash"""
-        self.senha = generate_password_hash(senha)
+        """Define a senha do usuário com hash (Argon2id)"""
+        self.senha = hash_password(senha)
 
     def verificar_senha(self, senha):
-        """Verifica se a senha informada é correta"""
-        return check_password_hash(self.senha, senha)
+        """Verifica se a senha informada é correta (aceita Argon2id e hashes legados)"""
+        return check_password(self.senha, senha)
 
     def atualizar_ultimo_login(self):
         """Atualiza a data/hora do último login"""

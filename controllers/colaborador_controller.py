@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify, send_file, make_response
 from flask_login import login_required, current_user
 from datetime import datetime, date
-from werkzeug.security import generate_password_hash
+from utils.password import hash_password
 import pandas as pd
 import os
 import tempfile
@@ -138,7 +138,7 @@ def novo():
             novo_usuario = Usuario(
                 nome=nome,
                 email=email_usuario,
-                senha=generate_password_hash(senha_padrao),
+                senha=hash_password(senha_padrao),
                 cargo=cargo.nome if cargo else None,
                 departamento=departamento.nome if departamento else None
             )
