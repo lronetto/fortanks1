@@ -131,6 +131,14 @@ def fazer_backup_banco_dados(logs):
             return False
         
         # Criar pasta de backups se não existir
+        if sys.platform == 'linux':
+            backup_dir = os.path.join('/mnt/backup/sfortanks', database)
+        else:
+            backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+            logger.info(f"Pasta de backups criada: {backup_dir}")
+        
         backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
         if not os.path.exists(backup_dir):
             os.makedirs(backup_dir)
