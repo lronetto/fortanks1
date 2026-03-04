@@ -11,6 +11,7 @@ import sys
 import subprocess
 import shutil
 import gzip
+import tarfile
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
@@ -88,10 +89,47 @@ def obter_usuario_sistema():
         return 0
 
 
+def _encontrar_mysql_binario(nome):
+    """Encontra o caminho do executável MySQL (mysqldump ou mysql)."""
+    path = shutil.which(nome)
+    if path:
+        return path
+    caminhos_comuns = [
+        f'/usr/bin/{nome}',
+        f'/usr/local/bin/{nome}',
+        f'/opt/mysql/bin/{nome}',
+        f'/usr/local/mysql/bin/{nome}'
+    ]
+    for caminho in caminhos_comuns:
+        if os.path.exists(caminho) and os.access(caminho, os.X_OK):
+            return caminho
+    return None
+
+
+def _obter_tabelas_mysql(host, port, username, password, database, mysql_path):
+    """Obtém lista de tabelas do banco via SHOW TABLES."""
+    cmd = [
+        mysql_path,
+        f'--host={host}',
+        f'--port={port}',
+        f'--user={username}',
+        f'--password={password}',
+        '-N',
+        database,
+        '-e',
+        'SHOW TABLES'
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8')
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr or 'Falha ao listar tabelas')
+    tabelas = [linha.strip() for linha in result.stdout.strip().splitlines() if linha.strip()]
+    return tabelas
+
+
 def fazer_backup_banco_dados(logs):
     """
-    Faz backup completo do banco de dados MySQL.
-    Salva o backup em uma pasta dedicada com timestamp no nome do arquivo.
+    Faz backup do banco de dados MySQL: um arquivo .sql por tabela,
+    depois compacta tudo em um único .tar.gz.
     Remove backups antigos (mantém apenas os últimos 30 dias).
     """
     logs['backup'] = {
@@ -99,84 +137,67 @@ def fazer_backup_banco_dados(logs):
         'erro': False,
         'erro_mensagem': [],
         'erro_traceback': []
-        }
+    }
     try:
-        logger.info("Iniciando backup do banco de dados...")
-        
-        # Obter URI do banco de dados
+        logger.info("Iniciando backup do banco de dados (um .sql por tabela)...")
+
         database_uri = app.config.get('SQLALCHEMY_DATABASE_URI', '')
-        
         if not database_uri:
             logger.error("DATABASE_URI não configurado")
+            logs['backup']['erro'] = True
+            logs['backup']['erro_mensagem'].append("DATABASE_URI não configurado")
             return False
-        
-        # Verificar se é MySQL
+
         if not database_uri.startswith('mysql'):
-            logger.warning(f"Tipo de banco de dados não suportado para backup: {database_uri.split('://')[0]}")
+            logger.warning(f"Tipo de banco não suportado para backup: {database_uri.split('://')[0]}")
             return False
-        
-        # Parse da URI do banco de dados
-        # Formato: mysql+pymysql://user:password@host:port/database
-        parsed = urlparse(database_uri.replace('mysql+pymysql://', 'mysql://'))
-        
-        # Extrair informações de conexão
+
         username = 'remote'
         password = os.getenv('DB_PASSWORD')
         host = '192.168.8.10'
         port = 3306
         database = 'sfortanks'
-        
+
         if not all([username, password, host, database]):
             logger.error("Informações de conexão incompletas no DATABASE_URI")
+            logs['backup']['erro'] = True
+            logs['backup']['erro_mensagem'].append("Informações de conexão incompletas")
             return False
-        
-        # Criar pasta de backups se não existir
-        if sys.platform == 'linux':
-            backup_dir = os.path.join('/mnt/backup/sfortanks', database)
-        else:
-            backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
-        if not os.path.exists(backup_dir):
-            os.makedirs(backup_dir)
-            logger.info(f"Pasta de backups criada: {backup_dir}")
-        
+
         backup_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'backups')
         if not os.path.exists(backup_dir):
             os.makedirs(backup_dir)
             logger.info(f"Pasta de backups criada: {backup_dir}")
-        
-        # Nome do arquivo de backup com timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_filename = f"backup_{database}_{timestamp}.sql"
-        backup_path = os.path.join(backup_dir, backup_filename)
-        
-        # Encontrar o caminho completo do mysqldump
-        # Quando executado como serviço, o PATH pode não incluir o diretório do MySQL
-        mysqldump_path = shutil.which('mysqldump')
-        if not mysqldump_path:
-            # Tentar caminhos comuns do MySQL no Linux
-            caminhos_comuns = [
-                '/usr/bin/mysqldump',
-                '/usr/local/bin/mysqldump',
-                '/opt/mysql/bin/mysqldump',
-                '/usr/local/mysql/bin/mysqldump'
-            ]
-            for caminho in caminhos_comuns:
-                if os.path.exists(caminho) and os.access(caminho, os.X_OK):
-                    mysqldump_path = caminho
-                    break
-        
-        if not mysqldump_path:
-            logger.error("mysqldump não encontrado no sistema. Verifique se o MySQL está instalado.")
+
+        mysqldump_path = _encontrar_mysql_binario('mysqldump')
+        mysql_path = _encontrar_mysql_binario('mysql')
+        if not mysqldump_path or not mysql_path:
+            logger.error("mysqldump ou mysql não encontrado no sistema.")
             logs['backup']['erro'] = True
-            logs['backup']['erro_mensagem'].append("mysqldump não encontrado no sistema. Verifique se o MySQL está instalado.")
+            logs['backup']['erro_mensagem'].append("mysqldump ou mysql não encontrado. Verifique se o MySQL está instalado.")
             return False
-        
-        logger.info(f"Usando mysqldump em: {mysqldump_path}")
-        
-        # Comando mysqldump
-        # Usar --single-transaction para garantir consistência sem bloquear tabelas
-        # Usar --routines e --triggers para incluir procedures e triggers
-        cmd = [
+
+        logger.info(f"Usando mysqldump: {mysqldump_path}")
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        dir_backup = os.path.join(backup_dir, f"backup_{database}_{timestamp}")
+        os.makedirs(dir_backup, exist_ok=True)
+
+        try:
+            tabelas = _obter_tabelas_mysql(host, port, username, password, database, mysql_path)
+        except Exception as e:
+            logger.error(f"Erro ao listar tabelas: {str(e)}")
+            logs['backup']['erro'] = True
+            logs['backup']['erro_mensagem'].append(f"Erro ao listar tabelas: {str(e)}")
+            if os.path.exists(dir_backup):
+                shutil.rmtree(dir_backup, ignore_errors=True)
+            return False
+
+        if not tabelas:
+            logger.warning("Nenhuma tabela encontrada no banco.")
+            logs['backup']['mensagem'].append("Nenhuma tabela encontrada no banco.")
+
+        base_cmd = [
             mysqldump_path,
             f'--host={host}',
             f'--port={port}',
@@ -185,89 +206,96 @@ def fazer_backup_banco_dados(logs):
             '--single-transaction',
             '--routines',
             '--triggers',
-            '--events',
             '--quick',
             '--lock-tables=false',
             database
         ]
-        
-        logger.info(f"Executando backup do banco de dados: {database}")
-        logs['backup']['mensagem'].append(f"Executando backup do banco de dados: {database}")
-        # Executar mysqldump e salvar em arquivo
-        with open(backup_path, 'w', encoding='utf-8') as backup_file:
+
+        logs['backup']['mensagem'].append(f"Executando backup do banco: {database} ({len(tabelas)} tabelas)")
+
+        for tabela in tabelas:
+            sql_path = os.path.join(dir_backup, f"{tabela}.sql")
+            cmd = base_cmd + [tabela]
             try:
-                result = subprocess.run(
-                cmd,
-                stdout=backup_file,
-                stderr=subprocess.PIPE,
-                text=True
-                )
+                with open(sql_path, 'w', encoding='utf-8') as f:
+                    result = subprocess.run(cmd, stdout=f, stderr=subprocess.PIPE, text=True)
+                if result.returncode != 0:
+                    logger.error(f"Erro ao fazer dump da tabela {tabela}: {result.stderr}")
+                    if os.path.exists(sql_path):
+                        os.remove(sql_path)
+                    continue
             except Exception as e:
-                import traceback
-                logger.error(f"Erro ao executar mysqldump: {str(e)}")
-                logs['backup']['erro'] = True
-                logs['backup']['erro_mensagem'].append(f"Erro ao executar mysqldump: {str(e)}")
-                logs['backup']['erro_traceback'].append(traceback.format_exc())
-                return False
-        if result.returncode != 0:
-            logger.error(f"Erro ao executar mysqldump: {result.stderr}")
-            # Remover arquivo de backup parcial se houver erro
-            if os.path.exists(backup_path):
-                os.remove(backup_path)
-            return False
-        
-        # Verificar se o arquivo foi criado e tem conteúdo
-        if not os.path.exists(backup_path):
-            logger.error("Arquivo de backup não foi criado")
-            logs['backup']['erro'] = True
-            logs['backup']['erro_mensagem'].append(f"Arquivo de backup não foi criado")
-            return False
-        
-        file_size = os.path.getsize(backup_path)
-        if file_size == 0:
-            logger.error("Arquivo de backup está vazio")
-            logs['backup']['erro'] = True
-            logs['backup']['erro_mensagem'].append(f"Arquivo de backup está vazio")
-            os.remove(backup_path)
-            return False
-        
-        logger.info(f"Backup criado com sucesso: {backup_filename} ({file_size / 1024 / 1024:.2f} MB)")
-        logs['backup']['mensagem'].append(f"Backup do banco de dados criado com sucesso: {backup_filename} ({file_size / 1024 / 1024:.2f} MB)")
-        # Comprimir o backup para economizar espaço (opcional)
+                logger.error(f"Erro ao fazer dump da tabela {tabela}: {str(e)}")
+                if os.path.exists(sql_path):
+                    os.remove(sql_path)
+                continue
+
+        # Rotinas e eventos (sem dados de tabelas)
+        rotinas_path = os.path.join(dir_backup, '_routines_events.sql')
+        cmd_rotinas = [
+            mysqldump_path,
+            f'--host={host}',
+            f'--port={port}',
+            f'--user={username}',
+            f'--password={password}',
+            '--single-transaction',
+            '--routines',
+            '--events',
+            '--no-create-info',
+            '--no-data',
+            database
+        ]
         try:
-            compressed_path = f"{backup_path}.gz"
-            with open(backup_path, 'rb') as f_in:
-                with gzip.open(compressed_path, 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-            
-            # Remover arquivo não comprimido
-            os.remove(backup_path)
-            compressed_size = os.path.getsize(compressed_path)
-            logger.info(f"Backup comprimido: {backup_filename}.gz ({compressed_size / 1024 / 1024:.2f} MB)")
-            backup_path = compressed_path
-            logs['backup']['mensagem'].append(f"Backup do banco de dados comprimido com sucesso: {backup_filename}.gz ({compressed_size / 1024 / 1024:.2f} MB)")
+            with open(rotinas_path, 'w', encoding='utf-8') as f:
+                result = subprocess.run(cmd_rotinas, stdout=f, stderr=subprocess.PIPE, text=True)
+            if result.returncode != 0 or os.path.getsize(rotinas_path) == 0:
+                os.remove(rotinas_path)
+            else:
+                logger.info("Backup de rotinas e eventos criado: _routines_events.sql")
+        except Exception as e:
+            if os.path.exists(rotinas_path):
+                os.remove(rotinas_path)
+            logger.warning(f"Não foi possível exportar rotinas/eventos: {str(e)}")
+
+        # Compactar tudo em um único .tar.gz
+        archive_name = f"backup_{database}_{timestamp}.tar.gz"
+        archive_path = os.path.join(backup_dir, archive_name)
+        try:
+            with tarfile.open(archive_path, 'w:gz') as tar:
+                for nome in os.listdir(dir_backup):
+                    path_completo = os.path.join(dir_backup, nome)
+                    if os.path.isfile(path_completo):
+                        tar.add(path_completo, arcname=nome)
         except Exception as e:
             import traceback
-            logger.warning(f"Não foi possível comprimir o backup: {str(e)}")
+            logger.error(f"Erro ao compactar backup: {str(e)}")
             logs['backup']['erro'] = True
-            logs['backup']['erro_mensagem'].append(f"Não foi possível comprimir o backup: {str(e)}")
+            logs['backup']['erro_mensagem'].append(f"Erro ao compactar backup: {str(e)}")
             logs['backup']['erro_traceback'].append(traceback.format_exc())
-        
-        # Limpar backups antigos (manter apenas os últimos 30 dias)
+            if os.path.exists(dir_backup):
+                shutil.rmtree(dir_backup, ignore_errors=True)
+            return False
+
+        shutil.rmtree(dir_backup, ignore_errors=True)
+        tamanho_mb = os.path.getsize(archive_path) / 1024 / 1024
+        logger.info(f"Backup concluído: {archive_name} ({tamanho_mb:.2f} MB)")
+        logs['backup']['mensagem'].append(f"Backup criado com sucesso: {archive_name} ({tamanho_mb:.2f} MB)")
+
         try:
             limpar_backups_antigos(backup_dir, dias_manter=30)
         except Exception as e:
             logger.warning(f"Erro ao limpar backups antigos: {str(e)}")
-            logs['backup']['erro'] = True
             logs['backup']['erro_mensagem'].append(f"Erro ao limpar backups antigos: {str(e)}")
-        logger.info("Backup do banco de dados concluído com sucesso")
-        logs['backup']['mensagem'].append(f"Backup do banco de dados concluído com sucesso")
+
+        logs['backup']['mensagem'].append("Backup do banco de dados concluído com sucesso")
         return True
-            
+
     except Exception as e:
+        import traceback
         logger.error(f"Erro ao fazer backup do banco de dados: {str(e)}", exc_info=True)
         logs['backup']['erro'] = True
-        logs['backup']['erro_mensagem'].append(f"Erro ao fazer backup do banco de dados: {str(e)}")
+        logs['backup']['erro_mensagem'].append(f"Erro ao fazer backup: {str(e)}")
+        logs['backup']['erro_traceback'].append(traceback.format_exc())
         return False
 
 
