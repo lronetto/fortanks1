@@ -1,0 +1,173 @@
+{% extends 'common/base.html' %}
+
+{% block title %}{{ 'Editar' if reg else 'Nova' }} Avaliação PLR - Sistema de Gestão{% endblock %}
+{% block mobile_title %}{{ 'Editar' if reg else 'Nova' }} Avaliação PLR{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">{{ 'Editar' if reg else 'Nova' }} Avaliação PLR</h1>
+        <a href="{{ url_for('plr.avaliacoes_index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('plr.avaliacao_editar', id=reg.id) if reg else url_for('plr.avaliacao_nova') }}" id="formAvaliacao">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="colaborador_id" class="form-label">Colaborador *</label>
+                        <select class="form-select" id="colaborador_id" name="colaborador_id" required>
+                            <option value="">Selecione...</option>
+                            {% for c in colaboradores %}
+                            <option value="{{ c.id }}" {% if reg and reg.colaborador_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="data" class="form-label">Data *</label>
+                        <input type="date" class="form-control" id="data" name="data" value="{{ reg.data.strftime('%Y-%m-%d') if reg and reg.data else '' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="modelo_plr_id" class="form-label">Modelo PLR</label>
+                        <select class="form-select" id="modelo_plr_id" name="modelo_plr_id">
+                            <option value="">Nenhum</option>
+                            {% for m in modelos %}
+                            <option value="{{ m.id }}" {% if reg and reg.modelo_plr_id == m.id %}selected{% endif %}>{{ m.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="centro_custo_id" class="form-label">Obra (Centro de Custo)</label>
+                        <select class="form-select" id="centro_custo_id" name="centro_custo_id">
+                            <option value="">Nenhum</option>
+                            {% for cc in centros %}
+                            <option value="{{ cc.id }}" {% if reg and reg.centro_custo_id == cc.id %}selected{% endif %}>{{ cc.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="equipe_alocada" class="form-label">Equipe alocada (um por linha)</label>
+                        <textarea class="form-control" id="equipe_alocada" name="equipe_alocada" rows="2" placeholder="Equipe A&#10;Equipe B">{{ (reg.equipe_alocada | join('\n')) if reg and reg.equipe_alocada else '' }}</textarea>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Avaliação (critérios e notas)</label>
+                        <p class="text-muted small mb-2">Critérios padrão: Assiduidade (30%), Zero Acidente (15%), Segurança/Limpeza/Organização (25%), Prazo (30%). A média é calculada de forma ponderada quando os pesos são informados.</p>
+                        <div id="avaliacao-criterios">
+                            {% for item in avaliacao_list | default([]) %}
+                            <div class="row g-2 mb-2 criterio-row align-items-center">
+                                <div class="col-md-4">
+                                    <input type="text" class="form-control criterio-tipo" placeholder="Ex: Assiduidade" value="{{ item.get('tipo', '') }}">
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" step="0.01" min="0" max="100" class="form-control criterio-peso" placeholder="Peso %" value="{{ (item.get('peso') * 100) | int if item.get('peso') is not none else '' }}" title="Peso em % (ex: 30 para 30%)">
+                                </div>
+                                <div class="col-md-3">
+                                    <input type="number" step="0.01" min="0" max="10" class="form-control criterio-valor" placeholder="Nota 0-10" value="{{ item.get('valor', '') }}">
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="button" class="btn btn-outline-danger btn-sm btn-remover-criterio"><i class="fas fa-minus"></i></button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm me-2" id="btn-criterios-padrao">
+                                <i class="fas fa-list-check"></i> Usar critérios padrão
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-criterio">
+                                <i class="fas fa-plus"></i> Adicionar critério
+                            </button>
+                        </div>
+                        <input type="hidden" name="avaliacao" id="avaliacao_json" value="">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="observacoes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="observacoes" name="observacoes" rows="2">{{ reg.observacoes if reg else '' }}</textarea>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <a href="{{ url_for('plr.avaliacoes_index') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function() {
+    var criteriosPadrao = {{ criterios_padrao | tojson | safe }};
+
+    function buildAvaliacaoJson() {
+        var rows = document.querySelectorAll('#avaliacao-criterios .criterio-row');
+        var arr = [];
+        rows.forEach(function(row) {
+            var tipo = row.querySelector('.criterio-tipo');
+            var valorEl = row.querySelector('.criterio-valor');
+            var pesoEl = row.querySelector('.criterio-peso');
+            if (!tipo) return;
+            var valor = valorEl && valorEl.value !== '' ? parseFloat(valorEl.value) : null;
+            var peso = pesoEl && pesoEl.value !== '' ? parseFloat(pesoEl.value) / 100 : null;
+            arr.push({
+                tipo: tipo.value || 'Critério',
+                valor: valor !== null ? valor : 0,
+                peso: peso
+            });
+        });
+        document.getElementById('avaliacao_json').value = JSON.stringify(arr);
+    }
+
+    function addRow(item) {
+        item = item || {};
+        var pesoPct = item.peso != null ? Math.round(item.peso * 100) : '';
+        var html = '<div class="row g-2 mb-2 criterio-row align-items-center">' +
+            '<div class="col-md-4"><input type="text" class="form-control criterio-tipo" placeholder="Ex: Assiduidade" value="' + (item.tipo || '') + '"></div>' +
+            '<div class="col-md-2"><input type="number" step="0.01" min="0" max="100" class="form-control criterio-peso" placeholder="Peso %" value="' + pesoPct + '" title="Peso em %"></div>' +
+            '<div class="col-md-3"><input type="number" step="0.01" min="0" max="10" class="form-control criterio-valor" placeholder="Nota 0-10" value="' + (item.valor !== undefined && item.valor !== '' ? item.valor : '') + '"></div>' +
+            '<div class="col-md-2"><button type="button" class="btn btn-outline-danger btn-sm btn-remover-criterio"><i class="fas fa-minus"></i></button></div></div>';
+        document.getElementById('avaliacao-criterios').insertAdjacentHTML('beforeend', html);
+    }
+
+    document.getElementById('btn-criterios-padrao').addEventListener('click', function() {
+        document.getElementById('avaliacao-criterios').innerHTML = '';
+        if (criteriosPadrao && criteriosPadrao.length) {
+            criteriosPadrao.forEach(function(c) { addRow(c); });
+        } else {
+            addRow({ tipo: 'Assiduidade', peso: 0.30 });
+            addRow({ tipo: 'Zero Acidente', peso: 0.15 });
+            addRow({ tipo: 'Segurança, Limpeza, Organização', peso: 0.25 });
+            addRow({ tipo: 'Prazo', peso: 0.30 });
+        }
+    });
+
+    document.getElementById('btn-add-criterio').addEventListener('click', function() {
+        addRow({});
+    });
+
+    document.getElementById('avaliacao-criterios').addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-remover-criterio');
+        if (btn) btn.closest('.criterio-row').remove();
+    });
+
+    document.getElementById('formAvaliacao').addEventListener('submit', function() {
+        buildAvaliacaoJson();
+    });
+
+    if (document.querySelectorAll('#avaliacao-criterios .criterio-row').length === 0) {
+        document.getElementById('btn-criterios-padrao').click();
+    }
+})();
+</script>
+{% endblock %}

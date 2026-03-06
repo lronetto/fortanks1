@@ -1,0 +1,99 @@
+{% extends 'common/base.html' %}
+
+{% block title %}PLR - Relatório de Avaliação - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Relatório de Avaliação PLR{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Relatório de Avaliação PLR</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('plr.relatorio_planilha') }}" class="btn btn-outline-primary">
+                <i class="fas fa-file-excel"></i> Relatório Planilha (Cálculo)
+            </a>
+            <a href="{{ url_for('plr.avaliacoes_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('plr.relatorio_avaliacao') }}" class="row g-3">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-2">
+                    <label for="ano" class="form-label">Ano *</label>
+                    <input type="number" class="form-control" id="ano" name="ano" min="2020" max="2030" value="{{ request.form.get('ano') or ano_sugerido or '' }}" placeholder="Ex: 2025" required>
+                </div>
+                <div class="col-md-2">
+                    <label for="mes_inicio" class="form-label">Mês início</label>
+                    <select class="form-select" id="mes_inicio" name="mes_inicio">
+                        {% for i in range(1, 13) %}
+                        <option value="{{ i }}" {% if (request.form.get('mes_inicio') | default('1') | int) == i %}selected{% endif %}>{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="mes_fim" class="form-label">Mês fim</label>
+                    <select class="form-select" id="mes_fim" name="mes_fim">
+                        {% for i in range(1, 13) %}
+                        <option value="{{ i }}" {% if (request.form.get('mes_fim') | default('12') | int) == i %}selected{% endif %}>{{ i }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="modelo_plr_id" class="form-label">Modelo de PLR</label>
+                    <select class="form-select" id="modelo_plr_id" name="modelo_plr_id">
+                        <option value="">Todos</option>
+                        {% for m in modelos %}
+                        <option value="{{ m.id }}" {% if request.form.get('modelo_plr_id') | int == m.id %}selected{% endif %}>{{ m.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Gerar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if resultado is not none %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Resultado (média por colaborador no período)</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>Quantidade de avaliações</th>
+                            <th>Média</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in resultado %}
+                        <tr>
+                            <td>{{ r.colaborador.nome if r.colaborador else '-' }}</td>
+                            <td>{{ r.quantidade_avaliacoes }}</td>
+                            <td>{% if r.media is not none %}{{ "%.2f"|format(r.media) }}{% else %}-{% endif %}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center">Nenhum dado no período com os filtros informados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

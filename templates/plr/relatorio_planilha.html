@@ -1,0 +1,271 @@
+{% extends 'common/base.html' %}
+
+{% block title %}PLR - Relatório Planilha (Cálculo) - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Relatório Planilha PLR{% endblock %}
+
+{% block content %}
+<style>
+/* Barra de rolagem horizontal em cima da tabela (transform flip) */
+.planilha-scroll-wrapper {
+    overflow-x: auto !important;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+    display: block;
+    transform: scaleY(-1);
+}
+.planilha-scroll-inner {
+    transform: scaleY(-1);
+}
+.planilha-scroll-wrapper table {
+    width: max-content !important;
+    min-width: 100%;
+    table-layout: auto;
+}
+/* th em duas linhas, largura controlada */
+#tabela-planilha-plr thead th {
+    white-space: normal !important;
+    word-wrap: break-word;
+    word-break: break-word;
+    max-width: 85px;
+    line-height: 1.25;
+    padding: 0.4em 0.5em;
+    vertical-align: middle;
+    font-size: 0.85rem;
+}
+#tabela-planilha-plr thead th.th-nome { max-width: 120px; }
+#tabela-planilha-plr thead th.th-largo { max-width: 110px; }
+</style>
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Relatório Planilha PLR (Cálculo)</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('plr.relatorio_avaliacao') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-chart-bar"></i> Relatório de Avaliação
+            </a>
+            <a href="{{ url_for('plr.avaliacoes_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="formPlanilhaPlr" class="row g-3 align-items-end">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="col-md-4">
+                    <label for="periodo_inicio" class="form-label">Início (ano - mês)</label>
+                    <select class="form-select" id="periodo_inicio" name="periodo_inicio" required>
+                        {% for a in range(2020, 2031) %}
+                        {% for i in range(1, 13) %}
+                        <option value="{{ a }}-{{ '%02d'|format(i) }}" {% if a == ano_sugerido and i == 1 %}selected{% endif %}>{{ a }} - {{ '%02d'|format(i) }}</option>
+                        {% endfor %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="periodo_fim" class="form-label">Fim (ano - mês)</label>
+                    <select class="form-select" id="periodo_fim" name="periodo_fim" required>
+                        {% for a in range(2020, 2031) %}
+                        {% for i in range(1, 13) %}
+                        <option value="{{ a }}-{{ '%02d'|format(i) }}" {% if a == ano_sugerido and i == 12 %}selected{% endif %}>{{ a }} - {{ '%02d'|format(i) }}</option>
+                        {% endfor %}
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100" id="btnGerarPlanilha">
+                        <i class="fas fa-search"></i> Gerar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4" id="cardPlanilhaResultado" style="display: none;">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold">Planilha de Cálculo PLR</h6>
+            <span class="text-muted small" id="dataFechamentoLabel"></span>
+        </div>
+        <div class="card-body p-0">
+            <div class="planilha-scroll-wrapper">
+                <div class="planilha-scroll-inner">
+                <table class="table table-bordered table-sm mb-0" id="tabela-planilha-plr">
+                    <thead class="table-light">
+                        <tr id="theadPlanilhaRow"></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer small text-muted">
+            Regra: Salário base PLR = salário do cargo no período × multiplicador. Se tempo de casa &gt; 18 meses, multiplicador = 2; senão 1. P = participação média (%). VPO = Salário base PLR × P/100. Valor total = VPO.
+        </div>
+    </div>
+
+    <div id="planilhaMensagem" class="alert alert-info mb-4" role="alert">
+        <i class="fas fa-info-circle"></i> Use os filtros acima e clique em <strong>Gerar</strong> para carregar os dados.
+    </div>
+    <div id="planilhaErro" class="alert alert-danger mb-4" style="display: none;" role="alert"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{% if planilha_json %}
+<script>window.PLANILHA_PLR_DATA = {{ planilha_json | tojson | safe }};</script>
+{% endif %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+    var dadosUrl = '{{ url_for("plr.relatorio_planilha_dados") }}';
+    var dtInstance = null;
+
+    function initDataTable(data, mesesColunas, dataFechamento) {
+        var card = document.getElementById('cardPlanilhaResultado');
+        var msg = document.getElementById('planilhaMensagem');
+        var labelFech = document.getElementById('dataFechamentoLabel');
+        if (card) card.style.display = 'block';
+        if (msg) msg.style.display = 'none';
+        if (labelFech) labelFech.textContent = dataFechamento ? ('Data de fechamento: ' + dataFechamento) : '';
+        buildThead(mesesColunas);
+        if (dtInstance) {
+            dtInstance.destroy();
+            dtInstance = null;
+        }
+        var $table = $('#tabela-planilha-plr');
+        if ($table.length && typeof $.fn.DataTable !== 'undefined') {
+            dtInstance = $table.DataTable({
+                data: data,
+                columns: buildColumns(mesesColunas),
+                responsive: false,
+                order: [[1, 'asc']],
+                language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+                pageLength: 25,
+                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+            });
+        }
+    }
+
+    function buildColumns(mesesColunas) {
+        var cols = [
+            { data: 'cpf', className: 'text-nowrap' },
+            { data: 'nome' },
+            { data: 'admissao', className: 'text-nowrap' },
+            { data: 'demissao_fechamento', className: 'text-nowrap' },
+            { data: 'tempo_casa_meses', className: 'text-end' },
+            { data: 'funcao' }
+        ];
+        var i, m;
+        for (i = 0; i < mesesColunas.length; i++) {
+            m = mesesColunas[i];
+            (function(idx) {
+                cols.push({
+                    data: 'pcts_meses',
+                    className: 'text-end',
+                    render: function(d) { return d && d[idx] != null ? (d[idx].toFixed(2) + '%') : '-'; }
+                });
+            })(i);
+        }
+        cols.push({ data: 'soma', className: 'text-end' });
+        cols.push({ data: 'p', className: 'text-end' });
+        cols.push({ data: 'salario_base_plr', className: 'text-end' });
+        cols.push({ data: 'vpo', className: 'text-end' });
+        cols.push({ data: 'valor_total', className: 'text-end fw-bold' });
+        return cols;
+    }
+
+    function buildThead(mesesColunas) {
+        var ths = [
+            'CPF',
+            'Nome',
+            'Admissão',
+            'Demissão /<br>Fecham.',
+            'Tempo casa<br>(meses)',
+            'Função'
+        ];
+        var i, m;
+        for (i = 0; i < mesesColunas.length; i++) {
+            m = mesesColunas[i];
+            ths.push(MESES_ABREV[(m.mes - 1)] + '<br>' + m.ano);
+        }
+        ths.push('SOMA', 'P (%)', 'Salário base<br>PLR', 'VPO', 'Valor total<br>a pagar');
+        var row = document.getElementById('theadPlanilhaRow');
+        if (!row) return;
+        row.innerHTML = '';
+        var idx = 0;
+        ths.forEach(function(t) {
+            var th = document.createElement('th');
+            var isMes = (idx >= 6 && idx < 6 + mesesColunas.length);
+            th.className = isMes ? 'text-center' : '';
+            if (idx === 1) th.classList.add('th-nome');
+            if (idx === 2 || idx === 5) th.classList.add('th-largo');
+            th.innerHTML = t;
+            row.appendChild(th);
+            idx++;
+        });
+    }
+
+    var form = document.getElementById('formPlanilhaPlr');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var inicioVal = document.getElementById('periodo_inicio').value;
+        var fimVal = document.getElementById('periodo_fim').value;
+        var errEl = document.getElementById('planilhaErro');
+        var partsInicio = inicioVal.split('-');
+        var partsFim = fimVal.split('-');
+        var ano = partsInicio[0];
+        var mesInicio = parseInt(partsInicio[1], 10);
+        var mesFim = parseInt(partsFim[1], 10);
+        var anoFim = partsFim[0];
+        if (ano !== anoFim) {
+            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Início e fim devem ser do mesmo ano.'; }
+            return;
+        }
+        if (mesInicio > mesFim) {
+            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'O mês de início deve ser anterior ou igual ao mês de fim.'; }
+            return;
+        }
+        if (errEl) errEl.style.display = 'none';
+        var msgEl = document.getElementById('planilhaMensagem');
+        if (msgEl) msgEl.style.display = 'none';
+        var btn = document.getElementById('btnGerarPlanilha');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Carregando...'; }
+
+        var url = dadosUrl + '?ano=' + encodeURIComponent(ano) + '&mes_inicio=' + encodeURIComponent(mesInicio) + '&mes_fim=' + encodeURIComponent(mesFim);
+
+        fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
+            .then(function(res) { return res.json(); })
+            .then(function(res) {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }
+                if (res.error) {
+                    errEl = document.getElementById('planilhaErro');
+                    if (errEl) { errEl.textContent = res.error; errEl.style.display = 'block'; }
+                    return;
+                }
+                initDataTable(res.data || [], res.meses_colunas || [], res.data_fechamento || '');
+            })
+            .catch(function(err) {
+                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }
+                errEl = document.getElementById('planilhaErro');
+                if (errEl) { errEl.textContent = 'Erro ao carregar os dados. Tente novamente.'; errEl.style.display = 'block'; }
+            });
+        });
+    }
+
+    if (window.PLANILHA_PLR_DATA && window.PLANILHA_PLR_DATA.meses_colunas) {
+        initDataTable(
+            window.PLANILHA_PLR_DATA.data || [],
+            window.PLANILHA_PLR_DATA.meses_colunas,
+            window.PLANILHA_PLR_DATA.data_fechamento || ''
+        );
+    }
+});
+</script>
+{% endblock %}

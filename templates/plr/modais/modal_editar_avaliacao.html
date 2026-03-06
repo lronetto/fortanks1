@@ -1,0 +1,92 @@
+<!-- Modal Editar Avaliação PLR (uma instância por avaliação no loop) -->
+<div class="modal fade" id="modalEditarAvaliacao{{ av.id }}" tabindex="-1" aria-labelledby="modalEditarAvaliacaoLabel{{ av.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.avaliacao_editar', id=av.id) }}" class="form-avaliacao-plr">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarAvaliacaoLabel{{ av.id }}">Editar Avaliação PLR</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Colaborador *</label>
+                            <select class="form-select" name="colaborador_id" required>
+                                {% for c in colaboradores %}
+                                <option value="{{ c.id }}" {% if av.colaborador_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Data *</label>
+                            <input type="date" class="form-control" name="data" value="{{ av.data.strftime('%Y-%m-%d') if av.data else '' }}" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Modelo PLR</label>
+                            <select class="form-select" name="modelo_plr_id">
+                                <option value="">Nenhum</option>
+                                {% for m in modelos %}
+                                <option value="{{ m.id }}" {% if av.modelo_plr_id == m.id %}selected{% endif %}>{{ m.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Obra (Centro de Custo)</label>
+                            <select class="form-select" name="centro_custo_id">
+                                <option value="">Nenhum</option>
+                                {% for cc in centros %}
+                                <option value="{{ cc.id }}" {% if av.centro_custo_id == cc.id %}selected{% endif %}>{{ cc.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Equipe alocada (um por linha)</label>
+                            <textarea class="form-control" name="equipe_alocada" rows="2">{{ (av.equipe_alocada | join('\n')) if av.equipe_alocada else '' }}</textarea>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="form-label">Avaliação (critérios e notas)</label>
+                            <div class="avaliacao-criterios-container">
+                                {% for item in avaliacao_list_editar %}
+                                <div class="row g-2 mb-2 criterio-row align-items-center">
+                                    <div class="col-md-4">
+                                        <input type="text" class="form-control criterio-tipo" value="{{ item.get('tipo', '') }}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <input type="number" step="0.01" min="0" max="100" class="form-control criterio-peso" value="{{ (item.get('peso') * 100) | int if item.get('peso') is not none else '' }}">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="number" step="0.01" min="0" max="10" class="form-control criterio-valor" value="{{ item.get('valor', '') }}">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-danger btn-sm btn-remover-criterio"><i class="fas fa-minus"></i></button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm me-2 btn-criterios-padrao"><i class="fas fa-list-check"></i> Usar critérios padrão</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm btn-add-criterio"><i class="fas fa-plus"></i> Adicionar critério</button>
+                            </div>
+                            <input type="hidden" name="avaliacao" class="avaliacao-json-input" value="">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="form-label">Observações</label>
+                            <textarea class="form-control" name="observacoes" rows="2">{{ av.observacoes or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -1,13 +1,7 @@
 ---
 description: 
-globs: 
 alwaysApply: true
 ---
-
-# Your rule content
-
-- You can @ files here
-- You can use markdown but dont have to
 
 Você é um engenheiro de software sênior especializado na construção de sistemas altamente escaláveis e fáceis de manter.
 
@@ -49,5 +43,4 @@ Nunca sobrescreva meu arquivo .env sem primeiro perguntar e confirmar.
 Procure sempre usar modal para fazer a a criação de novo item e tambem a edição
 quando for criar um formulario sempre coloque o token csrf
 Ao criar novos modais em templates crie em arquivo separado dentro da pasta modais dentro do template principal, nele coloque tambem o javascript
-
-
+ao criar tabelas sempre procure usar datatables com ajax para responsividade

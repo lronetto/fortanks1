@@ -1,0 +1,105 @@
+{% extends 'common/base.html' %}
+
+{% block title %}PLR - Avaliações - Sistema de Gestão{% endblock %}
+{% block mobile_title %}PLR - Avaliações{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">PLR - Avaliações do Colaborador</h1>
+        <div class="btn-group">
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaAvaliacao">
+                <i class="fas fa-plus"></i>
+                <span class="d-none d-md-inline-block ms-1">Nova Avaliação</span>
+            </button>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalImportarAvaliacoes">
+                <i class="fas fa-file-import"></i>
+                <span class="d-none d-md-inline-block ms-1">Importar planilha</span>
+            </button>
+            <a href="{{ url_for('plr.relatorio_avaliacao') }}" class="btn btn-info">
+                <i class="fas fa-chart-bar"></i>
+                <span class="d-none d-md-inline-block ms-1">Relatório de Avaliação</span>
+            </a>
+            <a href="{{ url_for('plr.modelos_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-cog"></i>
+                <span class="d-none d-md-inline-block ms-1">Modelos de PLR</span>
+            </a>
+            <a href="{{ url_for('plr.cargos_salarios_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-money-bill"></i>
+                <span class="d-none d-md-inline-block ms-1">Cargos x Salário</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Lista de Avaliações</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabela-avaliacoes" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Colaborador</th>
+                            <th>Obra</th>
+                            <th>Equipe Alocada</th>
+                            <th>Assiduidade</th>
+                            <th>Zero Acidente</th>
+                            <th>Segurança<br>Limpeza<br>Organ.</th>
+                            <th>Prazo</th>
+                            <th>Total %</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# Dados carregados via AJAX pelo DataTables #}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'plr/modais/modal_nova_avaliacao.html' %}
+{% include 'plr/modais/modal_importar_avaliacoes.html' %}
+{% for av_data in avaliacoes_com_lista %}
+{% with av=av_data.av, avaliacao_list_editar=av_data.avaliacao_list_editar %}
+{% include 'plr/modais/modal_editar_avaliacao.html' %}
+{% endwith %}
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>window.CRITERIOS_PADRAO_PLR = {{ criterios_padrao | tojson | safe }};</script>
+<script src="{{ url_for('static', filename='js/plr_avaliacao_modais.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var $table = $('#tabela-avaliacoes');
+    if ($table.length && typeof $.fn.DataTable !== 'undefined') {
+        $table.DataTable({
+            responsive: true,
+            order: [[0, 'desc']],
+            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' },
+            ajax: {
+                url: '{{ url_for("plr.avaliacoes_dados") }}',
+                dataSrc: 'data'
+            },
+            columns: [
+                { data: 'data' },
+                { data: 'colaborador_nome' },
+                { data: 'obra_codigo' },
+                { data: 'equipe_alocada' },
+                { data: 'assiduidade' },
+                { data: 'zero_acidente' },
+                { data: 'seguranca' },
+                { data: 'prazo' },
+                { data: 'total_pct' },
+                { data: 'acoes', orderable: false, searchable: false, className: 'text-center', render: function(data) { return data || ''; } }
+            ]
+        });
+    }
+});
+</script>
+{% endblock %}

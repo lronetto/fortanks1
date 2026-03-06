@@ -310,7 +310,8 @@ class Arquivei:
             url = f"https://api.arquivei.com.br/v1/nfse/danfse?id={self.chave_acesso}"
         response = requests.get(url, headers=headers)
         response_data = response.json() 
-        #print('get pdf')
+        print('get pdf')
+        print(f'url: {url}')
         print(f'response_data: {response_data}')
         if response_data.get('status').get('code') == 200:
             self.pdf = response_data.get('data').get('encoded_pdf')

@@ -26,7 +26,9 @@ from .equipamento import Equipamento, Manutencao, ChecklistModelo, ChecklistItem
 from .colaborador import Colaborador
 from .solicitacao import Solicitacoes, SolicitacoesItens
 from .cargo import Cargo
+from .cargo_salario import CargoSalario
 from .departamento import Departamento
+from .plr import ModeloPLR, PLRColaborador, modelos_plr_departamentos
 
 # Importamos material e solicitacao explicitamente
 from .material import Materiais, MateriaisGrupos
@@ -79,7 +81,8 @@ __all__ = [
     'db', 'Usuario', 'CentroCusto', 'PlanoConta', 'Contrato',
     'Materiais', 'MateriaisGrupos', 
     'Solicitacoes', 'SolicitacoesItens', 
-    'Cargo','Departamento','Colaborador','DadosBancarios', 
+    'Cargo', 'CargoSalario', 'Departamento', 'Colaborador', 'DadosBancarios',
+    'ModeloPLR', 'PLRColaborador', 'modelos_plr_departamentos', 
     'Estoque', 'EstoqueMovimentacoes', 'EstoqueInventarios', 'EstoqueInventariosItens',
     'EstoqueTerceiro',
     'NotaFiscal', 'NotaFiscalItem', 

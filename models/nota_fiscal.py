@@ -174,23 +174,15 @@ class NotaFiscal(db.Model):
         self.tipo = tipo
         self.upload = None
         self.cancelada = cancelada
-        if data and not tipo:
-            self.tipo = self.extrair_tipo_nota(data)
-        if not xml_data:
-            if self.data.get('xml',None):
-                self.xml_data = self.data.get('xml',None)
-                self.tipo = self.extrair_tipo_nota(self.data)
-        else:
-            self.xml_data = xml_data
-            dicta = self.get_xml_json()
-            #print(f'dicta: {dicta}')
-            if dicta.get('CompNfse') or dicta.get('tcListaNFse') or dicta.get('ListaNfse') or dicta.get('NFSe'):
-                self.tipo = 'nfse'
-            elif dicta.get('nfeProc').get('NFe'):
-                self.tipo = 'nfe'
-            elif dicta.get('nfeProc').get('CTe'):
-                self.tipo = 'cte'
-        print(f'self.tipo: {self.tipo}')
+        if data and not xml_data:
+           
+            self.xml_data = data.get('xml',None) 
+
+            self.chave_acesso = data.get('chave_acesso',None)
+
+        if not tipo:
+            self.extrair_tipo_nota()
+
         if self.tipo:
             if self.tipo == 'nfe':
                 self.processar_nfe()
@@ -220,19 +212,19 @@ class NotaFiscal(db.Model):
                 else:
                     self.upload = upload
                 print('self.upload: ',self.upload)
-    def extrair_tipo_nota(self, data):
+    def extrair_tipo_nota(self):
         """
         Extrai o tipo de nota fiscal do XML
         """
-        if data.get('id'):
-            return 'nfse'
-        if data.get('chave_acesso'):
-            if int(data.get('chave_acesso')[20:22]) == 55:
-                return 'nfe'
-            elif int(data.get('chave_acesso')[20:22]) == 57:
-                return 'cte'
-            else:
-                return 'nfse'
+
+        dicta = self.get_xml_json()
+        #print(f'dicta: {dicta}')
+        if dicta.get('CompNfse') or dicta.get('tcListaNFse') or dicta.get('ListaNfse') or dicta.get('NFSe'):
+            self.tipo = 'nfse'
+        elif dicta.get('nfeProc').get('NFe'):
+            self.tipo = 'nfe'
+        elif dicta.get('nfeProc').get('CTe'):
+            self.tipo = 'cte'
         return None
     def save(self):
         """
@@ -348,6 +340,7 @@ class NotaFiscal(db.Model):
         return None        
     def importar_arquivei(data_inicial,data_final,tipo='nfe',logs=None):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
+        print(f'notas: {len(notas.datas)}')
         total = len(notas.datas)
         logs={
             'tipo': tipo,
@@ -1000,8 +993,8 @@ class NotaFiscal(db.Model):
         return None
 
     def _extrair_nfse_lista_nfse(self, root):
-        """Formato ListaNfse > CompNfse > Nfse > InfNfse (ex.: XML 40 - VALE)."""
-        comp = self._nfse_dict_get(root, 'ListaNfse', 'CompNfse')
+        """Formato ListaNfse > CompNfse > Nfse > InfNfse ou CompNfse > Nfse > InfNfse (nota única ABRASF)."""
+        comp = self._nfse_dict_get(root, 'ListaNfse', 'CompNfse') or root
         nfse_el = self._nfse_dict_get(comp, 'Nfse') if comp else None
         inf = self._nfse_dict_get(nfse_el, 'InfNfse') if nfse_el else None
         if not inf:
@@ -1042,7 +1035,7 @@ class NotaFiscal(db.Model):
                     cnpj_emitente = self._nfse_text(cpf_cnpj.get('Cnpj')) or self._nfse_text(cpf_cnpj.get('Cpf'))
             if not nome_emitente and prestador:
                 nome_emitente = self._nfse_text(prestador.get('RazaoSocial'))
-        tomador_el = self._nfse_dict_get(decl, 'TomadorServico') if decl else None
+        tomador_el = (self._nfse_dict_get(decl, 'Tomador') or self._nfse_dict_get(decl, 'TomadorServico')) if decl else None
         cnpj_dest = None
         nome_dest = ''
         if tomador_el:
@@ -1228,13 +1221,18 @@ class NotaFiscal(db.Model):
                         if isinstance(key, str) and (key == k or key.endswith('}' + k)):
                             return True
                 return False
-
+            if _tem_chave(root, 'CompNfse'):
+                root = self._nfse_dict_get(root, 'CompNfse') or root
             if _tem_chave(root, 'ListaNfse'):
                 chave, dados = self._extrair_nfse_lista_nfse(root)
             elif _tem_chave(root, 'tcListaNFse'):
                 chave, dados = self._extrair_nfse_tc_lista(root)
-            elif _tem_chave(root, 'NFSe'):
-                chave, dados = self._extrair_nfse_sped(root)
+            elif _tem_chave(root, 'Nfse'):
+                nfse_inner = self._nfse_dict_get(root, 'Nfse')
+                if nfse_inner and isinstance(nfse_inner, dict) and self._nfse_dict_get(nfse_inner, 'InfNfse'):
+                    chave, dados = self._extrair_nfse_lista_nfse(root)
+                else:
+                    chave, dados = self._extrair_nfse_sped(root)
             else:
                 logger.warning("extrair_dados_xml_nfse: Formato de XML NFSe não reconhecido")
                 return None, None

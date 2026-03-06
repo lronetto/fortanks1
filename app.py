@@ -27,6 +27,7 @@ from controllers.unidade_controller import unidade_bp
 from controllers.produto_composto_controller import produto_composto_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
+from controllers.plr_controller import plr_bp
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
 from controllers.grupo_material_controller import grupo_material_bp
 from controllers.certificado_controller import certificado_bp
@@ -172,7 +173,8 @@ login_manager.login_message = 'Por favor, faça login para acessar esta página.
 
 @login_manager.user_loader
 def load_user(user_id):
-    return Usuario.query.get(int(user_id))
+    from models.colaborador import Colaborador
+    return Usuario.query.join(Colaborador, Usuario.colaborador_id == Colaborador.id).filter(Usuario.id == int(user_id)).first()
 
 
 # Registrar os blueprints (modularização)
@@ -209,6 +211,7 @@ app.register_blueprint(unidade_bp)
 app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
+app.register_blueprint(plr_bp)
 app.register_blueprint(certificado_bp, url_prefix='/certificados')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
 app.register_blueprint(acabamento_pecas_bp)

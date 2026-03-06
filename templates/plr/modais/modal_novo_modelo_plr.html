@@ -1,0 +1,71 @@
+<!-- Modal Novo Modelo PLR -->
+<div class="modal fade" id="modalNovoModeloPlr" tabindex="-1" aria-labelledby="modalNovoModeloPlrLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.modelo_novo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovoModeloPlrLabel">Novo Modelo de PLR</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="nome_modelo_novo" class="form-label">Nome *</label>
+                            <input type="text" class="form-control" id="nome_modelo_novo" name="nome" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="ativo_modelo_novo" class="form-label">Ativo</label>
+                            <select class="form-select" id="ativo_modelo_novo" name="ativo">
+                                <option value="1" selected>Sim</option>
+                                <option value="0">Não</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="descricao_modelo_novo" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao_modelo_novo" name="descricao" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Departamentos</label>
+                        <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                            {% for d in departamentos %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="departamento_ids" value="{{ d.id }}" id="dep_novo_{{ d.id }}">
+                                <label class="form-check-label" for="dep_novo_{{ d.id }}">{{ d.nome }}</label>
+                            </div>
+                            {% endfor %}
+                            {% if not departamentos %}
+                            <p class="text-muted small mb-0">Nenhum departamento cadastrado.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="forma_calculo_colaborador_novo" class="form-label">Forma de cálculo (colaborador)</label>
+                            <input type="text" class="form-control" id="forma_calculo_colaborador_novo" name="forma_calculo_colaborador" placeholder="Ex: media_avaliacoes">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="forma_calculo_final_novo" class="form-label">Forma de cálculo final</label>
+                            <input type="text" class="form-control" id="forma_calculo_final_novo" name="forma_calculo_final" placeholder="Ex: ponderada_salario">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="pesos_colaboradores_novo" class="form-label">Pesos (JSON)</label>
+                            <textarea class="form-control font-monospace small" id="pesos_colaboradores_novo" name="pesos_colaboradores" rows="2" placeholder='{"desempenho": 0.5}'></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="config_calculo_final_novo" class="form-label">Config. cálculo final (JSON)</label>
+                            <textarea class="form-control font-monospace small" id="config_calculo_final_novo" name="config_calculo_final" rows="2" placeholder='{}'></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -674,6 +674,7 @@
                                 <i class="fas fa-user-tie"></i> Colaboradores
                             </a>
                         </li>
+                        
                         {% endif %}
                         {% if current_user.is_permissao('usuarios') %}
                         <li class="{{ is_active('usuario') }}">
@@ -852,6 +853,40 @@
                     <a href="{{ url_for('reembolso.index') }}">
                         <i class="fas fa-money-bill-wave"></i> Reembolsos
                     </a>
+                </li>
+                {% endif %}
+                {% if current_user.is_permissao('PLR') %}
+                <li class="{{ is_active('plr') }}">
+                    <a href="#plrSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                        <i class="fas fa-award"></i> PLR
+                    </a>
+                    <ul class="collapse list-unstyled" id="plrSubmenu">
+                        <li class="{{ is_active('plr.avaliacoes_index') }}">
+                            <a href="{{ url_for('plr.avaliacoes_index') }}">
+                                <i class="fas fa-clipboard-list"></i> Avaliações
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.relatorio_avaliacao') }}">
+                            <a href="{{ url_for('plr.relatorio_avaliacao') }}">
+                                <i class="fas fa-chart-bar"></i> Relatório de Avaliação
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.relatorio_planilha') }}">
+                            <a href="{{ url_for('plr.relatorio_planilha') }}">
+                                <i class="fas fa-file-excel"></i> Relatório Planilha (Cálculo PLR)
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.modelos_index') }}">
+                            <a href="{{ url_for('plr.modelos_index') }}">
+                                <i class="fas fa-cog"></i> Modelos de PLR
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.cargos_salarios_index') }}">
+                            <a href="{{ url_for('plr.cargos_salarios_index') }}">
+                                <i class="fas fa-money-bill"></i> Cargos x Salário
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 {% endif %}
                 <!-- Módulo de Estoque -->

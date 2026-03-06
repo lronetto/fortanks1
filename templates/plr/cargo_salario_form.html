@@ -1,0 +1,57 @@
+{% extends 'common/base.html' %}
+
+{% block title %}{{ 'Editar' if reg else 'Novo' }} Cargo x Salário - Sistema de Gestão{% endblock %}
+{% block mobile_title %}{{ 'Editar' if reg else 'Novo' }} Cargo x Salário{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">{{ 'Editar' if reg else 'Novo' }} Cargo x Salário</h1>
+        <a href="{{ url_for('plr.cargos_salarios_index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('plr.cargo_salario_editar', id=reg.id) if reg else url_for('plr.cargo_salario_novo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <label for="cargo_id" class="form-label">Cargo *</label>
+                        <select class="form-select" id="cargo_id" name="cargo_id" required {% if reg %}disabled{% endif %}>
+                            <option value="">Selecione...</option>
+                            {% for c in cargos %}
+                            <option value="{{ c.id }}" {% if reg and reg.cargo_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if reg %}
+                        <input type="hidden" name="cargo_id" value="{{ reg.cargo_id }}">
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2">
+                        <label for="mes" class="form-label">Mês *</label>
+                        <select class="form-select" id="mes" name="mes" required>
+                            {% for i in range(1, 13) %}
+                            <option value="{{ i }}" {% if reg and reg.mes == i %}selected{% endif %}>{{ i }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="ano" class="form-label">Ano *</label>
+                        <input type="number" class="form-control" id="ano" name="ano" min="2020" max="2030" value="{{ reg.ano if reg else '' }}" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="salario" class="form-label">Salário (R$) *</label>
+                        <input type="text" class="form-control" id="salario" name="salario" value="{{ "%.2f" | format(reg.salario) if reg and reg.salario is not none else '' }}" placeholder="0,00" required>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <a href="{{ url_for('plr.cargos_salarios_index') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,55 @@
+<!-- Modal Importar Avaliações da Planilha -->
+<div class="modal fade" id="modalImportarAvaliacoes" tabindex="-1" aria-labelledby="modalImportarAvaliacoesLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.avaliacoes_importar') }}" enctype="multipart/form-data" id="formImportarAvaliacoes">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalImportarAvaliacoesLabel">Importar avaliações da planilha</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Use a planilha <strong>Acompanhamento Mensal - MOD</strong> no formato .xls. As abas devem ter o nome no formato <strong>MES ANO</strong> (ex.: AGO 2025, DEZ 2021).</p>
+                    <div class="mb-3">
+                        <label for="arquivo_importacao_plr" class="form-label">Arquivo .xls *</label>
+                        <input type="file" id="arquivo_importacao_plr" name="arquivo" class="form-control" accept=".xls" required>
+                        <small class="form-text text-muted">Apenas arquivos Excel .xls são aceitos.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="modelo_plr_id_importar" class="form-label">Modelo PLR (opcional)</label>
+                        <select class="form-select" id="modelo_plr_id_importar" name="modelo_plr_id">
+                            <option value="">Nenhum</option>
+                            {% for m in modelos %}
+                            <option value="{{ m.id }}">{{ m.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitImportarPlr">
+                        <i class="fas fa-file-import"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    document.getElementById('formImportarAvaliacoes').addEventListener('submit', function(e) {
+        var input = document.getElementById('arquivo_importacao_plr');
+        if (!input.files || !input.files.length) {
+            e.preventDefault();
+            alert('Selecione um arquivo .xls.');
+            return;
+        }
+        var nome = (input.files[0].name || '').toLowerCase();
+        if (!nome.endsWith('.xls')) {
+            e.preventDefault();
+            alert('Apenas arquivos Excel .xls são aceitos.');
+            return;
+        }
+    });
+})();
+</script>

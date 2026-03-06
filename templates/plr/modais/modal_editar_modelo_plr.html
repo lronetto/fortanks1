@@ -1,0 +1,68 @@
+<!-- Modal Editar Modelo PLR -->
+<div class="modal fade" id="modalEditarModeloPlr{{ m.id }}" tabindex="-1" aria-labelledby="modalEditarModeloPlrLabel{{ m.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.modelo_editar', id=m.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarModeloPlrLabel{{ m.id }}">Editar Modelo de PLR</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">Nome *</label>
+                            <input type="text" class="form-control" name="nome" value="{{ m.nome }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Ativo</label>
+                            <select class="form-select" name="ativo">
+                                <option value="1" {% if m.ativo %}selected{% endif %}>Sim</option>
+                                <option value="0" {% if not m.ativo %}selected{% endif %}>Não</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descrição</label>
+                        <textarea class="form-control" name="descricao" rows="2">{{ m.descricao or '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Departamentos</label>
+                        <div class="border rounded p-2" style="max-height: 180px; overflow-y: auto;">
+                            {% for d in departamentos %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="departamento_ids" value="{{ d.id }}" id="dep_editar_{{ m.id }}_{{ d.id }}" {% if d in m.departamentos %}checked{% endif %}>
+                                <label class="form-check-label" for="dep_editar_{{ m.id }}_{{ d.id }}">{{ d.nome }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Forma de cálculo (colaborador)</label>
+                            <input type="text" class="form-control" name="forma_calculo_colaborador" value="{{ m.forma_calculo_colaborador or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Forma de cálculo final</label>
+                            <input type="text" class="form-control" name="forma_calculo_final" value="{{ m.forma_calculo_final or '' }}">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Pesos (JSON)</label>
+                            <textarea class="form-control font-monospace small" name="pesos_colaboradores" rows="2">{{ (m.pesos_colaboradores | tojson) if m.pesos_colaboradores else '' }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Config. cálculo final (JSON)</label>
+                            <textarea class="form-control font-monospace small" name="config_calculo_final" rows="2">{{ (m.config_calculo_final | tojson) if m.config_calculo_final else '{}' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

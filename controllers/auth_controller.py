@@ -5,6 +5,7 @@ import logging
 from models.database import db
 from models.usuario import Usuario
 from utils.password import is_argon2_hash
+from models.colaborador import Colaborador
 
 
 auth_bp = Blueprint('auth', __name__)
@@ -32,7 +33,7 @@ def login():
             return render_template('auth/login.html')
         
         # Busca o usuário pelo email
-        usuario = Usuario.query.filter_by(email=email).first()
+        usuario = Usuario.query.join(Colaborador, Usuario.colaborador_id == Colaborador.id).filter_by(email=email).first()
         
         # Verifica se o usuário existe e se a senha está correta
         if usuario and usuario.verificar_senha(senha):

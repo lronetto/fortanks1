@@ -1,0 +1,242 @@
+<!-- Modal Nova Avaliação PLR: filtro mês-ano + tabela de funcionários com avaliações -->
+<div class="modal fade" id="modalNovaAvaliacao" tabindex="-1" aria-labelledby="modalNovaAvaliacaoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovaAvaliacaoLabel">Avaliações PLR por mês</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3 align-items-end">
+                    <div class="col-md-3">
+                        <label for="avaliacao_mes_ano" class="form-label">Mês - Ano</label>
+                        <select class="form-select" id="avaliacao_mes_ano">
+                            {% for a in range(2025, 2026) %}
+                            {% for m in range(1, 13) %}
+                            <option value="{{ a }}-{{ '%02d'|format(m) }}">{{ '%02d'|format(m) }} - {{ a }}</option>
+                            {% endfor %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="avaliacao_filtro_departamento" class="form-label">Departamento</label>
+                        <select class="form-select" id="avaliacao_filtro_departamento">
+                            <option value="">Todos</option>
+                            {% for d in departamentos or [] %}
+                            <option value="{{ d.id }}">{{ d.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="avaliacao_filtro_equipe" class="form-label">Equipe</label>
+                        <select class="form-select" id="avaliacao_filtro_equipe">
+                            <option value="">Todas</option>
+                            {% for e in equipes or [] %}
+                            <option value="{{ e }}">{{ e }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                        <button type="button" class="btn btn-primary" id="btnCarregarAvaliacoesMes">
+                            <i class="fas fa-sync-alt"></i> Carregar
+                        </button>
+                    </div>
+                </div>
+                <p class="text-muted small">Funcionários ativos que não foram demitidos até o fim do mês selecionado. Filtre por departamento ou equipe (equipe considera apenas avaliações já cadastradas).</p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm" id="tabelaAvaliacoesMes">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center">#</th>
+                                <th>Colaborador</th>
+                                <th>Data Admissão</th>
+                                <th>Data Demissão</th>
+                                <th>Obra</th>
+                                <th>Equipe</th>
+                                <th>Assiduidade</th>
+                                <th>Zero Acidente</th>
+                                <th>Segurança/Limpeza/Organ.</th>
+                                <th>Prazo</th>
+                                <th>Total %</th>
+                                <th class="text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyAvaliacoesMes">
+                            <tr><td colspan="12" class="text-center text-muted">Selecione o mês-ano para carregar os dados.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var urlPorMes = '{{ url_for("plr.avaliacoes_por_mes") }}';
+    var urlNova = '{{ url_for("plr.avaliacao_nova") }}';
+    var urlEditarBase = '{{ url_for("plr.avaliacao_editar", id=0) }}';
+    var csrfToken = '{{ csrf_token() }}';
+    var centros = [
+        {% for cc in centros %}
+        { "id": {{ cc.id }}, "nome": {{ cc.nome | tojson }}, "codigo": {{ (cc.codigo or '') | tojson }} }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    var criteriosPadrao = window.CRITERIOS_PADRAO_PLR || [
+        { tipo: 'Assiduidade', peso: 0.30 }, { tipo: 'Zero Acidente', peso: 0.15 },
+        { tipo: 'Segurança, Limpeza, Organização', peso: 0.25 }, { tipo: 'Prazo', peso: 0.30 }
+    ];
+
+    function formatVal(v) { return v != null ? Number(v).toFixed(1) : '-'; }
+
+    function buildAvaliacaoJson(assid, zero, seg, prazo) {
+        var arr = [
+            { tipo: 'Assiduidade', valor: assid !== '' ? parseFloat(assid) : null, peso: 0.30 },
+            { tipo: 'Zero Acidente', valor: zero !== '' ? parseFloat(zero) : null, peso: 0.15 },
+            { tipo: 'Segurança, Limpeza, Organização', valor: seg !== '' ? parseFloat(seg) : null, peso: 0.25 },
+            { tipo: 'Prazo', valor: prazo !== '' ? parseFloat(prazo) : null, peso: 0.30 }
+        ];
+        return JSON.stringify(arr.filter(function(x) { return x.valor != null; }));
+    }
+
+    function obterSelectObra(selectedId) {
+        var sel = '<select class="form-select form-select-sm centro-custo-select"><option value="">Nenhum</option>';
+        centros.forEach(function(cc) {
+            sel += '<option value="' + (cc.id || '') + '"' + (cc.id == selectedId ? ' selected' : '') + '>' + (cc.nome || cc.codigo || '') + '</option>';
+        });
+        sel += '</select>';
+        return sel;
+    }
+
+    document.getElementById('btnCarregarAvaliacoesMes').addEventListener('click', function() {
+        var val = document.getElementById('avaliacao_mes_ano').value;
+        if (!val) return;
+        var parts = val.split('-');
+        var ano = parts[0];
+        var mes = parts[1];
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Carregando...';
+        var dep = document.getElementById('avaliacao_filtro_departamento');
+        var eq = document.getElementById('avaliacao_filtro_equipe');
+        var qs = '?ano=' + encodeURIComponent(ano) + '&mes=' + encodeURIComponent(mes);
+        if (dep && dep.value) qs += '&departamento_id=' + encodeURIComponent(dep.value);
+        if (eq && eq.value) qs += '&equipe=' + encodeURIComponent(eq.value);
+        fetch(urlPorMes + qs, { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Carregar';
+                var tbody = document.getElementById('tbodyAvaliacoesMes');
+                tbody.innerHTML = '';
+                if (res.error) {
+                    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">' + res.error + '</td></tr>';
+                    return;
+                }
+                var dataRef = res.data_ref || (ano + '-' + mes + '-01');
+                var data = res.data || [];
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Nenhum colaborador ativo neste período.</td></tr>';
+                    return;
+                }
+                data.forEach(function(row, index) {
+                    var tr = document.createElement('tr');
+                    var isEdicao = !!row.avaliacao_id;
+                    var obraCel = isEdicao ? obterSelectObra(row.centro_custo_id) : obterSelectObra(row.centro_custo_id);
+                    var equipeCel = '<input type="text" class="form-control form-control-sm input-equipe" placeholder="Equipe" value="' + (row.equipe_alocada || '') + '">';
+                    var assidCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-assid" placeholder="0-10" value="' + (row.assiduidade != null ? row.assiduidade : '') + '">';
+                    var zeroCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-zero" placeholder="0-10" value="' + (row.zero_acidente != null ? row.zero_acidente : '') + '">';
+                    var segCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-seg" placeholder="0-10" value="' + (row.seguranca != null ? row.seguranca : '') + '">';
+                    var prazoCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-prazo" placeholder="0-10" value="' + (row.prazo != null ? row.prazo : '') + '">';
+                    var acoes = '';
+                    if (isEdicao) {
+                        acoes = '<form class="form-row-avaliacao-editar d-inline" method="POST" action="' + urlEditarBase.replace('/0', '/' + row.avaliacao_id) + '">' +
+                            '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                            '<input type="hidden" name="colaborador_id" value="' + row.colaborador_id + '">' +
+                            '<input type="hidden" name="data" value="' + dataRef + '">' +
+                            (row.modelo_plr_id ? '<input type="hidden" name="modelo_plr_id" value="' + row.modelo_plr_id + '">' : '') +
+                            '<input type="hidden" name="avaliacao" class="input-avaliacao-json">' +
+                            '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
+                    } else {
+                        acoes = '<form class="form-row-avaliacao d-inline" method="POST" action="' + urlNova + '">' +
+                            '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                            '<input type="hidden" name="colaborador_id" value="' + row.colaborador_id + '">' +
+                            '<input type="hidden" name="data" value="' + dataRef + '">' +
+                            '<input type="hidden" name="avaliacao" class="input-avaliacao-json">' +
+                            '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
+                    }
+                    tr.innerHTML =
+                        '<td class="text-center">' + (index + 1) + '</td>' +
+                        '<td>' + (row.nome || '') + '</td>' +
+                        '<td class="text-nowrap">' + (row.data_admissao || '-') + '</td>' +
+                        '<td class="text-nowrap">' + (row.data_demissao || '-') + '</td>' +
+                        '<td>' + obraCel + '</td>' +
+                        '<td>' + equipeCel + '</td>' +
+                        '<td>' + assidCel + '</td>' +
+                        '<td>' + zeroCel + '</td>' +
+                        '<td>' + segCel + '</td>' +
+                        '<td>' + prazoCel + '</td>' +
+                        '<td>' + (row.total_pct || '-') + '</td>' +
+                        '<td class="text-center">' + acoes + '</td>';
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(function() {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Carregar';
+                document.getElementById('tbodyAvaliacoesMes').innerHTML = '<tr><td colspan="12" class="text-center text-danger">Erro ao carregar.</td></tr>';
+            });
+    });
+
+    function carregarAvaliacoesMes() {
+        document.getElementById('btnCarregarAvaliacoesMes').click();
+    }
+
+    document.getElementById('avaliacao_mes_ano').addEventListener('change', function() {
+        if (this.value) carregarAvaliacoesMes();
+    });
+    var filtroDep = document.getElementById('avaliacao_filtro_departamento');
+    var filtroEquipe = document.getElementById('avaliacao_filtro_equipe');
+    if (filtroDep) filtroDep.addEventListener('change', function() { if (document.getElementById('avaliacao_mes_ano').value) carregarAvaliacoesMes(); });
+    if (filtroEquipe) filtroEquipe.addEventListener('change', function() { if (document.getElementById('avaliacao_mes_ano').value) carregarAvaliacoesMes(); });
+
+    document.getElementById('modalNovaAvaliacao').addEventListener('shown.bs.modal', function() {
+        var val = document.getElementById('avaliacao_mes_ano').value;
+        if (val) carregarAvaliacoesMes();
+    });
+
+    document.getElementById('tbodyAvaliacoesMes').addEventListener('submit', function(e) {
+        var form = e.target;
+        var isNova = form && form.classList && form.classList.contains('form-row-avaliacao');
+        var isEditar = form && form.classList && form.classList.contains('form-row-avaliacao-editar');
+        if (!isNova && !isEditar) return;
+        var row = form.closest('tr');
+        if (!row) return;
+        var centroSelect = row.querySelector('.centro-custo-select');
+        var centroId = centroSelect ? centroSelect.value : '';
+        var equipeInput = row.querySelector('.input-equipe');
+        var equipe = equipeInput ? equipeInput.value.trim() : '';
+        var assid = row.querySelector('.input-assid'); var zero = row.querySelector('.input-zero');
+        var seg = row.querySelector('.input-seg'); var prazo = row.querySelector('.input-prazo');
+        var jsonInput = form.querySelector('.input-avaliacao-json');
+        if (jsonInput) {
+            jsonInput.value = buildAvaliacaoJson(
+                assid ? assid.value : '', zero ? zero.value : '',
+                seg ? seg.value : '', prazo ? prazo.value : ''
+            );
+        }
+        if (centroId) {
+            var hid = document.createElement('input');
+            hid.type = 'hidden'; hid.name = 'centro_custo_id'; hid.value = centroId;
+            form.appendChild(hid);
+        }
+        if (equipe) {
+            var he = document.createElement('input');
+            he.type = 'hidden'; he.name = 'equipe_alocada'; he.value = equipe;
+            form.appendChild(he);
+        }
+    });
+})();
+</script>

@@ -1,0 +1,83 @@
+{% extends 'common/base.html' %}
+
+{% block title %}{{ 'Editar' if modelo else 'Novo' }} Modelo PLR - Sistema de Gestão{% endblock %}
+{% block mobile_title %}{{ 'Editar' if modelo else 'Novo' }} Modelo PLR{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">{{ 'Editar' if modelo else 'Novo' }} Modelo de PLR</h1>
+        <a href="{{ url_for('plr.modelos_index') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('plr.modelo_editar', id=modelo.id) if modelo else url_for('plr.modelo_novo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="nome" class="form-label">Nome *</label>
+                        <input type="text" class="form-control" id="nome" name="nome" value="{{ modelo.nome if modelo else '' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="ativo" class="form-label">Ativo</label>
+                        <select class="form-select" id="ativo" name="ativo">
+                            <option value="1" {% if not modelo or modelo.ativo %}selected{% endif %}>Sim</option>
+                            <option value="0" {% if modelo and not modelo.ativo %}selected{% endif %}>Não</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="descricao" name="descricao" rows="2">{{ modelo.descricao if modelo else '' }}</textarea>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Departamentos</label>
+                        <div class="border rounded p-2" style="max-height: 200px; overflow-y: auto;">
+                            {% for d in departamentos %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="departamento_ids" value="{{ d.id }}" id="dep{{ d.id }}"
+                                    {% if modelo and d in modelo.departamentos %}checked{% endif %}>
+                                <label class="form-check-label" for="dep{{ d.id }}">{{ d.nome }}</label>
+                            </div>
+                            {% endfor %}
+                            {% if not departamentos %}
+                            <p class="text-muted small mb-0">Nenhum departamento cadastrado.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="forma_calculo_colaborador" class="form-label">Forma de cálculo (colaborador)</label>
+                        <input type="text" class="form-control" id="forma_calculo_colaborador" name="forma_calculo_colaborador" placeholder="Ex: media_avaliacoes, soma_ponderada" value="{{ modelo.forma_calculo_colaborador if modelo else '' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="forma_calculo_final" class="form-label">Forma de cálculo final</label>
+                        <input type="text" class="form-control" id="forma_calculo_final" name="forma_calculo_final" placeholder="Ex: ponderada_salario, igualitaria" value="{{ modelo.forma_calculo_final if modelo else '' }}">
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="pesos_colaboradores" class="form-label">Pesos (JSON)</label>
+                        <textarea class="form-control font-monospace" id="pesos_colaboradores" name="pesos_colaboradores" rows="2" placeholder='{"desempenho": 0.5, "competencia": 0.5}'>{{ (modelo.pesos_colaboradores | tojson) if modelo and modelo.pesos_colaboradores else '' }}</textarea>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="config_calculo_final" class="form-label">Config. cálculo final (JSON)</label>
+                        <textarea class="form-control font-monospace" id="config_calculo_final" name="config_calculo_final" rows="2" placeholder='{}'>{{ (modelo.config_calculo_final | tojson) if modelo and modelo.config_calculo_final else '' }}</textarea>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                    <a href="{{ url_for('plr.modelos_index') }}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

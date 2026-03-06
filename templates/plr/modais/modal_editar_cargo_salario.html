@@ -1,0 +1,43 @@
+<!-- Modal Editar Cargo x Salário (usado no loop por item) -->
+<div class="modal fade" id="modalEditarCargoSalario{{ item.id }}" tabindex="-1" aria-labelledby="modalEditarCargoSalarioLabel{{ item.id }}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.cargo_salario_editar', id=item.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarCargoSalarioLabel{{ item.id }}">Editar Cargo x Salário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Cargo</label>
+                        <input type="text" class="form-control" value="{{ item.cargo.nome if item.cargo else '' }}" readonly disabled>
+                        <input type="hidden" name="cargo_id" value="{{ item.cargo_id }}">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Mês *</label>
+                            <select class="form-select" name="mes" required>
+                                {% for i in range(1, 13) %}
+                                <option value="{{ i }}" {% if item.mes == i %}selected{% endif %}>{{ i }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Ano *</label>
+                            <input type="number" class="form-control" name="ano" min="2020" max="2030" value="{{ item.ano }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Salário (R$) *</label>
+                        <input type="text" class="form-control" name="salario" value="{{ "%.2f" | format(item.salario) if item.salario is not none else '' }}" placeholder="0,00" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

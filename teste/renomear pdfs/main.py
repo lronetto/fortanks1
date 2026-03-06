@@ -160,7 +160,7 @@ def main():
         return
 
     print(f"Processando {len(pdfs)} arquivo(s) de {input_dir} -> {output_dir}")
-    if False:
+    if True:
         with app.app_context():
             for path in pdfs:
                 try:
@@ -200,7 +200,7 @@ def main():
                 except Exception as e:
                     print(f"  ERRO {path.name}: {e}")
 
-    nomes_sem_extensao = listar_nomes_sem_extensao()
+    nomes_sem_extensao = listar_nomes_sem_extensao('output')
     for nome in nomes_sem_extensao:
         print(f"{nome}")
 if __name__ == "__main__":
