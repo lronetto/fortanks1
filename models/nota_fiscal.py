@@ -581,7 +581,7 @@ class NotaFiscal(db.Model):
             self.logs['erro'].append(str(e))
             return False
     def extrair_dados_xml_cte(self):
-
+        
         root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
         ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
 

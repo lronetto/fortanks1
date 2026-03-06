@@ -831,6 +831,7 @@ def _processar_ods_template(ods_path, numero_serie, cliente_nome, tanque_nome, d
                             else:
                                 new_value = new_value.replace('{23}', "N/A")
                             romps = len(rompimentos)
+                            print(f'romps: {romps}')
                             romps_data = [] 
                             if romps == 4:
                                 romps_data.append(rompimentos[0])
@@ -951,7 +952,7 @@ def _gerar_excel_temp(numero_serie, tanque_id=None, contrato_id=None, grupo_id=N
             print(f'[_gerar_excel_temp] Buscando rompimentos com numero_serie_int: {numero_serie_int}')
             rompimentos = ConcretoUsinagensRompimentos.query\
                 .filter(ConcretoUsinagensRompimentos.numero_serie == numero_serie_int)\
-                .filter(ConcretoUsinagensRompimentos.resultado >=24.0)\
+                .filter(ConcretoUsinagensRompimentos.resultado >=23.0)\
                 .order_by(ConcretoUsinagensRompimentos.resultado.asc())\
                 .all()
             print(f'[_gerar_excel_temp] Rompimentos encontrados (int): {len(rompimentos)}')
