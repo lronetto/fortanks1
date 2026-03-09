@@ -1,0 +1,48 @@
+<!-- Modal Visualizar Departamento -->
+<div class="modal fade" id="modalVisualizarDepartamento" tabindex="-1" aria-labelledby="modalVisualizarDepartamentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarDepartamentoLabel">Detalhes do Departamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <dl class="row">
+                    <dt class="col-sm-4">ID:</dt>
+                    <dd class="col-sm-8" id="vis_id"></dd>
+
+                    <dt class="col-sm-4">Nome:</dt>
+                    <dd class="col-sm-8" id="vis_nome"></dd>
+
+                    <dt class="col-sm-4">Descrição:</dt>
+                    <dd class="col-sm-8" id="vis_descricao"></dd>
+
+                    <dt class="col-sm-4">Status:</dt>
+                    <dd class="col-sm-8" id="vis_status"></dd>
+
+                    <dt class="col-sm-4">Criado em:</dt>
+                    <dd class="col-sm-8" id="vis_criado"></dd>
+
+                    <dt class="col-sm-4">Atualizado em:</dt>
+                    <dd class="col-sm-8" id="vis_atualizado"></dd>
+                </dl>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).on('click', '.btn-visualizar', function() {
+    var btn = $(this);
+    $('#vis_id').text(btn.data('id'));
+    $('#vis_nome').text(btn.data('nome'));
+    $('#vis_descricao').text(btn.data('descricao'));
+    $('#vis_status').html(btn.data('status-badge'));
+    $('#vis_criado').text(btn.data('criado'));
+    $('#vis_atualizado').text(btn.data('atualizado'));
+    $('#modalVisualizarDepartamento').modal('show');
+});
+</script>

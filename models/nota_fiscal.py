@@ -218,12 +218,13 @@ class NotaFiscal(db.Model):
         """
 
         dicta = self.get_xml_json()
-        #print(f'dicta: {dicta}')
-        if dicta.get('CompNfse') or dicta.get('tcListaNFse') or dicta.get('ListaNfse') or dicta.get('NFSe'):
+        
+        print(f'dicta: {dicta}')
+        if dicta.get('CompNfse',None) or dicta.get('tcListaNFse',None) or dicta.get('ListaNfse',None) or dicta.get('NFSe',None):
             self.tipo = 'nfse'
-        elif dicta.get('nfeProc').get('NFe'):
+        elif dicta.get('nfeProc',None):
             self.tipo = 'nfe'
-        elif dicta.get('nfeProc').get('CTe'):
+        elif dicta.get('cteProc',None):
             self.tipo = 'cte'
         return None
     def save(self):
@@ -358,7 +359,7 @@ class NotaFiscal(db.Model):
         notasn = []
         if total > 0:
             for data in notas.datas:
-                nf = NotaFiscal(data=data,tipo=tipo)
+                nf = NotaFiscal(data=data)
                 if nf.logs['erro']:
                     logs['erro'] += 1
                     logs['erros'].append(nf.logs['erro'])
@@ -379,9 +380,18 @@ class NotaFiscal(db.Model):
         return logs
     def processar_cte(self):
         chave_acesso, dados = self.extrair_dados_xml_cte()
-        #print(f'dados: {dados}')
-        # Verifica se já existe
-        
+        if not chave_acesso or not dados:
+            try:
+                root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
+                tag = root.tag if hasattr(root, 'tag') else ''
+                if 'nfeProc' in tag or (root.find('.//{http://www.portalfiscal.inf.br/nfe}infNFe') is not None) or (root.find('.//infNFe') is not None):
+                    logger.info("Documento importado como CTe é na verdade NFe; processando como NFe.")
+                    self.tipo = 'nfe'
+                    return self.processar_nfe()
+            except Exception as e:
+                logger.debug(f"Verificação de redirecionamento NFe/CTe: {e}")
+            self.logs['erro'].append("XML não é um CTe válido (infCte não encontrado).")
+            return False
         existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
             self.logs['existente'] += 1
@@ -581,12 +591,12 @@ class NotaFiscal(db.Model):
             self.logs['erro'].append(str(e))
             return False
     def extrair_dados_xml_cte(self):
-        
         root = ET.fromstring(base64.b64decode(self.xml_data).decode('utf-8'))
         ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
-
-        # Caminhos principais
         infCte = root.find('.//cte:infCte', ns) or root.find('.//infCte', ns)
+        if infCte is None:
+            logger.warning("extrair_dados_xml_cte: XML não contém infCte (pode ser NFe ou formato inválido)")
+            return None, None
         emit = infCte.find('.//cte:emit', ns) or infCte.find('.//emit', ns)
         dest = infCte.find('.//cte:dest', ns) or infCte.find('.//dest', ns)
         rem = infCte.find('.//cte:rem', ns) or infCte.find('.//rem', ns)

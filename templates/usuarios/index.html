@@ -225,7 +225,7 @@
                     $novoCargoSelect.find('option:not(:first)').remove();
                     response.cargos.forEach(function(cargo) {
                         $novoCargoSelect.append($('<option>', {
-                            value: cargo.nome,
+                            value: cargo.id,
                             text: cargo.nome
                         }));
                     });
@@ -246,7 +246,7 @@
                     $novoDepartamentoSelect.find('option:not(:first)').remove();
                     response.departamentos.forEach(function(departamento) {
                         $novoDepartamentoSelect.append($('<option>', {
-                            value: departamento.nome,
+                            value: departamento.id,
                             text: departamento.nome
                         }));
                     });

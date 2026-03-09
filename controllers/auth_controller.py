@@ -33,7 +33,8 @@ def login():
             return render_template('auth/login.html')
         
         # Busca o usuário pelo email
-        usuario = Usuario.query.join(Colaborador, Usuario.colaborador_id == Colaborador.id).filter_by(email=email).first()
+        usuario = Usuario.query.join(Colaborador, Usuario.colaborador_id == Colaborador.id).filter(Usuario.email==email).first()
+        print(f'usuario: {usuario} email: {email} senha: {senha}')
         
         # Verifica se o usuário existe e se a senha está correta
         if usuario and usuario.verificar_senha(senha):

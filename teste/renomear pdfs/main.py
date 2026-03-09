@@ -160,7 +160,7 @@ def main():
         return
 
     print(f"Processando {len(pdfs)} arquivo(s) de {input_dir} -> {output_dir}")
-    if True:
+    if False:
         with app.app_context():
             for path in pdfs:
                 try:

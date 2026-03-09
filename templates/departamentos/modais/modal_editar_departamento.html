@@ -1,0 +1,55 @@
+<!-- Modal Editar Departamento -->
+<div class="modal fade" id="modalEditarDepartamento" tabindex="-1" aria-labelledby="modalEditarDepartamentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formEditarDepartamento">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarDepartamentoLabel">Editar Departamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editar_nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="editar_nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="editar_descricao" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_status" class="form-label">Status</label>
+                        <select class="form-select" id="editar_status" name="status">
+                            <option value="Ativo">Ativo</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalEditar(btn) {
+    var id = $(btn).data('id');
+    var nome = $(btn).data('nome');
+    var descricao = $(btn).data('descricao');
+    var status = $(btn).data('status');
+
+    var actionUrl = "{{ url_for('departamento.editar', id=0) }}".replace('/0', '/' + id);
+    $('#formEditarDepartamento').attr('action', actionUrl);
+    $('#editar_nome').val(nome);
+    $('#editar_descricao').val(descricao);
+    $('#editar_status').val(status);
+    $('#modalEditarDepartamento').modal('show');
+}
+
+$(document).on('click', '.btn-editar', function() {
+    abrirModalEditar(this);
+});
+</script>

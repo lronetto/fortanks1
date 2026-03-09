@@ -175,11 +175,11 @@ def api_datatables():
         for peca in pecas:
             tanque_nome = peca.tanque.nome if peca.tanque else ''
             peca_nome = peca.nome or ''
-            acabamento = peca.acabamento or ''
-            data_transporte = peca.transporte or ''
-            transportadora = peca.transportadora or ''
-            placa = peca.placa_carreta or ''
-            nota = peca.nota_fiscal or ''
+            acabamento = str(peca.acabamento) if peca.acabamento else ''
+            data_transporte = str(peca.transporte) if peca.transporte else ''
+            transportadora = str(peca.transportadora) if peca.transportadora else ''
+            placa = str(peca.placa_carreta) if peca.placa_carreta else ''
+            nota = str(peca.nota_fiscal) if peca.nota_fiscal else ''
             tanque_id = peca.tanque_id if peca.tanque_id else (peca.tanque.id if peca.tanque else None)
             peca_id = getattr(peca, 'id', None)
             # Botões de ação (escapar nomes para atributos HTML)

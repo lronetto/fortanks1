@@ -1,0 +1,43 @@
+<!-- Modal Novo Departamento -->
+<div class="modal fade" id="modalNovoDepartamento" tabindex="-1" aria-labelledby="modalNovoDepartamentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('departamento.novo') }}" id="formNovoDepartamento">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovoDepartamentoLabel">Novo Departamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="novo_nome" class="form-label">Nome</label>
+                        <input type="text" class="form-control" id="novo_nome" name="nome" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_descricao" class="form-label">Descrição</label>
+                        <textarea class="form-control" id="novo_descricao" name="descricao" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="novo_status" class="form-label">Status</label>
+                        <select class="form-select" id="novo_status" name="status">
+                            <option value="Ativo" selected>Ativo</option>
+                            <option value="Inativo">Inativo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#modalNovoDepartamento').on('hidden.bs.modal', function() {
+        $('#formNovoDepartamento')[0].reset();
+    });
+});
+</script>
