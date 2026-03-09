@@ -518,20 +518,30 @@ def relatorio_avaliacao():
 
 # ---------- Relatório Planilha (Cálculo PLR - formato Excel) ----------
 
-def _relatorio_planilha_calcular(ano, mes_inicio, mes_fim, modelo_plr_id):
+def _relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo_plr_id, equipe_filtro=None):
     """
     Retorna (resultado, meses_colunas, data_fechamento) para o relatório planilha.
-    resultado é lista de dicts com colaborador, tempo_casa_meses, pcts_meses, soma, p, etc.
+    Suporta períodos que abrangem anos diferentes.
     """
     from datetime import date, timedelta
     from utils.plr_calculo import tempo_de_casa_meses, salario_base_plr
 
     mes_i = int(mes_inicio)
     mes_f = int(mes_fim)
-    data_fechamento = date(ano, mes_f, 1) + timedelta(days=32)
+    ano_i = int(ano_inicio)
+    ano_f = int(ano_fim)
+    data_inicio = date(ano_i, mes_i, 1)
+    data_fechamento = date(ano_f, mes_f, 1) + timedelta(days=32)
     data_fechamento = data_fechamento.replace(day=1) - timedelta(days=1)
-    data_inicio = date(ano, mes_i, 1)
-    meses_colunas = [(m, ano) for m in range(mes_i, mes_f + 1)]
+
+    meses_colunas = []
+    cur_ano, cur_mes = ano_i, mes_i
+    while (cur_ano < ano_f) or (cur_ano == ano_f and cur_mes <= mes_f):
+        meses_colunas.append((cur_mes, cur_ano))
+        cur_mes += 1
+        if cur_mes > 12:
+            cur_mes = 1
+            cur_ano += 1
 
     q_av = (
         PLRColaborador.query.filter(
@@ -542,6 +552,13 @@ def _relatorio_planilha_calcular(ano, mes_inicio, mes_fim, modelo_plr_id):
     if modelo_plr_id:
         q_av = q_av.filter(PLRColaborador.modelo_plr_id == int(modelo_plr_id))
     avaliacoes_periodo = q_av.all()
+
+    if equipe_filtro:
+        avaliacoes_periodo = [
+            av for av in avaliacoes_periodo
+            if av.equipe_alocada and isinstance(av.equipe_alocada, list)
+            and equipe_filtro in [str(e).strip() for e in av.equipe_alocada if e]
+        ]
 
     ids_colab = list({av.colaborador_id for av in avaliacoes_periodo})
     if not ids_colab:
@@ -579,7 +596,7 @@ def _relatorio_planilha_calcular(ano, mes_inicio, mes_fim, modelo_plr_id):
         if tempo_meses < 2:
             continue
         tempo_meses = tempo_de_casa_meses(colab.data_admissao, data_fechamento)
-        ref_mes, ref_ano = meses_colunas[-1] if meses_colunas else (mes_f, ano)
+        ref_mes, ref_ano = meses_colunas[-1] if meses_colunas else (mes_f, ano_f)
         dados_sal = salario_base_plr(colab, ref_mes, ref_ano, data_fechamento, db.session)
         salario_base_plr_val = dados_sal.get('salario_base_plr')
 
@@ -617,20 +634,23 @@ def _relatorio_planilha_calcular(ano, mes_inicio, mes_fim, modelo_plr_id):
 
 @plr_bp.route('/relatorio-planilha/dados')
 def relatorio_planilha_dados():
-    """Retorna JSON com os dados da planilha para DataTables (AJAX). Params: ano, mes_inicio, mes_fim, modelo_plr_id."""
-    ano = request.args.get('ano')
+    """Retorna JSON com os dados da planilha para DataTables (AJAX). Params: ano_inicio, mes_inicio, ano_fim, mes_fim, modelo_plr_id."""
+    ano_inicio = request.args.get('ano_inicio') or request.args.get('ano')
+    ano_fim = request.args.get('ano_fim') or ano_inicio
     mes_inicio = request.args.get('mes_inicio', '1')
     mes_fim = request.args.get('mes_fim', '12')
     modelo_plr_id = request.args.get('modelo_plr_id', '')
-    if not ano:
-        return jsonify({'error': 'Informe o ano.', 'data': [], 'meses_colunas': [], 'data_fechamento': None}), 400
+    equipe_filtro = request.args.get('equipe', '').strip() or None
+    if not ano_inicio:
+        return jsonify({'error': 'Informe o período.', 'data': [], 'meses_colunas': [], 'data_fechamento': None}), 400
     try:
-        ano = int(ano)
-    except ValueError:
+        ano_inicio = int(ano_inicio)
+        ano_fim = int(ano_fim)
+    except (ValueError, TypeError):
         return jsonify({'error': 'Ano inválido.', 'data': [], 'meses_colunas': [], 'data_fechamento': None}), 400
 
     try:
-        resultado, meses_colunas, data_fechamento = _relatorio_planilha_calcular(ano, mes_inicio, mes_fim, modelo_plr_id)
+        resultado, meses_colunas, data_fechamento = _relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo_plr_id, equipe_filtro)
     except Exception as e:
         return jsonify({'error': str(e), 'data': [], 'meses_colunas': [], 'data_fechamento': None}), 500
 
@@ -671,39 +691,41 @@ def relatorio_planilha():
     Dados da tabela são carregados via AJAX (DataTables) ao clicar em Gerar.
     """
     modelos = ModeloPLR.query.filter_by(ativo=True).order_by(ModeloPLR.nome).all()
+    equipes = _equipes_distintas_plr()
     ano_sugerido = datetime.now().year
 
     if request.method == 'POST':
         modelo_plr_id = request.form.get('modelo_plr_id', '')
+        equipe_filtro = request.form.get('equipe', '').strip() or None
         periodo_inicio = request.form.get('periodo_inicio')
         periodo_fim = request.form.get('periodo_fim')
         if periodo_inicio and periodo_fim:
             parts_i = periodo_inicio.split('-')
             parts_f = periodo_fim.split('-')
-            if len(parts_i) != 2 or len(parts_f) != 2 or parts_i[0] != parts_f[0]:
-                flash('Início e fim devem ser no formato ano-mês e do mesmo ano.', 'danger')
-                return render_template('plr/relatorio_planilha.html', modelos=modelos, ano_sugerido=ano_sugerido)
-            ano = int(parts_i[0])
+            ano_inicio = int(parts_i[0])
             mes_inicio = parts_i[1].lstrip('0') or '1'
+            ano_fim = int(parts_f[0])
             mes_fim = parts_f[1].lstrip('0') or '12'
-            if int(mes_inicio) > int(mes_fim):
-                flash('O mês de início deve ser anterior ou igual ao mês de fim.', 'danger')
-                return render_template('plr/relatorio_planilha.html', modelos=modelos, ano_sugerido=ano_sugerido)
+            if ano_inicio > ano_fim or (ano_inicio == ano_fim and int(mes_inicio) > int(mes_fim)):
+                flash('A data de início deve ser anterior ou igual à data de fim.', 'danger')
+                return render_template('plr/relatorio_planilha.html', modelos=modelos, equipes=equipes, ano_sugerido=ano_sugerido)
         else:
-            ano = request.form.get('ano')
+            ano_inicio = request.form.get('ano_inicio') or request.form.get('ano')
+            ano_fim = request.form.get('ano_fim') or ano_inicio
             mes_inicio = request.form.get('mes_inicio', '1')
             mes_fim = request.form.get('mes_fim', '12')
-            if not ano:
+            if not ano_inicio:
                 flash('Informe o período.', 'danger')
-                return render_template('plr/relatorio_planilha.html', modelos=modelos, ano_sugerido=ano_sugerido)
-            ano = int(ano)
+                return render_template('plr/relatorio_planilha.html', modelos=modelos, equipes=equipes, ano_sugerido=ano_sugerido)
+            ano_inicio = int(ano_inicio)
+            ano_fim = int(ano_fim)
         try:
             resultado, meses_colunas, data_fechamento = _relatorio_planilha_calcular(
-                ano, mes_inicio, mes_fim, modelo_plr_id
+                ano_inicio, mes_inicio, ano_fim, mes_fim, modelo_plr_id, equipe_filtro
             )
         except Exception as e:
             flash(f'Erro ao gerar relatório: {e}', 'danger')
-            return render_template('plr/relatorio_planilha.html', modelos=modelos, ano_sugerido=ano_sugerido)
+            return render_template('plr/relatorio_planilha.html', modelos=modelos, equipes=equipes, ano_sugerido=ano_sugerido)
         # Serializar para o template (fallback quando formulário é enviado por POST sem AJAX)
         planilha_json = {
             'data': [],
@@ -731,6 +753,7 @@ def relatorio_planilha():
         return render_template(
             'plr/relatorio_planilha.html',
             modelos=modelos,
+            equipes=equipes,
             ano_sugerido=ano_sugerido,
             planilha_json=planilha_json,
         )
@@ -738,6 +761,7 @@ def relatorio_planilha():
     return render_template(
         'plr/relatorio_planilha.html',
         modelos=modelos,
+        equipes=equipes,
         ano_sugerido=ano_sugerido,
         planilha_json=None,
     )

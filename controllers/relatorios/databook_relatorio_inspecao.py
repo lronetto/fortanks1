@@ -372,7 +372,13 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
         raise ImportError('odfpy não está disponível. Instale com: pip install odfpy')
     
     try:
-
+        print(f'[_processar_ods_template_inspecao] ODS Path: {ods_path}')
+        print(f'[_processar_ods_template_inspecao] Concretagem ID: {concretagem_id}')
+        print(f'[_processar_ods_template_inspecao] Concretagem: {concretagem}')
+        print(f'[_processar_ods_template_inspecao] Contrato: {contrato}')
+        print(f'[_processar_ods_template_inspecao] Tanque ID: {tanque_id}')
+        print(f'[_processar_ods_template_inspecao] Projeto ID: {projeto_id}')
+        print(f'[_processar_ods_template_inspecao] Grupo ID: {grupo_id}')
         # Carregar o documento ODS
         doc = load(ods_path)
         
@@ -446,13 +452,19 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
        
         # Buscar primeira peça válida para usar no processamento de alongamentos
         peca_tanque_global = None
+        tipo_painel = ''
         if tanques_ids:
             pecasb = concretagem.get_pecas()
-            if pecasb:
-                for peca in pecasb:
-                    if peca['tanque_id'] in tanques_ids:
+            pecasbb = json.loads(pecasb) if isinstance(pecasb, str) else pecasb
+            print(f'[_processar_ods_template_inspecao] Pecas: {pecasbb}')
+            if pecasbb:
+                for peca in pecasbb:
+                    print(f'[_processar_ods_template_inspecao] Peca: {peca} tanques_ids: {tanques_ids}')
+                    if str(peca['tanque_id']) in tanques_ids:
                         peca_tanque = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca['tanque_id'], TanquesPecas.nome == peca['nome']).first()
+                        print(f'[_processar_ods_template_inspecao] Peca Tanque: {peca_tanque}')
                         series = peca_tanque.get_series_de_pecas()
+                        print(f'[_processar_ods_template_inspecao] Series: {series}')
                         if peca_tanque:
                             peca['tipo'] = peca_tanque.tipo
                             pecas_concretadas.append(peca)
@@ -479,6 +491,13 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                             'tipo': peca_obj.tipo,
                             'series': series
                         }
+                         
+                        if 'PF' in peca_obj.tipo:
+                            tipo_painel = 'FECHO'
+                        elif ['PN','P'] in peca_obj.tipo:
+                            tipo_painel = 'NORMAL'
+                        else:
+                            tipo_painel = 'ESPECIAL'
                         pecas_concretadas.append(peca)
                         for serie in series:
                             if serie not in series_concretadas:
@@ -599,9 +618,9 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                         new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
                                         new_value = new_value.replace(f'{{{31+forma}}}', str(peca['tipo']))
                                         
-                                        if peca_tanque.tipo == 'PF':
+                                        if 'PF' in peca['tipo']:
                                             tipo_painel = 'FECHO'
-                                        elif peca_tanque.tipo in ['PN','P']:
+                                        elif peca['tipo'] in ['PN','P']:
                                             tipo_painel = 'NORMAL'
                                         else:
                                             tipo_painel = 'ESPECIAL'
@@ -646,7 +665,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                                 new_value = new_value.replace('{60}', '')
                                 new_value = new_value.replace('{61}', '')
                         
-                        if 'PF' in peca_tanque.tipo:
+                        if tipo_painel == 'FECHO':
                             alongamento_maximo_unitario = 120
                             alongamento_minimo_unitario = 100
                         else:
