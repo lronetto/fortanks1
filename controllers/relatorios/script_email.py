@@ -300,7 +300,7 @@ def relatorio_semanal():
                     'gean.junior@fortanks.ind.br', 
                    'bruno.lacerda@fortanks.ind.br', 
                    'marcelo.porto@fortanks.ind.br']
-    destinatarios += ['arthur.witzel@fortes.ind.br','joao.faria@fortes.ind.br','joao.carvalho@fortes.ind.br']
+    #destinatarios += ['arthur.witzel@fortes.ind.br','joao.faria@fortes.ind.br','joao.carvalho@fortes.ind.br']
     try:
         enviar_relatorio_por_email(contrato_id=contrato_id, destinatarios=destinatarios)
         Logs(local='relatorio_semanal', data=datetime.now(), texto='Relatório de tanques por projeto enviado com sucesso enviado para: ' + ', '.join(destinatarios))
