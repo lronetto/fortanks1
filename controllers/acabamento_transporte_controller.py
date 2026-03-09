@@ -325,7 +325,7 @@ def api_cte_por_nota():
         NotaFiscal.query.filter(
             NotaFiscal.tipo == 2,
             NotaFiscal.status_processamento != 'cancelada',
-            func.json_extract(NotaFiscal.dados_adicionais, '$.chave_nf') == chave_nf,
+            func.json_unquote(func.json_extract(NotaFiscal.dados_adicionais, '$.chave_nf')) == chave_nf,
         )
         .order_by(NotaFiscal.data_emissao.desc())
         .all()
@@ -350,6 +350,33 @@ def api_cte_por_nota():
             'motorista': (dados.get('motorista') or '').strip(),
         })
     return jsonify(resultado)
+
+
+@acabamento_transporte_bp.route('/api/transporte-por-nota', methods=['GET'])
+def api_transporte_por_nota():
+    """
+    Busca dados de transporte já registrados para uma nota fiscal.
+    Retorna placa, transportadora e data caso a nota já tenha sido usada.
+    """
+    nota = (request.args.get('nota_fiscal') or '').strip()
+    if not nota:
+        return jsonify(None)
+    pecas = TanquesPecas.query.filter(
+        TanquesPecas.qualidade.isnot(None)
+    ).all()
+    for peca in pecas:
+        try:
+            q = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else (peca.qualidade or {})
+        except (json.JSONDecodeError, TypeError):
+            continue
+        transporte = q.get('transporte')
+        if transporte and str(transporte.get('nota', '')) == nota:
+            return jsonify({
+                'placa_carreta': transporte.get('placa_carreta', ''),
+                'transportadora': transporte.get('transportadora', ''),
+                'data_transporte': transporte.get('data_transporte', ''),
+            })
+    return jsonify(None)
 
 
 @acabamento_transporte_bp.route('/exportar_excel')

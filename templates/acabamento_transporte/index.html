@@ -69,7 +69,6 @@
 
 {% block scripts %}
 <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
-<script src="{{ url_for('static', filename='js/acabamento-transporte.js') }}"></script>
 <script>
 $(document).ready(function() {
     function syncExportForm() {
@@ -77,7 +76,7 @@ $(document).ready(function() {
         $('#exportNomePeca').val($('#nome_peca').val());
     }
 
-    const table = $('#tabelaAcabamentoTransporte').DataTable({
+    $('#tabelaAcabamentoTransporte').DataTable({
         processing: true,
         serverSide: true,
         ajax: {
@@ -118,168 +117,16 @@ $(document).ready(function() {
         ]
     });
 
-    // Abrir modal de Acabamento da linha (modal específico para ação individual)
-    $(document).on('click', '.btn-acao-acabamento', function() {
-        var pecaId = $(this).data('peca-id');
-        var tanqueId = $(this).data('tanque-id');
-        var pecaNome = $(this).data('peca-nome');
-        var tanqueNome = $(this).data('tanque-nome');
-        if (!pecaId || !tanqueId) return;
-        $('#acabamento_linha-tanque_id').val(tanqueId);
-        $('#acabamento_linha-peca_id').val(pecaId);
-        $('#acabamento_linha-tanque_nome').text(tanqueNome || '');
-        $('#acabamento_linha-peca_nome').text(pecaNome || '');
-        var modalEl = document.getElementById('modalAcabamentoLinha');
-        if (typeof bootstrap !== 'undefined' && modalEl) {
-            new bootstrap.Modal(modalEl).show();
-        } else {
-            $(modalEl).modal('show');
-        }
-    });
-
-    // Abrir modal de Transporte da linha (modal específico para ação individual)
-    $(document).on('click', '.btn-acao-transporte', function() {
-        var pecaId = $(this).data('peca-id');
-        var tanqueId = $(this).data('tanque-id');
-        var pecaNome = $(this).data('peca-nome');
-        var tanqueNome = $(this).data('tanque-nome');
-        if (!pecaId || !tanqueId) return;
-        $('#transporte_linha-tanque_id').val(tanqueId);
-        $('#transporte_linha-peca_id').val(pecaId);
-        $('#transporte_linha-tanque_nome').text(tanqueNome || '');
-        $('#transporte_linha-peca_nome').text(pecaNome || '');
-        $('#nota_fiscal_linha, #cte_frete_linha, #placa_carreta_linha, #transportadora_linha').val('');
-        $('#nota_fiscal_chave_linha').val('');
-        $('#cte_frete_linha').prop('readonly', true).attr('placeholder', 'Selecione a nota para carregar CT-e');
-        if ($('#cte_frete_linha').autocomplete('instance')) {
-            $('#cte_frete_linha').autocomplete('destroy');
-        }
-        var modalEl = document.getElementById('modalTransporteLinha');
-        if (typeof bootstrap !== 'undefined' && modalEl) {
-            new bootstrap.Modal(modalEl).show();
-        } else {
-            $(modalEl).modal('show');
-        }
-    });
-
-    // Submit do modal Acabamento Linha (AJAX + recarregar tabela)
-    $('#formAcabamentoLinha').on('submit', function(e) {
-        e.preventDefault();
-        var form = $(this);
-        $.post(form.attr('action'), form.serialize())
-            .done(function(resp) {
-                if (resp.success) {
-                    var modalAcab = document.getElementById('modalAcabamentoLinha');
-                    if (modalAcab) { var inst = bootstrap.Modal.getInstance(modalAcab); if (inst) inst.hide(); }
-                    table.ajax.reload(null, false);
-                    alert('Acabamento registrado com sucesso!');
-                } else {
-                    alert(resp.message || 'Erro ao registrar acabamento.');
-                }
-            })
-            .fail(function(xhr) {
-                alert('Erro: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao registrar acabamento.'));
-            });
-    });
-
-    // Submit do modal Transporte Linha (AJAX + recarregar tabela)
-    $('#formTransporteLinha').on('submit', function(e) {
-        e.preventDefault();
-        var form = $(this);
-        $.post(form.attr('action'), form.serialize())
-            .done(function(resp) {
-                if (resp.success) {
-                    var modalTrans = document.getElementById('modalTransporteLinha');
-                    if (modalTrans) { var inst = bootstrap.Modal.getInstance(modalTrans); if (inst) inst.hide(); }
-                    table.ajax.reload(null, false);
-                    alert('Transporte registrado com sucesso!');
-                } else {
-                    alert(resp.message || 'Erro ao registrar transporte.');
-                }
-            })
-            .fail(function(xhr) {
-                alert('Erro: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao registrar transporte.'));
-            });
-    });
-
-    // Autocomplete Nota Fiscal no modal Transporte Linha
-    $('#nota_fiscal_linha').autocomplete({
-        source: function(request, response) {
-            $.get('{{ url_for("acabamento_transporte.api_notas_venda_matriz") }}', { q: request.term || '' }, function(data) {
-                var list = Array.isArray(data) ? data : (data && typeof data === 'object' && !Array.isArray(data) ? [data] : []);
-                var items = list.map(function(n) {
-                    var num = n.numero_nf != null ? String(n.numero_nf) : '';
-                    var dest = (n.nome_destinatario || '').substring(0, 40);
-                    var dataEmissao = n.data_emissao || '';
-                    return {
-                        label: 'NF ' + num + ' - ' + dest + (dataEmissao ? ' (' + dataEmissao + ')' : ''),
-                        value: num,
-                        chave_acesso: n.chave_acesso || '',
-                        numero_nf: num
-                    };
-                });
-                response(items);
-            }).fail(function() { response([]); });
-        },
-        minLength: 0,
-        delay: 0,
-        appendTo: '#modalTransporteLinha .modal-body',
-        select: function(event, ui) {
-            $('#nota_fiscal_linha').val(ui.item.numero_nf);
-            $('#nota_fiscal_chave_linha').val(ui.item.chave_acesso || '');
-            $('#cte_frete_linha').val('').prop('readonly', false).attr('placeholder', 'Carregando CT-e...');
-            var chave = ui.item.chave_acesso;
-            if (chave) {
-                $.get('{{ url_for("acabamento_transporte.api_cte_por_nota") }}', { chave_nf: chave }, function(ctes) {
-                    if ($('#cte_frete_linha').autocomplete('instance')) {
-                        $('#cte_frete_linha').autocomplete('destroy');
-                    }
-                    var itensCte = (ctes || []).map(function(c) {
-                        var desc = 'CT-e ' + c.numero_nf;
-                        if (c.placa) desc += ' - Placa ' + c.placa;
-                        if (c.nome_emitente) desc += ' - ' + c.nome_emitente;
-                        return { label: desc, value: c.numero_nf, placa: c.placa || '', transportadora: c.nome_emitente || '' };
-                    });
-                    if (itensCte.length === 0) {
-                        $('#cte_frete_linha').attr('placeholder', 'Nenhum CT-e vinculado a esta NF');
-                        return;
-                    }
-                    $('#cte_frete_linha').attr('placeholder', 'Selecione o CT-e (opcional)');
-                    $('#cte_frete_linha').autocomplete({
-                        source: itensCte,
-                        minLength: 0,
-                        appendTo: '#modalTransporteLinha .modal-body',
-                        select: function(ev, u) {
-                            if (u.item.placa) $('#placa_carreta_linha').val(u.item.placa);
-                            if (u.item.transportadora) $('#transportadora_linha').val(u.item.transportadora);
-                        }
-                    });
-                }).fail(function() {
-                    $('#cte_frete_linha').attr('placeholder', 'Erro ao carregar CT-e');
-                });
-            } else {
-                $('#cte_frete_linha').attr('placeholder', 'Selecione a nota para carregar CT-e');
-            }
-            return false;
-        }
-    });
-    $('#nota_fiscal_linha').on('focus', function() {
-        var $el = $(this);
-        if ($el.autocomplete('instance')) {
-            $el.autocomplete('search', $el.val() || '');
-        }
-    });
-
     $('#filtro').on('change', function() {
-        table.ajax.reload();
+        $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
     });
     $('#btnFiltrar').on('click', function() {
-        table.ajax.reload();
+        $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
     });
     $('#nome_peca').on('keypress', function(e) {
         if (e.which === 13) {
             e.preventDefault();
-            table.ajax.reload();
+            $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
         }
     });
     syncExportForm();

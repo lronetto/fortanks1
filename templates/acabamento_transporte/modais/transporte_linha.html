@@ -52,3 +52,137 @@
     </div>
   </div>
 </div>
+<script>
+$(function() {
+  $(document).on('click', '.btn-acao-transporte', function() {
+    var pecaId = $(this).data('peca-id');
+    var tanqueId = $(this).data('tanque-id');
+    var pecaNome = $(this).data('peca-nome');
+    var tanqueNome = $(this).data('tanque-nome');
+    if (!pecaId || !tanqueId) return;
+    $('#transporte_linha-tanque_id').val(tanqueId);
+    $('#transporte_linha-peca_id').val(pecaId);
+    $('#transporte_linha-tanque_nome').text(tanqueNome || '');
+    $('#transporte_linha-peca_nome').text(pecaNome || '');
+    $('#nota_fiscal_linha, #cte_frete_linha, #placa_carreta_linha, #transportadora_linha').val('');
+    $('#nota_fiscal_chave_linha').val('');
+    $('#cte_frete_linha').prop('readonly', true).attr('placeholder', 'Selecione a nota para carregar CT-e');
+    if ($('#cte_frete_linha').autocomplete('instance')) { $('#cte_frete_linha').autocomplete('destroy'); }
+    var modalEl = document.getElementById('modalTransporteLinha');
+    if (typeof bootstrap !== 'undefined' && modalEl) {
+      new bootstrap.Modal(modalEl).show();
+    } else {
+      $(modalEl).modal('show');
+    }
+  });
+
+  $('#formTransporteLinha').on('submit', function(e) {
+    e.preventDefault();
+    var form = $(this);
+    $.post(form.attr('action'), form.serialize())
+      .done(function(resp) {
+        if (resp.success) {
+          var modalTrans = document.getElementById('modalTransporteLinha');
+          if (modalTrans) { var inst = bootstrap.Modal.getInstance(modalTrans); if (inst) inst.hide(); }
+          $('#tabelaAcabamentoTransporte').DataTable().ajax.reload(null, false);
+          alert('Transporte registrado com sucesso!');
+        } else {
+          alert(resp.message || 'Erro ao registrar transporte.');
+        }
+      })
+      .fail(function(xhr) {
+        alert('Erro: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao registrar transporte.'));
+      });
+  });
+
+  $('#nota_fiscal_linha').autocomplete({
+    source: function(request, response) {
+      $.get('{{ url_for("acabamento_transporte.api_notas_venda_matriz") }}', { q: request.term || '' }, function(data) {
+        var list = Array.isArray(data) ? data : (data && typeof data === 'object' && !Array.isArray(data) ? [data] : []);
+        var items = list.map(function(n) {
+          var num = n.numero_nf != null ? String(n.numero_nf) : '';
+          var dest = (n.nome_destinatario || '').substring(0, 40);
+          var dataEmissao = n.data_emissao || '';
+          return {
+            label: 'NF ' + num + ' - ' + dest + (dataEmissao ? ' (' + dataEmissao + ')' : ''),
+            value: num,
+            chave_acesso: n.chave_acesso || '',
+            numero_nf: num
+          };
+        });
+        response(items);
+      }).fail(function() { response([]); });
+    },
+    minLength: 0,
+    delay: 0,
+    appendTo: '#modalTransporteLinha .modal-body',
+    select: function(event, ui) {
+      $('#nota_fiscal_linha').val(ui.item.numero_nf);
+      $('#nota_fiscal_chave_linha').val(ui.item.chave_acesso || '');
+      $.get('{{ url_for("acabamento_transporte.api_transporte_por_nota") }}', { nota_fiscal: ui.item.numero_nf }, function(prev) {
+        if (prev) {
+          if (prev.placa_carreta) $('#placa_carreta_linha').val(prev.placa_carreta);
+          if (prev.transportadora) $('#transportadora_linha').val(prev.transportadora);
+          if (prev.data_transporte) $('#data_transporte_linha').val(prev.data_transporte);
+        }
+      });
+      $('#cte_frete_linha').val('').prop('readonly', false).attr('placeholder', 'Carregando CT-e...');
+      var chave = ui.item.chave_acesso;
+      if (chave) {
+        $.get('{{ url_for("acabamento_transporte.api_cte_por_nota") }}', { chave_nf: chave }, function(ctes) {
+          if ($('#cte_frete_linha').autocomplete('instance')) { $('#cte_frete_linha').autocomplete('destroy'); }
+          var itensCte = (ctes || []).map(function(c) {
+            var desc = 'CT-e ' + c.numero_nf;
+            if (c.placa) desc += ' - Placa ' + c.placa;
+            if (c.nome_emitente) desc += ' - ' + c.nome_emitente;
+            var dataIso = '';
+            if (c.data_emissao) {
+              var p = c.data_emissao.split('/');
+              if (p.length === 3) dataIso = p[2] + '-' + p[1] + '-' + p[0];
+            }
+            return { label: desc, value: String(c.numero_nf), placa: c.placa || '', transportadora: c.nome_emitente || '', data_emissao: dataIso };
+          });
+          if (itensCte.length === 0) {
+            $('#cte_frete_linha').attr('placeholder', 'Nenhum CT-e vinculado a esta NF');
+            return;
+          }
+          if (itensCte.length === 1) {
+            var unico = itensCte[0];
+            $('#cte_frete_linha').val(unico.value);
+            if (unico.placa) $('#placa_carreta_linha').val(unico.placa);
+            if (unico.transportadora) $('#transportadora_linha').val(unico.transportadora);
+            if (unico.data_emissao) $('#data_transporte_linha').val(unico.data_emissao);
+            return;
+          }
+          $('#cte_frete_linha').attr('placeholder', 'Selecione o CT-e (opcional)');
+          $('#cte_frete_linha').autocomplete({
+            source: itensCte,
+            minLength: 0,
+            appendTo: '#modalTransporteLinha .modal-body',
+            select: function(ev, u) {
+              if (u.item.placa) $('#placa_carreta_linha').val(u.item.placa);
+              if (u.item.transportadora) $('#transportadora_linha').val(u.item.transportadora);
+              if (u.item.data_emissao) $('#data_transporte_linha').val(u.item.data_emissao);
+            }
+          });
+          $('#cte_frete_linha').autocomplete('search', '');
+        }).fail(function() {
+          $('#cte_frete_linha').attr('placeholder', 'Erro ao carregar CT-e');
+        });
+      } else {
+        $('#cte_frete_linha').attr('placeholder', 'Selecione a nota para carregar CT-e');
+      }
+      return false;
+    }
+  });
+
+  $('#nota_fiscal_linha').on('focus', function() {
+    var $el = $(this);
+    if ($el.autocomplete('instance')) { $el.autocomplete('search', $el.val() || ''); }
+  });
+  $('#cte_frete_linha').on('focus', function() {
+    var $el = $(this);
+    if ($el.autocomplete('instance')) { $el.autocomplete('search', $el.val() || ''); }
+  });
+});
+</script>

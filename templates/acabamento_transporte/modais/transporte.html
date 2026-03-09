@@ -77,4 +77,198 @@
       </form>
     </div>
   </div>
-</div> 
+</div>
+<script>
+$(function() {
+  $('#formTransporte').on('submit', function(e) {
+    e.preventDefault();
+    var form = $(this);
+    $.post(form.attr('action'), form.serialize())
+      .done(function(resp) {
+        if (resp.success) {
+          alert('Transporte registrado com sucesso!');
+          location.reload();
+        } else {
+          alert(resp.message || 'Erro ao registrar transporte.');
+        }
+      })
+      .fail(function(xhr) {
+        alert('Erro ao registrar transporte: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro desconhecido.'));
+      });
+  });
+
+  $('#transportadora').on('focus', function() {
+    var tanque_ids = $('#tanque_ids').val();
+    if (!tanque_ids || tanque_ids.length === 0) return;
+    $.ajax({
+      url: '{{ url_for("acabamento_transporte.api_transportadoras") }}',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ tanque_ids: tanque_ids }),
+      headers: { 'X-CSRFToken': $('input[name="csrf_token"]').val() },
+      success: function(data) {
+        $('#transportadora').autocomplete({ source: data.map(function(p) { return p; }), minLength: 2 });
+      }
+    });
+  });
+
+  $('#transporte-peca_id').select2({
+    dropdownParent: $('#modalTransporte'),
+    theme: 'bootstrap-5',
+    placeholder: 'Pesquise a peça pelo nome',
+    allowClear: true,
+    multiple: true,
+    width: '100%',
+    scrollAfterSelect: true,
+    dropdownAutoWidth: true,
+    ajax: {
+      url: '{{ url_for("acabamento_transporte.api_pecas") }}',
+      method: 'GET',
+      dataType: 'json',
+      delay: 250,
+      data: function(params) {
+        return {
+          tanque_ids: [$('#transporte-tanque_ids').val()],
+          nome: params.term || '',
+          apenas_concretadas: 1,
+          apenas_acabadas: 0,
+          nao_acabadas: 0
+        };
+      },
+      processResults: function(data) {
+        return {
+          results: data.map(function(peca) {
+            return { id: peca.id, text: peca.tanque_nome + ' - ' + peca.nome, tanque_nome: peca.tanque_nome };
+          })
+        };
+      },
+      cache: true
+    },
+    minimumInputLength: 2
+  });
+
+  $('#transporte-tanque_id').select2({
+    dropdownParent: $('#modalTransporte'),
+    theme: 'bootstrap-5',
+    placeholder: 'Pesquise a peça pelo nome',
+    allowClear: true,
+    multiple: true,
+    ajax: {
+      url: '{{ url_for("acabamento_transporte.api_tanques") }}',
+      method: 'GET',
+      dataType: 'json',
+      delay: 250,
+      processResults: function(data) {
+        return {
+          results: data.map(function(tanque) {
+            return { id: tanque.id, text: tanque.nome };
+          })
+        };
+      },
+      cache: true
+    }
+  });
+
+  $('#tanque_id').on('change', function() {
+    $('#peca_id').val(null).trigger('change');
+  });
+
+  $('#nota_fiscal').autocomplete({
+    source: function(request, response) {
+      $.get('{{ url_for("acabamento_transporte.api_notas_venda_matriz") }}', { q: request.term || '' }, function(data) {
+        var list = Array.isArray(data) ? data : (data && typeof data === 'object' && !Array.isArray(data) ? [data] : []);
+        var items = list.map(function(n) {
+          var num = n.numero_nf != null ? String(n.numero_nf) : '';
+          var dest = (n.nome_destinatario || '').substring(0, 40);
+          var dataEmissao = n.data_emissao || '';
+          return {
+            label: 'NF ' + num + ' - ' + dest + (dataEmissao ? ' (' + dataEmissao + ')' : ''),
+            value: num,
+            chave_acesso: n.chave_acesso || '',
+            numero_nf: num
+          };
+        });
+        response(items);
+      }).fail(function() { response([]); });
+    },
+    minLength: 0,
+    delay: 0,
+    appendTo: '#modalTransporte .modal-body',
+    select: function(event, ui) {
+      $('#nota_fiscal').val(ui.item.numero_nf);
+      $('#nota_fiscal_chave').val(ui.item.chave_acesso || '');
+      $.get('{{ url_for("acabamento_transporte.api_transporte_por_nota") }}', { nota_fiscal: ui.item.numero_nf }, function(prev) {
+        if (prev) {
+          if (prev.placa_carreta) $('#placa_carreta').val(prev.placa_carreta);
+          if (prev.transportadora) $('#transportadora').val(prev.transportadora);
+          if (prev.data_transporte) $('#data_transporte').val(prev.data_transporte);
+        }
+      });
+      $('#cte_frete').val('').prop('readonly', false).attr('placeholder', 'Carregando CT-e...');
+      var chave = ui.item.chave_acesso;
+      if (chave) {
+        $.get('{{ url_for("acabamento_transporte.api_cte_por_nota") }}', { chave_nf: chave }, function(ctes) {
+          if ($('#cte_frete').autocomplete('instance')) {
+            $('#cte_frete').autocomplete('destroy');
+          }
+          var itensCte = (ctes || []).map(function(c) {
+            var desc = 'CT-e ' + c.numero_nf;
+            if (c.placa) desc += ' - Placa ' + c.placa;
+            if (c.nome_emitente) desc += ' - ' + c.nome_emitente;
+            var dataIso = '';
+            if (c.data_emissao) {
+              var p = c.data_emissao.split('/');
+              if (p.length === 3) dataIso = p[2] + '-' + p[1] + '-' + p[0];
+            }
+            return { label: desc, value: String(c.numero_nf), placa: c.placa || '', transportadora: c.nome_emitente || '', data_emissao: dataIso };
+          });
+          if (itensCte.length === 0) {
+            $('#cte_frete').attr('placeholder', 'Nenhum CT-e vinculado a esta NF');
+            return;
+          }
+          if (itensCte.length === 1) {
+            var unico = itensCte[0];
+            $('#cte_frete').val(unico.value);
+            if (unico.placa) $('#placa_carreta').val(unico.placa);
+            if (unico.transportadora) $('#transportadora').val(unico.transportadora);
+            if (unico.data_emissao) $('#data_transporte').val(unico.data_emissao);
+            return;
+          }
+          $('#cte_frete').attr('placeholder', 'Selecione o CT-e (opcional)');
+          $('#cte_frete').autocomplete({
+            source: itensCte,
+            minLength: 0,
+            appendTo: '#modalTransporte .modal-body',
+            select: function(ev, u) {
+              if (u.item.placa) $('#placa_carreta').val(u.item.placa);
+              if (u.item.transportadora) $('#transportadora').val(u.item.transportadora);
+              if (u.item.data_emissao) $('#data_transporte').val(u.item.data_emissao);
+            }
+          });
+          $('#cte_frete').autocomplete('search', '');
+        }).fail(function() {
+          $('#cte_frete').attr('placeholder', 'Erro ao carregar CT-e');
+        });
+      } else {
+        $('#cte_frete').attr('placeholder', 'Selecione a nota acima para carregar CT-e');
+      }
+      return false;
+    }
+  });
+
+  $('#nota_fiscal').on('focus', function() {
+    var $el = $(this);
+    if ($el.autocomplete('instance')) { $el.autocomplete('search', $el.val() || ''); }
+  });
+  $('#cte_frete').on('focus', function() {
+    var $el = $(this);
+    if ($el.autocomplete('instance')) { $el.autocomplete('search', $el.val() || ''); }
+  });
+
+  $('#modalTransporte').on('show.bs.modal', function() {
+    $('#nota_fiscal_chave').val('');
+    $('#cte_frete').val('').prop('readonly', true).attr('placeholder', 'Selecione a nota acima para carregar CT-e');
+    if ($('#cte_frete').autocomplete('instance')) { $('#cte_frete').autocomplete('destroy'); }
+  });
+});
+</script> 

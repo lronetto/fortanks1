@@ -32,3 +32,43 @@
     </div>
   </div>
 </div>
+<script>
+$(function() {
+  $(document).on('click', '.btn-acao-acabamento', function() {
+    var pecaId = $(this).data('peca-id');
+    var tanqueId = $(this).data('tanque-id');
+    var pecaNome = $(this).data('peca-nome');
+    var tanqueNome = $(this).data('tanque-nome');
+    if (!pecaId || !tanqueId) return;
+    $('#acabamento_linha-tanque_id').val(tanqueId);
+    $('#acabamento_linha-peca_id').val(pecaId);
+    $('#acabamento_linha-tanque_nome').text(tanqueNome || '');
+    $('#acabamento_linha-peca_nome').text(pecaNome || '');
+    var modalEl = document.getElementById('modalAcabamentoLinha');
+    if (typeof bootstrap !== 'undefined' && modalEl) {
+      new bootstrap.Modal(modalEl).show();
+    } else {
+      $(modalEl).modal('show');
+    }
+  });
+
+  $('#formAcabamentoLinha').on('submit', function(e) {
+    e.preventDefault();
+    var form = $(this);
+    $.post(form.attr('action'), form.serialize())
+      .done(function(resp) {
+        if (resp.success) {
+          var modalAcab = document.getElementById('modalAcabamentoLinha');
+          if (modalAcab) { var inst = bootstrap.Modal.getInstance(modalAcab); if (inst) inst.hide(); }
+          $('#tabelaAcabamentoTransporte').DataTable().ajax.reload(null, false);
+          alert('Acabamento registrado com sucesso!');
+        } else {
+          alert(resp.message || 'Erro ao registrar acabamento.');
+        }
+      })
+      .fail(function(xhr) {
+        alert('Erro: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro ao registrar acabamento.'));
+      });
+  });
+});
+</script>

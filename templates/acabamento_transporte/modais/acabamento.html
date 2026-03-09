@@ -35,4 +35,62 @@
       </form>
     </div>
   </div>
-</div> 
+</div>
+<script>
+$(function() {
+  $('#formAcabamento').on('submit', function(e) {
+    e.preventDefault();
+    var form = $(this);
+    $.post(form.attr('action'), form.serialize())
+      .done(function(resp) {
+        if (resp.success) {
+          alert('Acabamento registrado com sucesso!');
+          location.reload();
+        } else {
+          alert(resp.message || 'Erro ao registrar acabamento.');
+        }
+      })
+      .fail(function(xhr) {
+        alert('Erro ao registrar acabamento: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : 'Erro desconhecido.'));
+      });
+  });
+
+  $('#acabamento-peca_id').select2({
+    dropdownParent: $('#modalAcabamento'),
+    theme: 'bootstrap-5',
+    placeholder: 'Pesquise a peça pelo nome',
+    allowClear: true,
+    multiple: true,
+    width: '100%',
+    scrollAfterSelect: true,
+    dropdownAutoWidth: true,
+    ajax: {
+      url: '{{ url_for("acabamento_transporte.api_pecas") }}',
+      method: 'GET',
+      dataType: 'json',
+      delay: 250,
+      data: function(params) {
+        return {
+          tanque_ids: [$('#acabamento-tanque_id').val()],
+          nome: params.term || '',
+          apenas_concretadas: 1,
+          apenas_acabadas: 0,
+          nao_acabadas: 1
+        };
+      },
+      processResults: function(data) {
+        return {
+          results: data.map(function(peca) {
+            return { id: peca.id, text: peca.nome + ' (' + peca.numero_sequencial + ')', tanque_nome: peca.tanque_nome };
+          })
+        };
+      },
+      cache: true
+    },
+    minimumInputLength: 2
+  });
+
+  $('#peca_nome').autocomplete && $('#peca_nome').autocomplete('destroy');
+  $('#datalistPecas').remove();
+});
+</script> 
