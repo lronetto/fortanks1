@@ -950,6 +950,11 @@
                                 <i class="fas fa-random"></i> Análise de Transferências
                             </a>
                         </li>
+                        <li class="{{ is_active('nota_fiscal.protocolos_index') }}">
+                            <a href="{{ url_for('nota_fiscal.protocolos_index') }}">
+                                <i class="fas fa-folder-open"></i> Protocolos
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 {% endif %}

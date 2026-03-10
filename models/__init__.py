@@ -35,6 +35,8 @@ from .material import Materiais, MateriaisGrupos
 from .estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
 from .estoque_terceiro import EstoqueTerceiro
 from .nota_fiscal import NotaFiscal, NotaFiscalItem
+from .protocolo import Protocolo
+from .upload import Upload
 
 # Importamos os novos modelos de usinagem de concreto
 from .concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagens, ConcretoUsinagensMateriais, ConcretoUsinagensRompimentos
@@ -85,7 +87,7 @@ __all__ = [
     'ModeloPLR', 'PLRColaborador', 'modelos_plr_departamentos', 
     'Estoque', 'EstoqueMovimentacoes', 'EstoqueInventarios', 'EstoqueInventariosItens',
     'EstoqueTerceiro',
-    'NotaFiscal', 'NotaFiscalItem', 
+    'NotaFiscal', 'NotaFiscalItem', 'Protocolo', 'Upload',
     'Cliente', 'Endereco', 
     'Tanques', 'TanquesGrupos', 'TanquesPecas',
     'Equipamento', 'Manutencao', 

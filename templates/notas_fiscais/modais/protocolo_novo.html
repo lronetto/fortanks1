@@ -1,0 +1,124 @@
+<!-- Modal Novo Protocolo -->
+<div class="modal fade" id="modalNovoProtocolo" tabindex="-1" aria-labelledby="modalNovoProtocoloLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalNovoProtocoloLabel">Novo Protocolo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formNovoProtocolo" data-base-url="{{ request.script_root or '' }}/notas-fiscais">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="protocolo_id" name="protocolo_id" value="">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="protocolo_data" class="form-label">Data</label>
+                        <input type="date" id="protocolo_data" name="data" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="protocolo_numero" class="form-label">Número</label>
+                        <input type="text" id="protocolo_numero" name="numero" class="form-control" placeholder="Ex: 264231708" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvarProtocolo">
+                        <i class="fas fa-save"></i> Salvar e importar PDFs
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var form = document.getElementById('formNovoProtocolo');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var data = document.getElementById('protocolo_data').value;
+        var numero = document.getElementById('protocolo_numero').value;
+        if (!data || !numero) {
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Atenção', 'Preencha data e número.', 'warning');
+            } else {
+                alert('Preencha data e número.');
+            }
+            return;
+        }
+        var btn = document.getElementById('btnSalvarProtocolo');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+        }
+        var baseUrl = (form.dataset && form.dataset.baseUrl) ? form.dataset.baseUrl : '/notas-fiscais';
+        var csrf = document.querySelector('input[name="csrf_token"]');
+        var formData = new FormData();
+        formData.append('data', data);
+        formData.append('numero', numero);
+        if (csrf) formData.append('csrf_token', csrf.value);
+
+        fetch(baseUrl + '/protocolos', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Salvar e importar PDFs';
+            }
+            if (res.success && res.id) {
+                var modalNovo = document.getElementById('modalNovoProtocolo');
+                if (typeof bootstrap !== 'undefined' && modalNovo) {
+                    var bModal = bootstrap.Modal.getInstance(modalNovo);
+                    if (bModal) bModal.hide();
+                }
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Sucesso', res.message || 'Protocolo criado.', 'success');
+                }
+                var modalImportar = document.getElementById('modalImportarPdfsProtocolo');
+                if (modalImportar) {
+                    modalImportar.setAttribute('data-protocolo-id', res.id);
+                    var label = modalImportar.querySelector('.protocolo-id-label');
+                    if (label) label.textContent = 'Protocolo #' + res.id;
+                    var etapaUpload = document.getElementById('etapaUpload');
+                    var resultados = document.getElementById('resultadosImportacao');
+                    if (resultados) { resultados.classList.add('d-none'); resultados.innerHTML = ''; }
+                    if (etapaUpload) etapaUpload.classList.remove('d-none');
+                    var etapaRes = document.getElementById('etapaResultados');
+                    if (etapaRes) etapaRes.classList.add('d-none');
+                    var inp = document.getElementById('pdfs_protocolo');
+                    if (inp) inp.value = '';
+                    if (typeof bootstrap !== 'undefined') {
+                        var m = new bootstrap.Modal(modalImportar);
+                        m.show();
+                    }
+                }
+                if (typeof window.recarregarProtocolos === 'function') {
+                    window.recarregarProtocolos();
+                }
+            } else {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire('Erro', res.message || 'Erro ao criar protocolo.', 'error');
+                } else {
+                    alert(res.message || 'Erro ao criar protocolo.');
+                }
+            }
+        })
+        .catch(function(err) {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-save"></i> Salvar e importar PDFs';
+            }
+            if (typeof Swal !== 'undefined') {
+                Swal.fire('Erro', 'Erro de conexão ao salvar protocolo.', 'error');
+            } else {
+                alert('Erro de conexão.');
+            }
+        });
+    });
+})();
+</script>

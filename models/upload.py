@@ -27,7 +27,7 @@ class Upload(db.Model):
     def __repr__(self):
         return f'<Upload {self.id} - {self.filename}>'
     
-    def __init__(self, pai=None, pai_id=None, tipo=None, filename=None, mimetype=None, blob=None):
+    def __init__(self, pai=None, pai_id=None, tipo=None, filename=None, mimetype=None, blob=None,dados_adicionais=None):
 
         #print('pai: ',pai)
         #print('pai_id: ',pai_id)
@@ -42,6 +42,7 @@ class Upload(db.Model):
             self.tipo = tipo
             self.filename = filename
             self.mimetype = mimetype
+            self.dados_adicionais = dados_adicionais
             # Codifica o blob em base64 antes de salvar
             if isinstance(blob, bytes):
                 self.blob = base64.b64encode(blob).decode('utf-8')

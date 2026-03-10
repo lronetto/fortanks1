@@ -1,0 +1,141 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Protocolos - Notas Fiscais{% endblock %}
+
+{% block head %}
+    {{ super() }}
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 text-gray-800">Protocolos</h1>
+            <p class="mb-0">Gerencie protocolos e importe PDFs de notas fiscais com renomeação automática.</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-primary" id="btnNovoProtocolo">
+                <i class="fas fa-plus"></i> Novo Protocolo
+            </button>
+        </div>
+    </div>
+
+    {% include 'common/alerts.html' %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Protocolos cadastrados</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabelaProtocolos" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Número</th>
+                            <th>Qtd. arquivos</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'notas_fiscais/modais/protocolo_novo.html' %}
+{% include 'notas_fiscais/modais/protocolo_importar_pdfs.html' %}
+{% include 'notas_fiscais/modais/protocolo_enviar_email.html' %}
+{% include 'notas_fiscais/modais/protocolo_arquivos.html' %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+$(document).ready(function() {
+    var baseUrl = '{{ request.script_root or "" }}/notas-fiscais';
+    var table = $('#tabelaProtocolos').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: baseUrl + '/protocolos/api/datatables',
+            type: 'GET',
+            dataSrc: function(json) {
+                if (json.error) {
+                    console.error('Erro ao carregar protocolos:', json.error);
+                    return [];
+                }
+                return json.data || [];
+            }
+        },
+        language: {
+            url: "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
+        },
+        order: [[0, 'desc']],
+        pageLength: 25,
+        columns: [
+            { data: 'data', name: 'data' },
+            { data: 'numero', name: 'numero' },
+            { data: 'qtd_arquivos', name: 'qtd_arquivos', className: 'text-center' },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(data, type, row) {
+                    var numeroEsc = (row.numero || '').replace(/'/g, "\\'");
+                    return '<div class="btn-group btn-group-sm">' +
+                        '<button type="button" class="btn btn-outline-primary btn-importar-pdfs" data-id="' + row.id + '" title="Importar PDFs"><i class="fas fa-file-pdf"></i></button>' +
+                        '<button type="button" class="btn btn-outline-info btn-protocolo-email" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Enviar por e-mail"><i class="fas fa-envelope"></i></button>' +
+                        '<button type="button" class="btn btn-outline-secondary btn-protocolo-arquivos" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Visualizar/Editar arquivos"><i class="fas fa-folder-open"></i></button>' +
+                        '</div>';
+                }
+            }
+        ]
+    });
+
+    $('#btnNovoProtocolo').on('click', function() {
+        $('#protocolo_id').val('');
+        $('#protocolo_data').val('');
+        $('#protocolo_numero').val('');
+        $('#modalNovoProtocolo').modal('show');
+    });
+
+    $(document).on('click', '.btn-importar-pdfs', function() {
+        var id = $(this).data('id');
+        $('#modalImportarPdfsProtocolo').data('protocolo-id', id);
+        $('#modalImportarPdfsProtocolo .protocolo-id-label').text('Protocolo #' + id);
+        $('#pdfs_protocolo').val('');
+        $('#resultadosImportacao').addClass('d-none').empty();
+        $('#etapaUpload').removeClass('d-none');
+        $('#etapaResultados').addClass('d-none');
+        $('#modalImportarPdfsProtocolo').modal('show');
+    });
+
+    $(document).on('click', '.btn-protocolo-email', function() {
+        var id = $(this).data('id');
+        var numero = $(this).data('numero') || id;
+        var m = $('#modalProtocoloEnviarEmail');
+        m.attr('data-protocolo-id', id);
+        m.attr('data-protocolo-numero', numero);
+        m.find('.protocolo-numero-label').text(numero);
+        m.find('#protocolo_email_destinatarios').val('');
+        m.modal('show');
+    });
+
+    $(document).on('click', '.btn-protocolo-arquivos', function() {
+        var id = $(this).data('id');
+        var numero = $(this).data('numero') || id;
+        if (typeof window.abrirModalProtocoloArquivos === 'function') {
+            window.abrirModalProtocoloArquivos(id, numero);
+        }
+    });
+
+    window.recarregarProtocolos = function() {
+        table.ajax.reload(null, false);
+    };
+});
+</script>
+{% endblock %}

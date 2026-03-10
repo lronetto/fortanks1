@@ -1,0 +1,88 @@
+<!-- Modal Enviar Protocolo por E-mail -->
+<div class="modal fade" id="modalProtocoloEnviarEmail" tabindex="-1" aria-labelledby="modalProtocoloEnviarEmailLabel" aria-hidden="true" data-protocolo-id="" data-protocolo-numero="" data-base-url="{{ request.script_root or '' }}/notas-fiscais">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalProtocoloEnviarEmailLabel">
+                    Enviar por e-mail — Protocolo <span class="protocolo-numero-label"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small">O e-mail terá o assunto <strong>Protocolo {número}</strong> e no corpo a lista dos arquivos (sem extensão).</p>
+                <div class="mb-3">
+                    <label for="protocolo_email_destinatarios" class="form-label">Destinatário(s)</label>
+                    <input type="text" id="protocolo_email_destinatarios" class="form-control" placeholder="email@exemplo.com ou vários separados por vírgula" required>
+                    <small class="form-text text-muted">Separe múltiplos e-mails por vírgula.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnEnviarProtocoloEmail">
+                    <i class="fas fa-envelope"></i> Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var modal = document.getElementById('modalProtocoloEnviarEmail');
+    var input = document.getElementById('protocolo_email_destinatarios');
+    var btn = document.getElementById('btnEnviarProtocoloEmail');
+    if (!modal || !btn) return;
+
+    function getBaseUrl() {
+        if (modal && modal.getAttribute('data-base-url')) return modal.getAttribute('data-base-url');
+        var el = document.querySelector('[data-base-url]');
+        if (el && el.getAttribute('data-base-url')) return el.getAttribute('data-base-url');
+        return '/notas-fiscais';
+    }
+
+    btn.addEventListener('click', function() {
+        var protocoloId = modal.getAttribute('data-protocolo-id');
+        if (!protocoloId) {
+            if (typeof Swal !== 'undefined') Swal.fire('Erro', 'Protocolo não definido.', 'error');
+            return;
+        }
+        var emailsStr = input && input.value ? input.value.trim() : '';
+        if (!emailsStr) {
+            if (typeof Swal !== 'undefined') Swal.fire('Atenção', 'Informe ao menos um e-mail.', 'warning');
+            return;
+        }
+        var destinatarios = emailsStr.split(/[,;]/).map(function(e) { return e.trim(); }).filter(Boolean);
+        if (!destinatarios.length) {
+            if (typeof Swal !== 'undefined') Swal.fire('Atenção', 'Informe ao menos um e-mail válido.', 'warning');
+            return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+        var baseUrl = getBaseUrl();
+        var csrfEl = document.querySelector('input[name="csrf_token"]') || document.querySelector('meta[name="csrf-token"]');
+        var csrfVal = csrfEl ? (csrfEl.value || csrfEl.getAttribute('content')) : '';
+        var headers = { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+        if (csrfVal) headers['X-CSRFToken'] = csrfVal;
+        fetch(baseUrl + '/protocolos/' + protocoloId + '/enviar-email', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({ destinatarios: destinatarios, csrf_token: csrfVal })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-envelope"></i> Enviar';
+            if (res.success) {
+                if (typeof Swal !== 'undefined') Swal.fire('Sucesso', res.message || 'E-mail enviado.', 'success');
+                if (typeof bootstrap !== 'undefined' && modal) { var m = bootstrap.Modal.getInstance(modal); if (m) m.hide(); }
+            } else {
+                if (typeof Swal !== 'undefined') Swal.fire('Erro', res.message || 'Falha ao enviar.', 'error');
+            }
+        })
+        .catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-envelope"></i> Enviar';
+            if (typeof Swal !== 'undefined') Swal.fire('Erro', 'Erro de conexão ao enviar e-mail.', 'error');
+        });
+    });
+})();
+</script>

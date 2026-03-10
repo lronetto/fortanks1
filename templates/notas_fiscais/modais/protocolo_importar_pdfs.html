@@ -1,0 +1,190 @@
+<!-- Modal Importar PDFs do Protocolo -->
+<div class="modal fade" id="modalImportarPdfsProtocolo" tabindex="-1" aria-labelledby="modalImportarPdfsLabel" aria-hidden="true" data-protocolo-id="">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarPdfsLabel">
+                    Importar PDFs — <span class="protocolo-id-label"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div id="etapaUpload">
+                    <p class="text-muted">Selecione os arquivos PDF. Eles serão processados e renomeados pela chave de acesso (código de barras/QR). Documentos não identificados poderão ser renomeados manualmente em seguida.</p>
+                    <form id="formImportarPdfsProtocolo" data-base-url="{{ request.script_root or '' }}/notas-fiscais">
+                        <div class="mb-3">
+                            <label for="pdfs_protocolo" class="form-label">Arquivos PDF</label>
+                            <input type="file" id="pdfs_protocolo" name="pdfs" class="form-control" accept=".pdf" multiple required>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="btnProcessarPdfs">
+                            <i class="fas fa-cog"></i> Processar e importar
+                        </button>
+                    </form>
+                </div>
+                <div id="etapaResultados" class="d-none">
+                    <p class="text-success mb-2"><i class="fas fa-check-circle"></i> Arquivos importados. Ajuste os nomes dos não identificados abaixo e clique em "Aplicar nomes" se necessário.</p>
+                    <div id="resultadosImportacao" class="table-responsive"></div>
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-secondary" id="btnAplicarNomes">Aplicar nomes alterados</button>
+                        <button type="button" class="btn btn-primary" id="btnConcluirImportacao">Concluir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var modal = document.getElementById('modalImportarPdfsProtocolo');
+    var form = document.getElementById('formImportarPdfsProtocolo');
+    var resultadosContainer = document.getElementById('resultadosImportacao');
+    var etapaUpload = document.getElementById('etapaUpload');
+    var etapaResultados = document.getElementById('etapaResultados');
+    var btnProcessar = document.getElementById('btnProcessarPdfs');
+    var btnAplicar = document.getElementById('btnAplicarNomes');
+    var btnConcluir = document.getElementById('btnConcluirImportacao');
+    var pdfInput = document.getElementById('pdfs_protocolo');
+
+    var resultadosAtuais = [];
+
+    function getProtocoloId() {
+        return modal && modal.getAttribute('data-protocolo-id');
+    }
+
+    function getBaseUrl() {
+        return (form && form.dataset && form.dataset.baseUrl) ? form.dataset.baseUrl : '/notas-fiscais';
+    }
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var protocoloId = getProtocoloId();
+            if (!protocoloId) {
+                if (typeof Swal !== 'undefined') Swal.fire('Erro', 'Protocolo não definido.', 'error');
+                return;
+            }
+            if (!pdfInput || !pdfInput.files || pdfInput.files.length === 0) {
+                if (typeof Swal !== 'undefined') Swal.fire('Atenção', 'Selecione ao menos um PDF.', 'warning');
+                return;
+            }
+            if (btnProcessar) {
+                btnProcessar.disabled = true;
+                btnProcessar.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
+            }
+            var formData = new FormData();
+            var csrfEl = document.querySelector('input[name="csrf_token"]') || document.querySelector('meta[name="csrf-token"]');
+            if (csrfEl) formData.append('csrf_token', csrfEl.value || csrfEl.getAttribute('content'));
+            for (var i = 0; i < pdfInput.files.length; i++) {
+                formData.append('pdfs', pdfInput.files[i]);
+            }
+            var baseUrl = getBaseUrl();
+            fetch(baseUrl + '/protocolos/' + protocoloId + '/importar-pdfs', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (btnProcessar) {
+                    btnProcessar.disabled = false;
+                    btnProcessar.innerHTML = '<i class="fas fa-cog"></i> Processar e importar';
+                }
+                if (res.success && res.resultados && res.resultados.length) {
+                    resultadosAtuais = res.resultados;
+                    renderResultados(res.resultados);
+                    etapaUpload.classList.add('d-none');
+                    etapaResultados.classList.remove('d-none');
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire('Sucesso', res.message || 'Arquivos processados.', 'success');
+                    }
+                    if (typeof window.recarregarProtocolos === 'function') window.recarregarProtocolos();
+                } else {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire(res.success ? 'Info' : 'Erro', res.message || 'Nenhum arquivo processado ou erro no servidor.', res.success ? 'info' : 'error');
+                    }
+                }
+            })
+            .catch(function() {
+                if (btnProcessar) {
+                    btnProcessar.disabled = false;
+                    btnProcessar.innerHTML = '<i class="fas fa-cog"></i> Processar e importar';
+                }
+                if (typeof Swal !== 'undefined') Swal.fire('Erro', 'Erro ao processar arquivos.', 'error');
+            });
+        });
+    }
+
+    function renderResultados(lista) {
+        if (!resultadosContainer) return;
+        var html = '<table class="table table-sm"><thead><tr><th>Original</th><th>Nome (sugerido / final)</th><th>Status</th></tr></thead><tbody>';
+        lista.forEach(function(r, idx) {
+            var identificado = r.identificado;
+            var nomeExibir = r.suggested_name || r.original;
+            var inputNome = identificado
+                ? ('<span class="text-muted">' + (nomeExibir || '-') + '</span>')
+                : ('<input type="text" class="form-control form-control-sm input-rename" data-upload-id="' + r.upload_id + '" value="' + (nomeExibir ? nomeExibir.replace(/"/g, '&quot;') : '') + '" placeholder="Nome do arquivo">');
+            var status = identificado ? '<span class="badge bg-success">Identificado</span>' : '<span class="badge bg-warning">Renomear manualmente</span>';
+            html += '<tr><td>' + (r.original || '-') + '</td><td>' + inputNome + '</td><td>' + status + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        resultadosContainer.innerHTML = html;
+        resultadosContainer.classList.remove('d-none');
+    }
+
+    if (btnAplicar) {
+        btnAplicar.addEventListener('click', function() {
+            var inputs = resultadosContainer && resultadosContainer.querySelectorAll('.input-rename');
+            if (!inputs || !inputs.length) {
+                if (typeof Swal !== 'undefined') Swal.fire('Info', 'Nenhum nome para aplicar.', 'info');
+                return;
+            }
+            var baseUrl = getBaseUrl();
+            var promises = [];
+            inputs.forEach(function(inp) {
+                var uploadId = inp.getAttribute('data-upload-id');
+                var filename = inp.value && inp.value.trim();
+                if (!uploadId || !filename) return;
+                if (!filename.toLowerCase().endsWith('.pdf')) filename = filename + '.pdf';
+                var csrfEl = document.querySelector('input[name="csrf_token"]') || document.querySelector('meta[name="csrf-token"]');
+                var csrfVal = csrfEl ? (csrfEl.value || csrfEl.getAttribute('content')) : '';
+                promises.push(
+                    fetch(baseUrl + '/protocolos/upload/' + uploadId + '/renomear', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                        body: JSON.stringify({ filename: filename, csrf_token: csrfVal })
+                    }).then(function(r) { return r.json(); })
+                );
+            });
+            if (promises.length === 0) {
+                if (typeof Swal !== 'undefined') Swal.fire('Info', 'Preencha os nomes que deseja alterar.', 'info');
+                return;
+            }
+            btnAplicar.disabled = true;
+            Promise.all(promises).then(function(results) {
+                btnAplicar.disabled = false;
+                var ok = results.every(function(r) { return r && r.success; });
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire(ok ? 'Sucesso' : 'Aviso', ok ? 'Nomes aplicados.' : 'Alguns nomes podem não ter sido atualizados.', ok ? 'success' : 'warning');
+                }
+            }).catch(function() {
+                btnAplicar.disabled = false;
+                if (typeof Swal !== 'undefined') Swal.fire('Erro', 'Erro ao aplicar nomes.', 'error');
+            });
+        });
+    }
+
+    if (btnConcluir) {
+        btnConcluir.addEventListener('click', function() {
+            if (typeof bootstrap !== 'undefined' && modal) {
+                var m = bootstrap.Modal.getInstance(modal);
+                if (m) m.hide();
+            }
+            etapaResultados.classList.add('d-none');
+            etapaUpload.classList.remove('d-none');
+            if (pdfInput) pdfInput.value = '';
+            resultadosAtuais = [];
+        });
+    }
+})();
+</script>

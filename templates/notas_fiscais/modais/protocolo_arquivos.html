@@ -1,0 +1,144 @@
+<!-- Modal Visualizar/Editar Arquivos do Protocolo -->
+<div class="modal fade" id="modalProtocoloArquivos" tabindex="-1" aria-labelledby="modalProtocoloArquivosLabel" aria-hidden="true" data-protocolo-id="" data-base-url="{{ request.script_root or '' }}/notas-fiscais">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalProtocoloArquivosLabel">
+                    Arquivos — Protocolo <span class="protocolo-numero-arquivos"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="protocoloArquivosLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 mb-0">Carregando arquivos...</p>
+                </div>
+                <div id="protocoloArquivosConteudo" class="d-none">
+                    <p class="text-muted small">Visualize o PDF ou edite o nome do arquivo abaixo.</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Nome do arquivo</th>
+                                    <th style="width: 180px;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="protocoloArquivosTbody"></tbody>
+                        </table>
+                    </div>
+                    <p id="protocoloArquivosVazio" class="text-muted d-none mb-0">Nenhum arquivo neste protocolo.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var modal = document.getElementById('modalProtocoloArquivos');
+    var loading = document.getElementById('protocoloArquivosLoading');
+    var conteudo = document.getElementById('protocoloArquivosConteudo');
+    var tbody = document.getElementById('protocoloArquivosTbody');
+    var vazio = document.getElementById('protocoloArquivosVazio');
+
+    function getBaseUrl() {
+        if (modal && modal.getAttribute('data-base-url')) return modal.getAttribute('data-base-url');
+        return '/notas-fiscais';
+    }
+
+    window.abrirModalProtocoloArquivos = function(protocoloId, protocoloNumero) {
+        if (!modal || !protocoloId) return;
+        modal.setAttribute('data-protocolo-id', protocoloId);
+        var label = modal.querySelector('.protocolo-numero-arquivos');
+        if (label) label.textContent = protocoloNumero || protocoloId;
+        if (loading) loading.classList.remove('d-none');
+        if (conteudo) conteudo.classList.add('d-none');
+        if (tbody) tbody.innerHTML = '';
+        if (vazio) vazio.classList.add('d-none');
+
+        var baseUrl = getBaseUrl();
+        fetch(baseUrl + '/protocolos/' + protocoloId + '/arquivos')
+            .then(function(r) { return r.json(); })
+            .then(function(res) {
+                if (loading) loading.classList.add('d-none');
+                if (conteudo) conteudo.classList.remove('d-none');
+                if (!res.success || !res.arquivos || !res.arquivos.length) {
+                    if (vazio) vazio.classList.remove('d-none');
+                    return;
+                }
+                if (vazio) vazio.classList.add('d-none');
+                var pdfBase = baseUrl + '/pdf/';
+                res.arquivos.forEach(function(arq) {
+                    var tr = document.createElement('tr');
+                    var nomeEsc = (arq.filename || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    var nomeSemExt = (arq.filename || '').replace(/\.pdf$/i, '');
+                    tr.innerHTML =
+                        '<td class="align-middle">' +
+                        '<span class="nome-arquivo-texto">' + nomeEsc + '</span>' +
+                        '<div class="input-group input-group-sm d-none mt-1 editar-nome-wrap">' +
+                        '<input type="text" class="form-control input-editar-nome" value="' + nomeSemExt + '" data-upload-id="' + arq.id + '">' +
+                        '<button type="button" class="btn btn-outline-primary btn-salvar-nome" data-upload-id="' + arq.id + '"><i class="fas fa-check"></i></button>' +
+                        '</div>' +
+                        '</td>' +
+                        '<td class="align-middle">' +
+                        '<a href="' + pdfBase + arq.id + '" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Visualizar"><i class="fas fa-eye"></i> Visualizar</a>' +
+                        '<button type="button" class="btn btn-sm btn-outline-primary btn-editar-nome-arquivo" title="Editar nome"><i class="fas fa-edit"></i> Editar</button>' +
+                        '</td>';
+                    if (tbody) tbody.appendChild(tr);
+                });
+            })
+            .catch(function() {
+                if (loading) loading.classList.add('d-none');
+                if (conteudo) conteudo.classList.remove('d-none');
+                if (vazio) { vazio.textContent = 'Erro ao carregar arquivos.'; vazio.classList.remove('d-none'); }
+            });
+
+        if (typeof bootstrap !== 'undefined' && modal) {
+            var m = bootstrap.Modal.getOrCreateInstance(modal);
+            m.show();
+        }
+    };
+
+    $(document).on('click', '.btn-editar-nome-arquivo', function() {
+        var tr = $(this).closest('tr');
+        tr.find('.nome-arquivo-texto').addClass('d-none');
+        tr.find('.editar-nome-wrap').removeClass('d-none');
+    });
+
+    function getCsrfToken() {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        if (m && m.getAttribute('content')) return m.getAttribute('content');
+        var inp = document.querySelector('input[name="csrf_token"]');
+        if (inp && inp.value) return inp.value;
+        return '';
+    }
+
+    $(document).on('click', '.btn-salvar-nome', function() {
+        var btn = $(this);
+        var uploadId = btn.data('upload-id');
+        var input = btn.siblings('.input-editar-nome');
+        var nome = input.val() && input.val().trim();
+        if (!nome) return;
+        if (!nome.toLowerCase().endsWith('.pdf')) nome = nome + '.pdf';
+        var baseUrl = getBaseUrl();
+        var csrf = getCsrfToken();
+        var payload = { filename: nome };
+        if (csrf) payload.csrf_token = csrf;
+        $.ajax({
+            url: baseUrl + '/protocolos/upload/' + uploadId + '/renomear',
+            method: 'POST',
+            contentType: 'application/json',
+            headers: csrf ? { 'X-CSRFToken': csrf } : {},
+            data: JSON.stringify(payload)
+        }).done(function(res) {
+            if (res && res.success) {
+                var tr = btn.closest('tr');
+                tr.find('.nome-arquivo-texto').text(res.filename || nome).removeClass('d-none');
+                tr.find('.editar-nome-wrap').addClass('d-none');
+                if (typeof Swal !== 'undefined') Swal.fire('Sucesso', 'Nome atualizado.', 'success');
+            }
+        }).fail(function() {
+            if (typeof Swal !== 'undefined') Swal.fire('Erro', 'Não foi possível atualizar o nome.', 'error');
+        });
+    });
+})();
+</script>
