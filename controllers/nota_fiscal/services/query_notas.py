@@ -60,7 +60,7 @@ def api_get_dados_notas_fiscais(request):
     plano_conta_id = json_filtros.get("plano_conta_id", "")
     notas_selecionadas = json_filtros.get("notas_selecionadas", [])
     centro_custo_ids = json_filtros.get("centro_custo_ids", [])
-    cancelada = json_filtros.get("cancelada", "")
+    cancelada = json_filtros.get("cancelada", "nao_canceladas")
     liberada = json_filtros.get("liberada", "")
     reembolso_id = json_filtros.get("reembolso_id", "")
     reembolso = json_filtros.get("reembolso", "")
@@ -255,8 +255,12 @@ def api_get_dados_notas_fiscais(request):
             pc_column,
         )
         .select_from(NotaFiscal)
-        .filter(NotaFiscal.status_processamento != "cancelada")
     )
+    if cancelada == "canceladas":
+        query = query.filter(NotaFiscal.status_processamento == "cancelada")
+    elif cancelada == "nao_canceladas":
+        query = query.filter(NotaFiscal.status_processamento != "cancelada")
+    # cancelada == "" (todos): sem filtro por cancelamento
     if reembolso:
         if reembolso == "1":
             query = query.filter(

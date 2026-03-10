@@ -122,6 +122,7 @@ def exportar_excel():
                 "Data": nf.data_emissao.strftime("%d/%m/%Y") if nf.data_emissao else "",
                 "Valor": float(nf.valor_total) if nf.valor_total is not None else 0.0,
                 "Status Upload": ", ".join(status_u),
+                "Status": nf.status_processamento,
             }
         )
 

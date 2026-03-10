@@ -121,6 +121,7 @@ def api_dados():
         ConcretoConcretagens.data_concretagem.desc(),
         ConcretoConcretagens.pista.asc()
     ).all()
+
     
     # Agrupar dados por data_concretagem e pista
     grupos = {}
@@ -128,6 +129,7 @@ def api_dados():
     grupos_concretagens = {}  # Armazenar IDs de concretagens por grupo
     
     for concretagem in concretagens:
+       
         # Criar chave única para agrupamento (data + pista)
         chave = (concretagem.data_concretagem, concretagem.pista)
         
@@ -266,7 +268,7 @@ def extrair_tanque_ids_do_json(pecas_json_str):
             elif 'tanque_id' in pecas_data:
                 tanque_ids.add(int(pecas_data['tanque_id']))
     except (json.JSONDecodeError, TypeError, ValueError, KeyError) as e:
-        print(f"Erro ao processar JSON de pecas: {e}")
+        print(f"Erro ao processar JSON de pecas: {pecas_json_str} {e}")
     
     return tanque_ids
 
@@ -460,9 +462,10 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
             if pecasbb:
                 for peca in pecasbb:
                     print(f'[_processar_ods_template_inspecao] Peca: {peca} tanques_ids: {tanques_ids}')
-                    if str(peca['tanque_id']) in tanques_ids:
-                        peca_tanque = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca['tanque_id'], TanquesPecas.nome == peca['nome']).first()
+                    if peca['tanque_id'] in tanques_ids:
+                        peca_tanque = TanquesPecas.query.filter(TanquesPecas.id == peca['peca_id']).first()
                         qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
+                        print(f'[_processar_ods_template_inspecao] Qualidade: {qualidade}')
                         if qualidade:
                             if 'perca' in qualidade and qualidade['perca']==True:
                                 continue

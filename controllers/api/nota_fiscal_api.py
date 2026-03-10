@@ -139,19 +139,20 @@ def register(nota_fiscal_bp):
             if liberada is None:
                 liberada = 0
 
-            # Status badge
+            # Status badge (cancelada ou não + demais status)
             status_html = ""
             if nota.NotaFiscal.status_processamento == 'cancelada':
                 status_html = '<span class="badge bg-danger">Cancelada</span>'
             else:
+                status_html = ''
                 if percentual == 0:
-                    status_html = '<span class="badge bg-danger">Pend</span>'
+                    status_html += '<span class="badge bg-danger">Pend</span>'
                 elif percentual == 100:
-                    status_html = '<span class="badge bg-success">Impo</span>'
+                    status_html += '<span class="badge bg-success">Impo</span>'
                 elif percentual > 0:
-                    status_html = f'<span class="badge bg-warning">Parc ({int(percentual)}%)</span>'
+                    status_html += f'<span class="badge bg-warning">Parc ({int(percentual)}%)</span>'
                 else:
-                    status_html = '<span class="badge bg-secondary">N/A</span>'
+                    status_html += '<span class="badge bg-secondary">N/A</span>'
 
                 # Badge de liberação
                 if liberada == 1:

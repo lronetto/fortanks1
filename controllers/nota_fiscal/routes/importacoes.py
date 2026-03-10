@@ -17,6 +17,7 @@ from models.estoque import EstoqueMovimentacoes
 from models.logs import Logs
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.upload import Upload
+from models.arquivei import Arquivei
 from scripts.processar_email1 import processar_emails
 
 from .. import nota_fiscal_bp
@@ -215,6 +216,122 @@ def importar_item_estoque_todas_notas(item_id):
     )
     Logs(local="importar_item_estoque", data=datetime.now(), texto=json_dumps_safe(estatisticas))
     return jsonify({"success": bool(sucesso), "message": mensagem})
+
+
+@nota_fiscal_bp.route("/verificar-notas-canceladas", methods=["GET"])
+@login_required
+def verificar_notas_canceladas():
+    """
+    Verifica no Arquivei quais notas do período do filtro estão canceladas
+    e atualiza status_processamento para 'cancelada' quando for o caso.
+    Usa data_emissao_inicio e data_emissao_fim do filtro (query string).
+    """
+    try:
+        data_inicio = request.args.get("data_emissao_inicio", "").strip()
+        data_fim = request.args.get("data_emissao_fim", "").strip()
+        if not data_inicio or not data_fim:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Informe o período do filtro (Data Emissão Início e Fim) para verificar notas canceladas.",
+                    }
+                ),
+                400,
+            )
+        try:
+            dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d")
+            dt_fim = datetime.strptime(data_fim, "%Y-%m-%d")
+        except ValueError:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Datas inválidas. Use o formato AAAA-MM-DD.",
+                    }
+                ),
+                400,
+            )
+        if dt_inicio > dt_fim:
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "message": "Data início não pode ser maior que data fim.",
+                    }
+                ),
+                400,
+            )
+
+        # Notas do período que ainda não estão marcadas como canceladas
+        LIMITE_VERIFICACAO = 500
+        notas = (
+            NotaFiscal.query.filter(
+                NotaFiscal.status_processamento != "cancelada",
+                NotaFiscal.data_emissao >= dt_inicio,
+                NotaFiscal.data_emissao <= dt_fim,
+            )
+            .order_by(NotaFiscal.data_emissao)
+            .limit(LIMITE_VERIFICACAO)
+            .all()
+        )
+
+        verificadas = 0
+        marcadas_canceladas = 0
+        erros = []
+
+        # Mapeamento NotaFiscal.tipo (int) -> Arquivei tipo (str)
+        tipo_arquivei_map = {0: "nfe", 2: "cte", 3: "nfse"}
+
+        for nota in notas:
+            try:
+                tipo_arq = tipo_arquivei_map.get(nota.tipo, "nfe")
+                arquivei = Arquivei(
+                    chave_acesso=nota.chave_acesso,
+                    cancelamento=True,
+                    tipo=tipo_arq,
+                )
+                verificadas += 1
+                if getattr(arquivei, "cancelada", False):
+                    nota.status_processamento = "cancelada"
+                    marcadas_canceladas += 1
+            except Exception as e:
+                erros.append({"chave": nota.chave_acesso, "erro": str(e)})
+
+        if marcadas_canceladas > 0:
+            db.session.commit()
+
+        log = {
+            "data_inicio": data_inicio,
+            "data_fim": data_fim,
+            "verificadas": verificadas,
+            "marcadas_canceladas": marcadas_canceladas,
+            "erros": erros,
+        }
+        Logs(local="verificar_notas_canceladas", data=datetime.now(), texto=json_dumps_safe(log))
+
+        msg = f"Verificação concluída: {verificadas} nota(s) verificada(s), {marcadas_canceladas} marcada(s) como cancelada(s)."
+        if erros:
+            msg += f" {len(erros)} erro(s) (ver logs)."
+        if len(notas) >= LIMITE_VERIFICACAO:
+            msg += f" Limite de {LIMITE_VERIFICACAO} notas por execução; refine o período se necessário."
+
+        return jsonify(
+            {
+                "success": True,
+                "message": msg,
+                "verificadas": verificadas,
+                "marcadas_canceladas": marcadas_canceladas,
+                "erros_count": len(erros),
+            }
+        )
+    except Exception as e:
+        logger.error(f"Erro ao verificar notas canceladas: {str(e)}", exc_info=True)
+        return (
+            jsonify({"success": False, "message": f"Erro ao verificar notas canceladas: {str(e)}"}),
+            500,
+        )
+
 
 # Rotas de diagnóstico antigas removidas:
 # - /teste, /teste1, /teste2, /teste3

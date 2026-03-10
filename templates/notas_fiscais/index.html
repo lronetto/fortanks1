@@ -37,6 +37,9 @@
             <button type="button" class="btn btn-danger" id="btnExportarPdf">
                 <i class="fas fa-file-pdf"></i> Exportar PDF (originais)
             </button>
+            <button type="button" class="btn btn-outline-secondary" id="btnVerificarCanceladas" title="Verifica no Arquivei se as notas do período do filtro foram canceladas">
+                <i class="fas fa-ban"></i> Verificar notas canceladas
+            </button>
         </div>
     </div>
 
@@ -76,6 +79,14 @@
                         <option value="Matriz" {% if request.args.get('destinatario') == 'Matriz' %}selected{% endif %}>Matriz</option>
                         <option value="Filiais" {% if request.args.get('destinatario') == 'Filiais' %}selected{% endif %}>Filiais</option>
                         <option value="Matriz_Filiais" {% if request.args.get('destinatario') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_cancelada" class="form-label">Status</label>
+                    <select name="cancelada" id="status_cancelada" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="canceladas" {% if request.args.get('cancelada') == 'canceladas' %}selected{% endif %}>Canceladas</option>
+                        <option value="nao_canceladas" {% if request.args.get('cancelada', 'nao_canceladas') == 'nao_canceladas' %}selected{% endif %}>Não canceladas</option>
                     </select>
                 </div>
                 <div class="col-md-3">
@@ -387,6 +398,53 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Verificar notas canceladas no período do filtro (consulta Arquivei)
+    $('#btnVerificarCanceladas').on('click', function() {
+        var dataInicio = $('#data_emissao_inicio').val();
+        var dataFim = $('#data_emissao_fim').val();
+        if (!dataInicio || !dataFim) {
+            mostrarAlerta('Período obrigatório', 'Informe Data Emissão (Início) e (Fim) nos filtros para verificar notas canceladas no período.', 'warning');
+            return;
+        }
+        var $btn = $('#btnVerificarCanceladas').prop('disabled', true);
+        var icon = $btn.find('i');
+        icon.removeClass('fa-ban').addClass('fa-spinner fa-spin');
+        $.ajax({
+            url: '{{ url_for("nota_fiscal.verificar_notas_canceladas") }}',
+            type: 'GET',
+            data: {
+                data_emissao_inicio: dataInicio,
+                data_emissao_fim: dataFim
+            },
+            success: function(response) {
+                if (response.success) {
+                    mostrarAlerta('Verificação concluída', response.message, 'success', function() {
+                        if (response.marcadas_canceladas > 0 && typeof table !== 'undefined') {
+                            table.ajax.reload();
+                        }
+                    });
+                } else {
+                    mostrarAlerta('Atenção', response.message, 'warning');
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Erro ao verificar notas canceladas.';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                else if (xhr.responseText) {
+                    try {
+                        var j = JSON.parse(xhr.responseText);
+                        if (j.message) msg = j.message;
+                    } catch (e) {}
+                }
+                mostrarAlerta('Erro', msg, 'error');
+            },
+            complete: function() {
+                $btn.prop('disabled', false);
+                icon.removeClass('fa-spinner fa-spin').addClass('fa-ban');
+            }
+        });
+    });
+
     $('#btnReprocessarImportacao').on('click', function() {
         $.ajax({    
             url: '/notas-fiscais/reprocessar-importacao',
