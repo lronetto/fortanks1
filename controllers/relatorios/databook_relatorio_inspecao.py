@@ -450,19 +450,26 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                             if tanque.contrato.nome not in contratos_nome:
                                 contratos_nome.append(tanque.contrato.nome)
             
-       
-       
+        tanques_ids_int = []
+        for tanque_id in tanques_ids:
+            if isinstance(tanque_id, str):
+                tanques_ids_int.append(int(tanque_id))
+            elif isinstance(tanque_id, int):
+                tanques_ids_int.append(tanque_id)
+
+                
         # Buscar primeira peça válida para usar no processamento de alongamentos
         peca_tanque_global = None
         tipo_painel = ''
-        if tanques_ids:
+        if tanques_ids_int:
             pecasb = concretagem.get_pecas()
             pecasbb = json.loads(pecasb) if isinstance(pecasb, str) else pecasb
             print(f'[_processar_ods_template_inspecao] Pecas: {pecasbb}')
             if pecasbb:
                 for peca in pecasbb:
                     print(f'[_processar_ods_template_inspecao] Peca: {peca} tanques_ids: {tanques_ids}')
-                    if peca['tanque_id'] in tanques_ids:
+                    
+                    if int(peca['tanque_id']) in tanques_ids_int:
                         peca_tanque = TanquesPecas.query.filter(TanquesPecas.id == peca['peca_id']).first()
                         qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
                         print(f'[_processar_ods_template_inspecao] Qualidade: {qualidade}')
