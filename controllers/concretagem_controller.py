@@ -475,6 +475,7 @@ def api_pecas(id):
                                             'id': peca.id,
                                             'nome': peca.nome,
                                             'tipo': peca.tipo,
+                                            'perca': qualidade.get('perca', False),
                                             'numero_sequencial': peca.numero_sequencial,
                                             'tanque_id': peca.tanque_id,
                                             'tanque_nome': peca.tanque.nome if peca.tanque else None,

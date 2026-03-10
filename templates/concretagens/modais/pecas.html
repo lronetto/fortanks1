@@ -99,6 +99,7 @@
                             pista: pistaAtual
                         }
                     }).then(function(pecasData) {
+                        console.log('Pecas Data:', pecasData);
                         return { tanqueId: tanqueId, pecas: Array.isArray(pecasData) ? pecasData : (pecasData || []) };
                     });
                 });
@@ -143,8 +144,10 @@
                                     <select class="form-select form-select-sm peca-peca" data-index="${contadorPecas}">
                                         <option value="">Selecione a peça</option>
                                         ${pecasDoTanque.map(p => {
+                                            const qualidade = JSON.parse(p.qualidade)
                                             const isSelected = p.nome === pecaNome;
-                                            return `<option value="${p.id}" data-nome="${p.nome}" ${isSelected ? 'selected' : ''}>${p.nome} (${p.tipo})</option>`;
+                                            const perca = qualidade && qualidade.perca ? ' (PERCA)' : '';
+                                            return `<option value="${p.id}" data-nome="${p.nome}" ${isSelected ? 'selected' : ''}>${p.nome} (${p.tipo}) ${perca}</option>`;
                                         }).join('')}
                                     </select>
                                 </td>

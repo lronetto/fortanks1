@@ -462,6 +462,10 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                     print(f'[_processar_ods_template_inspecao] Peca: {peca} tanques_ids: {tanques_ids}')
                     if str(peca['tanque_id']) in tanques_ids:
                         peca_tanque = TanquesPecas.query.filter(TanquesPecas.tanque_id == peca['tanque_id'], TanquesPecas.nome == peca['nome']).first()
+                        qualidade = json.loads(peca_tanque.qualidade) if isinstance(peca_tanque.qualidade, str) else peca_tanque.qualidade
+                        if qualidade:
+                            if 'perca' in qualidade and qualidade['perca']==True:
+                                continue
                         print(f'[_processar_ods_template_inspecao] Peca Tanque: {peca_tanque}')
                         series = peca_tanque.get_series_de_pecas()
                         print(f'[_processar_ods_template_inspecao] Series: {series}')
