@@ -1,0 +1,38 @@
+<!-- Modal de Liberação de Nota Fiscal -->
+<div class="modal fade" id="modalLiberarNota" tabindex="-1" aria-labelledby="modalLiberarNotaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalLiberarNotaLabel">Liberar Nota Fiscal</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formLiberarNota">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="liberar_nf_id" name="nf_id">
+                <div class="modal-body">
+                    <p class="mb-3">Deseja liberar a nota fiscal <strong id="numeroNotaLiberar"></strong>?</p>
+                    <div class="mb-3">
+                        <label for="tipo_item_liberacao" class="form-label">Tipo de Item</label>
+                        <select name="tipo_item" id="tipo_item_liberacao" class="form-select">
+                            <option value="">Selecione...</option>
+                            <option value="MP">Matéria Prima (MP)</option>
+                            <option value="UC">Uso e consumo (UC)</option>
+                            <option value="IM">Imobilizado (IM)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pedido_compra_liberacao" class="form-label">Pedido de Compra</label>
+                        <input type="text" name="pedido_compra" id="pedido_compra_liberacao" class="form-control"
+                               placeholder="Número do pedido de compra">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" id="btnConfirmarLiberacao" class="btn btn-info">
+                        <i class="fas fa-unlock"></i> Liberar Nota Fiscal
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

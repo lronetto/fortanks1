@@ -842,9 +842,15 @@ def register(nota_fiscal_bp):
             # Alternar status de liberação
             liberada = dados_adicionais.get('liberada', False)
             dados_adicionais['liberada'] = not liberada
-            
-            # Adicionar informações de quem e quando liberou/desliberou
+
+            # Ao liberar: receber e gravar tipo de item (MP/UC/IM) e pedido de compra
             if dados_adicionais['liberada']:
+                tipo_item = request.form.get('tipo_item') or (request.json.get('tipo_item') if request.is_json else None)
+                pedido_compra = request.form.get('pedido_compra') or (request.json.get('pedido_compra') if request.is_json else None)
+                if tipo_item:
+                    dados_adicionais['tipo_item'] = tipo_item.strip()
+                if pedido_compra is not None:
+                    dados_adicionais['pedido_compra'] = str(pedido_compra).strip()
                 dados_adicionais['liberada_por'] = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
                 dados_adicionais['liberada_em'] = datetime.now().isoformat()
             else:
