@@ -565,7 +565,7 @@ def _processar_ods_template_inspecao(ods_path, concretagem_id, concretagem, cont
                         peca_tanque_local = peca_tanque_global
                         
                         # Substituir placeholders básicos
-                        new_value = new_value.replace('{1}', str(concretagem_id))
+                        new_value = new_value.replace('{1}', str(concretagem.conc))
                         
                         cliente_nome = 'N/A'
                         if clientes_nome:
@@ -898,6 +898,10 @@ def exportar_excel():
         tanque_id = request.args.get('tanque_id', type=int) or None
         projeto_id = request.args.get('projeto_id', type=int) or None
         grupo_id = request.args.get('grupo_id', type=int) or None
+        concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.id == concretagem_id).first()
+        if not concretagem:
+            return jsonify({'error': 'Concretagem não encontrada'}), 404
+        concretagem_id = concretagem.conc
         if not concretagem_id:
             return jsonify({'error': 'Parâmetro concretagem_id é obrigatório'}), 400
         time_inicio = datetime.now()
@@ -933,7 +937,7 @@ def exportar_excel():
             
             # Nome do arquivo
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'relatorio_inspecao_{concretagem_id}_{timestamp}.xlsx'
+            filename = f'relatorio_inspecao_{concretagem.conc}_{timestamp}.xlsx'
             
             return send_file(
                 output,
@@ -965,7 +969,10 @@ def exportar_pdf():
         concretagem_id = request.args.get('concretagem_id', type=int)
         tanque_id = request.args.get('tanque_id', type=int) or None
         projeto_id = request.args.get('projeto_id', type=int) or None
-        
+        concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.id == concretagem_id).first()
+        if not concretagem:
+            return jsonify({'error': 'Concretagem não encontrada'}), 404
+       
         if not concretagem_id:
             return jsonify({'error': 'Parâmetro concretagem_id é obrigatório'}), 400
         
@@ -1027,7 +1034,7 @@ def exportar_pdf():
         
         # Nome do arquivo
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'relatorio_inspecao_{concretagem_id}_{timestamp}.pdf'
+        filename = f'relatorio_inspecao_{concretagem.conc}_{timestamp}.pdf'
         
         return send_file(
             output,
@@ -1135,10 +1142,14 @@ def exportar_massa():
                 for i, excel_path in enumerate(excel_paths):
                     try:
                         concretagem_id = concretagens_ids[i] if i < len(concretagens_ids) else None
+                        concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.id == concretagem_id).first()
+                        if not concretagem:
+                            return jsonify({'error': 'Concretagem não encontrada'}), 404
+                        
                         # Converter para PDF (aceita tanto XLSX quanto ODS)
                         pdf_path = _converter_excel_para_pdf_libreoffice(excel_path)
                         if pdf_path and os.path.exists(pdf_path):
-                            nome_arquivo = f'relatorio_inspecao_{concretagem_id}.pdf'
+                            nome_arquivo = f'relatorio_inspecao_{concretagem.conc}.pdf'
                             destino = os.path.join(temp_dir, nome_arquivo)
                             shutil.copy2(pdf_path, destino)
                             arquivos_gerados.append(destino)
