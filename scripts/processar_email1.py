@@ -143,7 +143,7 @@ TAMANHO_MAX_ANEXO_MB = float(os.getenv('TAMANHO_MAX_ANEXO_MB', '10.0'))  # Taman
 PROCESSAR_APENAS_PDF_XML = os.getenv('PROCESSAR_APENAS_PDF_XML', 'true').lower() == 'true'  # Processar apenas PDF e XML
 PRIORIZAR_XML = os.getenv('PRIORIZAR_XML', 'true').lower() == 'true'  # Processar XML antes de PDF
 ORDENAR_EMAILS_POR_ANEXOS = os.getenv('ORDENAR_EMAILS_POR_ANEXOS', 'true').lower() == 'true'  # Ordenar emails por quantidade de anexos (menos primeiro)
-MAX_WORKERS_ANEXOS = int(os.getenv('MAX_WORKERS_ANEXOS', '8'))  # Número de tarefas paralelas para processar anexos do mesmo email
+MAX_WORKERS_ANEXOS = int(os.getenv('MAX_WORKERS_ANEXOS', '1'))  # Número de tarefas paralelas para processar anexos do mesmo email
 
 def normalizar_texto(texto):
     """
