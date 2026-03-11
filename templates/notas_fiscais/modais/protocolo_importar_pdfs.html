@@ -49,7 +49,14 @@
     var resultadosAtuais = [];
 
     function getProtocoloId() {
-        return modal && modal.getAttribute('data-protocolo-id');
+        if (!modal) return '';
+        var id = modal.getAttribute('data-protocolo-id');
+        if (id) return id;
+        if (typeof $ !== 'undefined') {
+            var jq = $(modal).data('protocolo-id');
+            if (jq) return String(jq);
+        }
+        return '';
     }
 
     function getBaseUrl() {
@@ -74,15 +81,18 @@
             }
             var formData = new FormData();
             var csrfEl = document.querySelector('input[name="csrf_token"]') || document.querySelector('meta[name="csrf-token"]');
-            if (csrfEl) formData.append('csrf_token', csrfEl.value || csrfEl.getAttribute('content'));
+            var csrfVal = csrfEl ? (csrfEl.value || csrfEl.getAttribute('content')) : '';
+            if (csrfVal) formData.append('csrf_token', csrfVal);
             for (var i = 0; i < pdfInput.files.length; i++) {
                 formData.append('pdfs', pdfInput.files[i]);
             }
             var baseUrl = getBaseUrl();
+            var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+            if (csrfVal) headers['X-CSRFToken'] = csrfVal;
             fetch(baseUrl + '/protocolos/' + protocoloId + '/importar-pdfs', {
                 method: 'POST',
                 body: formData,
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                headers: headers
             })
             .then(function(r) { return r.json(); })
             .then(function(res) {

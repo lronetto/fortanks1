@@ -1,0 +1,217 @@
+<!-- Modal Importar Efetivo (Excel com mapeamento de colunas) -->
+<div class="modal fade" id="modalImportarEfetivo" tabindex="-1" aria-labelledby="modalImportarEfetivoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.efetivo_importar') }}" enctype="multipart/form-data" id="formImportarEfetivo">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="mapping" id="efetivoMappingJson" value="">
+                <input type="hidden" name="ano" id="efetivo_ano_hidden" value="">
+                <input type="hidden" name="mes" id="efetivo_mes_hidden" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalImportarEfetivoLabel">Importar Efetivo (Excel)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">Selecione um arquivo Excel (.xlsx ou .xls). Em seguida, clique em <strong>Ler colunas</strong> e mapeie as colunas do arquivo para os campos do sistema.</p>
+
+                    <div id="efetivoPasso1" class="mb-3">
+                        <label for="arquivo_efetivo" class="form-label">Arquivo Excel *</label>
+                        <div class="input-group">
+                            <input type="file" id="arquivo_efetivo" name="arquivo" class="form-control" accept=".xlsx,.xls">
+                            <button type="button" class="btn btn-outline-secondary" id="btnLerColunasEfetivo">
+                                <i class="fas fa-list"></i> Ler colunas
+                            </button>
+                        </div>
+                        <small class="form-text text-muted">Será usada a primeira aba da planilha.</small>
+                        <div id="efetivoPreviewErro" class="alert alert-danger mt-2 d-none" role="alert"></div>
+                    </div>
+
+                    <div id="efetivoPasso2" class="d-none">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="efetivo_ano" class="form-label">Ano de referência *</label>
+                                <input type="number" class="form-control" id="efetivo_ano" min="2000" max="2100" placeholder="Ex: 2025" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="efetivo_mes" class="form-label">Mês de referência *</label>
+                                <select class="form-select" id="efetivo_mes" required>
+                                    <option value="">Selecione</option>
+                                    <option value="1">Janeiro</option>
+                                    <option value="2">Fevereiro</option>
+                                    <option value="3">Março</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Maio</option>
+                                    <option value="6">Junho</option>
+                                    <option value="7">Julho</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Setembro</option>
+                                    <option value="10">Outubro</option>
+                                    <option value="11">Novembro</option>
+                                    <option value="12">Dezembro</option>
+                                </select>
+                            </div>
+                        </div>
+                        <h6 class="mb-2">Mapeamento de colunas</h6>
+                        <p class="text-muted small">Associe cada campo do sistema à coluna correspondente no arquivo.</p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Campo no sistema</th>
+                                        <th>Coluna no arquivo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for campo_key, campo_label in campos_efetivo %}
+                                    <tr>
+                                        <td><label for="efetivo_map_{{ campo_key }}" class="mb-0">{{ campo_label }}</label></td>
+                                        <td>
+                                            <select class="form-select form-select-sm efetivo-map-select" id="efetivo_map_{{ campo_key }}" data-field="{{ campo_key }}" data-label="{{ campo_label }}">
+                                                <option value="">— Não importar</option>
+                                                <!-- Opções preenchidas via JS após Ler colunas -->
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-outline-primary d-none" id="btnVoltarEfetivo">Voltar</button>
+                    <button type="submit" class="btn btn-primary d-none" id="btnSubmitImportarEfetivo">
+                        <i class="fas fa-file-import"></i> Importar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var form = document.getElementById('formImportarEfetivo');
+    var arquivoInput = document.getElementById('arquivo_efetivo');
+    var passo1 = document.getElementById('efetivoPasso1');
+    var passo2 = document.getElementById('efetivoPasso2');
+    var btnLerColunas = document.getElementById('btnLerColunasEfetivo');
+    var btnVoltar = document.getElementById('btnVoltarEfetivo');
+    var btnSubmit = document.getElementById('btnSubmitImportarEfetivo');
+    var previewErro = document.getElementById('efetivoPreviewErro');
+    var mappingHidden = document.getElementById('efetivoMappingJson');
+    var colunasAtuais = [];
+
+    function getCsrfToken() {
+        var input = form.querySelector('input[name="csrf_token"]');
+        return input ? input.value : '';
+    }
+
+    function getPreviewUrl() {
+        return '{{ url_for("plr.efetivo_preview_excel") }}';
+    }
+
+    btnLerColunas.addEventListener('click', function() {
+        if (!arquivoInput.files || !arquivoInput.files.length) {
+            previewErro.textContent = 'Selecione um arquivo Excel primeiro.';
+            previewErro.classList.remove('d-none');
+            return;
+        }
+        var nome = (arquivoInput.files[0].name || '').toLowerCase();
+        if (!nome.endsWith('.xlsx') && !nome.endsWith('.xls')) {
+            previewErro.textContent = 'Apenas arquivos Excel (.xlsx ou .xls) são aceitos.';
+            previewErro.classList.remove('d-none');
+            return;
+        }
+        previewErro.classList.add('d-none');
+        btnLerColunas.disabled = true;
+        btnLerColunas.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Lendo...';
+
+        var formData = new FormData();
+        formData.append('arquivo', arquivoInput.files[0]);
+        formData.append('csrf_token', getCsrfToken());
+
+        fetch(getPreviewUrl(), {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success && data.colunas && data.colunas.length) {
+                colunasAtuais = data.colunas;
+                function normalizar(s) {
+                    return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+                }
+                var selects = form.querySelectorAll('.efetivo-map-select');
+                selects.forEach(function(sel) {
+                    var labelSistema = (sel.getAttribute('data-label') || '').trim();
+                    var labelNorm = normalizar(labelSistema);
+                    sel.innerHTML = '<option value="">— Não importar</option>';
+                    var selecionada = null;
+                    data.colunas.forEach(function(col) {
+                        var opt = document.createElement('option');
+                        opt.value = col;
+                        opt.textContent = col;
+                        sel.appendChild(opt);
+                        if (labelNorm && normalizar(col) === labelNorm) selecionada = col;
+                    });
+                    if (selecionada) sel.value = selecionada;
+                });
+                passo1.classList.add('d-none');
+                passo2.classList.remove('d-none');
+                btnSubmit.classList.remove('d-none');
+                btnVoltar.classList.remove('d-none');
+                var d = new Date();
+                document.getElementById('efetivo_ano').value = d.getFullYear();
+                if (!document.getElementById('efetivo_mes').value) document.getElementById('efetivo_mes').value = String(d.getMonth() + 1);
+            } else {
+                previewErro.textContent = data.message || 'Não foi possível ler as colunas do arquivo.';
+                previewErro.classList.remove('d-none');
+            }
+        })
+        .catch(function(err) {
+            previewErro.textContent = 'Erro ao comunicar com o servidor: ' + (err.message || err);
+            previewErro.classList.remove('d-none');
+        })
+        .finally(function() {
+            btnLerColunas.disabled = false;
+            btnLerColunas.innerHTML = '<i class="fas fa-list"></i> Ler colunas';
+        });
+    });
+
+    btnVoltar.addEventListener('click', function() {
+        passo2.classList.add('d-none');
+        passo1.classList.remove('d-none');
+        btnSubmit.classList.add('d-none');
+        btnVoltar.classList.add('d-none');
+    });
+
+    form.addEventListener('submit', function(e) {
+        if (!arquivoInput.files || !arquivoInput.files.length) {
+            e.preventDefault();
+            alert('Selecione um arquivo Excel.');
+            return;
+        }
+        var ano = document.getElementById('efetivo_ano');
+        var mes = document.getElementById('efetivo_mes');
+        if (passo2.classList.contains('d-none') === false) {
+            if (!ano.value || !mes.value) {
+                e.preventDefault();
+                alert('Informe o ano e o mês de referência.');
+                return;
+            }
+        }
+        var anoEl = document.getElementById('efetivo_ano');
+        var mesEl = document.getElementById('efetivo_mes');
+        document.getElementById('efetivo_ano_hidden').value = anoEl ? anoEl.value : '';
+        document.getElementById('efetivo_mes_hidden').value = mesEl ? mesEl.value : '';
+        var mapping = {};
+        form.querySelectorAll('.efetivo-map-select').forEach(function(sel) {
+            var field = sel.getAttribute('data-field');
+            var col = sel.value ? sel.value.trim() : '';
+            if (field && col) mapping[field] = col;
+        });
+        mappingHidden.value = JSON.stringify(mapping);
+    });
+})();
+</script>

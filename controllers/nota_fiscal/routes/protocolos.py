@@ -11,6 +11,7 @@ from datetime import datetime
 from flask import jsonify, render_template, request
 from flask_login import login_required
 from sqlalchemy import func
+from sqlalchemy.orm import defer
 
 from models.database import db
 from models.protocolo import Protocolo
@@ -25,21 +26,17 @@ TIPO_UPLOAD_PROTOCOLO = 2
 
 
 def _uploads_do_protocolo(protocolo_id):
-    """Retorna lista de Upload (tipo=2) cujo dados_adicionais contém protocolo_id."""
+    """Retorna lista de Upload (tipo=2) cujo dados_adicionais contém protocolo_id.
+    O blob não é carregado para não pesar na consulta; será carregado sob demanda se acessado.
+    """
     uploads = (
-        Upload.query.filter_by(tipo=TIPO_UPLOAD_PROTOCOLO)
+        Upload.query.options(defer(Upload.blob))
+        .filter_by(tipo=TIPO_UPLOAD_PROTOCOLO)
         .filter(Upload.dados_adicionais.isnot(None))
+        .filter(func.json_extract(Upload.dados_adicionais, "$.protocolo_id") == protocolo_id)
         .all()
     )
-    resultado = []
-    for u in uploads:
-        try:
-            dados = json.loads(u.dados_adicionais) if isinstance(u.dados_adicionais, str) else (u.dados_adicionais or {})
-            if isinstance(dados, dict) and dados.get("protocolo_id") == protocolo_id:
-                resultado.append(u)
-        except (TypeError, ValueError):
-            continue
-    return resultado
+    return uploads
 
 
 @nota_fiscal_bp.route("/protocolos")
@@ -152,6 +149,8 @@ def protocolos_importar_pdfs(protocolo_id):
 
         dados_adicionais = json.dumps({"protocolo_id": protocolo_id})
         resultados = []
+        pai_id = 0
+        mimetype = "application/pdf"
 
         for f in files:
             if not f or not f.filename or not f.filename.lower().endswith(".pdf"):
@@ -162,22 +161,36 @@ def protocolos_importar_pdfs(protocolo_id):
 
             nome_original = f.filename
             nome_sugerido, nota_id, identificado = processar_pdf_protocolo(payload, nome_original)
+            nid = nota_id if nota_id else 0
 
             if not nome_sugerido.endswith(".pdf"):
                 nome_sugerido = f"{nome_sugerido}.pdf"
 
-            u = Upload(pai="NotaFiscal", pai_id=nota_id if nota_id else 0, 
-                tipo=TIPO_UPLOAD_PROTOCOLO, 
-                filename=nome_sugerido, 
-                mimetype="application/pdf", 
-                blob=base64.b64encode(payload).decode("utf-8"), 
-                dados_adicionais=dados_adicionais)
-            u.save()
+            filename_final = nome_sugerido
+            stem = filename_final[:-4] if filename_final.lower().endswith(".pdf") else filename_final
+            cont = 1
+            while Upload.query.filter_by(
+                pai="NotaFiscal", pai_id=nid, tipo=TIPO_UPLOAD_PROTOCOLO,
+                filename=filename_final, mimetype=mimetype
+            ).first() is not None:
+                cont += 1
+                filename_final = f"{stem}_proto{protocolo_id}_{cont}.pdf"
+
+            u = Upload(
+                pai="NotaFiscal",
+                pai_id=nid,
+                tipo=TIPO_UPLOAD_PROTOCOLO,
+                filename=filename_final,
+                mimetype=mimetype,
+                blob=base64.b64encode(payload).decode("utf-8"),
+                dados_adicionais=dados_adicionais,
+            )
+            # Upload.__init__ chama save() ao final do branch else
 
             resultados.append({
                 "upload_id": u.id,
                 "original": nome_original,
-                "suggested_name": nome_sugerido,
+                "suggested_name": filename_final,
                 "nota_id": nota_id,
                 "identificado": identificado,
             })
@@ -305,4 +318,22 @@ def protocolos_enviar_email(protocolo_id):
         return jsonify({"success": True, "message": "E-mail enviado com sucesso."})
     except Exception as e:
         logger.exception("Erro ao enviar e-mail do protocolo")
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
+@nota_fiscal_bp.route("/protocolos/<int:protocolo_id>", methods=["DELETE"])
+@login_required
+def protocolos_delete(protocolo_id):
+    """Exclui o protocolo e todos os arquivos (uploads) anexados a ele."""
+    try:
+        protocolo = Protocolo.query.get_or_404(protocolo_id)
+        uploads = _uploads_do_protocolo(protocolo_id)
+        for u in uploads:
+            db.session.delete(u)
+        db.session.delete(protocolo)
+        db.session.commit()
+        return jsonify({"success": True, "message": "Protocolo e arquivos excluídos com sucesso."})
+    except Exception as e:
+        logger.exception("Erro ao excluir protocolo")
+        db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500

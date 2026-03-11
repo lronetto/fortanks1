@@ -90,6 +90,7 @@ $(document).ready(function() {
                         '<button type="button" class="btn btn-outline-primary btn-importar-pdfs" data-id="' + row.id + '" title="Importar PDFs"><i class="fas fa-file-pdf"></i></button>' +
                         '<button type="button" class="btn btn-outline-info btn-protocolo-email" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Enviar por e-mail"><i class="fas fa-envelope"></i></button>' +
                         '<button type="button" class="btn btn-outline-secondary btn-protocolo-arquivos" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Visualizar/Editar arquivos"><i class="fas fa-folder-open"></i></button>' +
+                        '<button type="button" class="btn btn-outline-danger btn-protocolo-excluir" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Excluir protocolo e arquivos"><i class="fas fa-trash"></i></button>' +
                         '</div>';
                 }
             }
@@ -105,7 +106,7 @@ $(document).ready(function() {
 
     $(document).on('click', '.btn-importar-pdfs', function() {
         var id = $(this).data('id');
-        $('#modalImportarPdfsProtocolo').data('protocolo-id', id);
+        $('#modalImportarPdfsProtocolo').attr('data-protocolo-id', id);
         $('#modalImportarPdfsProtocolo .protocolo-id-label').text('Protocolo #' + id);
         $('#pdfs_protocolo').val('');
         $('#resultadosImportacao').addClass('d-none').empty();
@@ -130,6 +131,58 @@ $(document).ready(function() {
         var numero = $(this).data('numero') || id;
         if (typeof window.abrirModalProtocoloArquivos === 'function') {
             window.abrirModalProtocoloArquivos(id, numero);
+        }
+    });
+
+    $(document).on('click', '.btn-protocolo-excluir', function() {
+        var id = $(this).data('id');
+        var numero = $(this).data('numero') || id;
+        var msg = 'Excluir o protocolo ' + numero + ' e todos os arquivos anexados? Esta ação não pode ser desfeita.';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Excluir protocolo?',
+                text: msg,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d33',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sim, excluir',
+                cancelButtonText: 'Cancelar'
+            }).then(function(result) {
+                if (!result.isConfirmed) return;
+                var csrf = $('meta[name="csrf-token"]').attr('content') || $('input[name="csrf_token"]').first().val();
+                var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+                if (csrf) headers['X-CSRFToken'] = csrf;
+                $.ajax({
+                    url: baseUrl + '/protocolos/' + id,
+                    method: 'DELETE',
+                    headers: headers
+                }).done(function(res) {
+                    if (res && res.success) {
+                        Swal.fire('Excluído', res.message || 'Protocolo excluído.', 'success');
+                        table.ajax.reload(null, false);
+                    } else {
+                        Swal.fire('Erro', (res && res.message) || 'Não foi possível excluir.', 'error');
+                    }
+                }).fail(function(xhr) {
+                    var msg = 'Erro ao excluir.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                    Swal.fire('Erro', msg, 'error');
+                });
+            });
+        } else {
+            if (confirm(msg)) {
+                var csrf = document.querySelector('meta[name="csrf-token"]') && document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+                if (csrf) headers['X-CSRFToken'] = csrf;
+                fetch(baseUrl + '/protocolos/' + id, { method: 'DELETE', headers: headers })
+                    .then(function(r) { return r.json(); })
+                    .then(function(res) {
+                        if (res && res.success) {
+                            table.ajax.reload(null, false);
+                        }
+                    });
+            }
         }
     });
 

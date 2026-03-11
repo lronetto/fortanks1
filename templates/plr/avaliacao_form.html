@@ -35,7 +35,7 @@
                         <select class="form-select" id="modelo_plr_id" name="modelo_plr_id">
                             <option value="">Nenhum</option>
                             {% for m in modelos %}
-                            <option value="{{ m.id }}" {% if reg and reg.modelo_plr_id == m.id %}selected{% endif %}>{{ m.nome }}</option>
+                            <option value="{{ m.id }}" {% if reg and reg.PlrModelo_id == m.id %}selected{% endif %}>{{ m.nome }}</option>
                             {% endfor %}
                         </select>
                     </div>

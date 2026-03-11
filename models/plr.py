@@ -11,7 +11,7 @@ class ModeloPLR(db.Model):
     Modelo de PLR: nome, departamentos vinculados, forma de cálculo e pesos dos colaboradores,
     e forma de cálculo final.
     """
-    __tablename__ = 'modelos_plr'
+    __tablename__ = 'PlrModelos'
 
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(150), nullable=False)
@@ -30,8 +30,8 @@ class ModeloPLR(db.Model):
 
     departamentos = db.relationship(
         'Departamento',
-        secondary='modelos_plr_departamentos',
-        backref=db.backref('modelos_plr', lazy='dynamic'),
+        secondary='PlrModelosDepartamentos',
+        backref=db.backref('PlrModelos', lazy='dynamic'),
         lazy='joined'
     )
     avaliacoes = db.relationship('PLRColaborador', backref='modelo_plr', lazy='dynamic')
@@ -55,8 +55,8 @@ class ModeloPLR(db.Model):
 
 # Tabela associativa N:N entre ModeloPLR e Departamento
 modelos_plr_departamentos = db.Table(
-    'modelos_plr_departamentos',
-    db.Column('modelo_plr_id', db.Integer, db.ForeignKey('modelos_plr.id', ondelete='CASCADE'), primary_key=True),
+    'PlrModelosDepartamentos',
+    db.Column('PlrModelo_id', db.Integer, db.ForeignKey('PlrModelos.id', ondelete='CASCADE'), primary_key=True),
     db.Column('departamento_id', db.Integer, db.ForeignKey('departamentos.id', ondelete='CASCADE'), primary_key=True),
 )
 
@@ -66,10 +66,10 @@ class PLRColaborador(db.Model):
     Avaliação PLR do colaborador: obra (centro de custo), equipe alocada (lista texto),
     colaborador, avaliação (JSON com um ou mais tipos) e data.
     """
-    __tablename__ = 'plr_colaboradores'
+    __tablename__ = 'PlrAvaliacoes'
 
     id = db.Column(db.Integer, primary_key=True)
-    modelo_plr_id = db.Column(db.Integer, db.ForeignKey('modelos_plr.id', ondelete='RESTRICT'), nullable=True)
+    PlrModelo_id = db.Column(db.Integer, db.ForeignKey('PlrModelos.id', ondelete='RESTRICT'), nullable=True)
     centro_custo_id = db.Column(db.Integer, db.ForeignKey('centros_custo.id', ondelete='SET NULL'), nullable=True)
     colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id', ondelete='CASCADE'), nullable=False)
     # Equipe alocada: lista de nomes em JSON, ex: ["Equipe A", "Equipe B"]
@@ -90,7 +90,7 @@ class PLRColaborador(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'modelo_plr_id': self.modelo_plr_id,
+            'PlrModelo_id': self.PlrModelo_id,
             'centro_custo_id': self.centro_custo_id,
             'centro_custo_nome': self.centro_custo.nome if self.centro_custo else None,
             'colaborador_id': self.colaborador_id,
@@ -139,3 +139,45 @@ class PLRColaborador(db.Model):
             except (TypeError, ValueError):
                 pass
         return None
+
+
+class EfetivoPLR(db.Model):
+    """
+    Efetivo (quadro de funcionários) importado por ano/mês para uso em PLR.
+    Campos: ano, mes, cpf, nome, funcao, salario, data_nascimento, data_demissao, secao, data_admissao, chapa.
+    """
+    __tablename__ = 'PlrEfetivos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ano = db.Column(db.Integer, nullable=False)
+    mes = db.Column(db.Integer, nullable=False)  # 1-12
+    cpf = db.Column(db.String(20), nullable=True)
+    nome = db.Column(db.String(200), nullable=True)
+    funcao = db.Column(db.String(150), nullable=True)
+    salario = db.Column(db.Numeric(12, 2), nullable=True)
+    data_nascimento = db.Column(db.Date, nullable=True)
+    data_demissao = db.Column(db.Date, nullable=True)
+    secao = db.Column(db.String(150), nullable=True)
+    data_admissao = db.Column(db.Date, nullable=True)
+    chapa = db.Column(db.String(50), nullable=True)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<EfetivoPLR {self.ano}/{self.mes} {self.nome or self.cpf}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'ano': self.ano,
+            'mes': self.mes,
+            'cpf': self.cpf,
+            'nome': self.nome,
+            'funcao': self.funcao,
+            'salario': float(self.salario) if self.salario is not None else None,
+            'data_nascimento': self.data_nascimento.isoformat() if self.data_nascimento else None,
+            'data_demissao': self.data_demissao.isoformat() if self.data_demissao else None,
+            'secao': self.secao,
+            'data_admissao': self.data_admissao.isoformat() if self.data_admissao else None,
+            'chapa': self.chapa,
+        }

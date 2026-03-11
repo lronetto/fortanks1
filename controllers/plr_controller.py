@@ -10,8 +10,9 @@ from flask_login import login_required
 from flask_wtf.csrf import generate_csrf
 from datetime import datetime
 from sqlalchemy import func, and_, or_
+import pandas as pd
 from models.database import db
-from models.plr import ModeloPLR, PLRColaborador
+from models.plr import ModeloPLR, PLRColaborador, EfetivoPLR
 from models.cargo_salario import CargoSalario
 from models.colaborador import Colaborador
 from models.centro_custo import CentroCusto
@@ -109,6 +110,7 @@ def avaliacoes_index():
         departamentos=departamentos,
         equipes=equipes,
         criterios_padrao=CRITERIOS_PADRAO_PLR,
+        campos_efetivo=CAMPOS_EFETIVO_PLR,
     )
 
 
@@ -216,7 +218,7 @@ def avaliacoes_por_mes():
             'avaliacao_id': av.id if av else None,
             'centro_custo_id': av.centro_custo_id if av else None,
             'centro_custo_nome': (av.centro_custo.codigo or av.centro_custo.nome) if av and av.centro_custo else '',
-            'modelo_plr_id': av.modelo_plr_id if av else None,
+            'modelo_plr_id': av.PlrModelo_id if av else None,
             'equipe_alocada': (', '.join(av.equipe_alocada) if av.equipe_alocada else '') if av else '',
             'assiduidade': v_assid,
             'zero_acidente': v_zero,
@@ -274,7 +276,7 @@ def avaliacao_nova():
         reg = PLRColaborador(
             colaborador_id=int(colaborador_id),
             centro_custo_id=centro_custo_id,
-            modelo_plr_id=modelo_plr_id,
+            PlrModelo_id=modelo_plr_id,
             equipe_alocada=equipe_alocada,
             avaliacao=avaliacao,
             data=data,
@@ -302,7 +304,7 @@ def avaliacao_editar(id):
         centro_custo_id = request.form.get('centro_custo_id')
         reg.centro_custo_id = int(centro_custo_id) if centro_custo_id else None
         modelo_plr_id = request.form.get('modelo_plr_id')
-        reg.modelo_plr_id = int(modelo_plr_id) if modelo_plr_id else None
+        reg.PlrModelo_id = int(modelo_plr_id) if modelo_plr_id else None
         reg.data = datetime.strptime(request.form.get('data'), '%Y-%m-%d').date()
         equipe_raw = request.form.get('equipe_alocada', '')
         reg.equipe_alocada = [x.strip() for x in equipe_raw.replace('\r', '').split('\n') if x.strip()] if equipe_raw.strip() else None
@@ -422,7 +424,7 @@ def avaliacoes_importar():
         reg = PLRColaborador(
             colaborador_id=colab.id,
             centro_custo_id=centro.id if centro else None,
-            modelo_plr_id=modelo_plr_id,
+            PlrModelo_id=modelo_plr_id,
             equipe_alocada=equipe_alocada,
             avaliacao=item['avaliacao'],
             data=item['data'],
@@ -451,6 +453,198 @@ def avaliacoes_importar():
         ex = next(iter(erros_obra), '')
         msg += f' Obra não encontrada: {len(erros_obra)} (ex.: {ex}).'
     flash(msg, 'success' if inseridos else 'warning')
+    return redirect(url_for('plr.avaliacoes_index'))
+
+
+# ---------- Efetivo PLR (importação Excel com mapeamento) ----------
+
+# Ano e mês vêm do formulário (digitados); os demais campos podem ser mapeados do Excel
+CAMPOS_EFETIVO_PLR = [
+    ('cpf', 'CPF'),
+    ('nome', 'Nome'),
+    ('funcao', 'Função'),
+    ('salario', 'Salário'),
+    ('data_nascimento', 'Data Nascimento'),
+    ('data_demissao', 'Data Demissão'),
+    ('secao', 'Seção'),
+    ('data_admissao', 'Data Admissão'),
+    ('chapa', 'Chapa'),
+]
+
+
+@plr_bp.route('/efetivo/preview-excel', methods=['POST'])
+def efetivo_preview_excel():
+    """Retorna as colunas da primeira aba do arquivo Excel para mapeamento."""
+    arquivo = request.files.get('arquivo')
+    if not arquivo or arquivo.filename == '':
+        return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado.'}), 400
+    if not arquivo.filename.lower().endswith(('.xlsx', '.xls')):
+        return jsonify({'success': False, 'message': 'Use um arquivo Excel (.xlsx ou .xls).'}), 400
+    temp_path = None
+    try:
+        fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(arquivo.filename)[1])
+        os.close(fd)
+        arquivo.save(temp_path)
+        engine = 'openpyxl' if temp_path.lower().endswith('.xlsx') else 'xlrd'
+        df = pd.read_excel(temp_path, sheet_name=0, engine=engine, nrows=0)
+        colunas = [str(c).strip() for c in df.columns.tolist()]
+        return jsonify({'success': True, 'colunas': colunas})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 400
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+
+
+def _parse_data_efetivo(val):
+    """Converte valor para date; aceita datetime, string, NaN ou NaT."""
+    # Pandas usa NaT para datas vazias; pd.isna cobre NaN/NaT em qualquer tipo
+    if val is None:
+        return None
+    try:
+        if pd.isna(val):
+            return None
+    except Exception:
+        # Se pd.isna não aceitar o tipo de val, seguimos com as demais verificações
+        pass
+    if hasattr(val, "date"):
+        # datetime.date ou datetime.datetime
+        try:
+            return val.date()
+        except Exception:
+            return None
+    try:
+        # Tenta converter strings, inteiros, etc.
+        return pd.to_datetime(val).date()
+    except Exception:
+        return None
+
+
+def _parse_num_efetivo(val):
+    """Converte para int ou None."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    try:
+        if isinstance(val, float) and val == int(val):
+            return int(val)
+        return int(float(str(val).replace(',', '.')))
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_decimal_efetivo(val):
+    """Converte para float para salário."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return None
+    try:
+        s = str(val).replace(',', '.').strip()
+        return float(s) if s else None
+    except (ValueError, TypeError):
+        return None
+
+
+@plr_bp.route('/efetivo/importar', methods=['POST'])
+def efetivo_importar():
+    """Importa efetivo a partir de Excel com mapeamento de colunas."""
+    arquivo = request.files.get('arquivo')
+    if not arquivo or arquivo.filename == '':
+        flash('Nenhum arquivo selecionado.', 'danger')
+        return redirect(url_for('plr.avaliacoes_index'))
+    if not arquivo.filename.lower().endswith(('.xlsx', '.xls')):
+        flash('Use um arquivo Excel (.xlsx ou .xls).', 'danger')
+        return redirect(url_for('plr.avaliacoes_index'))
+
+    # Ano e mês vêm do formulário (digitados); não do Excel
+    ano_raw = request.form.get('ano') or request.form.get('ano_ref')
+    mes_raw = request.form.get('mes') or request.form.get('mes_ref')
+    try:
+        ano = int(ano_raw) if ano_raw and str(ano_raw).strip() else None
+        mes = int(mes_raw) if mes_raw and str(mes_raw).strip() else None
+    except (ValueError, TypeError):
+        ano = mes = None
+    if ano is None or mes is None or not (1 <= mes <= 12):
+        flash('Informe o ano e o mês de referência (mês de 1 a 12).', 'danger')
+        return redirect(url_for('plr.avaliacoes_index'))
+
+    mapping_raw = request.form.get('mapping')
+    mapping = {}
+    if mapping_raw:
+        try:
+            mapping = json.loads(mapping_raw)
+        except json.JSONDecodeError:
+            pass
+
+    temp_path = None
+    try:
+        fd, temp_path = tempfile.mkstemp(suffix=os.path.splitext(arquivo.filename)[1])
+        os.close(fd)
+        arquivo.save(temp_path)
+        engine = 'openpyxl' if temp_path.lower().endswith('.xlsx') else 'xlrd'
+        df = pd.read_excel(temp_path, sheet_name=0, engine=engine)
+
+        inseridos = 0
+        erros = []
+
+        for idx, row in df.iterrows():
+            try:
+                # Montar valores a partir do mapeamento (chave = campo do sistema, valor = nome da coluna no Excel)
+                get_val = lambda col: row.get(mapping[col], None) if mapping.get(col) else None
+
+                cpf = get_val('cpf')
+                if cpf is not None:
+                    cpf = re.sub(r'\D', '', str(cpf))
+                nome = get_val('nome')
+                if nome is not None:
+                    nome = str(nome).strip() or None
+                funcao = get_val('funcao')
+                if funcao is not None:
+                    funcao = str(funcao).strip() or None
+                salario = _parse_decimal_efetivo(get_val('salario'))
+                data_nascimento = _parse_data_efetivo(get_val('data_nascimento'))
+                data_demissao = _parse_data_efetivo(get_val('data_demissao'))
+                secao = get_val('secao')
+                if secao is not None:
+                    secao = str(secao).strip() or None
+                data_admissao = _parse_data_efetivo(get_val('data_admissao'))
+                chapa = get_val('chapa')
+                if chapa is not None:
+                    chapa = str(chapa).strip() or None
+
+                reg = EfetivoPLR(
+                    ano=ano,
+                    mes=mes,
+                    cpf=cpf or None,
+                    nome=nome,
+                    funcao=funcao,
+                    salario=salario,
+                    data_nascimento=data_nascimento,
+                    data_demissao=data_demissao,
+                    secao=secao,
+                    data_admissao=data_admissao,
+                    chapa=chapa,
+                )
+                db.session.add(reg)
+                inseridos += 1
+            except Exception as e:
+                erros.append(f'Linha {idx + 2}: {str(e)}')
+
+        db.session.commit()
+        msg = f'Importação do efetivo concluída: {inseridos} registro(s) importado(s).'
+        if erros:
+            msg += f' Erros: {len(erros)} (primeiros: {"; ".join(erros[:3])}).'
+        flash(msg, 'success' if inseridos else 'warning')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao importar efetivo: {e}', 'danger')
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
     return redirect(url_for('plr.avaliacoes_index'))
 
 
@@ -488,7 +682,7 @@ def relatorio_avaliacao():
             PLRColaborador.data <= data_fim,
         )
         if modelo_plr_id:
-            q = q.filter(PLRColaborador.modelo_plr_id == int(modelo_plr_id))
+            q = q.filter(PLRColaborador.PlrModelo_id == int(modelo_plr_id))
         avaliacoes = q.order_by(PLRColaborador.colaborador_id, PLRColaborador.data).all()
 
         # Agrupar por colaborador e calcular média
@@ -550,7 +744,7 @@ def _relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, model
         )
     )
     if modelo_plr_id:
-        q_av = q_av.filter(PLRColaborador.modelo_plr_id == int(modelo_plr_id))
+        q_av = q_av.filter(PLRColaborador.PlrModelo_id == int(modelo_plr_id))
     avaliacoes_periodo = q_av.all()
 
     if equipe_filtro:
