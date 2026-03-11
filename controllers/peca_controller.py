@@ -44,16 +44,21 @@ def converter_decimal_para_float(obj):
 
 # Função auxiliar para verificar status de uma peça
 def verificar_status_peca(peca):
-    """Verifica se uma peça está concretada, acabada, transportada ou produzida"""
+    """Verifica se uma peça está concretada, acabada, transportada, produzida ou marcada como perca"""
     concretado = peca.data_concretagem is not None
     acabada = False
     transportado = False
     produzido = False
-    
+    perca = False
+
     if peca.qualidade:
         try:
             qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-            
+
+            # Verificar perca (ex: "perca": true no JSON)
+            if qualidade_dict.get('perca') is True:
+                perca = True
+
             # Verificar acabamento
             if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
                 acabamento = qualidade_dict['acabamento']
@@ -63,22 +68,22 @@ def verificar_status_peca(peca):
                     acabada = acabamento != '' and acabamento != 'null'
                 else:
                     acabada = bool(acabamento)
-            
+
             # Verificar transporte
             if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
                 transporte = qualidade_dict['transporte']
                 if isinstance(transporte, dict):
                     data_transporte = transporte.get('data_transporte')
                     transportado = data_transporte is not None and data_transporte != '' and data_transporte != 'null'
-            
+
             # Verificar produção (data_producao)
             if 'data_producao' in qualidade_dict and qualidade_dict['data_producao']:
                 data_producao = qualidade_dict['data_producao']
                 produzido = data_producao is not None and data_producao != '' and data_producao != 'null'
         except (json.JSONDecodeError, TypeError, AttributeError):
             pass
-    
-    return concretado, acabada, transportado, produzido
+
+    return concretado, acabada, transportado, produzido, perca
 
 # Criação do blueprint
 peca = Blueprint('peca', __name__, url_prefix='/pecas')
@@ -115,10 +120,12 @@ def index():
     filtro_nao_produzido = request.args.get('filtro_nao_produzido', type=str) == '1'
     filtro_nao_acabado = request.args.get('filtro_nao_acabado', type=str) == '1'
     filtro_nao_transportado = request.args.get('filtro_nao_transportado', type=str) == '1'
-    
+    filtro_perca = request.args.get('filtro_perca', type=str) == '1'
+    filtro_nao_perca = request.args.get('filtro_nao_perca', type=str) == '1'
+
     # Para o template, passar o primeiro tanque_id se houver (para compatibilidade)
     tanque_id_filtro = tanque_ids[0] if tanque_ids else None
-    
+
     # Montar filtros iniciais como JSON para evitar problemas de escape no JavaScript
     import json as json_module
     filtros_iniciais_dict = {
@@ -133,12 +140,14 @@ def index():
         'filtro_nao_produzido': filtro_nao_produzido,
         'filtro_nao_acabado': filtro_nao_acabado,
         'filtro_nao_transportado': filtro_nao_transportado,
+        'filtro_perca': filtro_perca,
+        'filtro_nao_perca': filtro_nao_perca,
     }
     filtros_iniciais_json = json_module.dumps(filtros_iniciais_dict)
-    
+
     # Nota: tanques e contratos agora são carregados via AJAX no client-side
     # Apenas passamos os filtros iniciais para aplicar quando a página carregar
-    return render_template('pecas/index.html', 
+    return render_template('pecas/index.html',
                          tanque_id_filtro=tanque_id_filtro,
                          tanque_ids_filtro=tanque_ids,  # Passar lista completa também
                          projeto_id_filtro=projeto_id,
@@ -150,6 +159,8 @@ def index():
                          filtro_nao_produzido=filtro_nao_produzido,
                          filtro_nao_acabado=filtro_nao_acabado,
                          filtro_nao_transportado=filtro_nao_transportado,
+                         filtro_perca=filtro_perca,
+                         filtro_nao_perca=filtro_nao_perca,
                          filtros_iniciais_json=filtros_iniciais_json)
 
 @peca.route('/api/pecas')
@@ -184,31 +195,33 @@ def api_pecas():
         filtro_nao_produzido = request.args.get('filtro_nao_produzido', type=str) == '1'
         filtro_nao_acabado = request.args.get('filtro_nao_acabado', type=str) == '1'
         filtro_nao_transportado = request.args.get('filtro_nao_transportado', type=str) == '1'
-        
+        filtro_perca = request.args.get('filtro_perca', type=str) == '1'
+        filtro_nao_perca = request.args.get('filtro_nao_perca', type=str) == '1'
+
         # Query base com join para incluir tanque e contrato
         query = db.session.query(TanquesPecas)\
             .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
             .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
-        
+
         # Aplicar filtros (busca global feita no frontend)
         if tanque_ids:
             query = query.filter(TanquesPecas.tanque_id.in_(tanque_ids))
-        
+
         if projeto_id:
             query = query.filter(Tanques.contrato_id == projeto_id)
-        
+
         # Aplicar filtro de concretado diretamente na query (mais eficiente)
         if filtro_concretado:
             query = query.filter(TanquesPecas.data_concretagem.isnot(None))
-        
+
         # Buscar todas as peças (sem paginação no backend)
         pecas_todas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial).all()
-        
+
         # Aplicar filtros de status que dependem de JSON
         pecas_filtradas = []
         for peca in pecas_todas:
-            concretado, acabada, transportado, produzido = verificar_status_peca(peca)
-            
+            concretado, acabada, transportado, produzido, perca = verificar_status_peca(peca)
+
             # Aplicar filtros positivos
             if filtro_concretado and not concretado:
                 continue
@@ -218,7 +231,9 @@ def api_pecas():
                 continue
             if filtro_transportado and not transportado:
                 continue
-            
+            if filtro_perca and not perca:
+                continue
+
             # Aplicar filtros negativos
             if filtro_nao_concretado and concretado:
                 continue
@@ -228,7 +243,9 @@ def api_pecas():
                 continue
             if filtro_nao_transportado and transportado:
                 continue
-            
+            if filtro_nao_perca and perca:
+                continue
+
             pecas_filtradas.append(peca)
         
         # Total de registros (todos enviados; paginação no frontend)
@@ -238,8 +255,8 @@ def api_pecas():
         data = []
         for peca in pecas_filtradas:
             # Verificar status usando função auxiliar
-            concretado, acabada, transportado, produzido = verificar_status_peca(peca)
-            
+            concretado, acabada, transportado, produzido, perca = verificar_status_peca(peca)
+
             # Montar badges de status
             status_badges = []
             if concretado:
@@ -250,13 +267,15 @@ def api_pecas():
                 status_badges.append('<span class="badge bg-info me-1"><i class="fas fa-check"></i> Acabada</span>')
             if transportado:
                 status_badges.append('<span class="badge bg-primary me-1"><i class="fas fa-truck"></i> Transportado</span>')
-            
+            if perca:
+                status_badges.append('<span class="badge bg-danger me-1"><i class="fas fa-times-circle"></i> Perca</span>')
+
             status_html = ' '.join(status_badges) if status_badges else '<span class="text-muted">-</span>'
-            
+
             # URLs das ações
             url_visualizar = url_for('peca.visualizar', id=peca.id)
             url_editar = url_for('peca.editar', id=peca.id)
-            
+
             acoes_html = f'''
                 <div class="btn-group" role="group">
                     <a href="{url_visualizar}" class="btn btn-info btn-sm" title="Visualizar">
@@ -270,7 +289,7 @@ def api_pecas():
                     </button>
                 </div>
             '''
-            
+
             data.append({
                 'DT_RowId': f'peca_{peca.id}',
                 'numero_sequencial': peca.numero_sequencial,
@@ -286,7 +305,8 @@ def api_pecas():
                 'concretado': concretado,
                 'acabada': acabada,
                 'transportado': transportado,
-                'produzido': produzido
+                'produzido': produzido,
+                'perca': perca
             })
         
         return jsonify({
@@ -336,7 +356,9 @@ def api_pecas_estatisticas():
         filtro_nao_produzido = request.args.get('filtro_nao_produzido', type=str) == '1'
         filtro_nao_acabado = request.args.get('filtro_nao_acabado', type=str) == '1'
         filtro_nao_transportado = request.args.get('filtro_nao_transportado', type=str) == '1'
-        
+        filtro_perca = request.args.get('filtro_perca', type=str) == '1'
+        filtro_nao_perca = request.args.get('filtro_nao_perca', type=str) == '1'
+
         # Query base com join para incluir tanque e contrato
         query = db.session.query(TanquesPecas)\
             .join(Tanques, TanquesPecas.tanque_id == Tanques.id)\
@@ -344,14 +366,14 @@ def api_pecas_estatisticas():
         # Aplicar filtros
         if tanque_ids:
             query = query.filter(TanquesPecas.tanque_id.in_(tanque_ids))
-        
+
         if projeto_id:
             query = query.filter(Tanques.contrato_id == projeto_id)
-        
+
         # Aplicar filtro de concretado diretamente na query (mais eficiente)
         if filtro_concretado:
             query = query.filter(TanquesPecas.data_concretagem.isnot(None))
-        
+
         # Aplicar busca global se houver
         if search_value:
             search_filter = db.or_(
@@ -362,15 +384,15 @@ def api_pecas_estatisticas():
                 Contrato.nome.like(f'%{search_value}%')
             )
             query = query.filter(search_filter)
-        
+
         # Buscar todas as peças (sem paginação)
         pecas_todas = query.all()
-        
+
         # Aplicar filtros de status que dependem de JSON
         pecas_filtradas = []
         for peca in pecas_todas:
-            concretado, acabada, transportado, produzido = verificar_status_peca(peca)
-            
+            concretado, acabada, transportado, produzido, perca = verificar_status_peca(peca)
+
             # Aplicar filtros positivos
             if filtro_concretado and not concretado:
                 continue
@@ -380,7 +402,9 @@ def api_pecas_estatisticas():
                 continue
             if filtro_transportado and not transportado:
                 continue
-            
+            if filtro_perca and not perca:
+                continue
+
             # Aplicar filtros negativos
             if filtro_nao_concretado and concretado:
                 continue
@@ -390,18 +414,21 @@ def api_pecas_estatisticas():
                 continue
             if filtro_nao_transportado and transportado:
                 continue
-            
+            if filtro_nao_perca and perca:
+                continue
+
             pecas_filtradas.append(peca)
-        
+
         # Contadores
         total_pecas = len(pecas_filtradas)
         concretadas = 0
         acabadas = 0
         transportadas = 0
         produzidas = 0
-        
+        percas = 0
+
         for peca in pecas_filtradas:
-            concretado, acabada, transportado, produzido = verificar_status_peca(peca)
+            concretado, acabada, transportado, produzido, perca = verificar_status_peca(peca)
             if concretado:
                 concretadas += 1
             if acabada:
@@ -410,14 +437,17 @@ def api_pecas_estatisticas():
                 transportadas += 1
             if produzido:
                 produzidas += 1
-        
+            if perca:
+                percas += 1
+
         return jsonify({
             'success': True,
             'total': total_pecas,
             'concretadas': concretadas,
             'acabadas': acabadas,
             'transportadas': transportadas,
-            'produzidas': produzidas
+            'produzidas': produzidas,
+            'percas': percas
         })
     except Exception as e:
         import traceback
@@ -429,6 +459,7 @@ def api_pecas_estatisticas():
             'acabadas': 0,
             'transportadas': 0,
             'produzidas': 0,
+            'percas': 0,
             'error': str(e)
         }), 500
 
@@ -454,6 +485,8 @@ def exportar_excel():
         filtro_nao_produzido = request.args.get('filtro_nao_produzido', type=str) == '1'
         filtro_nao_acabado = request.args.get('filtro_nao_acabado', type=str) == '1'
         filtro_nao_transportado = request.args.get('filtro_nao_transportado', type=str) == '1'
+        filtro_perca = request.args.get('filtro_perca', type=str) == '1'
+        filtro_nao_perca = request.args.get('filtro_nao_perca', type=str) == '1'
 
         query = (
             db.session.query(TanquesPecas)
@@ -470,7 +503,7 @@ def exportar_excel():
         pecas_todas = query.order_by(Tanques.nome, TanquesPecas.numero_sequencial).all()
         pecas_filtradas = []
         for peca in pecas_todas:
-            concretado, acabada, transportado, produzido = verificar_status_peca(peca)
+            concretado, acabada, transportado, produzido, perca = verificar_status_peca(peca)
             if filtro_concretado and not concretado:
                 continue
             if filtro_produzido and not produzido:
@@ -478,6 +511,8 @@ def exportar_excel():
             if filtro_acabado and not acabada:
                 continue
             if filtro_transportado and not transportado:
+                continue
+            if filtro_perca and not perca:
                 continue
             if filtro_nao_concretado and concretado:
                 continue
@@ -487,11 +522,13 @@ def exportar_excel():
                 continue
             if filtro_nao_transportado and transportado:
                 continue
+            if filtro_nao_perca and perca:
+                continue
             pecas_filtradas.append(peca)
 
         rows = []
         for peca in pecas_filtradas:
-            concretado, acabada, transportado, produzido = verificar_status_peca(peca)
+            concretado, acabada, transportado, produzido, perca = verificar_status_peca(peca)
             rows.append({
                 'Nº Seq.': peca.numero_sequencial,
                 'Tanque': (peca.tanque.nome if peca.tanque else 'N/A') + ((' (' + peca.tanque.sistema + ')') if peca.tanque and getattr(peca.tanque, 'sistema', None) else ''),
@@ -502,6 +539,7 @@ def exportar_excel():
                 'Produzido': 'Sim' if produzido else 'Não',
                 'Acabado': 'Sim' if acabada else 'Não',
                 'Transportado': 'Sim' if transportado else 'Não',
+                'Perca': 'Sim' if perca else 'Não',
                 'Data Cadastro': peca.data_cadastro.strftime('%d/%m/%Y %H:%M') if peca.data_cadastro else '',
             })
         df = pd.DataFrame(rows)

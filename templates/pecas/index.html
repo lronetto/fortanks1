@@ -101,6 +101,12 @@
                                         <span class="badge bg-primary"><i class="fas fa-truck"></i> Transportado</span>
                                     </label>
                                 </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_perca" name="filtro_perca" value="1" {% if filtro_perca %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_perca">
+                                        <span class="badge bg-danger"><i class="fas fa-times-circle"></i> Perca</span>
+                                    </label>
+                                </div>
                             </div>
                             <div class="col-6">
                                 <small class="text-muted d-block mb-2"><strong>Sem Status:</strong></small>
@@ -126,6 +132,12 @@
                                     <input class="form-check-input" type="checkbox" id="filtro_nao_transportado" name="filtro_nao_transportado" value="1" {% if filtro_nao_transportado %}checked{% endif %}>
                                     <label class="form-check-label" for="filtro_nao_transportado">
                                         <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Transportado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_perca" name="filtro_nao_perca" value="1" {% if filtro_nao_perca %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_perca">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Perca</span>
                                     </label>
                                 </div>
                             </div>
@@ -170,13 +182,14 @@
                             <th class="text-center"><span class="badge bg-warning">Produzidas</span></th>
                             <th class="text-center"><span class="badge bg-info">Acabadas</span></th>
                             <th class="text-center"><span class="badge bg-primary">Transportadas</span></th>
+                            <th class="text-center"><span class="badge bg-danger">Percas</span></th>
                         </tr>
                     </thead>
                     <tbody id="resumoPorTipoContainer">
-                        <tr><td colspan="6" class="text-center text-muted">Carregando...</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>
                     </tbody>
                     <tfoot id="resumoPorTipoSubtotais" class="table-light fw-bold">
-                        <tr><td colspan="6" class="text-center text-muted small">—</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted small">—</td></tr>
                     </tfoot>
                 </table>
             </div>
@@ -404,7 +417,13 @@
             if (filtrosIniciais.filtro_nao_transportado) {
                 $('#filtro_nao_transportado').prop('checked', true);
             }
-            
+            if (filtrosIniciais.filtro_perca) {
+                $('#filtro_perca').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_perca) {
+                $('#filtro_nao_perca').prop('checked', true);
+            }
+
             // Aplicar seleção de tanques se houver
             if (filtrosIniciais.tanque_ids && filtrosIniciais.tanque_ids.length > 0) {
                 filtrosIniciais.tanque_ids.forEach(function(tanqueId) {
@@ -426,17 +445,21 @@
         var filtroNaoProduzido = false;
         var filtroNaoAcabado = false;
         var filtroNaoTransportado = false;
-        
+        var filtroPerca = false;
+        var filtroNaoPerca = false;
+
         // Inicializar filtros de status a partir dos valores do formulário
         function atualizarFiltrosStatus() {
             filtroConcretado = $('#filtro_concretado').is(':checked');
             filtroProduzido = $('#filtro_produzido').is(':checked');
             filtroAcabado = $('#filtro_acabado').is(':checked');
             filtroTransportado = $('#filtro_transportado').is(':checked');
+            filtroPerca = $('#filtro_perca').is(':checked');
             filtroNaoConcretado = $('#filtro_nao_concretado').is(':checked');
             filtroNaoProduzido = $('#filtro_nao_produzido').is(':checked');
             filtroNaoAcabado = $('#filtro_nao_acabado').is(':checked');
             filtroNaoTransportado = $('#filtro_nao_transportado').is(':checked');
+            filtroNaoPerca = $('#filtro_nao_perca').is(':checked');
         }
         
         // Função para obter tanque_ids como array
@@ -466,29 +489,30 @@
             atualizarFiltrosStatus();
         }
         
-        // Função para atualizar a tabela de resumo por tipo (Total, Concretadas, Produzidas, Acabadas, Transportadas)
+        // Função para atualizar a tabela de resumo por tipo (Total, Concretadas, Produzidas, Acabadas, Transportadas, Percas)
         function atualizarResumoPorTipo(data) {
             var tbody = $('#resumoPorTipoContainer');
             var tfoot = $('#resumoPorTipoSubtotais');
             if (!data || data.length === 0) {
-                tbody.html('<tr><td colspan="6" class="text-center text-muted">Nenhuma peça para exibir</td></tr>');
-                tfoot.html('<tr><td colspan="6" class="text-center text-muted small">—</td></tr>');
+                tbody.html('<tr><td colspan="7" class="text-center text-muted">Nenhuma peça para exibir</td></tr>');
+                tfoot.html('<tr><td colspan="7" class="text-center text-muted small">—</td></tr>');
                 return;
             }
             var porTipo = {};
             data.forEach(function(row) {
                 var t = (row.tipo && row.tipo.toString().trim()) ? row.tipo : 'Sem tipo';
                 if (!porTipo[t]) {
-                    porTipo[t] = { total: 0, concretadas: 0, produzidas: 0, acabadas: 0, transportadas: 0 };
+                    porTipo[t] = { total: 0, concretadas: 0, produzidas: 0, acabadas: 0, transportadas: 0, percas: 0 };
                 }
                 porTipo[t].total += 1;
                 if (row.concretado) porTipo[t].concretadas += 1;
                 if (row.produzido) porTipo[t].produzidas += 1;
                 if (row.acabada) porTipo[t].acabadas += 1;
                 if (row.transportado) porTipo[t].transportadas += 1;
+                if (row.perca) porTipo[t].percas += 1;
             });
             var tiposOrdenados = Object.keys(porTipo).sort();
-            var stTotal = 0, stConcretadas = 0, stProduzidas = 0, stAcabadas = 0, stTransportadas = 0;
+            var stTotal = 0, stConcretadas = 0, stProduzidas = 0, stAcabadas = 0, stTransportadas = 0, stPercas = 0;
             var html = '';
             tiposOrdenados.forEach(function(tipo) {
                 var o = porTipo[tipo];
@@ -497,6 +521,7 @@
                 stProduzidas += o.produzidas;
                 stAcabadas += o.acabadas;
                 stTransportadas += o.transportadas;
+                stPercas += o.percas;
                 html += '<tr>' +
                     '<td class="fw-bold">' + tipo + '</td>' +
                     '<td class="text-center">' + o.total + '</td>' +
@@ -504,9 +529,10 @@
                     '<td class="text-center">' + o.produzidas + '</td>' +
                     '<td class="text-center">' + o.acabadas + '</td>' +
                     '<td class="text-center">' + o.transportadas + '</td>' +
+                    '<td class="text-center">' + o.percas + '</td>' +
                     '</tr>';
             });
-            tbody.html(html || '<tr><td colspan="6" class="text-center text-muted">Nenhum tipo encontrado</td></tr>');
+            tbody.html(html || '<tr><td colspan="7" class="text-center text-muted">Nenhum tipo encontrado</td></tr>');
             // Linha de subtotais
             var footHtml = '<tr>' +
                 '<td>Subtotal</td>' +
@@ -515,6 +541,7 @@
                 '<td class="text-center">' + stProduzidas + '</td>' +
                 '<td class="text-center">' + stAcabadas + '</td>' +
                 '<td class="text-center">' + stTransportadas + '</td>' +
+                '<td class="text-center">' + stPercas + '</td>' +
                 '</tr>';
             tfoot.html(footHtml);
         }
@@ -570,6 +597,12 @@
                         }
                         if ($('#filtro_nao_transportado').is(':checked')) {
                             d.filtro_nao_transportado = '1';
+                        }
+                        if ($('#filtro_perca').is(':checked')) {
+                            d.filtro_perca = '1';
+                        }
+                        if ($('#filtro_nao_perca').is(':checked')) {
+                            d.filtro_nao_perca = '1';
                         }
                     },
                     dataSrc: function(json) {
@@ -664,7 +697,7 @@
         });
         
         // Recarregar tabela quando os checkboxes de status mudarem
-        $('#filtro_concretado, #filtro_produzido, #filtro_acabado, #filtro_transportado, #filtro_nao_concretado, #filtro_nao_produzido, #filtro_nao_acabado, #filtro_nao_transportado').on('change', function() {
+        $('#filtro_concretado, #filtro_produzido, #filtro_acabado, #filtro_transportado, #filtro_perca, #filtro_nao_concretado, #filtro_nao_produzido, #filtro_nao_acabado, #filtro_nao_transportado, #filtro_nao_perca').on('change', function() {
             atualizarVariaveisFiltro();
             if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
                 table.ajax.reload(null, false);
@@ -713,6 +746,8 @@
             $('#filtro_nao_produzido').is(':checked') && params.push('filtro_nao_produzido=1');
             $('#filtro_nao_acabado').is(':checked') && params.push('filtro_nao_acabado=1');
             $('#filtro_nao_transportado').is(':checked') && params.push('filtro_nao_transportado=1');
+            $('#filtro_perca').is(':checked') && params.push('filtro_perca=1');
+            $('#filtro_nao_perca').is(':checked') && params.push('filtro_nao_perca=1');
             var queryString = params.join('&');
             var url = '{{ url_for("peca.exportar_excel") }}' + (queryString ? '?' + queryString : '');
             window.location.href = url;

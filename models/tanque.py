@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, date
 import json
 from models.concreto import ConcretoConcretagens
 from models.database import db
 from sqlalchemy.orm import relationship
+from sqlalchemy import func
 
-from models.nota_fiscal import NotaFiscalItem
+from models.nota_fiscal import NotaFiscalItem, NotaFiscal
 
 class Tanques(db.Model):
     """
@@ -213,46 +214,93 @@ class Tanques(db.Model):
         Retorna o total de concretagens do tanque
         """
         return len(self.get_pecas_concretadas())
-    def get_statistics(self):
+    def _parse_data_ate(self, value):
+        """Converte valor para date para comparação; retorna None se inválido."""
+        if value is None:
+            return None
+        if isinstance(value, date):
+            return value if not isinstance(value, datetime) else value.date()
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, str) and value.strip() not in ('', 'null'):
+            s = value.strip()
+            s_date = s[:10] if len(s) >= 10 else s
+            for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                try:
+                    d = datetime.strptime(s_date, fmt)
+                    return d.date()
+                except ValueError:
+                    continue
+            try:
+                return datetime.fromisoformat(s.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass
+        return None
+
+    def get_statistics(self, data_ate=None):
         """
-        Retorna as estatísticas do tanque
+        Retorna as estatísticas do tanque até a data informada (inclusive).
+        data_ate: date ou None (usa data atual).
         """
+        data_ate = data_ate or date.today()
+        if isinstance(data_ate, datetime):
+            data_ate = data_ate.date()
+
         pecas_acabadas = 0
         pecas_transportadas = 0
         pecas_em_estoque = 0
         pecas_prontas_transportar = 0
         nfs_emitidas_total = 0
         pecas_concretadas = 0
+        pecas_perca = 0  # peças marcadas como perda no qualidade (ex: "perca": true)
         for peca in self.TanquesPecas:
             if peca.qualidade:
                 try:
                     qualidade_dict = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-                    # Verificar acabamento
+                    # Peças marcadas como perca no qualidade
+                    if qualidade_dict.get('perca') is True:
+                        pecas_perca += 1
+                    # Verificar acabamento (considerar apenas se data <= data_ate)
                     if 'acabamento' in qualidade_dict and qualidade_dict['acabamento']:
                         acabamento = qualidade_dict['acabamento']
+                        data_acabamento = None
                         if isinstance(acabamento, dict):
-                            if acabamento.get('data') is not None and acabamento.get('data') != '' and acabamento.get('data') != 'null':
+                            val = acabamento.get('data')
+                            if val is not None and str(val).strip() not in ('', 'null'):
+                                data_acabamento = self._parse_data_ate(val)
+                            if data_acabamento is not None and data_acabamento <= data_ate:
                                 pecas_acabadas += 1
                         elif isinstance(acabamento, str):
-                            if acabamento != '' and acabamento != 'null':
-                                pecas_acabadas += 1
+                            if acabamento.strip() not in ('', 'null'):
+                                pecas_acabadas += 1  # sem data, considera
                         else:
                             if bool(acabamento):
                                 pecas_acabadas += 1
-                    
-                    # Verificar transporte
+
+                    # Verificar transporte (considerar apenas se data_transporte <= data_ate)
                     if 'transporte' in qualidade_dict and qualidade_dict['transporte']:
                         transporte = qualidade_dict['transporte']
                         if isinstance(transporte, dict):
                             data_transporte = transporte.get('data_transporte')
-                            if data_transporte is not None and data_transporte != '' and data_transporte != 'null':
-                                pecas_transportadas += 1
+                            if data_transporte is not None and str(data_transporte).strip() not in ('', 'null'):
+                                dt = self._parse_data_ate(data_transporte)
+                                if dt is not None and dt <= data_ate:
+                                    pecas_transportadas += 1
+                    # Concretadas: data_concretagem <= data_ate
                     if peca.data_concretagem:
-                        pecas_concretadas += 1
-
-                except:
+                        dc = peca.data_concretagem.date() if hasattr(peca.data_concretagem, 'date') else peca.data_concretagem
+                        if dc <= data_ate:
+                            pecas_concretadas += 1
+                except Exception:
                     pass
-        nfs_emitidas_total = NotaFiscalItem.query.filter_by(codigo=self.item_nf).group_by(NotaFiscalItem.nf_id).count()
+        # NFs emitidas até data_ate
+        if self.item_nf is not None:
+            nfs_emitidas_total = db.session.query(NotaFiscalItem.nf_id).join(
+                NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id
+            ).filter(
+                NotaFiscalItem.codigo == self.item_nf,
+                func.date(NotaFiscal.data_emissao) <= data_ate
+            ).distinct().count()
         pecas_prontas_transportar = pecas_acabadas - pecas_transportadas
         pecas_em_estoque = pecas_concretadas - pecas_transportadas
         return {
@@ -262,7 +310,8 @@ class Tanques(db.Model):
             'total_pecas': len(self.TanquesPecas),
             'em_estoque': pecas_em_estoque,
             'prontas_transportar': pecas_prontas_transportar,
-            'nfs_emitidas_total': nfs_emitidas_total
+            'nfs_emitidas_total': nfs_emitidas_total,
+            'percas': pecas_perca
         }
 class TanquesGrupos(db.Model):
     """

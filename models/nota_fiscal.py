@@ -174,6 +174,7 @@ class NotaFiscal(db.Model):
         self.tipo = tipo
         self.upload = None
         self.cancelada = cancelada
+        self.xml_data = xml_data
         if data and not xml_data:
            
             self.xml_data = data.get('xml',None) 

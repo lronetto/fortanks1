@@ -1,12 +1,17 @@
 <div class="card shadow mb-4">
-    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between flex-wrap gap-2">
         <h6 class="m-0 font-weight-bold text-info">Resumo de Placas</h6>
-        <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="agruparPorGrupo" 
-                   {% if request.args.get('agrupar_por_grupo', 'true') != 'false' %}checked{% endif %}>
-            <label class="form-check-label" for="agruparPorGrupo">
-                Agrupar por Grupo
-            </label>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <label class="mb-0 small text-nowrap">Resumo até:</label>
+            <input type="date" id="dataAteResumoPlacas" class="form-control form-control-sm" style="width: auto;"
+                   value="{{ cards.resumo_placas.data_ate|default('') }}">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="agruparPorGrupo"
+                       {% if request.args.get('agrupar_por_grupo', 'true') != 'false' %}checked{% endif %}>
+                <label class="form-check-label" for="agruparPorGrupo">
+                    Agrupar por Grupo
+                </label>
+            </div>
         </div>
     </div>
     <div class="card-body">
@@ -20,6 +25,7 @@
                         <th>Transportadas</th>
                         <th>Em Estoque</th>
                         <th>Prontas para Transp.</th>
+                        <th>Percas</th>
                         <th>NFs emitidas</th>
                     </tr>
                 </thead>
@@ -32,6 +38,7 @@
                         <td>{{ item.transportadas }}</td>
                         <td>{{ item.em_estoque }}</td>
                         <td>{{ item.prontas_transportar }}</td>
+                        <td>{{ item.percas|default(0) }}</td>
                         <td>{{ item.nfs_emitidas }}</td>
                     </tr>
                     {% endfor %}
@@ -43,60 +50,74 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const tbody = document.getElementById('tbodyResumoPlacas');
     const checkboxAgrupar = document.getElementById('agruparPorGrupo');
-    if (checkboxAgrupar) {
-        checkboxAgrupar.addEventListener('change', function() {
-            const agrupar = this.checked;
-            
-            // Mostrar loading
-            const tbody = document.getElementById('tbodyResumoPlacas');
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
-            
-            // Fazer requisição AJAX
-            fetch(`/dashboard/api/resumo-placas?agrupar_por_grupo=${agrupar}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Atualizar tabela
-                        let html = '';
-                        if (data.dados && data.dados.length > 0) {
-                            data.dados.forEach(item => {
-                                html += `
-                                    <tr>
-                                        <td>${item.tanque}</td>
-                                        <td>${item.concretadas}</td>
-                                        <td>${item.acabadas}</td>
-                                        <td>${item.transportadas}</td>
-                                        <td>${item.em_estoque}</td>
-                                        <td>${item.prontas_transportar}</td>
-                                        <td>${item.nfs_emitidas}</td>
-                                    </tr>
-                                `;
-                            });
-                        } else {
-                            html = '<tr><td colspan="7" class="text-center text-muted">Nenhum dado encontrado</td></tr>';
-                        }
-                        tbody.innerHTML = html;
-                        
-                        // Atualizar URL sem recarregar a página
-                        const url = new URL(window.location);
-                        if (agrupar) {
-                            url.searchParams.set('agrupar_por_grupo', 'true');
-                        } else {
-                            url.searchParams.delete('agrupar_por_grupo');
-                        }
-                        window.history.pushState({}, '', url);
+    const inputDataAte = document.getElementById('dataAteResumoPlacas');
+
+    function getDataAte() {
+        if (!inputDataAte || !inputDataAte.value) {
+            const today = new Date();
+            return today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        }
+        return inputDataAte.value;
+    }
+
+    function carregarResumoPlacas() {
+        const agrupar = checkboxAgrupar ? checkboxAgrupar.checked : true;
+        const dataAte = getDataAte();
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+        }
+        const params = new URLSearchParams({ agrupar_por_grupo: agrupar, data_ate: dataAte });
+        fetch('/dashboard/api/resumo-placas?' + params.toString())
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    let html = '';
+                    if (data.dados && data.dados.length > 0) {
+                        data.dados.forEach(item => {
+                            html += `
+                                <tr>
+                                    <td>${item.tanque}</td>
+                                    <td>${item.concretadas}</td>
+                                    <td>${item.acabadas}</td>
+                                    <td>${item.transportadas}</td>
+                                    <td>${item.em_estoque}</td>
+                                    <td>${item.prontas_transportar}</td>
+                                    <td>${item.percas !== undefined ? item.percas : 0}</td>
+                                    <td>${item.nfs_emitidas}</td>
+                                </tr>
+                            `;
+                        });
                     } else {
-                        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar dados</td></tr>';
-                        alert('Erro ao carregar dados: ' + (data.error || 'Erro desconhecido'));
+                        html = '<tr><td colspan="8" class="text-center text-muted">Nenhum dado encontrado</td></tr>';
                     }
-                })
-                .catch(error => {
-                    console.error('Erro ao carregar resumo de placas:', error);
-                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Erro ao carregar dados</td></tr>';
-                    alert('Erro ao carregar dados. Verifique o console.');
-                });
-        });
+                    if (tbody) tbody.innerHTML = html;
+                    const url = new URL(window.location);
+                    url.searchParams.set('agrupar_por_grupo', agrupar);
+                    url.searchParams.set('data_ate', dataAte);
+                    window.history.pushState({}, '', url);
+                } else {
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro ao carregar dados</td></tr>';
+                    alert('Erro ao carregar dados: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar resumo de placas:', error);
+                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro ao carregar dados</td></tr>';
+                alert('Erro ao carregar dados. Verifique o console.');
+            });
+    }
+
+    if (checkboxAgrupar) {
+        checkboxAgrupar.addEventListener('change', carregarResumoPlacas);
+    }
+    if (inputDataAte) {
+        if (!inputDataAte.value) {
+            const today = new Date();
+            inputDataAte.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+        }
+        inputDataAte.addEventListener('change', carregarResumoPlacas);
     }
 });
 </script>

@@ -31,11 +31,13 @@ def api_get_dados_notas_fiscais(request):
     Monta a query base de notas fiscais usada pela tela principal (tabela via AJAX),
     respeitando filtros de `request.args` ou JSON.
     """
+    
     json_filtros = request
     if hasattr(request, "args"):
         json_filtros = request.args
     else:
         json_filtros = request
+    
     busca = json_filtros.get("busca", "")
     item_nome = json_filtros.get("item_nome", "")
     status_importacao = json_filtros.get("status_importacao", "")
@@ -340,7 +342,10 @@ def api_get_dados_notas_fiscais(request):
         if emitente == "Terceiros":
             query = query.filter(~NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS))
         elif emitente == "Matriz":
-            query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ))
+            query = query.filter(or_(
+                and_(NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ), NotaFiscal.tipo < 2), 
+                and_(NotaFiscal.tipo == 2, NotaFiscal.dados_adicionais.isnot(None),
+                func.json_extract(NotaFiscal.dados_adicionais, "$.remetente.cnpj").in_(CNPJS_MATRIZ))))
         elif emitente == "Filiais":
             query = query.filter(NotaFiscal.cnpj_emitente.in_(CNPJS_FILIAIS))
         elif emitente == "Matriz_Filiais":
@@ -350,7 +355,10 @@ def api_get_dados_notas_fiscais(request):
         if destinatario == "Terceiros":
             query = query.filter(~NotaFiscal.cnpj_destinatario.in_(CNPJS_MATRIZ_FILIAIS))
         elif destinatario == "Matriz":
-            query = query.filter(NotaFiscal.cnpj_destinatario.in_(CNPJS_MATRIZ))
+                 query = query.filter(or_(
+                and_(NotaFiscal.cnpj_destinatario.in_(CNPJS_MATRIZ), NotaFiscal.tipo !=2), 
+                and_(NotaFiscal.tipo == 2, NotaFiscal.dados_adicionais.isnot(None),
+                func.json_extract(NotaFiscal.dados_adicionais, "$.remetente.cnpj").in_(CNPJS_MATRIZ))))
         elif destinatario == "Filiais":
             query = query.filter(NotaFiscal.cnpj_destinatario.in_(CNPJS_FILIAIS))
         elif destinatario == "Matriz_Filiais":

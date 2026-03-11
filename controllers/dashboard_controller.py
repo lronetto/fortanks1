@@ -92,10 +92,17 @@ def meu_dashboard():
     exibir_card_resumo_placas = False
     resumo_placas = []
     agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'true').lower() == 'true'
+    data_ate_str = request.args.get('data_ate')
+    data_ate = date.today()
+    if data_ate_str:
+        try:
+            data_ate = datetime.strptime(data_ate_str, '%Y-%m-%d').date()
+        except ValueError:
+            data_ate = date.today()
     if current_user.colaborador and current_user.is_permissao('dashboard_resumo_placas'):
         print("exibir_card_resumo_placas")
         exibir_card_resumo_placas = True
-        resumo_placas = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo)
+        resumo_placas = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo, data_ate=data_ate)
    
     exibir_card_resumo_notas = False
     resumo_notas = []
@@ -137,6 +144,7 @@ def meu_dashboard():
             },
             'resumo_placas': {
                 'dados': resumo_placas,
+                'data_ate': data_ate.strftime('%Y-%m-%d'),
                 'exibir': exibir_card_resumo_placas
             },
             'resumo_notas': {
@@ -455,14 +463,16 @@ def acerto_data_concretagem():
             except (json.JSONDecodeError, TypeError, AttributeError):
                 continue
     return True
-def card_resumo_placas(agrupar_por_grupo=False):
+def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
     """
-    Gera resumo de placas por tanque ou agrupado por grupo de tanques
+    Gera resumo de placas por tanque ou agrupado por grupo de tanques até a data informada.
+    data_ate: date ou None (usa data atual).
     """
+    data_ate = data_ate or date.today()
     tanques = Tanques.query.order_by(Tanques.contrato_id, Tanques.nome).all()
     dados_especificosb = []
     for tanque in tanques:
-        statistics = tanque.get_statistics()
+        statistics = tanque.get_statistics(data_ate=data_ate)
         
         dados_especificosb.append({
             'id': tanque.id,
@@ -473,7 +483,8 @@ def card_resumo_placas(agrupar_por_grupo=False):
             'total_pecas': statistics['total_pecas'],
             'em_estoque': statistics['em_estoque'],
             'prontas_transportar': statistics['prontas_transportar'],
-            'nfs_emitidas': "{:,.0f}".format(statistics['nfs_emitidas_total'])
+            'nfs_emitidas': "{:,.0f}".format(statistics['nfs_emitidas_total']),
+            'percas': statistics['percas']
         })
     if not agrupar_por_grupo:
         return dados_especificosb
@@ -496,8 +507,9 @@ def card_resumo_placas(agrupar_por_grupo=False):
             em_estoque_total = 0
             prontas_transportar_total = 0
             nfs_emitidas_total = 0
+            percas_total = 0
             num_tanques = 0
-            
+
             # Somarizar dados de todos os tanques do grupo
             for tanque in grupo.tanques:
                 if tanque.id in dados_por_tanque:
@@ -508,6 +520,7 @@ def card_resumo_placas(agrupar_por_grupo=False):
                     total_pecas_total += dados['total_pecas']
                     em_estoque_total += dados['em_estoque']
                     prontas_transportar_total += dados['prontas_transportar']
+                    percas_total += dados.get('percas', 0)
                     # Para nfs_emitidas, precisamos converter de string formatada para número
                     # O formato usa vírgula como separador de milhar (ex: "1,234")
                     nfs_str = dados['nfs_emitidas'].replace(',', '').strip()
@@ -531,7 +544,8 @@ def card_resumo_placas(agrupar_por_grupo=False):
                 'total_pecas': total_pecas_total,
                 'em_estoque': em_estoque_total,
                 'prontas_transportar': prontas_transportar_total,
-                'nfs_emitidas': "{:,.0f}".format(nfs_emitidas_media)
+                'nfs_emitidas': "{:,.0f}".format(nfs_emitidas_media),
+                'percas': percas_total
             })
     
     return dados_especificos
@@ -540,19 +554,28 @@ def card_resumo_placas(agrupar_por_grupo=False):
 @login_required
 def api_resumo_placas():
     """
-    API para retornar resumo de placas com opção de agrupar por grupo
+    API para retornar resumo de placas com opção de agrupar por grupo e data até.
+    Query params: agrupar_por_grupo (true|false), data_ate (YYYY-MM-DD, padrão: hoje).
     """
     agrupar_por_grupo = request.args.get('agrupar_por_grupo', 'true').lower() == 'true'
-    
+    data_ate_str = request.args.get('data_ate')
+    data_ate = date.today()
+    if data_ate_str:
+        try:
+            data_ate = datetime.strptime(data_ate_str, '%Y-%m-%d').date()
+        except ValueError:
+            data_ate = date.today()
+
     if not (current_user.colaborador and current_user.colaborador.departamento_id == 4):
         return jsonify({'success': False, 'error': 'Acesso negado'}), 403
-    
+
     try:
-        dados = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo)
+        dados = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo, data_ate=data_ate)
         return jsonify({
             'success': True,
             'dados': dados,
-            'agrupar_por_grupo': agrupar_por_grupo
+            'agrupar_por_grupo': agrupar_por_grupo,
+            'data_ate': data_ate.isoformat()
         })
     except Exception as e:
         return jsonify({

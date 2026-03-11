@@ -7,10 +7,8 @@ from datetime import datetime
 import pandas as pd
 from flask import request, send_file
 from flask_login import login_required
-from sqlalchemy import or_
 
-from models.database import db
-from models.nota_fiscal import NotaFiscal, NotaFiscalItem, CFOPS_VENDA, CFOPS_TRANSFERENCIA, CNPJS_MATRIZ_FILIAIS
+from models.nota_fiscal import NotaFiscal, CFOPS_VENDA, CFOPS_TRANSFERENCIA, CNPJS_MATRIZ_FILIAIS
 from models.upload import Upload
 
 from .. import nota_fiscal_bp
@@ -19,117 +17,70 @@ from ..services.query_notas import api_get_dados_notas_fiscais
 logger = logging.getLogger(__name__)
 
 
+def _status_upload_from_row(row):
+    """Monta o texto de Status Upload a partir das colunas upload_arquivei, upload_protocolo, upload_reembolso do row."""
+    upload_arquivei = getattr(row, "upload_arquivei", None) if hasattr(row, "upload_arquivei") else (row[6] if len(row) > 6 else None)
+    upload_protocolo = getattr(row, "upload_protocolo", None) if hasattr(row, "upload_protocolo") else (row[4] if len(row) > 4 else None)
+    upload_reembolso = getattr(row, "upload_reembolso", None) if hasattr(row, "upload_reembolso") else (row[5] if len(row) > 5 else None)
+    status_u = []
+    if upload_arquivei:
+        status_u.append("Arquivei")
+    if upload_protocolo:
+        status_u.append("Protocolo")
+    if upload_reembolso:
+        status_u.append("Reembolso")
+    if not status_u:
+        status_u.append("Nenhum")
+    return ", ".join(status_u)
+
+
 @nota_fiscal_bp.route("/exportar-excel")
 @login_required
 def exportar_excel():
     """
     Exporta as notas fiscais filtradas para um arquivo Excel (botão na tela principal).
+    Usa o mesmo serviço de query da tela principal (query_notas) para manter filtros consistentes.
     """
-    busca = request.args.get("busca", "")
-    item_nome = request.args.get("item_nome", "")
-    status_importacao = request.args.get("status_importacao", "")
-    data_emissao_inicio = request.args.get("data_emissao_inicio", "")
-    data_emissao_fim = request.args.get("data_emissao_fim", "")
-    tipo_nfe = request.args.get("tipo_nfe", "")
-    status_upload = request.args.get("status_upload", "")
-    cnpj_emitente_val = (request.args.get("cnpj_emitente", "") or "").strip()
-    cnpj_destinatario_val = (request.args.get("cnpj_destinatario", "") or "").strip()
+    print(f"request: {request.args}")
+    query = api_get_dados_notas_fiscais(request)
+    rows = query.all()
 
-    query = NotaFiscal.query.filter(NotaFiscal.status_processamento != "cancelada")
-
-    if busca:
-        busca_like = f"%{busca}%"
-        query = query.filter(
-            or_(
-                NotaFiscal.numero_nf.ilike(busca_like),
-                NotaFiscal.nome_emitente.ilike(busca_like),
-                NotaFiscal.chave_acesso.ilike(busca_like),
-            )
-        )
-    if item_nome:
-        query = query.join(NotaFiscalItem).filter(NotaFiscalItem.descricao.ilike(f"%{item_nome}%"))
-    if status_importacao == "pendentes":
-        query = query.filter(~NotaFiscal.itens.any(NotaFiscalItem.importado_estoque.is_(True)))
-    if cnpj_emitente_val:
-        query = query.filter(NotaFiscal.cnpj_emitente == cnpj_emitente_val)
-    if cnpj_destinatario_val:
-        query = query.filter(NotaFiscal.cnpj_destinatario == cnpj_destinatario_val)
-    if data_emissao_inicio:
-        query = query.filter(NotaFiscal.data_emissao >= datetime.strptime(data_emissao_inicio, "%Y-%m-%d"))
-    if data_emissao_fim:
-        query = query.filter(NotaFiscal.data_emissao <= datetime.strptime(data_emissao_fim, "%Y-%m-%d"))
-    if tipo_nfe:
-        if tipo_nfe == "0":
-            tipos = [0, 1]
-        elif tipo_nfe == "2":
-            tipos = [2]
-        elif tipo_nfe == "3":
-            tipos = [3]
+    dados_cte = []
+    dados_nfe = []
+    dados_nfs = []
+    for row in rows:
+        nota = getattr(row, "NotaFiscal", None) or row[0]
+        status_u = _status_upload_from_row(row)
+        linha = {
+            "Data": nota.data_emissao.strftime("%d/%m/%Y") if nota.data_emissao else "",
+            "Número": nota.numero_nf,
+            "Fornecedor": nota.nome_emitente,
+            "Valor": float(nota.valor_total) if nota.valor_total is not None else 0.0,
+            "Status Upload": status_u,
+            "Status": nota.status_processamento,
+            "Chave de Acesso": nota.chave_acesso,
+        }
+        if nota.tipo == 2:
+            dados_cte.append(linha)
+        elif nota.tipo in [0, 1]:
+            dados_nfe.append(linha)
         else:
-            tipos = None
-        if tipos is not None:
-            query = query.filter(NotaFiscal.tipo.in_(tipos))
+            dados_nfs.append(linha)
 
-    if status_upload:
-        if status_upload == "1":
-            query = query.filter(
-                db.session.query(Upload.id)
-                .filter(Upload.pai == "NotaFiscal", Upload.pai_id == NotaFiscal.id, Upload.tipo == 1)
-                .exists()
-            )
-        elif status_upload == "2":
-            query = query.filter(
-                db.session.query(Upload.id)
-                .filter(Upload.pai == "NotaFiscal", Upload.pai_id == NotaFiscal.id, Upload.tipo == 2)
-                .exists()
-            )
-        elif status_upload == "3":
-            query = query.filter(
-                db.session.query(Upload.id)
-                .filter(Upload.pai == "NotaFiscal", Upload.pai_id == NotaFiscal.id, Upload.tipo == 3)
-                .exists()
-            )
-        elif status_upload == "4":
-            query = query.filter(
-                ~db.session.query(Upload.id)
-                .filter(Upload.pai == "NotaFiscal", Upload.pai_id == NotaFiscal.id, Upload.tipo == 2)
-                .exists()
-            )
-
-    query = query.order_by(NotaFiscal.data_emissao.desc(), NotaFiscal.numero_nf.desc())
-    notas = query.all()
-
-    dados = []
-    for nf in notas:
-        uploads = db.session.query(Upload.tipo).filter_by(pai_id=nf.id, pai="NotaFiscal").all()
-        status_u = []
-        if uploads:
-            tipos = [u[0] for u in uploads]
-            if 1 in tipos:
-                status_u.append("Arquivei")
-            if 2 in tipos:
-                status_u.append("Protocolo")
-            if 3 in tipos:
-                status_u.append("Reembolso")
-        else:
-            status_u.append("Nenhum")
-        dados.append(
-            {
-                "Fornecedor": nf.nome_emitente,
-                "Número": nf.numero_nf,
-                "Tipo": "NFe" if nf.tipo in [0, 1] else ("CTE" if nf.tipo == 2 else "NFSe"),
-                "Chave de Acesso": nf.chave_acesso,
-                "Data": nf.data_emissao.strftime("%d/%m/%Y") if nf.data_emissao else "",
-                "Valor": float(nf.valor_total) if nf.valor_total is not None else 0.0,
-                "Status Upload": ", ".join(status_u),
-                "Status": nf.status_processamento,
-            }
-        )
-
-    df = pd.DataFrame(dados)
+    colunas = ["Fornecedor", "Número", "Chave de Acesso", "Data", "Valor", "Status Upload", "Status"]
     output = io.BytesIO()
+    print(f"dados_cte: {len(dados_cte)}")
+    print(f"dados_nfe: {len(dados_nfe)}")
+    print(f"dados_nfs: {len(dados_nfs)}")
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Notas Fiscais")
+        if dados_cte:
+            pd.DataFrame(dados_cte).to_excel(writer, index=False, sheet_name="CTE")
+        if dados_nfe:
+            pd.DataFrame(dados_nfe).to_excel(writer, index=False, sheet_name="NFe")
+        if dados_nfs:
+            pd.DataFrame(dados_nfs).to_excel(writer, index=False, sheet_name="NFS")
+        if not dados_cte and not dados_nfe and not dados_nfs:
+            pd.DataFrame(columns=colunas).to_excel(writer, index=False, sheet_name="Notas Fiscais")
     output.seek(0)
 
     return send_file(
