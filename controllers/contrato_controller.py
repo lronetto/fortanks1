@@ -327,7 +327,29 @@ def editar(id):
             contrato.valor_total = valor_material_float + valor_servico_float
 
             # Outros campos aqui...
-            contrato.conf = json.dumps({'cnpjs_associados': cnpjs_associados})
+
+            # Atualizar config (conf) preservando outras chaves e tratando corretamente os CNPJs associados
+            conf_data = {}
+            if contrato.conf:
+                try:
+                    conf_data = json.loads(contrato.conf)
+                    if not isinstance(conf_data, dict):
+                        conf_data = {}
+                except Exception:
+                    conf_data = {}
+
+            try:
+                cnpjs_list = json.loads(cnpjs_associados) if cnpjs_associados else []
+            except Exception:
+                cnpjs_list = []
+
+            if isinstance(cnpjs_list, list) and len(cnpjs_list) > 0:
+                conf_data['cnpjs_associados'] = cnpjs_list
+            else:
+                # Se vier vazio, removemos apenas a chave de CNPJs associados
+                conf_data.pop('cnpjs_associados', None)
+
+            contrato.conf = json.dumps(conf_data) if conf_data else None
             db.session.commit()
             
             # Verificar se é requisição AJAX

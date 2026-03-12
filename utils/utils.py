@@ -319,7 +319,8 @@ def extrair_chave_do_pdf(payload: bytes) -> str | None:
 
     try:
         images = convert_from_bytes(payload, 500, poppler_path=poppler_path)
-    except Exception:
+    except Exception as e:
+        logging.error(f"Erro ao converter PDF para imagem: {e}")
         return None
 
     if not images:

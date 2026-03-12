@@ -25,7 +25,8 @@ class Config:
     
     # Configurações de upload
     UPLOAD_FOLDER = os.path.join('static', 'uploads')
-    MAX_CONTENT_LENGTH = 20 * 1024 * 1024  # 16MB
+    # Limite do corpo da requisição (importação de vários PDFs em protocolos pode ser grande)
+    MAX_CONTENT_LENGTH = 150 * 1024 * 1024  # 150MB
     
     # Configurações de paginação
     ITEMS_PER_PAGE = 10

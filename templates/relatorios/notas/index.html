@@ -197,6 +197,11 @@
                             <i class="fas fa-file-excel"></i> Exportar Excel
                         </button>
                     </div>
+                    <div class="col-md-3">
+                        <button type="button" id="btn-exportar-faturamento-mes-excel" class="btn btn-outline-success w-100">
+                            <i class="fas fa-file-excel"></i> Faturamento por Mês (Excel)
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
@@ -683,6 +688,12 @@ $(document).ready(function() {
 
         $('#btn-exportar-excel').off('click').on('click', function() {
             let url = "{{ url_for('relatorios_notas.exportar_excel') }}?" + params;
+            window.open(url, '_blank');
+        });
+
+        // Exportação de faturamento mensal em Excel (endpoint deve ser criado no backend)
+        $('#btn-exportar-faturamento-mes-excel').off('click').on('click', function() {
+            let url = "/relatorios/notas/exportar/faturamento-mes-excel?" + params;
             window.open(url, '_blank');
         });
     }

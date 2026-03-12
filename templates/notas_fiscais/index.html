@@ -791,6 +791,82 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    // Cancelar / descancelar nota fiscal
+    $(document).on('click', '.cancelar-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNota = $(this).data('numero');
+        const estaCancelada = $(this).data('cancelada') == 1;
+
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado.', 'error');
+            return;
+        }
+
+        const titulo = estaCancelada ? 'Descancelar nota fiscal' : 'Cancelar nota fiscal';
+        const texto = estaCancelada
+            ? `Deseja realmente descancelar a nota fiscal ${numeroNota}?`
+            : `Deseja realmente cancelar a nota fiscal ${numeroNota}?`;
+
+        Swal.fire({
+            title: titulo,
+            text: texto,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sim',
+            cancelButtonText: 'Não',
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33'
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            let csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = $('input[name="csrf_token"]').first().val();
+            }
+            if (!csrfToken) {
+                mostrarAlerta('Erro', 'Token CSRF não encontrado. Recarregue a página e tente novamente.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('csrf_token', csrfToken);
+            formData.append('nf_id', notaId);
+
+            $.ajax({
+                url: '/notas-fiscais/api/cancelar',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        mostrarAlerta('Sucesso', response.message, 'success', function() {
+                            if (typeof table !== 'undefined') {
+                                table.ajax.reload(null, false);
+                            }
+                        });
+                    } else {
+                        mostrarAlerta('Erro', response.message || 'Não foi possível alterar o status da nota fiscal.', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    let msg = 'Erro ao alterar status de cancelamento da nota fiscal.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            const j = JSON.parse(xhr.responseText);
+                            if (j.message) msg = j.message;
+                        } catch (e) {}
+                    }
+                    mostrarAlerta('Erro', msg, 'error');
+                }
+            });
+        });
+    });
+
     // Submeter filtros via AJAX (recarregar DataTables)
     $('#filtrosNotasFiscais').on('submit', function(e) {
         e.preventDefault();

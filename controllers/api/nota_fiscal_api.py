@@ -141,7 +141,8 @@ def register(nota_fiscal_bp):
 
             # Status badge (cancelada ou não + demais status)
             status_html = ""
-            if nota.NotaFiscal.status_processamento == 'cancelada':
+            nf_cancelada = nota.NotaFiscal.status_processamento == 'cancelada'
+            if nf_cancelada:
                 status_html = '<span class="badge bg-danger">Cancelada</span>'
             else:
                 status_html = ''
@@ -187,6 +188,9 @@ def register(nota_fiscal_bp):
             btn_liberar_class = "btn-info" if liberada == 0 else "btn-primary"
             btn_liberar_icon = "fa-unlock" if liberada == 0 else "fa-lock"
             btn_liberar_title = "Liberar" if liberada == 0 else "Desliberar"
+            btn_cancelar_class = "btn-danger" if not nf_cancelada else "btn-outline-danger"
+            btn_cancelar_icon = "fa-ban" if not nf_cancelada else "fa-undo"
+            btn_cancelar_title = "Cancelar nota fiscal" if not nf_cancelada else "Reverter cancelamento da nota fiscal"
             
             acoes_html = f'''
                 <div class="btn-group">
@@ -201,6 +205,9 @@ def register(nota_fiscal_bp):
                     </button>
                     <button type="button" class="btn btn-sm {btn_liberar_class} liberar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-liberada="{liberada}" title="{btn_liberar_title}">
                         <i class="fas {btn_liberar_icon}"></i>
+                    </button>
+                    <button type="button" class="btn btn-sm {btn_cancelar_class} cancelar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-cancelada="{1 if nf_cancelada else 0}" title="{btn_cancelar_title}">
+                        <i class="fas {btn_cancelar_icon}"></i>
                     </button>
                     <button type="button" class="btn btn-sm btn-danger excluir-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" title="Excluir">
                         <i class="fas fa-trash"></i>
@@ -875,6 +882,88 @@ def register(nota_fiscal_bp):
         except Exception as e:
             logger.error(f"Erro ao alterar status de liberação: {str(e)}")
             return jsonify({"success": False, "message": f"Erro ao alterar status de liberação: {str(e)}"}), 500
+
+    @nota_fiscal_bp.route("/api/cancelar", methods=["POST"])
+    @login_required
+    def api_cancelar_nota_fiscal():
+        """Alterna o status de cancelamento da nota fiscal (cancelar / descancelar)"""
+        import json
+        from datetime import datetime
+
+        # Validar CSRF token
+        csrf_token = request.form.get("csrf_token") or (request.json.get("csrf_token") if request.is_json else None)
+        if csrf_token:
+            try:
+                from flask_wtf.csrf import validate_csrf
+
+                validate_csrf(csrf_token)
+            except Exception as e:
+                logger.warning(f"Erro de validação CSRF: {str(e)}")
+                return jsonify({"success": False, "message": "Token CSRF inválido"}), 403
+
+        nf_id = request.form.get("nf_id") or (request.json.get("nf_id") if request.is_json else None)
+        if not nf_id:
+            return jsonify({"success": False, "message": "ID da nota fiscal não fornecido"}), 400
+
+        try:
+            nota_fiscal = NotaFiscal.query.get(int(nf_id))
+            if not nota_fiscal:
+                return jsonify({"success": False, "message": "Nota fiscal não encontrada"}), 404
+
+            # Carregar dados_adicionais existentes ou criar novo dict
+            dados_adicionais = {}
+            if nota_fiscal.dados_adicionais:
+                try:
+                    dados_adicionais = (
+                        json.loads(nota_fiscal.dados_adicionais)
+                        if isinstance(nota_fiscal.dados_adicionais, str)
+                        else nota_fiscal.dados_adicionais
+                    )
+                except (json.JSONDecodeError, TypeError):
+                    dados_adicionais = {}
+
+            # Alternar status de cancelamento
+            estava_cancelada = nota_fiscal.status_processamento == "cancelada"
+            if estava_cancelada:
+                # Descancelar: volta para 'importado' ou para o status anterior, se existir em dados_adicionais
+                status_anterior = dados_adicionais.get("status_antes_cancelamento") or "importado"
+                nota_fiscal.status_processamento = status_anterior
+                dados_adicionais["cancelada_por"] = getattr(current_user, "nome", None) or getattr(
+                    current_user, "email", "Usuário desconhecido"
+                )
+                dados_adicionais["cancelada_revertida_em"] = datetime.now().isoformat()
+            else:
+                # Cancelar: guarda status atual e marca como cancelada
+                dados_adicionais["status_antes_cancelamento"] = nota_fiscal.status_processamento
+                nota_fiscal.status_processamento = "cancelada"
+                dados_adicionais["cancelada_por"] = getattr(current_user, "nome", None) or getattr(
+                    current_user, "email", "Usuário desconhecido"
+                )
+                dados_adicionais["cancelada_em"] = datetime.now().isoformat()
+
+            nota_fiscal.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
+            db.session.commit()
+
+            usuario_nome = getattr(current_user, "nome", None) or getattr(
+                current_user, "email", "Usuário desconhecido"
+            )
+            acao = "descancelada" if estava_cancelada else "cancelada"
+            logger.info(f"Nota fiscal {nota_fiscal.numero_nf} (ID: {nf_id}) {acao} manualmente por {usuario_nome}")
+
+            return jsonify(
+                {
+                    "success": True,
+                    "message": f"Nota fiscal {nota_fiscal.numero_nf} {acao} com sucesso",
+                    "cancelada": nota_fiscal.status_processamento == "cancelada",
+                }
+            )
+        except ValueError:
+            return jsonify({"success": False, "message": "ID da nota fiscal inválido"}), 400
+        except Exception as e:
+            logger.error(f"Erro ao alterar status de cancelamento: {str(e)}")
+            return jsonify(
+                {"success": False, "message": f"Erro ao alterar status de cancelamento: {str(e)}"}
+            ), 500
 
 
 def register_api(api_bp):

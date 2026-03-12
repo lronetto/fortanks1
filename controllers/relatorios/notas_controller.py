@@ -247,8 +247,10 @@ def index():
 @login_required_decorator
 def api_dados():
     """Endpoint AJAX para buscar dados do relatório"""
+    print(f'request.args: {request.args}')
     data_inicio = request.args.get('data_inicio', None)
     data_fim = request.args.get('data_fim', None)
+    
     # Tentar getlist primeiro (para múltiplos valores)
     centro_custo_ids = request.args.getlist('centro_custo', [])
     # Se getlist retornar vazio, tentar get (para um único valor)
@@ -277,8 +279,8 @@ def api_dados():
     
     print(f'centro_custo_ids: {centro_custo_ids}')
     json_request = {
-        'data_inicio': data_inicio,
-        'data_fim': data_fim,
+        'data_emissao_inicio': data_inicio,
+        'data_emissao_fim': data_fim,
         'centro_custo_ids': centro_custo_ids_int,
         'status_pagamento': status_pagamento,
         #'plano_conta_id': 44,
@@ -601,6 +603,89 @@ def exportar_excel():
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
         download_name='relatorio_notas.xlsx'
+    )
+
+@notas_bp.route('/exportar/faturamento-mes-excel', methods=['GET'])
+@login_required_decorator
+def exportar_faturamento_mes_excel():
+    """Exportar faturamento mensal em formato Excel (agrupado por mês/ano de emissão)"""
+    data_inicio = request.args.get('data_inicio')
+    data_fim = request.args.get('data_fim')
+    centro_custo_ids = request.args.getlist('centro_custo')
+    status_pagamento = request.args.get('status_pagamento')
+    tipo_nota = request.args.get('tipo_nota', None)
+
+    # Converter filtro tipo_nota para tipo_nfe (mesma regra usada em outros endpoints)
+    tipo_nfe = None
+    if tipo_nota == 'material':
+        tipo_nfe = '0'  # Tipo 0 ou 1 (NFE)
+    elif tipo_nota == 'servico':
+        tipo_nfe = '3'  # Tipo 3 (NFSe)
+
+    centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
+
+    json_request = {
+        'data_inicio': data_inicio,
+        'data_fim': data_fim,
+        'centro_custo_ids': centro_custo_ids_int,
+        'status_pagamento': status_pagamento,
+        'emitente': 'Matriz',
+        'tipo_operacao': 'venda',
+        'pagamento_5percent': True,
+        'tipo_nfe': tipo_nfe
+    }
+
+    query = api_get_dados_notas_fiscais(json_request)
+    resultados = query.all()
+
+    # Agrupar por ano/mês de emissão
+    faturamento_mensal = {}
+    for resultado in resultados:
+        nf = resultado[0]
+        # Ignorar notas canceladas
+        if nf.status_processamento == 'cancelada':
+            continue
+        if not nf.data_emissao:
+            continue
+        ano = nf.data_emissao.year
+        mes = nf.data_emissao.month
+        chave = (ano, mes)
+        if chave not in faturamento_mensal:
+            faturamento_mensal[chave] = {
+                'ANO': ano,
+                'MES': mes,
+                'MES/ANO': f'{mes:02d}/{ano}',
+                'QTD_NOTAS': 0,
+                'VALOR_TOTAL': 0.0
+            }
+        faturamento_mensal[chave]['QTD_NOTAS'] += 1
+        faturamento_mensal[chave]['VALOR_TOTAL'] += float(Decimal(nf.valor_total))
+
+    # Ordenar por ano e mês
+    linhas = sorted(
+        faturamento_mensal.values(),
+        key=lambda x: (x['ANO'], x['MES'])
+    )
+
+    df = pd.DataFrame(linhas) if linhas else pd.DataFrame(
+        columns=['ANO', 'MES', 'MES/ANO', 'QTD_NOTAS', 'VALOR_TOTAL']
+    )
+
+    # Formatar valor total como moeda em string para facilitar leitura no Excel
+    if not df.empty:
+        df['VALOR_TOTAL'] = df['VALOR_TOTAL'].apply(
+            lambda x: 'R$ ' + '{:,.2f}'.format(x).replace(',', 'X').replace('.', ',').replace('X', '.')
+        )
+
+    excel_buffer = io.BytesIO()
+    df.to_excel(excel_buffer, index=False, sheet_name='Faturamento Mensal')
+    excel_buffer.seek(0)
+
+    return send_file(
+        excel_buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='faturamento_mensal_notas.xlsx'
     )
 
 def _get_dataframe(dados_relatorio):
