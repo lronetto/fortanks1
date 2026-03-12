@@ -866,6 +866,11 @@
                                 <i class="fas fa-clipboard-list"></i> Avaliações
                             </a>
                         </li>
+                        <li class="{{ is_active('plr.efetivos_index') }}">
+                            <a href="{{ url_for('plr.efetivos_index') }}">
+                                <i class="fas fa-users"></i> Efetivos
+                            </a>
+                        </li>
                         <li class="{{ is_active('plr.relatorio_avaliacao') }}">
                             <a href="{{ url_for('plr.relatorio_avaliacao') }}">
                                 <i class="fas fa-chart-bar"></i> Relatório de Avaliação

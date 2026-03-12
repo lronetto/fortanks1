@@ -7,6 +7,7 @@
                 <input type="hidden" name="mapping" id="efetivoMappingJson" value="">
                 <input type="hidden" name="ano" id="efetivo_ano_hidden" value="">
                 <input type="hidden" name="mes" id="efetivo_mes_hidden" value="">
+                {% if redirect_after_import is defined and redirect_after_import %}<input type="hidden" name="next" value="{{ redirect_after_import }}">{% endif %}
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalImportarEfetivoLabel">Importar Efetivo (Excel)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -62,11 +63,14 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for campo_key, campo_label in campos_efetivo %}
+                                    {% for item in campos_efetivo %}
+                                    {% set campo_key = item[0] %}
+                                    {% set campo_label = item[1] %}
+                                    {% set padrao = item[2] if item|length >= 3 else '' %}
                                     <tr>
                                         <td><label for="efetivo_map_{{ campo_key }}" class="mb-0">{{ campo_label }}</label></td>
                                         <td>
-                                            <select class="form-select form-select-sm efetivo-map-select" id="efetivo_map_{{ campo_key }}" data-field="{{ campo_key }}" data-label="{{ campo_label }}">
+                                            <select class="form-select form-select-sm efetivo-map-select" id="efetivo_map_{{ campo_key }}" data-field="{{ campo_key }}" data-label="{{ campo_label }}"{% if padrao %} data-padrao="{{ padrao }}"{% endif %}>
                                                 <option value="">— Não importar</option>
                                                 <!-- Opções preenchidas via JS após Ler colunas -->
                                             </select>
@@ -144,7 +148,9 @@
                 }
                 var selects = form.querySelectorAll('.efetivo-map-select');
                 selects.forEach(function(sel) {
+                    var padrao = (sel.getAttribute('data-padrao') || '').trim();
                     var labelSistema = (sel.getAttribute('data-label') || '').trim();
+                    var padraoNorm = normalizar(padrao);
                     var labelNorm = normalizar(labelSistema);
                     sel.innerHTML = '<option value="">— Não importar</option>';
                     var selecionada = null;
@@ -153,7 +159,9 @@
                         opt.value = col;
                         opt.textContent = col;
                         sel.appendChild(opt);
-                        if (labelNorm && normalizar(col) === labelNorm) selecionada = col;
+                        var colNorm = normalizar(col);
+                        if (padraoNorm && colNorm === padraoNorm) selecionada = col;
+                        else if (!selecionada && labelNorm && colNorm === labelNorm) selecionada = col;
                     });
                     if (selecionada) sel.value = selecionada;
                 });
@@ -161,9 +169,26 @@
                 passo2.classList.remove('d-none');
                 btnSubmit.classList.remove('d-none');
                 btnVoltar.classList.remove('d-none');
-                var d = new Date();
-                document.getElementById('efetivo_ano').value = d.getFullYear();
-                if (!document.getElementById('efetivo_mes').value) document.getElementById('efetivo_mes').value = String(d.getMonth() + 1);
+                var anoEl = document.getElementById('efetivo_ano');
+                var mesEl = document.getElementById('efetivo_mes');
+                var nomeArquivo = (arquivoInput.files[0].name || '').replace(/\.(xlsx?|xls)$/i, '');
+                var matchMmYyyy = nomeArquivo.match(/(\d{1,2})-(\d{4})/);
+                if (matchMmYyyy) {
+                    var mesNum = parseInt(matchMmYyyy[1], 10);
+                    var anoNum = parseInt(matchMmYyyy[2], 10);
+                    if (mesNum >= 1 && mesNum <= 12 && anoNum >= 2000 && anoNum <= 2100) {
+                        anoEl.value = String(anoNum);
+                        mesEl.value = String(mesNum);
+                    } else {
+                        var d = new Date();
+                        anoEl.value = d.getFullYear();
+                        if (!mesEl.value) mesEl.value = String(d.getMonth() + 1);
+                    }
+                } else {
+                    var d = new Date();
+                    anoEl.value = d.getFullYear();
+                    if (!mesEl.value) mesEl.value = String(d.getMonth() + 1);
+                }
             } else {
                 previewErro.textContent = data.message || 'Não foi possível ler as colunas do arquivo.';
                 previewErro.classList.remove('d-none');

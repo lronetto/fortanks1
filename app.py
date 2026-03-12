@@ -27,7 +27,7 @@ from controllers.unidade_controller import unidade_bp
 from controllers.produto_composto_controller import produto_composto_bp
 from controllers.dados_analiticos_controller import dados_analiticos_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
-from controllers.plr_controller import plr_bp
+from controllers.plr import plr_bp
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
 from controllers.grupo_material_controller import grupo_material_bp
 from controllers.certificado_controller import certificado_bp

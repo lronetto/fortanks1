@@ -43,26 +43,44 @@
                     </div>
                 </div>
                 <p class="text-muted small">Funcionários ativos que não foram demitidos até o fim do mês selecionado. Filtre por departamento ou equipe (equipe considera apenas avaliações já cadastradas).</p>
+                <style>
+                    #tabelaAvaliacoesMes thead th {
+                        white-space: normal !important;
+                        word-wrap: break-word;
+                        word-break: break-word;
+                        line-height: 1.25;
+                        padding: 0.4em 0.35em;
+                        vertical-align: middle;
+                        font-size: 0.8rem;
+                    }
+                    #tabelaAvaliacoesMes thead th.th-colaborador { min-width: 120px; max-width: none; }
+                    #tabelaAvaliacoesMes thead th.th-secao { max-width: 95px; }
+                    #tabelaAvaliacoesMes tbody td.td-secao { max-width: 95px; overflow: hidden; text-overflow: ellipsis; }
+                    #tabelaAvaliacoesMes thead th.th-narrow { max-width: 55px; }
+                    #tabelaAvaliacoesMes thead th.th-medium { max-width: 70px; }
+                    #tabelaAvaliacoesMes thead th.th-data { max-width: 58px; }
+                    #tabelaAvaliacoesMes thead th.th-acoes { max-width: 52px; }
+                </style>
                 <div class="table-responsive">
                     <table class="table table-bordered table-sm" id="tabelaAvaliacoesMes">
                         <thead class="table-light">
                             <tr>
-                                <th class="text-center">#</th>
-                                <th>Colaborador</th>
-                                <th>Data Admissão</th>
-                                <th>Data Demissão</th>
-                                <th>Obra</th>
-                                <th>Equipe</th>
-                                <th>Assiduidade</th>
-                                <th>Zero Acidente</th>
-                                <th>Segurança/Limpeza/Organ.</th>
-                                <th>Prazo</th>
-                                <th>Total %</th>
-                                <th class="text-center">Ações</th>
+                                <th class="text-center th-narrow">#</th>
+                                <th class="th-colaborador">Colaborador</th>
+                                <th class="th-secao">Seção<br><small>(efetivo)</small></th>
+                                <th class="th-data">Data<br>Admissão</th>
+                                <th class="th-data">Data<br>Demissão</th>
+                                <th class="th-medium">Obra</th>
+                                <th class="th-medium">Equipe</th>
+                                <th class="th-narrow">Assid.</th>
+                                <th class="th-narrow">Zero<br>Acid.</th>
+                                <th class="th-narrow">Seg./<br>Limpeza</th>
+                                <th class="th-narrow">Prazo</th>
+                                <th class="th-narrow">Total %</th>
+                                <th class="text-center th-acoes">Ações</th>
                             </tr>
                         </thead>
                         <tbody id="tbodyAvaliacoesMes">
-                            <tr><td colspan="12" class="text-center text-muted">Selecione o mês-ano para carregar os dados.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -88,8 +106,7 @@
         { tipo: 'Assiduidade', peso: 0.30 }, { tipo: 'Zero Acidente', peso: 0.15 },
         { tipo: 'Segurança, Limpeza, Organização', peso: 0.25 }, { tipo: 'Prazo', peso: 0.30 }
     ];
-
-    function formatVal(v) { return v != null ? Number(v).toFixed(1) : '-'; }
+    window.avaliacoesDataRef = '';
 
     function buildAvaliacaoJson(assid, zero, seg, prazo) {
         var arr = [
@@ -110,101 +127,102 @@
         return sel;
     }
 
-    document.getElementById('btnCarregarAvaliacoesMes').addEventListener('click', function() {
-        var val = document.getElementById('avaliacao_mes_ano').value;
-        if (!val) return;
-        var parts = val.split('-');
-        var ano = parts[0];
-        var mes = parts[1];
-        var btn = this;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Carregando...';
-        var dep = document.getElementById('avaliacao_filtro_departamento');
-        var eq = document.getElementById('avaliacao_filtro_equipe');
-        var qs = '?ano=' + encodeURIComponent(ano) + '&mes=' + encodeURIComponent(mes);
-        if (dep && dep.value) qs += '&departamento_id=' + encodeURIComponent(dep.value);
-        if (eq && eq.value) qs += '&equipe=' + encodeURIComponent(eq.value);
-        fetch(urlPorMes + qs, { headers: { 'Accept': 'application/json' } })
-            .then(function(r) { return r.json(); })
-            .then(function(res) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Carregar';
-                var tbody = document.getElementById('tbodyAvaliacoesMes');
-                tbody.innerHTML = '';
-                if (res.error) {
-                    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-danger">' + res.error + '</td></tr>';
-                    return;
-                }
-                var dataRef = res.data_ref || (ano + '-' + mes + '-01');
-                var data = res.data || [];
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="12" class="text-center text-muted">Nenhum colaborador ativo neste período.</td></tr>';
-                    return;
-                }
-                data.forEach(function(row, index) {
-                    var tr = document.createElement('tr');
-                    var isEdicao = !!row.avaliacao_id;
-                    var obraCel = isEdicao ? obterSelectObra(row.centro_custo_id) : obterSelectObra(row.centro_custo_id);
-                    var equipeCel = '<input type="text" class="form-control form-control-sm input-equipe" placeholder="Equipe" value="' + (row.equipe_alocada || '') + '">';
-                    var assidCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-assid" placeholder="0-10" value="' + (row.assiduidade != null ? row.assiduidade : '') + '">';
-                    var zeroCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-zero" placeholder="0-10" value="' + (row.zero_acidente != null ? row.zero_acidente : '') + '">';
-                    var segCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-seg" placeholder="0-10" value="' + (row.seguranca != null ? row.seguranca : '') + '">';
-                    var prazoCel = '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-prazo" placeholder="0-10" value="' + (row.prazo != null ? row.prazo : '') + '">';
-                    var acoes = '';
-                    if (isEdicao) {
-                        acoes = '<form class="form-row-avaliacao-editar d-inline" method="POST" action="' + urlEditarBase.replace('/0', '/' + row.avaliacao_id) + '">' +
-                            '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
-                            '<input type="hidden" name="colaborador_id" value="' + row.colaborador_id + '">' +
-                            '<input type="hidden" name="data" value="' + dataRef + '">' +
-                            (row.modelo_plr_id ? '<input type="hidden" name="modelo_plr_id" value="' + row.modelo_plr_id + '">' : '') +
-                            '<input type="hidden" name="avaliacao" class="input-avaliacao-json">' +
-                            '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
-                    } else {
-                        acoes = '<form class="form-row-avaliacao d-inline" method="POST" action="' + urlNova + '">' +
-                            '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
-                            '<input type="hidden" name="colaborador_id" value="' + row.colaborador_id + '">' +
-                            '<input type="hidden" name="data" value="' + dataRef + '">' +
-                            '<input type="hidden" name="avaliacao" class="input-avaliacao-json">' +
-                            '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
-                    }
-                    tr.innerHTML =
-                        '<td class="text-center">' + (index + 1) + '</td>' +
-                        '<td>' + (row.nome || '') + '</td>' +
-                        '<td class="text-nowrap">' + (row.data_admissao || '-') + '</td>' +
-                        '<td class="text-nowrap">' + (row.data_demissao || '-') + '</td>' +
-                        '<td>' + obraCel + '</td>' +
-                        '<td>' + equipeCel + '</td>' +
-                        '<td>' + assidCel + '</td>' +
-                        '<td>' + zeroCel + '</td>' +
-                        '<td>' + segCel + '</td>' +
-                        '<td>' + prazoCel + '</td>' +
-                        '<td>' + (row.total_pct || '-') + '</td>' +
-                        '<td class="text-center">' + acoes + '</td>';
-                    tbody.appendChild(tr);
-                });
-            })
-            .catch(function() {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Carregar';
-                document.getElementById('tbodyAvaliacoesMes').innerHTML = '<tr><td colspan="12" class="text-center text-danger">Erro ao carregar.</td></tr>';
-            });
-    });
-
-    function carregarAvaliacoesMes() {
-        document.getElementById('btnCarregarAvaliacoesMes').click();
+    function buildAcoesCell(row) {
+        var dataRef = window.avaliacoesDataRef || '';
+        var isEdicao = !!row.avaliacao_id;
+        if (isEdicao) {
+            return '<form class="form-row-avaliacao-editar d-inline" method="POST" action="' + urlEditarBase.replace('/0', '/' + row.avaliacao_id) + '">' +
+                '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+                '<input type="hidden" name="colaborador_id" value="' + row.colaborador_id + '">' +
+                '<input type="hidden" name="data" value="' + dataRef + '">' +
+                (row.modelo_plr_id ? '<input type="hidden" name="modelo_plr_id" value="' + row.modelo_plr_id + '">' : '') +
+                '<input type="hidden" name="avaliacao" class="input-avaliacao-json">' +
+                '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
+        }
+        return '<form class="form-row-avaliacao d-inline" method="POST" action="' + urlNova + '">' +
+            '<input type="hidden" name="csrf_token" value="' + csrfToken + '">' +
+            '<input type="hidden" name="colaborador_id" value="' + row.colaborador_id + '">' +
+            '<input type="hidden" name="data" value="' + dataRef + '">' +
+            '<input type="hidden" name="avaliacao" class="input-avaliacao-json">' +
+            '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
     }
 
+    var dtAvaliacoesMes = null;
+
+    function initDataTableAvaliacoes() {
+        if (dtAvaliacoesMes) return dtAvaliacoesMes;
+        var $table = $('#tabelaAvaliacoesMes');
+        if (!$table.length || typeof $.fn.DataTable === 'undefined') return null;
+        dtAvaliacoesMes = $table.DataTable({
+            ajax: function(data, callback, settings) {
+                var val = document.getElementById('avaliacao_mes_ano').value;
+                if (!val) {
+                    window.avaliacoesDataRef = '';
+                    callback({ data: [] });
+                    return;
+                }
+                var p = val.split('-');
+                var qs = '?ano=' + encodeURIComponent(p[0]) + '&mes=' + encodeURIComponent(p[1]);
+                var dep = document.getElementById('avaliacao_filtro_departamento');
+                var eq = document.getElementById('avaliacao_filtro_equipe');
+                if (dep && dep.value) qs += '&departamento_id=' + encodeURIComponent(dep.value);
+                if (eq && eq.value) qs += '&equipe=' + encodeURIComponent(eq.value);
+                var btn = document.getElementById('btnCarregarAvaliacoesMes');
+                if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Carregando...'; }
+                fetch(urlPorMes + qs, { headers: { 'Accept': 'application/json' } })
+                    .then(function(r) { return r.json(); })
+                    .then(function(json) {
+                        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Carregar'; }
+                        window.avaliacoesDataRef = json.data_ref || '';
+                        callback({ data: json.error ? [] : (json.data || []) });
+                    })
+                    .catch(function() {
+                        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Carregar'; }
+                        window.avaliacoesDataRef = '';
+                        callback({ data: [] });
+                    });
+            },
+            columns: [
+                { data: null, orderable: false, className: 'text-center', render: function(d, type, row, meta) { return (meta.row + 1); } },
+                { data: 'nome', defaultContent: '' },
+                { data: 'secao', defaultContent: '-', className: 'td-secao' },
+                { data: 'data_admissao', defaultContent: '-', className: 'text-nowrap' },
+                { data: 'data_demissao', defaultContent: '-', className: 'text-nowrap' },
+                { data: 'centro_custo_id', orderable: false, render: function(v) { return obterSelectObra(v); } },
+                { data: 'equipe_alocada', orderable: false, render: function(v) { return '<input type="text" class="form-control form-control-sm input-equipe" placeholder="Equipe" value="' + (v || '').replace(/"/g, '&quot;') + '">'; } },
+                { data: 'assiduidade', orderable: false, render: function(v) { return '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-assid" placeholder="0-10" value="' + (v != null ? v : '') + '">'; } },
+                { data: 'zero_acidente', orderable: false, render: function(v) { return '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-zero" placeholder="0-10" value="' + (v != null ? v : '') + '">'; } },
+                { data: 'seguranca', orderable: false, render: function(v) { return '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-seg" placeholder="0-10" value="' + (v != null ? v : '') + '">'; } },
+                { data: 'prazo', orderable: false, render: function(v) { return '<input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm input-prazo" placeholder="0-10" value="' + (v != null ? v : '') + '">'; } },
+                { data: 'total_pct', defaultContent: '-' },
+                { data: null, orderable: false, className: 'text-center', render: function(d, type, row) { return buildAcoesCell(row); } }
+            ],
+            order: [[1, 'asc']],
+            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+            pageLength: 100,
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip',
+            emptyTable: 'Selecione o mês-ano e clique em Carregar.',
+            processing: true
+        });
+        return dtAvaliacoesMes;
+    }
+
+    document.getElementById('btnCarregarAvaliacoesMes').addEventListener('click', function() {
+        if (dtAvaliacoesMes) dtAvaliacoesMes.ajax.reload();
+        else initDataTableAvaliacoes();
+    });
+
     document.getElementById('avaliacao_mes_ano').addEventListener('change', function() {
-        if (this.value) carregarAvaliacoesMes();
+        if (this.value && dtAvaliacoesMes) dtAvaliacoesMes.ajax.reload();
     });
     var filtroDep = document.getElementById('avaliacao_filtro_departamento');
     var filtroEquipe = document.getElementById('avaliacao_filtro_equipe');
-    if (filtroDep) filtroDep.addEventListener('change', function() { if (document.getElementById('avaliacao_mes_ano').value) carregarAvaliacoesMes(); });
-    if (filtroEquipe) filtroEquipe.addEventListener('change', function() { if (document.getElementById('avaliacao_mes_ano').value) carregarAvaliacoesMes(); });
+    if (filtroDep) filtroDep.addEventListener('change', function() { if (document.getElementById('avaliacao_mes_ano').value && dtAvaliacoesMes) dtAvaliacoesMes.ajax.reload(); });
+    if (filtroEquipe) filtroEquipe.addEventListener('change', function() { if (document.getElementById('avaliacao_mes_ano').value && dtAvaliacoesMes) dtAvaliacoesMes.ajax.reload(); });
 
     document.getElementById('modalNovaAvaliacao').addEventListener('shown.bs.modal', function() {
-        var val = document.getElementById('avaliacao_mes_ano').value;
-        if (val) carregarAvaliacoesMes();
+        if (!dtAvaliacoesMes) initDataTableAvaliacoes();
+        else if (document.getElementById('avaliacao_mes_ano').value) dtAvaliacoesMes.ajax.reload();
     });
 
     document.getElementById('tbodyAvaliacoesMes').addEventListener('submit', function(e) {
@@ -212,6 +230,7 @@
         var isNova = form && form.classList && form.classList.contains('form-row-avaliacao');
         var isEditar = form && form.classList && form.classList.contains('form-row-avaliacao-editar');
         if (!isNova && !isEditar) return;
+        e.preventDefault();
         var row = form.closest('tr');
         if (!row) return;
         var centroSelect = row.querySelector('.centro-custo-select');
@@ -237,6 +256,36 @@
             he.type = 'hidden'; he.name = 'equipe_alocada'; he.value = equipe;
             form.appendChild(he);
         }
+
+        var btn = form.querySelector('.btn-salvar-av');
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
+        var formData = new FormData(form);
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r) {
+            if (r.headers.get('content-type') && r.headers.get('content-type').indexOf('application/json') !== -1) {
+                return r.json().then(function(data) { return { ok: r.ok, status: r.status, data: data }; });
+            }
+            return { ok: r.ok, status: r.status, data: null };
+        })
+        .then(function(result) {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i>'; }
+            if (result.ok && result.data && result.data.success) {
+                if (dtAvaliacoesMes) dtAvaliacoesMes.ajax.reload(null, false);
+                var ev = new CustomEvent('plr-avaliacao-salva');
+                document.dispatchEvent(ev);
+            } else {
+                var msg = (result.data && result.data.message) ? result.data.message : 'Erro ao salvar.';
+                alert(msg);
+            }
+        })
+        .catch(function() {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i>'; }
+            alert('Erro ao enviar. Tente novamente.');
+        });
     });
 })();
 </script>

@@ -1,0 +1,201 @@
+{% extends 'common/base.html' %}
+
+{% block title %}PLR - Efetivos - Sistema de Gestão{% endblock %}
+{% block mobile_title %}PLR - Efetivos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">PLR - Efetivos</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('plr.avaliacoes_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline-block ms-1">Avaliações</span>
+            </a>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalImportarEfetivo">
+                <i class="fas fa-file-import"></i>
+                <span class="d-none d-md-inline-block ms-1">Importar efetivo</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="formFiltroEfetivos" class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label for="filtro_ano" class="form-label">Ano</label>
+                    <select class="form-select" id="filtro_ano" name="ano">
+                        <option value="" selected>Todos</option>
+                        {% for a in anos %}
+                        <option value="{{ a }}">{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro_mes" class="form-label">Mês</label>
+                    <select class="form-select" id="filtro_mes" name="mes">
+                        <option value="" selected>Todos</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Lista de Efetivos</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabela-efetivos" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Período</th>
+                            <th>CPF</th>
+                            <th>Nome</th>
+                            <th>Função</th>
+                            <th>Salário</th>
+                            <th>Data Nasc.</th>
+                            <th>Data Demissão</th>
+                            <th>Seção</th>
+                            <th>Data Admissão</th>
+                            <th>Chapa</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# Dados carregados via AJAX pelo DataTables #}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'plr/modais/modal_importar_efetivo.html' %}
+{% include 'plr/modais/modal_editar_efetivo.html' %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var dadosUrl = '{{ url_for("plr.efetivos_dados") }}';
+    var dtInstance = null;
+
+    function getDataTableParams() {
+        var ano = document.getElementById('filtro_ano').value;
+        var mes = document.getElementById('filtro_mes').value;
+        var params = {};
+        if (ano) params.ano = ano;
+        if (mes) params.mes = mes;
+        return params;
+    }
+
+    function initDataTable() {
+        var $table = $('#tabela-efetivos');
+        if (!$table.length || typeof $.fn.DataTable === 'undefined') return;
+        if (dtInstance) {
+            dtInstance.destroy();
+            dtInstance = null;
+        }
+        var MESES_ABREV = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        dtInstance = $table.DataTable({
+            responsive: true,
+            order: [[0, 'desc'], [2, 'asc']],
+            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+            ajax: {
+                url: dadosUrl,
+                data: function(d) {
+                    var p = getDataTableParams();
+                    if (p.ano) d.ano = p.ano;
+                    if (p.mes) d.mes = p.mes;
+                },
+                dataSrc: 'data'
+            },
+            columns: [
+                {
+                    data: null,
+                    className: 'text-nowrap',
+                    render: function(data, type, row) {
+                        var ano = row.ano, mes = row.mes;
+                        if (type === 'sort' || type === 'type')
+                            return (ano || 0) * 100 + (mes || 0);
+                        var mesStr = (mes >= 1 && mes <= 12) ? MESES_ABREV[mes] : (mes || '-');
+                        return mesStr + '/' + (ano || '-');
+                    }
+                },
+                { data: 'cpf', className: 'text-nowrap' },
+                { data: 'nome' },
+                { data: 'funcao' },
+                { data: 'salario', className: 'text-end' },
+                { data: 'data_nascimento', className: 'text-nowrap' },
+                { data: 'data_demissao', className: 'text-nowrap' },
+                { data: 'secao' },
+                { data: 'data_admissao', className: 'text-nowrap' },
+                { data: 'chapa' },
+                { data: 'acoes', orderable: false, searchable: false, className: 'text-center' }
+            ],
+            pageLength: 25,
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+        });
+    }
+
+    document.getElementById('formFiltroEfetivos').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (dtInstance) dtInstance.ajax.reload();
+    });
+
+    var urlEditarBase = '{{ url_for("plr.efetivo_editar", id=0) }}';
+    var urlJsonBase = '{{ url_for("plr.efetivo_json", id=0) }}';
+    var modalEditar = document.getElementById('modalEditarEfetivo');
+    var formEditar = document.getElementById('formEditarEfetivo');
+
+    $(document).on('click', '.btn-editar-efetivo', function() {
+        var id = this.getAttribute('data-id');
+        if (!id) return;
+        formEditar.action = urlEditarBase.replace('/0/', '/' + id + '/');
+        var urlJson = urlJsonBase.replace('/0', '/' + id);
+        fetch(urlJson, { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                document.getElementById('efetivo_editar_ano').value = d.ano || '';
+                document.getElementById('efetivo_editar_mes').value = d.mes || '';
+                document.getElementById('efetivo_editar_cpf').value = d.cpf || '';
+                document.getElementById('efetivo_editar_nome').value = d.nome || '';
+                document.getElementById('efetivo_editar_funcao').value = d.funcao || '';
+                document.getElementById('efetivo_editar_salario').value = d.salario != null ? String(d.salario).replace('.', ',') : '';
+                document.getElementById('efetivo_editar_data_nascimento').value = d.data_nascimento || '';
+                document.getElementById('efetivo_editar_data_demissao').value = d.data_demissao || '';
+                document.getElementById('efetivo_editar_secao').value = d.secao || '';
+                document.getElementById('efetivo_editar_data_admissao').value = d.data_admissao || '';
+                document.getElementById('efetivo_editar_chapa').value = d.chapa || '';
+                new bootstrap.Modal(modalEditar).show();
+            })
+            .catch(function() { alert('Erro ao carregar os dados.'); });
+    });
+
+    initDataTable();
+});
+</script>
+{% endblock %}

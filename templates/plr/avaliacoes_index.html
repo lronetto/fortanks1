@@ -37,6 +37,48 @@
 
     <div class="card shadow mb-4">
         <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="formFiltroAvaliacoes" class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label for="filtro_ano" class="form-label">Ano</label>
+                    <select class="form-select" id="filtro_ano" name="ano">
+                        <option value="" selected>Todos</option>
+                        {% for a in anos %}
+                        <option value="{{ a }}">{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro_mes" class="form-label">Mês</label>
+                    <select class="form-select" id="filtro_mes" name="mes">
+                        <option value="" selected>Todos</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold">Lista de Avaliações</h6>
         </div>
         <div class="card-body">
@@ -81,14 +123,28 @@
 <script src="{{ url_for('static', filename='js/plr_avaliacao_modais.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    var dtInstance = null;
+    function getDataTableParams() {
+        var ano = document.getElementById('filtro_ano').value;
+        var mes = document.getElementById('filtro_mes').value;
+        var params = {};
+        if (ano) params.ano = ano;
+        if (mes) params.mes = mes;
+        return params;
+    }
     var $table = $('#tabela-avaliacoes');
     if ($table.length && typeof $.fn.DataTable !== 'undefined') {
-        $table.DataTable({
+        dtInstance = $table.DataTable({
             responsive: true,
             order: [[0, 'desc']],
-            language: { url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json' },
+            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
             ajax: {
                 url: '{{ url_for("plr.avaliacoes_dados") }}',
+                data: function(d) {
+                    var p = getDataTableParams();
+                    if (p.ano) d.ano = p.ano;
+                    if (p.mes) d.mes = p.mes;
+                },
                 dataSrc: 'data'
             },
             columns: [
@@ -105,6 +161,13 @@ document.addEventListener('DOMContentLoaded', function() {
             ]
         });
     }
+    document.getElementById('formFiltroAvaliacoes').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (dtInstance) dtInstance.ajax.reload();
+    });
+    document.addEventListener('plr-avaliacao-salva', function() {
+        if (dtInstance) dtInstance.ajax.reload(null, false);
+    });
 });
 </script>
 {% endblock %}

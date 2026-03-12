@@ -63,7 +63,7 @@
                            value="{{ '%04d-01-01'|format(ano_sugerido) }}" required>
                 </div>
                 <div class="col-md-3">
-                    <label for="periodo_fim" class="form-label">Data Fim</label>
+                    <label for="periodo_fim" class="form-label">Data de Fechamento</label>
                     <input type="date" class="form-control" id="periodo_fim" name="periodo_fim"
                            value="{{ '%04d-12-31'|format(ano_sugerido) }}" required>
                 </div>
@@ -219,6 +219,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    function formatDateBr(isoDate) {
+        if (!isoDate || isoDate.length < 10) return '';
+        var parts = isoDate.split('-');
+        return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : '';
+    }
+
     var form = document.getElementById('formPlanilhaPlr');
     if (form) {
         form.addEventListener('submit', function(e) {
@@ -227,7 +233,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var fimVal = document.getElementById('periodo_fim').value;
         var errEl = document.getElementById('planilhaErro');
         if (!inicioVal || !fimVal) {
-            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Informe as datas de início e fim.'; }
+            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Informe as datas de início e de fechamento.'; }
             return;
         }
         var partsInicio = inicioVal.split('-');
@@ -237,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var anoFim = parseInt(partsFim[0], 10);
         var mesFim = parseInt(partsFim[1], 10);
         if (anoInicio > anoFim || (anoInicio === anoFim && mesInicio > mesFim)) {
-            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'A data de início deve ser anterior ou igual à data de fim.'; }
+            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'A data de início deve ser anterior ou igual à data de fechamento.'; }
             return;
         }
         if (errEl) errEl.style.display = 'none';
@@ -261,7 +267,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (errEl) { errEl.textContent = res.error; errEl.style.display = 'block'; }
                     return;
                 }
-                initDataTable(res.data || [], res.meses_colunas || [], res.data_fechamento || '');
+                var dataFechamento = formatDateBr(fimVal) || res.data_fechamento || '';
+                initDataTable(res.data || [], res.meses_colunas || [], dataFechamento);
             })
             .catch(function(err) {
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }

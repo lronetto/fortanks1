@@ -1,0 +1,85 @@
+<!-- Modal Editar Efetivo PLR (dados carregados via AJAX) -->
+<div class="modal fade" id="modalEditarEfetivo" tabindex="-1" aria-labelledby="modalEditarEfetivoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" id="formEditarEfetivo" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarEfetivoLabel">Editar Efetivo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_ano" class="form-label">Ano *</label>
+                            <input type="number" class="form-control" id="efetivo_editar_ano" name="ano" min="2000" max="2100" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_mes" class="form-label">Mês *</label>
+                            <select class="form-select" id="efetivo_editar_mes" name="mes" required>
+                                <option value="1">Janeiro</option>
+                                <option value="2">Fevereiro</option>
+                                <option value="3">Março</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Maio</option>
+                                <option value="6">Junho</option>
+                                <option value="7">Julho</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Setembro</option>
+                                <option value="10">Outubro</option>
+                                <option value="11">Novembro</option>
+                                <option value="12">Dezembro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_cpf" class="form-label">CPF</label>
+                            <input type="text" class="form-control" id="efetivo_editar_cpf" name="cpf" placeholder="Apenas números">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="efetivo_editar_nome" class="form-label">Nome</label>
+                            <input type="text" class="form-control" id="efetivo_editar_nome" name="nome">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_funcao" class="form-label">Função</label>
+                            <input type="text" class="form-control" id="efetivo_editar_funcao" name="funcao">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_salario" class="form-label">Salário (R$)</label>
+                            <input type="text" class="form-control" id="efetivo_editar_salario" name="salario" placeholder="0,00">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_data_nascimento" class="form-label">Data Nascimento</label>
+                            <input type="date" class="form-control" id="efetivo_editar_data_nascimento" name="data_nascimento">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_data_admissao" class="form-label">Data Admissão</label>
+                            <input type="date" class="form-control" id="efetivo_editar_data_admissao" name="data_admissao">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_data_demissao" class="form-label">Data Demissão</label>
+                            <input type="date" class="form-control" id="efetivo_editar_data_demissao" name="data_demissao">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_secao" class="form-label">Seção</label>
+                            <input type="text" class="form-control" id="efetivo_editar_secao" name="secao">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="efetivo_editar_chapa" class="form-label">Chapa</label>
+                            <input type="text" class="form-control" id="efetivo_editar_chapa" name="chapa">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

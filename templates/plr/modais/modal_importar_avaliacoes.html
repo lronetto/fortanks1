@@ -9,11 +9,11 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted small">Use a planilha <strong>Acompanhamento Mensal - MOD</strong> no formato .xls. As abas devem ter o nome no formato <strong>MES ANO</strong> (ex.: AGO 2025, DEZ 2021).</p>
+                    <p class="text-muted small">Use a planilha <strong>Acompanhamento Mensal - MOD</strong> em formato .xls ou .xlsx. As abas devem ter o nome no formato <strong>MES ANO</strong> (ex.: AGO 2025, DEZ 2021).</p>
                     <div class="mb-3">
-                        <label for="arquivo_importacao_plr" class="form-label">Arquivo .xls *</label>
-                        <input type="file" id="arquivo_importacao_plr" name="arquivo" class="form-control" accept=".xls" required>
-                        <small class="form-text text-muted">Apenas arquivos Excel .xls são aceitos.</small>
+                        <label for="arquivo_importacao_plr" class="form-label">Arquivo Excel *</label>
+                        <input type="file" id="arquivo_importacao_plr" name="arquivo" class="form-control" accept=".xls,.xlsx" required>
+                        <small class="form-text text-muted">Arquivos Excel (.xls ou .xlsx) são aceitos.</small>
                     </div>
                     <div class="mb-3">
                         <label for="modelo_plr_id_importar" class="form-label">Modelo PLR (opcional)</label>
@@ -41,13 +41,13 @@
         var input = document.getElementById('arquivo_importacao_plr');
         if (!input.files || !input.files.length) {
             e.preventDefault();
-            alert('Selecione um arquivo .xls.');
+            alert('Selecione um arquivo Excel.');
             return;
         }
         var nome = (input.files[0].name || '').toLowerCase();
-        if (!nome.endsWith('.xls')) {
+        if (!nome.endsWith('.xls') && !nome.endsWith('.xlsx')) {
             e.preventDefault();
-            alert('Apenas arquivos Excel .xls são aceitos.');
+            alert('Apenas arquivos Excel (.xls ou .xlsx) são aceitos.');
             return;
         }
     });

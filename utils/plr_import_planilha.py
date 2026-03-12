@@ -68,7 +68,7 @@ def _parse_sheet_name(nome: str) -> Optional[Tuple[int, int]]:
 
 
 def _cell_value(book, sheet, row: int, col: int):
-    """Retorna o valor da célula (row/col 0-based)."""
+    """Retorna o valor da célula (row/col 0-based) para xlrd (.xls)."""
     if row >= sheet.nrows or col >= sheet.ncols:
         return None
     try:
@@ -80,6 +80,20 @@ def _cell_value(book, sheet, row: int, col: int):
         if cell.ctype == 0:  # empty
             return None
         return cell.value
+    except Exception:
+        return None
+
+
+def _cell_value_xlsx(sheet, row: int, col: int):
+    """Retorna o valor da célula (row/col 0-based) para openpyxl (.xlsx)."""
+    try:
+        cell = sheet.cell(row=row + 1, column=col + 1)
+        val = cell.value
+        if val is None:
+            return None
+        if isinstance(val, str):
+            return val.strip() or None
+        return val
     except Exception:
         return None
 
@@ -144,10 +158,14 @@ def ler_avaliacoes_planilha_xls(caminho: str) -> List[Dict[str, Any]]:
                 if obra is not None and isinstance(obra_raw, (int, float)):
                     obra = str(int(obra_raw)) if obra_raw == int(obra_raw) else str(obra_raw)
 
-                v1 = _valor_nota(_cell_value(book, sheet, row_idx, COL_ASSIDUIDADE))*100 if _valor_nota(_cell_value(book, sheet, row_idx, COL_ASSIDUIDADE)) is not None else None
-                v2 = _valor_nota(_cell_value(book, sheet, row_idx, COL_ZERO_ACIDENTE))*100 if _valor_nota(_cell_value(book, sheet, row_idx, COL_ZERO_ACIDENTE)) is not None else None
-                v3 = _valor_nota(_cell_value(book, sheet, row_idx, COL_SEGURANCA))*100 if _valor_nota(_cell_value(book, sheet, row_idx, COL_SEGURANCA)) is not None else None
-                v4 = _valor_nota(_cell_value(book, sheet, row_idx, COL_PRAZO))*100 if _valor_nota(_cell_value(book, sheet, row_idx, COL_PRAZO)) is not None else None
+                raw1 = _valor_nota(_cell_value(book, sheet, row_idx, COL_ASSIDUIDADE))
+                v1 = (int(raw1 * 100) / 30.0) * 10.0 if raw1 is not None else None
+                raw2 = _valor_nota(_cell_value(book, sheet, row_idx, COL_ZERO_ACIDENTE))
+                v2 = (int(raw2 * 100) / 15.0) * 10.0 if raw2 is not None else None
+                raw3 = _valor_nota(_cell_value(book, sheet, row_idx, COL_SEGURANCA))
+                v3 = (int(raw3 * 100) / 25.0) * 10.0 if raw3 is not None else None
+                raw4 = _valor_nota(_cell_value(book, sheet, row_idx, COL_PRAZO))
+                v4 = (int(raw4 * 100) / 30.0) * 10.0 if raw4 is not None else None
 
                 avaliacao = []
                 for (tipo, peso), val in zip(CRITERIOS, [v1, v2, v3, v4]):
@@ -166,3 +184,77 @@ def ler_avaliacoes_planilha_xls(caminho: str) -> List[Dict[str, Any]]:
                     'sheet_name': sheet.name,
                 })
     return resultado
+
+
+def _ler_avaliacoes_planilha_xlsx_impl(caminho: str) -> List[Dict[str, Any]]:
+    """Lê arquivo .xlsx com openpyxl. Mesma estrutura de retorno que ler_avaliacoes_planilha_xls."""
+    from openpyxl import load_workbook
+
+    resultado = []
+    wb = load_workbook(caminho, read_only=True, data_only=True)
+    try:
+        for sheet in wb.worksheets:
+            parsed = _parse_sheet_name(sheet.title)
+            if not parsed:
+                continue
+            mes, ano = parsed
+            data_avaliacao = date(ano, mes, 1)
+            max_row = sheet.max_row or 0
+            for row_idx in range(DATA_START_ROW, max_row):
+                cpf_raw = _cell_value_xlsx(sheet, row_idx, COL_CPF)
+                cpf = _normalizar_cpf(cpf_raw)
+                if not cpf:
+                    continue
+
+                equipe = _cell_value_xlsx(sheet, row_idx, COL_EQUIPE)
+                if equipe is not None and isinstance(equipe, float):
+                    equipe = str(int(equipe)) if equipe == int(equipe) else str(equipe)
+                obra_raw = _cell_value_xlsx(sheet, row_idx, COL_OBRA)
+                obra = None
+                if obra_raw is not None:
+                    obra = str(obra_raw).strip() or None
+                if obra is not None and isinstance(obra_raw, (int, float)):
+                    obra = str(int(obra_raw)) if obra_raw == int(obra_raw) else str(obra_raw)
+
+                raw1 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_ASSIDUIDADE))
+                v1 = (int(raw1 * 100) / 30.0) * 10.0 if raw1 is not None else None
+                raw2 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_ZERO_ACIDENTE))
+                v2 = (int(raw2 * 100) / 15.0) * 10.0 if raw2 is not None else None
+                raw3 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_SEGURANCA))
+                v3 = (int(raw3 * 100) / 25.0) * 10.0 if raw3 is not None else None
+                raw4 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_PRAZO))
+                v4 = (int(raw4 * 100) / 30.0) * 10.0 if raw4 is not None else None
+
+                avaliacao = []
+                for (tipo, peso), val in zip(CRITERIOS, [v1, v2, v3, v4]):
+                    if val is not None:
+                        avaliacao.append({'tipo': tipo, 'valor': val, 'peso': peso})
+
+                if not avaliacao:
+                    continue
+
+                resultado.append({
+                    'cpf': cpf,
+                    'equipe': equipe,
+                    'obra': obra,
+                    'data': data_avaliacao,
+                    'avaliacao': avaliacao,
+                    'sheet_name': sheet.title,
+                })
+    finally:
+        wb.close()
+    return resultado
+
+
+def ler_avaliacoes_planilha(caminho: str) -> List[Dict[str, Any]]:
+    """
+    Lê planilha de avaliações PLR (.xls ou .xlsx).
+    Detecta o formato pelo sufixo do arquivo e retorna a mesma estrutura
+    que ler_avaliacoes_planilha_xls.
+    """
+    path_lower = caminho.lower()
+    if path_lower.endswith('.xlsx'):
+        return _ler_avaliacoes_planilha_xlsx_impl(caminho)
+    if path_lower.endswith('.xls'):
+        return ler_avaliacoes_planilha_xls(caminho)
+    raise ValueError('Formato não suportado. Use .xls ou .xlsx.')

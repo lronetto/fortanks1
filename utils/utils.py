@@ -174,13 +174,28 @@ def format_float(value):
     """Formata float para string com duas casas decimais e separador de milhar"""
     return "{:,.2f}".format(value).replace('.', ',')
 
+def valor_para_str(valor, default=None):
+    """
+    Converte valor (ex.: lido do Excel) para string, sem .0 no final para inteiros.
+    Evita que 12345678901.0 vire "12345678901.0" ou que float inteiro vire string com .0.
+    """
+    if valor is None:
+        return default
+    if isinstance(valor, float) and pd.isna(valor):
+        return default
+    if isinstance(valor, float) and valor == int(valor):
+        return str(int(valor))
+    s = str(valor).strip()
+    return s if s else default
+
+
 def get_value_str(row, col_index, default=None):
     """Converte valor do Excel para string, retornando None se for NaN ou vazio"""
     try:
         valor = row.iloc[col_index]
         if pd.isna(valor) or valor == '' or valor is None:
             return default
-        return str(valor).strip().replace('.0', '')
+        return valor_para_str(valor, default)
     except (IndexError, KeyError):
         return default
 
