@@ -1,0 +1,196 @@
+{% extends 'common/base.html' %}
+
+{% block title %}PLR - Assiduidade - Sistema de Gestão{% endblock %}
+{% block mobile_title %}PLR - Assiduidade{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">PLR - Assiduidade (Faltas)</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('plr.relatorio_planilha') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-file-excel"></i> Relatório Planilha
+            </a>
+            <a href="{{ url_for('plr.avaliacoes_index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Avaliações
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaAssiduidade">
+                <i class="fas fa-plus"></i> Nova
+            </button>
+            <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalImportarAssiduidadePage">
+                <i class="fas fa-file-import"></i> Importar Excel
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="formFiltroAssiduidade" class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label for="filtro_ano" class="form-label">Ano</label>
+                    <select class="form-select" id="filtro_ano" name="ano">
+                        <option value="">Todos</option>
+                        {% for a in anos %}
+                        <option value="{{ a }}">{{ a }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro_mes" class="form-label">Mês</label>
+                    <select class="form-select" id="filtro_mes" name="mes">
+                        <option value="">Todos</option>
+                        <option value="1">Janeiro</option>
+                        <option value="2">Fevereiro</option>
+                        <option value="3">Março</option>
+                        <option value="4">Abril</option>
+                        <option value="5">Maio</option>
+                        <option value="6">Junho</option>
+                        <option value="7">Julho</option>
+                        <option value="8">Agosto</option>
+                        <option value="9">Setembro</option>
+                        <option value="10">Outubro</option>
+                        <option value="11">Novembro</option>
+                        <option value="12">Dezembro</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro_colaborador" class="form-label">Colaborador</label>
+                    <select class="form-select" id="filtro_colaborador" name="colaborador_id">
+                        <option value="">Todos</option>
+                        {% for c in colaboradores %}
+                        <option value="{{ c.id }}">{{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro_departamento" class="form-label">Departamento</label>
+                    <select class="form-select" id="filtro_departamento" name="departamento_id">
+                        <option value="">Todos</option>
+                        {% for d in departamentos %}
+                        <option value="{{ d.id }}">{{ d.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold">Registros de Assiduidade</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabela-assiduidade" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Colaborador</th>
+                            <th>CPF</th>
+                            <th>Mês/Ano</th>
+                            <th>Faltas</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer small text-muted">
+            Regra: 1 falta = -10%; 2 = -20%; 3 = -30%; 4 ou mais = perde 100% da assiduidade do mês.
+        </div>
+    </div>
+</div>
+
+{% include 'plr/modais/modal_nova_assiduidade.html' %}
+{% include 'plr/modais/modal_editar_assiduidade.html' %}
+{% include 'plr/modais/modal_importar_assiduidade_page.html' %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var dadosUrl = '{{ url_dados }}';
+    var dtInstance = null;
+
+    function getDataTableParams() {
+        return {
+            ano: document.getElementById('filtro_ano').value || undefined,
+            mes: document.getElementById('filtro_mes').value || undefined,
+            colaborador_id: document.getElementById('filtro_colaborador').value || undefined,
+            departamento_id: document.getElementById('filtro_departamento').value || undefined
+        };
+    }
+
+    function initDataTable() {
+        var $table = $('#tabela-assiduidade');
+        if (!$table.length || typeof $.fn.DataTable === 'undefined') return;
+        if (dtInstance) {
+            dtInstance.destroy();
+            dtInstance = null;
+        }
+        dtInstance = $table.DataTable({
+            responsive: true,
+            order: [[2, 'desc'], [0, 'asc']],
+            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+            ajax: {
+                url: dadosUrl,
+                data: function(d) {
+                    var p = getDataTableParams();
+                    if (p.ano) d.ano = p.ano;
+                    if (p.mes) d.mes = p.mes;
+                    if (p.colaborador_id) d.colaborador_id = p.colaborador_id;
+                    if (p.departamento_id) d.departamento_id = p.departamento_id;
+                },
+                dataSrc: 'data'
+            },
+            columns: [
+                { data: 'colaborador_nome' },
+                { data: 'colaborador_cpf', className: 'text-nowrap' },
+                { data: 'mes_ano', className: 'text-nowrap' },
+                { data: 'faltas', className: 'text-end' },
+                { data: 'acoes', orderable: false, searchable: false, className: 'text-center' }
+            ],
+            pageLength: 25,
+            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+        });
+    }
+
+    document.getElementById('formFiltroAssiduidade').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (dtInstance) dtInstance.ajax.reload();
+    });
+
+    var urlEditarBase = '{{ url_for("plr.assiduidade_editar", id=0) }}';
+    var urlJsonBase = '{{ url_for("plr.assiduidade_json", id=0) }}';
+    var modalEditar = document.getElementById('modalEditarAssiduidade');
+    var formEditar = document.getElementById('formEditarAssiduidade');
+
+    $(document).on('click', '.btn-editar-assiduidade', function() {
+        var id = this.getAttribute('data-id');
+        if (!id) return;
+        formEditar.action = urlEditarBase.replace('/0/', '/' + id + '/');
+        var urlJson = urlJsonBase.replace('/0', '/' + id);
+        fetch(urlJson, { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                document.getElementById('editar_assiduidade_faltas').value = d.faltas != null ? d.faltas : 0;
+                document.getElementById('editar_assiduidade_colab_nome').textContent = d.colaborador_nome || '-';
+                document.getElementById('editar_assiduidade_mes_ano').textContent = (d.mes ? (String(d.mes).padStart(2,'0') + '/') : '') + (d.ano || '');
+                new bootstrap.Modal(modalEditar).show();
+            })
+            .catch(function() { alert('Erro ao carregar os dados.'); });
+    });
+
+    initDataTable();
+});
+</script>
+{% endblock %}

@@ -1,6 +1,7 @@
 """
-Rotas de Modelos de PLR e Cargos/Salários (mês/ano + salário).
+Rotas de Modelos de PLR e Cargos/Salários (período mês/ano + salário).
 """
+from datetime import date
 import json
 
 from flask import request, redirect, url_for, flash, render_template
@@ -122,7 +123,7 @@ def modelo_excluir(id):
 @plr_bp.route('/cargos-salarios/')
 def cargos_salarios_index():
     """Lista vínculos cargo x mês/ano x salário."""
-    lista = CargoSalario.query.order_by(CargoSalario.ano.desc(), CargoSalario.mes.desc()).all()
+    lista = CargoSalario.query.order_by(CargoSalario.data.desc()).all()
     cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
     return render_template('plr/cargos_salarios_index.html', itens=lista, cargos=cargos)
 
@@ -140,16 +141,19 @@ def cargo_salario_novo():
             flash('Preencha cargo, mês, ano e salário.', 'danger')
             return render_template('plr/cargo_salario_form.html', reg=None, cargos=cargos)
         try:
-            mes, ano = int(mes), int(ano)
-            salario = float(salario.replace(',', '.'))
+            mes_i, ano_i = int(mes), int(ano)
+            if mes_i < 1 or mes_i > 12:
+                raise ValueError('Mês inválido')
+            salario_val = float(salario.replace(',', '.'))
         except (ValueError, TypeError):
             flash('Mês, ano ou salário inválidos.', 'danger')
             return render_template('plr/cargo_salario_form.html', reg=None, cargos=cargos)
-        existente = CargoSalario.query.filter_by(cargo_id=int(cargo_id), mes=mes, ano=ano).first()
+        data_ref = date(ano_i, mes_i, 1)
+        existente = CargoSalario.query.filter_by(cargo_id=int(cargo_id), data=data_ref).first()
         if existente:
             flash('Já existe registro para este cargo no mês/ano informado.', 'danger')
             return render_template('plr/cargo_salario_form.html', reg=None, cargos=cargos)
-        reg = CargoSalario(cargo_id=int(cargo_id), mes=mes, ano=ano, salario=salario)
+        reg = CargoSalario(cargo_id=int(cargo_id), data=data_ref, salario=salario_val)
         db.session.add(reg)
         db.session.commit()
         flash('Salário do cargo registrado.', 'success')
@@ -163,8 +167,14 @@ def cargo_salario_editar(id):
     reg = CargoSalario.query.get_or_404(id)
     cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
     if request.method == 'POST':
-        reg.mes = int(request.form.get('mes'))
-        reg.ano = int(request.form.get('ano'))
+        mes = request.form.get('mes')
+        ano = request.form.get('ano')
+        try:
+            mes_i, ano_i = int(mes), int(ano)
+            if 1 <= mes_i <= 12:
+                reg.data = date(ano_i, mes_i, 1)
+        except (ValueError, TypeError):
+            pass
         reg.salario = float(request.form.get('salario').replace(',', '.'))
         db.session.commit()
         flash('Salário do cargo atualizado.', 'success')

@@ -11,25 +11,9 @@
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label for="efetivo_editar_ano" class="form-label">Ano *</label>
-                            <input type="number" class="form-control" id="efetivo_editar_ano" name="ano" min="2000" max="2100" required>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label for="efetivo_editar_mes" class="form-label">Mês *</label>
-                            <select class="form-select" id="efetivo_editar_mes" name="mes" required>
-                                <option value="1">Janeiro</option>
-                                <option value="2">Fevereiro</option>
-                                <option value="3">Março</option>
-                                <option value="4">Abril</option>
-                                <option value="5">Maio</option>
-                                <option value="6">Junho</option>
-                                <option value="7">Julho</option>
-                                <option value="8">Agosto</option>
-                                <option value="9">Setembro</option>
-                                <option value="10">Outubro</option>
-                                <option value="11">Novembro</option>
-                                <option value="12">Dezembro</option>
-                            </select>
+                            <label for="efetivo_editar_data" class="form-label">Período (mês/ano) *</label>
+                            <input type="date" class="form-control" id="efetivo_editar_data" name="data" required>
+                            <small class="form-text text-muted">Use o 1º dia do mês de referência (ex: 01/03/2025).</small>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label for="efetivo_editar_cpf" class="form-label">CPF</label>

@@ -28,7 +28,7 @@ from .solicitacao import Solicitacoes, SolicitacoesItens
 from .cargo import Cargo
 from .cargo_salario import CargoSalario
 from .departamento import Departamento
-from .plr import ModeloPLR, PLRColaborador, EfetivoPLR, modelos_plr_departamentos
+from .plr import ModeloPLR, PLRColaborador, EfetivoPLR, PlrAssiduidade, modelos_plr_departamentos
 
 # Importamos material e solicitacao explicitamente
 from .material import Materiais, MateriaisGrupos
@@ -84,7 +84,7 @@ __all__ = [
     'Materiais', 'MateriaisGrupos', 
     'Solicitacoes', 'SolicitacoesItens', 
     'Cargo', 'CargoSalario', 'Departamento', 'Colaborador', 'DadosBancarios',
-    'ModeloPLR', 'PLRColaborador', 'EfetivoPLR', 'modelos_plr_departamentos', 
+    'ModeloPLR', 'PLRColaborador', 'EfetivoPLR', 'PlrAssiduidade', 'modelos_plr_departamentos', 
     'Estoque', 'EstoqueMovimentacoes', 'EstoqueInventarios', 'EstoqueInventariosItens',
     'EstoqueTerceiro',
     'NotaFiscal', 'NotaFiscalItem', 'Protocolo', 'Upload',

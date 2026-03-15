@@ -1,0 +1,32 @@
+<!-- Modal Editar Assiduidade -->
+<div class="modal fade" id="modalEditarAssiduidade" tabindex="-1" aria-labelledby="modalEditarAssiduidadeLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="#" id="formEditarAssiduidade">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarAssiduidadeLabel">Editar Assiduidade</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Colaborador</label>
+                        <p class="mb-0" id="editar_assiduidade_colab_nome">-</p>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Mês/Ano</label>
+                        <p class="mb-0" id="editar_assiduidade_mes_ano">-</p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editar_assiduidade_faltas" class="form-label">Faltas</label>
+                        <input type="number" class="form-control" id="editar_assiduidade_faltas" name="faltas" min="0" value="0">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

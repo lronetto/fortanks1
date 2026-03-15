@@ -1,0 +1,133 @@
+<!-- Modal Importar Assiduidade: template Excel + upload -->
+<div class="modal fade" id="modalImportarAssiduidade" tabindex="-1" aria-labelledby="modalImportarAssiduidadeLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarAssiduidadeLabel">
+                    <i class="fas fa-clipboard-check"></i> Importar Assiduidade (Faltas)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Use os <strong>filtros do relatório</strong> (período, modelo PLR, equipe, departamento) e clique em <strong>Gerar</strong> antes de baixar o template.
+                    O template terá uma linha por colaborador (CPF e Nome) e uma coluna por mês do período. Preencha a quantidade de <strong>faltas</strong> por mês.
+                </p>
+                <p class="small mb-3">
+                    <strong>Regra na avaliação:</strong> 1 falta = perde 10%; 2 faltas = 20%; 3 faltas = 30%; 4 ou mais = perde 100% da assiduidade do mês.
+                </p>
+                <div class="mb-4">
+                    <label class="form-label">1. Baixar template (com base nos filtros aplicados)</label>
+                    <div>
+                        <a href="#" id="btnBaixarTemplateAssiduidade" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-file-download"></i> Baixar template Excel
+                        </a>
+                    </div>
+                </div>
+                <form method="POST" action="{{ url_for('plr.relatorio_planilha_assiduidade_import') }}" enctype="multipart/form-data" id="formImportarAssiduidade">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="ano_inicio" id="assid_ano_inicio" value="">
+                    <input type="hidden" name="mes_inicio" id="assid_mes_inicio" value="">
+                    <input type="hidden" name="ano_fim" id="assid_ano_fim" value="">
+                    <input type="hidden" name="mes_fim" id="assid_mes_fim" value="">
+                    <input type="hidden" name="modelo_plr_id" id="assid_modelo_plr_id" value="">
+                    <input type="hidden" name="equipe" id="assid_equipe" value="">
+                    <div id="assid_departamentos_hidden"></div>
+                    <div class="mb-2">
+                        <label for="arquivo_assiduidade" class="form-label">2. Enviar planilha preenchida</label>
+                        <input type="file" id="arquivo_assiduidade" name="arquivo" class="form-control" accept=".xlsx,.xls" required>
+                        <small class="form-text text-muted">Mesmo período e estrutura do template.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-file-import"></i> Importar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var modal = document.getElementById('modalImportarAssiduidade');
+    var btnTemplate = document.getElementById('btnBaixarTemplateAssiduidade');
+    var formImport = document.getElementById('formImportarAssiduidade');
+    var baseUrl = '{{ url_for("plr.relatorio_planilha_assiduidade_template") }}';
+
+    function getFiltroAtual() {
+        var periodoInicio = document.getElementById('periodo_inicio');
+        var periodoFim = document.getElementById('periodo_fim');
+        var modelo = document.getElementById('modelo_plr_id');
+        var equipe = document.getElementById('equipe');
+        var depEl = document.getElementById('departamento_id');
+        if (!periodoInicio || !periodoFim) return null;
+        var partsI = (periodoInicio.value || '').split('-');
+        var partsF = (periodoFim.value || '').split('-');
+        if (partsI.length !== 3 || partsF.length !== 3) return null;
+        var departamentos = depEl ? Array.from(depEl.selectedOptions).map(function(o) { return o.value; }).filter(Boolean) : [];
+        return {
+            ano_inicio: partsI[0],
+            mes_inicio: parseInt(partsI[1], 10) || 1,
+            ano_fim: partsF[0],
+            mes_fim: parseInt(partsF[1], 10) || 12,
+            modelo_plr_id: modelo ? modelo.value : '',
+            equipe: equipe ? equipe.value : '',
+            departamentos: departamentos
+        };
+    }
+
+    function preencherHidden(filtro) {
+        if (!filtro) return;
+        document.getElementById('assid_ano_inicio').value = filtro.ano_inicio || '';
+        document.getElementById('assid_mes_inicio').value = String(filtro.mes_inicio || 1);
+        document.getElementById('assid_ano_fim').value = filtro.ano_fim || '';
+        document.getElementById('assid_mes_fim').value = String(filtro.mes_fim || 12);
+        document.getElementById('assid_modelo_plr_id').value = filtro.modelo_plr_id || '';
+        document.getElementById('assid_equipe').value = filtro.equipe || '';
+        var container = document.getElementById('assid_departamentos_hidden');
+        container.innerHTML = '';
+        (filtro.departamentos || []).forEach(function(id) {
+            var inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'departamento_id';
+            inp.value = id;
+            container.appendChild(inp);
+        });
+    }
+
+    function buildTemplateUrl(filtro) {
+        if (!filtro) return baseUrl;
+        var params = new URLSearchParams();
+        params.append('ano_inicio', filtro.ano_inicio);
+        params.append('mes_inicio', filtro.mes_inicio);
+        params.append('ano_fim', filtro.ano_fim);
+        params.append('mes_fim', filtro.mes_fim);
+        if (filtro.modelo_plr_id) params.append('modelo_plr_id', filtro.modelo_plr_id);
+        if (filtro.equipe) params.append('equipe', filtro.equipe);
+        (filtro.departamentos || []).forEach(function(id) { params.append('departamento_id', id); });
+        return baseUrl + '?' + params.toString();
+    }
+
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function() {
+            var filtro = getFiltroAtual();
+            preencherHidden(filtro);
+            btnTemplate.href = buildTemplateUrl(filtro);
+        });
+    }
+
+    btnTemplate.addEventListener('click', function(e) {
+        var filtro = getFiltroAtual();
+        if (!filtro || !filtro.ano_inicio || !filtro.ano_fim) {
+            e.preventDefault();
+            alert('Aplique os filtros do relatório (Data Início e Data de Fechamento) e clique em Gerar antes de baixar o template.');
+            return;
+        }
+        btnTemplate.href = buildTemplateUrl(filtro);
+    });
+
+    formImport.addEventListener('submit', function() {
+        var filtro = getFiltroAtual();
+        preencherHidden(filtro);
+    });
+})();
+</script>

@@ -5,11 +5,13 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime
+from datetime import datetime, date
 
 import pandas as pd
 from flask import request, redirect, url_for, flash, jsonify, render_template
 from flask_wtf.csrf import generate_csrf
+
+from sqlalchemy import func
 
 from models.database import db
 from models.plr import EfetivoPLR
@@ -148,6 +150,8 @@ def efetivo_importar():
         flash('Informe o ano e o mês de referência (mês de 1 a 12).', 'danger')
         return redirect(url_for('plr.avaliacoes_index'))
 
+    data_ref = date(ano, mes, 1)
+
     mapping_raw = request.form.get('mapping')
     mapping = {}
     if mapping_raw:
@@ -173,7 +177,7 @@ def efetivo_importar():
         for idx, row in df.iterrows():
             try:
                 get_val = lambda col: row.get(mapping[col], None) if mapping.get(col) else None
-                kwargs = {'ano': ano, 'mes': mes}
+                kwargs = {'data': data_ref}
                 for key in campos_keys:
                     raw = get_val(key)
                     kwargs[key] = _parse_valor_efetivo(key, raw)
@@ -181,7 +185,7 @@ def efetivo_importar():
                 cpf = kwargs.get('cpf')
                 existente = None
                 if cpf:
-                    existente = EfetivoPLR.query.filter_by(ano=ano, mes=mes, cpf=cpf).first()
+                    existente = EfetivoPLR.query.filter_by(data=data_ref, cpf=cpf).first()
 
                 if existente:
                     for key in campos_keys:
@@ -219,8 +223,8 @@ def efetivos_index():
     """Lista efetivos PLR com filtros de ano/mês e DataTables (AJAX)."""
     ano_atual = datetime.now().year
     mes_atual = datetime.now().month
-    anos_db = db.session.query(EfetivoPLR.ano).distinct().order_by(EfetivoPLR.ano.desc()).limit(15).all()
-    anos_set = {r[0] for r in anos_db}
+    anos_db = db.session.query(func.extract('year', EfetivoPLR.data).label('ano')).distinct().order_by(func.extract('year', EfetivoPLR.data).desc()).limit(15).all()
+    anos_set = {int(r[0]) for r in anos_db if r[0] is not None}
     for a in range(ano_atual, ano_atual - 5, -1):
         anos_set.add(a)
     anos = sorted(anos_set, reverse=True)
@@ -240,11 +244,12 @@ def efetivos_dados():
     ano = request.args.get('ano', type=int)
     mes = request.args.get('mes', type=int)
     query = EfetivoPLR.query
-    if ano is not None:
-        query = query.filter(EfetivoPLR.ano == ano)
-    if mes is not None and 1 <= mes <= 12:
-        query = query.filter(EfetivoPLR.mes == mes)
-    lista = query.order_by(EfetivoPLR.ano.desc(), EfetivoPLR.mes.desc(), EfetivoPLR.nome.asc()).all()
+    if ano is not None and mes is not None and 1 <= mes <= 12:
+        data_filtro = date(ano, mes, 1)
+        query = query.filter(EfetivoPLR.data == data_filtro)
+    elif ano is not None:
+        query = query.filter(func.extract('year', EfetivoPLR.data) == ano)
+    lista = query.order_by(EfetivoPLR.data.desc(), EfetivoPLR.nome.asc()).all()
     csrf = generate_csrf()
     data = []
     for reg in lista:
@@ -258,8 +263,9 @@ def efetivos_dados():
         )
         data.append({
             'id': reg.id,
-            'ano': reg.ano,
-            'mes': reg.mes,
+            'data': reg.data.isoformat() if reg.data else None,
+            'ano': reg.data.year if reg.data else None,
+            'mes': reg.data.month if reg.data else None,
             'cpf': reg.cpf or '-',
             'nome': reg.nome or '-',
             'funcao': reg.funcao or '-',
@@ -286,8 +292,23 @@ def efetivo_json(id):
 def efetivo_editar(id):
     """Atualiza um registro de efetivo PLR."""
     reg = EfetivoPLR.query.get_or_404(id)
-    reg.ano = request.form.get('ano', type=int) or reg.ano
-    reg.mes = request.form.get('mes', type=int) or reg.mes
+    data_val = request.form.get('data')
+    if data_val:
+        try:
+            from datetime import datetime as dt
+            parsed = dt.strptime(data_val.strip()[:10], '%Y-%m-%d').date()
+            reg.data = date(parsed.year, parsed.month, 1)
+        except (ValueError, TypeError):
+            pass
+    else:
+        ano_f, mes_f = request.form.get('ano'), request.form.get('mes')
+        if ano_f and mes_f:
+            try:
+                a, m = int(ano_f), int(mes_f)
+                if 1 <= m <= 12:
+                    reg.data = date(a, m, 1)
+            except (ValueError, TypeError):
+                pass
     reg.cpf = (request.form.get('cpf') or '').strip() or None
     reg.nome = (request.form.get('nome') or '').strip() or None
     reg.funcao = (request.form.get('funcao') or '').strip() or None

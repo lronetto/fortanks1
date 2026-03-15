@@ -120,14 +120,26 @@ def avaliacoes_index():
 
 @plr_bp.route('/avaliacoes/dados')
 def avaliacoes_dados():
-    """Retorna JSON com as avaliações para DataTables (AJAX). Params: ano, mes (opcionais)."""
+    """Retorna JSON com as avaliações para DataTables (AJAX). Params: ano, mes, departamento_id (opcionais)."""
     ano = request.args.get('ano', type=int)
     mes = request.args.get('mes', type=int)
+    # Suporta departamento_id[] (jQuery) ou múltiplos departamento_id
+    dept_ids = request.args.getlist('departamento_id[]') or request.args.getlist('departamento_id')
+    departamento_ids = []
+    for vid in dept_ids:
+        try:
+            departamento_ids.append(int(vid))
+        except (TypeError, ValueError):
+            continue
     query = PLRColaborador.query
     if ano is not None:
         query = query.filter(func.extract('year', PLRColaborador.data) == ano)
     if mes is not None and 1 <= mes <= 12:
         query = query.filter(func.extract('month', PLRColaborador.data) == mes)
+    if departamento_ids:
+        query = query.join(Colaborador, PLRColaborador.colaborador_id == Colaborador.id).filter(
+            Colaborador.departamento_id.in_(departamento_ids)
+        )
     lista = query.order_by(PLRColaborador.data.desc(), PLRColaborador.id.desc()).all()
     csrf = generate_csrf()
     data = []
@@ -183,7 +195,7 @@ def avaliacoes_por_mes():
     ultimo_dia = ultimo_dia.replace(day=1) - timedelta(days=1)
     primeiro_dia = date(ano, mes, 1)
     q = (
-        Colaborador.query.filter(Colaborador.data_admissao <= ultimo_dia)
+        Colaborador.query.filter(Colaborador.data_admissao <= date(ano,mes,15))
         .filter(
             (Colaborador.data_demissao.is_(None)) | (Colaborador.data_demissao > ultimo_dia)
         )
@@ -214,7 +226,7 @@ def avaliacoes_por_mes():
         for pav in prev_q:
             if pav.colaborador_id not in prev_por_colab:
                 prev_por_colab[pav.colaborador_id] = pav
-    efetivos_mes = EfetivoPLR.query.filter_by(ano=ano, mes=mes).all()
+    efetivos_mes = EfetivoPLR.query.filter_by(data=primeiro_dia).all()
     cpf_to_secao = {}
     for ef in efetivos_mes:
         if ef.cpf:

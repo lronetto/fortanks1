@@ -1,0 +1,57 @@
+<!-- Modal Nova Assiduidade -->
+<div class="modal fade" id="modalNovaAssiduidade" tabindex="-1" aria-labelledby="modalNovaAssiduidadeLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('plr.assiduidade_nova') }}" id="formNovaAssiduidade">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovaAssiduidadeLabel">Nova Assiduidade</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="nova_assiduidade_colaborador" class="form-label">Colaborador *</label>
+                        <select class="form-select" id="nova_assiduidade_colaborador" name="colaborador_id" required>
+                            <option value="">Selecione</option>
+                            {% for c in colaboradores %}
+                            <option value="{{ c.id }}">{{ c.nome }} {% if c.cpf %}({{ c.cpf }}){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <label for="nova_assiduidade_mes" class="form-label">Mês *</label>
+                            <select class="form-select" id="nova_assiduidade_mes" name="mes" required>
+                                <option value="">Mês</option>
+                                <option value="1">01 - Jan</option>
+                                <option value="2">02 - Fev</option>
+                                <option value="3">03 - Mar</option>
+                                <option value="4">04 - Abr</option>
+                                <option value="5">05 - Mai</option>
+                                <option value="6">06 - Jun</option>
+                                <option value="7">07 - Jul</option>
+                                <option value="8">08 - Ago</option>
+                                <option value="9">09 - Set</option>
+                                <option value="10">10 - Out</option>
+                                <option value="11">11 - Nov</option>
+                                <option value="12">12 - Dez</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label for="nova_assiduidade_ano" class="form-label">Ano *</label>
+                            <input type="number" class="form-control" id="nova_assiduidade_ano" name="ano" min="2000" max="2100" value="{{ ano_atual or 2025 }}" required>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label for="nova_assiduidade_faltas" class="form-label">Faltas</label>
+                        <input type="number" class="form-control" id="nova_assiduidade_faltas" name="faltas" min="0" value="0">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

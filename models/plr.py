@@ -143,14 +143,13 @@ class PLRColaborador(db.Model):
 
 class EfetivoPLR(db.Model):
     """
-    Efetivo (quadro de funcionários) importado por ano/mês para uso em PLR.
-    Campos: ano, mes, cpf, nome, funcao, salario, data_nascimento, data_demissao, secao, data_admissao, chapa.
+    Efetivo (quadro de funcionários) importado por período (data de referência = 1º dia do mês) para uso em PLR.
+    Campos: data (referência mês/ano), cpf, nome, funcao, salario, data_nascimento, data_demissao, secao, data_admissao, chapa.
     """
     __tablename__ = 'PlrEfetivos'
 
     id = db.Column(db.Integer, primary_key=True)
-    ano = db.Column(db.Integer, nullable=False)
-    mes = db.Column(db.Integer, nullable=False)  # 1-12
+    data = db.Column(db.Date, nullable=False)  # 1º dia do mês de referência (ex: 2025-03-01)
     cpf = db.Column(db.String(20), nullable=True)
     nome = db.Column(db.String(200), nullable=True)
     funcao = db.Column(db.String(150), nullable=True)
@@ -164,13 +163,12 @@ class EfetivoPLR(db.Model):
     atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
-        return f'<EfetivoPLR {self.ano}/{self.mes} {self.nome or self.cpf}>'
+        return f'<EfetivoPLR {self.data} {self.nome or self.cpf}>'
 
     def to_dict(self):
         return {
             'id': self.id,
-            'ano': self.ano,
-            'mes': self.mes,
+            'data': self.data.isoformat() if self.data else None,
             'cpf': self.cpf,
             'nome': self.nome,
             'funcao': self.funcao,
@@ -180,4 +178,38 @@ class EfetivoPLR(db.Model):
             'secao': self.secao,
             'data_admissao': self.data_admissao.isoformat() if self.data_admissao else None,
             'chapa': self.chapa,
+        }
+
+
+class PlrAssiduidade(db.Model):
+    """
+    Faltas por colaborador por mês para cálculo de assiduidade na PLR.
+    Regra: 1 falta = -10%, 2 = -20%, 3 = -30%, 4 ou mais = perde 100% do mês.
+    """
+    __tablename__ = 'PlrAssiduidade'
+
+    id = db.Column(db.Integer, primary_key=True)
+    colaborador_id = db.Column(db.Integer, db.ForeignKey('colaboradores.id', ondelete='CASCADE'), nullable=False)
+    mes = db.Column(db.Integer, nullable=False)  # 1-12
+    ano = db.Column(db.Integer, nullable=False)
+    faltas = db.Column(db.Integer, nullable=False, default=0)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    atualizado_em = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('colaborador_id', 'mes', 'ano', name='uq_plr_assiduidade_colab_mes_ano'),)
+
+    colaborador = db.relationship('Colaborador', backref=db.backref('plr_assiduidade', lazy='dynamic'))
+
+    def __repr__(self):
+        return f'<PlrAssiduidade colaborador_id={self.colaborador_id} {self.mes}/{self.ano} faltas={self.faltas}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'colaborador_id': self.colaborador_id,
+            'colaborador_nome': self.colaborador.nome if self.colaborador else None,
+            'colaborador_cpf': self.colaborador.cpf if self.colaborador else None,
+            'mes': self.mes,
+            'ano': self.ano,
+            'faltas': self.faltas,
         }

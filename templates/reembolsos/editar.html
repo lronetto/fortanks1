@@ -60,7 +60,7 @@
                         <div class="row mb-3">
                             <div class="col-md-2">
                                 <div class="form-group">
-                                    <label>Pagamento</label>
+                                    <label>Status</label>
                                     <select class="form-control" id="filtroPagamento">
                                         <option value="" >Todos</option>
                                         <option value="0" >Não Pago</option>
@@ -78,7 +78,7 @@
                         
                         <div class="row mb-3">
                             <div class="col-12">
-                                <button type="button" class="btn btn-primary" onclick="if(tableNotas) tableNotas.ajax.reload();">
+                                <button type="button" class="btn btn-primary" id="btnBuscarNotas" onclick="if(tableNotas) tableNotas.ajax.reload();">
                                     <i class="fas fa-search"></i> Buscar Notas
                                 </button>
                             </div>
@@ -100,7 +100,7 @@
                 <th>Fornecedor</th>
                 <th>Número</th>
                 <th>Valor</th>
-                <th>Pagamento</th>
+                <th>Status</th>
                 <th>Descrição</th>
                 <th>Centro de Custo</th>
             </tr>
@@ -132,7 +132,7 @@
                 <th>Fornecedor</th>
                 <th>Número</th>
                 <th>Valor</th>
-                <th>Pagamento</th>
+                <th>Status</th>
                 <th>Descrição</th>
                 <th>Centro de Custo</th>
                 <th width="100">Ações</th>
@@ -360,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 { 
                     data: null,
                     name: 'pagamento',
-                    title: 'Pagamento',
+                    title: 'Status',
                     orderable: false,
                     render: function(data, type, row) {
                         let badges = '';
@@ -375,6 +375,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                         if (row.upload && !row.upload_reembolso && !row.upload_protocolo) {
                             badges += '<span class="badge bg-info ms-1" title="Documentos de envio"><i class="fas fa-paperclip"></i></span>';
+                        }
+                        if (row.reembolso) {
+                            badges += '<span class="badge bg-warning ms-1" title="Esta nota já está em reembolso">Não pendente</span>';
+                        } else {
+                            badges += '<span class="badge bg-secondary ms-1" title="Nota ainda não está em reembolso">Pendente</span>';
                         }
                         return badges;
                     }
@@ -739,6 +744,29 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('filtroPagamento')?.addEventListener('change', function() {
         if (tableNotas) tableNotas.ajax.reload();
+    });
+    
+    // Tecla Enter nos filtros dispara o botão "Buscar Notas"
+    const btnBuscarNotas = document.getElementById('btnBuscarNotas');
+    const camposFiltroEnter = [
+        'filtroBusca',
+        'filtroDataInicial',
+        'filtroDataFinal',
+        'filtroValorMinimo',
+        'filtroValorMaximo',
+        'filtroPagamento'
+    ];
+    camposFiltroEnter.forEach(function(idCampo) {
+        const el = document.getElementById(idCampo);
+        if (el && btnBuscarNotas) {
+            el.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    btnBuscarNotas.focus();
+                    btnBuscarNotas.click();
+                }
+            });
+        }
     });
     
     // Carregar dados iniciais

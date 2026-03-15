@@ -11,7 +11,7 @@
                     <div class="col-md-3">
                         <label for="avaliacao_mes_ano" class="form-label">Mês - Ano</label>
                         <select class="form-select" id="avaliacao_mes_ano">
-                            {% for a in range(2025, 2026) %}
+                            {% for a in range(2025, 2027) %}
                             {% for m in range(1, 13) %}
                             <option value="{{ a }}-{{ '%02d'|format(m) }}">{{ '%02d'|format(m) }} - {{ a }}</option>
                             {% endfor %}

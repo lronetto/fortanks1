@@ -179,8 +179,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch(urlJson, { headers: { 'Accept': 'application/json' } })
             .then(function(r) { return r.json(); })
             .then(function(d) {
-                document.getElementById('efetivo_editar_ano').value = d.ano || '';
-                document.getElementById('efetivo_editar_mes').value = d.mes || '';
+                document.getElementById('efetivo_editar_data').value = d.data || '';
                 document.getElementById('efetivo_editar_cpf').value = d.cpf || '';
                 document.getElementById('efetivo_editar_nome').value = d.nome || '';
                 document.getElementById('efetivo_editar_funcao').value = d.funcao || '';

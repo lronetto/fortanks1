@@ -1534,7 +1534,7 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
 
 @peca.route('/processar-producao', methods=['POST'])
 @login_required
-def processar_producao(log=True,total=True,usinagem=True):
+def processar_producao(log=True,total=False,usinagem=True):
 
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia"""

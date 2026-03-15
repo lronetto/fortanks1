@@ -1,0 +1,102 @@
+<!-- Modal Importar Assiduidade (página Assiduidade): período + template + upload -->
+<div class="modal fade" id="modalImportarAssiduidadePage" tabindex="-1" aria-labelledby="modalImportarAssiduidadePageLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarAssiduidadePageLabel">
+                    <i class="fas fa-file-import"></i> Importar Assiduidade (Excel)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Informe o período e baixe o template (CPF, Nome e colunas por mês). Preencha as <strong>faltas</strong> e envie o arquivo.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label">Período (para o template)</label>
+                    <div class="row g-2">
+                        <div class="col-3">
+                            <input type="number" class="form-control form-control-sm" id="import_assid_ano_inicio" placeholder="Ano início" min="2000" max="2100">
+                        </div>
+                        <div class="col-2">
+                            <input type="number" class="form-control form-control-sm" id="import_assid_mes_inicio" placeholder="Mês" min="1" max="12">
+                        </div>
+                        <div class="col-1 text-center align-self-center">a</div>
+                        <div class="col-3">
+                            <input type="number" class="form-control form-control-sm" id="import_assid_ano_fim" placeholder="Ano fim" min="2000" max="2100">
+                        </div>
+                        <div class="col-2">
+                            <input type="number" class="form-control form-control-sm" id="import_assid_mes_fim" placeholder="Mês" min="1" max="12">
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <a href="#" id="btnBaixarTemplateAssiduidadePage" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-file-download"></i> Baixar template Excel
+                    </a>
+                </div>
+                <form method="POST" action="{{ url_import }}" enctype="multipart/form-data" id="formImportarAssiduidadePage">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="next" value="{{ url_next }}">
+                    <input type="hidden" name="ano_inicio" id="import_page_ano_inicio" value="">
+                    <input type="hidden" name="mes_inicio" id="import_page_mes_inicio" value="">
+                    <input type="hidden" name="ano_fim" id="import_page_ano_fim" value="">
+                    <input type="hidden" name="mes_fim" id="import_page_mes_fim" value="">
+                    <label for="arquivo_assiduidade_page" class="form-label">Arquivo Excel preenchido</label>
+                    <input type="file" id="arquivo_assiduidade_page" name="arquivo" class="form-control mb-2" accept=".xlsx,.xls" required>
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-file-import"></i> Importar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var baseUrl = '{{ url_template }}';
+    var btnTemplate = document.getElementById('btnBaixarTemplateAssiduidadePage');
+    var formImport = document.getElementById('formImportarAssiduidadePage');
+
+    function getPeriodo() {
+        var anoI = document.getElementById('import_assid_ano_inicio').value;
+        var mesI = document.getElementById('import_assid_mes_inicio').value;
+        var anoF = document.getElementById('import_assid_ano_fim').value;
+        var mesF = document.getElementById('import_assid_mes_fim').value;
+        return { ano_inicio: anoI, mes_inicio: mesI || '1', ano_fim: anoF, mes_fim: mesF || '12' };
+    }
+
+    function buildTemplateUrl() {
+        var p = getPeriodo();
+        if (!p.ano_inicio || !p.ano_fim) return baseUrl;
+        var params = new URLSearchParams();
+        params.append('ano_inicio', p.ano_inicio);
+        params.append('mes_inicio', p.mes_inicio);
+        params.append('ano_fim', p.ano_fim);
+        params.append('mes_fim', p.mes_fim);
+        return baseUrl + '?' + params.toString();
+    }
+
+    if (btnTemplate) {
+        btnTemplate.addEventListener('click', function(e) {
+            var p = getPeriodo();
+            if (!p.ano_inicio || !p.ano_fim) {
+                e.preventDefault();
+                alert('Informe o período (ano início, ano fim e meses) antes de baixar o template.');
+                return;
+            }
+            btnTemplate.href = buildTemplateUrl();
+        });
+    }
+
+    if (formImport) {
+        formImport.addEventListener('submit', function() {
+            var p = getPeriodo();
+            document.getElementById('import_page_ano_inicio').value = p.ano_inicio || '';
+            document.getElementById('import_page_mes_inicio').value = p.mes_inicio || '1';
+            document.getElementById('import_page_ano_fim').value = p.ano_fim || '';
+            document.getElementById('import_page_mes_fim').value = p.mes_fim || '12';
+        });
+    }
+})();
+</script>

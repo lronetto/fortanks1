@@ -57,12 +57,12 @@
         <div class="card-body">
             <form id="formPlanilhaPlr" class="row g-3 align-items-end">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="periodo_inicio" class="form-label">Data Início</label>
                     <input type="date" class="form-control" id="periodo_inicio" name="periodo_inicio"
                            value="{{ '%04d-01-01'|format(ano_sugerido) }}" required>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label for="periodo_fim" class="form-label">Data de Fechamento</label>
                     <input type="date" class="form-control" id="periodo_fim" name="periodo_fim"
                            value="{{ '%04d-12-31'|format(ano_sugerido) }}" required>
@@ -85,9 +85,21 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2 d-flex align-items-end">
-                    <button type="submit" class="btn btn-primary w-100" id="btnGerarPlanilha">
+                <div class="col-md-2">
+                    <label for="departamento_id" class="form-label">Departamento</label>
+                    <select class="form-select" id="departamento_id" name="departamento_id" multiple size="1" title="Segure Ctrl para selecionar vários">
+                        {% for d in departamentos %}
+                        <option value="{{ d.id }}">{{ d.nome }}</option>
+                        {% endfor %}
+                    </select>
+                    <small class="text-muted">Ctrl+clique para múltiplos</small>
+                </div>
+                <div class="col-md-2 d-flex align-items-end gap-1">
+                    <button type="submit" class="btn btn-primary" id="btnGerarPlanilha">
                         <i class="fas fa-search"></i> Gerar
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalImportarAssiduidade" title="Template Excel: CPF, Nome e faltas por mês">
+                        <i class="fas fa-clipboard-check"></i> Assiduidade
                     </button>
                 </div>
             </form>
@@ -95,9 +107,21 @@
     </div>
 
     <div class="card shadow mb-4" id="cardPlanilhaResultado" style="display: none;">
-        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold">Planilha de Cálculo PLR</h6>
-            <span class="text-muted small" id="dataFechamentoLabel"></span>
+        <div class="card-header py-3">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+                <div class="mb-2 mb-md-0">
+                    <h6 class="m-0 font-weight-bold">Planilha de Cálculo PLR</h6>
+                    <span class="text-muted small" id="dataFechamentoLabel"></span>
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-success btn-sm" id="btnExportarExcel" disabled>
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
+                    <button type="button" class="btn btn-outline-success btn-sm" id="btnExportarExcelFormulas" disabled title="Mesma planilha com SOMA, P, VPO e Valor total em fórmulas">
+                        <i class="fas fa-calculator"></i> Excel (fórmulas)
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="planilha-scroll-wrapper">
@@ -120,6 +144,8 @@
         <i class="fas fa-info-circle"></i> Use os filtros acima e clique em <strong>Gerar</strong> para carregar os dados.
     </div>
     <div id="planilhaErro" class="alert alert-danger mb-4" style="display: none;" role="alert"></div>
+
+    {% include 'plr/modais/modal_importar_assiduidade.html' %}
 </div>
 {% endblock %}
 
@@ -132,7 +158,10 @@
 document.addEventListener('DOMContentLoaded', function() {
     var MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
     var dadosUrl = '{{ url_for("plr.relatorio_planilha_dados") }}';
+    var excelUrl = '{{ url_for("plr.relatorio_planilha_excel") }}';
+    var excelFormulasUrl = '{{ url_for("plr.relatorio_planilha_excel_formulas") }}';
     var dtInstance = null;
+    var ultimoFiltro = null;
 
     function initDataTable(data, mesesColunas, dataFechamento) {
         var card = document.getElementById('cardPlanilhaResultado');
@@ -142,12 +171,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (msg) msg.style.display = 'none';
         if (labelFech) labelFech.textContent = dataFechamento ? ('Data de fechamento: ' + dataFechamento) : '';
         buildThead(mesesColunas);
-        if (dtInstance) {
-            dtInstance.destroy();
-            dtInstance = null;
-        }
+        var btnExcel = document.getElementById('btnExportarExcel');
+        var btnExcelFormulas = document.getElementById('btnExportarExcelFormulas');
+        if (btnExcel && ultimoFiltro) { btnExcel.disabled = false; }
+        if (btnExcelFormulas && ultimoFiltro) { btnExcelFormulas.disabled = false; }
         var $table = $('#tabela-planilha-plr');
         if ($table.length && typeof $.fn.DataTable !== 'undefined') {
+            if ($.fn.DataTable.isDataTable($table)) {
+                $table.DataTable().destroy();
+            }
+            dtInstance = null;
             dtInstance = $table.DataTable({
                 data: data,
                 columns: buildColumns(mesesColunas),
@@ -251,17 +284,37 @@ document.addEventListener('DOMContentLoaded', function() {
         if (msgEl) msgEl.style.display = 'none';
         var btn = document.getElementById('btnGerarPlanilha');
         if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Carregando...'; }
+        var btnExcel = document.getElementById('btnExportarExcel');
+        var btnExcelFormulas = document.getElementById('btnExportarExcelFormulas');
+        if (btnExcel) { btnExcel.disabled = true; }
+        if (btnExcelFormulas) { btnExcelFormulas.disabled = true; }
 
         var modeloVal = document.getElementById('modelo_plr_id').value;
         var equipeVal = document.getElementById('equipe').value;
+        var depEl = document.getElementById('departamento_id');
+        var departamentosVal = depEl ? Array.from(depEl.selectedOptions).map(function(o) { return o.value; }).filter(Boolean) : [];
         var url = dadosUrl + '?ano_inicio=' + anoInicio + '&mes_inicio=' + mesInicio + '&ano_fim=' + anoFim + '&mes_fim=' + mesFim;
         if (modeloVal) url += '&modelo_plr_id=' + encodeURIComponent(modeloVal);
         if (equipeVal) url += '&equipe=' + encodeURIComponent(equipeVal);
+        departamentosVal.forEach(function(id) { url += '&departamento_id=' + encodeURIComponent(id); });
+        ultimoFiltro = {
+            ano_inicio: anoInicio,
+            mes_inicio: mesInicio,
+            ano_fim: anoFim,
+            mes_fim: mesFim,
+            modelo_plr_id: modeloVal || '',
+            equipe: equipeVal || '',
+            departamentos: departamentosVal
+        };
 
         fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
             .then(function(res) { return res.json(); })
             .then(function(res) {
                 if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }
+                if (btnExcel && ultimoFiltro) { btnExcel.disabled = false; }
+                if (document.getElementById('btnExportarExcelFormulas') && ultimoFiltro) {
+                    document.getElementById('btnExportarExcelFormulas').disabled = false;
+                }
                 if (res.error) {
                     errEl = document.getElementById('planilhaErro');
                     if (errEl) { errEl.textContent = res.error; errEl.style.display = 'block'; }
@@ -275,6 +328,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 errEl = document.getElementById('planilhaErro');
                 if (errEl) { errEl.textContent = 'Erro ao carregar os dados. Tente novamente.'; errEl.style.display = 'block'; }
             });
+        });
+    }
+
+    var btnExcel = document.getElementById('btnExportarExcel');
+    if (btnExcel) {
+        btnExcel.addEventListener('click', function() {
+            if (!ultimoFiltro) {
+                return;
+            }
+            var params = new URLSearchParams();
+            params.append('ano_inicio', ultimoFiltro.ano_inicio);
+            params.append('mes_inicio', ultimoFiltro.mes_inicio);
+            params.append('ano_fim', ultimoFiltro.ano_fim);
+            params.append('mes_fim', ultimoFiltro.mes_fim);
+            if (ultimoFiltro.modelo_plr_id) {
+                params.append('modelo_plr_id', ultimoFiltro.modelo_plr_id);
+            }
+            if (ultimoFiltro.equipe) {
+                params.append('equipe', ultimoFiltro.equipe);
+            }
+            (ultimoFiltro.departamentos || []).forEach(function(id) {
+                params.append('departamento_id', id);
+            });
+            window.location = excelUrl + '?' + params.toString();
+        });
+    }
+    var btnExcelFormulas = document.getElementById('btnExportarExcelFormulas');
+    if (btnExcelFormulas) {
+        btnExcelFormulas.addEventListener('click', function() {
+            if (!ultimoFiltro) return;
+            var params = new URLSearchParams();
+            params.append('ano_inicio', ultimoFiltro.ano_inicio);
+            params.append('mes_inicio', ultimoFiltro.mes_inicio);
+            params.append('ano_fim', ultimoFiltro.ano_fim);
+            params.append('mes_fim', ultimoFiltro.mes_fim);
+            if (ultimoFiltro.modelo_plr_id) params.append('modelo_plr_id', ultimoFiltro.modelo_plr_id);
+            if (ultimoFiltro.equipe) params.append('equipe', ultimoFiltro.equipe);
+            (ultimoFiltro.departamentos || []).forEach(function(id) { params.append('departamento_id', id); });
+            window.location = excelFormulasUrl + '?' + params.toString();
         });
     }
 
