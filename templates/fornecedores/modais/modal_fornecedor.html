@@ -1,0 +1,206 @@
+<div class="modal fade" id="modalFornecedor" tabindex="-1" aria-labelledby="modalFornecedorLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formFornecedor" method="POST" action="{{ url_for('fornecedor.salvar') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" id="fornecedor_id">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalFornecedorLabel">Fornecedor</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label for="fornecedor_nome" class="form-label">Nome*</label>
+                            <input type="text" class="form-control" id="fornecedor_nome" name="nome" required maxlength="150">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="fornecedor_cnpj" class="form-label">CNPJ*</label>
+                            <input type="text" class="form-control" id="fornecedor_cnpj" name="cnpj" required maxlength="20">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="fornecedor_estado" class="form-label">Estado</label>
+                            <select class="form-select" id="fornecedor_estado" name="estado">
+                                <option value="">Selecione</option>
+                                <option value="AC">AC</option>
+                                <option value="AL">AL</option>
+                                <option value="AP">AP</option>
+                                <option value="AM">AM</option>
+                                <option value="BA">BA</option>
+                                <option value="CE">CE</option>
+                                <option value="DF">DF</option>
+                                <option value="ES">ES</option>
+                                <option value="GO">GO</option>
+                                <option value="MA">MA</option>
+                                <option value="MT">MT</option>
+                                <option value="MS">MS</option>
+                                <option value="MG">MG</option>
+                                <option value="PA">PA</option>
+                                <option value="PB">PB</option>
+                                <option value="PR">PR</option>
+                                <option value="PE">PE</option>
+                                <option value="PI">PI</option>
+                                <option value="RJ">RJ</option>
+                                <option value="RN">RN</option>
+                                <option value="RS">RS</option>
+                                <option value="RO">RO</option>
+                                <option value="RR">RR</option>
+                                <option value="SC">SC</option>
+                                <option value="SP">SP</option>
+                                <option value="SE">SE</option>
+                                <option value="TO">TO</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-center">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="fornecedor_ativo" name="ativo" checked>
+                                <label class="form-check-label" for="fornecedor_ativo">Ativo</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="fornecedor_contatos" class="form-label">Contatos (JSON)</label>
+                            <textarea class="form-control" id="fornecedor_contatos" name="contatos" rows="3"
+                                placeholder='Ex: [{"nome": "João", "telefone": "11 99999-9999"}]'></textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="fornecedor_enderecos" class="form-label">Endereços (JSON)</label>
+                            <textarea class="form-control" id="fornecedor_enderecos" name="enderecos" rows="3"
+                                placeholder='Ex: [{"logradouro": "Rua A", "cidade": "SP"}]'></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalFornecedorEl = document.getElementById('modalFornecedor');
+        const modalFornecedor = new bootstrap.Modal(modalFornecedorEl);
+        const formFornecedor = document.getElementById('formFornecedor');
+        const csrfToken = "{{ csrf_token() }}";
+
+        // Novo fornecedor
+        modalFornecedorEl.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            if (!button) {
+                return;
+            }
+
+            const fornecedorId = button.getAttribute('data-id');
+
+            if (!fornecedorId) {
+                formFornecedor.reset();
+                document.getElementById('fornecedor_id').value = '';
+                return;
+            }
+
+            // Carregar dados para edição via AJAX
+            fetch(`{{ url_for('fornecedor.get') }}?id=${fornecedorId}`)
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('fornecedor_id').value = data.id;
+                    document.getElementById('fornecedor_nome').value = data.nome || '';
+                    document.getElementById('fornecedor_cnpj').value = data.cnpj || '';
+                    document.getElementById('fornecedor_estado').value = data.estado || '';
+                    document.getElementById('fornecedor_ativo').checked = !!data.ativo;
+                    document.getElementById('fornecedor_contatos').value = data.contatos || '';
+                    document.getElementById('fornecedor_enderecos').value = data.enderecos || '';
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro ao carregar fornecedor.');
+                    modalFornecedor.hide();
+                });
+        });
+
+        // Enviar o formulário via AJAX (evita navegar para o JSON)
+        formFornecedor.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(formFornecedor);
+
+            fetch(formFornecedor.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+                .then(r => r.json())
+                .then(resp => {
+                    if (resp && resp.success) {
+                        modalFornecedor.hide();
+                        if (typeof $.fn.DataTable !== 'undefined') {
+                            $('#tabelaFornecedores').DataTable().ajax.reload(null, false);
+                        }
+                    } else {
+                        alert((resp && resp.message) ? resp.message : 'Erro ao salvar fornecedor.');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro ao salvar fornecedor.');
+                });
+        });
+
+        // Vincular botões de edição/exclusão
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.btn-editar-fornecedor')) {
+                const id = e.target.closest('.btn-editar-fornecedor').dataset.id;
+                const btn = e.target.closest('.btn-editar-fornecedor');
+                btn.setAttribute('data-bs-target', '#modalFornecedor');
+                btn.setAttribute('data-bs-toggle', 'modal');
+                btn.setAttribute('data-id', id);
+                modalFornecedor.show();
+            }
+
+            if (e.target.closest('.btn-excluir-fornecedor')) {
+                const btn = e.target.closest('.btn-excluir-fornecedor');
+                const id = btn.dataset.id;
+                const nome = btn.dataset.nome;
+                if (confirm(`Confirma a exclusão do fornecedor "${nome}"?`)) {
+                    fetch(`{{ url_for('fornecedor.excluir') }}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': "{{ csrf_token() }}"
+                        },
+                        body: JSON.stringify({
+                            id: id,
+                            csrf_token: "{{ csrf_token() }}"
+                        })
+                    })
+                        .then(r => r.json())
+                        .then(resp => {
+                            if (resp.success) {
+                                $('#tabelaFornecedores').DataTable().ajax.reload(null, false);
+                            } else {
+                                alert(resp.message || 'Erro ao excluir fornecedor.');
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            alert('Erro ao excluir fornecedor.');
+                        });
+                }
+            }
+        });
+    });
+</script>
+

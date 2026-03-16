@@ -21,9 +21,30 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label for="pedido_compra_liberacao" class="form-label">Pedido de Compra</label>
-                        <input type="text" name="pedido_compra" id="pedido_compra_liberacao" class="form-control"
-                               placeholder="Número do pedido de compra">
+                        <label class="form-label">Pedido de Compra (Fornecedor)</label>
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <input type="text" id="pedido_numero_liberacao" class="form-control" list="pedido_lista_liberacao" placeholder="Digite o número do pedido (ou deixe em branco)">
+                                <datalist id="pedido_lista_liberacao">
+                                    <!-- opções preenchidas via JS -->
+                                </datalist>
+                                <input type="hidden" id="pedido_id_liberacao">
+                                <div class="form-text" id="pedidoFornecedorInfo">
+                                    Você pode liberar a nota sem vincular a um pedido de compra. Para isso, deixe o campo em branco.
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label mt-2">Item do Pedido</label>
+                                <select id="pedido_item_id_liberacao" class="form-select" disabled>
+                                    <option value="">Selecione o item...</option>
+                                </select>
+                                <div class="form-text" id="pedidoItemSaldoInfo"></div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label mt-2">Quantidade de Entrada</label>
+                                <input type="number" step="0.0001" min="0" id="quantidade_entrada_liberacao" class="form-control" disabled>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">

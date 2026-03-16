@@ -1,0 +1,108 @@
+<!-- Modal para definir quantidade entregue inicial (saldo) do item -->
+<div class="modal fade" id="modalDefinirSaldoItem" tabindex="-1" aria-labelledby="modalDefinirSaldoItemLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalDefinirSaldoItemLabel">Definir saldo do item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formDefinirSaldoItem">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="definir_saldo_item_id" name="item_id">
+                <div class="modal-body">
+                    <p class="text-muted small mb-3">Informe a <strong>quantidade já entregue</strong> (inicial) para este item. O saldo disponível será: quantidade do pedido menos esta quantidade e menos as entradas já registradas.</p>
+                    <div class="mb-2">
+                        <span class="text-muted">Material:</span>
+                        <strong id="definir_saldo_material_nome">-</strong>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted">Quantidade no pedido:</span>
+                        <strong id="definir_saldo_quantidade_pedido">-</strong>
+                    </div>
+                    <div class="mb-2">
+                        <span class="text-muted">Entradas já registradas:</span>
+                        <strong id="definir_saldo_entradas">-</strong>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantidade_entregue_inicial" class="form-label">Quantidade já entregue (inicial)</label>
+                        <input type="number" step="0.0001" min="0" class="form-control" id="quantidade_entregue_inicial" name="quantidade_entregue_inicial" required>
+                        <div class="form-text">Saldo resultante: <strong id="definir_saldo_preview">0</strong></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const modalEl = document.getElementById('modalDefinirSaldoItem');
+    if (!modalEl) return;
+    const modal = new bootstrap.Modal(modalEl);
+    const itemIdInput = document.getElementById('definir_saldo_item_id');
+    const materialNomeEl = document.getElementById('definir_saldo_material_nome');
+    const qtdPedidoEl = document.getElementById('definir_saldo_quantidade_pedido');
+    const entradasEl = document.getElementById('definir_saldo_entradas');
+    const qtdEntregueInput = document.getElementById('quantidade_entregue_inicial');
+    const previewEl = document.getElementById('definir_saldo_preview');
+
+    function atualizarPreview() {
+        const qtdPedido = parseFloat(document.getElementById('definir_saldo_quantidade_pedido').dataset.val) || 0;
+        const entradas = parseFloat(document.getElementById('definir_saldo_entradas').dataset.val) || 0;
+        const entregueInicial = parseFloat(qtdEntregueInput.value) || 0;
+        const saldo = Math.max(0, qtdPedido - entradas - entregueInicial);
+        if (previewEl) previewEl.textContent = saldo;
+    }
+
+    if (qtdEntregueInput) qtdEntregueInput.addEventListener('input', atualizarPreview);
+
+    window.abrirModalDefinirSaldo = function(itemId, materialNome, quantidadePedido, entradasTotal, quantidadeEntregueInicial) {
+        if (!itemIdInput || !qtdEntregueInput) return;
+        itemIdInput.value = itemId;
+        if (materialNomeEl) materialNomeEl.textContent = materialNome || '-';
+        if (qtdPedidoEl) {
+            qtdPedidoEl.textContent = quantidadePedido;
+            qtdPedidoEl.dataset.val = quantidadePedido;
+        }
+        if (entradasEl) {
+            entradasEl.textContent = entradasTotal;
+            entradasEl.dataset.val = entradasTotal;
+        }
+        qtdEntregueInput.value = quantidadeEntregueInicial != null ? quantidadeEntregueInicial : '0';
+        atualizarPreview();
+        modal.show();
+    };
+
+    const form = document.getElementById('formDefinirSaldoItem');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const id = itemIdInput.value;
+            if (!id) return;
+            const csrf = form.querySelector('input[name="csrf_token"]').value;
+            const formData = new FormData();
+            formData.append('csrf_token', csrf);
+            formData.append('quantidade_entregue_inicial', qtdEntregueInput.value || '0');
+            fetch('/pedidos-compra/item/' + id + '/definir-saldo', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) { return r.json().then(function(data) { return { ok: r.ok, data: data }; }); })
+            .then(function(result) {
+                if (result.ok && result.data.success) {
+                    modal.hide();
+                    window.location.reload();
+                } else {
+                    alert(result.data.message || 'Erro ao salvar.');
+                }
+            })
+            .catch(function() { alert('Erro de conexão.'); });
+        });
+    }
+})();
+</script>

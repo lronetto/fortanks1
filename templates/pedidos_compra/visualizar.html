@@ -1,0 +1,175 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Pedido de Compra {{ pedido.numero }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Pedido de Compra {{ pedido.numero }}</h1>
+        <a href="{{ url_for('pedido_compra.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Dados do Pedido</h6>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div><strong>Número:</strong> {{ pedido.numero }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div><strong>Fornecedor:</strong> {{ pedido.fornecedor.nome if pedido.fornecedor else '-' }}</div>
+                </div>
+                <div class="col-md-4">
+                    <div><strong>Centro de Custo:</strong> {{ pedido.centro_custo.nome if pedido.centro_custo else '-' }}</div>
+                </div>
+            </div>
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div><strong>Liberação:</strong>
+                        {% if pedido.data_liberacao %}
+                        {{ pedido.data_liberacao.strftime('%d/%m/%Y') }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <hr>
+
+            <h6 class="mb-3">Itens</h6>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Material</th>
+                            <th class="text-end">Quantidade</th>
+                            <th class="text-end">Entregue inicial</th>
+                            <th class="text-end">Entradas</th>
+                            <th class="text-end">Saldo</th>
+                            <th>Unidade</th>
+                            <th class="text-end">Valor Unitário</th>
+                            <th class="text-end">Total</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set total = 0 %}
+                        {% for item in pedido.itens.all() %}
+                        {% set entradas_total = item.get_quantidade_entrada_total() %}
+                        {% set entradas_registradas = item.get_quantidade_entradas_registradas() %}
+                        {% set saldo = item.get_saldo() %}
+                        {% set entregue_inicial = item.quantidade_entregue_inicial or 0 %}
+                        {% set linha_total = (item.quantidade or 0) * (item.valor_unitario or 0) %}
+                        {% set total = total + linha_total %}
+                        <tr>
+                            <td>{{ item.material.nome if item.material else item.material_id }}</td>
+                            <td class="text-end">{{ item.quantidade }}</td>
+                            <td class="text-end">{{ entregue_inicial }}</td>
+                            <td class="text-end">{{ entradas_total }}</td>
+                            <td class="text-end">{{ saldo }}</td>
+                            <td>{{ item.unidade or '-' }}</td>
+                            <td class="text-end">{{ item.valor_unitario }}</td>
+                            <td class="text-end">{{ linha_total }}</td>
+                            <td class="text-nowrap">
+                                <button type="button" class="btn btn-sm btn-outline-secondary definir-saldo-item" title="Definir saldo"
+                                    data-item-id="{{ item.id }}"
+                                    data-material-nome="{{ (item.material.nome if item.material else item.material_id)|e }}"
+                                    data-quantidade="{{ item.quantidade }}"
+                                    data-entradas="{{ entradas_registradas }}"
+                                    data-entregue-inicial="{{ entregue_inicial }}">
+                                    <i class="fas fa-calculator"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="7" class="text-end">Total</th>
+                            <th class="text-end">{{ total }}</th>
+                            <th></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <hr>
+
+            <h6 class="mb-3">Entradas</h6>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Item</th>
+                            <th>Nota Fiscal</th>
+                            <th class="text-end">Quantidade Entrada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% set tem_entradas = false %}
+                        {% for item in pedido.itens.all() %}
+                            {% for ent in item.get_entradas_ordenadas() %}
+                                {% set tem_entradas = true %}
+                                <tr>
+                                    <td>{{ item.material.nome if item.material else item.material_id }}</td>
+                                    <td>{{ ent.nota_fiscal.numero_nf if ent.nota_fiscal else ent.nota_fiscal_id }}</td>
+                                    <td class="text-end">{{ ent.quantidade_entrada }}</td>
+                                </tr>
+                            {% endfor %}
+                        {% endfor %}
+                        {% if not tem_entradas %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Nenhuma entrada registrada.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <hr>
+
+            <h6 class="mb-3">Anexos</h6>
+            {% set anexos = pedido.get_uploads() %}
+            {% if anexos %}
+            <ul class="list-group">
+                {% for a in anexos %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>{{ a.filename }}</span>
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('pedido_compra.download_anexo', anexo_id=a.id) }}">
+                        <i class="fas fa-download"></i>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="text-muted">Nenhum anexo.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% include 'pedidos_compra/modais/definir_saldo_item.html' %}
+
+<script>
+$(function() {
+    $(document).on('click', '.definir-saldo-item', function() {
+        var $btn = $(this);
+        if (typeof window.abrirModalDefinirSaldo === 'function') {
+            window.abrirModalDefinirSaldo(
+                $btn.data('item-id'),
+                $btn.data('material-nome'),
+                $btn.data('quantidade'),
+                $btn.data('entradas'),
+                $btn.data('entregue-inicial')
+            );
+        }
+    });
+});
+</script>
+{% endblock %}
+

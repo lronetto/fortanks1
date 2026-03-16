@@ -54,6 +54,8 @@ from flask_mail import Mail
 from dotenv import load_dotenv
 from controllers.relatorio_controller import relatorio_bp
 from controllers.upload_controller import upload_bp
+from controllers.fornecedor_controller import fornecedor_bp
+from controllers.pedido_compra_controller import pedido_compra_bp
 
 
 from controllers.relatorios.acabamento_pecas_controller import acabamento_pecas_bp
@@ -195,7 +197,7 @@ app.register_blueprint(equipamento_bp, url_prefix='/equipamentos')
 app.register_blueprint(colaborador_bp, url_prefix='/colaboradores')
 # Registrar o blueprint unificado seguranca_bp e aliases
 app.register_blueprint(seguranca_bp, url_prefix='/seguranca')
-# app.register_blueprint(fornecedor_bp, url_prefix='/fornecedores')
+app.register_blueprint(fornecedor_bp, url_prefix='/fornecedor')
 app.register_blueprint(api_bp, url_prefix='/api')
 app.register_blueprint(usinagem_concreto, url_prefix='/usinagem-concreto')
 app.register_blueprint(conversao_unidade_bp,url_prefix='/conversao-unidade')
@@ -226,6 +228,7 @@ app.register_blueprint(databook_api_bp)
 app.register_blueprint(usinagem_bp)
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
 app.register_blueprint(upload_bp, url_prefix='/uploads')
+app.register_blueprint(pedido_compra_bp, url_prefix='/pedido_compra')
 logger.info("Blueprints registrados com sucesso!")
 
 # Registrar comandos CLI

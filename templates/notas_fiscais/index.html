@@ -546,7 +546,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Liberar nota fiscal: abre modal com tipo de item e pedido de compra
+    // Liberar nota fiscal: abre modal com tipo de item e integração com Pedido de Compra
     $(document).on('click', '.liberar-nota', function() {
         const notaId = $(this).data('id');
         const numeroNota = $(this).data('numero');
@@ -565,36 +565,159 @@ document.addEventListener('DOMContentLoaded', function() {
                 cancelButtonColor: '#d33'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    enviarLiberacao(notaId, null, null);
+                    enviarLiberacao(notaId, null, null, null, null, null);
                 }
             });
         } else {
-            // Liberar: abrir modal para preencher tipo de item e pedido de compra
+            // Liberar: abrir modal para preencher tipo de item e (opcionalmente) registrar entrada em Pedido de Compra
             $('#liberar_nf_id').val(notaId);
             $('#numeroNotaLiberar').text(numeroNota);
             $('#tipo_item_liberacao').val('');
-            $('#pedido_compra_liberacao').val('');
+
+            // Reset integração pedido
+            $('#pedido_numero_liberacao').val('');
+            $('#pedido_lista_liberacao').empty();
+            $('#pedido_id_liberacao').val('');
+            $('#pedido_item_id_liberacao').html('<option value="">Selecione o item...</option>').prop('disabled', true);
+            $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+            $('#pedidoFornecedorInfo').text('');
+            $('#pedidoItemSaldoInfo').text('');
+
             const modal = new bootstrap.Modal(document.getElementById('modalLiberarNota'));
             modal.show();
+
+            // Buscar dados da nota para identificar fornecedor (CNPJ emitente)
+            fetch(`/notas-fiscais/api/visualizar/${notaId}`)
+                .then(r => r.json())
+                .then(nf => {
+                    const cnpjEmitente = (nf.cnpj_emitente || '').toString();
+                    const nomeEmitente = (nf.nome_emitente || '').toString();
+                    if (!cnpjEmitente) {
+                        $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente || 'N/A'} (CNPJ não informado)`);
+                        return;
+                    }
+
+                    // Carregar pedidos disponíveis para o fornecedor (por CNPJ)
+                    fetch(`/pedido_compra/api/pedidos-disponiveis?cnpj=${encodeURIComponent(cnpjEmitente)}`)
+                        .then(r => r.json())
+                        .then(resp => {
+                            const listaEl = $('#pedido_lista_liberacao');
+                            listaEl.empty();
+                            if (!resp || !resp.success) {
+                                $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}) - erro ao carregar pedidos.`);
+                                return;
+                            }
+                            const pedidos = resp.pedidos || [];
+                            if (!pedidos.length) {
+                                $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}) - nenhum pedido com saldo encontrado. Você pode liberar sem pedido.`);
+                                return;
+                            }
+
+                            window.pedidosDisponiveisPorNumero = {};
+                            pedidos.forEach(p => {
+                                const numero = p.numero || '';
+                                if (!numero) return;
+                                const opt = document.createElement('option');
+                                opt.value = numero;
+                                listaEl.append(opt);
+                                window.pedidosDisponiveisPorNumero[numero] = p.id;
+                            });
+                            $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}). Digite o número do pedido (ou deixe em branco).`);
+                        })
+                        .catch(() => {
+                            $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}) - erro ao carregar pedidos.`);
+                        });
+                })
+                .catch(() => {
+                    $('#pedido_id_liberacao').html('<option value="">Erro ao carregar dados da NF</option>');
+                });
         }
+    });
+
+    // Sempre que o número do pedido mudar, sincronizar o ID escondido
+    $('#pedido_numero_liberacao').on('change blur', function() {
+        const numero = ($(this).val() || '').trim();
+        const mapa = window.pedidosDisponiveisPorNumero || {};
+        const id = mapa[numero] || '';
+        $('#pedido_id_liberacao').val(id);
+        // Disparar fluxo de carregamento de itens
+        $(document).trigger('pedido-liberacao-id-change');
+    });
+
+    // Ao mudar o ID efetivo de pedido, carregar itens disponíveis (saldo > 0)
+    $(document).on('pedido-liberacao-id-change', function() {
+        const pedidoId = $('#pedido_id_liberacao').val();
+        $('#pedido_item_id_liberacao').html('<option value="">Carregando itens...</option>').prop('disabled', true);
+        $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+        $('#pedidoItemSaldoInfo').text('');
+
+        if (!pedidoId) {
+            $('#pedido_item_id_liberacao').html('<option value="">Selecione o item...</option>').prop('disabled', true);
+            return;
+        }
+
+        fetch(`/pedido_compra/api/itens-disponiveis?pedido_id=${encodeURIComponent(pedidoId)}`)
+            .then(r => r.json())
+            .then(resp => {
+                if (!resp || !resp.success) {
+                    $('#pedido_item_id_liberacao').html('<option value="">Erro ao carregar itens</option>').prop('disabled', true);
+                    return;
+                }
+                const itens = resp.itens || [];
+                if (!itens.length) {
+                    $('#pedido_item_id_liberacao').html('<option value="">Sem itens com saldo</option>').prop('disabled', true);
+                    return;
+                }
+                let options = '<option value="">Selecione o item...</option>';
+                itens.forEach(i => {
+                    const label = `${i.material_nome || 'Material'} - Saldo: ${i.saldo} ${i.unidade || ''}`;
+                    options += `<option value="${i.id}" data-saldo="${i.saldo}">${label}</option>`;
+                });
+                $('#pedido_item_id_liberacao').html(options).prop('disabled', false);
+            })
+            .catch(() => {
+                $('#pedido_item_id_liberacao').html('<option value="">Erro ao carregar itens</option>').prop('disabled', true);
+            });
+    });
+
+    // Ao escolher item, habilitar quantidade e mostrar saldo
+    $('#pedido_item_id_liberacao').on('change', function() {
+        const opt = $(this).find('option:selected');
+        const saldo = opt.data('saldo');
+        if (!opt.val()) {
+            $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+            $('#pedidoItemSaldoInfo').text('');
+            return;
+        }
+        $('#quantidade_entrada_liberacao').prop('disabled', false);
+        $('#pedidoItemSaldoInfo').text(`Saldo disponível: ${saldo}`);
     });
 
     // Confirmar liberação (submit do modal)
     $('#btnConfirmarLiberacao').on('click', function() {
         const notaId = $('#liberar_nf_id').val();
         const tipoItem = $('#tipo_item_liberacao').val();
-        const pedidoCompra = $('#pedido_compra_liberacao').val().trim();
         if (!notaId) {
             mostrarAlerta('Erro', 'ID da nota fiscal não encontrado.', 'error');
             return;
         }
-        enviarLiberacao(notaId, tipoItem || null, pedidoCompra || null, function() {
+
+        const pedidoId = $('#pedido_id_liberacao').val();
+        const pedidoItemId = $('#pedido_item_id_liberacao').val();
+        const qtdEntrada = $('#quantidade_entrada_liberacao').val();
+
+        if (pedidoId && (!pedidoItemId || !qtdEntrada)) {
+            mostrarAlerta('Erro', 'Selecione o item do pedido e informe a quantidade de entrada.', 'error');
+            return;
+        }
+
+        enviarLiberacao(notaId, tipoItem || null, null, pedidoId || null, pedidoItemId || null, qtdEntrada || null, function() {
             const modalLib = bootstrap.Modal.getInstance(document.getElementById('modalLiberarNota'));
             if (modalLib) modalLib.hide();
         });
     });
 
-    function enviarLiberacao(nfId, tipoItem, pedidoCompra, onSuccess) {
+    function enviarLiberacao(nfId, tipoItem, pedidoCompra, pedidoId, pedidoItemId, quantidadeEntrada, onSuccess) {
         let csrfToken = $('meta[name="csrf-token"]').attr('content');
         if (!csrfToken) csrfToken = $('input[name="csrf_token"]').first().val();
         if (!csrfToken) {
@@ -606,6 +729,9 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('nf_id', nfId);
         if (tipoItem != null) formData.append('tipo_item', tipoItem);
         if (pedidoCompra != null) formData.append('pedido_compra', pedidoCompra);
+        if (pedidoId != null) formData.append('pedido_id', pedidoId);
+        if (pedidoItemId != null) formData.append('pedido_item_id', pedidoItemId);
+        if (quantidadeEntrada != null) formData.append('quantidade_entrada', quantidadeEntrada);
         $.ajax({
             url: '/notas-fiscais/api/liberar',
             type: 'POST',

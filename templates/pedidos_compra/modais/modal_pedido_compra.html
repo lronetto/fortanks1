@@ -1,0 +1,388 @@
+<div class="modal fade" id="modalPedidoCompra" tabindex="-1" aria-labelledby="modalPedidoCompraLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="formPedidoCompra" method="POST" action="{{ url_for('pedido_compra.salvar') }}"
+                enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" id="pedido_id">
+                <div class="modal-header bg-primary text-white d-flex align-items-center">
+                    <h5 class="modal-title mb-0 me-auto" id="modalPedidoCompraLabel">Pedido de Compra</h5>
+                    <button type="submit" class="btn btn-light btn-sm me-2 btn-salvar-pedido">
+                        <i class="fas fa-save"></i> Salvar
+                    </button>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                        aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="pedido_numero" class="form-label">Número*</label>
+                            <input type="text" class="form-control" id="pedido_numero" name="numero" required maxlength="50">
+                        </div>
+                        <div class="col-md-4">
+                            <label for="pedido_fornecedor_id" class="form-label">Fornecedor*</label>
+                            <select class="form-select" id="pedido_fornecedor_id" name="fornecedor_id" required>
+                                <option value="">Selecione</option>
+                            </select>
+                        </div>
+                        <div class="col-md-5">
+                            <label for="pedido_centro_custo_id" class="form-label">Centro de Custo</label>
+                            <select class="form-select" id="pedido_centro_custo_id" name="centro_custo_id">
+                                <option value="">Selecione</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="pedido_data_liberacao" class="form-label">Data de Liberação</label>
+                            <input type="date" class="form-control" id="pedido_data_liberacao" name="data_liberacao">
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="mb-3">Itens do Pedido</h6>
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm table-bordered align-middle" id="tabelaItensPedido">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 35%;">Material</th>
+                                    <th style="width: 15%;">Unidade</th>
+                                    <th style="width: 15%;">Quantidade</th>
+                                    <th style="width: 15%;">Valor Unitário</th>
+                                    <th style="width: 15%;">Total</th>
+                                    <th style="width: 5%;" class="text-center">
+                                        <button type="button" class="btn btn-sm btn-success" id="btnAdicionarItem">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {# linhas adicionadas via JS #}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex justify-content-end mb-3">
+                        <h5>Total do Pedido: <span id="pedido_total" class="text-primary">R$ 0,00</span></h5>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="mb-3">Anexos</h6>
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="pedido_anexos" name="anexos" multiple>
+                        <div class="form-text">
+                            Você pode anexar arquivos relacionados ao pedido (PDFs, planilhas, etc.).
+                        </div>
+                    </div>
+
+                    <div id="listaAnexosExistentes" class="mb-2">
+                        {# preenchido via JS quando editar #}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3 pt-3 border-top">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-salvar-pedido">
+                            <i class="fas fa-save"></i> Salvar Pedido
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-salvar-pedido">
+                        <i class="fas fa-save"></i> Salvar Pedido
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function formatarMoedaBR(valor) {
+        const numero = parseFloat(valor || 0);
+        return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function atualizarTotalLinha(row) {
+        const qtd = parseFloat(row.querySelector('.item-quantidade').value.replace(',', '.')) || 0;
+        const vlr = parseFloat(row.querySelector('.item-valor-unitario').value.replace(',', '.')) || 0;
+        const total = qtd * vlr;
+        row.querySelector('.item-total').textContent = formatarMoedaBR(total);
+    }
+
+    function atualizarTotalPedido() {
+        let total = 0;
+        document.querySelectorAll('#tabelaItensPedido tbody tr').forEach(row => {
+            const qtd = parseFloat(row.querySelector('.item-quantidade').value.replace(',', '.')) || 0;
+            const vlr = parseFloat(row.querySelector('.item-valor-unitario').value.replace(',', '.')) || 0;
+            total += qtd * vlr;
+        });
+        document.getElementById('pedido_total').textContent = formatarMoedaBR(total);
+    }
+
+    function criarLinhaItem(item) {
+        const tbody = document.querySelector('#tabelaItensPedido tbody');
+        const row = document.createElement('tr');
+
+        row.innerHTML = `
+            <td>
+                <select class="form-select item-material" name="itens[][material_id]" required>
+                    <option value="">Selecione</option>
+                </select>
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm item-unidade" name="itens[][unidade]" maxlength="20">
+            </td>
+            <td>
+                <input type="number" step="0.0001" min="0" class="form-control form-control-sm text-end item-quantidade" 
+                       name="itens[][quantidade]" required>
+            </td>
+            <td>
+                <input type="number" step="0.0001" min="0" class="form-control form-control-sm text-end item-valor-unitario" 
+                       name="itens[][valor_unitario]" required>
+            </td>
+            <td class="text-end item-total">R$ 0,00</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-sm btn-danger btn-remover-item">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(row);
+
+        // carregar materiais no select (ajax simples)
+        fetch("{{ url_for('pedido_compra.materiais') }}")
+            .then(r => r.json())
+            .then(lista => {
+                const select = row.querySelector('.item-material');
+                lista.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = `${m.nome} (${m.unidade || ''})`;
+                    select.appendChild(opt);
+                });
+
+                if (item && item.material_id) {
+                    select.value = item.material_id;
+                }
+            })
+            .catch(console.error);
+
+        if (item) {
+            row.querySelector('.item-unidade').value = item.unidade || '';
+            row.querySelector('.item-quantidade').value = item.quantidade || '';
+            row.querySelector('.item-valor-unitario').value = item.valor_unitario || '';
+        }
+
+        row.querySelectorAll('.item-quantidade, .item-valor-unitario').forEach(input => {
+            input.addEventListener('input', function () {
+                atualizarTotalLinha(row);
+                atualizarTotalPedido();
+            });
+        });
+
+        row.querySelector('.btn-remover-item').addEventListener('click', function () {
+            row.remove();
+            atualizarTotalPedido();
+        });
+
+        atualizarTotalLinha(row);
+        atualizarTotalPedido();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const modalEl = document.getElementById('modalPedidoCompra');
+        const modal = new bootstrap.Modal(modalEl);
+        const form = document.getElementById('formPedidoCompra');
+        const csrfToken = "{{ csrf_token() }}";
+
+        // carregar fornecedores no select principal
+        function carregarFornecedores(selectedId) {
+            fetch("{{ url_for('pedido_compra.fornecedores') }}")
+                .then(r => r.json())
+                .then(lista => {
+                    const select = document.getElementById('pedido_fornecedor_id');
+                    select.innerHTML = '<option value=\"\">Selecione</option>';
+                    lista.fornecedores.forEach(f => {
+                        const opt = document.createElement('option');
+                        opt.value = f.id;
+                        opt.textContent = `${f.nome} (${f.cnpj})`;
+                        select.appendChild(opt);
+                    });
+                    if (selectedId) {
+                        select.value = selectedId;
+                    }
+                })
+                .catch(console.error);
+        }
+
+        // carregar centros de custo
+        function carregarCentrosCusto(selectedId) {
+            fetch("{{ url_for('pedido_compra.centros_custo') }}")
+                .then(r => r.json())
+                .then(lista => {
+                    const select = document.getElementById('pedido_centro_custo_id');
+                    select.innerHTML = '<option value=\"\">Selecione</option>';
+                    lista.centros_custo.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = `${c.codigo} - ${c.nome}`;
+                        select.appendChild(opt);
+                    });
+                    if (selectedId) {
+                        select.value = selectedId;
+                    }
+                })
+                .catch(console.error);
+        }
+
+        modalEl.addEventListener('show.bs.modal', function (event) {
+            const button = event.relatedTarget;
+            // Quando o modal é aberto por modal.show() (botão Editar), relatedTarget é null; usar data-edit-id
+            const pedidoId = (button && button.getAttribute('data-id')) || modalEl.getAttribute('data-edit-id') || null;
+            modalEl.removeAttribute('data-edit-id');
+            document.querySelector('#tabelaItensPedido tbody').innerHTML = '';
+            document.getElementById('listaAnexosExistentes').innerHTML = '';
+            form.reset();
+            document.getElementById('pedido_id').value = '';
+
+            if (!pedidoId) {
+                carregarFornecedores();
+                carregarCentrosCusto();
+                criarLinhaItem();
+                return;
+            }
+
+            fetch(`{{ url_for('pedido_compra.get') }}?id=${pedidoId}`)
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('pedido_id').value = data.id;
+                    document.getElementById('pedido_numero').value = data.numero || '';
+
+                    if (data.data_liberacao) {
+                        const d = new Date(data.data_liberacao);
+                        document.getElementById('pedido_data_liberacao').value = d.toISOString().slice(0, 10);
+                    }
+
+                    carregarFornecedores(data.fornecedor_id);
+                    carregarCentrosCusto(data.centro_custo_id);
+
+                    if (Array.isArray(data.itens) && data.itens.length) {
+                        data.itens.forEach(i => criarLinhaItem(i));
+                    } else {
+                        criarLinhaItem();
+                    }
+
+                    if (Array.isArray(data.anexos) && data.anexos.length) {
+                        const div = document.getElementById('listaAnexosExistentes');
+                        const ul = document.createElement('ul');
+                        ul.className = 'list-group list-group-flush mb-2';
+                        data.anexos.forEach(a => {
+                            const li = document.createElement('li');
+                            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                            const downloadBaseUrl = "{{ url_for('pedido_compra.download_anexo', anexo_id=0) }}";
+                            li.innerHTML = `
+                                <span>${a.filename}</span>
+                                <a href="${downloadBaseUrl.replace('/0/download', '/' + a.id + '/download')}"
+                                   class="btn btn-sm btn-outline-secondary" target="_blank">
+                                    <i class="fas fa-download"></i>
+                                </a>
+                            `;
+                            ul.appendChild(li);
+                        });
+                        div.appendChild(ul);
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro ao carregar pedido de compra.');
+                    modal.hide();
+                });
+        });
+
+        // Enviar o formulário via AJAX (evita navegar para o JSON)
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(form);
+
+            fetch(form.action, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+                .then(r => r.json())
+                .then(resp => {
+                    if (resp && resp.success) {
+                        modal.hide();
+                        if (typeof $.fn.DataTable !== 'undefined') {
+                            $('#tabelaPedidosCompra').DataTable().ajax.reload(null, false);
+                        }
+                    } else {
+                        alert((resp && resp.message) ? resp.message : 'Erro ao salvar pedido.');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erro ao salvar pedido.');
+                });
+        });
+
+        document.getElementById('btnAdicionarItem').addEventListener('click', function () {
+            criarLinhaItem();
+        });
+
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.btn-editar-pedido')) {
+                const btn = e.target.closest('.btn-editar-pedido');
+                const id = btn.getAttribute('data-id');
+                modalEl.setAttribute('data-edit-id', id);
+                modal.show();
+            }
+
+            if (e.target.closest('.btn-visualizar-pedido')) {
+                const id = e.target.closest('.btn-visualizar-pedido').dataset.id;
+                window.location.href = "{{ url_for('pedido_compra.visualizar', id=0) }}".replace('0', id);
+            }
+
+            if (e.target.closest('.btn-excluir-pedido')) {
+                const btn = e.target.closest('.btn-excluir-pedido');
+                const id = btn.dataset.id;
+                const numero = btn.dataset.numero;
+                if (confirm(`Confirma a exclusão do pedido ${numero}?`)) {
+                    fetch("{{ url_for('pedido_compra.excluir') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': "{{ csrf_token() }}"
+                        },
+                        body: JSON.stringify({
+                            id: id,
+                            csrf_token: "{{ csrf_token() }}"
+                        })
+                    })
+                        .then(r => r.json())
+                        .then(resp => {
+                            if (resp.success) {
+                                $('#tabelaPedidosCompra').DataTable().ajax.reload(null, false);
+                            } else {
+                                alert(resp.message || 'Erro ao excluir pedido.');
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            alert('Erro ao excluir pedido.');
+                        });
+                }
+            }
+        });
+    });
+</script>
+

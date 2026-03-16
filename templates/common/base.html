@@ -247,6 +247,7 @@
                    if (window.location.pathname.includes('/usuario') ||
                        window.location.pathname.includes('/contrato') ||
                        window.location.pathname.includes('/cliente') ||
+                       window.location.pathname.includes('/fornecedor') ||
                        window.location.pathname.includes('/material') ||
                        window.location.pathname.includes('/colaborador') ||
                        window.location.pathname.includes('/tanques') ||
@@ -697,6 +698,13 @@
                             </a>
                         </li>
                         {% endif %}
+                        {% if current_user.is_permissao('fornecedores') %}
+                        <li class="{{ is_active('fornecedor') }}">
+                            <a href="{{ url_for('fornecedor.index') }}">
+                                <i class="fas fa-truck-field"></i> Fornecedores
+                            </a>
+                        </li>
+                        {% endif %}
 
                         {% if current_user.is_permissao('material') %}
                         <li class="{{ is_active('material') }}">
@@ -852,6 +860,13 @@
                 <li class="{{ is_active('reembolso') }}">
                     <a href="{{ url_for('reembolso.index') }}">
                         <i class="fas fa-money-bill-wave"></i> Reembolsos
+                    </a>
+                </li>
+                {% endif %}
+                {% if current_user.is_permissao('pedido_compra') %}
+                <li class="{{ is_active('pedido_compra') }}">
+                    <a href="{{ url_for('pedido_compra.index') }}">
+                        <i class="fas fa-cart-shopping"></i> Pedidos de Compra
                     </a>
                 </li>
                 {% endif %}

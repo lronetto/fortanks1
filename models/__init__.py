@@ -52,6 +52,8 @@ from .reembolso import Reembolsos, ReembolsosDocumentos
 from .epi import Epi, EpiEntregas
 from .certificado import Certificados, CertificadosTipos
 from .permissoes import Modulo, Permissao
+from .fornecedor import Fornecedor
+from .pedido_compra import PedidoCompra, PedidoCompraItem, PedidoCompraEntrada
 def configure_mappers():
     """
     Configura explicitamente todos os mappers SQLAlchemy
@@ -101,4 +103,5 @@ __all__ = [
     'Epi', 'EpiEntregas',
     'Certificados', 'CertificadosTipos',
     'Modulo', 'Permissao',
+    'Fornecedor', 'PedidoCompra', 'PedidoCompraItem', 'PedidoCompraEntrada',
 ] 

@@ -1,0 +1,103 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Fornecedores{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Fornecedores</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFornecedor">
+            <i class="fas fa-plus"></i> Novo Fornecedor
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Fornecedores</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabelaFornecedores" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>CNPJ</th>
+                            <th>Estado</th>
+                            <th>Ativo</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# Conteúdo será preenchido via DataTables AJAX #}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Modais separados em arquivos dedicados #}
+{% include 'fornecedores/modais/modal_fornecedor.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof $.fn.DataTable !== 'undefined') {
+            $('#tabelaFornecedores').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: "{{ url_for('fornecedor.datatables') }}",
+                    type: "POST",
+                    headers: {
+                        'X-CSRFToken': "{{ csrf_token() }}"
+                    },
+                    data: function (d) {
+                        d.csrf_token = "{{ csrf_token() }}";
+                    }
+                },
+                columns: [
+                    { data: 'nome', name: 'nome' },
+                    { data: 'cnpj', name: 'cnpj' },
+                    { data: 'estado', name: 'estado' },
+                    {
+                        data: 'ativo',
+                        name: 'ativo',
+                        render: function (data) {
+                            if (data) {
+                                return '<span class="badge bg-success">Ativo</span>';
+                            }
+                            return '<span class="badge bg-danger">Inativo</span>';
+                        },
+                        className: 'text-center'
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        className: 'text-center',
+                        render: function (data, type, row) {
+                            return `
+                                <button type="button" class="btn btn-sm btn-primary btn-editar-fornecedor" 
+                                        data-id="${row.id}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger btn-excluir-fornecedor" 
+                                        data-id="${row.id}" data-nome="${row.nome}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            `;
+                        }
+                    }
+                ],
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+

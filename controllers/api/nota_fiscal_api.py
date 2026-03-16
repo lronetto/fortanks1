@@ -1,6 +1,7 @@
 import base64
 import logging
 from datetime import datetime
+from decimal import Decimal
 
 from flask import jsonify, make_response, request
 from flask.wrappers import json
@@ -16,6 +17,7 @@ from models.logs import Logs
 from models.material import Materiais
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.upload import Upload
+from models.pedido_compra import PedidoCompraEntrada, PedidoCompraItem
 from controllers.nota_fiscal.services.query_notas import api_get_dados_notas_fiscais
 
 logger = logging.getLogger(__name__)
@@ -818,7 +820,7 @@ def register(nota_fiscal_bp):
         """Alterna o status de liberação da nota fiscal"""
         import json
         from datetime import datetime
-        
+
         # Validar CSRF token
         csrf_token = request.form.get('csrf_token') or (request.json.get('csrf_token') if request.is_json else None)
         if csrf_token:
@@ -829,12 +831,20 @@ def register(nota_fiscal_bp):
                 logger.warning(f"Erro de validação CSRF: {str(e)}")
                 return jsonify({"success": False, "message": "Token CSRF inválido"}), 403
 
-        nf_id = request.form.get("nf_id") or (request.json.get("nf_id") if request.is_json else None)
+        nf_id_raw = request.form.get("nf_id") or (request.json.get("nf_id") if request.is_json else None)
+        nf_id = (nf_id_raw or "").strip() if nf_id_raw is not None else None
         if not nf_id:
+            logger.warning("api/liberar: nf_id não fornecido")
             return jsonify({"success": False, "message": "ID da nota fiscal não fornecido"}), 400
 
         try:
-            nota_fiscal = NotaFiscal.query.get(int(nf_id))
+            nf_id_int = int(nf_id)
+        except ValueError:
+            logger.warning("api/liberar: nf_id inválido: %s", repr(nf_id_raw))
+            return jsonify({"success": False, "message": "ID da nota fiscal inválido (deve ser um número)."}), 400
+
+        try:
+            nota_fiscal = NotaFiscal.query.get(nf_id_int)
             if not nota_fiscal:
                 return jsonify({"success": False, "message": "Nota fiscal não encontrada"}), 404
 
@@ -845,7 +855,9 @@ def register(nota_fiscal_bp):
                     dados_adicionais = json.loads(nota_fiscal.dados_adicionais) if isinstance(nota_fiscal.dados_adicionais, str) else nota_fiscal.dados_adicionais
                 except (json.JSONDecodeError, TypeError):
                     dados_adicionais = {}
-            
+            if not isinstance(dados_adicionais, dict):
+                dados_adicionais = {}
+
             # Alternar status de liberação
             liberada = dados_adicionais.get('liberada', False)
             dados_adicionais['liberada'] = not liberada
@@ -854,33 +866,86 @@ def register(nota_fiscal_bp):
             if dados_adicionais['liberada']:
                 tipo_item = request.form.get('tipo_item') or (request.json.get('tipo_item') if request.is_json else None)
                 pedido_compra = request.form.get('pedido_compra') or (request.json.get('pedido_compra') if request.is_json else None)
+                pedido_id = request.form.get('pedido_id') or (request.json.get('pedido_id') if request.is_json else None)
+                pedido_item_id_raw = request.form.get('pedido_item_id') or (request.json.get('pedido_item_id') if request.is_json else None)
+                quantidade_entrada_raw = request.form.get('quantidade_entrada') or (request.json.get('quantidade_entrada') if request.is_json else None)
+                # Tratar string vazia como não informado (liberar sem vincular pedido)
+                pedido_item_id = (pedido_item_id_raw or "").strip() or None
+                quantidade_entrada = (quantidade_entrada_raw or "").strip() or None
                 if tipo_item:
                     dados_adicionais['tipo_item'] = tipo_item.strip()
-                if pedido_compra is not None:
+                if pedido_compra is not None and str(pedido_compra).strip():
                     dados_adicionais['pedido_compra'] = str(pedido_compra).strip()
+                if pedido_id is not None and str(pedido_id).strip():
+                    dados_adicionais['pedido_id'] = str(pedido_id).strip()
                 dados_adicionais['liberada_por'] = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
                 dados_adicionais['liberada_em'] = datetime.now().isoformat()
+
+                # Só registrar entrada se pedido_item_id e quantidade_entrada foram informados
+                if pedido_item_id and quantidade_entrada:
+                    try:
+                        qtd = Decimal(str(quantidade_entrada))
+                    except Exception:
+                        logger.warning("api/liberar: quantidade_entrada inválida: %s", repr(quantidade_entrada_raw))
+                        return jsonify({"success": False, "message": "Quantidade de entrada inválida."}), 400
+
+                    if qtd <= 0:
+                        logger.warning("api/liberar: quantidade de entrada <= 0")
+                        return jsonify({"success": False, "message": "Quantidade de entrada deve ser maior que zero."}), 400
+
+                    try:
+                        pedido_item_id_int = int(pedido_item_id)
+                    except ValueError:
+                        logger.warning("api/liberar: pedido_item_id inválido: %s", repr(pedido_item_id_raw))
+                        return jsonify({"success": False, "message": "Item do pedido inválido."}), 400
+
+                    item = PedidoCompraItem.query.get(pedido_item_id_int)
+                    if not item:
+                        return jsonify({"success": False, "message": "Item do pedido não encontrado."}), 404
+
+                    # Validar fornecedor (cnpj do fornecedor vs cnpj emitente da NF)
+                    def _norm_cnpj(v):
+                        return ''.join([c for c in str(v or '') if c.isdigit()])
+
+                    cnpj_nf = _norm_cnpj(nota_fiscal.cnpj_emitente)
+                    cnpj_fornecedor = _norm_cnpj(item.pedido.fornecedor.cnpj if item.pedido and item.pedido.fornecedor else '')
+                    if cnpj_nf and cnpj_fornecedor and cnpj_nf != cnpj_fornecedor:
+                        logger.warning("api/liberar: CNPJ NF não corresponde ao fornecedor do pedido")
+                        return jsonify({"success": False, "message": "Fornecedor da NF não corresponde ao fornecedor do pedido selecionado."}), 400
+
+                    saldo = item.get_saldo()
+                    if qtd > (saldo or 0):
+                        logger.warning("api/liberar: quantidade %s > saldo %s", qtd, saldo)
+                        return jsonify({"success": False, "message": f"Quantidade de entrada ({qtd}) maior que o saldo do item ({saldo})."}), 400
+
+                    entrada = PedidoCompraEntrada(
+                        pedido_item_id=item.id,
+                        nota_fiscal_id=nota_fiscal.id,
+                        quantidade_entrada=qtd,
+                    )
+                    db.session.add(entrada)
             else:
                 dados_adicionais['desliberada_por'] = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
                 dados_adicionais['desliberada_em'] = datetime.now().isoformat()
-            
+
+                # Ao desliberar, remover entradas vinculadas a esta nota fiscal
+                PedidoCompraEntrada.query.filter_by(nota_fiscal_id=nota_fiscal.id).delete()
+
             # Salvar dados_adicionais atualizados
             nota_fiscal.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
             db.session.commit()
-            
+
             status_texto = "liberada" if dados_adicionais['liberada'] else "desliberada"
             usuario_nome = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
-            logger.info(f"Nota fiscal {nota_fiscal.numero_nf} (ID: {nf_id}) {status_texto} por {usuario_nome}")
-            
+            logger.info(f"Nota fiscal {nota_fiscal.numero_nf} (ID: {nf_id_int}) {status_texto} por {usuario_nome}")
+
             return jsonify({
-                "success": True, 
+                "success": True,
                 "message": f"Nota fiscal {nota_fiscal.numero_nf} {status_texto} com sucesso",
                 "liberada": dados_adicionais['liberada']
             })
-        except ValueError:
-            return jsonify({"success": False, "message": "ID da nota fiscal inválido"}), 400
         except Exception as e:
-            logger.error(f"Erro ao alterar status de liberação: {str(e)}")
+            logger.error(f"Erro ao alterar status de liberação: {str(e)}", exc_info=True)
             return jsonify({"success": False, "message": f"Erro ao alterar status de liberação: {str(e)}"}), 500
 
     @nota_fiscal_bp.route("/api/cancelar", methods=["POST"])

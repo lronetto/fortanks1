@@ -380,6 +380,7 @@ class NotaFiscal(db.Model):
         print(f'logs: {logs}')
         return logs
     def processar_cte(self):
+        from models.fornecedor import Fornecedor
         chave_acesso, dados = self.extrair_dados_xml_cte()
         if not chave_acesso or not dados:
             try:
@@ -393,8 +394,14 @@ class NotaFiscal(db.Model):
                 logger.debug(f"Verificação de redirecionamento NFe/CTe: {e}")
             self.logs['erro'].append("XML não é um CTe válido (infCte não encontrado).")
             return False
+        cnpj_emitente = dados.get('dados_adicionais',{}).get('emitente',{}).get('cnpj','')
+        nome_emitente = dados.get('dados_adicionais',{}).get('emitente',{}).get('nome','')
+        uf = dados.get('dados_adicionais',{}).get('emitente',{}).get('uf','')
+        fornecedor = Fornecedor(nome=nome_emitente, cnpj=cnpj_emitente, estado=uf)
         existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
+            
+            self.fornecedor_id = fornecedor.id
             self.logs['existente'] += 1
             self.logs['existentes'].append({
                 'numero_nf':existente.numero_nf,
@@ -439,8 +446,13 @@ class NotaFiscal(db.Model):
         if not chave_acesso or not dados:
             logger.warning("processar_nfse: extração retornou chave ou dados vazios")
             return False
-
+        from models.fornecedor import Fornecedor
+        cnpj_emitente = dados.get('cnpj_emitente')
+        nome_emitente = dados.get('nome_emitente')
+        uf = dados.get('dados_adicionais',{}).get('emitente',{}).get('uf','')
+        fornecedor = Fornecedor(nome=nome_emitente, cnpj=cnpj_emitente, estado=uf)
         try:
+            
             existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             if existente:
                 #self.logs['existente'] += 1
@@ -510,7 +522,11 @@ class NotaFiscal(db.Model):
                 return False
             self.chave_acesso=chave_acesso
     
-            
+            cnpj_emitente = dados_nf.get('cnpj_emitente')
+            nome_emitente = dados_nf.get('nome_emitente')
+            uf = dados_nf.get('dados_adicionais',{}).get('emitente',{}).get('uf','')
+            from models.fornecedor import Fornecedor
+            fornecedor = Fornecedor(nome=nome_emitente, cnpj=cnpj_emitente, estado=uf)
             # Verificar se a nota fiscal já existe
             nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             #print('nf: ',nf)
@@ -701,6 +717,13 @@ class NotaFiscal(db.Model):
             if motorista_match:
                 motorista = motorista_match.group(1)
         dados_adicionais = {
+            'emitente': {
+                'nome': emit.findtext('cte:xNome', default='', namespaces=ns),
+                'cnpj': emit.findtext('cte:CNPJ', default='', namespaces=ns),
+                'endereco': emit.findtext('cte:xLgr', default='', namespaces=ns),
+                'municipio': emit.findtext('cte:xMun', default='', namespaces=ns),
+                'uf': emit.findtext('cte:UF', default='', namespaces=ns)
+            },
             'remetente': {
                 'nome': rem.findtext('cte:xNome', default='', namespaces=ns),
                 'cnpj': rem.findtext('cte:CNPJ', default='', namespaces=ns),
@@ -806,7 +829,7 @@ class NotaFiscal(db.Model):
             # Extrair CNPJ emitente
             cnpj_emitente = get_xml_text(emit, './/nfe:CNPJ', ns) or get_xml_text(emit, './/CNPJ', ns)
             nome_emitente = get_xml_text(emit, './/nfe:xNome', ns) or get_xml_text(emit, './/xNome', ns)
-            
+            uf = get_xml_text(emit, './/nfe:UF', ns) or get_xml_text(emit, './/UF', ns) or ''
             # Extrair CNPJ destinatário
             cnpj_destinatario = get_xml_text(dest, './/nfe:CNPJ', ns) or get_xml_text(dest, './/CNPJ', ns) or ''
             if not cnpj_destinatario:
@@ -824,6 +847,11 @@ class NotaFiscal(db.Model):
             valor_total = Decimal(valor_total_text)
             
             dados_adicionais = {
+                'emitente': {
+                    'nome': nome_emitente,
+                    'cnpj': cnpj_emitente,
+                    'uf': uf,
+                },
                 'fatura': {
                     'vencimento': None,
                     'numero_fatura': None,

@@ -1,0 +1,113 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Pedidos de Compra{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Pedidos de Compra</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalPedidoCompra">
+            <i class="fas fa-plus"></i> Novo Pedido
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Pedidos de Compra</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="tabelaPedidosCompra" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Número</th>
+                            <th>Fornecedor</th>
+                            <th>Centro de Custo</th>
+                            <th>Data Liberação</th>
+                            <th>Qtd Itens</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# preenchido via DataTables AJAX #}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'pedidos_compra/modais/modal_pedido_compra.html' %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (typeof $.fn.DataTable !== 'undefined') {
+            $('#tabelaPedidosCompra').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: "{{ url_for('pedido_compra.datatables') }}",
+                    type: "POST",
+                    headers: {
+                        'X-CSRFToken': "{{ csrf_token() }}"
+                    },
+                    data: function (d) {
+                        d.csrf_token = "{{ csrf_token() }}";
+                    }
+                },
+                columns: [
+                    { data: 'numero', name: 'numero' },
+                    { data: 'fornecedor_nome', name: 'fornecedor_nome' },
+                    { data: 'centro_custo_nome', name: 'centro_custo_nome', defaultContent: '-', },
+                    {
+                        data: 'data_liberacao',
+                        name: 'data_liberacao',
+                        render: function (data) {
+                            if (!data) return '-';
+                            const d = new Date(data);
+                            return d.toLocaleDateString('pt-BR');
+                        }
+                    },
+                    {
+                        data: 'itens',
+                        name: 'itens',
+                        render: function (data) {
+                            return Array.isArray(data) ? data.length : 0;
+                        },
+                        className: 'text-center'
+                    },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        className: 'text-center',
+                        render: function (data, type, row) {
+                            return `
+                                <button type="button" class="btn btn-sm btn-info btn-visualizar-pedido" 
+                                        data-id="${row.id}">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-primary btn-editar-pedido" 
+                                        data-id="${row.id}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger btn-excluir-pedido" 
+                                        data-id="${row.id}" data-numero="${row.numero}">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            `;
+                        }
+                    }
+                ],
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}
+
