@@ -87,7 +87,7 @@
             const formData = new FormData();
             formData.append('csrf_token', csrf);
             formData.append('quantidade_entregue_inicial', qtdEntregueInput.value || '0');
-            fetch('/pedidos-compra/item/' + id + '/definir-saldo', {
+            fetch('/pedido_compra/item/' + id + '/definir-saldo', {
                 method: 'POST',
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }

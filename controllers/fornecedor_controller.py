@@ -114,15 +114,8 @@ def salvar():
         if fornecedor_id:
             f = Fornecedor.query.get_or_404(fornecedor_id)
         else:
-            f = Fornecedor()
+            f = Fornecedor(nome=nome, cnpj=cnpj, estado=estado)
             db.session.add(f)
-
-        f.nome = nome
-        f.cnpj = cnpj
-        f.estado = estado
-        f.contatos = contatos
-        f.enderecos = enderecos
-        f.ativo = ativo
 
         db.session.commit()
         return jsonify({'success': True, 'id': f.id})
