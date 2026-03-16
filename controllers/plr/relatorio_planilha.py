@@ -23,6 +23,14 @@ from .constantes import CRITERIOS_PADRAO_PLR
 
 MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ']
 
+
+def _titulo_aba_mes(mes, ano):
+    """Retorna o título da aba do mês no formato 'AGO 2025', 'SET 2025', etc."""
+    idx = int(mes) - 1
+    mes_nome = MESES_ABREV[idx] if 0 <= idx < len(MESES_ABREV) else f'{mes:02d}'
+    return f'{mes_nome} {ano}'
+
+
 MIN_MESES_AVALIACAO_RESUMO = 3
 
 # Títulos das colunas de avaliação com peso em % (cache)
@@ -658,7 +666,10 @@ def _render_planilha(modelos_list, equipes, departamentos, ano_sugerido, planilh
 # ---------- Helpers Excel ----------
 
 def _excel_cpf_para_chapa(resultado, data_inicio, data_fechamento):
-    """Mapa CPF -> chapa a partir do EfetivoPLR no período."""
+    """
+    Mapa CPF -> chapa a partir do EfetivoPLR no período.
+    Usa o último efetivo (por data) que tiver chapa disponível para cada CPF.
+    """
     cpf_set = set()
     for r in resultado:
         colab = r.get('colaborador')
@@ -674,8 +685,14 @@ def _excel_cpf_para_chapa(resultado, data_inicio, data_fechamento):
             .all()
         )
         for ef in efetivos:
-            if ef.cpf and ef.cpf not in cpf_para_chapa:
-                cpf_para_chapa[ef.cpf] = ef.chapa or ''
+            if not ef.cpf:
+                continue
+            chapa_val = (ef.chapa or '').strip()
+            if ef.cpf not in cpf_para_chapa:
+                cpf_para_chapa[ef.cpf] = chapa_val
+            elif chapa_val and not cpf_para_chapa.get(ef.cpf):
+                # Já tinha vazio; pega chapa de registro mais antigo que tenha chapa
+                cpf_para_chapa[ef.cpf] = chapa_val
     return cpf_para_chapa
 
 
@@ -770,11 +787,9 @@ def _excel_aba_resumo(wb, resultado, meses_colunas, cpf_para_chapa, estilos):
     """Preenche e formata a aba Resumo."""
     ws = wb.active
     ws.title = 'Resumo'
-    header = ['CPF', 'Chapa', 'Nome', 'Tempo casa (meses)', 'Função']
+    header = ['CPF', 'Chapa', 'Nome', 'Admissão', 'Demissão/Fech.', 'Tempo casa (meses)', 'Função']
     for (mes, ano) in meses_colunas:
-        mes_idx = int(mes) - 1
-        mes_nome = MESES_ABREV[mes_idx] if 0 <= mes_idx < len(MESES_ABREV) else f'{mes:02d}'
-        header.append(f'{mes_nome} {ano}')
+        header.append(f'{_titulo_aba_mes(mes, ano)}')
     header.extend(['SOMA (%)', 'P (%)', 'Salário base PLR', 'VPO', 'Valor total'])
     ws.append(header)
 
@@ -786,15 +801,21 @@ def _excel_aba_resumo(wb, resultado, meses_colunas, cpf_para_chapa, estilos):
             continue
         total_geral += (r.get('valor_total') or 0)
         colab = r['colaborador']
+        data_fech = r.get('data_fechamento')
         cpf = colab.cpf or '-'
         chapa = cpf_para_chapa.get(cpf, '') if cpf != '-' else ''
+        admissao = colab.data_admissao.strftime('%d/%m/%Y') if colab.data_admissao else '-'
+        if colab.data_demissao and data_fech and colab.data_demissao <= data_fech:
+            demissao_fech = colab.data_demissao.strftime('%d/%m/%Y')
+        else:
+            demissao_fech = data_fech.strftime('%d/%m/%Y') if data_fech else '-'
         funcao = colab.cargo.nome if colab.cargo else '-'
         valores_mensais = [
             (pcts_meses[i] / 100.0) if i < len(pcts_meses) and pcts_meses[i] is not None else None
             for i in range(len(meses_colunas))
         ]
         linha = (
-            [cpf, chapa, (colab.nome or '').upper(), r['tempo_casa_meses'], funcao]
+            [cpf, chapa, (colab.nome or '').upper(), admissao, demissao_fech, r['tempo_casa_meses'], funcao]
             + valores_mensais
             + [
                 (r['soma'] / 100.0) if r['soma'] is not None else None,
@@ -841,27 +862,32 @@ def _excel_aba_resumo(wb, resultado, meses_colunas, cpf_para_chapa, estilos):
             cell.border = estilos['thin_border']
 
     num_meses = len(meses_colunas)
-    col_widths = {'A': 14, 'B': 10, 'C': 36, 'D': 12, 'E': 29}
-    for idx_col in range(6, 6 + num_meses):
+    col_mes_inicio = 8
+    col_widths = {'A': 14, 'B': 10, 'C': 36, 'D': 12, 'E': 12, 'F': 12, 'G': 29}
+    for idx_col in range(col_mes_inicio, col_mes_inicio + num_meses):
         col_letter = ws.cell(row=1, column=idx_col).column_letter
         col_widths[col_letter] = 7.3
-    for idx_col in range(6 + num_meses, ws.max_column + 1):
+    for idx_col in range(col_mes_inicio + num_meses, ws.max_column + 1):
         col_letter = ws.cell(row=1, column=idx_col).column_letter
         col_widths[col_letter] = 14
     for col, width in col_widths.items():
         ws.column_dimensions[col].width = width
 
     right = estilos['right_align']
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=4, max_col=5):
+        for cell in row:
+            cell.number_format = "dd/mm/yyyy"
+            cell.alignment = right
     if num_meses:
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=6, max_col=5 + num_meses):
+        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=col_mes_inicio, max_col=col_mes_inicio + num_meses - 1):
             for cell in row:
                 cell.number_format = "0.00%"
                 cell.alignment = right
-    for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=4, max_col=4):
+    for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=6, max_col=6):
         for cell in col:
             cell.number_format = "0"
             cell.alignment = right
-    soma_col = 5 + num_meses + 1
+    soma_col = col_mes_inicio + num_meses + 1
     p_col = soma_col + 1
     for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=soma_col, max_col=p_col):
         for cell in col:
@@ -881,20 +907,18 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
     """
     ws = wb.create_sheet('Resumo', 0)
     num_meses = len(meses_colunas)
-    col_mes_inicio = 6
-    col_mes_fim = 5 + num_meses
-    col_soma = 6 + num_meses
-    col_p = 7 + num_meses
-    col_salario = 8 + num_meses
-    col_vpo = 9 + num_meses
-    col_valor_total = 10 + num_meses
+    col_mes_inicio = 8
+    col_mes_fim = 7 + num_meses
+    col_soma = 8 + num_meses
+    col_p = 9 + num_meses
+    col_salario = 10 + num_meses
+    col_vpo = 11 + num_meses
+    col_valor_total = 12 + num_meses
     col_mes_pct_na_aba_mes = 11
 
-    header = ['CPF', 'Chapa', 'Nome', 'Tempo casa (meses)', 'Função']
+    header = ['CPF', 'Chapa', 'Nome', 'Admissão', 'Demissão/Fech.', 'Tempo casa (meses)', 'Função']
     for (mes, ano) in meses_colunas:
-        mes_idx = int(mes) - 1
-        mes_nome = MESES_ABREV[mes_idx] if 0 <= mes_idx < len(MESES_ABREV) else f'{mes:02d}'
-        header.append(f'{mes_nome} {ano}')
+        header.append(_titulo_aba_mes(mes, ano))
     header.extend(['SOMA (%)', 'P (%)', 'Salário base PLR', 'VPO', 'Valor total'])
     ws.append(header)
 
@@ -915,13 +939,19 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
         data_row += 1
         row_idx = data_row
         colab = r['colaborador']
+        data_fech = r.get('data_fechamento')
         cpf = colab.cpf or '-'
         chapa = cpf_para_chapa.get(cpf, '') if cpf != '-' else ''
+        admissao = colab.data_admissao.strftime('%d/%m/%Y') if colab.data_admissao else '-'
+        if colab.data_demissao and data_fech and colab.data_demissao <= data_fech:
+            demissao_fech = colab.data_demissao.strftime('%d/%m/%Y')
+        else:
+            demissao_fech = data_fech.strftime('%d/%m/%Y') if data_fech else '-'
         funcao = colab.cargo.nome if colab.cargo else '-'
-        for col, val in enumerate([cpf, chapa, (colab.nome or '').upper(), r['tempo_casa_meses'], funcao], start=1):
+        for col, val in enumerate([cpf, chapa, (colab.nome or '').upper(), admissao, demissao_fech, r['tempo_casa_meses'], funcao], start=1):
             ws.cell(row=row_idx, column=col, value=val)
         for i, (mes, ano) in enumerate(meses_colunas):
-            sheet_mes = f"'{mes:02d}-{ano}'"
+            sheet_mes = f"'{_titulo_aba_mes(mes, ano)}'"
             col_resumo = col_mes_inicio + i
             ws.cell(
                 row=row_idx,
@@ -968,20 +998,24 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
             cell.border = estilos['thin_border']
 
     num_meses_resumo = len(meses_colunas)
-    col_widths = {'A': 14, 'B': 10, 'C': 36, 'D': 12, 'E': 29}
-    for idx_col in range(6, 6 + num_meses_resumo):
+    col_widths = {'A': 14, 'B': 10, 'C': 36, 'D': 12, 'E': 12, 'F': 12, 'G': 29}
+    for idx_col in range(col_mes_inicio, col_mes_inicio + num_meses_resumo):
         col_widths[get_column_letter(idx_col)] = 7.3
-    for idx_col in range(6 + num_meses_resumo, ws.max_column + 1):
+    for idx_col in range(col_mes_inicio + num_meses_resumo, ws.max_column + 1):
         col_widths[get_column_letter(idx_col)] = 14
     for col, width in col_widths.items():
         ws.column_dimensions[col].width = width
 
     right = estilos['right_align']
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=4, max_col=5):
+        for cell in row:
+            cell.number_format = "dd/mm/yyyy"
+            cell.alignment = right
     for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=col_mes_inicio, max_col=col_mes_fim):
         for cell in row:
             cell.number_format = "0.00%"
             cell.alignment = right
-    for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=4, max_col=4):
+    for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=6, max_col=6):
         for cell in col:
             cell.number_format = "0"
             cell.alignment = right
@@ -1014,7 +1048,7 @@ def _excel_abas_meses_formulas(wb, resultado, meses_colunas, cpf_para_chapa, cri
     headers_criterios = [label for _, label in _criterios_headers_com_peso()]
     pesos = _pesos_por_tipo()
     for idx, (mes, ano) in enumerate(meses_colunas):
-        titulo = f'{mes:02d}-{ano}'
+        titulo = _titulo_aba_mes(mes, ano)
         ws = wb.create_sheet(title=titulo)
         header_mes = [
             'CPF', 'Chapa', 'Nome', 'Admissão', 'Demissão', 'Função',
@@ -1102,7 +1136,7 @@ def _excel_abas_meses(wb, resultado, meses_colunas, cpf_para_chapa, criterios_po
     pesos = _pesos_por_tipo()
 
     for idx, (mes, ano) in enumerate(meses_colunas):
-        titulo = f'{mes:02d}-{ano}'
+        titulo = _titulo_aba_mes(mes, ano)
         ws = wb.create_sheet(title=titulo)
         header_mes = [
             'CPF', 'Chapa', 'Nome', 'Admissão', 'Demissão', 'Função',
