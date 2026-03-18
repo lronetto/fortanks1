@@ -31,6 +31,12 @@
                     <option value="com">Com alongamento</option>
                     <option value="sem">Sem alongamento</option>
                 </select>
+                <label class="mb-0 small text-muted ms-2">Formas:</label>
+                <select id="filtroFormas" class="form-select form-select-sm" style="width: auto;">
+                    <option value="">Todos</option>
+                    <option value="com">Com formas</option>
+                    <option value="sem">Sem formas</option>
+                </select>
                 <label class="mb-0 small text-muted ms-2">Usinagem:</label>
                 <select id="filtroUsinagem" class="form-select form-select-sm" style="width: auto;">
                     <option value="">Todos</option>
@@ -133,10 +139,11 @@
                         const badge = concluido
                             ? '<span class="badge bg-success me-1" title="Formas, alongamentos e séries preenchidos"><i class="fas fa-check-circle"></i> Concluído</span>'
                             : '<span class="badge bg-secondary me-1" title="Pendente de formas, alongamentos ou séries"><i class="fas fa-clock"></i> Em andamento</span>';
+                        const formas = row.tem_formas ? '<span class="text-success" title="Formas definidas e sem repetição"><i class="fas fa-check"></i> Formas</span>' : '<span class="text-muted" title="Pendente de definir formas (ou há repetição)"><i class="fas fa-minus"></i> Formas</span>';
                         const along = row.tem_alongamentos ? '<span class="text-success" title="Alongamentos associados"><i class="fas fa-check"></i> Along.</span>' : '<span class="text-muted" title="Sem alongamentos"><i class="fas fa-minus"></i> Along.</span>';
                         const usin = row.tem_usinagens ? '<span class="text-success" title="Usinagens associadas"><i class="fas fa-check"></i> Usin.</span>' : '<span class="text-muted" title="Sem usinagens"><i class="fas fa-minus"></i> Usin.</span>';
                         const prod = row.produzida ? '<span class="text-success" title="Produção processada"><i class="fas fa-check"></i> Produzido</span>' : '<span class="text-muted" title="Pendente de produção"><i class="fas fa-minus"></i> Produzido</span>';
-                        return badge + ' ' + along + ' &nbsp; ' + usin + ' &nbsp; ' + prod;
+                        return badge + ' ' + formas + ' &nbsp; ' + along + ' &nbsp; ' + usin + ' &nbsp; ' + prod;
                     }
                 },
                 { 
@@ -212,6 +219,12 @@
                 if (filtroAlong === 'com' && !temAlong) return false;
                 if (filtroAlong === 'sem' && temAlong) return false;
             }
+            var filtroFormas = $('#filtroFormas').val();
+            if (filtroFormas) {
+                var temFormas = !!row.tem_formas;
+                if (filtroFormas === 'com' && !temFormas) return false;
+                if (filtroFormas === 'sem' && temFormas) return false;
+            }
             var filtroUsin = $('#filtroUsinagem').val();
             if (filtroUsin) {
                 var temUsin = !!row.tem_usinagens;
@@ -240,8 +253,8 @@
             initializeDataTable();
         });
 
-        // Filtros: status, alongamento, usinagem, produzido (redesenha a tabela sem nova requisição)
-        $(document).on('change', '#filtroStatus, #filtroAlongamento, #filtroUsinagem, #filtroProduzido', function() {
+        // Filtros: status, alongamento, formas, usinagem, produzido (redesenha a tabela sem nova requisição)
+        $(document).on('change', '#filtroStatus, #filtroAlongamento, #filtroFormas, #filtroUsinagem, #filtroProduzido', function() {
             if ($.fn.DataTable.isDataTable('#tabelaConcretagens')) {
                 $('#tabelaConcretagens').DataTable().draw();
             }

@@ -70,7 +70,10 @@ class Upload(db.Model):
             db.session.commit()
             db.session.flush()
         except Exception as e:
-            print('upload error: ',e)
+            import logging
+            import traceback
+            logging.error('upload error: ',e)
+            logging.error(traceback.format_exc())
             db.session.rollback()
             raise e
 

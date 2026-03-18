@@ -138,7 +138,6 @@
     </div>
 </div>
 
-{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Função para preencher o modal com os dados do tanque
@@ -221,42 +220,50 @@ document.addEventListener('DOMContentLoaded', function() {
     
     document.getElementById('edit_segunda_concretagem').addEventListener('change', toggleDescricaoSegundaConcretagem);
 
-    // Adicionar evento para o botão de editar
-    const editButtons = document.querySelectorAll('.btn-editar-tanque');
-    editButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            try {
-                const tanqueId = this.getAttribute('data-id');
-                const url = `/api/tanques/${tanqueId}`;
-                fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Erro HTTP: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    if (data.success && data.tanque) {
-                        preencherModal(data.tanque);
-                        const modal = new bootstrap.Modal(document.getElementById('modalEditarTanque'));
-                        modal.show();
-                    } else {
-                        alert('Erro ao carregar os dados do tanque: ' + (data.error || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    alert('Erro ao carregar os dados do tanque: ' + error.message);
-                });
-            } catch (error) {
-                alert('Ocorreu um erro ao processar sua solicitação');
+    // Abrir modal de edição (delegação de eventos para funcionar com DataTables/AJAX)
+    document.addEventListener('click', function(e) {
+        const button = e.target.closest('.btn-editar-tanque');
+        if (!button) return;
+
+        e.preventDefault();
+
+        try {
+            const tanqueId = button.getAttribute('data-id');
+            if (!tanqueId) {
+                alert('Não foi possível identificar o tanque para edição.');
+                return;
             }
-        });
+
+            const url = `/api/tanques/${tanqueId}`;
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.tanque) {
+                    preencherModal(data.tanque);
+                    const modalEl = document.getElementById('modalEditarTanque');
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                } else {
+                    alert('Erro ao carregar os dados do tanque: ' + (data.error || 'Erro desconhecido'));
+                }
+            })
+            .catch(error => {
+                alert('Erro ao carregar os dados do tanque: ' + error.message);
+            });
+        } catch (error) {
+            alert('Ocorreu um erro ao processar sua solicitação');
+        }
     });
 
     // Adicionar evento para o botão de salvar edição
@@ -344,5 +351,4 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-{% endblock %}
 

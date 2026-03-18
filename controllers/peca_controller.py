@@ -2078,7 +2078,7 @@ def processar_arquivo_inspecao(xlsx_path):
     print(f"Total de séries novas: {novas} e atualizadas: {atualizadas}")
     atualizadas = 0
     novas = 0
-    if False:
+    if True:
         for alongamento in alongamentos:
             concretagem = ConcretoConcretagens.query.filter(ConcretoConcretagens.conc==alongamento['concretagem']).first()
             if not concretagem:
@@ -2102,7 +2102,7 @@ def processar_arquivo_inspecao(xlsx_path):
     atualizadas = 0
     novas = 0
     # Processar peças
-    for peca in pecas:
+    for i,peca in enumerate(pecas):
         peca_existe = TanquesPecas.query.filter(
             TanquesPecas.numero_sequencial==peca['numero_sequencial'], 
             TanquesPecas.tanque_id==peca['tanque_id']
@@ -2125,16 +2125,23 @@ def processar_arquivo_inspecao(xlsx_path):
                 qualidade=qualidade_serializada
             )
             peca_dict.save()
+            db.session.flush()
+            pecas[i]['peca_id'] = peca_dict.id
             novas += 1
         else:
-            log['atualizadas'] += 1
-            #peca_existe.qualidade = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
-            peca_existe.data_concretagem = peca['data_concretagem']
-            peca_existe.nome = peca['nome']
-            peca_existe.tipo = peca['tipo']
-            peca_existe.numero_tanque = peca['numero_tanque']
-            peca_existe.save()
             atualizadas += 1
+            log['atualizadas'] += 1
+            pecas[i]['peca_id'] = peca_existe.id
+            if False:
+                log['atualizadas'] += 1
+                
+                #peca_existe.qualidade = json.dumps(serialize_nested(peca['qualidade']), ensure_ascii=False)
+                peca_existe.data_concretagem = peca['data_concretagem']
+                peca_existe.nome = peca['nome']
+                peca_existe.tipo = peca['tipo']
+                peca_existe.numero_tanque = peca['numero_tanque']
+                peca_existe.save()
+                atualizadas += 1
     print(f"Total de peças novas: {novas} e atualizadas: {atualizadas}")
 
     # Agrupar peças por concretagem para ConcretoConcretagens (alongamentos em branco quando não houver)
@@ -2153,7 +2160,10 @@ def processar_arquivo_inspecao(xlsx_path):
     for conc, lista_pecas in pecas_por_concretagem.items():
         conc_str = str(conc)
         pecas_json = [
-            {'nome': p['nome'], 'tanque_id': p['tanque_id'], 'forma': p.get('forma')}
+            {'nome': p['nome'], 
+            'tanque_id': p['tanque_id'], 
+            'forma': p.get('forma', 0), 
+            'peca_id': p.get('peca_id', None)}
             for p in lista_pecas
         ]
         data_conc = lista_pecas[0]['data_concretagem'] if lista_pecas else None

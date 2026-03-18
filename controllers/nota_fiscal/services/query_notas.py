@@ -487,6 +487,7 @@ def api_get_dados_notas_fiscais(request):
     order_dir = json_filtros.get("order_dir", "desc")
     order_mapping = {
         "numero_nf": NotaFiscal.numero_nf,
+        "tipo": NotaFiscal.tipo,
         "data_emissao": NotaFiscal.data_emissao,
         "vencimento": NotaFiscal.vencimento,
         "valor_total": NotaFiscal.valor_total,

@@ -254,6 +254,7 @@ def api_listar():
                 'data_concretagem': conc.data_concretagem.isoformat() if conc.data_concretagem else None,
                 'pista': conc.pista,
                 'quantidade_pecas': len(conc.get_pecas()),
+                'tem_formas': _concretagem_formas_ok(conc),
                 'tem_alongamentos': _concretagem_tem_alongamentos(conc),
                 'tem_usinagens': _concretagem_tem_usinagens(conc),
                 'produzida': _concretagem_produzida(conc),
