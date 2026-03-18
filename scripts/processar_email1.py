@@ -1190,7 +1190,7 @@ def processar_upload(anexo, nota=None, filename=None, payload=None, tipo=None, d
                 print(f"dados_adicionais: {dados_json_dua}")
                 up = Upload(
                     pai='DUA',
-                    pai_id=dados_adicionais['dua']['dua'],
+                    pai_id=dados_adicionais['dua']['nf_id'],
                     tipo=tipo,
                     filename=file_name,
                     mimetype='application/pdf',
