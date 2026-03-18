@@ -1,5 +1,8 @@
 from models.database import db
 from datetime import datetime
+from sqlalchemy.orm import defer
+from sqlalchemy import func
+
 from flask import render_template, current_app
 from io import BytesIO
 import tempfile
@@ -32,7 +35,12 @@ CNPJS_MATRIZ_FILIAIS = CNPJS_MATRIZ + CNPJS_FILIAIS
 CFOPS_COMPRA = ['6101','5101','5405','6105','6401']
 CFOPS_VENDA = ['6101','5101','6107']
 CFOPS_TRANSFERENCIA = ['5949','6949']
-
+MAP_TIPO = {
+    0 : 'nfe',
+    1 : 'nfe',
+    2 : 'cte',
+    3 : 'nfse',
+}
 def determinar_movimentacoes_estoque(nota_fiscal):
     """
     Determina as movimentações de estoque necessárias baseado nos CNPJs da nota fiscal.
@@ -180,11 +188,24 @@ class NotaFiscal(db.Model):
             self.xml_data = data.get('xml',None) 
 
             self.chave_acesso = data.get('chave_acesso',None)
-
-        if not tipo:
+        nota = None
+        # Durante o __init__ essa instância pode estar "meio preenchida" e/ou já ter sido
+        # adicionada ao session por algum processar_*; qualquer query aqui dispara autoflush.
+        # Para evitar FlushError (tentativa de UPDATE com PK NULL), fazemos a busca sem autoflush.
+        if self.chave_acesso:
+            with db.session.no_autoflush:
+                nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == self.chave_acesso).first()
+            if nota:
+                for key, value in nota.__dict__.items():
+                    # nunca copiar estado interno do SQLAlchemy (ex: _sa_instance_state)
+                    if key.startswith('_'):
+                        continue
+                    setattr(self, key, value)
+            
+        if not tipo and not nota:
             self.extrair_tipo_nota()
 
-        if self.tipo:
+        if self.tipo and not nota:
             if self.tipo == 'nfe':
                 self.processar_nfe()
             elif self.tipo == 'cte':
@@ -192,16 +213,16 @@ class NotaFiscal(db.Model):
             elif self.tipo == 'nfse':
                 self.processar_nfse()
              
-        if chave_acesso:
-            nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso==chave_acesso).first()
-            if nota:
-                for key, value in nota.__dict__.items():
-                    setattr(self, key, value)
+        # Se a chave veio via `data`, o parâmetro `chave_acesso` pode estar None.
+        # Neste caso, usamos `self.chave_acesso` para recarregar do banco e obter o `id`.
+        
                 
         if id:
             nota = NotaFiscal.query.get_or_404(id)
             if nota:
                 for key, value in nota.__dict__.items():
+                    if key.startswith('_'):
+                        continue
                     setattr(self, key, value)
                     
                 upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first()
@@ -212,7 +233,7 @@ class NotaFiscal(db.Model):
                     self.upload = Upload('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
                 else:
                     self.upload = upload
-                print('self.upload: ',self.upload)
+                #print('self.upload: ',self.upload)
     def extrair_tipo_nota(self):
         """
         Extrai o tipo de nota fiscal do XML
@@ -220,9 +241,9 @@ class NotaFiscal(db.Model):
 
         dicta = self.get_xml_json()
         
-        print(f'dicta: {dicta}')
+        #print(f'dicta: {dicta}')
         if dicta.get('CompNfse',None) or dicta.get('tcListaNFse',None) or dicta.get('ListaNfse',None) or dicta.get('NFSe',None):
-            self.tipo = 'nfse'
+            self.tipo = MAP_TIPO[3]
         elif dicta.get('nfeProc',None):
             self.tipo = 'nfe'
         elif dicta.get('cteProc',None):
@@ -269,29 +290,79 @@ class NotaFiscal(db.Model):
         itens_importados = sum(1 for item in self.itens if item.importado_estoque)
         
         return (itens_importados / total_itens) * 100   
+    def get_cte(self):
+        cte = NotaFiscal.query.filter(
+            NotaFiscal.tipo == 2,
+            func.json_unquote(
+                func.json_extract(NotaFiscal.dados_adicionais, "$.chave_nf")
+            ) == self.chave_acesso
+        ).first()
+        if cte:
+            return cte
+        return None
     def get_pdf(self):
         if not self.upload:
             print(f'get_pdf: {self.id} chave: {self.chave_acesso}')
-            if not db.session.query(Upload.id).filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first():
-                up = Upload.query.filter_by(pai='NotaFiscal', filename=f'{self.chave_acesso}.pdf', tipo=1).first()
+
+            # Qualquer query/commit aqui pode disparar autoflush e falhar se existir alguma
+            # NotaFiscal pendente no session com PK None. Protegemos tudo com no_autoflush.
+            with db.session.no_autoflush:
+                # Se não temos id, tentamos recarregar do banco pela chave antes de buscar Upload.
+                if self.id is None and self.chave_acesso:
+                    nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == self.chave_acesso).first()
+                    if nota:
+                        for key, value in nota.__dict__.items():
+                            if key.startswith('_'):
+                                continue
+                            setattr(self, key, value)
+
+                up = None
+                if self.id is not None:
+                    up = Upload.query.options(defer(Upload.blob)).filter_by(
+                        pai='NotaFiscal',
+                        pai_id=self.id,
+                        tipo=1
+                    ).first()
+
+                if not up:
+                    up = Upload.query.options(defer(Upload.blob)).filter_by(
+                        pai='NotaFiscal',
+                        filename=f'{self.chave_acesso}.pdf',
+                        tipo=1
+                    ).first()
+
                 if up:
-                    up.pai_id = self.id
-                    up.save()
+                    # Se já existe upload com filename, e agora temos id, vinculamos.
+                    if self.id is not None and up.pai_id != self.id:
+                        up.pai_id = self.id
+                        up.save()
                     self.upload = up
                 else:
                     if self.dados_adicionais:
                         dados_json = json.loads(self.dados_adicionais) if isinstance(self.dados_adicionais, str) else self.dados_adicionais
-                        if isinstance(dados_json, dict):
-                            if dados_json.get('id'):
-                                pdf_data = Arquivei(chave_acesso=dados_json.get('id'),pdf=True)
-                            else:
-                                pdf_data = Arquivei(chave_acesso=self.chave_acesso,pdf=True)
+                        if isinstance(dados_json, dict) and dados_json.get('id'):
+                            pdf_data = Arquivei(chave_acesso=dados_json.get('id'), pdf=True)
+                        else:
+                            pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
                     else:
-                        pdf_data = Arquivei(chave_acesso=self.chave_acesso,pdf=True)
-                    if pdf_data.pdf:
-                        self.upload = Upload(pai='NotaFiscal', pai_id=self.id, tipo=1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
-                    else:
+                        pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
+
+                    if not pdf_data.pdf:
                         return None
+
+                    # Se ainda não temos id, evitamos criar Upload (isso faz commit e pode causar flush).
+                    if self.id is None:
+                        self.pdf = pdf_data.pdf
+                        return self.pdf
+
+                    self.upload = Upload(
+                        pai='NotaFiscal',
+                        pai_id=self.id,
+                        tipo=1,
+                        filename=f'{self.chave_acesso}.pdf',
+                        mimetype='application/pdf',
+                        blob=pdf_data.pdf
+                    )
         return self.upload
     def get_chave_acesso(self):
         return self.chave_acesso    
@@ -340,9 +411,19 @@ class NotaFiscal(db.Model):
             pass
         
         return None        
+    def get_cancelado(self):
+        print(f'get_cancelado: {self.tipo} id: {self.id} chave: {self.chave_acesso}')
+        arquivei = Arquivei(chave_acesso=self.chave_acesso,cancelamento=True)
+        if arquivei.cancelada:
+            nf = NotaFiscal.query.get(self.id)
+            nf.status_processamento = 'cancelada'
+            nf.save()
+            return True
+        return False
     def importar_arquivei(data_inicial,data_final,tipo='nfe',logs=None):
         notas = Arquivei(data_inicial=data_inicial, data_final=data_final,tipo=tipo)
-        print(f'notas: {len(notas.datas)}')
+        #print(f'notas: {len(notas.datas)}')
+        #print(f'notas.datas: {notas}')
         total = len(notas.datas)
         logs={
             'tipo': tipo,
@@ -361,6 +442,7 @@ class NotaFiscal(db.Model):
         if total > 0:
             for data in notas.datas:
                 nf = NotaFiscal(data=data)
+
                 if nf.logs['erro']:
                     logs['erro'] += 1
                     logs['erros'].append(nf.logs['erro'])
@@ -375,12 +457,17 @@ class NotaFiscal(db.Model):
                 notasn.append(nf)
             i+=1
         for nf in notasn:
-            print(f'nf: {nf.id}')
-            nf.get_pdf()
-        print(f'logs: {logs}')
+            #print(f'nf: {nf.id}')
+            if nf.tipo != 3:
+                if not nf.get_cancelado():
+                    nf.get_pdf()
+                else:
+                    print(f'nf cancelada: {nf.id} chave: {nf.chave_acesso} tipo: {nf.tipo}')
+        #print(f'logs: {logs}')
         return logs
     def processar_cte(self):
         from models.fornecedor import Fornecedor
+        print(f'processar_cte inicio')
         chave_acesso, dados = self.extrair_dados_xml_cte()
         if not chave_acesso or not dados:
             try:
@@ -401,7 +488,6 @@ class NotaFiscal(db.Model):
         existente = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
         if existente:
             
-            self.fornecedor_id = fornecedor.id
             self.logs['existente'] += 1
             self.logs['existentes'].append({
                 'numero_nf':existente.numero_nf,
@@ -415,6 +501,7 @@ class NotaFiscal(db.Model):
             })
             existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             existente.save()
+           
             return existente
         try:
             self.tipo = 2
@@ -431,6 +518,7 @@ class NotaFiscal(db.Model):
             self.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
             self.save()
             db.session.refresh(self)
+            db.session.commit()
             self.logs['inserido'] += 1
             self.logs['inseridos'].append(self.to_dict())
 
@@ -440,9 +528,10 @@ class NotaFiscal(db.Model):
             return False
     def processar_nfse(self):
         import traceback
+        print(f'processar_nfse inicio')
         chave_acesso, dados = self.extrair_dados_xml_nfse()
         print(f'chave_acesso: {chave_acesso}')
-        print(f'dados: {dados}')
+        #print(f'dados: {dados}')
         if not chave_acesso or not dados:
             logger.warning("processar_nfse: extração retornou chave ou dados vazios")
             return False
@@ -459,6 +548,7 @@ class NotaFiscal(db.Model):
                 #self.logs['existentes'].append(existente.to_dict())
                 existente.dados_adicionais = json.dumps(dados.get('dados_adicionais') or {}, ensure_ascii=False)
                 existente.save()
+                
                 return existente
         except Exception as e:
             logger.error(f"processar_nfse [nota existente]: {e}", exc_info=True)
@@ -531,8 +621,7 @@ class NotaFiscal(db.Model):
             nf = NotaFiscal.query.filter_by(chave_acesso=chave_acesso).first()
             #print('nf: ',nf)
             #print('self: ',self)
-            if not nf:
-                print(f'dados_nf: {dados_nf}')
+            
             if nf:
                 self.logs['existente'] += 1
                 self.logs['existentes'].append({
@@ -546,6 +635,7 @@ class NotaFiscal(db.Model):
                     self.logs['mensagem'] = "Dados adicionais não encontrados adicionando"
                     nf.dados_adicionais = json.dumps(dados_nf.get('dados_adicionais'), ensure_ascii=False)
                     nf.save()
+               
                 return nf   
             if not self.xml_data:
                 self.xml_data=self.data.get('xml',None)

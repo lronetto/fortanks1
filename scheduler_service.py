@@ -600,6 +600,7 @@ def main():
     
     try:
         #job_diario()
+        job_email5min()
         scheduler = iniciar_scheduler()
         logger.info("Serviço de scheduler em execução. Pressione Ctrl+C para parar.")
         

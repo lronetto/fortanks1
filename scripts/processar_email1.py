@@ -15,10 +15,11 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from utils.relatorio_financeiro import gerar_relatorio_financeiro
-from models.nota_fiscal import NotaFiscal
+from models.nota_fiscal import NotaFiscal, CNPJS_MATRIZ_FILIAIS
 from models.upload import Upload
 from models.arquivei import Arquivei
-from utils.utils import validar_chave_acesso
+from models.protocolo import Protocolo
+from utils.utils import validar_chave_acesso, json_dumps_safe
 import re
 import unicodedata
 import json
@@ -32,6 +33,8 @@ import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+import re
+from pdfminer.high_level import extract_text
 # Configuração de logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -122,7 +125,7 @@ def get_CC(nnf):
 IMAP_FOLDER = 'Inbox'
 ASSUNTO_PADRAO_NFE = ['Envio de Nota Fiscal Eletrônica']
 ASSUNTO_PADRAO_CTE = ['Envio de Nota Fiscal Eletrônica - DUA']
-ASSUNTO_PADRAO_DUA = ['CTE, NF Fortanks e DUA']
+ASSUNTO_PADRAO_DUA = ['CTE, NF Fortanks e DUA','CTE, NF Fortanks']
 ASSUNTO_PADRAO_PROTOCOLO = ["ENC: NF´S PROTOCOLOS","ENC: NF PROTOCOLO","NF PROTOCOLO","Protocolo","ENC: PROTOCOLO"]
 ASSUNTO_PADRAO_REEMBOLSO = ['REEMBOLSO','REEBOLSO', 'ENC: REEBOLSO','ENC: reembolso']
 EMAIL_DESTINO = 'leandro.netto@fortanks.ind.br'
@@ -527,7 +530,7 @@ def decodificar_assunto_email(subject_raw):
 def determinar_tipo_email(subject):
     """
     Determina o tipo de email baseado no assunto.
-    Retorna: 0=desconhecido, 1=NFE, 2=Protocolo, 3=Reembolso
+    Retorna: 0=desconhecido, 1=NFE, 2=Protocolo, 3=Reembolso, 4=DUA
     """
     # Decodifica o assunto antes de verificar
     subject_decodificado = decodificar_assunto_email(subject)
@@ -538,7 +541,76 @@ def determinar_tipo_email(subject):
         return 3
     elif any(p in subject_decodificado for p in ASSUNTO_PADRAO_NFE):
         return 1
+    elif any(p in subject_decodificado for p in ASSUNTO_PADRAO_DUA):
+        return 6
     return 0
+
+
+def _normalizar_numero_protocolo(valor: str | None) -> str | None:
+    if not valor:
+        return None
+    v = str(valor).strip()
+    v = re.sub(r"\s+", " ", v)
+    return v or None
+
+
+def extrair_numero_protocolo_do_texto(texto: str | None) -> str | None:
+    """
+    Tenta extrair o número do protocolo a partir de um texto (assunto ou conteúdo do PDF).
+    Aceita formatos comuns como: "Protocolo 12345", "PROTOCOLO: 12345/2026", "Protocolo nº 12345".
+    """
+    if not texto:
+        return None
+    t = decodificar_assunto_email(texto) if not isinstance(texto, str) else texto
+    t = " ".join(t.split())
+
+    # Ex.: "Protocolo 12345", "PROTOCOLO: 12345/2026", "Protocolo Nº 12345"
+    m = re.search(r"(?i)\bprotocolo\b\s*(?:n[ºo]\.?\s*)?[:\-]?\s*([0-9]{3,12}(?:/[0-9]{2,4})?)\b", t)
+    if m:
+        return _normalizar_numero_protocolo(m.group(1))
+
+    # Fallback: pega a primeira sequência numérica "grande" que costuma ser o protocolo
+    m2 = re.search(r"\b([0-9]{5,12})\b", t)
+    if m2:
+        return _normalizar_numero_protocolo(m2.group(1))
+    return None
+
+
+def extrair_numero_protocolo_pdf(payload: bytes) -> str | None:
+    """
+    Extrai texto do PDF e tenta identificar o número do protocolo.
+    """
+    try:
+        reader = PdfReader(io.BytesIO(payload))
+        # Limita para as 2 primeiras páginas para performance
+        texto = []
+        for i, page in enumerate(reader.pages[:2]):
+            try:
+                texto.append(page.extract_text() or "")
+            except Exception:
+                continue
+        joined = "\n".join(texto)
+        return extrair_numero_protocolo_do_texto(joined)
+    except Exception as e:
+        logging.warning(f"Erro ao extrair número do protocolo do PDF: {e}")
+        return None
+
+
+def obter_ou_criar_protocolo_por_numero(numero: str, data: datetime | None = None) -> Protocolo:
+    """
+    Busca (ou cria) Protocolo pelo número.
+    """
+    numero = (numero or "").strip()
+    if not numero:
+        raise ValueError("Número do protocolo vazio")
+    protocolo = Protocolo.query.filter(Protocolo.numero == numero).first()
+    if protocolo:
+        return protocolo
+    data_prot = (data or datetime.now()).date()
+    protocolo = Protocolo(data=data_prot, numero=numero)
+    db.session.add(protocolo)
+    db.session.commit()
+    return protocolo
 
 def extrair_anexos_do_email(msg_obj):
     """
@@ -651,7 +723,7 @@ def buscar_emails_por_uids(env, uids_ordenados, contagem_anexos=None):
 
 
 
-def processar_anexo_pdf(anexo, filename, payload, tipo):
+def processar_anexo_pdf(anexo, filename, payload, tipo, protocolo_id: int | None = None):
     """
     Processa um anexo PDF: tenta identificar por código de barras ou nome do arquivo.
     Retorna True se processou com sucesso, False caso contrário.
@@ -735,9 +807,83 @@ def processar_anexo_pdf(anexo, filename, payload, tipo):
             # Continua com o processamento normal em caso de erro
     
     # Processamento normal (PDF único ou tipo diferente de 3)
-    return processar_anexo_pdf_pagina(anexo, filename, payload, tipo)
+    return processar_anexo_pdf_pagina(anexo, filename, payload, tipo, protocolo_id=protocolo_id)
+def extrair_dados_dua(pdf_input):
+    """
+    Extrai texto e campos de uma DUA a partir de:
+    - caminho do arquivo (str)
+    - payload do arquivo (bytes/bytearray)
+    - objeto file-like (com .read())
+    """
+    if isinstance(pdf_input, (bytes, bytearray)):
+        texto = extract_text(io.BytesIO(pdf_input))
+    else:
+        texto = extract_text(pdf_input)
 
-def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
+    dados = {}
+
+    # DATA (Pagamento ou Emissão)
+    data_match = re.search(r'Pagamento\s+(\d{2}/\d{2}/\d{4})', texto)
+    if data_match:
+        dados['data'] = data_match.group(1)
+
+    # VALOR
+    valor_match = re.search(r'Receita\s+R\$\s*([\d\.,]+)', texto)
+    if valor_match:
+        dados['valor'] = valor_match.group(1)
+
+    # DACTE
+    dacte_match = re.search(r'DACTE\s*N[ºo]\s*(\d+)', texto, re.IGNORECASE)
+    if dacte_match:
+        dados['dacte'] = dacte_match.group(1)
+
+    # NF
+    nf_match = re.search(r'NF\s*N[ºo]\s*(\d+)', texto, re.IGNORECASE)
+    if nf_match:
+        dados['nf'] = nf_match.group(1)
+
+    # EMITENTE DACTE (logo após data)
+    emitente_match = re.search(
+        r'DACTE\s*N[ºo]\s*\d+\s*EMITIDO\s*EM\s*\d{2}/\d{2}/\d{4}\s*\n?([A-Z\s]+)',
+        texto,
+        re.IGNORECASE
+    )
+    if emitente_match:
+        dados['emitente_dacte'] = emitente_match.group(1).strip()
+
+    return dados
+def _processar_dua(dua,payload,filename,dados_adicionais,anexo,tipo):
+    """
+    Processa uma DUA: tenta identificar por código de barras ou nome do arquivo.
+    Retorna True se processou com sucesso, False caso contrário.
+    """
+    print(f"processar_dua inicio")
+    cod = dua[0].data.decode('utf-8').strip()
+    #85830000015600000072026031740242103331260074
+    print(f"cod: {cod} int(cod[:3]): {int(cod[:3])}")
+    if int(cod[:3]) == 858:
+        duan = cod[27:37]
+        dados = extrair_dados_dua(payload)
+        nf = NotaFiscal.query.filter(NotaFiscal.numero_nf == dados['nf'] and 
+                NotaFiscal.cnpj_emitente.in_(CNPJS_MATRIZ_FILIAIS)).first()
+        if nf:
+            dados['nf_id'] = nf.id
+            cte = nf.get_cte()
+            if cte:
+                dados['cte_id'] = cte.id
+            else:
+                dados['cte_id'] = None
+        else:
+            dados['nf_id'] = None
+
+        dados['dua'] = duan
+        dados['valor'] = float(cod[9:15])/100
+        print(f"dados: {dados}")
+        dados_adicionais['dua'] = dados
+        processar_upload(anexo=anexo, filename=filename, payload=payload, tipo=tipo, dados_adicionais=dados_adicionais)
+    return True
+
+def processar_anexo_pdf_pagina(anexo, filename, payload, tipo, protocolo_id: int | None = None):
     """
     Processa uma página de PDF: tenta identificar por código de barras ou nome do arquivo.
     Retorna True se processou com sucesso, False caso contrário.
@@ -751,9 +897,9 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
         'codigos': [],
         'erro': []
     }
-    # Ignora arquivos que contenham 'protocolo' no nome
-    if 'protocolo' in filename.lower():
-        logging.info(f"Ignorando arquivo de protocolo: {filename}")
+    # Para e-mail tipo protocolo (2), o PDF "protocolo" também deve ser salvo e vinculado ao Protocolo.
+    if 'protocolo' in filename.lower() and tipo != 2:
+        logging.info(f"Ignorando arquivo de protocolo (tipo != 2): {filename}")
         return False
     up = db.session.query(Upload.id,Upload.pai,Upload.pai_id,Upload.tipo,Upload.filename,Upload.mimetype,Upload.dados_adicionais).filter(Upload.filename==filename).first()
     if up:
@@ -777,7 +923,7 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
     decs = []
     try:
         print(f"decodando imagem")
-        decs = decode(img,)
+        decs = decode(img)
         anexo['codbarras']['qtd'] = len(decs)
     except Exception as e:
         logging.error(f"Erro ao decodificar o arquivo {filename}: {e}")
@@ -794,9 +940,13 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                 'decodificado': dec.data.decode('utf-8'),
                 'tiponf': dec.type
             })
-        
-        dados_adicionais['codbarras'] = anexo['codbarras']['codigos']
+        #print(f'anexo["codbarras"]: {anexo["codbarras"]}')
+        dados_adicionais['codbarras'] = anexo['codbarras']['codigos'] 
         dec = [dec for dec in decs if dec.type == 'CODE128']
+        dua = [dec for dec in decs if dec.type == 'I25']
+        if dua:
+            _processar_dua(dua,payload,filename,dados_adicionais,anexo,tipo)
+            return True
         if dec:
             dec1 = dec[0].data.decode('utf-8') if dec[0].data else None
             tiponf = dec1[20:22] if dec1 and len(dec1) > 22 else None
@@ -830,6 +980,8 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
             
             if nota:
                 logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
+                if protocolo_id and tipo == 2:
+                    dados_adicionais['protocolo_id'] = protocolo_id
                 processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais)
                 return True
             else:
@@ -841,6 +993,8 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                             #logging.info(f"achado arquivei")
                             nota = NotaFiscal(xml_data=arquivei.xml_data, tipo=tiponfc)
                             if nota:
+                                if protocolo_id and tipo == 2:
+                                    dados_adicionais['protocolo_id'] = protocolo_id
                                 processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais)
                             return True
                     except Exception as e:
@@ -868,9 +1022,12 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
         fornecedor_normalizado = normalizar_texto(fornecedor)
         if not notas:
             logging.info(f"numero nf {numero_nf} nao encontrado no db")
-            up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf')
+            dados = None
+            if protocolo_id and tipo == 2:
+                dados = json.dumps({"protocolo_id": protocolo_id})
+            up = Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', dados_adicionais=dados)
             if not up.id:
-                Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', payload)
+                Upload('NotaFiscal', 0, tipo, filename, 'application/pdf', payload, dados_adicionais=dados)
                 logging.info(f"upload realizado sem nota {numero_nf}")
             return True
         else:
@@ -884,9 +1041,12 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
             if nota:
                 logging.info(f"nota encontrada {nota.id} {nota.numero_nf}")
                 try:
-                    up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf')
+                    dados = None
+                    if protocolo_id and tipo == 2:
+                        dados = json.dumps({"protocolo_id": protocolo_id})
+                    up = Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', dados_adicionais=dados)
                     if not up.id:
-                        Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                        Upload(pai='NotaFiscal', pai_id=nota.id, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload, dados_adicionais=dados)
                         logging.info(f"upload realizado {numero_nf}")
                     return True
                 except Exception as e:
@@ -894,9 +1054,12 @@ def processar_anexo_pdf_pagina(anexo, filename, payload, tipo):
                     return False
             else:
                 logging.info(f"fornecedor nao encontrado {numero_nf}")
-                up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf')
+                dados = None
+                if protocolo_id and tipo == 2:
+                    dados = json.dumps({"protocolo_id": protocolo_id})
+                up = Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', dados_adicionais=dados)
                 if not up.id:
-                    Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload)
+                    Upload(pai='NotaFiscal', pai_id=0, tipo=tipo, filename=filename, mimetype='application/pdf', blob=payload, dados_adicionais=dados)
                     logging.info(f"upload realizado sem nota {numero_nf}")
                 return True
 
@@ -950,13 +1113,15 @@ def marcar_email_como_lido(uid, usar_imaplib, mail_marcar=None, imap=None):
         logging.warning(f'Erro ao marcar UID {uid} como lido: {e}')
         return False
 
-def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais='{}'):
+def processar_upload(anexo, nota=None, filename=None, payload=None, tipo=None, dados_adicionais='{}'):
+    print(f"processar_upload inicio")
     tinicia_tempo = time.time()
     up = db.session.query(Upload.id,Upload.pai,Upload.pai_id,Upload.tipo,Upload.filename,Upload.mimetype,Upload.dados_adicionais).filter(Upload.filename==filename).first()
     tempo_fim = time.time()
     tempo_execucao = tempo_fim - tinicia_tempo
     logging.info(f"tempo de execucao 1: {tempo_execucao} segundos")
     tinicia_tempo = time.time()
+    file_name = filename
     if nota:
         json_nota = json.loads(nota.dados_adicionais)
         json_nota['liberada'] = True
@@ -964,12 +1129,27 @@ def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais='{}'
         json_nota['liberada_por'] = 'email'
         nota.dados_adicionais = json.dumps(json_nota)
         nota.save()
+        file_name = f'{nota.id}_{tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
     tempo_fim = time.time()
     tempo_execucao = tempo_fim - tinicia_tempo
     logging.info(f"tempo de execucao 2: {tempo_execucao} segundos")
     logging.info(f"fazendo o upload da nota: {nota}")
-    file_name = f'{nota.id}_{tipo}_{nota.numero_nf}_{nota.chave_acesso}.pdf'
+    
     #logging.info(f"file_name: {file_name}")
+    dados_json = None
+    try:
+        if isinstance(dados_adicionais, dict):
+            dados_json = json.dumps(dados_adicionais)
+        elif isinstance(dados_adicionais, str) and dados_adicionais.strip():
+            # valida se é json; se não, guarda como texto
+            try:
+                json.loads(dados_adicionais)
+                dados_json = dados_adicionais
+            except Exception:
+                dados_json = json.dumps({"info": dados_adicionais})
+    except Exception:
+        dados_json = None
+
     if not up:
         logging.info(f"upload filename {filename} nao existe")
         tinicia_tempo = time.time()
@@ -977,7 +1157,48 @@ def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais='{}'
         up = db.session.query(Upload.id,Upload.pai,Upload.pai_id,Upload.tipo,Upload.filename,Upload.mimetype).filter(Upload.filename==file_name).first()
         if not up:
             logging.info(f"upload filename {file_name} nao existe criando")
-            up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload)
+            if tipo == 6:
+                # Para DUA, precisamos garantir que `dados_adicionais` seja dict (não string JSON)
+                # e que `pai_id` seja um inteiro compatível com a coluna.
+                if isinstance(dados_adicionais, str) and dados_adicionais.strip():
+                    try:
+                        dados_dict = json.loads(dados_adicionais)
+                    except Exception:
+                        dados_dict = {"info": dados_adicionais}
+                elif isinstance(dados_adicionais, dict):
+                    dados_dict = dados_adicionais
+                else:
+                    dados_dict = {}
+
+                dua_info = dados_dict.get("dua")
+                dua_num = None
+                if isinstance(dua_info, dict):
+                    dua_num = dua_info.get("dua")
+                else:
+                    dua_num = dua_info
+
+                pai_id = 0
+                try:
+                    if dua_num is not None:
+                        pai_id_int = int(str(dua_num).strip())
+                        # Evita overflow em colunas INT 32-bit (MySQL padrão em alguns schemas)
+                        pai_id = pai_id_int if pai_id_int <= 2147483647 else 0
+                except Exception:
+                    pai_id = 0
+
+                dados_json_dua = json.dumps(dados_dict, ensure_ascii=False)
+                print(f"dados_adicionais: {dados_json_dua}")
+                up = Upload(
+                    pai='DUA',
+                    pai_id=dados_adicionais['dua']['dua'],
+                    tipo=tipo,
+                    filename=file_name,
+                    mimetype='application/pdf',
+                    blob=payload,
+                    dados_adicionais=dados_json_dua
+                )
+            else:
+                up = Upload('NotaFiscal', nota.id, tipo, file_name, 'application/pdf', payload, dados_adicionais=dados_json)
             tempo_fim = time.time()
             tempo_execucao = tempo_fim - tinicia_tempo
             logging.info(f"tempo de execucao 3: {tempo_execucao} segundos")
@@ -996,7 +1217,7 @@ def processar_upload(anexo, nota, filename, payload, tipo, dados_adicionais='{}'
         
         anexo['upload'] = True
 
-def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=None):
+def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=None, protocolo_id: int | None = None):
     """
     Processa um anexo ZIP ou RAR: extrai arquivos e processa conforme o tipo.
     Se tipo == 3 (reembolso), processa PDFs extraídos usando processar_anexo_pdf.
@@ -1051,7 +1272,7 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=No
                         
                         # Processa os arquivos
                         resultado = _processar_arquivos_comprimidos(
-                            rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo, lock=lock
+                            rar_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo, lock=lock, protocolo_id=protocolo_id
                         )
                 except rarfile.RarCannotExec as e:
                     erro_msg = f"Ferramenta unrar não encontrada ou não pode ser executada. Erro: {str(e)}. Verifique se unrar está instalado e no PATH."
@@ -1080,7 +1301,7 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=No
                 
                 # Processa os arquivos
                 resultado = _processar_arquivos_comprimidos(
-                    zip_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo, lock=lock
+                    zip_ref, arquivos_no_arquivo, anexo, tipo, log_email_entry, tipo_arquivo, lock=lock, protocolo_id=protocolo_id
                 )
         
         return resultado
@@ -1103,7 +1324,7 @@ def processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=No
         anexo['codbarras']['erro'].append(f"Erro ao processar {tipo_erro}: {str(e)}")
         return False
 
-def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, log_email_entry, tipo_arquivo, lock=None):
+def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, log_email_entry, tipo_arquivo, lock=None, protocolo_id: int | None = None):
     """
     Função auxiliar para processar arquivos dentro de ZIP ou RAR.
     Se lock for passado, usa-o ao atualizar log_email_entry (thread-safe).
@@ -1144,7 +1365,7 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
                     }
                     
                     # Processa o PDF usando a função existente
-                    resultado = processar_anexo_pdf(anexo_pdf, arquivo_nome, arquivo_conteudo, tipo)
+                    resultado = processar_anexo_pdf(anexo_pdf, arquivo_nome, arquivo_conteudo, tipo, protocolo_id=protocolo_id)
                     
                     if resultado:
                         pdfs_processados += 1
@@ -1201,7 +1422,7 @@ def _processar_arquivos_comprimidos(arquivo_ref, arquivos_lista, anexo, tipo, lo
         return False
 
 
-def _processar_um_anexo(att, tipo, log_email_entry, lock):
+def _processar_um_anexo(att, tipo, log_email_entry, lock, protocolo_id: int | None = None):
     """
     Processa um único anexo (worker para execução paralela).
     Retorna: (anexos_processados, ignorado) onde cada um é 0 ou 1.
@@ -1231,7 +1452,7 @@ def _processar_um_anexo(att, tipo, log_email_entry, lock):
         }
 
         if filename.lower().endswith('.pdf'):
-            processar_anexo_pdf(anexo, filename, payload, tipo)
+            processar_anexo_pdf(anexo, filename, payload, tipo, protocolo_id=protocolo_id)
             with lock:
                 log_email_entry['anexos'].append(anexo)
             return (1, 0)
@@ -1239,7 +1460,7 @@ def _processar_um_anexo(att, tipo, log_email_entry, lock):
             processar_anexo_xml(filename, payload, log_email_entry, lock=lock)
             return (1, 0)
         elif filename.lower().endswith('.zip') or filename.lower().endswith('.rar'):
-            processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=lock)
+            processar_anexo_zip(anexo, filename, payload, tipo, log_email_entry, lock=lock, protocolo_id=protocolo_id)
             if tipo != 3:
                 with lock:
                     log_email_entry['anexos'].append(anexo)
@@ -1247,7 +1468,7 @@ def _processar_um_anexo(att, tipo, log_email_entry, lock):
     return (0, 0)
 
 
-def processar_anexos_email(msg, tipo, log_email_entry):
+def processar_anexos_email(msg, tipo, log_email_entry, protocolo_id: int | None = None):
     """
     Processa todos os anexos de um email em paralelo (uma task por anexo).
     Retorna: (anexos_processados, ignorado, total_nao_processados)
@@ -1319,7 +1540,7 @@ def processar_anexos_email(msg, tipo, log_email_entry):
 
     with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = {
-            executor.submit(_processar_um_anexo, att, tipo, log_email_entry, lock): att
+            executor.submit(_processar_um_anexo, att, tipo, log_email_entry, lock, protocolo_id): att
             for att in anexos_para_processar
         }
         for future in as_completed(futures):
@@ -1438,7 +1659,36 @@ def processar_emails():
                 })
                 if tipo > 0:
                     log_email_entry = log_email['email'][-1]
-                    anexos_processados, ignorado, total_nao_processados = processar_anexos_email(msg, tipo, log_email_entry)
+                    protocolo_id = None
+                    if tipo == 2:
+                        # Extrai o número do protocolo primeiro pelo assunto
+                        numero_protocolo = extrair_numero_protocolo_do_texto(msg.subject)
+                        # Se não achou no assunto, tenta achar no PDF cujo nome sugere "protocolo"
+                        if not numero_protocolo and msg.attachments:
+                            for att in msg.attachments:
+                                fn = (att.get("filename") or "").lower()
+                                if "protocolo" in fn and fn.endswith(".pdf"):
+                                    try:
+                                        numero_protocolo = extrair_numero_protocolo_pdf(att["content"].getvalue())
+                                    except Exception:
+                                        numero_protocolo = None
+                                    if numero_protocolo:
+                                        break
+
+                        if numero_protocolo:
+                            try:
+                                protocolo = obter_ou_criar_protocolo_por_numero(numero_protocolo)
+                                protocolo_id = protocolo.id
+                                log_email_entry["protocolo_numero"] = numero_protocolo
+                                log_email_entry["protocolo_id"] = protocolo_id
+                            except Exception as e:
+                                logging.error(f"Erro ao criar/buscar Protocolo ({numero_protocolo}): {e}")
+                        else:
+                            logging.warning("E-mail tipo protocolo, mas não foi possível extrair o número do protocolo do assunto nem do PDF.")
+
+                    anexos_processados, ignorado, total_nao_processados = processar_anexos_email(
+                        msg, tipo, log_email_entry, protocolo_id=protocolo_id
+                    )
                     
                     # Atualiza log com estatísticas
                     if len(msg.attachments) > 0:

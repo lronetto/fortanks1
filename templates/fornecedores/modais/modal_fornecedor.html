@@ -94,18 +94,19 @@
         const formFornecedor = document.getElementById('formFornecedor');
         const csrfToken = "{{ csrf_token() }}";
 
-        // Novo fornecedor
+        // Novo fornecedor ou edição (id pode vir do botão que abriu ou do data-edit-id quando abrimos via JS)
         modalFornecedorEl.addEventListener('show.bs.modal', function (event) {
             const button = event.relatedTarget;
-            if (!button) {
-                return;
-            }
+            const fornecedorId = (button && button.getAttribute('data-id')) || modalFornecedorEl.dataset.editId || '';
 
-            const fornecedorId = button.getAttribute('data-id');
+            if (modalFornecedorEl.dataset.editId) {
+                delete modalFornecedorEl.dataset.editId;
+            }
 
             if (!fornecedorId) {
                 formFornecedor.reset();
                 document.getElementById('fornecedor_id').value = '';
+                document.getElementById('fornecedor_ativo').checked = true;
                 return;
             }
 
@@ -163,10 +164,7 @@
         document.addEventListener('click', function (e) {
             if (e.target.closest('.btn-editar-fornecedor')) {
                 const id = e.target.closest('.btn-editar-fornecedor').dataset.id;
-                const btn = e.target.closest('.btn-editar-fornecedor');
-                btn.setAttribute('data-bs-target', '#modalFornecedor');
-                btn.setAttribute('data-bs-toggle', 'modal');
-                btn.setAttribute('data-id', id);
+                modalFornecedorEl.dataset.editId = id;
                 modalFornecedor.show();
             }
 

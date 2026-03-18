@@ -31,6 +31,9 @@
             <button type="button" class="btn btn-success" id="btnExportarExcel">
                 <i class="fas fa-file-excel"></i> Exportar Excel
             </button>
+            <button type="button" class="btn btn-success" id="btnExportarSped" title="Exportar CTE para SPED (abas Dentro do Estado e Fora do Estado)">
+                <i class="fas fa-file-export"></i> Exportar SPED
+            </button>
             <button type="button" class="btn btn-success" id="btnExportarZip">
                 <i class="fas fa-file-zip"></i> Exportar Zip
             </button>
@@ -317,6 +320,12 @@ document.addEventListener('DOMContentLoaded', function() {
     $('#btnExportarExcel').on('click', function() {
         params = $('#filtrosNotasFiscais').serialize();
         url = "exportar-excel?" + params;
+        window.location.href = url;
+    });
+    // Exportar SPED (CTE - abas Dentro do Estado e Fora do Estado)
+    $('#btnExportarSped').on('click', function() {
+        params = $('#filtrosNotasFiscais').serialize();
+        url = "exportar-sped?" + params;
         window.location.href = url;
     });
     $('#btnExportarZip').on('click', function() {

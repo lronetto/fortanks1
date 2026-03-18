@@ -6,6 +6,7 @@ import base64
 from flask import jsonify
 from datetime import datetime, timedelta
 import logging
+from sqlalchemy.orm import sessionmaker
 
 class Logs(db.Model):
     __tablename__ = 'logs'
@@ -15,8 +16,15 @@ class Logs(db.Model):
     texto = db.Column(db.Text, nullable=False)
 
     def save(self):
-        db.session.add(self)
-        db.session.commit()
+        # Usa uma sessão independente para não ser afetado por objetos pendentes
+        # (ex: NotaFiscal com PK None) no db.session da request/job atual.
+        SessionLocal = sessionmaker(bind=db.engine)
+        session = SessionLocal()
+        try:
+            session.add(self)
+            session.commit()
+        finally:
+            session.close()
     def __init__(self, local, data, texto):
         #logging.info(f'local: {local} data: {data} texto: {texto}')
         self.local = local

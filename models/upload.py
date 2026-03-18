@@ -10,7 +10,7 @@ from sqlalchemy import Text
 #3 - reembolso
 #4 - avulso
 #5 - certificado
-
+#6 - DUA
 
 class Upload(db.Model):
     __tablename__ = 'Uploads'

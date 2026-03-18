@@ -26,6 +26,7 @@ from .routes.documentos import *  # noqa: E402,F401,F403
 from .routes.itens_estoque import *  # noqa: E402,F401,F403
 from .routes.analises import *  # noqa: E402,F401,F403
 from .routes.exportacoes import *  # noqa: E402,F401,F403
+from .routes.exportacao_sped import *  # noqa: E402,F401,F403
 from .routes.protocolos import *  # noqa: E402,F401,F403
 
 

@@ -50,7 +50,7 @@ class Arquivei:
             self.processar_arquivei(send=True)
             print(f'datas: {len(self.datas)}')
          
-        if self.chave_acesso and cancelamento==False:
+        if self.chave_acesso:
             print(f'chave_acesso: {self.chave_acesso}')
             if len(self.chave_acesso) == 44:
                 if int(self.chave_acesso[20:22]) == 57:
@@ -70,7 +70,7 @@ class Arquivei:
 
             if pdf:
                 self.get_pdf()
-        if self.chave_acesso and cancelamento:
+        if cancelamento:
             self.cancelada = self.cancelamento()
         if send:
             self.processar_arquivei(send=True)
@@ -100,33 +100,20 @@ class Arquivei:
             'Content-Type': 'application/json'
         }
         if self.tipo == 'cte':
-            url = f"https://api.arquivei.com.br/v2/cte/events?access_key={self.chave_acesso}"
-            response = requests.get(url, headers=headers)
-            response=response.json()
-            if response.get('status').get('code') == 200:
-                if response.get('data'):
-                    for event in response.get('data'):
-                        if event.get('type') == '110111':
-                            return True
+            url = f"https://api.arquivei.com.br/v2/cte/events?access_key[]={self.chave_acesso}"
         elif self.tipo == 'nfe':
-            url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"
-            response = requests.get(url, headers=headers)
-            response=response.json()
-            if response.get('status').get('code') == 200:
-                if response.get('data'):
-                    for event in response.get('data'):
-                        if event.get('type') == '110111':
-                            return True
+            url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"    
         elif self.tipo == 'nfse':
             url = f"https://api.arquivei.com.br/v1/nfse/events?access_key={self.chave_acesso}"
-            response = requests.get(url, headers=headers)
-            response=response.json()
-            if response.get('status').get('code') == 200:
-                if response.get('data'):
-                    for event in response.get('data'):
-                        if event.get('type') == '101101':
-                            return True
-        
+        response = requests.get(url, headers=headers)
+        response=response.json()
+        if response.get('status').get('code') == 200:
+            #print(f'response: {response}')
+            if response.get('data'):
+                for event in response.get('data'):
+                    if event.get('type') == '110111' or \
+                    (event.get('type') == '101101' and  self.tipo == 'nfse'):
+                        return True
         return False
     
     def processar_arquivei(self,send=False):
@@ -160,7 +147,8 @@ class Arquivei:
                 url = 'https://api.arquivei.com.br/v1/nfse/emitted'
             else:
                 url = 'https://api.arquivei.com.br/v1/nfse/received'
-    
+        print(f'url: {url}')
+        print(f'params: {params}')
         response = requests.get(url, headers=headers, params=params)
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 1')
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')
