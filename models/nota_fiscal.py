@@ -243,7 +243,7 @@ class NotaFiscal(db.Model):
         
         #print(f'dicta: {dicta}')
         if dicta.get('CompNfse',None) or dicta.get('tcListaNFse',None) or dicta.get('ListaNfse',None) or dicta.get('NFSe',None):
-            self.tipo = MAP_TIPO[3]
+            self.tipo = 'nfse'
         elif dicta.get('nfeProc',None):
             self.tipo = 'nfe'
         elif dicta.get('cteProc',None):
@@ -457,8 +457,8 @@ class NotaFiscal(db.Model):
                 notasn.append(nf)
             i+=1
         for nf in notasn:
-            #print(f'nf: {nf.id}')
-            if nf.tipo != 3:
+            print(f'nf: {nf.id} tipo: {nf.tipo}')
+            if nf.tipo != 3 and nf.tipo != 'nfse':
                 if not nf.get_cancelado():
                     nf.get_pdf()
                 else:
@@ -579,6 +579,7 @@ class NotaFiscal(db.Model):
 
         try:
             self.save()
+            db.session.commit()
             db.session.refresh(self)
         except Exception as e:
             logger.error(f"processar_nfse [save/refresh]: {e}", exc_info=True)
