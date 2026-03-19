@@ -499,9 +499,10 @@ class NotaFiscal(db.Model):
                 'nome_destinatario': existente.nome_destinatario,
                 'dados_adicionais': existente.dados_adicionais,
             })
-            existente.dados_adicionais = json.dumps(dados.get('dados_adicionais'), ensure_ascii=False)
-            existente.save()
-           
+            if not existente.dados_adicionais:
+                existente.dados_adicionais = json.dumps(dados.get('dados_adicionais') or {}, ensure_ascii=False)
+                existente.save()
+        
             return existente
         try:
             self.tipo = 2
@@ -546,12 +547,12 @@ class NotaFiscal(db.Model):
             if existente:
                 #self.logs['existente'] += 1
                 #self.logs['existentes'].append(existente.to_dict())
-                existente.dados_adicionais = json.dumps(dados.get('dados_adicionais') or {}, ensure_ascii=False)
-                existente.save()
+                if not existente.dados_adicionais:
+                    existente.dados_adicionais = json.dumps(dados.get('dados_adicionais') or {}, ensure_ascii=False)
+                    existente.save()
                 
                 return existente
         except Exception as e:
-            logger.error(f"processar_nfse [nota existente]: {e}", exc_info=True)
             #self.logs['erro'] = f"Ao atualizar nota existente: {str(e)}"
             return False
 
