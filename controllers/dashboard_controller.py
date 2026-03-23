@@ -475,6 +475,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
         statistics = tanque.get_statistics(data_ate=data_ate)
         
         dados_especificosb.append({
+
             'id': tanque.id,
             'tanque': tanque.nome,
             'concretadas': statistics['concretadas'],
@@ -482,6 +483,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
             'transportadas': statistics['transportadas'],
             'total_pecas': statistics['total_pecas'],
             'em_estoque': statistics['em_estoque'],
+            'nfs_emitidas_quantidade': statistics['nfs_emitidas_quantidade'],
             'prontas_transportar': statistics['prontas_transportar'],
             'nfs_emitidas': "{:,.0f}".format(statistics['nfs_emitidas_total']),
             'percas': statistics['percas']
@@ -501,6 +503,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
                 
             # Inicializar acumuladores
             concretadas_total = 0
+            nfs_emitidas_quantidade_total = 0
             acabadas_total = 0
             transportadas_total = 0
             total_pecas_total = 0
@@ -515,6 +518,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
                 if tanque.id in dados_por_tanque:
                     dados = dados_por_tanque[tanque.id]
                     concretadas_total += dados['concretadas']
+                    nfs_emitidas_quantidade_total += dados['nfs_emitidas_quantidade']
                     acabadas_total += dados['acabadas']
                     transportadas_total += dados['transportadas']
                     total_pecas_total += dados['total_pecas']
@@ -541,6 +545,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
                 'concretadas': concretadas_total,
                 'acabadas': acabadas_total,
                 'transportadas': transportadas_total,
+                'nfs_emitidas_quantidade': nfs_emitidas_quantidade_total,
                 'total_pecas': total_pecas_total,
                 'em_estoque': em_estoque_total,
                 'prontas_transportar': prontas_transportar_total,

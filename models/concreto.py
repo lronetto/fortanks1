@@ -274,7 +274,7 @@ class ConcretoConcretagens(db.Model):
             if not peca_obj:
                 continue
             pecas_concretadas.append(peca_obj)
-        processar_producao_por_pecas(pecas_concretadas, usuario_id=current_user.id or None, log=True, _usinagem=False)
+        processar_producao_por_pecas(pecas_concretadas, usuario_id=current_user.id or None)
         return True
 # Nova tabela de associação entre concretagem e tanques
 class ConcretoConcretagensTanques(db.Model):

@@ -147,6 +147,187 @@ def api_materiais_traco(produto_composto_id):
         return jsonify({'error': str(e)}), 500
 
 
+@usinagem_concreto.route('/api/listar-usinagens', methods=['GET'])
+@login_required
+def api_listar_usinagens_datatables():
+    """
+    Retorna usinagens no formato esperado pelo DataTables (ajax + client-side).
+    Aceita filtros:
+    - ?data_inicial=AAAA-MM-DD&data_final=AAAA-MM-DD
+    - ?produzido=sim|nao
+    """
+    try:
+        data_inicial_str = (request.args.get('data_inicial') or '').strip()
+        data_final_str = (request.args.get('data_final') or '').strip()
+        filtro_produzido = (request.args.get('produzido') or '').strip().lower()
+        if filtro_produzido not in {'sim', 'nao'}:
+            filtro_produzido = ''
+
+        query = ConcretoUsinagens.query
+        data_inicial = None
+        data_final = None
+
+        if data_inicial_str:
+            try:
+                data_inicial = datetime.strptime(data_inicial_str, '%Y-%m-%d')
+                query = query.filter(ConcretoUsinagens.data_usinagem >= data_inicial)
+            except ValueError:
+                data_inicial = None
+
+        if data_final_str:
+            try:
+                data_final_dt_obj = datetime.strptime(data_final_str, '%Y-%m-%d')
+                data_final_para_query = datetime.combine(data_final_dt_obj.date(), datetime.max.time())
+                query = query.filter(ConcretoUsinagens.data_usinagem <= data_final_para_query)
+                data_final = data_final_dt_obj
+            except ValueError:
+                data_final = None
+
+        usinagens = query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
+        now = datetime.now()
+
+        def _parse_dados_adicionais(raw):
+            """
+            Converte dados_adicionais em dict (quando possível) para extrair data_producao,
+            mantendo também a string JSON original para preencher o modal de edição.
+            """
+            if raw is None:
+                return {}, ''
+            if isinstance(raw, dict):
+                return raw, json.dumps(raw, ensure_ascii=False)
+            if isinstance(raw, str):
+                trimmed = raw.strip()
+                if not trimmed:
+                    return {}, ''
+                try:
+                    parsed = json.loads(trimmed)
+                    return (parsed if isinstance(parsed, dict) else {}), json.dumps(parsed, ensure_ascii=False)
+                except Exception:
+                    # Se não for JSON válido, tenta manter como string (para o modal lidar com isso)
+                    return {}, trimmed
+            # Qualquer outro tipo inesperado
+            try:
+                return {}, json.dumps(raw, ensure_ascii=False)
+            except Exception:
+                return {}, ''
+
+        def _badge(label, cls, usinagem_id, idade):
+            # Tooltip: o conteúdo dinâmico depende de JS específico; o título ao menos evita tooltip vazia.
+            return (
+                f'<span class="badge {cls} rompimento-badge" '
+                f'data-bs-toggle="tooltip" data-bs-html="true" '
+                f'data-usinagem-id="{usinagem_id}" data-idade="{idade}" '
+                f'title="Detalhes dos rompimentos/idade: {idade}">{label}</span>'
+            )
+
+        data = []
+        for us in usinagens:
+            idade = (now - us.data_usinagem) if us.data_usinagem else None
+            idade_days = idade.days if idade is not None else 0
+
+            rompimentos = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=us.serie).all()
+            tem_24h = False
+            tem_28d = False
+            for r in rompimentos:
+                if r.data_rompimento and us.data_usinagem:
+                    delta_days = (r.data_rompimento - us.data_usinagem).days
+                    if delta_days <= 3:
+                        tem_24h = True
+                    if delta_days >= 27:
+                        tem_28d = True
+
+            # Status de rompimento (24H/28D) antes de adicionar o status de produção.
+            status_badges = []
+            if rompimentos:
+                if tem_24h:
+                    status_badges.append(_badge('24H', 'bg-success', us.id, '24H'))
+
+                if tem_28d:
+                    status_badges.append(_badge('28D', 'bg-success', us.id, '28D'))
+                else:
+                    if idade_days <= 28:
+                        status_badges.append(_badge('28D', 'bg-warning', us.id, '28D'))
+                    else:
+                        status_badges.append(_badge('28D', 'bg-danger', us.id, '28D'))
+            else:
+                if idade_days <= 0:
+                    status_badges.append(_badge('24H', 'bg-warning', us.id, '24H'))
+                elif idade_days > 3:
+                    status_badges.append(_badge('24H', 'bg-danger', us.id, '24H'))
+
+                if idade_days < 28:
+                    status_badges.append(_badge('28D', 'bg-warning', us.id, '28D'))
+                else:
+                    status_badges.append(_badge('28D', 'bg-danger', us.id, '28D'))
+
+            dados_obj, dados_json = _parse_dados_adicionais(us.dados_adicionais)
+            produzida = bool(dados_obj.get('data_producao')) if isinstance(dados_obj, dict) else False
+            data_producao = dados_obj.get('data_producao') if isinstance(dados_obj, dict) else None
+
+            # Filtro: produzido/nao produzido
+            if filtro_produzido == 'sim' and not produzida:
+                continue
+            if filtro_produzido == 'nao' and produzida:
+                continue
+
+            producao_badge = (
+                '<span class="badge bg-success ms-1" title="Produção processada">'
+                '<i class="fas fa-check-circle"></i> Produzida</span>'
+                if produzida
+                else '<span class="badge bg-secondary ms-1" title="Pendente de produção">'
+                     '<i class="fas fa-minus"></i> Não produzida</span>'
+            )
+
+            data.append({
+                'id': us.id,
+                'serie': us.serie,
+                'data_usinagem_iso': us.data_usinagem.strftime('%Y-%m-%dT%H:%M:%S') if us.data_usinagem else '',
+                'data_usinagem_display': us.data_usinagem.strftime('%d/%m/%Y %H:%M') if us.data_usinagem else '-',
+                'data_usinagem_datetime_local': us.data_usinagem.strftime('%Y-%m-%dT%H:%M') if us.data_usinagem else '',
+                'traco_nome': us.produto_composto.nome if us.produto_composto else '-',
+                'volume': float(us.volume) if us.volume is not None else None,
+                'flow': us.flow or '',
+                'nf': us.nota or '',
+                'produto_composto_id': us.produtoCompostoId,
+                'dados_adicionais_json': dados_json or '',
+                'produzida': produzida,
+                'data_producao': data_producao,
+                'status_html': ' '.join(status_badges) + ' ' + producao_badge,
+            })
+
+        return jsonify({'data': data})
+    except Exception as e:
+        return jsonify({'erro': f'Erro ao listar usinagens: {str(e)}'}), 500
+
+
+@usinagem_concreto.route('/api/<int:id>/processar-producao', methods=['POST'])
+@login_required
+def api_processar_producao_usinagem(id):
+    """
+    Processa a produção (consome estoque e marca `data_producao` em dados_adicionais).
+    """
+    try:
+        usinagem = ConcretoUsinagens.query.get_or_404(id)
+
+        # Se já tem data_producao (produzida), não reprocessa
+        if usinagem.dados_adicionais:
+            try:
+                dados_obj = json.loads(usinagem.dados_adicionais) if isinstance(usinagem.dados_adicionais, str) else usinagem.dados_adicionais
+            except Exception:
+                dados_obj = None
+            if isinstance(dados_obj, dict) and dados_obj.get('data_producao'):
+                return jsonify({'success': False, 'message': 'Usinagem já produzida.'}), 400
+
+        ok = usinagem.produzir(usuario_id=current_user.id if current_user and hasattr(current_user, 'id') else 1)
+        if not ok:
+            return jsonify({'success': False, 'message': 'Erro ao processar produção (verifique estoque e dados).'}), 400
+
+        return jsonify({'success': True, 'message': 'Produção da usinagem processada com sucesso!'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
+
+
 # Rotas para Usinagens
 @usinagem_concreto.route('/usinagens')
 @login_required
@@ -157,15 +338,15 @@ def listar_usinagens():
     data_inicial_str = request.args.get('data_inicial')
     data_final_str = request.args.get('data_final')
     
-    query = ConcretoUsinagens.query
-    
     data_inicial = None
     data_final = None
+    filtro_produzido = (request.args.get('produzido') or '').strip().lower()
+    if filtro_produzido not in {'sim', 'nao'}:
+        filtro_produzido = ''
 
     if data_inicial_str:
         try:
             data_inicial = datetime.strptime(data_inicial_str, '%Y-%m-%d')
-            query = query.filter(ConcretoUsinagens.data_usinagem >= data_inicial)
         except ValueError:
             flash('Formato de Data Inicial inválido. Use AAAA-MM-DD.', 'warning')
             data_inicial = None
@@ -173,47 +354,23 @@ def listar_usinagens():
     if data_final_str:
         try:
             data_final_dt_obj = datetime.strptime(data_final_str, '%Y-%m-%d')
-            data_final_para_query = datetime.combine(data_final_dt_obj.date(), datetime.max.time())
-            query = query.filter(ConcretoUsinagens.data_usinagem <= data_final_para_query)
             data_final = data_final_dt_obj
         except ValueError:
             flash('Formato de Data Final inválido. Use AAAA-MM-DD.', 'warning')
             data_final = None
 
-    usinagens = query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
-    
     # Buscar produtos compostos que são traços (traco=True)
     tracos = ProdutoComposto.query.filter_by(traco=True, status='Ativo').order_by(ProdutoComposto.nome).all()
     tracos_data = [{'id': t.id, 'nome': t.nome} for t in tracos]
 
-    usinagens_data = []
-    for usinagem in usinagens:
-        idade = (datetime.now() - usinagem.data_usinagem)
-        usinagem.idade = idade
-        usinagem.idade_hours = idade.total_seconds() / 3600
-        usinagem.idade_str = f"{usinagem.idade_hours} horas" if usinagem.idade.days == 0 else f"{usinagem.idade.days} dias"
-
-        usinagem.rompimento = []
-        rompimentos = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=usinagem.serie).all()
-        for rompimento in rompimentos:
-            rompimento.idade = rompimento.data_rompimento - usinagem.data_usinagem
-            rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
-            rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
-            usinagem.rompimento.append(rompimento)
-
-        usinagem.rompimento_24h = list(filter(lambda x: x.idade.days <= 3, usinagem.rompimento))
-        usinagem.rompimento_28d = list(filter(lambda x: x.idade.days >= 27, usinagem.rompimento))
-
-        usinagens_data.append(usinagem)
-
     return render_template(
         'usinagem_concreto/usinagens/index.html', 
         now=datetime.now().strftime('%Y-%m-%dT%H:%M'),
-        usinagens=usinagens_data, 
         tracos=tracos, 
         tracos_json=Markup(json.dumps(tracos_data)),
         filtro_data_inicial=data_inicial_str if data_inicial else '',
-        filtro_data_final=data_final_str if data_final else ''
+        filtro_data_final=data_final_str if data_final else '',
+        filtro_produzido=filtro_produzido
     )
 
 

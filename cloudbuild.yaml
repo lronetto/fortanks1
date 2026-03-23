@@ -1,0 +1,23 @@
+steps:
+  - id: "Instalar dependencias"
+    name: "python:3.13-slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+  - id: "Validar sintaxe Python"
+    name: "python:3.13-slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        python -m compileall -q .
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: "1200s"

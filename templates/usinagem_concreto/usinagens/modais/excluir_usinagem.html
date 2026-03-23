@@ -1,0 +1,46 @@
+<!-- Modal de Exclusão (Usinagem) -->
+<div class="modal fade" id="modalExcluirUsinagem" tabindex="-1" aria-labelledby="modalExcluirUsinagemLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalExcluirUsinagemLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="textoConfirmacaoExcluirUsinagem" class="mb-2">
+                    Tem certeza que deseja excluir a usinagem da série
+                    <strong id="excluirUsinagemSerie"></strong>
+                    do dia
+                    <strong id="excluirUsinagemData"></strong>?
+                </p>
+                <small class="text-danger">Esta ação não poderá ser desfeita.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluirUsinagem" action="" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#modalExcluirUsinagem').on('show.bs.modal', function(event) {
+        var button = $(event.relatedTarget);
+        var usinagemId = button.data('usinagem-id');
+        var serie = button.data('serie') || '';
+        var dataUsinagem = button.data('data-usinagem') || '';
+
+        var modal = $(this);
+        modal.find('#excluirUsinagemSerie').text(serie);
+        modal.find('#excluirUsinagemData').text(dataUsinagem);
+
+        // A rota de exclusão usa o ID na URL
+        modal.find('#formExcluirUsinagem').attr('action', '/usinagem-concreto/usinagens/' + usinagemId + '/excluir');
+    });
+});
+</script>
+

@@ -30,6 +30,14 @@
                         <input type="date" class="form-control" id="filtro_data_final" name="data_final" value="{{ filtro_data_final or '' }}">
                     </div>
                     <div class="col-md-auto">
+                        <label for="filtro_produzido" class="form-label">Produzido?</label>
+                        <select class="form-select" id="filtro_produzido" name="produzido">
+                            <option value="" {% if not filtro_produzido %}selected{% endif %}>Todos</option>
+                            <option value="sim" {% if filtro_produzido == 'sim' %}selected{% endif %}>Produzida</option>
+                            <option value="nao" {% if filtro_produzido == 'nao' %}selected{% endif %}>Não produzida</option>
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
                         <button type="submit" class="btn btn-primary">
                             <i class="fas fa-filter"></i> Filtrar
                         </button>
@@ -44,7 +52,6 @@
             <!-- Fim do Formulário de Filtro de Data -->
         
         <div class="card-body">
-            {% if usinagens %}
             <div class="table-responsive">
                 <table class="table table-bordered table-striped table-hover" id="dataTable" width="100%" cellspacing="0">
                     <thead class="table-light">
@@ -55,12 +62,12 @@
                             <th>Volume (m³)</th>
                             <th>Flow</th>
                             <th>NF</th>
-                            <th>Rompimentos</th>
+                            <th>Status</th>
                             <th width="120">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for usinagem in usinagens %}
+                        {% for usinagem in [] %}
                         <tr>
                             <td>{{ usinagem.serie }}</td>
                             <td data-order="{{ usinagem.data_usinagem.strftime('%Y-%m-%dT%H:%M:%S') }}">{{ usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') }}</td>
@@ -182,14 +189,6 @@
                     </tbody>
                 </table>
             </div>
-            {% else %}
-            <div class="text-center py-4">
-                <p class="text-muted">Nenhuma usinagem de concreto cadastrada.</p>
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaUsinagem">
-                    <i class="fas fa-plus"></i> Cadastrar Usinagem
-                </button>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
@@ -201,6 +200,7 @@
 {% include 'usinagem_concreto/usinagens/modais/editar_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/importar_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/visualizar_rompimentos.html' %}
+{% include 'usinagem_concreto/usinagens/modais/excluir_usinagem.html' %}
 
 
 {% endblock %}
@@ -210,6 +210,17 @@
     // Inicializar variáveis JavaScript a partir do JSON passado pelo backend
     var tracosData = JSON.parse('{{ tracos_json|safe }}');
     var table;
+
+    var filtroDataInicial = "{{ filtro_data_inicial|default('') }}";
+    var filtroDataFinal = "{{ filtro_data_final|default('') }}";
+
+    function escapeAttr(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
 
     $(document).ready(function() {
         // Verificar se a tabela existe
@@ -239,38 +250,120 @@
                         "sLast": "Último"
                     }
                 },
-                "order": [[ 1, "desc" ]], // Ordenar pela coluna Data em ordem descendente
-                "pageLength": 25,
-                "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
-                "responsive": true,
-                "autoWidth": false,
-                "processing": false,
-                "stateSave": true, // Salvar estado (página, ordenação, etc) no localStorage
-                "columnDefs": [
-                    { 
-                        "type": "date", 
-                        "targets": 1,
-                        "render": function(data, type, row) {
-                            if (type === 'sort' || type === 'type') {
-                                return data;
-                            }
-                            return row[1]; // Retorna o valor formatado para exibição
+                processing: true,
+                serverSide: false,
+                ajax: {
+                    url: "{{ url_for('usinagem_concreto.api_listar_usinagens_datatables') }}",
+                    type: "GET",
+                    dataSrc: "data",
+                    data: function(d) {
+                        d.data_inicial = filtroDataInicial || '';
+                        d.data_final = filtroDataFinal || '';
+                        d.produzido = ($('#filtro_produzido').val() || '');
+                    }
+                },
+                order: [[1, "desc"]],
+                pageLength: 25,
+                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+                responsive: true,
+                autoWidth: false,
+                stateSave: true,
+                columns: [
+                    { data: 'serie', defaultContent: '-' },
+                    {
+                        data: 'data_usinagem_iso',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') return data || '';
+                            return row.data_usinagem_display || '-';
                         }
                     },
-                    { 
-                        "orderable": false, 
-                        "targets": [6, 7] // Desabilitar ordenação nas colunas de Rompimentos e Ações
+                    { data: 'traco_nome', defaultContent: '-' },
+                    {
+                        data: 'volume',
+                        render: function(data) {
+                            return data !== null && data !== undefined ? data : '-';
+                        }
+                    },
+                    { data: 'flow', defaultContent: '-' },
+                    { data: 'nf', defaultContent: '-' },
+                    {
+                        data: 'status_html',
+                        orderable: false,
+                        searchable: false,
+                        render: function(data) {
+                            return data || '';
+                        }
                     },
                     {
-                        "width": "120px",
-                        "targets": 7 // Largura fixa para coluna de Ações
-                    },
-                    {
-                        "className": "text-center",
-                        "targets": [6, 7] // Centralizar colunas de Rompimentos e Ações
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        render: function(data, type, row) {
+                            const dadosAdicionais = row.dados_adicionais_json ? row.dados_adicionais_json : '';
+                            const produtoCompostoId = row.produto_composto_id ?? '';
+                            const produzida = row.produzida === true;
+                            const btnProduzirClass = produzida ? 'btn-secondary' : 'btn-success';
+                            const btnProduzirDisabled = produzida ? 'disabled' : '';
+                            const btnProduzirTitle = produzida ? 'Usinagem já produzida' : 'Processar produção';
+                            return `
+                                <div class="btn-group">
+                                    <button type="button" class="btn btn-sm btn-info"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalVisualizarRompimentos"
+                                            data-usinagem-id="${row.id}"
+                                            title="Visualizar Rompimentos">
+                                        <i class="fas fa-flask"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-primary"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEditarUsinagem"
+                                            data-usinagem-id="${row.id}"
+                                            data-serie="${escapeAttr(row.serie)}"
+                                            data-data-usinagem="${escapeAttr(row.data_usinagem_datetime_local)}"
+                                            data-produto-composto-id="${produtoCompostoId}"
+                                            data-volume="${escapeAttr(row.volume ?? '')}"
+                                            data-flow="${escapeAttr(row.flow ?? '')}"
+                                            data-nf="${escapeAttr(row.nf ?? '')}"
+                                            data-dados-adicionais="${escapeAttr(dadosAdicionais)}"
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm ${btnProduzirClass} btn-producao-usinagem"
+                                            data-usinagem-id="${row.id}"
+                                            ${btnProduzirDisabled}
+                                            title="${btnProduzirTitle}">
+                                        <i class="fas fa-cogs"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalExcluirUsinagem"
+                                            data-usinagem-id="${row.id}"
+                                            data-serie="${escapeAttr(row.serie)}"
+                                            data-data-usinagem="${escapeAttr(row.data_usinagem_display)}"
+                                            title="Excluir">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            `;
+                        }
                     }
                 ],
-                "dom": '<"row mb-3"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
+                columnDefs: [
+                    {
+                        orderable: false,
+                        targets: [6, 7]
+                    },
+                    {
+                        width: "120px",
+                        targets: 7
+                    },
+                    {
+                        className: "text-center",
+                        targets: [6, 7]
+                    }
+                ],
+                dom: '<"row mb-3"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rt<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>',
                 "initComplete": function(settings, json) {
                     // Inicializar tooltips do Bootstrap após o DataTable carregar
                     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
@@ -292,9 +385,58 @@
                 }
             });
 
-            // Recarregar tabela após fechar modais de criação/edição (se necessário)
-            $('#modalNovaUsinagem, #modalEditarUsinagem').on('hidden.bs.modal', function() {
-                // A página já recarrega após sucesso, então não precisa recarregar a tabela aqui
+            // Atualiza o filtro de produzido/nao sem recarregar a página
+            $('#filtro_produzido').on('change', function() {
+                if ($.fn.DataTable.isDataTable('#dataTable')) {
+                    $('#dataTable').DataTable().ajax.reload(null, false);
+                }
+            });
+
+            // Ação: Produção da usinagem
+            $(document).on('click', '.btn-producao-usinagem', function() {
+                const id = $(this).data('usinagem-id');
+                const $btn = $(this);
+
+                // Se veio desabilitado, não faz nada
+                if ($btn.prop('disabled')) return;
+
+                if (!$btn.data('confirmado') && !confirm('Processar produção da usinagem? Será consumido estoque e marcada a data de produção.')) {
+                    return;
+                }
+
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+                $btn.prop('disabled', true).find('i').removeClass('fa-cogs').addClass('fa-spinner fa-spin');
+
+                $.ajax({
+                    // Blueprint `usinagem_concreto` tem url_prefix '/usinagem-concreto'
+                    // Rota: /api/<id>/processar-producao
+                    url: '/usinagem-concreto/api/' + id + '/processar-producao',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    data: JSON.stringify({}),
+                    success: function(res) {
+                        if (res.success) {
+                            if ($.fn.DataTable.isDataTable('#dataTable')) {
+                                $('#dataTable').DataTable().ajax.reload(null, false);
+                            }
+                            alert(res.message || 'Produção processada com sucesso!');
+                        } else {
+                            alert(res.message || 'Erro ao processar produção.');
+                            $btn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-cogs');
+                        }
+                    },
+                    error: function(xhr) {
+                        let msg = 'Erro ao processar produção.';
+                        if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                        else if (xhr.responseText) {
+                            try { var j = JSON.parse(xhr.responseText); if (j.message) msg = j.message; } catch(e) {}
+                        }
+                        alert(msg);
+                        $btn.prop('disabled', false).find('i').removeClass('fa-spinner fa-spin').addClass('fa-cogs');
+                    }
+                });
             });
         }
     });

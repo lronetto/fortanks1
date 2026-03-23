@@ -24,6 +24,7 @@
                         <th>Acabadas</th>
                         <th>Transportadas</th>
                         <th>Em Estoque</th>
+                        <th>Itens NF</th>
                         <th>Prontas para Transp.</th>
                         <th>Percas</th>
                         <th>NFs emitidas</th>
@@ -37,6 +38,7 @@
                         <td>{{ item.acabadas }}</td>
                         <td>{{ item.transportadas }}</td>
                         <td>{{ item.em_estoque }}</td>
+                        <td>{{ item.nfs_emitidas_quantidade }}</td>
                         <td>{{ item.prontas_transportar }}</td>
                         <td>{{ item.percas|default(0) }}</td>
                         <td>{{ item.nfs_emitidas }}</td>

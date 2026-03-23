@@ -251,6 +251,7 @@ class Tanques(db.Model):
         pecas_em_estoque = 0
         pecas_prontas_transportar = 0
         nfs_emitidas_total = 0
+        pecas_nfs_quantidade = 0
         pecas_concretadas = 0
         pecas_perca = 0  # peças marcadas como perda no qualidade (ex: "perca": true)
         for peca in self.TanquesPecas:
@@ -295,12 +296,22 @@ class Tanques(db.Model):
                     pass
         # NFs emitidas até data_ate
         if self.item_nf is not None:
-            nfs_emitidas_total = db.session.query(NotaFiscalItem.nf_id).join(
-                NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id
-            ).filter(
-                NotaFiscalItem.codigo == self.item_nf,
-                func.date(NotaFiscal.data_emissao) <= data_ate
-            ).distinct().count()
+            try:
+                itens_nf = db.session.query(NotaFiscalItem.nf_id,NotaFiscalItem.quantidade).join(
+                    NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id
+                ).filter(
+                    NotaFiscalItem.codigo == self.item_nf,
+                    func.date(NotaFiscal.data_emissao) <= data_ate
+                ).all()
+            except Exception as e:
+
+                print(f'Erro ao buscar itens NF: {e}')
+                import traceback
+                traceback.print_exc()
+                itens_nf = []
+
+            pecas_nfs_quantidade = sum([item[1] for item in itens_nf])
+            nfs_emitidas_total = len(itens_nf)
         pecas_prontas_transportar = pecas_acabadas - pecas_transportadas
         pecas_em_estoque = pecas_concretadas - pecas_transportadas
         return {
@@ -311,6 +322,7 @@ class Tanques(db.Model):
             'em_estoque': pecas_em_estoque,
             'prontas_transportar': pecas_prontas_transportar,
             'nfs_emitidas_total': nfs_emitidas_total,
+            'nfs_emitidas_quantidade': pecas_nfs_quantidade,
             'percas': pecas_perca
         }
 class TanquesGrupos(db.Model):
