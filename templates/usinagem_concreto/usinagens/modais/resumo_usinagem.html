@@ -1,0 +1,132 @@
+<!-- Modal de Resumo da Usinagem -->
+<div class="modal fade" id="modalResumoUsinagem" tabindex="-1" aria-labelledby="modalResumoUsinagemLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalResumoUsinagemLabel">
+                    <i class="fas fa-clipboard-list"></i> Resumo da Usinagem
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="resumoUsinagemInfo" class="mb-3"></div>
+                <div id="resumoUsinagemBody">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Carregando...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#modalResumoUsinagem').on('show.bs.modal', function(event) {
+        var button = $(event.relatedTarget);
+        var usinagemId = button.data('usinagem-id');
+        var info = $('#resumoUsinagemInfo');
+        var body = $('#resumoUsinagemBody');
+
+        info.html('');
+        body.html(`
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+        `);
+
+        if (!usinagemId) {
+            body.html('<div class="alert alert-warning">Usinagem não informada.</div>');
+            return;
+        }
+
+        $.ajax({
+            url: '/usinagem-concreto/api/' + usinagemId + '/resumo-materiais',
+            method: 'GET',
+            success: function(response) {
+                if (!response.success) {
+                    body.html('<div class="alert alert-danger">' + (response.message || 'Erro ao carregar resumo.') + '</div>');
+                    return;
+                }
+
+                var us = response.usinagem || {};
+                info.html(`
+                    <div class="card bg-light">
+                        <div class="card-body py-2">
+                            <div class="row">
+                                <div class="col-md-3"><strong>Série:</strong> ${us.serie || '-'}</div>
+                                <div class="col-md-3"><strong>Data:</strong> ${us.data_usinagem || '-'}</div>
+                                <div class="col-md-3"><strong>Traço:</strong> ${us.traco_nome || '-'}</div>
+                                <div class="col-md-3"><strong>Volume:</strong> ${us.volume || 0} m³</div>
+                            </div>
+                        </div>
+                    </div>
+                `);
+
+                var materiais = response.materiais || [];
+                if (!materiais.length) {
+                    body.html('<div class="alert alert-info mb-0">Nenhum material encontrado para esta usinagem.</div>');
+                    return;
+                }
+
+                var linhas = materiais.map(function(m) {
+                    var origemBadge = m.origem === 'executado'
+                        ? '<span class="badge bg-success">Executado</span>'
+                        : '<span class="badge bg-secondary">Calculado</span>';
+
+                    return `
+                        <tr>
+                            <td>${m.material || '-'}</td>
+                            <td class="text-end">${(m.quantidade ?? 0).toLocaleString('pt-BR')}</td>
+                            <td>${m.unidade || '-'}</td>
+                            <td class="text-center">${origemBadge}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                body.html(`
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Material</th>
+                                    <th class="text-end">Quantidade</th>
+                                    <th>Unidade</th>
+                                    <th class="text-center">Origem</th>
+                                </tr>
+                            </thead>
+                            <tbody>${linhas}</tbody>
+                        </table>
+                    </div>
+                `);
+            },
+            error: function(xhr) {
+                var msg = 'Erro ao carregar resumo da usinagem.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    msg = xhr.responseJSON.message;
+                }
+                body.html('<div class="alert alert-danger">' + msg + '</div>');
+            }
+        });
+    });
+
+    $('#modalResumoUsinagem').on('hidden.bs.modal', function() {
+        $('#resumoUsinagemInfo').html('');
+        $('#resumoUsinagemBody').html(`
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Carregando...</span>
+                </div>
+            </div>
+        `);
+    });
+});
+</script>
+

@@ -328,6 +328,141 @@ def api_processar_producao_usinagem(id):
         return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
 
 
+@usinagem_concreto.route('/api/<int:id>/resumo-materiais', methods=['GET'])
+@login_required
+def api_resumo_materiais_usinagem(id):
+    """
+    Retorna resumo de materiais consumidos da usinagem.
+    Prioriza materiais executados; se não houver, usa cálculo do traço.
+    """
+    try:
+        usinagem = ConcretoUsinagens.query.get_or_404(id)
+
+        materiais = []
+
+        # 1) Materiais executados (consumo efetivo lançado na usinagem)
+        for item in usinagem.materiais or []:
+            if item.quantidade_executada is None:
+                continue
+            materiais.append({
+                'material': item.material.nome if item.material else f'Material #{item.material_id}',
+                'quantidade': float(item.quantidade_executada),
+                'unidade': item.unidade or (item.material.unidade_obj.nome if item.material and item.material.unidade_obj else ''),
+                'origem': 'executado'
+            })
+
+        # 2) Fallback: materiais calculados do traço x volume
+        if not materiais:
+            for calc in usinagem.calcular_materiais():
+                material_obj = calc.get('material')
+                materiais.append({
+                    'material': material_obj.nome if material_obj else '-',
+                    'quantidade': float(calc.get('quantidade') or 0),
+                    'unidade': calc.get('unidade') or '',
+                    'origem': 'calculado'
+                })
+
+        return jsonify({
+            'success': True,
+            'usinagem': {
+                'id': usinagem.id,
+                'serie': usinagem.serie,
+                'data_usinagem': usinagem.data_usinagem.strftime('%d/%m/%Y %H:%M') if usinagem.data_usinagem else '-',
+                'traco_nome': usinagem.produto_composto.nome if usinagem.produto_composto else '-',
+                'volume': float(usinagem.volume) if usinagem.volume is not None else 0
+            },
+            'materiais': materiais,
+            'total_materiais': len(materiais)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao buscar resumo de materiais: {str(e)}'}), 500
+
+
+@usinagem_concreto.route('/api/processar-producao-pendentes', methods=['POST'])
+@login_required
+def api_processar_producao_pendentes_usinagem():
+    """
+    Processa produção em lote para usinagens pendentes.
+    Pode receber filtros opcionais via JSON:
+    - data_inicial (AAAA-MM-DD)
+    - data_final (AAAA-MM-DD)
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        data_inicial_str = (payload.get('data_inicial') or '').strip()
+        data_final_str = (payload.get('data_final') or '').strip()
+
+        query = ConcretoUsinagens.query
+
+        if data_inicial_str:
+            try:
+                data_inicial = datetime.strptime(data_inicial_str, '%Y-%m-%d')
+                query = query.filter(ConcretoUsinagens.data_usinagem >= data_inicial)
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Data inicial inválida. Use AAAA-MM-DD.'}), 400
+
+        if data_final_str:
+            try:
+                data_final_dt = datetime.strptime(data_final_str, '%Y-%m-%d')
+                data_final_query = datetime.combine(data_final_dt.date(), datetime.max.time())
+                query = query.filter(ConcretoUsinagens.data_usinagem <= data_final_query)
+            except ValueError:
+                return jsonify({'success': False, 'message': 'Data final inválida. Use AAAA-MM-DD.'}), 400
+
+        usinagens = query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
+
+        total_analisadas = 0
+        total_pendentes = 0
+        total_processadas = 0
+        total_falhas = 0
+        falhas = []
+
+        for usinagem in usinagens:
+            total_analisadas += 1
+
+            dados = usinagem.dados_adicionais
+            try:
+                dados_obj = json.loads(dados) if isinstance(dados, str) else (dados or {})
+            except Exception:
+                dados_obj = {}
+
+            ja_produzida = isinstance(dados_obj, dict) and bool(dados_obj.get('data_producao'))
+            if ja_produzida:
+                continue
+
+            total_pendentes += 1
+
+            try:
+                ok = usinagem.produzir(usuario_id=current_user.id if current_user and hasattr(current_user, 'id') else 1)
+                if ok:
+                    total_processadas += 1
+                else:
+                    total_falhas += 1
+                    falhas.append(f"Série {usinagem.serie}: erro ao processar produção.")
+            except Exception as exc:
+                db.session.rollback()
+                total_falhas += 1
+                falhas.append(f"Série {usinagem.serie}: {str(exc)}")
+
+        return jsonify({
+            'success': True,
+            'message': (
+                f'Produção em lote concluída. '
+                f'Pendentes: {total_pendentes}, Processadas: {total_processadas}, Falhas: {total_falhas}.'
+            ),
+            'resumo': {
+                'analisadas': total_analisadas,
+                'pendentes': total_pendentes,
+                'processadas': total_processadas,
+                'falhas': total_falhas
+            },
+            'falhas': falhas[:20]
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erro ao processar pendentes: {str(e)}'}), 500
+
+
 # Rotas para Usinagens
 @usinagem_concreto.route('/usinagens')
 @login_required

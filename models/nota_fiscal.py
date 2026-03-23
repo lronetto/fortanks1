@@ -151,7 +151,7 @@ class NotaFiscal(db.Model):
 
     dados_adicionais = db.Column(db.Text, nullable=True)
     vencimento = db.Column(db.String(10), nullable=True)
-    
+    chave_nf = db.Column(db.String(44), nullable=True)
     # Relacionamentos
     itens = db.relationship('NotaFiscalItem', backref='nota_fiscal', cascade='all, delete-orphan')
 

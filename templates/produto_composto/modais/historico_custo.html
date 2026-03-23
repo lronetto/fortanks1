@@ -177,12 +177,12 @@
                     <div class="card">
                         <div class="card-header">
                             <h6 class="m-0 font-weight-bold text-primary">
-                                <i class="fas fa-table"></i> Detalhamento por Data
+                                <i class="fas fa-table"></i> Detalhamento por Semana
                             </h6>
                         </div>
-                        <div class="card-body">
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-striped table-sm" id="tabela-historico-custo">
+                        <div class="card-body p-0">
+                            <div class="historico-custo-scroll table-responsive">
+                                <table class="table table-bordered table-striped table-sm mb-0" id="tabela-historico-custo">
                                     <thead class="table-dark">
                                         <tr>
                                             <th style="width: 15%;">Data</th>
@@ -211,6 +211,22 @@ $(document).ready(function() {
     let produtoNomeHistorico = null;
     let chartCustoHistorico = null;
     let dadosHistoricoCompleto = null; // Armazenar dados completos para o modal de detalhamento
+
+    function formatarDataParaInput(data) {
+        const y = data.getFullYear();
+        const m = String(data.getMonth() + 1).padStart(2, '0');
+        const d = String(data.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + d;
+    }
+
+    /** Padrão: início = hoje − 120 dias; fim = hoje (intervalo dos últimos 120 dias). */
+    function aplicarDatasPadraoHistoricoCusto() {
+        const hoje = new Date();
+        const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+        inicio.setDate(inicio.getDate() - 120);
+        $('#data-inicio-historico').val(formatarDataParaInput(inicio));
+        $('#data-fim-historico').val(formatarDataParaInput(hoje));
+    }
     
     // Event listener para o botão de histórico de custo
     $('#tabela-produtos-compostos tbody').on('click', '.btn-historico-custo', function(e) {
@@ -221,9 +237,7 @@ $(document).ready(function() {
         $('#nome-produto-historico').text(produtoNomeHistorico);
         $('#info-produto-historico').show();
         
-        // Limpar campos
-        $('#data-inicio-historico').val('');
-        $('#data-fim-historico').val('');
+        aplicarDatasPadraoHistoricoCusto();
         $('#conteudo-historico').hide();
         $('#erro-historico').hide();
         
@@ -389,15 +403,30 @@ $(document).ready(function() {
                     ctx.style.cursor = 'pointer';
                 }
                 
-                // Renderizar tabela
-                const tbody = $('#tbody-historico-custo');
-                tbody.empty();
-                
-                let custosArray = [];
-                data.historico.forEach(item => {
-                    custosArray.push(item.custo_total);
-                    
-                    // Criar tabela de detalhes para melhor visualização
+                // Agrupar histórico por semana (segunda a domingo) mantendo ordem da API
+                function parseDataLocal(dateStr) {
+                    const p = dateStr.split('-');
+                    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+                }
+                function chaveSegundaFeira(dateStr) {
+                    const d = parseDataLocal(dateStr);
+                    const dow = d.getDay();
+                    const diff = dow === 0 ? -6 : 1 - dow;
+                    d.setDate(d.getDate() + diff);
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return y + '-' + m + '-' + day;
+                }
+                function addDias(data, n) {
+                    const x = new Date(data.getTime());
+                    x.setDate(x.getDate() + n);
+                    return x;
+                }
+                function formatarDataCurta(d) {
+                    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                }
+                function montarTabelaComponentes(item) {
                     let detalhesHtml = '<table class="table table-sm table-bordered mb-0" style="font-size: 0.85em;">';
                     detalhesHtml += '<thead class="table-light">';
                     detalhesHtml += '<tr>';
@@ -409,14 +438,12 @@ $(document).ready(function() {
                     detalhesHtml += '</tr>';
                     detalhesHtml += '</thead>';
                     detalhesHtml += '<tbody>';
-                    
                     item.componentes.forEach(comp => {
                         const peso = comp.peso_percentual || 0;
                         const quantidadeFormatada = parseFloat(comp.quantidade).toFixed(2);
                         const precoFormatado = parseFloat(comp.preco_unitario).toFixed(2);
                         const custoFormatado = parseFloat(comp.custo_componente).toFixed(2);
                         const pesoFormatado = parseFloat(peso).toFixed(2);
-                        
                         detalhesHtml += '<tr>';
                         detalhesHtml += `<td><strong>${comp.material_nome}</strong></td>`;
                         detalhesHtml += `<td class="text-end">${quantidadeFormatada} ${comp.unidade || ''}</td>`;
@@ -425,24 +452,63 @@ $(document).ready(function() {
                         detalhesHtml += `<td class="text-center"><span class="badge bg-info text-white">${pesoFormatado}%</span></td>`;
                         detalhesHtml += '</tr>';
                     });
-                    
                     detalhesHtml += '</tbody>';
                     detalhesHtml += '</table>';
-                    
-                    const dataFormatada = new Date(item.data + 'T00:00:00').toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric'
-                    });
-                    const custoTotalFormatado = parseFloat(item.custo_total).toFixed(2);
-                    
+                    return detalhesHtml;
+                }
+
+                const ordemSemanas = [];
+                const gruposPorSemana = {};
+                data.historico.forEach(item => {
+                    const k = chaveSegundaFeira(item.data);
+                    if (!gruposPorSemana[k]) {
+                        gruposPorSemana[k] = [];
+                        ordemSemanas.push(k);
+                    }
+                    gruposPorSemana[k].push(item);
+                });
+
+                const tbody = $('#tbody-historico-custo');
+                tbody.empty();
+
+                let custosArray = [];
+                data.historico.forEach(item => custosArray.push(item.custo_total));
+
+                ordemSemanas.forEach(chaveSeg => {
+                    const itensSemana = gruposPorSemana[chaveSeg];
+                    const segunda = parseDataLocal(chaveSeg);
+                    const domingo = addDias(segunda, 6);
+                    const labelPeriodo = formatarDataCurta(segunda) + ' – ' + formatarDataCurta(domingo);
+                    const somaSemana = itensSemana.reduce((acc, it) => acc + parseFloat(it.custo_total), 0);
+                    const mediaSemana = somaSemana / itensSemana.length;
+                    const nDias = itensSemana.length;
+
                     tbody.append(`
-                        <tr>
-                            <td class="align-middle">${dataFormatada}</td>
-                            <td class="align-middle text-end"><strong>R$ ${custoTotalFormatado}</strong></td>
-                            <td>${detalhesHtml}</td>
+                        <tr class="historico-custo-semana-header">
+                            <td colspan="3" class="bg-light font-weight-bold py-2">
+                                <i class="fas fa-calendar-week text-primary mr-1"></i>
+                                Semana ${labelPeriodo}
+                                <span class="text-muted font-weight-normal ml-2">(${nDias} dia${nDias !== 1 ? 's' : ''} · média R$ ${mediaSemana.toFixed(2)})</span>
+                            </td>
                         </tr>
                     `);
+
+                    itensSemana.forEach(item => {
+                        const detalhesHtml = montarTabelaComponentes(item);
+                        const dataFormatada = parseDataLocal(item.data).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric'
+                        });
+                        const custoTotalFormatado = parseFloat(item.custo_total).toFixed(2);
+                        tbody.append(`
+                            <tr>
+                                <td class="align-middle">${dataFormatada}</td>
+                                <td class="align-middle text-end"><strong>R$ ${custoTotalFormatado}</strong></td>
+                                <td>${detalhesHtml}</td>
+                            </tr>
+                        `);
+                    });
                 });
                 
                 // Calcular estatísticas (todos formatados com 2 casas decimais)
@@ -547,6 +613,20 @@ $(document).ready(function() {
 
 #tabela-historico-custo table.table tbody tr:hover {
     background-color: #f8f9fa;
+}
+
+/* Rolagem vertical no bloco de detalhamento (por semana / por data) */
+.historico-custo-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+
+.historico-custo-scroll #tabela-historico-custo thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* Garantir que o modal de detalhamento apareça acima do modal principal */

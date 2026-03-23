@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file, current_app
 from io import BytesIO
+from sqlalchemy.orm import defer
 from werkzeug.exceptions import abort
 from werkzeug.utils import secure_filename
 from models.estoque import Estoque,EstoqueMovimentacoes
@@ -1045,53 +1046,20 @@ def api_historico_custo(id):
                             # Buscar CTEs (tipo 2) que possam ter chave_nf correspondente nos dados_adicionais
                             # Primeiro tenta busca direta por json_extract (mais eficiente)
                             cte = (
-                                db.session.query(NotaFiscal)
+                                db.session.query(NotaFiscal).options(
+                                    defer(NotaFiscal.dados_adicionais),
+                                    defer(NotaFiscal.xml_data))
                                 .filter(NotaFiscal.tipo == 2)
                                 .filter(NotaFiscal.status_processamento != "cancelada")
-                                .filter(
-                                    or_(
-                                        func.json_extract(NotaFiscal.dados_adicionais, "$.chave_nf") == chave_acesso_nf_usada,
-                       #                 NotaFiscal.dados_adicionais.like(f'%"chave_nf": "{chave_acesso_nf_usada}"%'),
-                        #                NotaFiscal.dados_adicionais.like(f'%"chave_nf":["{chave_acesso_nf_usada}"%')
-                                    )
-                                )
+                                .filter(NotaFiscal.chave_nf is not None)
+                                .filter(NotaFiscal.chave_nf == chave_acesso_nf_usada)
                                 .first()
                             )
                             print(f'cte: {cte}')
                             if cte and cte.valor_total:
                                 valor_frete = float(cte.valor_total)
                                 tem_frete = True
-                            else:
-                                # Fallback: buscar todos e verificar manualmente (para casos de lista)
-                                ctes = (
-                                    db.session.query(NotaFiscal)
-                                    .filter(NotaFiscal.tipo == 2)
-                                    .filter(NotaFiscal.status_processamento != "cancelada")
-                                    .filter(func.json_extract(NotaFiscal.dados_adicionais, "$.chave_nf") == chave_acesso_nf_usada)
-                                    .all()
-                                )
-                                
-                                for cte_fallback in ctes:
-                                    if not cte_fallback.dados_adicionais:
-                                        continue
-                                    
-                                    try:
-                                        dados_adicionais = json.loads(cte_fallback.dados_adicionais)
-                                        chave_nf_cte = dados_adicionais.get('chave_nf')
-                                        
-                                        # Pode ser string ou lista
-                                        if isinstance(chave_nf_cte, str) and chave_nf_cte == chave_acesso_nf_usada:
-                                            if cte_fallback.valor_total:
-                                                valor_frete = float(cte_fallback.valor_total)
-                                                tem_frete = True
-                                            break
-                                        elif isinstance(chave_nf_cte, list) and chave_acesso_nf_usada in chave_nf_cte:
-                                            if cte_fallback.valor_total:
-                                                valor_frete = float(cte_fallback.valor_total)
-                                                tem_frete = True
-                                            break
-                                    except (json.JSONDecodeError, ValueError, TypeError):
-                                        continue
+                            
                         except Exception as e:
                             logger.warning(f"Erro ao buscar frete para chave_acesso {chave_acesso_nf_usada}: {str(e)}")
                     

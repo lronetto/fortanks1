@@ -537,7 +537,7 @@ def job_semanal():
     try:
         with app.app_context():
             logger.info("Executando job semanal...")
-            #relatorio_semanal()
+            relatorio_semanal()
             logger.info("Job semanal concluído")
     except Exception as e:
         logger.error(f"Erro no job semanal: {str(e)}", exc_info=True)
