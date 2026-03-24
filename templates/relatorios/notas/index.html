@@ -217,8 +217,9 @@
                         <th colspan="2" class="text-center">Total</th>
                         <th colspan="3" class="text-center">Faturado</th>
                         <th colspan="3" class="text-center">Recebido</th>
+                        <th colspan="3" class="text-center border-warning">A receber</th>
                         <th colspan="3" class="text-center">A Faturar</th>
-                        <th colspan="2" class="text-center">Não Faturado</th>
+                        
                     </tr>
                     <tr>
                         <th class="text-center">Valor (R$)</th>
@@ -233,7 +234,9 @@
                         <th class="text-center">Quantidade</th>
                         <th class="text-center">%</th>
                         <th class="text-center">Valor (R$)</th>
+                        <th class="text-center">Quantidade</th>
                         <th class="text-center">%</th>
+                        
                     </tr>
                 </thead>
                 <tbody>
@@ -250,11 +253,13 @@
                         <td class="text-end" id="valor-material-recebido">R$ 0,00</td>
                         <td class="text-center" id="quantidade-material-recebido">0</td>
                         <td class="text-center" id="percentual-material-recebido">0%</td>
+                        <td class="text-end table-warning" id="valor-material-a-receber">R$ 0,00</td>
+                        <td class="text-center table-warning" id="quantidade-material-a-receber">0</td>
+                        <td class="text-center table-warning" id="percentual-material-a-receber">0%</td>
                         <td class="text-end" id="valor-material-a-faturar">R$ 0,00</td>
                         <td class="text-center" id="quantidade-material-a-faturar">0</td>
                         <td class="text-center" id="percentual-material-a-faturar">0%</td>
-                        <td class="text-end" id="valor-material-nao-faturado">R$ 0,00</td>
-                        <td class="text-center" id="percentual-material-nao-faturado">0%</td>
+                        
                     </tr>
                     <!-- Serviço -->
                     <tr class="table-secondary">
@@ -269,11 +274,13 @@
                         <td class="text-end" id="valor-servico-recebido">R$ 0,00</td>
                         <td class="text-center">-</td>
                         <td class="text-center" id="percentual-servico-recebido">0%</td>
+                        <td class="text-end table-warning" id="valor-servico-a-receber">R$ 0,00</td>
+                        <td class="text-center table-warning">-</td>
+                        <td class="text-center table-warning" id="percentual-servico-a-receber">0%</td>
                         <td class="text-end" id="valor-servico-a-faturar">R$ 0,00</td>
                         <td class="text-center">-</td>
                         <td class="text-center" id="percentual-servico-a-faturar">0%</td>
-                        <td class="text-end" id="valor-servico-nao-faturado">R$ 0,00</td>
-                        <td class="text-center" id="percentual-servico-nao-faturado">0%</td>
+                        
                     </tr>
                 </tbody>
             </table>
@@ -487,26 +494,43 @@ $(document).ready(function() {
                     atualizarCards({
                         totalMaterial: parseFloat(dados.valor_total_material || 0),
                         totalPlacasMaterial: parseFloat(dados.total_placas_contratos || 0),
-                        quantidadeMaterialFaturado: parseFloat(dados.total_quantidade || 0),
+                        quantidadeMaterialFaturado: parseFloat(
+                            dados.quantidade_material_faturada != null && dados.quantidade_material_faturada !== ''
+                                ? dados.quantidade_material_faturada
+                                : dados.total_quantidade || 0
+                        ),
                         materialFaturado: parseFloat(dados.valor_material_faturado || 0),
-                        quantidadeMaterialRecebido: parseFloat(dados.quantidade_recebida || 0),
-                        quantidadeMaterialAFaturar: parseFloat(dados.quantidade_a_faturar || 0),
+                        quantidadeMaterialRecebido: parseFloat(dados.quantidade_material_recebida != null ? dados.quantidade_material_recebida : dados.quantidade_recebida || 0),
+                        quantidadeMaterialAReceber: parseFloat(dados.quantidade_material_a_receber || 0),
+                        quantidadeMaterialAFaturar: parseFloat(
+                            dados.quantidade_material_a_faturar != null && dados.quantidade_material_a_faturar !== ''
+                                ? dados.quantidade_material_a_faturar
+                                : dados.quantidade_a_faturar || 0
+                        ),
                         quantidadeMaterialNaoFaturar: parseFloat(dados.quantidade_material_nao_faturada || 0),
-                        materialRecebido: parseFloat(dados.valor_recebido || 0),
-                        materialAFaturar: parseFloat(dados.valor_a_faturar || 0),
+                        materialRecebido: parseFloat(dados.valor_material_recebido != null ? dados.valor_material_recebido : dados.valor_recebido || 0),
+                        materialAReceber: parseFloat(dados.valor_material_a_receber || 0),
+                        materialAFaturar: parseFloat(
+                            dados.valor_material_a_faturar != null && dados.valor_material_a_faturar !== ''
+                                ? dados.valor_material_a_faturar
+                                : dados.valor_a_faturar || 0
+                        ),
                         materialNaoFaturado: parseFloat(dados.valor_material_nao_faturado || 0),
                         percentualMaterialFaturado: parseFloat(dados.percentual_material_faturado || 0),
                         percentualMaterialRecebido: parseFloat(dados.percentual_material_recebido || 0),
+                        percentualMaterialAReceber: parseFloat(dados.percentual_material_a_receber || 0),
                         percentualMaterialAFaturar: parseFloat(dados.percentual_material_a_faturar || 0),
                         percentualMaterialNaoFaturado: parseFloat(dados.percentual_material_nao_faturado || 0),
                         totalServico: parseFloat(dados.valor_total_servico || 0),
                         servicoFaturado: parseFloat(dados.valor_servico_faturado || 0),
-                        servicoRecebido: 0,
-                        servicoAFaturar: 0,
+                        servicoRecebido: parseFloat(dados.valor_servico_recebido || 0),
+                        servicoAReceber: parseFloat(dados.valor_servico_a_receber || 0),
+                        servicoAFaturar: parseFloat(dados.valor_servico_a_faturar || 0),
                         servicoNaoFaturado: parseFloat(dados.valor_servico_nao_faturado || 0),
                         percentualServicoFaturado: parseFloat(dados.percentual_servico_faturado || 0),
-                        percentualServicoRecebido: 0,
-                        percentualServicoAFaturar: 0,
+                        percentualServicoRecebido: parseFloat(dados.percentual_servico_recebido || 0),
+                        percentualServicoAReceber: parseFloat(dados.percentual_servico_a_receber || 0),
+                        percentualServicoAFaturar: parseFloat(dados.percentual_servico_a_faturar || 0),
                         percentualServicoNaoFaturado: parseFloat(dados.percentual_servico_nao_faturado || 0)
                     });
                 }
@@ -611,6 +635,11 @@ $(document).ready(function() {
         $('#quantidade-material-recebido').text((dados.quantidadeMaterialRecebido || 0).toLocaleString('pt-BR'));
         $('#percentual-material-recebido').text((dados.percentualMaterialRecebido || 0).toFixed(1) + '%');
         
+        // Material - A receber (NF emitida, pagamento pendente)
+        $('#valor-material-a-receber').text(formatarMoeda(dados.materialAReceber || 0));
+        $('#quantidade-material-a-receber').text((dados.quantidadeMaterialAReceber || 0).toLocaleString('pt-BR'));
+        $('#percentual-material-a-receber').text((dados.percentualMaterialAReceber || 0).toFixed(1) + '%');
+        
         // Material - A Faturar
         $('#valor-material-a-faturar').text(formatarMoeda(dados.materialAFaturar || 0));
         $('#quantidade-material-a-faturar').text((dados.quantidadeMaterialAFaturar || 0).toLocaleString('pt-BR'));
@@ -630,6 +659,10 @@ $(document).ready(function() {
         // Serviço - Recebido
         $('#valor-servico-recebido').text(formatarMoeda(dados.servicoRecebido || 0));
         $('#percentual-servico-recebido').text((dados.percentualServicoRecebido || 0).toFixed(1) + '%');
+        
+        // Serviço - A receber
+        $('#valor-servico-a-receber').text(formatarMoeda(dados.servicoAReceber || 0));
+        $('#percentual-servico-a-receber').text((dados.percentualServicoAReceber || 0).toFixed(1) + '%');
         
         // Serviço - A Faturar
         $('#valor-servico-a-faturar').text(formatarMoeda(dados.servicoAFaturar || 0));

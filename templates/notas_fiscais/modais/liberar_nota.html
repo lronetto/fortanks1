@@ -35,14 +35,42 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label mt-2">Item do Pedido</label>
-                                <select id="pedido_item_id_liberacao" class="form-select" disabled>
-                                    <option value="">Selecione o item...</option>
-                                </select>
+                                <div class="row g-2">
+                                    <div class="col-md-7">
+                                        <select id="pedido_item_id_liberacao" class="form-select" disabled>
+                                            <option value="">Selecione o item...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="number" step="0.0001" min="0" id="quantidade_entrada_liberacao" class="form-control" placeholder="Quantidade" disabled>
+                                    </div>
+                                    <div class="col-md-2 d-grid">
+                                        <button type="button" id="btnAdicionarItemLiberacao" class="btn btn-outline-primary" disabled>
+                                            Adicionar
+                                        </button>
+                                    </div>
+                                </div>
                                 <div class="form-text" id="pedidoItemSaldoInfo"></div>
                             </div>
                             <div class="col-12">
-                                <label class="form-label mt-2">Quantidade de Entrada</label>
-                                <input type="number" step="0.0001" min="0" id="quantidade_entrada_liberacao" class="form-control" disabled>
+                                <label class="form-label mt-2">Itens para entrada</label>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered align-middle mb-0" id="tabelaItensLiberacao">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Item</th>
+                                                <th class="text-end">Saldo</th>
+                                                <th class="text-end">Qtd. Entrada</th>
+                                                <th style="width: 1%;">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr id="linhaSemItensLiberacao">
+                                                <td colspan="4" class="text-center text-muted">Nenhum item adicionado.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>

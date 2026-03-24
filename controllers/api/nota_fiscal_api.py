@@ -879,6 +879,7 @@ def register(nota_fiscal_bp):
                 tipo_item = request.form.get('tipo_item') or (request.json.get('tipo_item') if request.is_json else None)
                 pedido_compra = request.form.get('pedido_compra') or (request.json.get('pedido_compra') if request.is_json else None)
                 pedido_id = request.form.get('pedido_id') or (request.json.get('pedido_id') if request.is_json else None)
+                itens_entrada_raw = request.form.get('itens_entrada') or (request.json.get('itens_entrada') if request.is_json else None)
                 pedido_item_id_raw = request.form.get('pedido_item_id') or (request.json.get('pedido_item_id') if request.is_json else None)
                 quantidade_entrada_raw = request.form.get('quantidade_entrada') or (request.json.get('quantidade_entrada') if request.is_json else None)
                 # Tratar string vazia como não informado (liberar sem vincular pedido)
@@ -893,12 +894,38 @@ def register(nota_fiscal_bp):
                 dados_adicionais['liberada_por'] = getattr(current_user, 'nome', None) or getattr(current_user, 'email', 'Usuário desconhecido')
                 dados_adicionais['liberada_em'] = datetime.now().isoformat()
 
-                # Só registrar entrada se pedido_item_id e quantidade_entrada foram informados
-                if pedido_item_id and quantidade_entrada:
+                itens_entrada = []
+                if itens_entrada_raw:
                     try:
-                        qtd = Decimal(str(quantidade_entrada))
+                        itens_entrada = json.loads(itens_entrada_raw) if isinstance(itens_entrada_raw, str) else itens_entrada_raw
                     except Exception:
-                        logger.warning("api/liberar: quantidade_entrada inválida: %s", repr(quantidade_entrada_raw))
+                        logger.warning("api/liberar: itens_entrada inválido: %s", repr(itens_entrada_raw))
+                        return jsonify({"success": False, "message": "Lista de itens de entrada inválida."}), 400
+
+                    if not isinstance(itens_entrada, list):
+                        return jsonify({"success": False, "message": "Lista de itens de entrada inválida."}), 400
+
+                # Compatibilidade com payload antigo (1 item)
+                if not itens_entrada and pedido_item_id and quantidade_entrada:
+                    itens_entrada = [{
+                        "pedido_item_id": pedido_item_id,
+                        "quantidade_entrada": quantidade_entrada
+                    }]
+
+                # Só registrar entrada se houver itens informados
+                for item_entrada in itens_entrada:
+                    if not isinstance(item_entrada, dict):
+                        return jsonify({"success": False, "message": "Item de entrada inválido."}), 400
+
+                    pedido_item_id_val = item_entrada.get("pedido_item_id")
+                    quantidade_entrada_val = item_entrada.get("quantidade_entrada")
+                    if pedido_item_id_val in (None, "") or quantidade_entrada_val in (None, ""):
+                        return jsonify({"success": False, "message": "Preencha item do pedido e quantidade de entrada."}), 400
+
+                    try:
+                        qtd = Decimal(str(quantidade_entrada_val))
+                    except Exception:
+                        logger.warning("api/liberar: quantidade_entrada inválida: %s", repr(quantidade_entrada_val))
                         return jsonify({"success": False, "message": "Quantidade de entrada inválida."}), 400
 
                     if qtd <= 0:
@@ -906,9 +933,9 @@ def register(nota_fiscal_bp):
                         return jsonify({"success": False, "message": "Quantidade de entrada deve ser maior que zero."}), 400
 
                     try:
-                        pedido_item_id_int = int(pedido_item_id)
+                        pedido_item_id_int = int(pedido_item_id_val)
                     except ValueError:
-                        logger.warning("api/liberar: pedido_item_id inválido: %s", repr(pedido_item_id_raw))
+                        logger.warning("api/liberar: pedido_item_id inválido: %s", repr(pedido_item_id_val))
                         return jsonify({"success": False, "message": "Item do pedido inválido."}), 400
 
                     item = PedidoCompraItem.query.get(pedido_item_id_int)

@@ -44,6 +44,9 @@ def _processar_notas_fiscais(query):
     import json
     # Executar query e obter IDs das notas
     # Resultado da query: (NotaFiscal, pagamento_column, centro_custo_column, upload_column, ...)
+    from sqlalchemy.orm import defer
+    from models.nota_fiscal import NotaFiscal
+    query = query.options(defer(NotaFiscal.dados_adicionais),defer(NotaFiscal.xml_data))
     resultados = query.all()
     nf_ids = [resultado[0].id for resultado in resultados]
     
@@ -291,6 +294,7 @@ def api_dados():
     print(f'json_request: {json_request}')
     query = api_get_dados_notas_fiscais(json_request)
    
+    
     dados_relatorio = _processar_notas_fiscais(query)
     # Calcular totais por categoria
     total_valor = sum([d['valor'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
@@ -321,12 +325,6 @@ def api_dados():
         if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
     ])
     
-    # Calcular valores a faturar (emitidos mas não pagos)
-    valor_a_faturar = valor_faturado - valor_recebido
-    
-    # Calcular quantidades a faturar (emitidas mas não pagas)
-    quantidade_a_faturar = total_placas_contratos - quantidade_recebida
-    
     # Buscar valores dos contratos separados por material e serviço
     query_contratos_total = db.session.query(func.sum(Contrato.valor_total))
     query_contratos_mat = db.session.query(func.sum(Contrato.valor_mat))
@@ -355,18 +353,41 @@ def api_dados():
     if valor_material_faturado == 0 and valor_servico_faturado == 0:
         valor_material_faturado = float(valor_faturado)
         valor_servico_faturado = 0
+
+    # Placas já faturadas (apenas NFE material), para "a faturar" = contrato − faturado
+    quantidade_material_faturada = sum([
+        d['quantidade'] for d in dados_relatorio
+        if d['status'] != 'cancelada' and d.get('tipo_nf', None) in [0, 1]
+    ])
+
+    valor_material_recebido = sum([
+        d['valor'] for d in dados_relatorio
+        if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
+        and d.get('tipo_nf', None) in [0, 1]
+    ])
+    quantidade_material_recebida = sum([
+        d['quantidade'] for d in dados_relatorio
+        if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
+        and d.get('tipo_nf', None) in [0, 1]
+    ])
     
     # Calcular valores ainda não faturados
     valor_material_nao_faturado = float(valor_total_material) - float(valor_material_faturado)
     valor_servico_nao_faturado = float(valor_total_servico) - float(valor_servico_faturado)
     
-    # Calcular quantidades de placas não faturadas
-    quantidade_material_nao_faturada = float(total_placas_contratos) - float(total_quantidade)
+    # Calcular quantidades de placas não faturadas (contrato − placas já faturadas em NFE)
+    quantidade_material_nao_faturada = float(total_placas_contratos) - float(quantidade_material_faturada)
+
+    # A faturar (valor e quantidade) = total do contrato − já faturado
+    valor_material_a_faturar = float(valor_material_nao_faturado)
+    quantidade_material_a_faturar = float(quantidade_material_nao_faturada)
     
     # Calcular percentuais para material
     percentual_material_faturado = (valor_material_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
-    percentual_material_recebido = (valor_recebido / valor_total_material * 100) if valor_total_material > 0 else 0
-    percentual_material_a_faturar = (valor_a_faturar / valor_total_material * 100) if valor_total_material > 0 else 0
+    percentual_material_recebido = (valor_material_recebido / valor_total_material * 100) if valor_total_material > 0 else 0
+    percentual_material_a_faturar = (
+        (valor_material_a_faturar / valor_total_material * 100) if valor_total_material > 0 else 0
+    )
     percentual_material_nao_faturado = (valor_material_nao_faturado / valor_total_material * 100) if valor_total_material > 0 else 0
     
     # Calcular percentuais para serviço
@@ -375,25 +396,46 @@ def api_dados():
         d['valor'] for d in dados_relatorio
         if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada' and d.get('tipo_nf', None) == 3
     ])
-    valor_servico_a_faturar = valor_servico_faturado - valor_servico_recebido
+    valor_servico_a_receber = float(valor_servico_faturado) - float(valor_servico_recebido)
     percentual_servico_recebido = (valor_servico_recebido / valor_total_servico * 100) if valor_total_servico > 0 else 0
-    percentual_servico_a_faturar = (valor_servico_a_faturar / valor_total_servico * 100) if valor_total_servico > 0 else 0
+    # A faturar serviço = valor contrato serviço − NFSe já emitidas
+    valor_servico_a_faturar = float(valor_servico_nao_faturado)
+    percentual_servico_a_faturar = (
+        (valor_servico_a_faturar / valor_total_servico * 100) if valor_total_servico > 0 else 0
+    )
+    percentual_servico_a_receber = (
+        (valor_servico_a_receber / valor_total_servico * 100) if valor_total_servico > 0 else 0
+    )
     percentual_servico_nao_faturado = (valor_servico_nao_faturado / valor_total_servico * 100) if valor_total_servico > 0 else 0
+
+    # Material: a receber (faturado e ainda não pago)
+    valor_material_a_receber = float(valor_material_faturado) - float(valor_material_recebido)
+    quantidade_material_a_receber = sum([
+        d['quantidade'] for d in dados_relatorio
+        if d['status'] != 'cancelada' and d.get('tipo_nf', None) in [0, 1]
+        and (d['pago'] == 'Não' or d['pago'] == 'Não definido')
+    ])
+    percentual_material_a_receber = (
+        (valor_material_a_receber / valor_total_material * 100) if valor_total_material > 0 else 0
+    )
     
     dados_relatorio_aux = {
         'valor_total_material': valor_total_material,
         'total_placas_contratos': total_placas_contratos,
         'total_quantidade': total_quantidade,  # Quantidade de placas faturadas
         'quantidade_recebida': quantidade_recebida,
-        'quantidade_a_faturar': quantidade_a_faturar,
+        'quantidade_material_recebida': float(quantidade_material_recebida),
+        'quantidade_material_a_faturar': quantidade_material_a_faturar,
+        'quantidade_material_faturada': float(quantidade_material_faturada),
         'quantidade_material_nao_faturada': quantidade_material_nao_faturada,
         'valor_faturado': valor_faturado,
         'valor_recebido': valor_recebido,
-        'valor_a_faturar': valor_a_faturar,
+        'valor_material_a_faturar': valor_material_a_faturar,
         'valor_total_contratos': valor_total_contratos,
         'valor_total_servico': valor_total_servico,
         'valor_material_faturado': valor_material_faturado,
         'valor_servico_faturado': valor_servico_faturado,
+        'valor_servico_a_faturar': valor_servico_a_faturar,
         'valor_material_nao_faturado': valor_material_nao_faturado,
         'valor_servico_nao_faturado': valor_servico_nao_faturado,
         'percentual_material_faturado': percentual_material_faturado,
@@ -403,7 +445,13 @@ def api_dados():
         'percentual_servico_faturado': percentual_servico_faturado,
         'percentual_servico_recebido': percentual_servico_recebido,
         'percentual_servico_a_faturar': percentual_servico_a_faturar,
-        'percentual_servico_nao_faturado': percentual_servico_nao_faturado
+        'percentual_servico_nao_faturado': percentual_servico_nao_faturado,
+        'valor_material_recebido': float(valor_material_recebido),
+        'valor_material_a_receber': float(valor_material_a_receber),
+        'quantidade_material_a_receber': float(quantidade_material_a_receber),
+        'percentual_material_a_receber': float(percentual_material_a_receber),
+        'valor_servico_a_receber': float(valor_servico_a_receber),
+        'percentual_servico_a_receber': float(percentual_servico_a_receber),
         }
 
     return jsonify({    

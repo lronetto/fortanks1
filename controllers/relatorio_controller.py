@@ -215,10 +215,7 @@ def relatorio_notas_ajax():
     # Calcular quantidades de placas recebidas (pagos)
     quantidade_recebida = sum([d['Quantidade'] for d in dados_relatorio if d['Pago'] != 'Não' and d['Pago'] != 'Não definido' and d['Status'] != 'cancelada'])
     
-    # Calcular valores a faturar (emitidos mas não pagos)
-    valor_a_faturar = valor_faturado - valor_recebido
-    
-    # Calcular quantidades a faturar (emitidas mas não pagas)
+    # Quantidade a faturar (material): placas do contrato ainda não faturadas
     quantidade_a_faturar = total_placas_contratos - total_quantidade
     
     # Buscar valores dos contratos separados por material e serviço
@@ -244,6 +241,7 @@ def relatorio_notas_ajax():
     # Calcular valores ainda não faturados
     valor_material_nao_faturado = valor_total_material - valor_material_faturado
     valor_servico_nao_faturado = valor_total_servico - valor_servico_faturado
+    valor_a_faturar = float(valor_material_nao_faturado)
     
     # Calcular quantidades de placas não faturadas
     quantidade_material_nao_faturada = total_placas_contratos - total_quantidade

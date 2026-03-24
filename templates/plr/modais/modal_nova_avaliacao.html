@@ -42,6 +42,30 @@
                         </button>
                     </div>
                 </div>
+                <div class="row mb-3 g-2 align-items-end" id="linhaLoteAvaliacao">
+                    <div class="col-md-2">
+                        <label for="lote_centro_custo" class="form-label mb-1">Obra (lote)</label>
+                        <select class="form-select form-select-sm" id="lote_centro_custo">
+                            <option value="">Não alterar</option>
+                            {% for cc in centros %}
+                            <option value="{{ cc.id }}">{{ cc.nome or cc.codigo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="lote_equipe" class="form-label mb-1">Equipe (lote)</label>
+                        <input type="text" class="form-control form-control-sm" id="lote_equipe" placeholder="Não alterar">
+                    </div>
+                    <div class="col-md-1"><label for="lote_assid" class="form-label mb-1">Assid.</label><input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm" id="lote_assid" placeholder="-"></div>
+                    <div class="col-md-1"><label for="lote_zero" class="form-label mb-1">Zero Acid.</label><input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm" id="lote_zero" placeholder="-"></div>
+                    <div class="col-md-2"><label for="lote_seg" class="form-label mb-1">Seg./Limpeza</label><input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm" id="lote_seg" placeholder="-"></div>
+                    <div class="col-md-1"><label for="lote_prazo" class="form-label mb-1">Prazo</label><input type="number" step="0.01" min="0" max="10" class="form-control form-control-sm" id="lote_prazo" placeholder="-"></div>
+                    <div class="col-md-3 text-md-end">
+                        <button type="button" class="btn btn-outline-success btn-sm w-100" id="btnSalvarLoteAvaliacoes">
+                            <i class="fas fa-layer-group"></i> Aplicar e salvar lote (filtrados)
+                        </button>
+                    </div>
+                </div>
                 <p class="text-muted small">Funcionários ativos que não foram demitidos até o fim do mês selecionado. Filtre por departamento ou equipe (equipe considera apenas avaliações já cadastradas).</p>
                 <style>
                     #tabelaAvaliacoesMes thead th {
@@ -147,6 +171,32 @@
             '<button type="submit" class="btn btn-sm btn-success btn-salvar-av" title="Salvar"><i class="fas fa-save"></i></button></form>';
     }
 
+    function upsertHiddenInput(form, name, value) {
+        var input = form.querySelector('input[name="' + name + '"]');
+        if (!input) {
+            input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = name;
+            form.appendChild(input);
+        }
+        input.value = value;
+    }
+
+    function prepararFormularioLinha(form, row) {
+        var centroSelect = row.querySelector('.centro-custo-select');
+        var centroId = centroSelect ? centroSelect.value : '';
+        var equipeInput = row.querySelector('.input-equipe');
+        var equipe = equipeInput ? equipeInput.value.trim() : '';
+        var assid = row.querySelector('.input-assid');
+        var zero = row.querySelector('.input-zero');
+        var seg = row.querySelector('.input-seg');
+        var prazo = row.querySelector('.input-prazo');
+        var jsonInput = form.querySelector('.input-avaliacao-json');
+        if (jsonInput) jsonInput.value = buildAvaliacaoJson(assid ? assid.value : '', zero ? zero.value : '', seg ? seg.value : '', prazo ? prazo.value : '');
+        if (centroId) upsertHiddenInput(form, 'centro_custo_id', centroId);
+        if (equipe) upsertHiddenInput(form, 'equipe_alocada', equipe);
+    }
+
     var dtAvaliacoesMes = null;
 
     function initDataTableAvaliacoes() {
@@ -233,29 +283,7 @@
         e.preventDefault();
         var row = form.closest('tr');
         if (!row) return;
-        var centroSelect = row.querySelector('.centro-custo-select');
-        var centroId = centroSelect ? centroSelect.value : '';
-        var equipeInput = row.querySelector('.input-equipe');
-        var equipe = equipeInput ? equipeInput.value.trim() : '';
-        var assid = row.querySelector('.input-assid'); var zero = row.querySelector('.input-zero');
-        var seg = row.querySelector('.input-seg'); var prazo = row.querySelector('.input-prazo');
-        var jsonInput = form.querySelector('.input-avaliacao-json');
-        if (jsonInput) {
-            jsonInput.value = buildAvaliacaoJson(
-                assid ? assid.value : '', zero ? zero.value : '',
-                seg ? seg.value : '', prazo ? prazo.value : ''
-            );
-        }
-        if (centroId) {
-            var hid = document.createElement('input');
-            hid.type = 'hidden'; hid.name = 'centro_custo_id'; hid.value = centroId;
-            form.appendChild(hid);
-        }
-        if (equipe) {
-            var he = document.createElement('input');
-            he.type = 'hidden'; he.name = 'equipe_alocada'; he.value = equipe;
-            form.appendChild(he);
-        }
+        prepararFormularioLinha(form, row);
 
         var btn = form.querySelector('.btn-salvar-av');
         if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
@@ -286,6 +314,44 @@
             if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i>'; }
             alert('Erro ao enviar. Tente novamente.');
         });
+    });
+
+    document.getElementById('btnSalvarLoteAvaliacoes').addEventListener('click', async function() {
+        if (!dtAvaliacoesMes) return;
+        var rows = dtAvaliacoesMes.rows({ search: 'applied' }).nodes().toArray();
+        if (!rows.length) return alert('Não há registros filtrados para salvar em lote.');
+        var loteCentro = document.getElementById('lote_centro_custo').value;
+        var loteEquipe = document.getElementById('lote_equipe').value.trim();
+        var loteAssid = document.getElementById('lote_assid').value;
+        var loteZero = document.getElementById('lote_zero').value;
+        var loteSeg = document.getElementById('lote_seg').value;
+        var lotePrazo = document.getElementById('lote_prazo').value;
+        var btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+        var sucesso = 0;
+        for (var i = 0; i < rows.length; i++) {
+            var row = rows[i];
+            if (loteCentro !== '') { var sel = row.querySelector('.centro-custo-select'); if (sel) sel.value = loteCentro; }
+            if (loteEquipe !== '') { var inpEq = row.querySelector('.input-equipe'); if (inpEq) inpEq.value = loteEquipe; }
+            if (loteAssid !== '') { var inpA = row.querySelector('.input-assid'); if (inpA) inpA.value = loteAssid; }
+            if (loteZero !== '') { var inpZ = row.querySelector('.input-zero'); if (inpZ) inpZ.value = loteZero; }
+            if (loteSeg !== '') { var inpS = row.querySelector('.input-seg'); if (inpS) inpS.value = loteSeg; }
+            if (lotePrazo !== '') { var inpP = row.querySelector('.input-prazo'); if (inpP) inpP.value = lotePrazo; }
+            var form = row.querySelector('form.form-row-avaliacao, form.form-row-avaliacao-editar');
+            if (!form) continue;
+            prepararFormularioLinha(form, row);
+            try {
+                var res = await fetch(form.action, { method: 'POST', body: new FormData(form), headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                var json = await res.json();
+                if (res.ok && json && json.success) sucesso++;
+            } catch (err) {}
+        }
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-layer-group"></i> Aplicar e salvar lote (filtrados)';
+        if (dtAvaliacoesMes) dtAvaliacoesMes.ajax.reload(null, false);
+        if (sucesso > 0) document.dispatchEvent(new CustomEvent('plr-avaliacao-salva'));
+        alert('Lote concluído: ' + sucesso + ' de ' + rows.length + ' registros salvos.');
     });
 })();
 </script>

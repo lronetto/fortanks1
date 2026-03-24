@@ -655,8 +655,11 @@ document.addEventListener('DOMContentLoaded', function() {
             $('#pedido_id_liberacao').val('');
             $('#pedido_item_id_liberacao').html('<option value="">Selecione o item...</option>').prop('disabled', true);
             $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+            $('#btnAdicionarItemLiberacao').prop('disabled', true);
+            $('#tabelaItensLiberacao tbody').html('<tr id="linhaSemItensLiberacao"><td colspan="4" class="text-center text-muted">Nenhum item adicionado.</td></tr>');
             $('#pedidoFornecedorInfo').text('');
             $('#pedidoItemSaldoInfo').text('');
+            window.itensPedidoDisponiveisLiberacao = [];
 
             const modal = new bootstrap.Modal(document.getElementById('modalLiberarNota'));
             modal.show();
@@ -724,7 +727,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const pedidoId = $('#pedido_id_liberacao').val();
         $('#pedido_item_id_liberacao').html('<option value="">Carregando itens...</option>').prop('disabled', true);
         $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+        $('#btnAdicionarItemLiberacao').prop('disabled', true);
         $('#pedidoItemSaldoInfo').text('');
+        window.itensPedidoDisponiveisLiberacao = [];
 
         if (!pedidoId) {
             $('#pedido_item_id_liberacao').html('<option value="">Selecione o item...</option>').prop('disabled', true);
@@ -739,6 +744,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 const itens = resp.itens || [];
+                window.itensPedidoDisponiveisLiberacao = itens;
                 if (!itens.length) {
                     $('#pedido_item_id_liberacao').html('<option value="">Sem itens com saldo</option>').prop('disabled', true);
                     return;
@@ -746,7 +752,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 let options = '<option value="">Selecione o item...</option>';
                 itens.forEach(i => {
                     const label = `${i.material_nome || 'Material'} - Saldo: ${i.saldo} ${i.unidade || ''}`;
-                    options += `<option value="${i.id}" data-saldo="${i.saldo}">${label}</option>`;
+                    options += `<option value="${i.id}" data-saldo="${i.saldo}" data-nome="${i.material_nome || 'Material'}" data-unidade="${i.unidade || ''}">${label}</option>`;
                 });
                 $('#pedido_item_id_liberacao').html(options).prop('disabled', false);
             })
@@ -761,11 +767,65 @@ document.addEventListener('DOMContentLoaded', function() {
         const saldo = opt.data('saldo');
         if (!opt.val()) {
             $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+            $('#btnAdicionarItemLiberacao').prop('disabled', true);
             $('#pedidoItemSaldoInfo').text('');
             return;
         }
         $('#quantidade_entrada_liberacao').prop('disabled', false);
+        $('#btnAdicionarItemLiberacao').prop('disabled', false);
         $('#pedidoItemSaldoInfo').text(`Saldo disponível: ${saldo}`);
+    });
+
+    $('#btnAdicionarItemLiberacao').on('click', function() {
+        const pedidoItemId = $('#pedido_item_id_liberacao').val();
+        const qtdEntradaRaw = $('#quantidade_entrada_liberacao').val();
+        const opt = $('#pedido_item_id_liberacao option:selected');
+        const saldo = parseFloat(opt.data('saldo') || 0);
+        const materialNome = (opt.data('nome') || 'Material').toString();
+        const unidade = (opt.data('unidade') || '').toString();
+        const qtdEntrada = parseFloat(qtdEntradaRaw);
+
+        if (!pedidoItemId) {
+            mostrarAlerta('Erro', 'Selecione um item do pedido.', 'error');
+            return;
+        }
+        if (!qtdEntradaRaw || isNaN(qtdEntrada) || qtdEntrada <= 0) {
+            mostrarAlerta('Erro', 'Informe uma quantidade de entrada válida.', 'error');
+            return;
+        }
+        if (qtdEntrada > saldo) {
+            mostrarAlerta('Erro', `Quantidade de entrada maior que o saldo disponível (${saldo}).`, 'error');
+            return;
+        }
+
+        const tbody = $('#tabelaItensLiberacao tbody');
+        $('#linhaSemItensLiberacao').remove();
+
+        const linha = `
+            <tr data-pedido-item-id="${pedidoItemId}" data-quantidade="${qtdEntrada}">
+                <td>${materialNome}${unidade ? ` (${unidade})` : ''}</td>
+                <td class="text-end">${saldo}</td>
+                <td class="text-end">${qtdEntrada}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-remover-item-liberacao">
+                        Remover
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(linha);
+
+        $('#pedido_item_id_liberacao').val('');
+        $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+        $('#btnAdicionarItemLiberacao').prop('disabled', true);
+        $('#pedidoItemSaldoInfo').text('');
+    });
+
+    $(document).on('click', '.btn-remover-item-liberacao', function() {
+        $(this).closest('tr').remove();
+        if (!$('#tabelaItensLiberacao tbody tr').length) {
+            $('#tabelaItensLiberacao tbody').html('<tr id="linhaSemItensLiberacao"><td colspan="4" class="text-center text-muted">Nenhum item adicionado.</td></tr>');
+        }
     });
 
     // Confirmar liberação (submit do modal)
@@ -778,21 +838,26 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const pedidoId = $('#pedido_id_liberacao').val();
-        const pedidoItemId = $('#pedido_item_id_liberacao').val();
-        const qtdEntrada = $('#quantidade_entrada_liberacao').val();
+        const itensEntrada = [];
+        $('#tabelaItensLiberacao tbody tr[data-pedido-item-id]').each(function() {
+            itensEntrada.push({
+                pedido_item_id: $(this).data('pedido-item-id'),
+                quantidade_entrada: $(this).data('quantidade')
+            });
+        });
 
-        if (pedidoId && (!pedidoItemId || !qtdEntrada)) {
-            mostrarAlerta('Erro', 'Selecione o item do pedido e informe a quantidade de entrada.', 'error');
+        if (pedidoId && !itensEntrada.length) {
+            mostrarAlerta('Erro', 'Adicione ao menos um item do pedido com quantidade de entrada.', 'error');
             return;
         }
 
-        enviarLiberacao(notaId, tipoItem || null, null, pedidoId || null, pedidoItemId || null, qtdEntrada || null, function() {
+        enviarLiberacao(notaId, tipoItem || null, null, pedidoId || null, itensEntrada, function() {
             const modalLib = bootstrap.Modal.getInstance(document.getElementById('modalLiberarNota'));
             if (modalLib) modalLib.hide();
         });
     });
 
-    function enviarLiberacao(nfId, tipoItem, pedidoCompra, pedidoId, pedidoItemId, quantidadeEntrada, onSuccess) {
+    function enviarLiberacao(nfId, tipoItem, pedidoCompra, pedidoId, itensEntrada, onSuccess) {
         let csrfToken = $('meta[name="csrf-token"]').attr('content');
         if (!csrfToken) csrfToken = $('input[name="csrf_token"]').first().val();
         if (!csrfToken) {
@@ -805,8 +870,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tipoItem != null) formData.append('tipo_item', tipoItem);
         if (pedidoCompra != null) formData.append('pedido_compra', pedidoCompra);
         if (pedidoId != null) formData.append('pedido_id', pedidoId);
-        if (pedidoItemId != null) formData.append('pedido_item_id', pedidoItemId);
-        if (quantidadeEntrada != null) formData.append('quantidade_entrada', quantidadeEntrada);
+        if (Array.isArray(itensEntrada) && itensEntrada.length) {
+            formData.append('itens_entrada', JSON.stringify(itensEntrada));
+        }
         $.ajax({
             url: '/notas-fiscais/api/liberar',
             type: 'POST',
