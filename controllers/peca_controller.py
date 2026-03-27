@@ -7,7 +7,11 @@ from models.contrato import Contrato
 from models.tanque import TanquesGrupos, Tanques, TanquesPecas, TanquesProdutoComposto
 from models.estoque import Estoque, EstoqueMovimentacoes
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
-from models.concreto import ConcretoUsinagens, ConcretoConcretagens
+from models.concreto import (
+    ConcretoUsinagens,
+    ConcretoConcretagens,
+    qualidade_peca_remover_data_producao_de_dados_adicionais,
+)
 from flask_wtf.csrf import generate_csrf
 from flask_login import login_required, current_user
 from datetime import datetime
@@ -739,6 +743,7 @@ def acabamento():
                 'placa': placa,
                 'data': data_acabamento
             }
+            qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
             peca.qualidade = json.dumps(qualidade_dict)
             peca.save()
             return jsonify({'success': True})
@@ -774,6 +779,7 @@ def transporte():
                     'placa_carreta': placa_carreta,
                     'transportadora': transportadora
                 }
+                qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
                 peca.qualidade = json.dumps(qualidade_dict)
                 peca.data_entrega = data_transporte
                 peca.save()
@@ -1552,6 +1558,7 @@ def processar_producao(log=True,total=True,usinagem=True):
                     try:
                         q = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
                         q['data_producao'] = None
+                        qualidade_peca_remover_data_producao_de_dados_adicionais(q)
                         peca.qualidade = json.dumps(q, ensure_ascii=False)
                     except (json.JSONDecodeError, TypeError):
                         peca.qualidade = json.dumps({'data_producao': None}, ensure_ascii=False)
@@ -1704,13 +1711,10 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
                         except (json.JSONDecodeError, TypeError):
                             qualidade_dict = {}
                     
-                    # Adicionar data_producao nos dados_adicionais
                     if 'data_producao' not in qualidade_dict:
                         qualidade_dict['data_producao'] = None
-                    
                     qualidade_dict['data_producao'] = data_producao
-                    
-                    # Salvar qualidade atualizada
+                    qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
                     peca.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
                     db.session.add(peca)
                 except Exception as e:

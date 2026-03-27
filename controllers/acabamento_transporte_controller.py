@@ -1,6 +1,10 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
 from sqlalchemy import func
-from models.concreto import ConcretoConcretagensTanques, ConcretoUsinagens
+from models.concreto import (
+    ConcretoConcretagensTanques,
+    ConcretoUsinagens,
+    qualidade_peca_remover_data_producao_de_dados_adicionais,
+)
 from models.database import db
 from models.tanque import Tanques, TanquesPecas
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem, CNPJS_MATRIZ
@@ -126,6 +130,7 @@ def acabamento():
                 qualidade = peca.qualidade or '{}'
                 qualidade_dict = json.loads(qualidade) if isinstance(qualidade, str) else qualidade
                 qualidade_dict['acabamento'] = data_acabamento
+                qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
                 peca.qualidade = json.dumps(qualidade_dict)
                 peca.save()
             return jsonify({'success': True, 'pecas_afetadas': [p.id for p in pecas]})
@@ -166,6 +171,7 @@ def transporte():
                     'placa_carreta': placa_carreta,
                     'transportadora': transportadora
                 }
+                qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
                 peca.qualidade = json.dumps(qualidade_dict)
                 peca.data_entrega = data_transporte
                 peca.save()

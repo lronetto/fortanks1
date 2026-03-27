@@ -1,0 +1,99 @@
+<!-- Modal: desfazer todas as produções (admin) — data_producao null em TanquesPecas -->
+<div class="modal fade" id="modalDesfazerTodasProducoes" tabindex="-1" aria-labelledby="modalDesfazerTodasProducoesLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-danger">
+                <h5 class="modal-title text-danger" id="modalDesfazerTodasProducoesLabel">
+                    <i class="fas fa-exclamation-triangle"></i> Desfazer todas as produções
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="desfazerProducoesResumo" class="mb-2 text-primary fw-semibold"></p>
+                <p class="mb-2">
+                    Será removido o registro de <strong>data de produção</strong> (<code>data_producao</code>) no JSON de qualidade das
+                    peças (<code>TanquesPecas</code>) vinculadas às concretagens <strong>desta listagem</strong> (mesmo critério da busca e dos filtros da tabela).
+                </p>
+                <p class="text-muted small mb-0">
+                    Esta ação <strong>não</strong> reverte movimentações de estoque nem consumos já registrados.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarDesfazerTodasProducoes">
+                    <i class="fas fa-undo"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function coletarIdsConcretagensVisiveis() {
+        const ids = [];
+        if (!$.fn.DataTable.isDataTable('#tabelaConcretagens')) {
+            return ids;
+        }
+        $('#tabelaConcretagens').DataTable().rows({ search: 'applied' }).every(function() {
+            const row = this.data();
+            if (row && row.id != null) {
+                ids.push(row.id);
+            }
+        });
+        return ids;
+    }
+
+    $(document).ready(function() {
+        $('#modalDesfazerTodasProducoes').on('show.bs.modal', function() {
+            const n = coletarIdsConcretagensVisiveis().length;
+            const $p = $('#desfazerProducoesResumo');
+            if (n > 0) {
+                $p.text('Concretagens no escopo (visíveis com busca e filtros atuais): ' + n + '.');
+            } else {
+                $p.text('Nenhuma concretagem visível com os filtros atuais. Ajuste a busca ou os filtros.');
+            }
+        });
+
+        $('#btnConfirmarDesfazerTodasProducoes').on('click', function() {
+            const ids = coletarIdsConcretagensVisiveis();
+            if (!ids.length) {
+                alert('Não há concretagens visíveis na listagem atual (respeitando busca e filtros).');
+                return;
+            }
+            const $btn = $(this);
+            $btn.prop('disabled', true);
+            $.ajax({
+                url: "{{ url_for('concretagem.api_desfazer_todas_producoes') }}",
+                method: 'POST',
+                contentType: 'application/json',
+                headers: {
+                    'X-CSRFToken': $('#csrf_token_global').val()
+                },
+                data: JSON.stringify({ concretagem_ids: ids }),
+                success: function(response) {
+                    if (response.success) {
+                        $('#modalDesfazerTodasProducoes').modal('hide');
+                        if ($.fn.DataTable.isDataTable('#tabelaConcretagens')) {
+                            $('#tabelaConcretagens').DataTable().ajax.reload(null, false);
+                        }
+                        alert(response.message || 'Operação concluída.');
+                    } else {
+                        alert('Erro: ' + (response.message || 'Não foi possível desfazer as produções.'));
+                    }
+                },
+                error: function(xhr) {
+                    let msg = 'Erro ao desfazer produções.';
+                    if (xhr.status === 403) {
+                        msg = 'Acesso negado.';
+                    } else if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    }
+                    alert(msg);
+                },
+                complete: function() {
+                    $btn.prop('disabled', false);
+                }
+            });
+        });
+    });
+</script>

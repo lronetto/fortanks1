@@ -6,6 +6,8 @@ from models.concreto import (
     ConcretoConcretagensTanques,
     ConcretoUsinagens,
     peca_obj_ja_produzida,
+    limpar_data_producao_em_qualidade_str,
+    qualidade_peca_remover_data_producao_de_dados_adicionais,
 )
 from models.tanque import Tanques, TanquesPecas, TanquesProdutoComposto
 from models.contrato import Contrato
@@ -414,6 +416,83 @@ def api_processar_producao(id):
         return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
 
 
+@concretagem.route('/api/desfazer-todas-producoes', methods=['POST'])
+@login_required
+def api_desfazer_todas_producoes():
+    """Admin: zera data_producao nas TanquesPecas ligadas às concretagens informadas (ex.: listagem filtrada)."""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        raw_ids = data.get('concretagem_ids')
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Informe os IDs das concretagens (nenhuma linha visível ou lista vazia).',
+            }), 400
+
+        vistos = set()
+        concretagem_ids = []
+        for x in raw_ids:
+            try:
+                cid = int(x)
+            except (TypeError, ValueError):
+                continue
+            if cid not in vistos:
+                vistos.add(cid)
+                concretagem_ids.append(cid)
+        if not concretagem_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Nenhum ID de concretagem válido.',
+            }), 400
+
+        peca_ids_processadas = set()
+        desfeitas = 0
+
+        for cid in concretagem_ids:
+            concretagem = ConcretoConcretagens.query.get(cid)
+            if not concretagem:
+                continue
+            for peca_ref in concretagem.get_pecas():
+                try:
+                    nome = peca_ref.get('nome')
+                    tanque_id = int(peca_ref['tanque_id'])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not nome:
+                    continue
+                peca_obj = TanquesPecas.query.filter_by(nome=nome, tanque_id=tanque_id).first()
+                if not peca_obj or peca_obj.id in peca_ids_processadas:
+                    continue
+                peca_ids_processadas.add(peca_obj.id)
+                if not (peca_obj.qualidade or '').strip():
+                    continue
+                tinha_producao = peca_obj_ja_produzida(peca_obj)
+                nova = limpar_data_producao_em_qualidade_str(peca_obj.qualidade)
+                if nova is None:
+                    continue
+                peca_obj.qualidade = nova
+                if tinha_producao:
+                    desfeitas += 1
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': (
+                f'Escopo: {len(concretagem_ids)} concretagem(ns) enviada(s). '
+                f'Peças (TanquesPecas) com data de produção limpa (tinham registro): {desfeitas}. '
+                'Movimentações de estoque não foram alteradas.'
+            ),
+            'pecas_com_producao_desfeita': desfeitas,
+            'concretagens_escopo': len(concretagem_ids),
+        })
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Erro ao desfazer produções (escopo filtrado): {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Erro ao desfazer produções: {str(e)}'}), 500
+
+
 @concretagem.route('/api/<int:id>/excluir', methods=['POST'])
 @login_required
 def api_excluir(id):
@@ -761,8 +840,7 @@ def api_salvar_usinagens(id):
             
             # Atualizar qualidade com série como lista: [1, 2, '-C3', ...]
             qualidade['series'] = series_list
-            
-            # Salvar qualidade atualizada
+            qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade)
             peca.qualidade = json.dumps(qualidade, ensure_ascii=False)
             peca.data_concretagem = concretagem.data_concretagem
             peca.save()

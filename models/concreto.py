@@ -17,7 +17,10 @@ import logging
 
 
 def qualidade_dict_tem_data_producao(q):
-    """True se o dict de qualidade já registra data de produção (raiz ou dados_adicionais)."""
+    """
+    True se o dict de qualidade já registra data de produção.
+    Canônico: apenas na raiz (`data_producao`). Ainda lê `dados_adicionais.data_producao` por legado.
+    """
     if not q or not isinstance(q, dict):
         return False
     if q.get('data_producao'):
@@ -26,6 +29,18 @@ def qualidade_dict_tem_data_producao(q):
     if isinstance(da, dict) and da.get('data_producao'):
         return True
     return False
+
+
+def qualidade_peca_remover_data_producao_de_dados_adicionais(q):
+    """
+    Em TanquesPecas.qualidade, `data_producao` deve existir só na raiz do JSON.
+    Remove a chave duplicada de dentro de `dados_adicionais` (formato legado).
+    """
+    if not isinstance(q, dict):
+        return
+    da = q.get('dados_adicionais')
+    if isinstance(da, dict) and 'data_producao' in da:
+        da.pop('data_producao', None)
 
 
 def peca_obj_ja_produzida(peca_obj):
@@ -37,6 +52,43 @@ def peca_obj_ja_produzida(peca_obj):
         return bool(q) and qualidade_dict_tem_data_producao(q)
     except (ValueError, TypeError, json.JSONDecodeError):
         return False
+
+
+def limpar_data_producao_em_qualidade_str(qualidade_raw):
+    """
+    Retorna JSON de qualidade com data_producao null na raiz e sem duplicata em dados_adicionais.
+    """
+    if not qualidade_raw or not str(qualidade_raw).strip():
+        return None
+    try:
+        q = json.loads(qualidade_raw) if isinstance(qualidade_raw, str) else qualidade_raw
+    except (ValueError, TypeError, json.JSONDecodeError):
+        q = {}
+    if not isinstance(q, dict):
+        q = {}
+    q['data_producao'] = None
+    qualidade_peca_remover_data_producao_de_dados_adicionais(q)
+    return json.dumps(q, ensure_ascii=False)
+
+
+def limpar_data_producao_dados_adicionais_usinagem_str(dados_raw):
+    """
+    ConcretoUsinagens.dados_adicionais: JSON com data_producao na raiz deste objeto (coluna dados_adicionais).
+    Define data_producao como null preservando demais chaves (ex.: redosagem).
+    Retorna None se não houver JSON para atualizar.
+    """
+    if dados_raw is None:
+        return None
+    if isinstance(dados_raw, str) and not dados_raw.strip():
+        return None
+    try:
+        d = json.loads(dados_raw) if isinstance(dados_raw, str) else dados_raw
+    except (ValueError, TypeError, json.JSONDecodeError):
+        d = {}
+    if not isinstance(d, dict):
+        d = {}
+    d['data_producao'] = None
+    return json.dumps(d, ensure_ascii=False)
 
 
 def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=True):
@@ -123,6 +175,7 @@ def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=T
                 if 'data_producao' not in qualidade_dict:
                     qualidade_dict['data_producao'] = None
                 qualidade_dict['data_producao'] = data_producao
+                qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
                 peca.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
                 db.session.add(peca)
             except Exception as e:

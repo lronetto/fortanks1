@@ -3,18 +3,26 @@
 {% block title %}Usinagens de Concreto{% endblock %}
 
 {% block content %}
+<input type="hidden" id="csrf_token_global" value="{{ csrf_token() }}">
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
         <h1 class="h3 mb-0 text-gray-800">Usinagens de Concreto</h1>
-        <button type="button" class="btn btn-warning me-2" id="btnProducaoPendentes">
+        <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-warning" id="btnProducaoPendentes">
             <i class="fas fa-cogs"></i> Produção de Pendentes
         </button>
-        <button type="button" class="btn btn-success me-2" data-bs-toggle="modal" data-bs-target="#modalImportarUsinagens">
+        {% if current_user.is_admin %}
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalDesfazerProducoesUsinagens" title="Remover data_producao em dados_adicionais das usinagens visíveis — apenas administrador">
+            <i class="fas fa-undo-alt"></i> <span class="d-none d-sm-inline">Desfazer produções</span><span class="d-inline d-sm-none">Desfazer</span>
+        </button>
+        {% endif %}
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarUsinagens">
             <i class="fas fa-file-excel"></i> Importar Usinagens
         </button>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaUsinagem">
             <i class="fas fa-plus"></i> Nova Usinagem
         </button>
+        </div>
     </div>
 
     <div class="card shadow mb-4">
@@ -205,6 +213,9 @@
 {% include 'usinagem_concreto/usinagens/modais/visualizar_rompimentos.html' %}
 {% include 'usinagem_concreto/usinagens/modais/resumo_usinagem.html' %}
 {% include 'usinagem_concreto/usinagens/modais/excluir_usinagem.html' %}
+{% if current_user.is_admin %}
+{% include 'usinagem_concreto/usinagens/modais/desfazer_producoes.html' %}
+{% endif %}
 
 
 {% endblock %}

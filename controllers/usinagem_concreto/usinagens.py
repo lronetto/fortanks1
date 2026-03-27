@@ -1,12 +1,17 @@
 """
 Rotas relacionadas a usinagens de concreto
 """
+import logging
 from flask import render_template, redirect, url_for, request, flash, jsonify, send_file
 from flask_login import login_required, current_user
 from models.material import Materiais
 from models.unidade import Unidades, UnidadesConversao, get_conversao_unidade
 from models.colaborador import Colaborador
-from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens
+from models.concreto import (
+    ConcretoUsinagensRompimentos,
+    ConcretoUsinagens,
+    limpar_data_producao_dados_adicionais_usinagem_str,
+)
 from models.produto_composto import ProdutoComposto
 from models.database import db
 from datetime import datetime
@@ -326,6 +331,74 @@ def api_processar_producao_usinagem(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
+
+
+@usinagem_concreto.route('/api/desfazer-todas-producoes', methods=['POST'])
+@login_required
+def api_desfazer_todas_producoes_usinagens():
+    """
+    Admin: zera data_producao no JSON da coluna dados_adicionais das usinagens informadas
+    (escopo = linhas visíveis na tabela, como em concretagens). Não reverte estoque.
+    """
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
+    try:
+        payload = request.get_json(silent=True) or {}
+        raw_ids = payload.get('usinagem_ids')
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return jsonify({
+                'success': False,
+                'message': 'Informe os IDs das usinagens (nenhuma linha visível ou lista vazia).',
+            }), 400
+
+        vistos = set()
+        usinagem_ids = []
+        for x in raw_ids:
+            try:
+                uid = int(x)
+            except (TypeError, ValueError):
+                continue
+            if uid not in vistos:
+                vistos.add(uid)
+                usinagem_ids.append(uid)
+        if not usinagem_ids:
+            return jsonify({'success': False, 'message': 'Nenhum ID de usinagem válido.'}), 400
+
+        desfeitas = 0
+        for uid in usinagem_ids:
+            u = ConcretoUsinagens.query.get(uid)
+            if not u:
+                continue
+            tinha = False
+            if u.dados_adicionais:
+                try:
+                    d = json.loads(u.dados_adicionais) if isinstance(u.dados_adicionais, str) else u.dados_adicionais
+                    if isinstance(d, dict) and d.get('data_producao'):
+                        tinha = True
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    pass
+            nova = limpar_data_producao_dados_adicionais_usinagem_str(u.dados_adicionais)
+            if nova is None:
+                continue
+            u.dados_adicionais = nova
+            if tinha:
+                desfeitas += 1
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': (
+                f'Escopo: {len(usinagem_ids)} usinagem(ns) enviada(s). '
+                f'Com data de produção limpa (tinham registro em dados_adicionais): {desfeitas}. '
+                'Movimentações de estoque não foram alteradas.'
+            ),
+            'usinagens_com_producao_desfeita': desfeitas,
+            'usinagens_escopo': len(usinagem_ids),
+        })
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Erro ao desfazer produções (usinagens): {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Erro ao desfazer produções: {str(e)}'}), 500
 
 
 @usinagem_concreto.route('/api/<int:id>/resumo-materiais', methods=['GET'])

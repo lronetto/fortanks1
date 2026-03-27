@@ -1,6 +1,6 @@
 from datetime import datetime, date
 import json
-from models.concreto import ConcretoConcretagens
+from models.concreto import ConcretoConcretagens, qualidade_peca_remover_data_producao_de_dados_adicionais
 from models.database import db
 from sqlalchemy.orm import relationship
 from sqlalchemy import func, distinct
@@ -459,31 +459,22 @@ class TanquesPecas(db.Model):
             # Incrementa para obter o próximo número
             self.numero_sequencial = maior_sequencial + 1
         
-        # Se for uma nova peça e não tem qualidade definida, inicializar com data_producao null
+        # Nova peça: data_producao só na raiz do JSON (evita duplicar em dados_adicionais)
         if not self.id:
             if not self.qualidade:
-                qualidade_dict = {
-                    'dados_adicionais': {
-                        'data_producao': None
-                    }
-                }
+                qualidade_dict = {'data_producao': None}
                 self.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
             else:
-                # Se já tem qualidade, garantir que dados_adicionais.data_producao existe
                 try:
                     qualidade_dict = json.loads(self.qualidade) if isinstance(self.qualidade, str) else self.qualidade
-                    if 'dados_adicionais' not in qualidade_dict:
-                        qualidade_dict['dados_adicionais'] = {}
-                    if 'data_producao' not in qualidade_dict['dados_adicionais']:
-                        qualidade_dict['dados_adicionais']['data_producao'] = None
+                    if not isinstance(qualidade_dict, dict):
+                        qualidade_dict = {}
+                    if 'data_producao' not in qualidade_dict:
+                        qualidade_dict['data_producao'] = None
+                    qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade_dict)
                     self.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
                 except (json.JSONDecodeError, TypeError):
-                    # Se não conseguir parsear, criar novo dict
-                    qualidade_dict = {
-                        'dados_adicionais': {
-                            'data_producao': None
-                        }
-                    }
+                    qualidade_dict = {'data_producao': None}
                     self.qualidade = json.dumps(qualidade_dict, ensure_ascii=False)
             
         if not self.id:
