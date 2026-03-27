@@ -71,7 +71,7 @@
                         </div>
                         <div class="col-md-3">
                             <label for="quantidade-item">Quantidade</label>
-                            <input type="number" step="0.00001" class="form-control" id="quantidade-item" placeholder="Qtd.">
+                            <input type="number" step="0.001" class="form-control" id="quantidade-item" placeholder="Qtd.">
                         </div>
                         <div class="col-md-2">
                             <button type="button" class="btn btn-success btn-block" id="btn-adicionar-item">
@@ -409,7 +409,7 @@
             const componentes = [];
             $('#tabela-componentes tbody tr').each(function() {
                 const row = $(this);
-                const quantidadeValor = row.find('.quantidade-componente').val();
+                const quantidadeValor = row.find('.quantidade-componente').val().replace(',', '.');
                 
                 // Garantir que a quantidade seja tratada como número decimal
                 const quantidade = parseFloat(quantidadeValor) || 0;
@@ -508,24 +508,9 @@
         }
 
         function recarregarTabela() {
-            fetch('/produto-composto/')
-            .then(response => response.text())
-            .then(data => {
-                // Extrair apenas o conteúdo da tabela do HTML retornado
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = data;
-                const novaTabela = tempDiv.querySelector('#tabela-produtos-compostos tbody').innerHTML;
-                
-                // Atualizar o conteúdo da tabela
-                document.querySelector('#tabela-produtos-compostos tbody').innerHTML = novaTabela;
-                
-                // Mostrar mensagem de sucesso
-                showAlert('success', 'Tabela atualizada com sucesso!');
-            })
-            .catch(error => {
-                console.error('Erro ao recarregar tabela:', error);
-                showAlert('warning', 'Tabela salva, mas houve erro ao atualizar a visualização.');
-            });
+            if (typeof window.recarregarDataTableProdutosCompostos === 'function') {
+                window.recarregarDataTableProdutosCompostos();
+            }
         }
         });
 </script>

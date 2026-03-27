@@ -213,14 +213,110 @@ def get_produto_composto(id):
         'produtos': produtos
     })
 
+
+def _map_estoque_por_produto_composto(ids):
+    """Quantidade em estoque por ProdutoComposto.id (primeiro registro por id, como no legado)."""
+    if not ids:
+        return {}
+    out = {}
+    rows = (
+        Estoque.query.filter(
+            Estoque.ProdComp_id.in_(ids),
+            Estoque.tipo_item == 'produto_composto',
+        ).all()
+    )
+    for e in rows:
+        pid = e.ProdComp_id
+        if pid not in out:
+            out[pid] = float(e.quantidade or 0)
+    return out
+
+
+@produto_composto_bp.route('/api/datatables', methods=['GET'])
+@login_required
+def api_datatables():
+    """JSON para DataTables (server-side): listagem de produtos compostos."""
+    try:
+        draw = int(request.args.get('draw', 1))
+        start = int(request.args.get('start', 0))
+        length = int(request.args.get('length', 25))
+        search_value = (request.args.get('search[value]', '') or '').strip()
+        order_column_index = int(request.args.get('order[0][column]', 3))
+        order_dir = request.args.get('order[0][dir]', 'asc')
+
+        query = ProdutoComposto.query
+
+        if search_value:
+            if search_value.isdigit():
+                sid = int(search_value)
+                query = query.filter(
+                    or_(
+                        ProdutoComposto.nome.ilike(f'%{search_value}%'),
+                        ProdutoComposto.id == sid,
+                    )
+                )
+            else:
+                query = query.filter(ProdutoComposto.nome.ilike(f'%{search_value}%'))
+
+        total_records = ProdutoComposto.query.count()
+        records_filtered = query.count()
+
+        # Colunas: 0 checkbox, 1 id, 2 imagem, 3 nome, 4 estoque, 5 ações
+        column_map = {
+            1: ProdutoComposto.id,
+            3: ProdutoComposto.nome,
+        }
+        if order_column_index in column_map:
+            col = column_map[order_column_index]
+            if order_dir == 'desc':
+                query = query.order_by(col.desc())
+            else:
+                query = query.order_by(col.asc())
+        else:
+            query = query.order_by(ProdutoComposto.nome.asc())
+
+        if length == -1:
+            remaining = max(0, records_filtered - start)
+            cap = min(remaining, 5000)
+            items = query.offset(start).limit(cap).all() if cap else []
+        else:
+            lim = max(1, min(length, 500))
+            items = query.offset(start).limit(lim).all()
+
+        estoque_por = _map_estoque_por_produto_composto([p.id for p in items])
+
+        data = []
+        for p in items:
+            data.append({
+                'id': p.id,
+                'nome': p.nome or '',
+                'estoque': estoque_por.get(p.id, 0.0),
+            })
+
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': total_records,
+            'recordsFiltered': records_filtered,
+            'data': data,
+        }), 200
+    except Exception as e:
+        logger.error(f'Erro api_datatables produto composto: {e}', exc_info=True)
+        return jsonify({
+            'draw': int(request.args.get('draw', 1)),
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e),
+        }), 500
+
+
 @produto_composto_bp.route('/')
 @login_required
 def index():
     """
     Lista todos os produtos compostos cadastrados
     """
-    produtos = ProdutoComposto.query.order_by(ProdutoComposto.id.desc()).all()
-    return render_template('produto_composto/index.html', produtos=produtos)
+    return render_template('produto_composto/index.html')
 
 @produto_composto_bp.route('/imagem/<int:id>')
 def imagem_produto(id):
@@ -810,7 +906,7 @@ def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, cami
                 'material_id': componente.estoque.material.id,
                 'material_nome': componente.estoque.material.nome,
                 'quantidade': quantidade_componente,
-                'unidade': componente.estoque.material.unidade_obj.sigla if (componente.estoque.material.unidade_obj and hasattr(componente.estoque.material.unidade_obj, 'sigla')) else ''
+                'unidade': componente.estoque.material.unidade_obj.nome if (componente.estoque.material.unidade_obj and hasattr(componente.estoque.material.unidade_obj, 'nome')) else ''
             })
         elif componente.estoque.tipo_item == 'produto_composto' and componente.estoque.ProdComp_id:
             # É um produto composto aninhado - processar recursivamente
@@ -1152,54 +1248,72 @@ def exportar_excel():
             for produto in produtos:
                 # Preparar dados dos componentes
                 dados_componentes = []
-                mega = ''
                 for componente in produto.componentes:
                     estoque = componente.estoque
-                    if estoque:
-                        if estoque.material:
-                            cod_alterdata = estoque.material.codigo_erp or ''
-                            material=Materiais.query.get(estoque.material_id)
-                            nome_item = material.nome
-                            codigo_item = material.codigo or ''
-                            json_obj = json.loads(material.dados_adicionais) if material.dados_adicionais else {}
-                            mega = json_obj.get('cod_mega', '')
-                            unidade = material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, 'nome')) else ''
-                            tipo = 'Material'
-                        elif estoque.produto_composto:
-                            nome_item = estoque.produto_composto.nome
-                            json_obj = json.loads(estoque.produto_composto.dados_adicionais) if estoque.produto_composto.dados_adicionais else {}
-                            mega = json_obj.get('cod_mega', '')
-                            codigo_item = ''
-                            unidade = ''
-                            tipo = 'Produto Composto'
-                            cod_alterdata = ''
-                        else:
-                            nome_item = 'Desconhecido'
-                            codigo_item = ''
-                            unidade = ''
-                            tipo = 'Desconhecido'
-                            cod_alterdata = ''
-                        
+                    if not estoque:
+                        continue
+
+                    qtd_componente = float(componente.quantidade or 0)
+                    if estoque.material_id and estoque.material:
+                        material = estoque.material
                         dados_componentes.append({
                             'ID Sfortanks': estoque.id,
-                            #'Material/Produto mega': mega,
-                            'Nome': nome_item,
-                            #'Código': codigo_item,
-                            'Código Alterdata': cod_alterdata,
-                            'Quantidade': float(componente.quantidade),
-                            'Unidade': unidade,
-                            #'Observação': componente.observacao or ''
+                            'Tipo': 'Material',
+                            'Nome': material.nome,
+                            'Código Alterdata': material.codigo_erp or '',
+                            'Quantidade': qtd_componente,
+                            'Unidade': material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, 'nome')) else '',
                         })
+                        continue
+
+                    if estoque.tipo_item == 'produto_composto' and estoque.ProdComp_id and estoque.produto_composto:
+                        # Linha do componente (produto composto) + expansão até materiais (alinhados abaixo)
+                        dados_componentes.append({
+                            'ID Sfortanks': estoque.id,
+                            'Tipo': 'Produto Composto',
+                            'Nome': estoque.produto_composto.nome,
+                            'Código Alterdata': '',
+                            'Quantidade': qtd_componente,
+                            'Unidade': '',
+                        })
+
+                        materiais_expandidos = _expandir_componentes_produto_composto(
+                            estoque.ProdComp_id,
+                            quantidade_base=qtd_componente,
+                            caminho_atual=[produto.id],
+                            data_movimento=None,
+                        )
+                        for mat in materiais_expandidos:
+                            material_obj = Materiais.query.get(mat['material_id'])
+                            dados_componentes.append({
+                                'ID Sfortanks': f"material:{mat['material_id']}",
+                                'Tipo': '↳ Material',
+                                'Nome': f"    {mat['material_nome']}",
+                                'Código Alterdata': (material_obj.codigo_erp if material_obj else ''),
+                                'Quantidade': float(mat['quantidade'] or 0),
+                                'Unidade': mat.get('unidade') or '',
+                            })
+                        continue
+
+                    # Fallback
+                    dados_componentes.append({
+                        'ID Sfortanks': estoque.id,
+                        'Tipo': 'Desconhecido',
+                        'Nome': 'Desconhecido',
+                        'Código Alterdata': '',
+                        'Quantidade': qtd_componente,
+                        'Unidade': '',
+                    })
                 
                 # Ordenar componentes pelo nome do material/produto
-                dados_componentes.sort(key=lambda x: x['Nome'].lower() if x['Nome'] else '')
+                dados_componentes.sort(key=lambda x: (x.get('Nome') or '').lower())
                 
                 # Criar DataFrame
                 if dados_componentes:
                     df = pd.DataFrame(dados_componentes)
                 else:
                     # Se não houver componentes, criar DataFrame vazio com colunas
-                    df = pd.DataFrame(columns=['ID Estoque', 'Tipo', 'Nome', 'Código', 'Quantidade', 'Unidade', 'Observação'])
+                    df = pd.DataFrame(columns=['ID Sfortanks', 'Tipo', 'Nome', 'Código Alterdata', 'Quantidade', 'Unidade'])
                 
                 # Sanitizar nome da aba (remover caracteres inválidos)
                 nome_aba = _sanitizar_nome_aba(produto.nome)
@@ -1209,13 +1323,12 @@ def exportar_excel():
                 
                 # Ajustar largura das colunas
                 worksheet = writer.sheets[nome_aba]
-                worksheet.set_column('A:A', 12)  # ID Estoque
-                worksheet.set_column('B:B', 15)  # Tipo
-                worksheet.set_column('C:C', 30)  # Nome
-                worksheet.set_column('D:D', 15)  # Código
+                worksheet.set_column('A:A', 14)  # ID Sfortanks
+                worksheet.set_column('B:B', 18)  # Tipo
+                worksheet.set_column('C:C', 44)  # Nome (com indentação)
+                worksheet.set_column('D:D', 18)  # Código Alterdata
                 worksheet.set_column('E:E', 12)  # Quantidade
                 worksheet.set_column('F:F', 10)  # Unidade
-                worksheet.set_column('G:G', 30)  # Observação
         
         output.seek(0)
         

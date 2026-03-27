@@ -110,6 +110,24 @@
                         </div>
                     </div>
                 </div>
+                <div class="row mt-3 align-items-center">
+                    <div class="col-md-6">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="filtro_apenas_restante" name="apenas_restante" value="1">
+                            <label class="form-check-label" for="filtro_apenas_restante">
+                                Apenas com quantidade restante <span class="text-muted">(produtos compostos e materiais)</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="filtro_materiais_insuficientes" name="apenas_insuficientes" value="1">
+                            <label class="form-check-label" for="filtro_materiais_insuficientes">
+                                Apenas materiais com estoque insuficiente
+                            </label>
+                        </div>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
@@ -128,8 +146,10 @@
                                 <tr>
                                     <th>Produto Composto</th>
                                     <th class="text-end">Total Previsto</th>
-                                    <th class="text-end">Total Consumido</th>
-                                    <th class="text-end">Total Restante</th>
+                                    <th class="text-end" title="Placas com data de concretagem">Concretadas</th>
+                                    <th class="text-end" title="Placas com registro de produção (data de produção)">Produzidas</th>
+                                    <th class="text-end" title="Concretadas ainda sem registro de produção">Pendente a produzir</th>
+                                    <th class="text-end" title="Previsto menos produzidas">Total restante</th>
                                 </tr>
                             </thead>
                             <tbody id="conteudo-produtos-compostos">
@@ -139,7 +159,9 @@
                                 <tr>
                                     <th class="text-end">SUBTOTAL</th>
                                     <th class="text-end" id="subtotal-produtos-prevista">0</th>
-                                    <th class="text-end" id="subtotal-produtos-consumido">0</th>
+                                    <th class="text-end" id="subtotal-produtos-concretadas">0</th>
+                                    <th class="text-end" id="subtotal-produtos-produzidas">0</th>
+                                    <th class="text-end" id="subtotal-produtos-pendente-produzir">0</th>
                                     <th class="text-end" id="subtotal-produtos-restante">0</th>
                                 </tr>
                             </tfoot>
@@ -166,7 +188,7 @@
                                     <th>Unidade</th>
                                     <th>Estoque Atual</th>
                                     <th>Quantidade Prevista Total</th>
-                                    <th>Quantidade Consumida Total</th>
+                                    <th title="Material já consumido nas placas produzidas">Consumida (placas produzidas)</th>
                                     <th>Quantidade Restante Total</th>
                                     <th>Previsto de Uso Futuro</th>
                                     <th>Estoque Após Uso</th>
@@ -251,7 +273,8 @@ $(document).ready(function() {
                 if (tanques && tanques.length > 0) {
                     d.tanque_id = tanques;
                 }
-                // quando vazio, não envia tanque_id (backend considera todos)
+                d.apenas_restante = $('#filtro_apenas_restante').is(':checked') ? 1 : 0;
+                d.apenas_insuficientes = $('#filtro_materiais_insuficientes').is(':checked') ? 1 : 0;
             },
             dataSrc: function(json) {
                 // Verificar se json e json.totais existem
@@ -402,6 +425,13 @@ $(document).ready(function() {
         atualizarLinksExportacao();
     });
 
+    $('#filtro_apenas_restante, #filtro_materiais_insuficientes').on('change', function() {
+        atualizarLinksExportacao();
+        if (tabelaMateriais) {
+            tabelaMateriais.ajax.reload(null, false);
+        }
+    });
+
     function atualizarCardProdutosCompostos(produtosCompostos) {
         const cardElement = $('#card-produtos-compostos');
         const conteudoElement = $('#conteudo-produtos-compostos');
@@ -413,31 +443,40 @@ $(document).ready(function() {
         
         let html = '';
         let subtotalPrevista = 0;
-        let subtotalConsumido = 0;
+        let subtotalConcretadas = 0;
+        let subtotalProduzidas = 0;
+        let subtotalPendenteProduzir = 0;
         let subtotalRestante = 0;
         
         produtosCompostos.forEach(function(produto) {
             const prevista = parseInt(produto.total_quantidade_prevista) || 0;
-            const consumido = parseInt(produto.total_quantidade_concretada) || 0;
+            const concretadas = parseInt(produto.total_placas_concretadas) || 0;
+            const produzidas = parseInt(produto.total_placas_produzidas) || parseInt(produto.total_quantidade_concretada) || 0;
+            const pendenteProduzir = parseInt(produto.total_pendente_produzir) || 0;
             const restante = parseInt(produto.total_quantidade_restante) || 0;
             
             subtotalPrevista += prevista;
-            subtotalConsumido += consumido;
+            subtotalConcretadas += concretadas;
+            subtotalProduzidas += produzidas;
+            subtotalPendenteProduzir += pendenteProduzir;
             subtotalRestante += restante;
             
             html += '<tr>';
             html += '<td><strong><i class="fas fa-cube"></i> ' + produto.produto_composto_nome + '</strong></td>';
             html += '<td class="text-end text-primary"><strong>' + prevista.toLocaleString('pt-BR') + '</strong></td>';
-            html += '<td class="text-end text-success"><strong>' + consumido.toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-info"><strong>' + concretadas.toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-success"><strong>' + produzidas.toLocaleString('pt-BR') + '</strong></td>';
+            html += '<td class="text-end text-danger"><strong>' + pendenteProduzir.toLocaleString('pt-BR') + '</strong></td>';
             html += '<td class="text-end text-warning"><strong>' + restante.toLocaleString('pt-BR') + '</strong></td>';
             html += '</tr>';
         });
         
         conteudoElement.html(html);
         
-        // Atualizar subtotais no rodapé
         $('#subtotal-produtos-prevista').text(subtotalPrevista.toLocaleString('pt-BR'));
-        $('#subtotal-produtos-consumido').text(subtotalConsumido.toLocaleString('pt-BR'));
+        $('#subtotal-produtos-concretadas').text(subtotalConcretadas.toLocaleString('pt-BR'));
+        $('#subtotal-produtos-produzidas').text(subtotalProduzidas.toLocaleString('pt-BR'));
+        $('#subtotal-produtos-pendente-produzir').text(subtotalPendenteProduzir.toLocaleString('pt-BR'));
         $('#subtotal-produtos-restante').text(subtotalRestante.toLocaleString('pt-BR'));
         
         cardElement.show();
@@ -499,7 +538,13 @@ $(document).ready(function() {
                 params.append('tanque_id', id);
             });
         }
-        
+        if ($('#filtro_apenas_restante').is(':checked')) {
+            params.append('apenas_restante', '1');
+        }
+        if ($('#filtro_materiais_insuficientes').is(':checked')) {
+            params.append('apenas_insuficientes', '1');
+        }
+
         const queryString = params.toString();
         const baseUrl = "{{ url_for('relatorios_capacidade_producao.exportar_pdf') }}";
         const excelUrl = "{{ url_for('relatorios_capacidade_producao.exportar_excel') }}";

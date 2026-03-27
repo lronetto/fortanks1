@@ -24,7 +24,7 @@
           </div>
           <div class="mb-3">
             <label for="nota_fiscal_linha" class="form-label">Nota Fiscal (venda matriz)</label>
-            <input type="text" class="form-control" id="nota_fiscal_linha" name="nota_fiscal" required placeholder="Digite o número da NF para buscar" autocomplete="off">
+            <input type="text" class="form-control" id="nota_fiscal_linha" name="nota_fiscal" required placeholder="NF com item do tanque (não usada em outra peça)" autocomplete="off">
             <input type="hidden" id="nota_fiscal_chave_linha" value="">
           </div>
           <div class="mb-3">
@@ -97,7 +97,13 @@ $(function() {
 
   $('#nota_fiscal_linha').autocomplete({
     source: function(request, response) {
-      $.get('{{ url_for("acabamento_transporte.api_notas_venda_matriz") }}', { q: request.term || '' }, function(data) {
+      var tid = $('#transporte_linha-tanque_id').val();
+      var pid = $('#transporte_linha-peca_id').val();
+      $.get('{{ url_for("acabamento_transporte.api_notas_venda_matriz") }}', {
+        q: request.term || '',
+        tanque_id: tid || '',
+        peca_id: pid || ''
+      }, function(data) {
         var list = Array.isArray(data) ? data : (data && typeof data === 'object' && !Array.isArray(data) ? [data] : []);
         var items = list.map(function(n) {
           var num = n.numero_nf != null ? String(n.numero_nf) : '';

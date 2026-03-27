@@ -3,7 +3,7 @@ import json
 from models.concreto import ConcretoConcretagens
 from models.database import db
 from sqlalchemy.orm import relationship
-from sqlalchemy import func
+from sqlalchemy import func, distinct
 
 from models.nota_fiscal import NotaFiscalItem, NotaFiscal
 
@@ -50,7 +50,7 @@ class Tanques(db.Model):
     # Relacionamentos
     contrato = db.relationship('Contrato',back_populates='tanques',foreign_keys=[contrato_id])
     grupos = db.relationship('TanquesGrupos', secondary='TanquesGruposItens', back_populates='tanques')
-    
+
     @property
     def tipo_tanque(self):
         """Retorna o tipo do tanque (Circular ou Retangular) baseado no sistema"""
@@ -297,21 +297,26 @@ class Tanques(db.Model):
         # NFs emitidas até data_ate
         if self.item_nf is not None:
             try:
-                itens_nf = db.session.query(NotaFiscalItem.nf_id,NotaFiscalItem.quantidade).join(
-                    NotaFiscal, NotaFiscalItem.nf_id == NotaFiscal.id
+                codigo_item_nf = str(self.item_nf).strip()
+                pecas_nfs_quantidade, nfs_emitidas_total = db.session.query(
+                    func.coalesce(func.sum(NotaFiscalItem.quantidade), 0),
+                    func.count(distinct(NotaFiscal.id)),
+                ).join(
+                    NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id
                 ).filter(
+                    func.coalesce(func.lower(NotaFiscal.status_processamento), '') != 'cancelada',
                     NotaFiscalItem.codigo == self.item_nf,
                     func.date(NotaFiscal.data_emissao) <= data_ate
-                ).all()
+                ).one()
+                print(f'pecas_nfs_quantidade: {pecas_nfs_quantidade}')
+                print(f'nfs_emitidas_total: {nfs_emitidas_total}')
             except Exception as e:
 
                 print(f'Erro ao buscar itens NF: {e}')
                 import traceback
                 traceback.print_exc()
-                itens_nf = []
-
-            pecas_nfs_quantidade = sum([item[1] for item in itens_nf])
-            nfs_emitidas_total = len(itens_nf)
+                pecas_nfs_quantidade = 0
+                nfs_emitidas_total = 0
         pecas_prontas_transportar = pecas_acabadas - pecas_transportadas
         pecas_em_estoque = pecas_concretadas - pecas_transportadas
         return {

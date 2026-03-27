@@ -14,11 +14,40 @@ from models.material import Materiais
 from models.estoque import EstoqueMovimentacoes
 import traceback
 import logging
+
+
+def qualidade_dict_tem_data_producao(q):
+    """True se o dict de qualidade já registra data de produção (raiz ou dados_adicionais)."""
+    if not q or not isinstance(q, dict):
+        return False
+    if q.get('data_producao'):
+        return True
+    da = q.get('dados_adicionais')
+    if isinstance(da, dict) and da.get('data_producao'):
+        return True
+    return False
+
+
+def peca_obj_ja_produzida(peca_obj):
+    """True se TanquesPecas já tem data_producao na qualidade (verificação por peça)."""
+    if not peca_obj or not peca_obj.qualidade:
+        return False
+    try:
+        q = json.loads(peca_obj.qualidade) if isinstance(peca_obj.qualidade, str) else peca_obj.qualidade
+        return bool(q) and qualidade_dict_tem_data_producao(q)
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
 def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=True):
     """Processa a produção para uma lista específica de peças (ex.: peças de uma concretagem).
     Consome estoque, marca data_producao e processa usinagens do dia. Retorna True se ok, False se lista vazia."""
     from datetime import date as date_type
     print(f"[_processar_producao_por_pecas] Pecas: {pecas_list}")
+    if not pecas_list:
+        return False
+    # Só processa peças ainda sem data de produção (evita consumo duplicado de estoque)
+    pecas_list = [p for p in pecas_list if not peca_obj_ja_produzida(p)]
     if not pecas_list:
         return False
     dia = pecas_list[0].data_concretagem
@@ -274,8 +303,13 @@ class ConcretoConcretagens(db.Model):
             if not peca_obj:
                 continue
             pecas_concretadas.append(peca_obj)
-        processar_producao_por_pecas(pecas_concretadas, usuario_id=current_user.id or None)
-        return True
+        pecas_pendentes = [p for p in pecas_concretadas if not peca_obj_ja_produzida(p)]
+        if not pecas_pendentes:
+            if not pecas_concretadas:
+                return False
+            return None
+        ok = processar_producao_por_pecas(pecas_pendentes, usuario_id=current_user.id or None)
+        return bool(ok)
 # Nova tabela de associação entre concretagem e tanques
 class ConcretoConcretagensTanques(db.Model):
     """

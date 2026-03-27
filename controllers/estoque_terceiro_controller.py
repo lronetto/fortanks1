@@ -2,6 +2,7 @@ import json as json_lib
 import logging
 import os
 import tempfile
+import zipfile
 from datetime import datetime
 from decimal import Decimal
 
@@ -21,7 +22,7 @@ from models.estoque import Estoque
 from models.estoque_terceiro import EstoqueTerceiro
 from models.material import Materiais
 from models.unidade import get_conversao_unidade, normalizar_unidade, comparar_unidades
-from models.tanque import TanquesPecas, TanquesProdutoComposto, Tanques
+from models.tanque import TanquesPecas, TanquesProdutoComposto, Tanques, TanquesGrupos
 from models.produto_composto import ProdutoComposto
 
 logger = logging.getLogger(__name__)
@@ -83,64 +84,168 @@ def importar():
         temp_path = os.path.join(temp_dir, f'estoque_terceiro_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{filename}')
         arquivo.save(temp_path)
         
+        patched_path = None
         try:
+            def _patch_xlsx_xml_attrs(src_path: str) -> str | None:
+                """
+                Alguns exports de Excel/WPS geram atributos fora do padrão em XMLs internos do .xlsx,
+                o que quebra o openpyxl (ex.: WindowWidth ao invés de windowWidth, firstPageNo, etc).
+                Aqui criamos uma cópia "higienizada" do xlsx apenas quando necessário.
+                """
+                if not str(src_path).lower().endswith('.xlsx'):
+                    return None
+
+                try:
+                    with zipfile.ZipFile(src_path, 'r') as zin:
+                        names = zin.namelist()
+                        # Se nem tiver o workbook, provavelmente não é um xlsx válido pro openpyxl
+                        if 'xl/workbook.xml' not in names:
+                            return None
+                        xml_files = [n for n in names if n.lower().endswith('.xml')]
+                        xml_payloads = {n: zin.read(n) for n in xml_files}
+                except Exception:
+                    return None
+
+                replacements = {
+                    b'WindowWidth=': b'windowWidth=',
+                    b'WindowHeight=': b'windowHeight=',
+                    b'WindowX=': b'xWindow=',
+                    b'WindowY=': b'yWindow=',
+                    # aparece em alguns arquivos como atributo inválido de pageSetup
+                    b'firstPageNo=': b'firstPageNumber=',
+                }
+
+                mudou_algo = False
+                patched_payloads = {}
+                for name, payload in xml_payloads.items():
+                    patched = payload
+                    for old, new in replacements.items():
+                        if old in patched:
+                            patched = patched.replace(old, new)
+                    if patched != payload:
+                        mudou_algo = True
+                    patched_payloads[name] = patched
+
+                if not mudou_algo:
+                    return None
+
+                dst_path = os.path.join(
+                    tempfile.gettempdir(),
+                    f'patched_{os.path.basename(src_path)}'
+                )
+                try:
+                    with zipfile.ZipFile(src_path, 'r') as zin, zipfile.ZipFile(dst_path, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+                        for item in zin.infolist():
+                            data = zin.read(item.filename)
+                            if item.filename in patched_payloads:
+                                data = patched_payloads[item.filename]
+                            zout.writestr(item, data)
+                    return dst_path
+                except Exception:
+                    try:
+                        if os.path.exists(dst_path):
+                            os.remove(dst_path)
+                    except Exception:
+                        pass
+                    return None
+
+            def _read_excel_robusto(path: str) -> pd.DataFrame:
+                logger.info(f'Lendo planilha: {path}')
+                try:
+                    return pd.read_excel(path)
+                except TypeError as e:
+                    msg = str(e)
+                    # Casos clássicos: XMLs com atributos inválidos (BookView / PrintPageSetup etc)
+                    if (
+                        'BookView.__init__' in msg
+                        or 'PrintPageSetup.__init__' in msg
+                        or 'WindowWidth' in msg
+                        or 'firstPageNo' in msg
+                    ):
+                        nonlocal patched_path
+                        patched_path = _patch_xlsx_xml_attrs(path)
+                        if patched_path:
+                            logger.warning('Arquivo xlsx com atributos inválidos detectado. Tentando leitura após higienização do XML interno.')
+                            return pd.read_excel(patched_path)
+                    raise
+
             # Ler planilha - tentar primeiro com cabeçalhos
-            logger.info(f'Lendo planilha: {temp_path}')
-            df = pd.read_excel(temp_path)
+            df = _read_excel_robusto(temp_path)
             logger.info(f'Planilha lida com sucesso. Colunas encontradas: {list(df.columns)}')
             
-            # Verificar se a planilha tem cabeçalhos nomeados ou apenas "Unnamed"
-            tem_cabecalhos = not all(str(col).startswith('Unnamed') for col in df.columns)
-            
-            # Se não tem cabeçalhos, ler novamente sem header e usar posições fixas
-            if not tem_cabecalhos:
-                logger.info('Planilha sem cabeçalhos detectada. Lendo novamente sem header.')
+            def _norm_col(val: object) -> str:
+                s = str(val).lower().strip()
+                # normalizações simples pra lidar com acentos e variações comuns
+                s = (
+                    s.replace('código', 'codigo')
+                    .replace('cód.', 'cod')
+                    .replace('cód', 'cod')
+                    .replace('unid.', 'unidade')
+                    .replace('vl unit', 'valor unitario')
+                    .replace('vl. unit', 'valor unitario')
+                    .replace('vl unitario', 'valor unitario')
+                    .replace('vl total', 'total')
+                    .replace('valor total', 'total')
+                    .replace('valor', 'valor')
+                )
+                s = ' '.join(s.split())
+                return s
+
+            # Padrão de importação por posição:
+            # 0=codigo, 1=tipo item, 2=nome, 3=unidade, 4=quantidade, 5=valor unitario, 6=total
+            mapeamento_posicional = {
+                'codigo': 0,
+                'tipo item': 1,
+                'nome': 2,
+                'unidade': 3,
+                'quantidade': 4,
+                'valor unitario': 5,
+                'total': 6,
+            }
+
+            # Se a primeira linha for dado, o pandas pode "promover" esses valores a cabeçalho.
+            # Então: só consideramos que há cabeçalho se conseguirmos mapear a maioria das colunas esperadas.
+            colunas_arquivo_norm = [_norm_col(col) for col in df.columns]
+            logger.info(f'Colunas normalizadas: {colunas_arquivo_norm}')
+
+            # Verificar colunas esperadas (com sinônimos)
+            colunas_esperadas = ['codigo', 'tipo item', 'nome', 'unidade', 'quantidade', 'valor unitario', 'total']
+            sinonimos = {
+                'codigo': ['codigo', 'codigo alterdata', 'cod', 'cod alterdata', 'codigo erp', 'cod erp'],
+                'tipo item': ['tipo item', 'tipo', 'tipo_item'],
+                'nome': ['nome', 'descricao', 'descrição', 'produto', 'item'],
+                'unidade': ['unidade', 'un', 'und'],
+                'quantidade': ['quantidade', 'qtd', 'qtde'],
+                'valor unitario': ['valor unitario', 'unitario', 'valor unit', 'vl unit', 'preco unitario', 'preço unitario'],
+                'total': ['total', 'valor total', 'vl total'],
+            }
+
+            mapeamento = {}
+            for col_padrao in colunas_esperadas:
+                possiveis = [(_norm_col(x)) for x in sinonimos.get(col_padrao, [col_padrao])]
+                for idx, col_norm in enumerate(colunas_arquivo_norm):
+                    if any(p in col_norm or col_norm in p for p in possiveis):
+                        mapeamento[col_padrao] = df.columns[idx]
+                        logger.info(f'Mapeado: {col_padrao} -> {df.columns[idx]}')
+                        break
+
+            logger.info(f'Mapeamento (tentativa por cabeçalho): {mapeamento}')
+
+            # Considerar que tem cabeçalho apenas se mapeou bem (>= 5/7).
+            tem_cabecalho_util = len(mapeamento) >= 5 and not all(str(col).startswith('Unnamed') for col in df.columns)
+            if not tem_cabecalho_util:
+                logger.info('Cabeçalho ausente/ruim detectado (ou 1ª linha é dado). Lendo sem header e usando posições fixas.')
                 df = pd.read_excel(temp_path, header=None)
                 logger.info(f'Planilha relida sem cabeçalhos. Total de colunas: {len(df.columns)}')
-                
-                # Verificar se tem pelo menos 7 colunas
+
                 if len(df.columns) < 7:
                     return jsonify({
                         'success': False,
-                        'message': f'A planilha deve ter pelo menos 7 colunas. Encontradas: {len(df.columns)}'
+                        'message': f'A planilha deve ter pelo menos 7 colunas (codigo, tipo item, nome, unidade, quantidade, valor unitario, total). Encontradas: {len(df.columns)}'
                     }), 400
-                
-                # Mapear por posição (índice): 0=codigo alterdata, 1=tipo item, 2=nome, 3=unidade, 4=quantidade, 5=valor unitario, 6=valor total
-                mapeamento = {
-                    'codigo alterdata': 0,
-                    'tipo item': 1,
-                    'nome': 2,
-                    'unidade': 3,
-                    'quantidade': 4,
-                    'valor unitario': 5,
-                    'valor total': 6
-                }
+
+                mapeamento = dict(mapeamento_posicional)
                 logger.info(f'Mapeamento por posição: {mapeamento}')
-            else:
-                # Verificar colunas esperadas
-                colunas_esperadas = ['codigo alterdata', 'tipo item', 'nome', 'unidade', 'quantidade', 'valor unitario', 'valor total']
-                colunas_arquivo = [str(col).lower().strip() for col in df.columns]
-                logger.info(f'Colunas normalizadas: {colunas_arquivo}')
-                
-                # Mapear colunas (case-insensitive)
-                mapeamento = {}
-                for col_esperada in colunas_esperadas:
-                    for idx, col_arquivo in enumerate(colunas_arquivo):
-                        if col_esperada in col_arquivo or col_arquivo in col_esperada:
-                            mapeamento[col_esperada] = df.columns[idx]
-                            logger.info(f'Mapeado: {col_esperada} -> {df.columns[idx]}')
-                            break
-                
-                logger.info(f'Mapeamento completo: {mapeamento}')
-                
-                # Verificar se todas as colunas foram encontradas
-                colunas_faltantes = [col for col in colunas_esperadas if col not in mapeamento]
-                if colunas_faltantes:
-                    logger.warning(f'Colunas faltantes: {colunas_faltantes}')
-                    return jsonify({
-                        'success': False,
-                        'message': f'Colunas não encontradas na planilha: {", ".join(colunas_faltantes)}. Colunas encontradas: {", ".join([str(c) for c in df.columns.tolist()])}'
-                    }), 400
             
             # Processar linhas
             registros_criados = 0
@@ -152,10 +257,10 @@ def importar():
             for idx, row in df.iterrows():
                 try:
                     # Se mapeamento é por índice (int), usar diretamente; se é por nome de coluna, usar o nome
-                    if isinstance(mapeamento.get('codigo alterdata'), int):
-                        codigo_erp = str(row.iloc[mapeamento['codigo alterdata']]).strip()
+                    if isinstance(mapeamento.get('codigo'), int):
+                        codigo_erp = str(row.iloc[mapeamento['codigo']]).strip()
                     else:
-                        codigo_erp = str(row[mapeamento['codigo alterdata']]).strip()
+                        codigo_erp = str(row[mapeamento['codigo']]).strip()
                     
                     if pd.isna(codigo_erp) or codigo_erp == '' or codigo_erp == 'nan':
                         continue
@@ -172,14 +277,14 @@ def importar():
                         unidade_val = row.iloc[mapeamento['unidade']]
                         quantidade_val = row.iloc[mapeamento['quantidade']]
                         valor_unitario_val = row.iloc[mapeamento['valor unitario']]
-                        valor_total_val = row.iloc[mapeamento['valor total']]
+                        valor_total_val = row.iloc[mapeamento['total']]
                     else:
                         tipo_val = row[mapeamento['tipo item']]
                         nome_val = row[mapeamento['nome']] if 'nome' in mapeamento else None
                         unidade_val = row[mapeamento['unidade']]
                         quantidade_val = row[mapeamento['quantidade']]
                         valor_unitario_val = row[mapeamento['valor unitario']]
-                        valor_total_val = row[mapeamento['valor total']]
+                        valor_total_val = row[mapeamento['total']]
                     
                     tipo = str(tipo_val).strip() if pd.notna(tipo_val) else None
                     nome = str(nome_val).strip() if pd.notna(nome_val) and nome_val is not None else None
@@ -188,6 +293,13 @@ def importar():
                     quantidade = Decimal(str(quantidade_val)) if pd.notna(quantidade_val) else Decimal('0')
                     valor_unitario = Decimal(str(valor_unitario_val)) if pd.notna(valor_unitario_val) else None
                     valor_total = Decimal(str(valor_total_val)) if pd.notna(valor_total_val) else None
+
+                    # Se não veio total (ou veio zerado), calcular pelo padrão quantidade * valor_unitario quando possível
+                    if (valor_total is None or valor_total == Decimal('0')) and valor_unitario is not None:
+                        try:
+                            valor_total = (quantidade * valor_unitario) if quantidade is not None else valor_total
+                        except Exception:
+                            pass
                     
                     if codigo_erp_int not in cods_existentes:
                         # Criar novo registro (codigo_erp e tipo como int)
@@ -230,6 +342,11 @@ def importar():
             # Remover arquivo temporário
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+            if patched_path and os.path.exists(patched_path):
+                try:
+                    os.remove(patched_path)
+                except Exception:
+                    pass
                 
     except Exception as e:
         import traceback
@@ -256,6 +373,18 @@ def api_comparativo():
                 data_filtro_date = datetime.strptime(data_filtro, '%Y-%m-%d').date()
             except ValueError:
                 pass
+
+        # Filtro de tipo do estoque terceiro (múltipla seleção).
+        # Por compatibilidade com o comportamento atual, se não informar nada, mantém o tipo 10.
+        tipos_raw = (request.args.get('tipos') or '').strip()
+        tipos_selecionados = []
+        if tipos_raw:
+            for parte in tipos_raw.split(','):
+                p = (parte or '').strip()
+                if p.isdigit():
+                    tipos_selecionados.append(int(p))
+        if not tipos_selecionados:
+            tipos_selecionados = [10]
         
         # Filtros e ordenação são feitos no frontend; backend retorna todos os dados
         # Collation única para evitar "Illegal mix of collations" no UNION
@@ -263,8 +392,6 @@ def api_comparativo():
         
         # Comparação codigo_erp: Materiais é String(50), EstoqueTerceiro é Integer — comparar como int
         join_codigo_erp = cast(Materiais.codigo_erp, Integer) == EstoqueTerceiro.codigo_erp
-        # EstoqueTerceiro.tipo é Integer; filtrar por 10
-        tipo_filtro = 10
 
         # Query 1: materiais que têm codigo_erp e estoque terceiro (match sistema + terceiro)
         q_matched = db.session.query(
@@ -280,7 +407,7 @@ def api_comparativo():
         ).outerjoin(EstoqueTerceiro, join_codigo_erp).filter(
             Materiais.codigo_erp.isnot(None),
             Materiais.codigo_erp != '',
-            EstoqueTerceiro.tipo == tipo_filtro,
+            EstoqueTerceiro.tipo.in_(tipos_selecionados),
             EstoqueTerceiro.quantidade > 0
         )
         if data_filtro_date:
@@ -304,10 +431,10 @@ def api_comparativo():
             cast(EstoqueTerceiro.tipo, String(50)).label('tipo'),
             EstoqueTerceiro.unidade.collate(collation).label('unidade'),
             EstoqueTerceiro.ValorUnitario.label('valor_unitario'),
-            EstoqueTerceiro.ValorTotal.label('valor_total'),
+            (EstoqueTerceiro.quantidade * EstoqueTerceiro.ValorUnitario).label('valor_total'),
             EstoqueTerceiro.data.label('data_estoque_terceiro')
         ).filter(
-            EstoqueTerceiro.tipo == tipo_filtro,
+            EstoqueTerceiro.tipo.in_(tipos_selecionados),
             ~EstoqueTerceiro.codigo_erp.in_(codigos_no_sistema),
             EstoqueTerceiro.quantidade > 0
         )
@@ -319,7 +446,6 @@ def api_comparativo():
         query_final = db.session.query(subq)
         
         # Busca também no frontend; não filtrar por search_value aqui
-        total_records = query_final.count()
         registros_temp = query_final.all()
         
         # Consumo futuro por peça/tipo: lista de grupos (tipo + produto composto) com consumo por material
@@ -358,6 +484,12 @@ def api_comparativo():
                         grupos_consumo[chave_grupo] = {'produto_id': produto_id, 'tipo': tipo_peca, 'count': 0}
                     grupos_consumo[chave_grupo]['count'] += 1
                 
+                produtos_ids = [info['produto_id'] for info in grupos_consumo.values() if info.get('produto_id')]
+                produtos_cache = {}
+                if produtos_ids:
+                    produtos_obj = ProdutoComposto.query.filter(ProdutoComposto.id.in_(produtos_ids)).all()
+                    produtos_cache = {p.id: p for p in produtos_obj}
+
                 for chave_grupo, grupo_info in grupos_consumo.items():
                     produto_id = grupo_info['produto_id']
                     tipo_peca = grupo_info['tipo']
@@ -367,7 +499,7 @@ def api_comparativo():
                     if quantidade_pecas <= 0:
                         continue
                     
-                    produto_composto_cons = ProdutoComposto.query.get(produto_id)
+                    produto_composto_cons = produtos_cache.get(produto_id)
                     if not produto_composto_cons:
                         continue
                     
@@ -409,13 +541,28 @@ def api_comparativo():
             except Exception as e:
                 logger.warning(f'Erro ao montar consumo por peça/tipo: {str(e)}')
         
+        # Prefetch para evitar N+1 (materiais e estoques por material)
+        material_ids = list({r.material_id for r in registros_temp if r.material_id is not None})
+        materiais_cache = {}
+        estoques_por_material = {}
+        if material_ids:
+            materiais = Materiais.query.options(joinedload(Materiais.unidade_obj)).filter(Materiais.id.in_(material_ids)).all()
+            materiais_cache = {m.id: m for m in materiais}
+
+            estoques = Estoque.query.filter(Estoque.material_id.in_(material_ids)).all()
+            for e in estoques:
+                estoques_por_material.setdefault(e.material_id, []).append(e)
+
+        conversao_cache = {}
+        saldo_cache = {}
+
         # Calcular estoque do sistema baseado em movimentações para cada registro
         data_temp = []
         for registro in registros_temp:
             # Registros "só terceiro" têm material_id None (existem no terceiro e não no sistema)
             so_terceiro = registro.material_id is None
             
-            material = Materiais.query.get(registro.material_id) if registro.material_id else None
+            material = materiais_cache.get(registro.material_id) if registro.material_id else None
             unidade_sistema = None
             if material and material.unidade_obj:
                 unidade_sistema = material.unidade_obj.nome
@@ -423,7 +570,7 @@ def api_comparativo():
             unidade_terceiro = registro.unidade or ''
             
             # Estoque do sistema: zero quando não há material cadastrado
-            estoques_material = Estoque.query.filter_by(material_id=registro.material_id).all() if registro.material_id else []
+            estoques_material = estoques_por_material.get(registro.material_id, []) if registro.material_id else []
             
             # Calcular saldo total somando todos os estoques do material
             estoque_sistema_total = Decimal('0.0')
@@ -439,7 +586,10 @@ def api_comparativo():
             
             # Somar saldos de todos os estoques do material
             for estoque in estoques_material:
-                saldo_estoque = estoque.get_saldo_ate_data(data_referencia)
+                saldo_key = (estoque.id, data_referencia)
+                if saldo_key not in saldo_cache:
+                    saldo_cache[saldo_key] = estoque.get_saldo_ate_data(data_referencia)
+                saldo_estoque = saldo_cache[saldo_key]
                 estoque_sistema_total += saldo_estoque
             
             estoque_sistema_float = float(estoque_sistema_total) if estoque_sistema_total else 0
@@ -448,11 +598,14 @@ def api_comparativo():
             # Verificar se precisa converter unidades
             fator_conversao = 1.0
             unidade_convertida = False
-            fator_conversao = get_conversao_unidade(
-                material_id=registro.material_id,
-                unidade_entrada=unidade_terceiro,
-                unidade_saida=unidade_sistema
-            )
+            conv_key = (registro.material_id, unidade_terceiro, unidade_sistema)
+            if conv_key not in conversao_cache:
+                conversao_cache[conv_key] = get_conversao_unidade(
+                    material_id=registro.material_id,
+                    unidade_entrada=unidade_terceiro,
+                    unidade_saida=unidade_sistema
+                )
+            fator_conversao = conversao_cache[conv_key]
             if fator_conversao:
                 fator_conversao = float(fator_conversao)
                 unidade_convertida = True
@@ -608,6 +761,34 @@ def api_datas_disponiveis():
             'message': str(e)
         }), 500
 
+
+@estoque_terceiro_bp.route('/api/tipos-disponiveis', methods=['GET'])
+@login_required
+def api_tipos_disponiveis():
+    """
+    Retorna lista de tipos (EstoqueTerceiro.tipo) disponíveis para filtro.
+    Pode ser filtrado por data do estoque terceiro (data_filtro=YYYY-MM-DD).
+    """
+    try:
+        data_filtro = request.args.get('data_filtro', '')
+        data_filtro_date = None
+        if data_filtro:
+            try:
+                data_filtro_date = datetime.strptime(data_filtro, '%Y-%m-%d').date()
+            except ValueError:
+                data_filtro_date = None
+
+        q = db.session.query(EstoqueTerceiro.tipo).filter(EstoqueTerceiro.tipo.isnot(None)).distinct()
+        if data_filtro_date:
+            q = q.filter(EstoqueTerceiro.data == data_filtro_date)
+
+        tipos = [t[0] for t in q.order_by(EstoqueTerceiro.tipo.asc()).all() if t and t[0] is not None]
+
+        return jsonify({'success': True, 'tipos': tipos}), 200
+    except Exception as e:
+        logger.error(f'Erro ao buscar tipos disponíveis: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @estoque_terceiro_bp.route('/api/pecas-nao-produzidas', methods=['GET'])
 @login_required
 def api_pecas_nao_produzidas():
@@ -649,16 +830,14 @@ def api_pecas_nao_produzidas():
             Tanques,
             TanquesPecas.tanque_id == Tanques.id
         ).filter(
-            TanquesPecas.data_concretagem.is_(None),
-            func.date(TanquesPecas.data_cadastro) >= data_estoque,
-            func.date(TanquesPecas.data_cadastro) <= data_hoje
+            TanquesPecas.data_concretagem.is_(None)
         ).order_by(
             TanquesPecas.tipo,
             TanquesProdutoComposto.produto_composto_id,
             Tanques.nome,
             TanquesPecas.numero_sequencial
         ).all()
-        
+        print('pecas_query', len(pecas_query));
         # Agrupar por tipo e produto composto
         grupos = {}
         for peca, vinculacao, tanque in pecas_query:
@@ -691,7 +870,7 @@ def api_pecas_nao_produzidas():
         # Converter para lista e ordenar
         resultado = list(grupos.values())
         resultado.sort(key=lambda x: (x['tipo'], x['produto_composto_nome']))
-        
+        print('resultado', resultado);
         return jsonify({
             'success': True,
             'grupos': resultado
@@ -805,3 +984,248 @@ def api_calcular_consumo_futuro():
             'success': False,
             'message': str(e)
         }), 500
+
+
+@estoque_terceiro_bp.route('/api/simulacao/opcoes', methods=['GET'])
+@login_required
+def api_simulacao_opcoes():
+    """
+    Retorna opções (tanque + tipo de peça) com produto composto vinculado e
+    quantidade produzida (concretada) até o momento.
+    """
+    try:
+        tanque_id = request.args.get('tanque_id', '').strip()
+        tanque_id_int = int(tanque_id) if tanque_id.isdigit() else None
+
+        join_pecas_produzidas = db.and_(
+            TanquesPecas.tanque_id == TanquesProdutoComposto.tanque_id,
+            TanquesPecas.tipo == TanquesProdutoComposto.tipo_peca,
+            TanquesPecas.data_concretagem.isnot(None),
+        )
+
+        q = db.session.query(
+            TanquesProdutoComposto.id.label('vinculo_id'),
+            Tanques.id.label('tanque_id'),
+            Tanques.nome.label('tanque_nome'),
+            func.coalesce(func.group_concat(func.distinct(TanquesGrupos.nome)), '').label('tanques_grupos'),
+            TanquesProdutoComposto.tipo_peca.label('tipo_peca'),
+            ProdutoComposto.id.label('produto_composto_id'),
+            ProdutoComposto.nome.label('produto_composto_nome'),
+            func.count(TanquesPecas.id).label('quantidade_produzida'),
+        ).join(
+            Tanques, Tanques.id == TanquesProdutoComposto.tanque_id
+        ).join(
+            ProdutoComposto, ProdutoComposto.id == TanquesProdutoComposto.produto_composto_id
+        ).outerjoin(
+            TanquesGrupos, Tanques.grupos
+        ).outerjoin(
+            TanquesPecas, join_pecas_produzidas
+        )
+
+        if tanque_id_int:
+            q = q.filter(TanquesProdutoComposto.tanque_id == tanque_id_int)
+
+        rows = q.group_by(
+            TanquesProdutoComposto.id,
+            Tanques.id,
+            Tanques.nome,
+            TanquesProdutoComposto.tipo_peca,
+            ProdutoComposto.id,
+            ProdutoComposto.nome,
+        ).order_by(Tanques.nome.asc(), TanquesProdutoComposto.tipo_peca.asc(), ProdutoComposto.nome.asc()).all()
+
+        # Agregar por (grupo_label, tipo_peca, produto_composto_id)
+        agregados = {}  # (grupo_label, tipo_peca, produto_id) -> dict
+        for r in rows:
+            grupos_lista = []
+            if r.tanques_grupos:
+                try:
+                    grupos_lista = [g.strip() for g in str(r.tanques_grupos).split(',') if g and str(g).strip()]
+                except Exception:
+                    grupos_lista = []
+
+            grupos_efetivos = grupos_lista if grupos_lista else ['Sem grupo']
+            for grupo_label in grupos_efetivos:
+                chave = (grupo_label, r.tipo_peca, int(r.produto_composto_id))
+                if chave not in agregados:
+                    agregados[chave] = {
+                        'grupo_label': grupo_label,
+                        'tipo_peca': r.tipo_peca,
+                        'produto_composto_id': int(r.produto_composto_id),
+                        'produto_composto_nome': r.produto_composto_nome,
+                        'quantidade_produzida': 0,
+                    }
+                agregados[chave]['quantidade_produzida'] += int(r.quantidade_produzida or 0)
+
+        opcoes = list(agregados.values())
+        opcoes.sort(key=lambda x: (x.get('grupo_label') or '', x.get('tipo_peca') or '', x.get('produto_composto_nome') or ''))
+        return jsonify({'success': True, 'opcoes': opcoes}), 200
+    except Exception as e:
+        logger.error(f'Erro ao buscar opções da simulação: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@estoque_terceiro_bp.route('/api/simulacao/consumo', methods=['POST'])
+@login_required
+def api_simulacao_consumo():
+    """
+    Calcula consumo por material baseado em itens da simulação.
+    Espera JSON: { itens: [{ grupo_label, tipo_peca, produto_composto_id, quantidade }] }
+    Onde `quantidade` é a quantidade A PRODUZIR (futura) para aquele grupo/tipo/produto.
+    """
+    try:
+        payload = request.get_json(silent=True) or {}
+        itens = payload.get('itens') or []
+        if not isinstance(itens, list):
+            return jsonify({'success': False, 'message': 'Payload inválido: itens deve ser lista.'}), 400
+
+        consumo_por_material: dict[int, float] = {}
+        grupos = []
+        hoje = datetime.now().date()
+
+        for item in itens:
+            if not isinstance(item, dict):
+                continue
+            grupo_label = (item.get('grupo_label') or '').strip()
+            tipo_peca = (item.get('tipo_peca') or '').strip()
+            produto_id = item.get('produto_composto_id')
+            try:
+                quantidade = float(item.get('quantidade') or 0)
+            except (TypeError, ValueError):
+                quantidade = 0
+
+            if not produto_id or not tipo_peca or quantidade <= 0:
+                continue
+
+            produto = ProdutoComposto.query.get(int(produto_id))
+            if not produto:
+                continue
+
+            materiais_necessarios = {}
+            produtos_processados = set()
+            try:
+                produto.produzir(
+                    quantidade=quantidade,
+                    data_movimento=hoje,
+                    usuario_id=current_user.id if current_user else 1,
+                    log=False,
+                    produtos_processados=produtos_processados,
+                    materiais_necessarios=materiais_necessarios,
+                )
+            except Exception as e:
+                logger.warning(f'Erro ao calcular consumo simulado para produto {produto_id}: {str(e)}')
+                continue
+
+            materiais_grupo: dict[int, float] = {}
+            for estoque_id, info in materiais_necessarios.items():
+                estoque = info.get('estoque')
+                if not estoque or getattr(estoque, 'tipo_item', None) != 'material' or not estoque.material_id:
+                    continue
+                qtd = info.get('quantidade')
+                if qtd is None:
+                    continue
+                try:
+                    qtd_float = float(qtd)
+                except (TypeError, ValueError):
+                    qtd_float = 0.0
+                if qtd_float == 0:
+                    continue
+                mid = int(estoque.material_id)
+                materiais_grupo[mid] = materiais_grupo.get(mid, 0.0) + qtd_float
+                consumo_por_material[mid] = consumo_por_material.get(mid, 0.0) + qtd_float
+
+            chave_grupo = f"{grupo_label}_{tipo_peca}_{int(produto_id)}"
+            grupos.append({
+                'chave_grupo': chave_grupo,
+                'grupo_label': grupo_label,
+                'tipo': tipo_peca,
+                'produto_composto_id': int(produto_id),
+                'produto_nome': (produto.nome or '').strip(),
+                'quantidade_pecas': float(quantidade),
+                'materiais': materiais_grupo,
+            })
+
+        return jsonify({
+            'success': True,
+            'consumo_por_material': consumo_por_material,
+            'grupos': grupos,
+        }), 200
+    except Exception as e:
+        logger.error(f'Erro ao calcular consumo da simulação: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@estoque_terceiro_bp.route('/api/simulacao/produtos-estrutura', methods=['GET'])
+@login_required
+def api_simulacao_produtos_estrutura():
+    """
+    Retorna, para cada produto composto, o consumo de materiais por 1 unidade (peça).
+    O frontend usa esse payload para simular sem novas chamadas ao backend.
+
+    Querystring:
+      - ids: "1,2,3"
+    """
+    try:
+        ids_raw = (request.args.get('ids') or '').strip()
+        if not ids_raw:
+            return jsonify({'success': True, 'estruturas': {}}), 200
+
+        ids = []
+        for p in ids_raw.split(','):
+            s = (p or '').strip()
+            if s.isdigit():
+                ids.append(int(s))
+        ids = list({i for i in ids if i})
+        if not ids:
+            return jsonify({'success': True, 'estruturas': {}}), 200
+
+        produtos = ProdutoComposto.query.filter(ProdutoComposto.id.in_(ids)).all()
+        produtos_map = {p.id: p for p in produtos}
+
+        estruturas = {}  # produto_id -> { material_id(str): float_per_unit }
+        hoje = datetime.now().date()
+
+        for pid in ids:
+            prod = produtos_map.get(pid)
+            if not prod:
+                continue
+
+            materiais_necessarios = {}
+            produtos_processados = set()
+            try:
+                # Quantidade=1 para obter consumo unitário (inclui recursões)
+                prod.produzir(
+                    quantidade=1,
+                    data_movimento=hoje,
+                    usuario_id=current_user.id if current_user else 1,
+                    log=False,
+                    produtos_processados=produtos_processados,
+                    materiais_necessarios=materiais_necessarios,
+                )
+            except Exception as e:
+                logger.warning(f'Erro ao montar estrutura do produto composto {pid}: {str(e)}')
+                continue
+
+            mat_map = {}
+            for _, info in materiais_necessarios.items():
+                estoque = info.get('estoque')
+                if not estoque or getattr(estoque, 'tipo_item', None) != 'material' or not estoque.material_id:
+                    continue
+                qtd = info.get('quantidade')
+                if qtd is None:
+                    continue
+                try:
+                    qtd_float = float(qtd)
+                except (TypeError, ValueError):
+                    qtd_float = 0.0
+                if qtd_float == 0:
+                    continue
+                mid = str(int(estoque.material_id))
+                mat_map[mid] = mat_map.get(mid, 0.0) + qtd_float
+
+            estruturas[str(pid)] = mat_map
+
+        return jsonify({'success': True, 'estruturas': estruturas}), 200
+    except Exception as e:
+        logger.error(f'Erro ao buscar estruturas de produtos compostos: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500

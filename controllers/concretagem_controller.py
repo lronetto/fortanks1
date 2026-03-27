@@ -1,6 +1,12 @@
 import logging
+from collections import defaultdict
 from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify, send_file
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques,ConcretoUsinagens
+from models.concreto import (
+    ConcretoConcretagens,
+    ConcretoConcretagensTanques,
+    ConcretoUsinagens,
+    peca_obj_ja_produzida,
+)
 from models.tanque import Tanques, TanquesPecas, TanquesProdutoComposto
 from models.contrato import Contrato
 from models.centro_custo import CentroCusto
@@ -201,7 +207,7 @@ def _concretagem_todas_pecas_tem_serie(conc):
 
 
 def _concretagem_produzida(conc):
-    """Retorna True se a concretagem tem peças e todas elas já têm data_producao preenchida (produção processada)."""
+    """Retorna True se a concretagem tem peças e todas elas já têm data_producao (verificação por peça)."""
     pecas = conc.get_pecas()
     if not pecas:
         return False
@@ -213,14 +219,9 @@ def _concretagem_produzida(conc):
         try:
             tid = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
             peca = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
-            if not peca:
+            if not peca or not peca_obj_ja_produzida(peca):
                 return False
-            if not peca.qualidade:
-                return False
-            q = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else peca.qualidade
-            if not q or not q.get('data_producao'):
-                return False
-        except (ValueError, TypeError, json.JSONDecodeError):
+        except (ValueError, TypeError):
             return False
     return True
 
@@ -267,6 +268,64 @@ def api_listar():
     except Exception as e:
         logging.error(f"Erro ao listar concretagens: {str(e)}", exc_info=True)
         return jsonify({'erro': f'Erro ao listar concretagens: {str(e)}', 'status': 'error'}), 500
+
+
+@concretagem.route('/api/resumo-pecas-nao-produzidas', methods=['GET'])
+@login_required
+def api_resumo_pecas_nao_produzidas():
+    """
+    Agrega quantidade de peças referenciadas em concretagens que ainda não têm produção
+    (sem data_producao na qualidade), agrupado por tanque e tipo da peça.
+    """
+    try:
+        cache_pecas = {}
+        grupos = defaultdict(int)
+        tanque_nomes = {}
+
+        def peca_cached(nome, tid):
+            key = (nome, tid)
+            if key not in cache_pecas:
+                cache_pecas[key] = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
+            return cache_pecas[key]
+
+        concretagens = ConcretoConcretagens.query.order_by(ConcretoConcretagens.data_concretagem.desc()).all()
+        for conc in concretagens:
+            for item in conc.get_pecas():
+                nome = item.get('nome') or item.get('placa')
+                tanque_id_val = item.get('tanque_id') or item.get('tanque')
+                if not nome or tanque_id_val is None:
+                    continue
+                try:
+                    tid = int(tanque_id_val) if isinstance(tanque_id_val, str) else tanque_id_val
+                except (ValueError, TypeError):
+                    continue
+                peca = peca_cached(nome, tid)
+                if not peca:
+                    continue
+                if peca_obj_ja_produzida(peca):
+                    continue
+                grupos[(tid, peca.tipo or '')] += 1
+                if tid not in tanque_nomes:
+                    if peca.tanque:
+                        tanque_nomes[tid] = peca.tanque.nome
+                    else:
+                        t = Tanques.query.get(tid)
+                        tanque_nomes[tid] = t.nome if t else f'Tanque #{tid}'
+
+        linhas = []
+        for (tid, tipo) in sorted(grupos.keys(), key=lambda k: (tanque_nomes.get(k[0], str(k[0])).lower(), (k[1] or '').lower())):
+            linhas.append({
+                'tanque_id': tid,
+                'tanque_nome': tanque_nomes.get(tid, f'#{tid}'),
+                'tipo': tipo or '—',
+                'quantidade': grupos[(tid, tipo)],
+            })
+        total = sum(l['quantidade'] for l in linhas)
+        return jsonify({'data': linhas, 'total_geral': total})
+    except Exception as e:
+        logging.error(f"Erro no resumo de peças não produzidas: {str(e)}", exc_info=True)
+        return jsonify({'erro': str(e), 'data': [], 'total_geral': 0}), 500
+
 
 @concretagem.route('/api/novo', methods=['POST'])
 @login_required
@@ -340,8 +399,13 @@ def api_processar_producao(id):
     """Processa a produção das peças desta concretagem (consumo de estoque e marca data_producao)."""
     try:
         concretagem = ConcretoConcretagens.query.get_or_404(id)
-        ok=concretagem.produzir()
-        if not ok:
+        resultado = concretagem.produzir()
+        if resultado is None:
+            return jsonify({
+                'success': False,
+                'message': 'Todas as peças desta concretagem já possuem produção registrada.',
+            }), 409
+        if not resultado:
             return jsonify({'success': False, 'message': 'Erro ao processar produção.'}), 500
         return jsonify({'success': True, 'message': 'Produção da concretagem processada com sucesso!'})
     except Exception as e:
@@ -398,15 +462,72 @@ def api_pecas(id):
         
         if request.method == 'POST':
             data = request.get_json()
-            if data.get('pecas'):
-                concretagem.pecas = data['pecas']
-                json_pecas = json.loads(data.get('pecas')) if isinstance(data.get('pecas'), str) else data.get('pecas')
-                for peca in json_pecas:
-                    peca=json.loads(peca) if isinstance(peca, str) else peca
-                    peca_obj = TanquesPecas.query.filter_by(nome=peca['nome'], tanque_id=peca['tanque_id']).first()
+            if data is not None and 'pecas' in data:
+                def _norm_key(item):
+                    if not isinstance(item, dict):
+                        return None
+                    nome = item.get('nome') or item.get('placa')
+                    tanque_id_val = item.get('tanque_id') or item.get('tanque')
+                    if not nome or tanque_id_val is None:
+                        return None
+                    try:
+                        tid = int(tanque_id_val) if isinstance(tanque_id_val, str) else int(tanque_id_val)
+                    except (ValueError, TypeError):
+                        return None
+                    return (tid, str(nome))
+
+                # Snapshot do que estava antes (para detectar remoções)
+                pecas_antes_raw = []
+                if concretagem.pecas:
+                    try:
+                        pecas_antes_raw = json.loads(concretagem.pecas) if isinstance(concretagem.pecas, str) else concretagem.pecas
+                    except Exception:
+                        pecas_antes_raw = []
+                if not isinstance(pecas_antes_raw, list):
+                    pecas_antes_raw = []
+                keys_antes = set(filter(None, (_norm_key(p) for p in pecas_antes_raw)))
+
+                # Peças recebidas no POST (pode vir como JSON string ou lista; itens podem ser dict ou JSON string)
+                pecas_recebidas_raw = data.get('pecas')
+                json_pecas = json.loads(pecas_recebidas_raw) if isinstance(pecas_recebidas_raw, str) else pecas_recebidas_raw
+                if json_pecas is None:
+                    json_pecas = []
+                if not isinstance(json_pecas, list):
+                    return jsonify({'success': False, 'message': 'Dados de peças inválidos'}), 400
+
+                pecas_dicts = []
+                for p in json_pecas:
+                    p_dict = json.loads(p) if isinstance(p, str) else p
+                    if isinstance(p_dict, dict):
+                        pecas_dicts.append(p_dict)
+
+                keys_depois = set(filter(None, (_norm_key(p) for p in pecas_dicts)))
+                removidas = keys_antes - keys_depois
+
+                # Se removeu peça da concretagem, precisa apagar a data_concretagem dela
+                for (tanque_id_int, nome) in removidas:
+                    peca_removida = TanquesPecas.query.filter_by(nome=nome, tanque_id=tanque_id_int).first()
+                    if peca_removida:
+                        peca_removida.data_concretagem = None
+                        peca_removida.save()
+
+                # Persistir a lista atual e marcar data_concretagem nas peças presentes
+                concretagem.pecas = data.get('pecas')
+                for peca in pecas_dicts:
+                    nome = peca.get('nome') or peca.get('placa')
+                    tanque_id_val = peca.get('tanque_id') or peca.get('tanque')
+                    if not nome or tanque_id_val is None:
+                        continue
+                    try:
+                        tanque_id_int = int(tanque_id_val) if isinstance(tanque_id_val, str) else int(tanque_id_val)
+                    except (ValueError, TypeError):
+                        continue
+
+                    peca_obj = TanquesPecas.query.filter_by(nome=nome, tanque_id=tanque_id_int).first()
                     if peca_obj:
                         peca_obj.data_concretagem = concretagem.data_concretagem
                         peca_obj.save()
+
                 concretagem.save()
                 return jsonify({'success': True, 'message': 'Peças salvas com sucesso!'})
             

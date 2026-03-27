@@ -250,12 +250,16 @@ class EstoqueMovimentacoes(db.Model):
         super().__init__(**kwargs)
         #print(f"kwargs: {kwargs}")
     def to_dict(self):
+        q = self.quantidade
+        if q is not None:
+            q = float(q)
+        dm = self.data_movimento
         return {
             'id': self.id,
             'estoque_id': self.estoque_id,
             'tipo_movimento': self.tipo_movimento,
-            'quantidade': self.quantidade,
-            'data_movimento': self.data_movimento,
+            'quantidade': q,
+            'data_movimento': dm.isoformat() if dm else None,
             'origem_id': self.origem_id,
             'origem_tipo': self.origem_tipo,
             'observacao': self.observacao,

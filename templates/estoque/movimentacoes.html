@@ -195,7 +195,19 @@
     <!-- Tabela de Movimentações -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Lista de Movimentações</h6>
+            <div class="d-flex align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Lista de Movimentações</h6>
+                <div class="d-flex flex-wrap gap-2">
+                    {% if current_user.is_admin %}
+                    <button type="button" class="btn btn-warning btn-sm" id="btnAbrirEntradasDuplicadas">
+                        <i class="fas fa-clone"></i> Verificar duplicatas (entrada/saída)
+                    </button>
+                    {% endif %}
+                    <button type="button" class="btn btn-success btn-sm" id="btnExportarExcelMovimentacoes">
+                        <i class="fas fa-file-excel"></i> Exportar Excel
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -226,6 +238,9 @@
 
     <!-- Modal de Histórico de Estoque -->
     {% include 'estoque/modais/historico_estoque.html' %}
+    {% if current_user.is_admin %}
+    {% include 'estoque/modais/entradas_duplicadas.html' %}
+    {% endif %}
 
 </div>
 {% endblock %}
@@ -271,50 +286,56 @@
                     d.observacao = $('#observacao').val() || '';
                 }
             },
-            "columns": [
-                { "data": "id" },
-                { "data": "data_hora" },
-                { 
-                    "data": "item",
-                    "render": function(data, type, row) {
-                        // Criar link que abre o modal ao invés de redirecionar
-                        return '<a href="#" class="link-historico-estoque" data-estoque-id="' + data.id + '" data-item-nome="' + data.nome.replace(/"/g, '&quot;') + '">' + data.nome + '</a>';
-                    }
-                },
-                { "data": "tipo" },
-                { 
-                    "data": "quantidade",
-                    "render": function(data, type, row) {
-                        return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+            "columns": (function() {
+                const isAdmin = ("{{ '1' if current_user.is_admin else '0' }}" === "1");
+                const cols = [
+                    { "data": "id" },
+                    { "data": "data_hora" },
+                    {
+                        "data": "item",
+                        "render": function(data, type, row) {
+                            return '<a href="#" class="link-historico-estoque" data-estoque-id="' + data.id + '" data-item-nome="' + data.nome.replace(/"/g, '&quot;') + '">' + data.nome + '</a>';
+                        }
                     },
-                    "className": "text-right"
-                },
-                { 
-                    "data": "saldo_anterior",
-                    "render": function(data, type, row) {
-                        return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                    { "data": "tipo" },
+                    {
+                        "data": "quantidade",
+                        "render": function(data, type, row) {
+                            return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                        },
+                        "className": "text-right"
                     },
-                    "className": "text-right"
-                },
-                { 
-                    "data": "saldo_atual",
-                    "render": function(data, type, row) {
-                        return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                    {
+                        "data": "saldo_anterior",
+                        "render": function(data, type, row) {
+                            return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                        },
+                        "className": "text-right"
                     },
-                    "className": "text-right"
-                },
-                { "data": "usuario" },
-                { "data": "observacao" }{% if current_user.is_admin %},
-                { 
-                    "data": "acoes",
-                    "render": function(data, type, row) {
-                        // O HTML das ações já vem do servidor com o CSRF token correto
-                        return data || '';
+                    {
+                        "data": "saldo_atual",
+                        "render": function(data, type, row) {
+                            return parseFloat(data).toFixed(2) + ' ' + (row.unidade || '');
+                        },
+                        "className": "text-right"
                     },
-                    "orderable": false,
-                    "searchable": false
-                }{% endif %}
-            ],
+                    { "data": "usuario" },
+                    { "data": "observacao" }
+                ];
+
+                if (isAdmin) {
+                    cols.push({
+                        "data": "acoes",
+                        "render": function(data, type, row) {
+                            return data || '';
+                        },
+                        "orderable": false,
+                        "searchable": false
+                    });
+                }
+
+                return cols;
+            })(),
             "order": [[1, "desc"]], // Ordenar por data/hora descendente
             "pageLength": 20,
             "lengthMenu": [[10, 20, 50, 100], [10, 20, 50, 100]]
@@ -330,6 +351,28 @@
             e.preventDefault();
             table.ajax.reload();
             return false;
+        });
+
+        // Exportar Excel usando o filtro aplicado (mesmos parâmetros do DataTables)
+        $('#btnExportarExcelMovimentacoes').on('click', function() {
+            const params = new URLSearchParams();
+            params.set('estoque_id', $('#estoque_id').val() || '');
+            params.set('tipo', $('#tipo').val() || '');
+            params.set('data_inicio', $('#data_inicio').val() || '');
+            params.set('data_fim', $('#data_fim').val() || '');
+            params.set('material_id', $('#material_id').val() || '');
+            params.set('localizacao', $('#localizacao').val() || '');
+            params.set('observacao', $('#observacao').val() || '');
+
+            // Busca global digitada no DataTables (se houver)
+            if (table && typeof table.search === 'function') {
+                const globalSearch = table.search() || '';
+                if (globalSearch) params.set('search', globalSearch);
+            }
+
+            const urlBase = "{{ url_for('estoque.exportar_movimentacoes_excel') }}";
+            const url = `${urlBase}?${params.toString()}`;
+            window.open(url, '_blank');
         });
         
         // Evento para abrir modal de histórico ao clicar no item

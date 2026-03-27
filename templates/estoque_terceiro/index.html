@@ -29,94 +29,7 @@
         </div>
     </div>
 
-    <!-- Cards de Estatísticas -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Valor total do sistema
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardValorTotalSistema">R$ 0,00</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-boxes fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                Valor total do terceiro
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardValorTotalTerceiro">R$ 0,00</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-truck-loading fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-secondary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
-                                Diferença Total (Valor)
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardDiferencaValor">R$ 0,00</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Percentual Médio Diferença
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardPercentualMedio">0%</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-percentage fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                Total de Itens Comparados
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="cardTotalItens">0</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-list fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    
 
     <!-- Filtros -->
     <div class="card shadow mb-4">
@@ -130,6 +43,17 @@
                     <select id="filtro_data" class="form-select">
                         <option value="">Todas as datas</option>
                     </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro_tipos" class="form-label">Tipo (Estoque Terceiro)</label>
+                    <select id="filtro_tipos" class="form-select" multiple>
+                        <!-- Opções carregadas via JavaScript -->
+                    </select>
+                    <small class="text-muted">Segure Ctrl para selecionar mais de um.</small>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="filtro_sped" value="1">
+                        <label class="form-check-label" for="filtro_sped">SPED (tipos 10, 15, 18)</label>
+                    </div>
                 </div>
                 <div class="col-md-3 d-flex flex-column justify-content-end">
                     <div class="form-check">
@@ -158,28 +82,131 @@
         </div>
     </div>
 
-    <!-- Peças Não Produzidas por Tipo/Produto Composto -->
-    <div class="card shadow mb-4" id="cardPecasNaoProduzidas" style="display: none;">
+    <!-- Simulação manual (Tanque + Tipo) -->
+    <div class="card shadow mb-4" id="cardSimulacaoManual">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">
-                <i class="fas fa-cog"></i> Peças Não Produzidas por Tipo/Produto Composto
-                <small class="text-muted">(Da data do estoque terceiro até hoje)</small>
+                <i class="fas fa-flask"></i> Simulação de Produção (manual)
+                <small class="text-muted">(Usa o produto composto vinculado ao tanque/tipo)</small>
             </h6>
-            <button type="button" class="btn btn-sm btn-secondary" id="btnResetarSimulacoes">
-                <i class="fas fa-undo"></i> Resetar Simulações
-            </button>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-warning text-dark" id="badgeSimulacaoPendente" style="display:none;">
+                    Pendente
+                </span>
+                <button type="button" class="btn btn-sm btn-success" id="btnExecutarSimulacaoManual">
+                    <i class="fas fa-play"></i> Executar simulação
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimparSimulacaoManual">
+                    <i class="fas fa-trash"></i> Limpar simulação
+                </button>
+            </div>
         </div>
         <div class="card-body">
-            <div id="pecasNaoProduzidasContainer">
-                <!-- Conteúdo será carregado via JavaScript -->
+            <div class="row g-2 align-items-end">
+                <div class="col-lg-9">
+                    <label class="form-label" for="selectSimulacaoOpcao">Tanque / Tipo</label>
+                    <select id="selectSimulacaoOpcao" class="form-select">
+                        <option value="">Carregando opções...</option>
+                    </select>
+                    <small class="text-muted">Selecione um tanque e tipo de peça. O produto composto será usado para calcular consumo futuro.</small>
+                </div>
+                <div class="col-lg-3 d-grid">
+                    <button type="button" class="btn btn-primary" id="btnAdicionarSimulacaoOpcao">
+                        <i class="fas fa-plus"></i> Adicionar
+                    </button>
+                </div>
+            </div>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="chkSimularApenasTerceiro" checked>
+                <label class="form-check-label" for="chkSimularApenasTerceiro">
+                    Simular apenas no estoque de terceiro
+                </label>
+            </div>
+
+            <div class="table-responsive mt-3">
+                <table class="table table-sm table-bordered table-striped align-middle" id="tabelaSimulacaoManual">
+                    <thead>
+                        <tr>
+                            <th>Grupo</th>
+                            <th>Tipo</th>
+                            <th>Produto Composto</th>
+                            <th class="text-end">Produzidas (até agora)</th>
+                            <th class="text-end">Quantidade (total)</th>
+                            <th class="text-end">A produzir</th>
+                            <th style="width: 1%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="text-muted" id="linhaVaziaSimulacaoManual">
+                            <td colspan="7">Nenhum item adicionado na simulação.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumo -->
+    <div class="card shadow mb-3">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Resumo</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0" id="tabelaResumoComparativo">
+                    <thead>
+                        <tr>
+                            <th>Cenário</th>
+                            <th class="text-end">Valor Sistema</th>
+                            <th class="text-end">Valor Terceiro</th>
+                            <th class="text-end">Diferença</th>
+                            <th class="text-end">Percentual Diferença</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Atual</strong></td>
+                            <td class="text-end" id="resumoAtualValorSistema">R$ 0,00</td>
+                            <td class="text-end" id="resumoAtualValorTerceiro">R$ 0,00</td>
+                            <td class="text-end" id="resumoAtualDiferenca">R$ 0,00</td>
+                            <td class="text-end" id="resumoAtualPercentual">0,00%</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Simulação</strong></td>
+                            <td class="text-end" id="resumoSimuladoValorSistema">R$ 0,00</td>
+                            <td class="text-end" id="resumoSimuladoValorTerceiro">R$ 0,00</td>
+                            <td class="text-end" id="resumoSimuladoDiferenca">R$ 0,00</td>
+                            <td class="text-end" id="resumoSimuladoPercentual">0,00%</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
     <!-- Tabela Comparativa -->
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">Comparativo de Estoques</h6>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="btnDropdownColunas"
+                        data-bs-toggle="dropdown" aria-expanded="false" title="Mostrar/ocultar colunas">
+                    <i class="fas fa-columns"></i> Colunas
+                </button>
+                <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="btnDropdownColunas"
+                     style="min-width: 320px; max-height: 70vh; overflow:auto;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong>Colunas visíveis</strong>
+                        <button type="button" class="btn btn-sm btn-link" id="btnResetColunas">Resetar</button>
+                    </div>
+                    <div id="colunasChecklist" class="d-grid gap-1">
+                        <div class="text-muted small">Carregando…</div>
+                    </div>
+                    <div class="text-muted small mt-2">
+                        Preferência salva neste navegador.
+                    </div>
+                </div>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -193,14 +220,19 @@
                             <th class="text-end">Estoque Sistema</th>
                             <th class="text-end">Estoque Terceiro</th>
                             <th class="text-end">Valor Unitário</th>
+                            <th class="text-end">Valor Sistema</th>
+                            <th class="text-end">Valor Terceiro</th>
                             <th class="text-end">Diferença</th>
                             <th class="text-end">Diferença %</th>
                             <th class="text-end">Valor da Diferença</th>
                             <th class="text-end">Consumo Futuro</th>
                             <th class="text-end">Estoque Futuro</th>
+                            <th class="text-end">Estoque Terceiro Futuro</th>
                             <th class="text-end">Diferença Futura</th>
-                            <th class="text-end">Valor Sistema</th>
-                            <th class="text-end">Valor Terceiro</th>
+                            <th class="text-end">Valor Estoque Futuro Sistema</th>
+                            <th class="text-end">Valor Estoque Futuro Terceiro</th>
+                            <th class="text-end">Diferença Valor Futuro</th>
+                            <th class="text-end">Diferença Futura (Terceiro Futuro)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -221,8 +253,106 @@
 <script>
 $(document).ready(function() {
     let table;
-    let quantidadesSimuladas = {};
     let lastConsumoPorPecaTipo = [];
+    let reloadTimer = null;
+    let tabelaCarregando = false;
+    let reloadPendente = false;
+    let opcoesSimulacao = [];
+    let simulacaoItens = {}; // key -> item
+    let consumoPorMaterialSimulacao = null; // {material_id: number}
+    let consumoPorMaterialSimulacaoTerceiro = null; // {material_id: number}
+    let simulacaoPendente = false;
+    let estruturaProdutosCache = {}; // { produto_composto_id(str): { material_id(str): qty_por_unidade } }
+    let estruturasLoading = false;
+
+    const tiposSped = ['10', '15', '18'];
+    let tiposSelecionadosAntesSped = [];
+
+    function storageKeyColunas() {
+        return 'estoque_terceiro:tabelaComparativo:colunasVisiveis:v1';
+    }
+
+    function salvarPreferenciaColunas(visiveis) {
+        try {
+            localStorage.setItem(storageKeyColunas(), JSON.stringify(visiveis || []));
+        } catch (e) {}
+    }
+
+    function carregarPreferenciaColunas() {
+        try {
+            const raw = localStorage.getItem(storageKeyColunas());
+            const parsed = raw ? JSON.parse(raw) : null;
+            return Array.isArray(parsed) ? parsed : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function aplicarPreferenciaColunas(table) {
+        const preferencia = carregarPreferenciaColunas();
+        if (!preferencia) return;
+        try {
+            table.columns().every(function(idx) {
+                const visivel = preferencia.includes(idx);
+                this.visible(visivel, false);
+            });
+            table.columns.adjust().draw(false);
+        } catch (e) {}
+    }
+
+    function renderChecklistColunas(table) {
+        const el = $('#colunasChecklist');
+        el.empty();
+        const headers = $('#tabelaComparativo thead th').toArray().map(th => ($(th).text() || '').trim());
+        table.columns().every(function(idx) {
+            const col = this;
+            const titulo = headers[idx] || `Coluna ${idx + 1}`;
+            const checked = col.visible();
+            const id = `chk_col_${idx}`;
+            el.append(`
+                <div class="form-check">
+                    <input class="form-check-input chk-coluna" type="checkbox" id="${id}" data-col-idx="${idx}" ${checked ? 'checked' : ''}>
+                    <label class="form-check-label" for="${id}">${titulo}</label>
+                </div>
+            `);
+        });
+    }
+
+    function aplicarVisibilidadeDeChecklist(table) {
+        const visiveis = [];
+        $('#colunasChecklist .chk-coluna').each(function() {
+            const idx = parseInt($(this).data('col-idx'));
+            if ($(this).is(':checked')) {
+                visiveis.push(idx);
+            }
+        });
+        // segurança: evitar esconder tudo
+        if (visiveis.length === 0) return;
+
+        table.columns().every(function(idx) {
+            this.visible(visiveis.includes(idx), false);
+        });
+        table.columns.adjust().draw(false);
+        salvarPreferenciaColunas(visiveis);
+    }
+
+    function agendarReloadTabela(motivo) {
+        if (!table) return;
+        if (tabelaCarregando) {
+            reloadPendente = true;
+            try {
+                console.debug('[DataTables] Reload pendente (tabela carregando)', { motivo: motivo });
+            } catch (e) {}
+            return;
+        }
+        if (reloadTimer) clearTimeout(reloadTimer);
+        reloadTimer = setTimeout(function() {
+            try {
+                console.debug('[DataTables] Recarregando (debounced)', { motivo: motivo });
+            } catch (e) {}
+            table.ajax.reload(null, false);
+        }, 150);
+    }
     
     // Carregar datas disponíveis
     function carregarDatasDisponiveis() {
@@ -242,6 +372,59 @@ $(document).ready(function() {
             .catch(error => {
                 console.error('Erro ao carregar datas:', error);
             });
+    }
+
+    // Carregar tipos disponíveis (multi-select)
+    function carregarTiposDisponiveis() {
+        const dataFiltro = $('#filtro_data').val();
+        let url = '{{ url_for("estoque_terceiro.api_tipos_disponiveis") }}';
+        if (dataFiltro) {
+            url += '?' + $.param({ data_filtro: dataFiltro });
+        }
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                const select = $('#filtro_tipos');
+                const selecionados = (select.val() || []).map(v => String(v));
+                select.empty();
+
+                if (data && data.success && Array.isArray(data.tipos)) {
+                    data.tipos.forEach(function(t) {
+                        if (t === null || t === undefined) return;
+                        const v = String(t);
+                        select.append(`<option value="${v}">Tipo ${v}</option>`);
+                    });
+                }
+
+                // Restaura seleção, quando aplicável
+                if (selecionados.length) {
+                    select.val(selecionados.filter(v => select.find(`option[value="${v}"]`).length > 0));
+                }
+
+                // Sincroniza checkbox SPED (se marcado, força seleção 10/15/18)
+                sincronizarFiltroSpedComTipos();
+            })
+            .catch(error => {
+                console.error('Erro ao carregar tipos:', error);
+            });
+    }
+
+    function sincronizarFiltroSpedComTipos() {
+        const select = $('#filtro_tipos');
+        const spedChecked = $('#filtro_sped').is(':checked');
+        if (spedChecked) {
+            tiposSelecionadosAntesSped = (select.val() || []).map(v => String(v));
+            const tiposExistentes = tiposSped.filter(v => select.find(`option[value="${v}"]`).length > 0);
+            select.val(tiposExistentes);
+        } else {
+            if (tiposSelecionadosAntesSped && tiposSelecionadosAntesSped.length) {
+                const existentes = tiposSelecionadosAntesSped.filter(v => select.find(`option[value="${v}"]`).length > 0);
+                select.val(existentes);
+            } else {
+                select.val([]);
+            }
+        }
     }
     
     // Filtros customizados (aplicados no frontend)
@@ -274,11 +457,32 @@ $(document).ready(function() {
             ajax: {
                 url: '{{ url_for("estoque_terceiro.api_comparativo") }}',
                 type: 'GET',
+                beforeSend: function(jqXHR, settings) {
+                    tabelaCarregando = true;
+                    try {
+                        console.debug('[DataTables] Requisição iniciada', {
+                            url: settings && settings.url,
+                            data: settings && settings.data
+                        });
+                    } catch (e) {}
+                },
+                complete: function() {
+                    tabelaCarregando = false;
+                    if (reloadPendente) {
+                        reloadPendente = false;
+                        agendarReloadTabela('coalesced_after_complete');
+                    }
+                },
                 data: function(d) {
                     var dataFiltro = $('#filtro_data').val();
                     if (dataFiltro) d.data_filtro = dataFiltro;
-                    if (Object.keys(quantidadesSimuladas).length > 0) {
-                        d.quantidades_simuladas = JSON.stringify(quantidadesSimuladas);
+                    if ($('#filtro_sped').is(':checked')) {
+                        d.tipos = tiposSped.join(',');
+                    } else {
+                        var tiposSelecionados = $('#filtro_tipos').val() || [];
+                        if (tiposSelecionados.length > 0) {
+                            d.tipos = tiposSelecionados.join(',');
+                        }
                     }
                 },
                 dataSrc: function(json) {
@@ -289,31 +493,58 @@ $(document).ready(function() {
                     var consumoPorPecaTipo = json.consumo_por_peca_tipo || [];
                     lastConsumoPorPecaTipo = consumoPorPecaTipo.length ? consumoPorPecaTipo : [];
                     json.data.forEach(function(row) {
-                        var consumoFuturo = 0;
-                        if (consumoPorPecaTipo.length > 0) {
-                            consumoPorPecaTipo.forEach(function(grupo) {
-                                var qtd = grupo.materiais && grupo.materiais[row.material_id];
-                                consumoFuturo += (typeof qtd === 'number' ? qtd : parseFloat(qtd) || 0);
-                            });
+                        var consumoFuturoSistema = 0;
+                        var consumoFuturoTerceiro = 0;
+                        var materialKey = (row.material_id != null) ? String(row.material_id) : null;
+                        if (consumoPorMaterialSimulacao && row.material_id != null) {
+                            consumoFuturoSistema = (consumoPorMaterialSimulacao[materialKey] || 0);
+                            if (consumoPorMaterialSimulacaoTerceiro) {
+                                consumoFuturoTerceiro = (consumoPorMaterialSimulacaoTerceiro[materialKey] || 0);
+                            } else {
+                                consumoFuturoTerceiro = consumoFuturoSistema;
+                            }
                         } else {
-                            consumoFuturo = parseFloat(row.consumo_futuro) || 0;
+                            consumoFuturoSistema = 0;
+                            consumoFuturoTerceiro = 0;
                         }
                         var estoqueSistema = parseFloat(row.estoque_sistema) || 0;
                         var estoqueTerceiro = parseFloat(row.estoque_terceiro) || 0;
-                        row.consumo_futuro = consumoFuturo;
-                        row.estoque_futuro = estoqueSistema - consumoFuturo;
+                        // "Consumo Futuro" sempre mostra o consumo total da simulação (terceiro)
+                        row.consumo_futuro = consumoFuturoTerceiro;
+                        row.estoque_futuro = estoqueSistema - consumoFuturoSistema;
+                        row.estoque_terceiro_futuro = estoqueTerceiro - consumoFuturoTerceiro;
+                        var valorUnitario = parseFloat(row.valor_unitario) || 0;
+                        row.valor_estoque_futuro_sistema = row.estoque_futuro * valorUnitario;
+                        row.valor_estoque_futuro_terceiro = row.estoque_terceiro_futuro * valorUnitario;
+                        row.diferenca_valor_futuro = row.valor_estoque_futuro_terceiro - row.valor_estoque_futuro_sistema;
                         row.diferenca_futura = estoqueTerceiro - row.estoque_futuro;
+                        row.diferenca_futura_terceiro = row.estoque_terceiro_futuro - row.estoque_futuro;
                     });
                     atualizarCardsEstatisticas(json.data);
                     return json.data;
                 },
                 error: function(xhr, error, thrown) {
-                    console.error('Erro AJAX:', error);
-                    alert('Erro ao carregar dados da tabela. Verifique o console para mais detalhes.');
+                    if (error === 'abort') {
+                        // Abort é esperado quando há reload enquanto uma requisição anterior ainda estava em andamento.
+                        return;
+                    }
+                    try {
+                        console.error('[DataTables] Erro AJAX', {
+                            error: error,
+                            thrown: thrown,
+                            status: xhr && xhr.status,
+                            statusText: xhr && xhr.statusText,
+                            responseURL: xhr && xhr.responseURL,
+                            responseText: (xhr && xhr.responseText) ? String(xhr.responseText).slice(0, 2000) : null
+                        });
+                    } catch (e) {
+                        console.error('[DataTables] Erro AJAX:', error, thrown);
+                    }
+                    alert('Erro ao carregar dados da tabela. Abra o console para ver status/response.');
                 }
             },
             language: {
-                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+                url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}'
             },
             order: [[1, 'asc']],
             pageLength: -1,
@@ -372,6 +603,30 @@ $(document).ready(function() {
                 { 
                     data: 'valor_unitario', 
                     name: 'valor_unitario',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
+                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    }
+                },
+                { 
+                    data: 'valor_sistema', 
+                    name: 'valor_sistema',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type') {
+                            return parseFloat(data) || 0;
+                        }
+                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    }
+                },
+                { 
+                    data: 'valor_terceiro', 
+                    name: 'valor_terceiro',
                     className: 'text-end',
                     type: 'num',
                     render: function(data, type, row) {
@@ -451,6 +706,20 @@ $(document).ready(function() {
                     }
                 },
                 { 
+                    data: 'estoque_terceiro_futuro', 
+                    name: 'estoque_terceiro_futuro',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`;
+                    }
+                },
+                { 
                     data: 'diferenca_futura', 
                     name: 'diferenca_futura',
                     className: 'text-end',
@@ -465,27 +734,57 @@ $(document).ready(function() {
                     }
                 },
                 { 
-                    data: 'valor_sistema', 
-                    name: 'valor_sistema',
+                    data: 'valor_estoque_futuro_sistema', 
+                    name: 'valor_estoque_futuro_sistema',
                     className: 'text-end',
                     type: 'num',
                     render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
                         if (type === 'sort' || type === 'type') {
-                            return parseFloat(data) || 0;
+                            return valor;
                         }
-                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
                     }
                 },
                 { 
-                    data: 'valor_terceiro', 
-                    name: 'valor_terceiro',
+                    data: 'valor_estoque_futuro_terceiro', 
+                    name: 'valor_estoque_futuro_terceiro',
                     className: 'text-end',
                     type: 'num',
                     render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
                         if (type === 'sort' || type === 'type') {
-                            return parseFloat(data) || 0;
+                            return valor;
                         }
-                        return parseFloat(data).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+                    }
+                },
+                { 
+                    data: 'diferenca_valor_futuro', 
+                    name: 'diferenca_valor_futuro',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>`;
+                    }
+                },
+                { 
+                    data: 'diferenca_futura_terceiro', 
+                    name: 'diferenca_futura_terceiro',
+                    className: 'text-end',
+                    type: 'num',
+                    render: function(data, type, row) {
+                        const valor = parseFloat(data) || 0;
+                        if (type === 'sort' || type === 'type') {
+                            return valor;
+                        }
+                        const classe = valor < 0 ? 'text-danger' : (valor > 0 ? 'text-success' : '');
+                        return `<span class="${classe}">${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</span>`;
                     }
                 }
             ],
@@ -498,122 +797,276 @@ $(document).ready(function() {
                 }
             }
         });
+
+        // Colunas persistentes (carregar preferências e montar checklist)
+        aplicarPreferenciaColunas(table);
+        renderChecklistColunas(table);
     }
-    
-    // Carregar peças não produzidas quando houver filtro de data
-    function carregarPecasNaoProduzidas() {
-        const dataFiltro = $('#filtro_data').val();
-        if (!dataFiltro) {
-            $('#cardPecasNaoProduzidas').hide();
-            return;
-        }
-        
-        fetch(`{{ url_for("estoque_terceiro.api_pecas_nao_produzidas") }}?data_estoque=${dataFiltro}`)
-            .then(response => response.json())
+
+    function getCsrfToken() {
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute('content') : '';
+    }
+
+    function carregarOpcoesSimulacao() {
+        const select = $('#selectSimulacaoOpcao');
+        select.prop('disabled', true);
+        select.html('<option value="">Carregando opções...</option>');
+        fetch('{{ url_for("estoque_terceiro.api_simulacao_opcoes") }}')
+            .then(r => r.json())
             .then(data => {
-                if (data.success && data.grupos && data.grupos.length > 0) {
-                    let html = '';
-                    data.grupos.forEach(function(grupo) {
-                        const chaveGrupo = `${grupo.tipo}_${grupo.produto_composto_id}`;
-                        const quantidadeAtual = quantidadesSimuladas[chaveGrupo] !== undefined ? quantidadesSimuladas[chaveGrupo] : grupo.quantidade_real;
-                        
-                        html += `
-                            <div class="mb-2 border rounded p-3 grupo-pecas" data-chave-grupo="${chaveGrupo}">
-                                <div class="row align-items-center">
-                                    <div class="col-md-5">
-                                        <h6 class="mb-0">
-                                            <i class="fas fa-cube"></i> <strong>${grupo.tipo}</strong>
-                                            <br>
-                                            <small class="text-muted">${grupo.produto_composto_nome}</small>
-                                        </h6>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="mb-0">
-                                            <strong>Quantidade Real:</strong> <span class="badge bg-info">${grupo.quantidade_real}</span>
-                                        </label>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="input-group">
-                                            <span class="input-group-text"><small>Qtd Simulada:</small></span>
-                                            <input type="number" 
-                                                   class="form-control form-control-sm quantidade-simulada" 
-                                                   data-chave-grupo="${chaveGrupo}"
-                                                   value="${quantidadeAtual}" 
-                                                   min="0" 
-                                                   step="1"
-                                                   data-quantidade-real="${grupo.quantidade_real}"
-                                                   title="Altere este valor para simular diferentes quantidades de produção">
-                                            ${quantidadeAtual != grupo.quantidade_real ? `<span class="input-group-text bg-warning text-dark"><i class="fas fa-exclamation-triangle"></i></span>` : ''}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    $('#pecasNaoProduzidasContainer').html(html);
-                    $('#cardPecasNaoProduzidas').show();
-                } else {
-                    $('#cardPecasNaoProduzidas').hide();
+                if (!data || data.success !== true || !Array.isArray(data.opcoes)) {
+                    console.error('Falha ao carregar opções de simulação:', data);
+                    select.html('<option value="">Falha ao carregar opções</option>');
+                    return;
                 }
+                opcoesSimulacao = data.opcoes;
+                select.empty();
+                select.append('<option value="">Selecione...</option>');
+
+                const gruposMap = {};
+                const produtoIdsSet = new Set();
+                data.opcoes.forEach((o, idx) => {
+                    const grupoLabel = (o.grupo_label || 'Sem grupo');
+                    if (!gruposMap[grupoLabel]) gruposMap[grupoLabel] = [];
+                    gruposMap[grupoLabel].push({ o, idx });
+                    if (o.produto_composto_id != null) {
+                        produtoIdsSet.add(String(o.produto_composto_id));
+                    }
+                });
+
+                Object.keys(gruposMap).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((grupoLabel) => {
+                    const optgroup = $(`<optgroup label="${grupoLabel}"></optgroup>`);
+                    gruposMap[grupoLabel].forEach(({ o, idx }) => {
+                        const label = `tipo: ${grupoLabel} | Tipo ${o.tipo_peca} | ${o.produto_composto_nome}`;
+                        optgroup.append(`<option value="${idx}">${label}</option>`);
+                    });
+                    select.append(optgroup);
+                });
+
+                // Pré-carrega estrutura dos produtos (cache)
+                const produtoIds = Array.from(produtoIdsSet).filter(Boolean);
+                carregarEstruturasProdutos(produtoIds).catch(err => {
+                    console.error('Erro ao pré-carregar estruturas:', err);
+                });
             })
-            .catch(error => {
-                console.error('Erro ao carregar peças não produzidas:', error);
-                $('#cardPecasNaoProduzidas').hide();
+            .catch(err => {
+                console.error('Erro ao carregar opções de simulação:', err);
+                select.html('<option value="">Erro ao carregar opções</option>');
+            })
+            .finally(() => {
+                select.prop('disabled', false);
             });
     }
-    
-    // Recalcula consumo por material a partir do breakdown por peça/tipo com quantidades simuladas atuais
-    function recalcularConsumoPorMaterial() {
-        const consumoPorMaterial = {};
-        if (!lastConsumoPorPecaTipo.length) return consumoPorMaterial;
-        lastConsumoPorPecaTipo.forEach(function(grupo) {
-            const newQty = (grupo.chave_grupo in quantidadesSimuladas)
-                ? (parseFloat(quantidadesSimuladas[grupo.chave_grupo]) || 0)
-                : (parseFloat(grupo.quantidade_pecas) || 0);
-            const baseQty = parseFloat(grupo.quantidade_pecas) || 0;
-            const scale = baseQty !== 0 ? newQty / baseQty : 0;
-            if (!grupo.materiais) return;
-            Object.keys(grupo.materiais).forEach(function(mid) {
-                const q = grupo.materiais[mid];
-                const val = (typeof q === 'number' ? q : parseFloat(q) || 0) * scale;
-                consumoPorMaterial[mid] = (consumoPorMaterial[mid] || 0) + val;
+
+    function carregarEstruturasProdutos(produtoIds) {
+        const ids = (produtoIds || []).map(v => String(v)).filter(Boolean);
+        if (!ids.length) return Promise.resolve();
+        const faltantes = ids.filter(pid => !estruturaProdutosCache[pid]);
+        if (!faltantes.length) return Promise.resolve();
+
+        estruturasLoading = true;
+        return fetch(`{{ url_for("estoque_terceiro.api_simulacao_produtos_estrutura") }}?ids=${encodeURIComponent(faltantes.join(','))}`)
+            .then(r => r.json())
+            .then(resp => {
+                if (!resp || resp.success !== true) {
+                    throw new Error((resp && resp.message) ? resp.message : 'Falha ao carregar estrutura dos produtos.');
+                }
+                estruturaProdutosCache = Object.assign({}, estruturaProdutosCache, resp.estruturas || {});
+            })
+            .finally(() => {
+                estruturasLoading = false;
+            });
+    }
+
+    function renderTabelaSimulacaoManual() {
+        const tbody = $('#tabelaSimulacaoManual tbody');
+        tbody.empty();
+        const keys = Object.keys(simulacaoItens);
+        if (!keys.length) {
+            tbody.append(`
+                <tr class="text-muted" id="linhaVaziaSimulacaoManual">
+                    <td colspan="7">Nenhum item adicionado na simulação.</td>
+                </tr>
+            `);
+            return;
+        }
+
+        keys.forEach((k) => {
+            const it = simulacaoItens[k];
+            const qtdTotal = Math.max((parseFloat(it.quantidade_simular) || 0), 0);
+            const qtdProduzida = Math.max((parseFloat(it.quantidade_produzida) || 0), 0);
+            const aProduzir = Math.max(qtdTotal - qtdProduzida, 0);
+            tbody.append(`
+                <tr data-key="${k}">
+                    <td>${it.grupo_label || 'Sem grupo'}</td>
+                    <td><span class="badge bg-secondary">${it.tipo_peca}</span></td>
+                    <td>${it.produto_composto_nome}</td>
+                    <td class="text-end">${(it.quantidade_produzida || 0).toLocaleString('pt-BR')}</td>
+                    <td class="text-end">
+                        <input type="number" class="form-control form-control-sm input-qtd-total text-end" min="0" step="1"
+                               value="${it.quantidade_simular}" style="max-width: 140px; margin-left:auto;">
+                    </td>
+                    <td class="text-end"><strong>${aProduzir.toLocaleString('pt-BR')}</strong></td>
+                    <td class="text-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-remover-simulacao" title="Remover">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `);
+        });
+    }
+
+    function montarPayloadSimulacao() {
+        const itens = [];
+        Object.keys(simulacaoItens).forEach((k) => {
+            const it = simulacaoItens[k];
+            const qtdTotal = Math.max((parseFloat(it.quantidade_simular) || 0), 0);
+            const qtdProduzida = Math.max((parseFloat(it.quantidade_produzida) || 0), 0);
+            if (qtdTotal <= 0) return;
+            itens.push({
+                chave_item: k,
+                grupo_label: it.grupo_label,
+                tipo_peca: it.tipo_peca,
+                produto_composto_id: it.produto_composto_id,
+                quantidade_total: qtdTotal,
+                quantidade_produzida: qtdProduzida
             });
         });
-        return consumoPorMaterial;
+        return { itens };
     }
-    
-    // Evento para atualizar quantidade simulada e recalcular no frontend (sem recarregar a tabela)
-    $(document).on('change', '.quantidade-simulada', function() {
-        const chaveGrupo = $(this).data('chave-grupo');
-        const quantidade = parseFloat($(this).val()) || 0;
-        
-        quantidadesSimuladas[chaveGrupo] = quantidade;
-        
-        if (!table) return;
-        if (!lastConsumoPorPecaTipo.length) {
-            table.ajax.reload();
-            return;
+
+    async function garantirMateriaisDoItem(item) {
+        if (!item || !item.produto_composto_id) return null;
+        if (item.materiais_cache && Object.keys(item.materiais_cache).length) {
+            return item.materiais_cache;
         }
-        const consumoPorMaterial = recalcularConsumoPorMaterial();
-        table.rows({ page: 'current' }).every(function() {
+        const pid = String(item.produto_composto_id);
+        if (!estruturaProdutosCache[pid]) {
+            await carregarEstruturasProdutos([pid]);
+        }
+        const estrutura = estruturaProdutosCache[pid] || null;
+        if (estrutura) {
+            item.materiais_cache = estrutura;
+        }
+        return estrutura;
+    }
+
+    function aplicarConsumoSimulacaoNaTabela(consumoPorMaterialSistema, consumoPorMaterialTerceiro) {
+        consumoPorMaterialSimulacao = consumoPorMaterialSistema || null;
+        consumoPorMaterialSimulacaoTerceiro = consumoPorMaterialTerceiro || null;
+        if (!table) return;
+        table.rows().every(function() {
             const row = this.data();
-            const consumoFuturo = consumoPorMaterial[row.material_id] || 0;
+            if (!row) return;
+            const consumoFuturoSistema = (consumoPorMaterialSimulacao && row.material_id != null)
+                ? (consumoPorMaterialSimulacao[String(row.material_id)] || 0)
+                : (parseFloat(row.consumo_futuro) || 0);
+            const consumoFuturoTerceiro = (consumoPorMaterialSimulacaoTerceiro && row.material_id != null)
+                ? (consumoPorMaterialSimulacaoTerceiro[String(row.material_id)] || 0)
+                : consumoFuturoSistema;
             const estoqueSistema = parseFloat(row.estoque_sistema) || 0;
             const estoqueTerceiro = parseFloat(row.estoque_terceiro) || 0;
-            row.consumo_futuro = consumoFuturo;
-            row.estoque_futuro = estoqueSistema - consumoFuturo;
-            row.diferenca_futura = estoqueTerceiro - row.estoque_futuro;
+            // "Consumo Futuro" sempre mostra o consumo total da simulação (terceiro)
+            row.consumo_futuro = consumoFuturoTerceiro;
+            row.estoque_futuro = estoqueSistema - consumoFuturoSistema;
+            row.estoque_terceiro_futuro = estoqueTerceiro - consumoFuturoTerceiro;
+            const valorUnitario = parseFloat(row.valor_unitario) || 0;
+            row.valor_estoque_futuro_sistema = row.estoque_futuro * valorUnitario;
+            row.valor_estoque_futuro_terceiro = row.estoque_terceiro_futuro * valorUnitario;
+            row.diferenca_valor_futuro = row.valor_estoque_futuro_terceiro - row.valor_estoque_futuro_sistema;
+            row.diferenca_futura = row.estoque_terceiro_futuro - row.estoque_futuro;
+            row.diferenca_futura_terceiro = row.estoque_terceiro_futuro - row.estoque_futuro;
             this.data(row);
         });
         table.draw(false);
-        atualizarCardsEstatisticas(table.rows({ page: 'current' }).data().toArray());
-    });
+        atualizarCardsEstatisticas(table.rows({ search: 'applied' }).data().toArray());
+    }
+
+    function setSimulacaoPendente(val) {
+        simulacaoPendente = !!val;
+        $('#badgeSimulacaoPendente').toggle(simulacaoPendente);
+    }
+
+    async function recalcularSimulacao() {
+        const payload = montarPayloadSimulacao();
+        if (!payload.itens.length) {
+            aplicarConsumoSimulacaoNaTabela(null, null);
+            return;
+        }
+
+        const produtoIds = Array.from(new Set(payload.itens.map(it => String(it.produto_composto_id)).filter(Boolean)));
+        try {
+            await carregarEstruturasProdutos(produtoIds);
+        } catch (e) {
+            console.error('Erro ao garantir estruturas antes da simulação:', e);
+            alert('Não foi possível carregar a estrutura dos produtos compostos para a simulação.');
+            return;
+        }
+
+        // Cálculo 100% no frontend a partir da estrutura cacheada
+        const consumoPorMaterialSistema = {};
+        const consumoPorMaterialTerceiro = {};
+        const simularApenasTerceiro = $('#chkSimularApenasTerceiro').is(':checked');
+        const semEstrutura = [];
+        for (const it of payload.itens) {
+            const itemSimulado = simulacaoItens[it.chave_item];
+            const pid = String(it.produto_composto_id);
+            let estrutura = itemSimulado ? itemSimulado.materiais_cache : null;
+            if (!estrutura) {
+                estrutura = await garantirMateriaisDoItem(itemSimulado);
+            }
+            if (!estrutura) {
+                estrutura = estruturaProdutosCache[pid];
+            }
+            if (!estrutura) {
+                semEstrutura.push(pid);
+                continue;
+            }
+            const qtdTotal = Math.max(parseFloat(it.quantidade_total) || 0, 0);
+            const qtdProduzida = Math.max(parseFloat(it.quantidade_produzida) || 0, 0);
+            const qtdSistema = simularApenasTerceiro ? 0 : Math.max(qtdTotal - qtdProduzida, 0);
+            const qtdTerceiro = qtdTotal;
+            if (qtdSistema <= 0 && qtdTerceiro <= 0) continue;
+            Object.keys(estrutura).forEach((mid) => {
+                const porUn = parseFloat(estrutura[mid]) || 0;
+                if (porUn === 0) return;
+                const key = String(mid);
+                if (qtdSistema > 0) {
+                    const totalSistema = porUn * qtdSistema;
+                    consumoPorMaterialSistema[key] = (consumoPorMaterialSistema[key] || 0) + totalSistema;
+                }
+                if (qtdTerceiro > 0) {
+                    const totalTerceiro = porUn * qtdTerceiro;
+                    consumoPorMaterialTerceiro[key] = (consumoPorMaterialTerceiro[key] || 0) + totalTerceiro;
+                }
+            });
+        }
+
+        if (semEstrutura.length) {
+            console.warn('Produtos sem estrutura para simulação:', Array.from(new Set(semEstrutura)));
+        }
+
+        aplicarConsumoSimulacaoNaTabela(consumoPorMaterialSistema, consumoPorMaterialTerceiro);
+    }
     
-    
+    // (removido) Bloco de "Peças não produzidas" e simulação antiga
     // Evento de mudança no filtro de data
     $('#filtro_data').on('change', function() {
-        if (table) table.ajax.reload();
-        carregarPecasNaoProduzidas();
+        carregarTiposDisponiveis();
+        agendarReloadTabela('filtro_data');
+    });
+
+    // Evento de mudança no filtro SPED (força tipos 10, 15, 18)
+    $('#filtro_sped').on('change', function() {
+        sincronizarFiltroSpedComTipos();
+        agendarReloadTabela('filtro_sped');
+    });
+
+    // Evento de mudança no filtro de tipos (backend filtra, então recarrega via AJAX)
+    $('#filtro_tipos').on('change', function() {
+        agendarReloadTabela('filtro_tipos');
     });
     
     // Filtros aplicados no frontend: só redesenha a tabela (sem nova requisição ao backend)
@@ -624,103 +1077,191 @@ $(document).ready(function() {
     // Botão limpar filtros
     $('#btnLimparFiltros').on('click', function() {
         $('#filtro_data').val('');
+        $('#filtro_sped').prop('checked', false);
+        $('#filtro_tipos').val([]);
         $('#filtro_quantidade_zero').prop('checked', false);
         $('#filtro_sem_material_sistema').prop('checked', false);
         $('#filtro_ter_os_dois').prop('checked', false);
-        quantidadesSimuladas = {};
         if (table) table.draw(false);
-
-        $('#cardPecasNaoProduzidas').hide();
     });
     
-    // Exportar para Excel: mesma URL da API com format=excel e mesmos parâmetros (data_filtro, quantidades_simuladas, filtros)
+    // Exportar para Excel: mesma URL da API com format=excel e mesmos parâmetros (data_filtro, filtros)
     $('#btnExportarExcel').on('click', function() {
         var url = '{{ url_for("estoque_terceiro.api_comparativo") }}';
         var params = { format: 'excel' };
         var dataFiltro = $('#filtro_data').val();
         if (dataFiltro) params.data_filtro = dataFiltro;
-        if (Object.keys(quantidadesSimuladas).length > 0) {
-            params.quantidades_simuladas = JSON.stringify(quantidadesSimuladas);
+        if ($('#filtro_sped').is(':checked')) {
+            params.tipos = tiposSped.join(',');
+        } else {
+            var tiposSelecionados = $('#filtro_tipos').val() || [];
+            if (tiposSelecionados.length > 0) params.tipos = tiposSelecionados.join(',');
         }
         if ($('#filtro_quantidade_zero').is(':checked')) params.filtro_quantidade_zero = '1';
         if ($('#filtro_sem_material_sistema').is(':checked')) params.filtro_sem_material_sistema = '1';
         if ($('#filtro_ter_os_dois').is(':checked')) params.filtro_ter_os_dois = '1';
         window.location.href = url + '?' + $.param(params);
     });
-    
-    // Botão resetar simulações
-    $('#btnResetarSimulacoes').on('click', function() {
-        quantidadesSimuladas = {};
-        carregarPecasNaoProduzidas();
-        if (table) {
-            table.draw(false);
+
+    // Checklist de colunas (persistente)
+    $(document).on('change', '#colunasChecklist .chk-coluna', function() {
+        if (!table) return;
+        aplicarVisibilidadeDeChecklist(table);
+    });
+
+    $('#btnResetColunas').on('click', function() {
+        if (!table) return;
+        table.columns().visible(true, false);
+        table.columns.adjust().draw(false);
+        renderChecklistColunas(table);
+        try { localStorage.removeItem(storageKeyColunas()); } catch (e) {}
+    });
+
+    // Simulação manual - adicionar item
+    $('#btnAdicionarSimulacaoOpcao').on('click', async function() {
+        const idx = $('#selectSimulacaoOpcao').val();
+        if (idx === null || idx === undefined || idx === '') return;
+        const opt = opcoesSimulacao[parseInt(idx)];
+        if (!opt) return;
+        const key = `${opt.grupo_label}_${opt.tipo_peca}_${opt.produto_composto_id}`;
+        if (!simulacaoItens[key]) {
+            simulacaoItens[key] = {
+                grupo_label: opt.grupo_label || 'Sem grupo',
+                tipo_peca: opt.tipo_peca,
+                produto_composto_id: opt.produto_composto_id,
+                produto_composto_nome: opt.produto_composto_nome,
+                quantidade_produzida: parseInt(opt.quantidade_produzida || 0),
+                quantidade_simular: 0,
+                materiais_cache: null
+            };
+            // Cacheia materiais assim que item é adicionado
+            try {
+                await garantirMateriaisDoItem(simulacaoItens[key]);
+            } catch (e) {
+                console.warn('Não foi possível cachear materiais ao adicionar item:', e);
+            }
         }
+        renderTabelaSimulacaoManual();
+        setSimulacaoPendente(true);
+    });
+
+    // Simulação manual - remover item
+    $(document).on('click', '.btn-remover-simulacao', function() {
+        const tr = $(this).closest('tr');
+        const key = tr.data('key');
+        if (key && simulacaoItens[key]) {
+            delete simulacaoItens[key];
+            renderTabelaSimulacaoManual();
+            setSimulacaoPendente(true);
+        }
+    });
+
+    // Simulação manual - alterar quantidade total
+    $(document).on('change', '.input-qtd-total', function() {
+        const tr = $(this).closest('tr');
+        const key = tr.data('key');
+        if (!key || !simulacaoItens[key]) return;
+        const val = parseFloat($(this).val()) || 0;
+        simulacaoItens[key].quantidade_simular = Math.max(val, 0);
+        renderTabelaSimulacaoManual();
+        setSimulacaoPendente(true);
+    });
+
+    $('#chkSimularApenasTerceiro').on('change', function() {
+        setSimulacaoPendente(true);
+    });
+
+    $('#btnExecutarSimulacaoManual').on('click', async function() {
+        setSimulacaoPendente(false);
+        const btn = $(this);
+        const txtOriginal = btn.html();
+        btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Executando...');
+        try {
+            await recalcularSimulacao();
+        } finally {
+            btn.prop('disabled', false).html(txtOriginal);
+        }
+    });
+
+    $('#btnLimparSimulacaoManual').on('click', async function() {
+        simulacaoItens = {};
+        renderTabelaSimulacaoManual();
+        setSimulacaoPendente(false);
+        await recalcularSimulacao();
     });
     
     // Função para atualizar cards com estatísticas
     function atualizarCardsEstatisticas(dados) {
         if (!dados || dados.length === 0) {
-            $('#cardValorTotalSistema').text('R$ 0,00');
-            $('#cardValorTotalTerceiro').text('R$ 0,00');
-            $('#cardDiferencaValor').text('R$ 0,00');
-            $('#cardPercentualMedio').text('0%');
-            $('#cardTotalItens').text('0');
+            $('#resumoAtualValorSistema').text('R$ 0,00');
+            $('#resumoAtualValorTerceiro').text('R$ 0,00');
+            $('#resumoAtualDiferenca').text('R$ 0,00');
+            $('#resumoAtualPercentual').text('0,00%');
+            $('#resumoSimuladoValorSistema').text('R$ 0,00');
+            $('#resumoSimuladoValorTerceiro').text('R$ 0,00');
+            $('#resumoSimuladoDiferenca').text('R$ 0,00');
+            $('#resumoSimuladoPercentual').text('0,00%');
             return;
         }
         
         let valorTotalSistema = 0;
         let valorTotalTerceiro = 0;
         let diferencaValorTotal = 0;
-        let somaPercentuais = 0;
-        let itensComPercentual = 0;
-        let totalItens = dados.length;
+        let valorTotalSistemaSimulado = 0;
+        let valorTotalTerceiroSimulado = 0;
         
         dados.forEach(function(item) {
-            const estoqueSistema = parseFloat(item.estoque_sistema) || 0;
-            const estoqueTerceiro = parseFloat(item.estoque_terceiro) || 0;
             const valorUnitario = parseFloat(item.valor_unitario) || 0;
             const valorSistema = parseFloat(item.valor_sistema) || 0;
             const valorTerceiro = parseFloat(item.valor_terceiro) || 0;
             const diferenca = parseFloat(item.diferenca) || 0;
-            const diferencaPercentual = parseFloat(item.diferenca_percentual) || 0;
+            const estoqueFuturo = parseFloat(item.estoque_futuro) || 0;
+            const estoqueTerceiroFuturo = parseFloat(item.estoque_terceiro_futuro) || 0;
             
             valorTotalSistema += valorSistema;
             valorTotalTerceiro += valorTerceiro;
             if (valorUnitario > 0) {
                 diferencaValorTotal += diferenca * valorUnitario;
             }
-            if (!isNaN(diferencaPercentual) && isFinite(diferencaPercentual)) {
-                somaPercentuais += Math.abs(diferencaPercentual);
-                itensComPercentual++;
-            }
+
+            valorTotalSistemaSimulado += (estoqueFuturo * valorUnitario);
+            valorTotalTerceiroSimulado += (estoqueTerceiroFuturo * valorUnitario);
         });
-        
-        $('#cardValorTotalSistema').text(valorTotalSistema.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-        $('#cardValorTotalTerceiro').text(valorTotalTerceiro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-        
-        const classeValor = diferencaValorTotal < 0 ? 'text-danger' : (diferencaValorTotal > 0 ? 'text-success' : 'text-gray-800');
-        $('#cardDiferencaValor').removeClass('text-danger text-success text-gray-800').addClass(classeValor);
-        $('#cardDiferencaValor').text(diferencaValorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
-        
-        // Atualizar card de percentual médio
-        const percentualMedio = itensComPercentual > 0 ? (somaPercentuais / itensComPercentual) : 0;
-        $('#cardPercentualMedio').text(percentualMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%');
-        
-        // Atualizar card de total de itens
-        $('#cardTotalItens').text(totalItens.toLocaleString('pt-BR'));
+
+        const diferencaAtual = valorTotalTerceiro - valorTotalSistema;
+        const percentualAtual = valorTotalSistema !== 0 ? (diferencaAtual / valorTotalSistema) * 100 : (valorTotalTerceiro !== 0 ? 100 : 0);
+
+        const diferencaSimulada = valorTotalTerceiroSimulado - valorTotalSistemaSimulado;
+        const percentualSimulado = valorTotalSistemaSimulado !== 0
+            ? (diferencaSimulada / valorTotalSistemaSimulado) * 100
+            : (valorTotalTerceiroSimulado !== 0 ? 100 : 0);
+
+        const fmtCurrency = (v) => (parseFloat(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const fmtPercent = (v) => (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+
+        $('#resumoAtualValorSistema').text(fmtCurrency(valorTotalSistema));
+        $('#resumoAtualValorTerceiro').text(fmtCurrency(valorTotalTerceiro));
+        $('#resumoAtualDiferenca').text(fmtCurrency(diferencaAtual));
+        $('#resumoAtualPercentual').text(fmtPercent(percentualAtual));
+
+        $('#resumoSimuladoValorSistema').text(fmtCurrency(valorTotalSistemaSimulado));
+        $('#resumoSimuladoValorTerceiro').text(fmtCurrency(valorTotalTerceiroSimulado));
+        $('#resumoSimuladoDiferenca').text(fmtCurrency(diferencaSimulada));
+        $('#resumoSimuladoPercentual').text(fmtPercent(percentualSimulado));
     }
     
     // Carregar datas e inicializar tabela
     carregarDatasDisponiveis();
+    carregarTiposDisponiveis();
     inicializarDataTable();
+    carregarOpcoesSimulacao();
+    renderTabelaSimulacaoManual();
     
     // Recarregar tabela após fechar modal de importação
     $('#modalImportarEstoqueTerceiro').on('hidden.bs.modal', function() {
         carregarDatasDisponiveis();
-        if (table) {
-            table.ajax.reload();
-        }
-    });
+        agendarReloadTabela('modal_importacao_hidden');
+        });
 });
 </script>
 {% endblock %}

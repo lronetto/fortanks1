@@ -11,6 +11,7 @@ from datetime import datetime, date, timedelta
 from models.unidade import Unidades
 from sqlalchemy import or_, func
 from sqlalchemy.orm import joinedload
+from collections import defaultdict
 
 from decimal import Decimal
 import logging
@@ -927,6 +928,306 @@ def excluir_movimentacao(id_movimentacao):
     
     return redirect(url_for('estoque.movimentacoes'))
 
+
+def _chave_duplicata_entrada(mov):
+    """Chave de agrupamento: estoque, tipo, quantidade, NF item, origens, observação (null conta como valor)."""
+    try:
+        q_norm = Decimal(str(mov.quantidade)).normalize()
+    except Exception:
+        q_norm = mov.quantidade
+    return (
+        mov.estoque_id,
+        mov.tipo_movimento,
+        q_norm,
+        mov.nota_fiscal_item_id,
+        mov.origem_id,
+        mov.origem_tipo,
+        mov.observacao,
+    )
+
+
+def _query_movimentacoes_com_filtros():
+    """Base da listagem de movimentações com os mesmos filtros da API do DataTables."""
+    query = EstoqueMovimentacoes.query.join(Estoque).options(
+        joinedload(EstoqueMovimentacoes.estoque).joinedload(Estoque.material),
+        joinedload(EstoqueMovimentacoes.estoque).joinedload(Estoque.epi),
+        joinedload(EstoqueMovimentacoes.usuario),
+    )
+    estoque_id = request.args.get('estoque_id', None, type=int)
+    tipo = request.args.get('tipo', None)
+    data_inicio = request.args.get('data_inicio', None)
+    data_fim = request.args.get('data_fim', None)
+    material_id = request.args.get('material_id', None, type=int)
+    localizacao = request.args.get('localizacao', None)
+    observacao = request.args.get('observacao', None)
+
+    if estoque_id:
+        query = query.filter(EstoqueMovimentacoes.estoque_id == estoque_id)
+    if material_id:
+        query = query.filter(Estoque.material_id == material_id)
+    if localizacao:
+        query = query.filter(Estoque.localizacao == localizacao)
+    if tipo:
+        query = query.filter(EstoqueMovimentacoes.tipo_movimento == tipo)
+    if observacao:
+        query = query.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
+
+    if data_inicio:
+        try:
+            data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+            query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) >= data_inicio_obj)
+        except ValueError:
+            pass
+    if data_fim:
+        try:
+            data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+            query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) <= data_fim_obj)
+        except ValueError:
+            pass
+
+    return query
+
+
+_TIPOS_DUPLICATA = ('entrada', 'saida')
+
+
+def _entradas_duplicadas_lista():
+    """
+    Retorna linhas duplicadas em entradas ou saídas (mantém o menor ID do grupo).
+    """
+    query = _query_movimentacoes_com_filtros().filter(
+        EstoqueMovimentacoes.tipo_movimento.in_(_TIPOS_DUPLICATA)
+    )
+    movs = query.order_by(EstoqueMovimentacoes.id.asc()).all()
+    grupos = defaultdict(list)
+    for m in movs:
+        grupos[_chave_duplicata_entrada(m)].append(m)
+
+    linhas = []
+    for _key, items in grupos.items():
+        if len(items) < 2:
+            continue
+        keeper = min(items, key=lambda x: x.id)
+        for dup in items:
+            if dup.id == keeper.id:
+                continue
+            linhas.append((keeper, dup))
+    return linhas
+
+
+def _is_movimentacao_duplicata_removivel_global(mov):
+    """
+    True se existir outra movimentação com a mesma chave de duplicata e ID menor.
+    Apenas entradas e saídas. Não depende dos filtros da tela (validação no POST).
+    """
+    if mov.tipo_movimento not in _TIPOS_DUPLICATA:
+        return False
+    k = _chave_duplicata_entrada(mov)
+    q = EstoqueMovimentacoes.query.filter(
+        EstoqueMovimentacoes.estoque_id == mov.estoque_id,
+        EstoqueMovimentacoes.tipo_movimento == mov.tipo_movimento,
+        EstoqueMovimentacoes.quantidade == mov.quantidade,
+    )
+    if mov.nota_fiscal_item_id is None:
+        q = q.filter(EstoqueMovimentacoes.nota_fiscal_item_id.is_(None))
+    else:
+        q = q.filter(EstoqueMovimentacoes.nota_fiscal_item_id == mov.nota_fiscal_item_id)
+    if mov.origem_id is None:
+        q = q.filter(EstoqueMovimentacoes.origem_id.is_(None))
+    else:
+        q = q.filter(EstoqueMovimentacoes.origem_id == mov.origem_id)
+    if mov.origem_tipo is None:
+        q = q.filter(EstoqueMovimentacoes.origem_tipo.is_(None))
+    else:
+        q = q.filter(EstoqueMovimentacoes.origem_tipo == mov.origem_tipo)
+    candidatas = q.all()
+    mesmo_grupo = [x for x in candidatas if _chave_duplicata_entrada(x) == k]
+    if len(mesmo_grupo) < 2:
+        return False
+    return mov.id != min(x.id for x in mesmo_grupo)
+
+
+def _label_tipo_movimentacao(tipo):
+    if tipo == 'entrada':
+        return 'Entrada'
+    if tipo == 'saida':
+        return 'Saída'
+    return tipo or '-'
+
+
+@estoque_bp.route('/movimentacoes/api/entradas-duplicadas', methods=['GET'])
+@login_required
+def api_entradas_duplicadas():
+    """
+    Lista duplicatas em entradas e saídas (mesma chave de agrupamento),
+    respeitando os filtros da tela.
+    """
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
+
+    def _nome_item_estoque(est):
+        if est.material:
+            return f"{est.material.id} - {est.material.nome}"
+        if est.epi and est.epi.material:
+            return f"{est.epi.material.id} - {est.epi.material.nome}"
+        return f"Item #{est.id}"
+
+    try:
+        pares = _entradas_duplicadas_lista()
+        data = []
+        for keeper, dup in pares:
+            est = dup.estoque
+            unidade = ''
+            if est.material and est.material.unidade_obj:
+                unidade = est.material.unidade_obj.nome
+            elif est.epi and est.epi.material and est.epi.material.unidade_obj:
+                unidade = est.epi.material.unidade_obj.nome
+
+            data.append({
+                'id': dup.id,
+                'id_mantido': keeper.id,
+                'tipo_movimento': dup.tipo_movimento,
+                'tipo_label': _label_tipo_movimentacao(dup.tipo_movimento),
+                'data_hora': dup.data_movimento.strftime('%d/%m/%Y %H:%M:%S'),
+                'item': _nome_item_estoque(est),
+                'quantidade': float(dup.quantidade),
+                'unidade': unidade,
+                'nota_fiscal_item_id': dup.nota_fiscal_item_id,
+                'origem_id': dup.origem_id,
+                'origem_tipo': dup.origem_tipo if dup.origem_tipo is not None else '-',
+                'observacao': dup.observacao or '-',
+                'usuario': dup.usuario.nome if dup.usuario else '-',
+            })
+        return jsonify({'success': True, 'data': data, 'total': len(data)})
+    except Exception as e:
+        logger.error(f"Erro ao listar entradas duplicadas: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@estoque_bp.route('/movimentacoes/api/remover-entrada-duplicada', methods=['POST'])
+@login_required
+def api_remover_entrada_duplicada():
+    """Remove uma movimentação duplicada — entrada ou saída (reverte estoque). Apenas admin."""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
+
+    csrf_token = None
+    if request.is_json and request.json:
+        csrf_token = request.json.get('csrf_token')
+    if not csrf_token:
+        csrf_token = request.form.get('csrf_token')
+    if not csrf_token:
+        return jsonify({'success': False, 'message': 'Token CSRF obrigatório.'}), 403
+    try:
+        from flask_wtf.csrf import validate_csrf
+        validate_csrf(csrf_token)
+    except Exception as e:
+        logger.warning(f"CSRF inválido em remover entrada duplicada: {str(e)}")
+        return jsonify({'success': False, 'message': 'Token CSRF inválido.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    id_mov = payload.get('id')
+    try:
+        id_mov = int(id_mov)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'ID inválido.'}), 400
+
+    mov = EstoqueMovimentacoes.query.get(id_mov)
+    if not mov:
+        return jsonify({'success': False, 'message': 'Movimentação não encontrada.'}), 404
+    if mov.tipo_movimento not in _TIPOS_DUPLICATA:
+        return jsonify({
+            'success': False,
+            'message': 'Apenas entradas e saídas podem ser removidas por este fluxo.',
+        }), 400
+
+    if not _is_movimentacao_duplicata_removivel_global(mov):
+        return jsonify({
+            'success': False,
+            'message': 'Esta movimentação não é uma duplicata removível (deve existir outra igual com ID menor).',
+        }), 400
+
+    try:
+        mov.delete()
+        return jsonify({'success': True, 'message': f'Movimentação duplicada #{id_mov} removida.'})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao remover entrada duplicada {id_mov}: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@estoque_bp.route('/movimentacoes/api/remover-todas-entradas-duplicadas', methods=['POST'])
+@login_required
+def api_remover_todas_entradas_duplicadas():
+    """Remove várias duplicatas de entrada ou saída (mesma validação do item a item). Apenas admin."""
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
+
+    csrf_token = None
+    if request.is_json and request.json:
+        csrf_token = request.json.get('csrf_token')
+    if not csrf_token:
+        csrf_token = request.form.get('csrf_token')
+    if not csrf_token:
+        return jsonify({'success': False, 'message': 'Token CSRF obrigatório.'}), 403
+    try:
+        from flask_wtf.csrf import validate_csrf
+        validate_csrf(csrf_token)
+    except Exception as e:
+        logger.warning(f"CSRF inválido em remover todas entradas duplicadas: {str(e)}")
+        return jsonify({'success': False, 'message': 'Token CSRF inválido.'}), 403
+
+    payload = request.get_json(silent=True) or {}
+    ids_raw = payload.get('ids')
+    if not ids_raw or not isinstance(ids_raw, list):
+        return jsonify({'success': False, 'message': 'Informe a lista de IDs (ids).'}), 400
+
+    ids_int = []
+    for x in ids_raw:
+        try:
+            ids_int.append(int(x))
+        except (TypeError, ValueError):
+            return jsonify({'success': False, 'message': f'ID inválido na lista: {x!r}.'}), 400
+
+    ids_int = sorted(set(ids_int))
+    removed_ids = []
+    errors = []
+
+    for id_mov in ids_int:
+        mov = EstoqueMovimentacoes.query.get(id_mov)
+        if not mov:
+            errors.append({'id': id_mov, 'message': 'Movimentação não encontrada.'})
+            continue
+        if mov.tipo_movimento not in _TIPOS_DUPLICATA:
+            errors.append({'id': id_mov, 'message': 'Apenas entradas e saídas podem ser removidas.'})
+            continue
+        if not _is_movimentacao_duplicata_removivel_global(mov):
+            errors.append({'id': id_mov, 'message': 'Não é duplicata removível.'})
+            continue
+        try:
+            mov.delete()
+            removed_ids.append(id_mov)
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao remover entrada duplicada em lote {id_mov}: {str(e)}", exc_info=True)
+            errors.append({'id': id_mov, 'message': str(e)})
+
+    ok = len(removed_ids) > 0
+    msg = []
+    if removed_ids:
+        msg.append(f'{len(removed_ids)} removida(s).')
+    if errors:
+        msg.append(f'{len(errors)} falha(s).')
+
+    return jsonify({
+        'success': ok,
+        'removed': removed_ids,
+        'removed_count': len(removed_ids),
+        'errors': errors,
+        'message': ' '.join(msg) if msg else 'Nada foi removido.',
+    })
+
+
 # Rotas de API para estoque
 @estoque_bp.route('/api/estoque/<int:id>')
 @login_required
@@ -1400,3 +1701,185 @@ def exportar_excel():
         logger.error(f"Erro ao exportar estoque para Excel: {str(e)}", exc_info=True)
         flash('Erro ao exportar estoque para Excel.', 'danger')
         return redirect(url_for('estoque.index')) 
+
+
+@estoque_bp.route('/movimentacoes/exportar-excel')
+@login_required
+def exportar_movimentacoes_excel():
+    """
+    Exporta as movimentações de estoque filtradas para Excel.
+    Considera os mesmos filtros aplicados no DataTables em /movimentacoes.
+    """
+    try:
+        # Filtros (mesmos do DataTables)
+        estoque_id = request.args.get('estoque_id', None, type=int)
+        tipo = request.args.get('tipo', None)
+        data_inicio = request.args.get('data_inicio', None)
+        data_fim = request.args.get('data_fim', None)
+        material_id = request.args.get('material_id', None, type=int)
+        localizacao = request.args.get('localizacao', None)
+        observacao = request.args.get('observacao', None)
+
+        # Busca global do DataTables (aceitar tanto "search" quanto "search[value]")
+        search_value = request.args.get('search', '', type=str) or request.args.get('search[value]', '', type=str)
+
+        query = EstoqueMovimentacoes.query.join(Estoque).options(
+            joinedload(EstoqueMovimentacoes.estoque).joinedload(Estoque.material),
+            joinedload(EstoqueMovimentacoes.estoque).joinedload(Estoque.epi),
+            joinedload(EstoqueMovimentacoes.usuario)
+        )
+
+        if estoque_id:
+            query = query.filter(EstoqueMovimentacoes.estoque_id == estoque_id)
+
+        if material_id:
+            query = query.filter(Estoque.material_id == material_id)
+
+        if localizacao:
+            query = query.filter(Estoque.localizacao == localizacao)
+
+        if tipo:
+            query = query.filter(EstoqueMovimentacoes.tipo_movimento == tipo)
+
+        if observacao:
+            query = query.filter(EstoqueMovimentacoes.observacao.ilike(f'%{observacao}%'))
+
+        if data_inicio:
+            try:
+                data_inicio_obj = datetime.strptime(data_inicio, '%Y-%m-%d').date()
+                query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) >= data_inicio_obj)
+            except ValueError:
+                pass
+
+        if data_fim:
+            try:
+                data_fim_obj = datetime.strptime(data_fim, '%Y-%m-%d').date()
+                query = query.filter(func.date(EstoqueMovimentacoes.data_movimento) <= data_fim_obj)
+            except ValueError:
+                pass
+
+        if search_value:
+            query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id) \
+                         .outerjoin(Epi, Estoque.epi_id == Epi.id) \
+                         .filter(
+                             db.or_(
+                                 db.cast(EstoqueMovimentacoes.id, db.String).ilike(f'%{search_value}%'),
+                                 EstoqueMovimentacoes.observacao.ilike(f'%{search_value}%'),
+                                 Materiais.nome.ilike(f'%{search_value}%'),
+                                 EstoqueMovimentacoes.tipo_movimento.ilike(f'%{search_value}%')
+                             )
+                         )
+
+        # Buscar resultados (vamos calcular saldos por estoque_id de forma cronológica)
+        movimentacoes_export = query.order_by(
+            EstoqueMovimentacoes.data_movimento.asc(),
+            EstoqueMovimentacoes.id.asc()
+        ).all()
+
+        # Se não houver movimentações, ainda exportar cabeçalho
+        estoque_ids = sorted({m.estoque_id for m in movimentacoes_export})
+        min_dt = min((m.data_movimento for m in movimentacoes_export), default=None)
+
+        saldos_iniciais = {eid: Decimal('0.0') for eid in estoque_ids}
+        if estoque_ids and min_dt:
+            # Para calcular o acumulado correto, precisamos do saldo anterior ao primeiro registro exportado.
+            # Isso considera TODAS as movimentações anteriores do(s) estoque(s), independentemente dos filtros de tipo/observacao/search.
+            movs_anteriores = EstoqueMovimentacoes.query.filter(
+                EstoqueMovimentacoes.estoque_id.in_(estoque_ids),
+                EstoqueMovimentacoes.data_movimento < min_dt
+            ).order_by(
+                EstoqueMovimentacoes.estoque_id.asc(),
+                EstoqueMovimentacoes.data_movimento.asc(),
+                EstoqueMovimentacoes.id.asc()
+            ).all()
+
+            for mov in movs_anteriores:
+                saldo = saldos_iniciais.get(mov.estoque_id, Decimal('0.0'))
+                if mov.tipo_movimento == 'entrada':
+                    saldo += Decimal(str(mov.quantidade))
+                elif mov.tipo_movimento == 'saida':
+                    saldo -= Decimal(str(mov.quantidade))
+                elif mov.tipo_movimento == 'ajuste':
+                    saldo = Decimal(str(mov.quantidade))
+                saldos_iniciais[mov.estoque_id] = saldo
+
+        # Processar exportadas em ordem cronológica calculando saldo anterior e acumulado por estoque
+        saldos_correntes = dict(saldos_iniciais)
+        saldos_por_mov_id = {}
+        dados_excel = []
+
+        for mov in movimentacoes_export:
+            saldo_anterior = saldos_correntes.get(mov.estoque_id, Decimal('0.0'))
+
+            # Atualizar saldo conforme o tipo
+            if mov.tipo_movimento == 'entrada':
+                saldo_atual = saldo_anterior + Decimal(str(mov.quantidade))
+            elif mov.tipo_movimento == 'saida':
+                saldo_atual = saldo_anterior - Decimal(str(mov.quantidade))
+            elif mov.tipo_movimento == 'ajuste':
+                saldo_atual = Decimal(str(mov.quantidade))
+            else:
+                # Tipos não previstos: não altera o acumulado
+                saldo_atual = saldo_anterior
+
+            saldos_correntes[mov.estoque_id] = saldo_atual
+            saldos_por_mov_id[mov.id] = (saldo_anterior, saldo_atual)
+
+            # Nome do item (mesma lógica usada no endpoint do DataTables)
+            item_nome = ""
+            if mov.estoque.material:
+                item_nome = f"{mov.estoque.material.id} - {mov.estoque.material.nome}"
+            elif mov.estoque.epi and mov.estoque.epi.material:
+                item_nome = f"{mov.estoque.epi.material.id} - {mov.estoque.epi.material.nome}"
+            else:
+                item_nome = f"Item #{mov.estoque.id}"
+
+            # Labels
+            tipo_label = mov.tipo_movimento.capitalize()
+            if mov.tipo_movimento == 'entrada':
+                tipo_label = 'Entrada'
+            elif mov.tipo_movimento == 'saida':
+                tipo_label = 'Saída'
+            elif mov.tipo_movimento == 'ajuste':
+                tipo_label = 'Ajuste'
+
+            dados_excel.append({
+                'ID': mov.id,
+                # datetime real para o Excel (não string)
+                'Data': mov.data_movimento,
+                'Item': item_nome,
+                'Tipo': tipo_label,
+                'Quantidade': float(mov.quantidade),
+                'Quantidade Anterior': float(saldo_anterior),
+                'Quantidade Acumulada': float(saldo_atual),
+            })
+
+        df = pd.DataFrame(dados_excel)
+
+        # Manter apenas as colunas solicitadas (na ordem pedida)
+        colunas = ['ID', 'Data', 'Item', 'Tipo', 'Quantidade', 'Quantidade Anterior', 'Quantidade Acumulada']
+        df = df[colunas] if not df.empty else pd.DataFrame(columns=colunas)
+
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='Movimentações')
+            ws = writer.sheets.get('Movimentações')
+            if ws and not df.empty:
+                # Coluna "Data" é a 2 (B). Formatar como data/hora no Excel.
+                for row in range(2, len(df) + 2):
+                    ws[f'B{row}'].number_format = 'dd/mm/yyyy hh:mm'
+        excel_buffer.seek(0)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nome_arquivo = f'movimentacoes_estoque_{timestamp}.xlsx'
+
+        return send_file(
+            excel_buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=nome_arquivo
+        )
+    except Exception as e:
+        logger.error(f"Erro ao exportar movimentações para Excel: {str(e)}", exc_info=True)
+        flash('Erro ao exportar movimentações para Excel.', 'danger')
+        return redirect(url_for('estoque.movimentacoes'))

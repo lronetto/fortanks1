@@ -22,6 +22,15 @@
           </select>
         </div>
         <div class="form-group">
+          <label for="tanque_id" class="me-2">Tanque:</label>
+          <select id="tanque_id" class="form-select form-select-sm">
+            <option value="todos" {% if tanque_id == 'todos' or not tanque_id %}selected{% endif %}>Todos</option>
+            {% for tanque in tanques %}
+              <option value="{{ tanque.id }}" {% if tanque_id|string == tanque.id|string %}selected{% endif %}>{{ tanque.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
           <label for="nome_peca" class="me-2">Nome da Peça:</label>
           <input type="text" id="nome_peca" class="form-control form-control-sm" value="{{ nome_peca|default('') }}" placeholder="Digite o nome da peça">
         </div>
@@ -32,6 +41,7 @@
       <div class="col text-end">
         <form method="get" action="{{ url_for('acabamento_transporte.exportar_excel') }}" id="formExportarExcel" style="display:inline">
           <input type="hidden" name="filtro" id="exportFiltro" value="{{ filtro|default('todos') }}">
+          <input type="hidden" name="tanque_id" id="exportTanqueId" value="{{ tanque_id|default('todos') }}">
           <input type="hidden" name="nome_peca" id="exportNomePeca" value="{{ nome_peca|default('') }}">
           <button type="submit" class="btn btn-outline-success btn-sm">
             <i class="fas fa-file-excel"></i> Exportar Excel
@@ -73,6 +83,7 @@
 $(document).ready(function() {
     function syncExportForm() {
         $('#exportFiltro').val($('#filtro').val());
+        $('#exportTanqueId').val($('#tanque_id').val());
         $('#exportNomePeca').val($('#nome_peca').val());
     }
 
@@ -84,6 +95,7 @@ $(document).ready(function() {
             type: 'GET',
             data: function(d) {
                 d.filtro = $('#filtro').val();
+                d.tanque_id = $('#tanque_id').val();
                 d.nome_peca = $('#nome_peca').val();
             },
             dataSrc: function(json) {
@@ -118,6 +130,9 @@ $(document).ready(function() {
     });
 
     $('#filtro').on('change', function() {
+        $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
+    });
+    $('#tanque_id').on('change', function() {
         $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
     });
     $('#btnFiltrar').on('click', function() {

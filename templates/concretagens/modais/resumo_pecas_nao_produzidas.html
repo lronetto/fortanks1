@@ -1,0 +1,108 @@
+<!-- Modal: resumo de peças sem produção (por tanque / tipo) -->
+<div class="modal fade" id="modalResumoPecasNaoProduzidas" tabindex="-1" aria-labelledby="modalResumoPecasNaoProduzidasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalResumoPecasNaoProduzidasLabel">
+                    <i class="fas fa-clipboard-list"></i> Peças não produzidas (por tanque / tipo)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-2">
+                    Contagem de referências a peças em concretagens que ainda não possuem <code>data_producao</code> registrada na qualidade.
+                </p>
+                <p id="resumoPecasNaoProduzidasTotal" class="fw-semibold text-primary mb-3"></p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover table-sm w-100" id="tabelaResumoPecasNaoProduzidas" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>Tanque</th>
+                                <th>Tipo</th>
+                                <th class="text-end">Quantidade</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        function textoTotal(n) {
+            var t = parseInt(n, 10) || 0;
+            return 'Total geral: ' + t + ' referência(ões) sem produção.';
+        }
+
+        function initTabelaResumo() {
+            var $tbl = $('#tabelaResumoPecasNaoProduzidas');
+            if ($.fn.DataTable.isDataTable($tbl)) {
+                $tbl.DataTable().destroy();
+                $tbl.find('tbody').empty();
+            }
+            var opts = {
+                processing: true,
+                serverSide: false,
+                ajax: {
+                    url: "{{ url_for('concretagem.api_resumo_pecas_nao_produzidas') }}",
+                    type: 'GET',
+                    dataSrc: function (json) {
+                        if (json.erro) {
+                            $('#resumoPecasNaoProduzidasTotal').text('Erro ao carregar: ' + json.erro).removeClass('text-primary').addClass('text-danger');
+                            return [];
+                        }
+                        $('#resumoPecasNaoProduzidasTotal').text(textoTotal(json.total_geral)).removeClass('text-danger').addClass('text-primary');
+                        return json.data || [];
+                    },
+                    error: function () {
+                        $('#resumoPecasNaoProduzidasTotal').text('Falha na requisição do resumo.').removeClass('text-primary').addClass('text-danger');
+                    }
+                },
+                columns: [
+                    { data: 'tanque_nome', title: 'Tanque' },
+                    { data: 'tipo', title: 'Tipo' },
+                    {
+                        data: 'quantidade',
+                        title: 'Quantidade',
+                        className: 'text-end',
+                        render: function (d) {
+                            return typeof d === 'number' ? d : (parseInt(d, 10) || 0);
+                        }
+                    }
+                ],
+                order: [[0, 'asc'], [1, 'asc']],
+                pageLength: 25,
+                lengthMenu: [10, 25, 50, 100],
+                responsive: true,
+                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                    "<'row'<'col-sm-12'tr>>" +
+                    "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+            };
+            if (typeof dataTablePortugueseTranslation !== 'undefined' && dataTablePortugueseTranslation) {
+                opts.language = dataTablePortugueseTranslation;
+            }
+            $tbl.DataTable(opts);
+        }
+
+        $(document).ready(function () {
+            $('#modalResumoPecasNaoProduzidas').on('hidden.bs.modal', function () {
+                var $tbl = $('#tabelaResumoPecasNaoProduzidas');
+                if ($.fn.DataTable.isDataTable($tbl)) {
+                    $tbl.DataTable().destroy();
+                    $tbl.find('tbody').empty();
+                }
+                $('#resumoPecasNaoProduzidasTotal').text('');
+            });
+
+            $('#modalResumoPecasNaoProduzidas').on('shown.bs.modal', function () {
+                initTabelaResumo();
+            });
+        });
+    })();
+</script>

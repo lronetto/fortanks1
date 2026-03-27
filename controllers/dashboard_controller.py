@@ -545,7 +545,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
                 'concretadas': concretadas_total,
                 'acabadas': acabadas_total,
                 'transportadas': transportadas_total,
-                'nfs_emitidas_quantidade': nfs_emitidas_quantidade_total,
+                'nfs_emitidas_quantidade': nfs_emitidas_quantidade_total/len(grupo.tanques),
                 'total_pecas': total_pecas_total,
                 'em_estoque': em_estoque_total,
                 'prontas_transportar': prontas_transportar_total,

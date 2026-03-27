@@ -3,7 +3,7 @@ from sqlalchemy import func
 from models.concreto import ConcretoConcretagensTanques, ConcretoUsinagens
 from models.database import db
 from models.tanque import Tanques, TanquesPecas
-from models.nota_fiscal import NotaFiscal, CNPJS_MATRIZ
+from models.nota_fiscal import NotaFiscal, NotaFiscalItem, CNPJS_MATRIZ
 
 from flask_wtf.csrf import generate_csrf
 from datetime import datetime
@@ -13,15 +13,44 @@ import pandas as pd
 
 acabamento_transporte_bp  = Blueprint('acabamento_transporte', __name__)
 
+
+def _numeros_nf_ja_usados_em_transporte(excluir_peca_id=None):
+    """Números de NF já gravados em qualidade.transporte.nota (outras peças)."""
+    usados = set()
+    qry = TanquesPecas.query.filter(TanquesPecas.qualidade.isnot(None))
+    if excluir_peca_id is not None:
+        qry = qry.filter(TanquesPecas.id != excluir_peca_id)
+    for peca in qry.all():
+        try:
+            q = json.loads(peca.qualidade) if isinstance(peca.qualidade, str) else (peca.qualidade or {})
+        except (json.JSONDecodeError, TypeError):
+            continue
+        transporte = q.get('transporte') or {}
+        if not isinstance(transporte, dict):
+            continue
+        nota = transporte.get('nota')
+        if nota is None or str(nota).strip() in ('', 'null'):
+            continue
+        usados.add(str(nota).strip())
+    return usados
+
+
 def get_pecas(filtros):
     filtro = filtros.get('filtro', 'todos')
     page = int(filtros.get('page', 1))
     per_page = 20
     nome_peca = filtros.get('nome_peca', '').strip()
+    tanque_id = filtros.get('tanque_id', 'todos')
     pecas_query = TanquesPecas.query.join(Tanques)
     if nome_peca:
         pecas_query = pecas_query.filter(\
             TanquesPecas.nome.ilike(f'%{nome_peca}%'))
+    if tanque_id and str(tanque_id) != 'todos':
+        try:
+            tanque_id_int = int(tanque_id)
+            pecas_query = pecas_query.filter(TanquesPecas.tanque_id == tanque_id_int)
+        except (TypeError, ValueError):
+            pass
     if filtro == 'acabadas':
         pecas_query = pecas_query.filter(\
             TanquesPecas.qualidade.isnot(None), \
@@ -71,11 +100,13 @@ def index():
     tanques = Tanques.query.order_by(Tanques.nome).all()
     filtro = filtros.get('filtro', 'todos')
     nome_peca = filtros.get('nome_peca', '')
+    tanque_id = filtros.get('tanque_id', 'todos')
     return render_template('acabamento_transporte/index.html',
                            tanques=tanques,
                            now=datetime.now().strftime('%Y-%m-%d'),
                            filtro=filtro,
-                           nome_peca=nome_peca)
+                           nome_peca=nome_peca,
+                           tanque_id=tanque_id)
 
 @acabamento_transporte_bp.route('/acabamento', methods=['GET', 'POST'])
 def acabamento():
@@ -165,6 +196,7 @@ def api_datatables():
 
         filtros = {
             'filtro': request.args.get('filtro', 'todos'),
+            'tanque_id': request.args.get('tanque_id', 'todos'),
             'nome_peca': request.args.get('nome_peca', '').strip(),
         }
         pecas = get_pecas(filtros)
@@ -282,8 +314,13 @@ def api_notas_venda_matriz():
     """
     Busca notas fiscais de venda emitidas pela matriz (NFe tipo 0 ou 1, cnpj_emitente matriz).
     Parâmetro: q (texto para filtrar por número da NF ou chave). Se vazio, retorna as mais recentes.
+    Opcional: tanque_id — restringe a NFs que possuem item com código igual ao item_nf do tanque.
+    Opcional: peca_id — ao excluir NFs já usadas, ignora a própria peça (ex.: reabertura do modal).
     """
     q = (request.args.get('q') or '').strip()
+    tanque_id = request.args.get('tanque_id', type=int)
+    peca_id = request.args.get('peca_id', type=int)
+
     query = (
         NotaFiscal.query.filter(
             NotaFiscal.tipo.in_([0, 1]),
@@ -291,6 +328,22 @@ def api_notas_venda_matriz():
             NotaFiscal.status_processamento != 'cancelada',
         )
     )
+
+    if tanque_id:
+        tanque = Tanques.query.get(tanque_id)
+        if not tanque or tanque.item_nf is None:
+            return jsonify([])
+        nf_ids_com_item = (
+            db.session.query(NotaFiscalItem.nf_id)
+            .filter(NotaFiscalItem.codigo == tanque.item_nf)
+            .distinct()
+        )
+        query = query.filter(NotaFiscal.id.in_(nf_ids_com_item))
+
+        usados = _numeros_nf_ja_usados_em_transporte(excluir_peca_id=peca_id)
+        if usados:
+            query = query.filter(~NotaFiscal.numero_nf.in_(list(usados)))
+
     if q:
         termo = f'%{q}%'
         query = query.filter(

@@ -1,0 +1,252 @@
+<!-- Modal: duplicatas de entrada/saída -->
+<div class="modal fade" id="modalEntradasDuplicadas" tabindex="-1" aria-labelledby="modalEntradasDuplicadasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="modalEntradasDuplicadasLabel">
+                    <i class="fas fa-clone"></i> Movimentações duplicadas
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="csrf_token" id="csrf_entradas_dup" value="{{ csrf_token() }}">
+                <p class="text-muted small mb-2">
+                    Duplicata: mais de uma <strong>entrada ou saída</strong> com os mesmos valores de
+                    <strong>estoque</strong>, <strong>tipo</strong>, <strong>quantidade</strong>, <strong>observação</strong>,
+                    <strong>nota fiscal item</strong> (pode ser vazio), <strong>origem_id</strong> e <strong>origem_tipo</strong>.
+                    Em cada grupo mantém-se o registro de <strong>menor ID</strong>; as demais podem ser removidas (o estoque é revertido).
+                </p>
+                <p class="mb-3">
+                    <span class="badge bg-secondary">Filtros da tela aplicados</span>
+                    <span class="ms-2" id="entradasDupResumo">Carregue a verificação para ver o total.</span>
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm w-100" id="dataTableEntradasDuplicadas" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th>ID (duplicata)</th>
+                                <th>ID mantido</th>
+                                <th>Tipo</th>
+                                <th>Data/Hora</th>
+                                <th>Item</th>
+                                <th>Quantidade</th>
+                                <th>NF item</th>
+                                <th>Origem ID</th>
+                                <th>Origem tipo</th>
+                                <th>Observação</th>
+                                <th>Usuário</th>
+                                <th>Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer d-flex flex-wrap gap-2 justify-content-between">
+                <button type="button" class="btn btn-danger" id="btnRemoverTodasDuplicatas" disabled>
+                    <i class="fas fa-trash-alt"></i> Remover todas as duplicatas
+                </button>
+                <button type="button" class="btn btn-secondary ms-auto" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var dtEntradasDup = null;
+    var urlListar = "{{ url_for('estoque.api_entradas_duplicadas') }}";
+    var urlRemover = "{{ url_for('estoque.api_remover_entrada_duplicada') }}";
+    var urlRemoverTodas = "{{ url_for('estoque.api_remover_todas_entradas_duplicadas') }}";
+
+    function paramsFiltrosMovimentacoes() {
+        return {
+            estoque_id: $('#estoque_id').val() || '',
+            tipo: $('#tipo').val() || '',
+            data_inicio: $('#data_inicio').val() || '',
+            data_fim: $('#data_fim').val() || '',
+            material_id: $('#material_id').val() || '',
+            localizacao: $('#localizacao').val() || '',
+            observacao: $('#observacao').val() || ''
+        };
+    }
+
+    function obterCsrf() {
+        return $('meta[name="csrf-token"]').attr('content') || $('#csrf_entradas_dup').val() || '';
+    }
+
+    function destruirDtDup() {
+        if (dtEntradasDup) {
+            try {
+                dtEntradasDup.destroy();
+            } catch (e) { /* ignore */ }
+            dtEntradasDup = null;
+        }
+        $('#dataTableEntradasDuplicadas tbody').empty();
+    }
+
+    window.carregarEntradasDuplicadasModal = function () {
+        destruirDtDup();
+        $('#entradasDupResumo').text('Carregando…');
+        $('#btnRemoverTodasDuplicatas').prop('disabled', true);
+        $.ajax({
+            url: urlListar,
+            type: 'GET',
+            data: paramsFiltrosMovimentacoes(),
+            success: function (res) {
+                if (!res.success) {
+                    $('#entradasDupResumo').text(res.message || 'Erro ao carregar.');
+                    alert(res.message || 'Não foi possível carregar as duplicatas.');
+                    return;
+                }
+                var total = res.total != null ? res.total : (res.data ? res.data.length : 0);
+                $('#entradasDupResumo').text(total === 0
+                    ? 'Nenhuma duplicata encontrada com os filtros atuais.'
+                    : (total + ' duplicata(s) encontrada(s).'));
+                $('#btnRemoverTodasDuplicatas').prop('disabled', total === 0);
+                dtEntradasDup = $('#dataTableEntradasDuplicadas').DataTable({
+                    language: { url: '//cdn.datatables.net/plug-ins/1.10.22/i18n/Portuguese-Brasil.json' },
+                    data: res.data || [],
+                    order: [[0, 'desc']],
+                    pageLength: 25,
+                    responsive: true,
+                    columns: [
+                        { data: 'id' },
+                        { data: 'id_mantido' },
+                        { data: 'tipo_label' },
+                        { data: 'data_hora' },
+                        { data: 'item' },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                var u = row.unidade ? ' ' + row.unidade : '';
+                                return parseFloat(row.quantidade).toFixed(4) + u;
+                            },
+                            className: 'text-end'
+                        },
+                        {
+                            data: 'nota_fiscal_item_id',
+                            render: function (d) { return d === null || d === undefined ? '—' : d; }
+                        },
+                        {
+                            data: 'origem_id',
+                            render: function (d) { return d === null || d === undefined ? '—' : d; }
+                        },
+                        { data: 'origem_tipo' },
+                        { data: 'observacao' },
+                        { data: 'usuario' },
+                        {
+                            data: null,
+                            orderable: false,
+                            searchable: false,
+                            render: function (data, type, row) {
+                                return '<button type="button" class="btn btn-danger btn-sm btn-remover-entrada-dup" data-id="' + row.id + '">' +
+                                    '<i class="fas fa-trash"></i> Remover</button>';
+                            }
+                        }
+                    ]
+                });
+            },
+            error: function (xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Erro ao carregar.';
+                $('#entradasDupResumo').text(msg);
+                $('#btnRemoverTodasDuplicatas').prop('disabled', true);
+                alert(msg);
+            }
+        });
+    };
+
+    function coletarIdsDuplicatasVisiveis() {
+        var ids = [];
+        if (!dtEntradasDup) return ids;
+        var rows = dtEntradasDup.rows({ search: 'applied' }).data().toArray();
+        rows.forEach(function (row) {
+            if (row && row.id != null) ids.push(row.id);
+        });
+        return ids;
+    }
+
+    $(document).on('click', '#btnRemoverTodasDuplicatas', function () {
+        var ids = coletarIdsDuplicatasVisiveis();
+        if (!ids.length) {
+            alert('Não há duplicatas na tabela.');
+            return;
+        }
+        if (!confirm('Remover as ' + ids.length + ' duplicatas listadas (entradas e/ou saídas)? O saldo do estoque será revertido em cada uma. O registro de menor ID em cada grupo é mantido.')) {
+            return;
+        }
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+        var csrf = obterCsrf();
+        $.ajax({
+            url: urlRemoverTodas,
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': csrf },
+            data: JSON.stringify({ ids: ids, csrf_token: csrf }),
+            success: function (r) {
+                var msg = r.message || '';
+                if (r.errors && r.errors.length) {
+                    msg += '\n\nFalhas:\n' + r.errors.map(function (e) { return 'ID ' + e.id + ': ' + e.message; }).join('\n');
+                }
+                if (r.success) {
+                    alert(msg || 'Concluído.');
+                    if (typeof table !== 'undefined' && table && table.ajax) {
+                        table.ajax.reload(null, false);
+                    }
+                    window.carregarEntradasDuplicadasModal();
+                } else {
+                    alert(msg || 'Nada foi removido.');
+                    $btn.prop('disabled', false);
+                }
+            },
+            error: function (xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Erro ao remover.';
+                alert(msg);
+                $btn.prop('disabled', false);
+            }
+        });
+    });
+
+    $(document).on('click', '#btnAbrirEntradasDuplicadas', function () {
+        var modalEl = document.getElementById('modalEntradasDuplicadas');
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        window.carregarEntradasDuplicadasModal();
+    });
+
+    $(document).on('click', '.btn-remover-entrada-dup', function () {
+        var id = $(this).data('id');
+        if (!id) return;
+        if (!confirm('Remover a movimentação duplicada ID ' + id + '? O saldo do estoque será revertido.')) {
+            return;
+        }
+        var $btn = $(this);
+        $btn.prop('disabled', true);
+        var csrf = obterCsrf();
+        $.ajax({
+            url: urlRemover,
+            type: 'POST',
+            contentType: 'application/json',
+            headers: { 'X-CSRFToken': csrf },
+            data: JSON.stringify({ id: id, csrf_token: csrf }),
+            success: function (r) {
+                if (r.success) {
+                    if (typeof table !== 'undefined' && table && table.ajax) {
+                        table.ajax.reload(null, false);
+                    }
+                    window.carregarEntradasDuplicadasModal();
+                } else {
+                    alert(r.message || 'Erro ao remover.');
+                    $btn.prop('disabled', false);
+                }
+            },
+            error: function (xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Erro ao remover.';
+                alert(msg);
+                $btn.prop('disabled', false);
+            }
+        });
+    });
+})();
+</script>
