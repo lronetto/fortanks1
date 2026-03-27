@@ -14,8 +14,15 @@
                     Será removido o registro de <strong>data de produção</strong> (<code>data_producao</code>) no JSON de qualidade das
                     peças (<code>TanquesPecas</code>) vinculadas às concretagens <strong>desta listagem</strong> (mesmo critério da busca e dos filtros da tabela).
                 </p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="chkDesfazerRemoverMovConcretagens" value="1">
+                    <label class="form-check-label" for="chkDesfazerRemoverMovConcretagens">
+                        Também remover as <strong>movimentações de estoque</strong> de produção de peças vinculadas a este escopo
+                        <span class="text-muted">(reverte o consumo de materiais; identifica por produto composto, data e nome da peça na observação)</span>
+                    </label>
+                </div>
                 <p class="text-muted small mb-0">
-                    Esta ação <strong>não</strong> reverte movimentações de estoque nem consumos já registrados.
+                    Se a opção acima <strong>não</strong> estiver marcada, apenas o registro de produção nas peças será limpo.
                 </p>
             </div>
             <div class="modal-footer">
@@ -45,6 +52,7 @@
 
     $(document).ready(function() {
         $('#modalDesfazerTodasProducoes').on('show.bs.modal', function() {
+            $('#chkDesfazerRemoverMovConcretagens').prop('checked', false);
             const n = coletarIdsConcretagensVisiveis().length;
             const $p = $('#desfazerProducoesResumo');
             if (n > 0) {
@@ -69,7 +77,10 @@
                 headers: {
                     'X-CSRFToken': $('#csrf_token_global').val()
                 },
-                data: JSON.stringify({ concretagem_ids: ids }),
+                data: JSON.stringify({
+                    concretagem_ids: ids,
+                    remover_movimentacoes: $('#chkDesfazerRemoverMovConcretagens').is(':checked')
+                }),
                 success: function(response) {
                     if (response.success) {
                         $('#modalDesfazerTodasProducoes').modal('hide');

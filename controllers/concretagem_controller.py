@@ -13,13 +13,14 @@ from models.tanque import Tanques, TanquesPecas, TanquesProdutoComposto
 from models.contrato import Contrato
 from models.centro_custo import CentroCusto
 from models.database import db
+from models.estoque import EstoqueMovimentacoes
 from flask_login import login_required, current_user
 #from flask_wtf.csrf import csrf_exempt
 import json
-from datetime import datetime
+from datetime import datetime, date as date_type
 import pandas as pd
 import numpy as np
-from sqlalchemy import text
+from sqlalchemy import text, func
 from sqlalchemy.orm import joinedload
 import os
 import io
@@ -416,6 +417,62 @@ def api_processar_producao(id):
         return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
 
 
+def _remover_movimentacoes_producao_peca_escopo_concretagens(concretagem_ids):
+    """
+    Remove saídas de estoque (origem_tipo producao_peca) associadas às peças/datas
+    das concretagens informadas. Usa produto composto vinculado (tanque+tipo), data da
+    concretagem e nome da peça na observação. Retorna quantidade de movimentações removidas.
+    """
+    mov_ids = set()
+    for cid in concretagem_ids:
+        conc = ConcretoConcretagens.query.get(cid)
+        if not conc or not conc.data_concretagem:
+            continue
+        dc = conc.data_concretagem
+        if isinstance(dc, datetime):
+            data_d = dc.date()
+        elif isinstance(dc, date_type):
+            data_d = dc
+        else:
+            try:
+                data_d = datetime.strptime(str(dc)[:10], '%Y-%m-%d').date()
+            except (ValueError, TypeError):
+                continue
+        for pref in conc.get_pecas():
+            try:
+                nome = (pref.get('nome') or '').strip()
+                tid = int(pref['tanque_id'])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not nome:
+                continue
+            peca_obj = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
+            if not peca_obj:
+                continue
+            vinc = TanquesProdutoComposto.query.filter_by(
+                tanque_id=tid,
+                tipo_peca=peca_obj.tipo,
+            ).first()
+            if not vinc:
+                continue
+            pid = vinc.produto_composto_id
+            qry = EstoqueMovimentacoes.query.filter(
+                EstoqueMovimentacoes.origem_tipo == 'producao_peca',
+                EstoqueMovimentacoes.origem_id == pid,
+                func.date(EstoqueMovimentacoes.data_movimento) == data_d,
+                EstoqueMovimentacoes.observacao.like(f'%{nome}%'),
+            )
+            for m in qry.all():
+                mov_ids.add(m.id)
+    n = 0
+    for mid in mov_ids:
+        m = EstoqueMovimentacoes.query.get(mid)
+        if m:
+            m.delete()
+            n += 1
+    return n
+
+
 @concretagem.route('/api/desfazer-todas-producoes', methods=['POST'])
 @login_required
 def api_desfazer_todas_producoes():
@@ -424,6 +481,7 @@ def api_desfazer_todas_producoes():
         return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
     try:
         data = request.get_json(silent=True) or {}
+        remover_movimentacoes = bool(data.get('remover_movimentacoes'))
         raw_ids = data.get('concretagem_ids')
         if not isinstance(raw_ids, list) or not raw_ids:
             return jsonify({
@@ -477,15 +535,24 @@ def api_desfazer_todas_producoes():
                     desfeitas += 1
 
         db.session.commit()
+        movs_removidas = 0
+        if remover_movimentacoes:
+            movs_removidas = _remover_movimentacoes_producao_peca_escopo_concretagens(concretagem_ids)
+        msg_parte_mov = (
+            f' Movimentações de produção de peças removidas (estoque revertido): {movs_removidas}.'
+            if remover_movimentacoes
+            else ' Movimentações de estoque não foram alteradas.'
+        )
         return jsonify({
             'success': True,
             'message': (
                 f'Escopo: {len(concretagem_ids)} concretagem(ns) enviada(s). '
-                f'Peças (TanquesPecas) com data de produção limpa (tinham registro): {desfeitas}. '
-                'Movimentações de estoque não foram alteradas.'
+                f'Peças (TanquesPecas) com data de produção limpa (tinham registro): {desfeitas}.'
+                + msg_parte_mov
             ),
             'pecas_com_producao_desfeita': desfeitas,
             'concretagens_escopo': len(concretagem_ids),
+            'movimentacoes_removidas': movs_removidas,
         })
     except Exception as e:
         db.session.rollback()

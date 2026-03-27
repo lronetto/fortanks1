@@ -10,10 +10,12 @@ from models.colaborador import Colaborador
 from models.concreto import (
     ConcretoUsinagensRompimentos,
     ConcretoUsinagens,
+    ConcretoUsinagensMateriais,
     limpar_data_producao_dados_adicionais_usinagem_str,
 )
 from models.produto_composto import ProdutoComposto
 from models.database import db
+from models.estoque import EstoqueMovimentacoes
 from datetime import datetime
 from decimal import Decimal
 import json
@@ -344,6 +346,7 @@ def api_desfazer_todas_producoes_usinagens():
         return jsonify({'success': False, 'message': 'Acesso negado.'}), 403
     try:
         payload = request.get_json(silent=True) or {}
+        remover_movimentacoes = bool(payload.get('remover_movimentacoes'))
         raw_ids = payload.get('usinagem_ids')
         if not isinstance(raw_ids, list) or not raw_ids:
             return jsonify({
@@ -385,15 +388,40 @@ def api_desfazer_todas_producoes_usinagens():
                 desfeitas += 1
 
         db.session.commit()
+
+        movs_removidas = 0
+        if remover_movimentacoes:
+            movs = EstoqueMovimentacoes.query.filter(
+                EstoqueMovimentacoes.origem_id.in_(usinagem_ids),
+                EstoqueMovimentacoes.origem_tipo == 'usinagem_concreto',
+            ).all()
+            mov_ids = [m.id for m in movs]
+            if mov_ids:
+                ConcretoUsinagensMateriais.query.filter(
+                    ConcretoUsinagensMateriais.movimentacao_estoque_id.in_(mov_ids)
+                ).update({ConcretoUsinagensMateriais.movimentacao_estoque_id: None}, synchronize_session=False)
+                db.session.commit()
+            for mid in mov_ids:
+                m = EstoqueMovimentacoes.query.get(mid)
+                if m:
+                    m.delete()
+                    movs_removidas += 1
+
+        msg_mov = (
+            f' Movimentações destas usinagens removidas (estoque revertido): {movs_removidas}.'
+            if remover_movimentacoes
+            else ' Movimentações de estoque não foram alteradas.'
+        )
         return jsonify({
             'success': True,
             'message': (
                 f'Escopo: {len(usinagem_ids)} usinagem(ns) enviada(s). '
-                f'Com data de produção limpa (tinham registro em dados_adicionais): {desfeitas}. '
-                'Movimentações de estoque não foram alteradas.'
+                f'Com data de produção limpa em dados_adicionais (tinham registro): {desfeitas}.'
+                + msg_mov
             ),
             'usinagens_com_producao_desfeita': desfeitas,
             'usinagens_escopo': len(usinagem_ids),
+            'movimentacoes_removidas': movs_removidas,
         })
     except Exception as e:
         db.session.rollback()

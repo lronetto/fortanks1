@@ -14,8 +14,15 @@
                     Será removido o registro de <strong>data de produção</strong> (<code>data_producao</code>) dentro do JSON da coluna
                     <strong>dados_adicionais</strong> das usinagens desta listagem (respeita busca do DataTables e filtros de data / produzido).
                 </p>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="chkDesfazerRemoverMovUsinagens" value="1">
+                    <label class="form-check-label" for="chkDesfazerRemoverMovUsinagens">
+                        Também remover as <strong>movimentações de estoque</strong> destas usinagens
+                        <span class="text-muted">(reverte o consumo vinculado a cada usinagem)</span>
+                    </label>
+                </div>
                 <p class="text-muted small mb-0">
-                    Esta ação <strong>não</strong> reverte movimentações de estoque.
+                    Se a opção acima <strong>não</strong> estiver marcada, apenas <code>data_producao</code> em <code>dados_adicionais</code> será limpo.
                 </p>
             </div>
             <div class="modal-footer">
@@ -51,6 +58,7 @@
 
     $(document).ready(function() {
         $('#modalDesfazerProducoesUsinagens').on('show.bs.modal', function() {
+            $('#chkDesfazerRemoverMovUsinagens').prop('checked', false);
             var n = coletarIdsUsinagensVisiveis().length;
             var $p = $('#desfazerProducoesUsinagensResumo');
             if (n > 0) {
@@ -73,7 +81,10 @@
                 method: 'POST',
                 contentType: 'application/json',
                 headers: { 'X-CSRFToken': csrfUsinagens() },
-                data: JSON.stringify({ usinagem_ids: ids }),
+                data: JSON.stringify({
+                    usinagem_ids: ids,
+                    remover_movimentacoes: $('#chkDesfazerRemoverMovUsinagens').is(':checked')
+                }),
                 success: function(response) {
                     if (response.success) {
                         $('#modalDesfazerProducoesUsinagens').modal('hide');
