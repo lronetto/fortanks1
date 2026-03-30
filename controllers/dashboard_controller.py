@@ -545,7 +545,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
                 'concretadas': concretadas_total,
                 'acabadas': acabadas_total,
                 'transportadas': transportadas_total,
-                'nfs_emitidas_quantidade': nfs_emitidas_quantidade_total/len(grupo.tanques),
+                'nfs_emitidas_quantidade': "{:,.0f}".format(nfs_emitidas_quantidade_total/len(grupo.tanques)),
                 'total_pecas': total_pecas_total,
                 'em_estoque': em_estoque_total,
                 'prontas_transportar': prontas_transportar_total,
@@ -604,7 +604,12 @@ def api_dados_resumo_notas():
                      NotaFiscal.valor_total, 
                      NotaFiscalItem.quantidade,
                      ).join(NotaFiscalItem, NotaFiscalItem.nf_id == NotaFiscal.id).\
-                     join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo).\
+                     join(
+                         Tanques,
+                         Tanques.sql_codigo_nf_igual_item_nf_colunas(
+                             NotaFiscalItem.codigo, Tanques.item_nf
+                         ),
+                     ).\
                      join(Contrato, Contrato.id == Tanques.contrato_id).\
                      order_by(NotaFiscal.data_emissao.desc()).\
                      filter(Contrato.id == contrato_id, 

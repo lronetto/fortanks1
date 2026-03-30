@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const agrupar = checkboxAgrupar ? checkboxAgrupar.checked : true;
         const dataAte = getDataAte();
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>';
         }
         const params = new URLSearchParams({ agrupar_por_grupo: agrupar, data_ate: dataAte });
         fetch('/dashboard/api/resumo-placas?' + params.toString())
@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <td>${item.acabadas}</td>
                                     <td>${item.transportadas}</td>
                                     <td>${item.em_estoque}</td>
+                                    <td>${item.nfs_emitidas_quantidade}</td>
                                     <td>${item.prontas_transportar}</td>
                                     <td>${item.percas !== undefined ? item.percas : 0}</td>
                                     <td>${item.nfs_emitidas}</td>
@@ -92,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             `;
                         });
                     } else {
-                        html = '<tr><td colspan="8" class="text-center text-muted">Nenhum dado encontrado</td></tr>';
+                        html = '<tr><td colspan="9" class="text-center text-muted">Nenhum dado encontrado</td></tr>';
                     }
                     if (tbody) tbody.innerHTML = html;
                     const url = new URL(window.location);
@@ -100,13 +101,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     url.searchParams.set('data_ate', dataAte);
                     window.history.pushState({}, '', url);
                 } else {
-                    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro ao carregar dados</td></tr>';
+                    if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Erro ao carregar dados</td></tr>';
                     alert('Erro ao carregar dados: ' + (data.error || 'Erro desconhecido'));
                 }
             })
             .catch(error => {
                 console.error('Erro ao carregar resumo de placas:', error);
-                if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erro ao carregar dados</td></tr>';
+                if (tbody) tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger">Erro ao carregar dados</td></tr>';
                 alert('Erro ao carregar dados. Verifique o console.');
             });
     }

@@ -1,0 +1,103 @@
+    <!-- Simulação manual (Tanque + Tipo) -->
+    <div class="card shadow mb-4" id="cardSimulacaoManual">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-flask"></i> Simulação de Produção (manual)
+                <small class="text-muted">(Tanque/tipo, material avulso ou produto composto avulso)</small>
+            </h6>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-warning text-dark" id="badgeSimulacaoPendente" style="display:none;">
+                    Pendente
+                </span>
+                <button type="button" class="btn btn-sm btn-success" id="btnExecutarSimulacaoManual">
+                    <i class="fas fa-play"></i> Executar simulação
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimparSimulacaoManual">
+                    <i class="fas fa-trash"></i> Limpar simulação
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="btnExportarIndicesSimulacaoExcel"
+                        title="Em cada produto: BOM + materiais avulsos rateados pelo peso das linhas PC. Só avulsos: aba dedicada.">
+                    <i class="fas fa-file-excel"></i> Índices (Excel)
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-lg-9">
+                    <label class="form-label" for="selectSimulacaoOpcao">Tanque / Tipo</label>
+                    <select id="selectSimulacaoOpcao" class="form-select">
+                        <option value="">Carregando opções...</option>
+                    </select>
+                    <small class="text-muted">Selecione um tanque e tipo de peça. O produto composto será usado para calcular consumo futuro.</small>
+                </div>
+                <div class="col-lg-3 d-grid">
+                    <button type="button" class="btn btn-primary" id="btnAdicionarSimulacaoOpcao">
+                        <i class="fas fa-plus"></i> Adicionar
+                    </button>
+                </div>
+            </div>
+            <div class="row g-2 align-items-end mt-2 pt-2 border-top">
+                <div class="col-12">
+                    <small class="text-muted d-block mb-1"><i class="fas fa-box"></i> Consumo avulso (somado à simulação)</small>
+                </div>
+                <div class="col-lg-5">
+                    <label class="form-label" for="selectMaterialAvulsoSimulacao">Material avulso</label>
+                    <select id="selectMaterialAvulsoSimulacao" class="form-select">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                <div class="col-lg-3">
+                    <label class="form-label" for="inputQtdMaterialAvulsoSimulacao">Quantidade (consumo)</label>
+                    <input type="number" class="form-control" id="inputQtdMaterialAvulsoSimulacao" min="0" step="any" placeholder="0">
+                </div>
+                <div class="col-lg-4 d-grid">
+                    <button type="button" class="btn btn-outline-primary" id="btnAdicionarMaterialAvulsoSimulacao">
+                        <i class="fas fa-plus"></i> Adicionar material avulso
+                    </button>
+                </div>
+                <div class="col-lg-8 mt-2">
+                    <label class="form-label" for="selectProdutoAvulsoSimulacao">Produto composto avulso</label>
+                    <select id="selectProdutoAvulsoSimulacao" class="form-select">
+                        <option value="">Carregando...</option>
+                    </select>
+                    <small class="text-muted">Quantidade total na tabela abaixo (produzidas inicia em 0, como no tanque).</small>
+                </div>
+                <div class="col-lg-4 mt-2 d-grid align-items-end">
+                    <label class="form-label d-none d-lg-block">&nbsp;</label>
+                    <button type="button" class="btn btn-outline-primary" id="btnAdicionarProdutoAvulsoSimulacao">
+                        <i class="fas fa-plus"></i> Adicionar produto composto avulso
+                    </button>
+                </div>
+            </div>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="chkSimularApenasTerceiro" checked>
+                <label class="form-check-label" for="chkSimularApenasTerceiro">
+                    Simular apenas no estoque de terceiro
+                </label>
+            </div>
+
+            <div class="table-responsive mt-3">
+                <table class="table table-sm table-bordered table-striped align-middle" id="tabelaSimulacaoManual">
+                    <thead>
+                        <tr>
+                            <th>Grupo</th>
+                            <th>Tipo</th>
+                            <th>Produto Composto</th>
+                            <th class="text-end">Produzidas (até agora)</th>
+                            <th class="text-end">Quantidade (total)</th>
+                            <th class="text-end">A produzir</th>
+                            <th class="text-end" title="Para linhas de produto composto (tanque ou PC avulso). Vazio = reparte o restante entre essas linhas. Material avulso não usa peso.">
+                                Peso (%)
+                            </th>
+                            <th style="width: 1%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="text-muted" id="linhaVaziaSimulacaoManual">
+                            <td colspan="8">Nenhum item adicionado na simulação.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>

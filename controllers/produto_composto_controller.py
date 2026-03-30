@@ -152,6 +152,157 @@ def get_componentes(id,quantidade):
         logger.error(f"Erro ao obter componentes: {str(e)}")
         return jsonify({'success': False, 'message': f'Erro ao obter componentes: {str(e)}'}), 500
 
+
+@produto_composto_bp.route('/api/comparacao/componentes', methods=['GET'])
+@login_required
+def api_comparacao_componentes():
+    """
+    Retorna os itens (componentes) para comparação lado a lado entre 2+ produtos.
+    """
+    try:
+        produto_ids = request.args.getlist('produto_ids', type=int)
+        produto_ids = [pid for pid in produto_ids if pid]
+        produto_ids = list(dict.fromkeys(produto_ids))  # unique preservando ordem
+
+        if len(produto_ids) < 2:
+            return jsonify({'success': False, 'message': 'Selecione pelo menos 2 produtos para comparar.'}), 400
+
+        produtos = (
+            ProdutoComposto.query.options(
+                joinedload(ProdutoComposto.componentes).joinedload(ProdutoCompostoItem.estoque).joinedload(Estoque.material),
+                joinedload(ProdutoComposto.componentes).joinedload(ProdutoCompostoItem.estoque).joinedload(Estoque.produto_composto),
+            )
+            .filter(ProdutoComposto.id.in_(produto_ids))
+            .all()
+        )
+
+        by_id = {p.id: p for p in produtos}
+        produtos_out = []
+        for pid in produto_ids:
+            p = by_id.get(pid)
+            if not p:
+                continue
+            produtos_out.append({'id': p.id, 'nome': p.nome})
+
+        # Union dos estoque_id + nome "humano"
+        itens = {}
+        for p in produtos_out:
+            prod = by_id[p['id']]
+            for comp in (prod.componentes or []):
+                e = comp.estoque
+                if not e:
+                    continue
+                nome = None
+                if e.material_id and e.material:
+                    nome = '[M] ' + (e.material.nome or '')
+                elif getattr(e, 'ProdComp_id', None) and e.produto_composto:
+                    nome = '[P] ' + (e.produto_composto.nome or '')
+                else:
+                    # fallback
+                    nome = '[Item] ' + str(e.id)
+                if e.id not in itens:
+                    itens[e.id] = {
+                        'estoque_id': e.id,
+                        'nome': nome.strip(),
+                        'por_produto': {}
+                    }
+
+        # preencher quantidades por produto
+        for p in produtos_out:
+            prod = by_id[p['id']]
+            for comp in (prod.componentes or []):
+                e = comp.estoque
+                if not e or e.id not in itens:
+                    continue
+                itens[e.id]['por_produto'][prod.id] = float(comp.quantidade or 0)
+
+        # Ordenação por nome, depois por estoque_id
+        itens_out = list(itens.values())
+        itens_out.sort(key=lambda x: (x.get('nome') or '').lower())
+
+        return jsonify({
+            'success': True,
+            'produtos': produtos_out,
+            'itens': itens_out
+        })
+    except Exception as e:
+        logger.exception("Erro na comparação de componentes")
+        return jsonify({'success': False, 'message': f'Erro ao carregar comparação: {str(e)}'}), 500
+
+
+@produto_composto_bp.route('/api/comparacao/salvar', methods=['POST'])
+@login_required
+def api_comparacao_salvar():
+    """
+    Salva as quantidades editadas no modal de comparação.
+    Recebe:
+      { produtos: [ { id: int, componentes: [ { estoque_id: int, quantidade: number } ] } ] }
+    Regras:
+      - quantidade <= 0 remove o item do produto (se existir)
+      - quantidade > 0 adiciona/atualiza o item
+    """
+    data = request.get_json(silent=True) or {}
+    try:
+        produtos_data = data.get('produtos') or []
+        if not isinstance(produtos_data, list) or len(produtos_data) < 2:
+            return jsonify({'success': False, 'message': 'Informe 2 ou mais produtos para salvar.'}), 400
+
+        produto_ids = []
+        for p in produtos_data:
+            pid = p.get('id')
+            if isinstance(pid, int) and pid:
+                produto_ids.append(pid)
+        produto_ids = list(dict.fromkeys(produto_ids))
+        if len(produto_ids) < 2:
+            return jsonify({'success': False, 'message': 'Informe 2 ou mais produtos válidos.'}), 400
+
+        produtos = (
+            ProdutoComposto.query.options(joinedload(ProdutoComposto.componentes))
+            .filter(ProdutoComposto.id.in_(produto_ids))
+            .all()
+        )
+        by_id = {p.id: p for p in produtos}
+
+        # Atualiza produto a produto
+        for p_in in produtos_data:
+            pid = p_in.get('id')
+            if pid not in by_id:
+                continue
+
+            produto = by_id[pid]
+            comps_in = p_in.get('componentes') or []
+            if not isinstance(comps_in, list):
+                continue
+
+            # map estoque_id -> ProdutoCompostoItem
+            atuais = {int(ci.estoque_id): ci for ci in (produto.componentes or []) if ci.estoque_id}
+
+            for ci in comps_in:
+                estoque_id = ci.get('estoque_id')
+                qtd = ci.get('quantidade')
+                if not isinstance(estoque_id, int) or not estoque_id:
+                    continue
+
+                try:
+                    qtd_num = float(qtd)
+                except Exception:
+                    continue
+
+                if qtd_num <= 0:
+                    if estoque_id in atuais:
+                        produto.remover_item(int(estoque_id))
+                    continue
+
+                estoque = Estoque.query.get_or_404(int(estoque_id))
+                produto.adicionar_item(estoque=estoque, quantidade=qtd_num)
+
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        logger.exception("Erro ao salvar comparação")
+        return jsonify({'success': False, 'message': f'Erro ao salvar comparação: {str(e)}'}), 500
+
 @produto_composto_bp.route('/get_produto_composto/<int:id>')
 @login_required
 def get_produto_composto(id):

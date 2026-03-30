@@ -59,7 +59,9 @@ def relatorio_semanal():
         NotaFiscalItem.nf_id == NotaFiscal.id
     ).join(
         Tanques,
-        Tanques.item_nf == NotaFiscalItem.codigo
+        Tanques.sql_codigo_nf_igual_item_nf_colunas(
+            NotaFiscalItem.codigo, Tanques.item_nf
+        ),
     ).join(
         Contrato,
         Contrato.id == Tanques.contrato_id

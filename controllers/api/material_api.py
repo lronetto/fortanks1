@@ -47,6 +47,7 @@ def register(material_bp):
                 {
                     "id": material.id,
                     "codigo": material.codigo or "",
+                    "codigo_erp": str(material.codigo_erp).strip() if material.codigo_erp not in (None, "") else "",
                     "nome": material.nome or "",
                     "unidade": material.unidade_obj.nome if material.unidade_obj else "",
                 }

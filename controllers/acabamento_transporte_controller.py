@@ -341,7 +341,11 @@ def api_notas_venda_matriz():
             return jsonify([])
         nf_ids_com_item = (
             db.session.query(NotaFiscalItem.nf_id)
-            .filter(NotaFiscalItem.codigo == tanque.item_nf)
+            .filter(
+                Tanques.sql_codigo_nf_igual_item_nf_valor(
+                    NotaFiscalItem.codigo, tanque.item_nf
+                )
+            )
             .distinct()
         )
         query = query.filter(NotaFiscal.id.in_(nf_ids_com_item))

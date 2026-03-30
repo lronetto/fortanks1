@@ -63,7 +63,12 @@ def _processar_notas_fiscais(query):
     nf_items_dict = {}
     if notas_material_ids:
         nf_items_query = db.session.query(NotaFiscalItem, Tanques, Contrato)\
-            .join(Tanques, Tanques.item_nf == NotaFiscalItem.codigo)\
+            .join(
+                Tanques,
+                Tanques.sql_codigo_nf_igual_item_nf_colunas(
+                    NotaFiscalItem.codigo, Tanques.item_nf
+                ),
+            )\
             .join(Contrato, Contrato.id == Tanques.contrato_id)\
             .filter(NotaFiscalItem.nf_id.in_(notas_material_ids))\
             .group_by(NotaFiscalItem.nf_id).all()

@@ -8,6 +8,12 @@
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Produtos Compostos</h1>
         <div>
+            <button class="btn btn-secondary btn-icon-split btn-sm mr-2" id="btn-comparar-produtos" title="Comparar materiais entre produtos selecionados" disabled>
+                <span class="icon text-white-50">
+                    <i class="fas fa-balance-scale"></i>
+                </span>
+                <span class="text">Comparar</span>
+            </button>
             <button class="btn btn-success btn-icon-split btn-sm mr-2" id="btn-exportar-excel" title="Exportar produtos selecionados para Excel">
                 <span class="icon text-white-50">
                     <i class="fas fa-file-excel"></i>
@@ -95,6 +101,9 @@
 
 <!-- Modal de Importação -->
 {% include 'produto_composto/modais/importar.html' %}
+
+<!-- Modal de Comparação -->
+{% include 'produto_composto/modais/comparacao.html' %}
 
 {% endblock %}
 
@@ -233,6 +242,7 @@
                 $('#contador-produtos').text(info.recordsDisplay);
                 $('#total-produtos').text(info.recordsTotal);
                 $('#selecionar-todos').prop('checked', false);
+                atualizarEstadoBotaoComparar();
             }
         });
 
@@ -252,6 +262,15 @@
         $('#selecionar-todos').on('change', function() {
             var marcado = $(this).prop('checked');
             $('#tabela-produtos-compostos tbody .checkbox-produto').prop('checked', marcado);
+            atualizarEstadoBotaoComparar();
+        });
+
+        $('#tabela-produtos-compostos tbody').on('change', '.checkbox-produto', function() {
+            atualizarEstadoBotaoComparar();
+        });
+
+        $('#btn-comparar-produtos').on('click', function() {
+            abrirModalComparacao();
         });
 
         $('#btn-exportar-excel').on('click', function() {
@@ -323,6 +342,36 @@
         setTimeout(function() {
             document.body.removeChild(form);
         }, 1000);
+    }
+
+    function getProdutosSelecionadosNaPagina() {
+        var produtos = [];
+        document.querySelectorAll('.checkbox-produto:checked').forEach(function(cb) {
+            produtos.push({
+                id: Number(cb.dataset.id),
+                nome: cb.dataset.nome || ''
+            });
+        });
+        return produtos;
+    }
+
+    function atualizarEstadoBotaoComparar() {
+        var selecionados = getProdutosSelecionadosNaPagina();
+        $('#btn-comparar-produtos').prop('disabled', selecionados.length < 2);
+    }
+
+    function abrirModalComparacao() {
+        var selecionados = getProdutosSelecionadosNaPagina();
+        if (selecionados.length < 2) {
+            alert('Selecione pelo menos 2 produtos (nesta página) para comparar.');
+            return;
+        }
+        if (typeof window.ProdutoCompostoComparacao === 'object' && typeof window.ProdutoCompostoComparacao.open === 'function') {
+            window.ProdutoCompostoComparacao.open(selecionados);
+        } else {
+            console.error('Comparação: módulo não encontrado (ProdutoCompostoComparacao).');
+            alert('Não foi possível abrir a comparação. Verifique o console.');
+        }
     }
 })();
 </script>

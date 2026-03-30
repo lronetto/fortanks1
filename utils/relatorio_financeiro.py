@@ -30,7 +30,12 @@ def dados_relatorio_financeiro(data_inicio=datetime.now()-relativedelta(years=1)
     # Buscar todas as notas fiscais no período
     query = db.session.query(NotaFiscal,NotaFiscalItem,Tanques,Contrato,CentroCusto)
     query = query.join(NotaFiscalItem,NotaFiscalItem.nf_id==NotaFiscal.id)
-    query = query.join(Tanques,Tanques.item_nf==NotaFiscalItem.codigo)
+    query = query.join(
+        Tanques,
+        Tanques.sql_codigo_nf_igual_item_nf_colunas(
+            NotaFiscalItem.codigo, Tanques.item_nf
+        ),
+    )
     query = query.join(Contrato,Contrato.id==Tanques.contrato_id)
     query = query.join(CentroCusto,CentroCusto.id==Contrato.centro_custo_id)
     if centro_custo_ids:

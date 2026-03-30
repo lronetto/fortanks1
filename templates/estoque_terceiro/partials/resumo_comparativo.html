@@ -1,0 +1,40 @@
+    <!-- Resumo -->
+    <div class="card shadow mb-3">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Resumo</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0" id="tabelaResumoComparativo">
+                    <thead>
+                        <tr>
+                            <th>Cenário</th>
+                            <th class="text-end">Valor Sistema</th>
+                            <th class="text-end">Valor Terceiro</th>
+                            <th class="text-end">Diferença</th>
+                            <th class="text-end">Percentual Diferença</th>
+                            <th class="text-end" title="Soma do consumo futuro (quantidade) das linhas visíveis na tabela comparativa">Total consumo futuro</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Atual</strong></td>
+                            <td class="text-end" id="resumoAtualValorSistema">R$ 0,00</td>
+                            <td class="text-end" id="resumoAtualValorTerceiro">R$ 0,00</td>
+                            <td class="text-end" id="resumoAtualDiferenca">R$ 0,00</td>
+                            <td class="text-end" id="resumoAtualPercentual">0,00%</td>
+                            <td class="text-end text-muted" id="resumoAtualConsumoFuturo">—</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Simulação</strong></td>
+                            <td class="text-end" id="resumoSimuladoValorSistema">R$ 0,00</td>
+                            <td class="text-end" id="resumoSimuladoValorTerceiro">R$ 0,00</td>
+                            <td class="text-end" id="resumoSimuladoDiferenca">R$ 0,00</td>
+                            <td class="text-end" id="resumoSimuladoPercentual">0,00%</td>
+                            <td class="text-end" id="resumoSimuladoConsumoFuturo">0,00</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>

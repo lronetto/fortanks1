@@ -3,10 +3,10 @@ import json
 from models.concreto import ConcretoConcretagens, qualidade_peca_remover_data_producao_de_dados_adicionais
 from models.database import db
 from sqlalchemy.orm import relationship
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, cast, String
 
 from models.nota_fiscal import NotaFiscalItem, NotaFiscal
-
+from models.nota_fiscal import CNPJS_MATRIZ
 class Tanques(db.Model):
     """
     Modelo para representar tanques de projetos
@@ -97,6 +97,20 @@ class Tanques(db.Model):
         Gera um código UN único baseado na data e hora atual
         """
         return f"T{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+    @staticmethod
+    def sql_codigo_nf_igual_item_nf_colunas(codigo_item_col, item_nf_col):
+        """
+        Uma NF pode ter vários itens (tanques/códigos distintos). Esta expressão
+        associa cada linha de item apenas ao tanque cujo item_nf coincide com o
+        código do item, comparando como texto (evita coerção numérica no SGBD).
+        """
+        return func.trim(codigo_item_col) == cast(item_nf_col, String)
+
+    @staticmethod
+    def sql_codigo_nf_igual_item_nf_valor(codigo_item_col, item_nf_int):
+        """Filtro: coluna codigo do item da NF igual ao item_nf (int) deste tanque."""
+        return func.trim(codigo_item_col) == str(item_nf_int).strip()
     
     def before_save(self):
         """
@@ -297,24 +311,25 @@ class Tanques(db.Model):
         # NFs emitidas até data_ate
         if self.item_nf is not None:
             try:
-                codigo_item_nf = str(self.item_nf).strip()
-                pecas_nfs_quantidade, nfs_emitidas_total = db.session.query(
-                    func.coalesce(func.sum(NotaFiscalItem.quantidade), 0),
-                    func.count(distinct(NotaFiscal.id)),
-                ).join(
-                    NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id
-                ).filter(
-                    func.coalesce(func.lower(NotaFiscal.status_processamento), '') != 'cancelada',
-                    NotaFiscalItem.codigo == self.item_nf,
-                    func.date(NotaFiscal.data_emissao) <= data_ate
-                ).one()
-                print(f'pecas_nfs_quantidade: {pecas_nfs_quantidade}')
-                print(f'nfs_emitidas_total: {nfs_emitidas_total}')
-            except Exception as e:
-
-                print(f'Erro ao buscar itens NF: {e}')
-                import traceback
-                traceback.print_exc()
+                # Soma só linhas cujo codigo = item_nf deste tanque; outras linhas da mesma NF
+                # (outros tanques) não entram na agregação.
+                pecas_nfs_quantidade, nfs_emitidas_total = (
+                    db.session.query(
+                        func.coalesce(func.sum(NotaFiscalItem.quantidade), 0),
+                        func.count(distinct(NotaFiscal.id)),
+                    )
+                    .select_from(NotaFiscalItem)
+                    .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+                    .filter(
+                        NotaFiscal.cnpj_emitente == CNPJS_MATRIZ,   
+                        func.coalesce(func.lower(NotaFiscal.status_processamento), '')
+                        != 'cancelada',
+                        NotaFiscalItem.codigo.like(f'%{self.item_nf}%'),
+                        func.date(NotaFiscal.data_emissao) <= data_ate,
+                    )
+                    .one()
+                )
+            except Exception:
                 pecas_nfs_quantidade = 0
                 nfs_emitidas_total = 0
         pecas_prontas_transportar = pecas_acabadas - pecas_transportadas
@@ -548,9 +563,12 @@ class TanquesProdutoComposto(db.Model):
     tanque = db.relationship('Tanques', backref='produtos_compostos_vinculados')
     produto_composto = db.relationship('ProdutoComposto', backref='tanques_vinculados')
     
-    # Constraint único para evitar duplicatas
+    # Um tanque pode ter o mesmo produto composto para vários tipos de peça; duplicata = mesmo tanque+produto+tipo
     __table_args__ = (
-        db.UniqueConstraint('tanque_id', 'produto_composto_id', name='uq_tanque_produto_composto'),
+        db.UniqueConstraint(
+            'tanque_id', 'produto_composto_id', 'tipo_peca',
+            name='uq_tanque_produto_composto_tipo',
+        ),
     )
     
     def save(self):

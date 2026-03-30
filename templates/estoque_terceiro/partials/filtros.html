@@ -1,0 +1,50 @@
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="filtro_data" class="form-label">Data do Estoque Terceiro</label>
+                    <select id="filtro_data" class="form-select">
+                        <option value="">Todas as datas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro_tipos" class="form-label">Tipo (Estoque Terceiro)</label>
+                    <select id="filtro_tipos" class="form-select" multiple>
+                        <!-- Opções carregadas via JavaScript -->
+                    </select>
+                    <small class="text-muted">Segure Ctrl para selecionar mais de um.</small>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" id="filtro_sped" value="1">
+                        <label class="form-check-label" for="filtro_sped">SPED (tipos 10, 15, 18)</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex flex-column justify-content-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro_quantidade_zero" value="1">
+                        <label class="form-check-label" for="filtro_quantidade_zero">Excluir quantidade 0 (sistema e terceiro)</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex flex-column justify-content-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro_sem_material_sistema" value="1">
+                        <label class="form-check-label" for="filtro_sem_material_sistema">Sem material no sistema</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex flex-column justify-content-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filtro_ter_os_dois" value="1">
+                        <label class="form-check-label" for="filtro_ter_os_dois">Ter os dois (sistema e terceiro)</label>
+                    </div>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="button" class="btn btn-secondary" id="btnLimparFiltros">
+                        <i class="fas fa-times"></i> Limpar Filtros
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>

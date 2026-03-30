@@ -46,6 +46,7 @@
                 <form id="formVinculacaoProdutoComposto">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <input type="hidden" id="vinculacao_id" name="vinculacao_id" value="">
+                    <input type="hidden" id="tanque_id_edicao" name="tanque_id" value="">
                     
                     <!-- Seleção de Grupos de Tanques -->
                     <div class="row mb-3">
@@ -68,33 +69,27 @@
                         </div>
                     </div>
 
-                    <!-- Tipo de Peça -->
+                    <!-- Tipos de Peça (vários por mesmo produto acabado) -->
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="tipo_peca" class="form-label">Tipo de Peça *</label>
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="tipo_peca" name="tipo_peca" 
-                                       placeholder="Digite ou selecione o tipo de peça..." 
-                                       required disabled autocomplete="off" list="listaTiposPeca">
-                                <datalist id="listaTiposPeca">
-                                    <!-- Opções serão carregadas dinamicamente via JavaScript -->
-                                </datalist>
-                                <button class="btn btn-outline-secondary" type="button" id="btnCarregarTiposPeca" title="Carregar tipos sugeridos">
-                                    <i class="fas fa-list"></i>
-                                </button>
+                            <label class="form-label">Tipos de Peça *</label>
+                            <div id="containerTiposPecaSelect" class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                                <div class="text-muted text-center small" id="placeholderTiposPeca">
+                                    Selecione um ou mais grupos para listar os tipos sugeridos.
+                                </div>
+                                <div id="listaTiposCheckboxes" class="d-none"></div>
+                            </div>
+                            <div class="mt-2">
+                                <label for="tiposPecaExtra" class="form-label small">Outros tipos (separados por vírgula)</label>
+                                <input type="text" class="form-control form-control-sm" id="tiposPecaExtra" name="tipos_peca_extra" autocomplete="off" placeholder="Ex.: Tipo A, Tipo B" disabled>
                             </div>
                             <small class="form-text text-muted">
-                                Digite manualmente ou selecione um tipo sugerido dos tanques selecionados
+                                Marque um ou mais tipos sugeridos e/ou informe tipos extras. O mesmo produto acabado pode ficar vinculado a vários tipos de peça nos tanques selecionados.
                             </small>
-                            
-                            <!-- Lista de Tipos Agrupados -->
-                            <div class="mt-2" id="containerTiposAgrupados" style="display: none;">
-                                <label class="form-label small">Tipos Sugeridos (agrupados):</label>
-                                <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
-                                    <div id="listaTiposAgrupados" class="d-flex flex-wrap gap-2">
-                                        <!-- Tipos serão carregados aqui via JavaScript -->
-                                    </div>
-                                </div>
+                            <div class="mt-1">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCarregarTiposPeca" title="Atualizar tipos sugeridos" disabled>
+                                    <i class="fas fa-list"></i> Atualizar tipos sugeridos
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -143,9 +138,16 @@
                 <div class="row mt-4">
                     <div class="col-md-12">
                         <hr>
-                        <h6 class="mb-3">
+                        <h6 class="mb-2">
                             <i class="fas fa-list"></i> Vinculações Existentes
                         </h6>
+                        <div class="mb-2">
+                            <label for="pesquisaVinculacoes" class="form-label small mb-1">Pesquisar</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                                <input type="text" class="form-control" id="pesquisaVinculacoes" placeholder="Projeto, tanque, tipo de peça, produto..." autocomplete="off">
+                            </div>
+                        </div>
                         <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                             <table class="table table-sm table-hover table-bordered" id="tabelaVinculacoes">
                                 <thead class="table-light">

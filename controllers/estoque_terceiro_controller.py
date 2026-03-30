@@ -446,6 +446,7 @@ def api_comparativo():
         query_final = db.session.query(subq)
         
         # Busca também no frontend; não filtrar por search_value aqui
+        total_records = query_final.count()
         registros_temp = query_final.all()
         
         # Consumo futuro por peça/tipo: lista de grupos (tipo + produto composto) com consumo por material
@@ -484,12 +485,6 @@ def api_comparativo():
                         grupos_consumo[chave_grupo] = {'produto_id': produto_id, 'tipo': tipo_peca, 'count': 0}
                     grupos_consumo[chave_grupo]['count'] += 1
                 
-                produtos_ids = [info['produto_id'] for info in grupos_consumo.values() if info.get('produto_id')]
-                produtos_cache = {}
-                if produtos_ids:
-                    produtos_obj = ProdutoComposto.query.filter(ProdutoComposto.id.in_(produtos_ids)).all()
-                    produtos_cache = {p.id: p for p in produtos_obj}
-
                 for chave_grupo, grupo_info in grupos_consumo.items():
                     produto_id = grupo_info['produto_id']
                     tipo_peca = grupo_info['tipo']
@@ -499,7 +494,7 @@ def api_comparativo():
                     if quantidade_pecas <= 0:
                         continue
                     
-                    produto_composto_cons = produtos_cache.get(produto_id)
+                    produto_composto_cons = ProdutoComposto.query.get(produto_id)
                     if not produto_composto_cons:
                         continue
                     
@@ -541,28 +536,13 @@ def api_comparativo():
             except Exception as e:
                 logger.warning(f'Erro ao montar consumo por peça/tipo: {str(e)}')
         
-        # Prefetch para evitar N+1 (materiais e estoques por material)
-        material_ids = list({r.material_id for r in registros_temp if r.material_id is not None})
-        materiais_cache = {}
-        estoques_por_material = {}
-        if material_ids:
-            materiais = Materiais.query.options(joinedload(Materiais.unidade_obj)).filter(Materiais.id.in_(material_ids)).all()
-            materiais_cache = {m.id: m for m in materiais}
-
-            estoques = Estoque.query.filter(Estoque.material_id.in_(material_ids)).all()
-            for e in estoques:
-                estoques_por_material.setdefault(e.material_id, []).append(e)
-
-        conversao_cache = {}
-        saldo_cache = {}
-
         # Calcular estoque do sistema baseado em movimentações para cada registro
         data_temp = []
         for registro in registros_temp:
             # Registros "só terceiro" têm material_id None (existem no terceiro e não no sistema)
             so_terceiro = registro.material_id is None
             
-            material = materiais_cache.get(registro.material_id) if registro.material_id else None
+            material = Materiais.query.get(registro.material_id) if registro.material_id else None
             unidade_sistema = None
             if material and material.unidade_obj:
                 unidade_sistema = material.unidade_obj.nome
@@ -570,7 +550,7 @@ def api_comparativo():
             unidade_terceiro = registro.unidade or ''
             
             # Estoque do sistema: zero quando não há material cadastrado
-            estoques_material = estoques_por_material.get(registro.material_id, []) if registro.material_id else []
+            estoques_material = Estoque.query.filter_by(material_id=registro.material_id).all() if registro.material_id else []
             
             # Calcular saldo total somando todos os estoques do material
             estoque_sistema_total = Decimal('0.0')
@@ -586,10 +566,7 @@ def api_comparativo():
             
             # Somar saldos de todos os estoques do material
             for estoque in estoques_material:
-                saldo_key = (estoque.id, data_referencia)
-                if saldo_key not in saldo_cache:
-                    saldo_cache[saldo_key] = estoque.get_saldo_ate_data(data_referencia)
-                saldo_estoque = saldo_cache[saldo_key]
+                saldo_estoque = estoque.get_saldo_ate_data(data_referencia)
                 estoque_sistema_total += saldo_estoque
             
             estoque_sistema_float = float(estoque_sistema_total) if estoque_sistema_total else 0
@@ -598,14 +575,11 @@ def api_comparativo():
             # Verificar se precisa converter unidades
             fator_conversao = 1.0
             unidade_convertida = False
-            conv_key = (registro.material_id, unidade_terceiro, unidade_sistema)
-            if conv_key not in conversao_cache:
-                conversao_cache[conv_key] = get_conversao_unidade(
-                    material_id=registro.material_id,
-                    unidade_entrada=unidade_terceiro,
-                    unidade_saida=unidade_sistema
-                )
-            fator_conversao = conversao_cache[conv_key]
+            fator_conversao = get_conversao_unidade(
+                material_id=registro.material_id,
+                unidade_entrada=unidade_terceiro,
+                unidade_saida=unidade_sistema
+            )
             if fator_conversao:
                 fator_conversao = float(fator_conversao)
                 unidade_convertida = True
@@ -1065,6 +1039,88 @@ def api_simulacao_opcoes():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
+@estoque_terceiro_bp.route('/api/simulacao/produtos-estrutura', methods=['GET'])
+@login_required
+def api_simulacao_produtos_estrutura():
+    """
+    Retorna a estrutura de materiais por unidade para uma lista de produtos compostos.
+    Resposta:
+      {
+        success: true,
+        estruturas: {
+          "<produto_id>": { "<material_id>": qtd_por_unidade, ... }
+        }
+      }
+    """
+    try:
+        ids_raw = (request.args.get('ids') or '').strip()
+        if not ids_raw:
+            return jsonify({'success': True, 'estruturas': {}}), 200
+
+        produto_ids = []
+        for token in ids_raw.split(','):
+            s = (token or '').strip()
+            if not s:
+                continue
+            try:
+                produto_ids.append(int(s))
+            except (TypeError, ValueError):
+                continue
+
+        if not produto_ids:
+            return jsonify({'success': True, 'estruturas': {}}), 200
+
+        estruturas = {}
+        produtos = ProdutoComposto.query.filter(ProdutoComposto.id.in_(produto_ids)).all()
+        hoje = datetime.now().date()
+
+        for produto in produtos:
+            if not produto:
+                continue
+
+            materiais_necessarios = {}
+            produtos_processados = set()
+            try:
+                produto.produzir(
+                    quantidade=1,
+                    data_movimento=hoje,
+                    usuario_id=current_user.id if current_user else 1,
+                    log=False,
+                    produtos_processados=produtos_processados,
+                    materiais_necessarios=materiais_necessarios,
+                )
+            except Exception as e:
+                logger.warning(
+                    f'Erro ao calcular estrutura para produto composto {produto.id}: {str(e)}'
+                )
+                continue
+
+            estrutura_produto = {}
+            for _, info in (materiais_necessarios or {}).items():
+                estoque = info.get('estoque') if isinstance(info, dict) else None
+                if not estoque or getattr(estoque, 'tipo_item', None) != 'material' or not estoque.material_id:
+                    continue
+
+                qtd = info.get('quantidade') if isinstance(info, dict) else 0
+                try:
+                    qtd_float = float(qtd or 0)
+                except (TypeError, ValueError):
+                    qtd_float = 0.0
+
+                if qtd_float == 0:
+                    continue
+
+                mid = str(int(estoque.material_id))
+                estrutura_produto[mid] = estrutura_produto.get(mid, 0.0) + qtd_float
+
+            estruturas[str(produto.id)] = estrutura_produto
+
+        return jsonify({'success': True, 'estruturas': estruturas}), 200
+    except Exception as e:
+        logger.error(f'Erro ao buscar estrutura de produtos para simulação: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
 @estoque_terceiro_bp.route('/api/simulacao/consumo', methods=['POST'])
 @login_required
 def api_simulacao_consumo():
@@ -1152,80 +1208,4 @@ def api_simulacao_consumo():
         }), 200
     except Exception as e:
         logger.error(f'Erro ao calcular consumo da simulação: {str(e)}', exc_info=True)
-        return jsonify({'success': False, 'message': str(e)}), 500
-
-
-@estoque_terceiro_bp.route('/api/simulacao/produtos-estrutura', methods=['GET'])
-@login_required
-def api_simulacao_produtos_estrutura():
-    """
-    Retorna, para cada produto composto, o consumo de materiais por 1 unidade (peça).
-    O frontend usa esse payload para simular sem novas chamadas ao backend.
-
-    Querystring:
-      - ids: "1,2,3"
-    """
-    try:
-        ids_raw = (request.args.get('ids') or '').strip()
-        if not ids_raw:
-            return jsonify({'success': True, 'estruturas': {}}), 200
-
-        ids = []
-        for p in ids_raw.split(','):
-            s = (p or '').strip()
-            if s.isdigit():
-                ids.append(int(s))
-        ids = list({i for i in ids if i})
-        if not ids:
-            return jsonify({'success': True, 'estruturas': {}}), 200
-
-        produtos = ProdutoComposto.query.filter(ProdutoComposto.id.in_(ids)).all()
-        produtos_map = {p.id: p for p in produtos}
-
-        estruturas = {}  # produto_id -> { material_id(str): float_per_unit }
-        hoje = datetime.now().date()
-
-        for pid in ids:
-            prod = produtos_map.get(pid)
-            if not prod:
-                continue
-
-            materiais_necessarios = {}
-            produtos_processados = set()
-            try:
-                # Quantidade=1 para obter consumo unitário (inclui recursões)
-                prod.produzir(
-                    quantidade=1,
-                    data_movimento=hoje,
-                    usuario_id=current_user.id if current_user else 1,
-                    log=False,
-                    produtos_processados=produtos_processados,
-                    materiais_necessarios=materiais_necessarios,
-                )
-            except Exception as e:
-                logger.warning(f'Erro ao montar estrutura do produto composto {pid}: {str(e)}')
-                continue
-
-            mat_map = {}
-            for _, info in materiais_necessarios.items():
-                estoque = info.get('estoque')
-                if not estoque or getattr(estoque, 'tipo_item', None) != 'material' or not estoque.material_id:
-                    continue
-                qtd = info.get('quantidade')
-                if qtd is None:
-                    continue
-                try:
-                    qtd_float = float(qtd)
-                except (TypeError, ValueError):
-                    qtd_float = 0.0
-                if qtd_float == 0:
-                    continue
-                mid = str(int(estoque.material_id))
-                mat_map[mid] = mat_map.get(mid, 0.0) + qtd_float
-
-            estruturas[str(pid)] = mat_map
-
-        return jsonify({'success': True, 'estruturas': estruturas}), 200
-    except Exception as e:
-        logger.error(f'Erro ao buscar estruturas de produtos compostos: {str(e)}', exc_info=True)
         return jsonify({'success': False, 'message': str(e)}), 500

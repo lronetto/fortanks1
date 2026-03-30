@@ -1,0 +1,192 @@
+<div class="modal fade" id="modal-comparar-produtos" tabindex="-1" role="dialog" aria-labelledby="modalCompararProdutosLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalCompararProdutosLabel">Comparação de Materiais</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Fechar">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <input type="hidden" id="csrf_token_comparacao" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="alert alert-info py-2 mb-3">
+                    Selecione 2 ou mais produtos na lista e clique em <strong>Comparar</strong>. Aqui você pode ajustar as quantidades de cada produto lado a lado.
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm" id="tabela-comparacao-produtos" width="100%" cellspacing="0">
+                        <thead>
+                            <tr id="comparacao-header-row">
+                                <th style="min-width: 280px;">Material / Item</th>
+                                <!-- colunas dinâmicas -->
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" id="btn-salvar-comparacao">
+                    <i class="fas fa-save"></i> Salvar quantidades
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    function toNumberOrNull(v) {
+        if (v === '' || v == null) return null;
+        var n = Number(String(v).replace(',', '.'));
+        return Number.isFinite(n) ? n : null;
+    }
+
+    function escHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    var state = {
+        produtos: [],          // [{id, nome}]
+        itens: [],             // [{estoque_id, nome, por_produto: { [produtoId]: quantidade|null }}]
+        dt: null
+    };
+
+    function getCsrfToken() {
+        return (
+            document.querySelector('meta[name="csrf-token"]')?.content ||
+            document.querySelector('#csrf_token_comparacao')?.value ||
+            document.querySelector('input[name="csrf_token"]')?.value ||
+            ''
+        );
+    }
+
+    function montarHeader(produtos) {
+        var $row = $('#comparacao-header-row');
+        $row.find('th:gt(0)').remove();
+        produtos.forEach(function(p) {
+            $row.append('<th class="text-center" style="min-width: 190px;">' + escHtml(p.nome || ('Produto ' + p.id)) + '<div class="small text-muted">#' + p.id + '</div></th>');
+        });
+    }
+
+    function montarTabela(itens, produtos) {
+        var $tbody = $('#tabela-comparacao-produtos tbody');
+        $tbody.empty();
+
+        itens.forEach(function(item) {
+            var tr = '<tr data-estoque-id="' + item.estoque_id + '">';
+            tr += '<td><strong>' + escHtml(item.nome) + '</strong><div class="small text-muted">Estoque ID: ' + item.estoque_id + '</div></td>';
+            produtos.forEach(function(p) {
+                var v = (item.por_produto && Object.prototype.hasOwnProperty.call(item.por_produto, p.id)) ? item.por_produto[p.id] : null;
+                tr += (
+                    '<td class="text-center">' +
+                        '<input type="number" step="0.001" class="form-control form-control-sm input-qtd-comparacao" ' +
+                            'data-produto-id="' + p.id + '" value="' + (v == null ? '' : String(v)) + '" placeholder="0">' +
+                    '</td>'
+                );
+            });
+            tr += '</tr>';
+            $tbody.append(tr);
+        });
+    }
+
+    function carregarComparacao(produtos) {
+        var ids = produtos.map(function(p) { return p.id; });
+        $('#btn-salvar-comparacao').prop('disabled', true);
+
+        return $.ajax({
+            url: '{{ url_for("produto_composto.api_comparacao_componentes") }}',
+            method: 'GET',
+            data: { produto_ids: ids },
+            traditional: true
+        }).then(function(resp) {
+            if (!resp || !resp.success) {
+                throw new Error(resp && resp.message ? resp.message : 'Falha ao carregar comparação.');
+            }
+            state.produtos = resp.produtos || [];
+            state.itens = resp.itens || [];
+
+            montarHeader(state.produtos);
+            montarTabela(state.itens, state.produtos);
+            $('#btn-salvar-comparacao').prop('disabled', false);
+        });
+    }
+
+    function coletarPayloadSalvar() {
+        var produtosMap = {};
+        state.produtos.forEach(function(p) {
+            produtosMap[p.id] = { id: p.id, componentes: [] };
+        });
+
+        $('#tabela-comparacao-produtos tbody tr').each(function() {
+            var estoqueId = Number($(this).data('estoque-id'));
+            $(this).find('.input-qtd-comparacao').each(function() {
+                var produtoId = Number($(this).data('produto-id'));
+                var qtd = toNumberOrNull($(this).val());
+                produtosMap[produtoId].componentes.push({
+                    estoque_id: estoqueId,
+                    quantidade: (qtd == null ? 0 : qtd)
+                });
+            });
+        });
+
+        return {
+            produtos: Object.values(produtosMap)
+        };
+    }
+
+    function salvarComparacao() {
+        var payload = coletarPayloadSalvar();
+        var token = getCsrfToken();
+
+        $('#btn-salvar-comparacao').prop('disabled', true);
+
+        return $.ajax({
+            url: '{{ url_for("produto_composto.api_comparacao_salvar") }}',
+            method: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify(payload),
+            headers: token ? { 'X-CSRFToken': token } : {}
+        }).then(function(resp) {
+            if (!resp || !resp.success) {
+                throw new Error(resp && resp.message ? resp.message : 'Falha ao salvar.');
+            }
+            $('#modal-comparar-produtos').modal('hide');
+            if (typeof window.recarregarDataTableProdutosCompostos === 'function') {
+                window.recarregarDataTableProdutosCompostos();
+            }
+        }).catch(function(err) {
+            console.error(err);
+            alert(err && err.message ? err.message : 'Erro ao salvar comparação. Verifique o console.');
+        }).always(function() {
+            $('#btn-salvar-comparacao').prop('disabled', false);
+        });
+    }
+
+    window.ProdutoCompostoComparacao = {
+        open: function(produtosSelecionados) {
+            $('#modal-comparar-produtos').modal('show');
+            carregarComparacao(produtosSelecionados).catch(function(err) {
+                console.error(err);
+                alert(err && err.message ? err.message : 'Erro ao carregar comparação. Verifique o console.');
+            });
+        }
+    };
+
+    $(document).ready(function() {
+        $('#btn-salvar-comparacao').on('click', function() {
+            salvarComparacao();
+        });
+    });
+})();
+</script>
+

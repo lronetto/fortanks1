@@ -23,7 +23,7 @@ def qualidade_dict_tem_data_producao(q):
     """
     if not q or not isinstance(q, dict):
         return False
-    if q.get('data_producao'):
+    if q.get('data_producao') and q['data_producao'] is not None:
         return True
     da = q.get('dados_adicionais')
     if isinstance(da, dict) and da.get('data_producao'):
@@ -122,7 +122,9 @@ def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=T
             grupos[chave] = []
         grupos[chave].append(peca)
     if _usinagem:
-        usinagens = ConcretoUsinagens.query.filter(ConcretoUsinagens.data_usinagem.like(f'%{dia_date}%')).all()
+        usinagens = ConcretoUsinagens.query.filter(
+            ConcretoUsinagens.data_usinagem.like(f'%{dia_date}%'),
+            ConcretoUsinagens.dados_adicionais.get('data_producao') is None).all()
         for usinagem in usinagens:
             try:
                 usinagem.produzir(usuario_id=usuario_id, total=True)
@@ -342,6 +344,7 @@ class ConcretoConcretagens(db.Model):
         """
         Produz a concretagem
         """
+       
         pecas_str = self.pecas
         if not pecas_str:
             return False
@@ -352,7 +355,10 @@ class ConcretoConcretagens(db.Model):
         from models.tanque import TanquesPecas
         pecas_concretadas = []
         for peca in pecas:
-            peca_obj = TanquesPecas.query.filter_by(nome=peca['nome'], tanque_id=int(peca['tanque_id'])).first()
+            if peca.get('peca_id'):
+                peca_obj = TanquesPecas.query.filter_by(id=peca['peca_id']).first()
+            else:
+                peca_obj = TanquesPecas.query.filter_by(nome=peca['nome'], tanque_id=int(peca['tanque_id'])).first()
             if not peca_obj:
                 continue
             pecas_concretadas.append(peca_obj)
@@ -361,7 +367,11 @@ class ConcretoConcretagens(db.Model):
             if not pecas_concretadas:
                 return False
             return None
-        ok = processar_producao_por_pecas(pecas_pendentes, usuario_id=current_user.id or None)
+        ok = processar_producao_por_pecas(
+            pecas_list=pecas_pendentes,
+            usuario_id=current_user.id or None,
+            log=False,
+            _usinagem=True)
         return bool(ok)
 # Nova tabela de associação entre concretagem e tanques
 class ConcretoConcretagensTanques(db.Model):
@@ -769,6 +779,12 @@ class ConcretoUsinagens(db.Model):
     def produzir(self, usuario_id=None,total=False):
         """Produz a usinagem de concreto"""
         # Obter usuario_id do parâmetro ou do current_user
+        mov = EstoqueMovimentacoes.query.filter(
+            EstoqueMovimentacoes.origem_tipo.like('%usinagem_concreto%'),
+            EstoqueMovimentacoes.origem_id==self.id).all()
+        if mov:
+            return False
+        
         if usuario_id is None:
             usuario_id = current_user.id if current_user and hasattr(current_user, 'id') else 1
         dados_adicionais = {}

@@ -869,6 +869,29 @@ def api_grupos_tanques():
     
     return jsonify({'grupos': grupos_json})
 
+
+def _tipos_peca_form_criacao():
+    """Tipos de peça enviados na criação (permite vários para o mesmo produto acabado)."""
+    tipos = request.form.getlist('tipo_peca[]')
+    if not tipos:
+        tipos = request.form.getlist('tipo_peca')
+    if not tipos:
+        t = request.form.get('tipo_peca')
+        if t:
+            tipos = [t]
+    vistos = set()
+    resultado = []
+    for t in tipos:
+        if not t:
+            continue
+        s = str(t).strip()
+        if not s or s in vistos:
+            continue
+        vistos.add(s)
+        resultado.append(s)
+    return resultado
+
+
 @peca.route('/vinculacao-produto-composto', methods=['GET', 'POST'])
 def vinculacao_produto_composto():
     """Modal e processamento de vinculação de tanque(s) a produto composto"""
@@ -949,6 +972,7 @@ def vinculacao_produto_composto():
             
             else:
                 # Modo criação - criar novas vinculações por grupos
+                grupos_processados = []
                 grupo_ids = request.form.getlist('grupo_ids[]')
                 
                 # Fallback para formato antigo (tanque_ids individuais)
@@ -961,11 +985,11 @@ def vinculacao_produto_composto():
                 else:
                     tanque_ids = []
                 
-                tipo_peca = request.form.get('tipo_peca')
+                tipos_peca = _tipos_peca_form_criacao()
                 produto_composto_id = request.form.get('produto_composto_id', type=int)
                 
-                if not tipo_peca or not produto_composto_id:
-                    return jsonify({'success': False, 'message': 'Tipo de peça e produto composto são obrigatórios'}), 400
+                if not tipos_peca or not produto_composto_id:
+                    return jsonify({'success': False, 'message': 'Selecione ao menos um tipo de peça e o produto composto'}), 400
                 
                 # Se grupos foram selecionados, buscar todos os tanques dos grupos
                 if grupo_ids:
@@ -979,7 +1003,6 @@ def vinculacao_produto_composto():
                     
                     # Buscar todos os tanques dos grupos selecionados
                     tanque_ids = []
-                    grupos_processados = []
                     for grupo_id in grupo_ids:
                         grupo = TanquesGrupos.query.get(grupo_id)
                         if grupo:
@@ -995,44 +1018,45 @@ def vinculacao_produto_composto():
                 vinculacoes_existentes = []
                 erros = []
                 
-                # Criar vinculação para cada tanque
+                # Criar vinculação para cada combinação tanque × tipo de peça
                 for tanque_id in tanque_ids:
-                    try:
-                        # Verificar se já existe vinculação
-                        vinculacao_existente = TanquesProdutoComposto.query.filter_by(
-                            tanque_id=tanque_id,
-                            tipo_peca=tipo_peca,
-                            produto_composto_id=produto_composto_id
-                        ).first()
-                        
-                        if vinculacao_existente:
+                    for tipo_peca in tipos_peca:
+                        try:
+                            vinculacao_existente = TanquesProdutoComposto.query.filter_by(
+                                tanque_id=tanque_id,
+                                tipo_peca=tipo_peca,
+                                produto_composto_id=produto_composto_id
+                            ).first()
+                            
+                            if vinculacao_existente:
+                                tanque = Tanques.query.get(tanque_id)
+                                nome_t = tanque.nome if tanque else f'Tanque ID {tanque_id}'
+                                vinculacoes_existentes.append(f'{nome_t} — tipo {tipo_peca}')
+                                continue
+                            
+                            nova_vinculacao = TanquesProdutoComposto(
+                                tanque_id=tanque_id,
+                                tipo_peca=tipo_peca,
+                                produto_composto_id=produto_composto_id
+                            )
+                            nova_vinculacao.save()
+                            vinculacoes_criadas += 1
+                            
+                        except Exception as e:
                             tanque = Tanques.query.get(tanque_id)
-                            vinculacoes_existentes.append(tanque.nome if tanque else f'Tanque ID {tanque_id}')
+                            erros.append({
+                                'tanque': tanque.nome if tanque else f'Tanque ID {tanque_id}',
+                                'tipo_peca': tipo_peca,
+                                'erro': str(e)
+                            })
                             continue
-                        
-                        # Criar nova vinculação
-                        nova_vinculacao = TanquesProdutoComposto(
-                            tanque_id=tanque_id,
-                            tipo_peca=tipo_peca,
-                            produto_composto_id=produto_composto_id
-                        )
-                        nova_vinculacao.save()
-                        vinculacoes_criadas += 1
-                        
-                    except Exception as e:
-                        tanque = Tanques.query.get(tanque_id)
-                        erros.append({
-                            'tanque': tanque.nome if tanque else f'Tanque ID {tanque_id}',
-                            'erro': str(e)
-                        })
-                        continue
                 
                 # Montar mensagem de resposta
                 mensagem = f'{vinculacoes_criadas} vinculação(ões) criada(s) com sucesso!'
                 if grupos_processados:
                     mensagem += f'\nGrupos processados: {", ".join(grupos_processados)}'
                 if vinculacoes_existentes:
-                    mensagem += f'\n{len(vinculacoes_existentes)} tanque(s) já possuíam vinculação.'
+                    mensagem += f'\n{len(vinculacoes_existentes)} combinação(ões) tanque/tipo já existia(m).'
                 if erros:
                     mensagem += f'\n{len(erros)} erro(s) durante o processamento.'
                 
@@ -1042,7 +1066,7 @@ def vinculacao_produto_composto():
                     'vinculacoes_criadas': vinculacoes_criadas,
                     'vinculacoes_existentes': vinculacoes_existentes,
                     'erros': erros,
-                    'grupos_processados': grupos_processados if grupo_ids else []
+                    'grupos_processados': grupos_processados
                 })
             
         except Exception as e:
