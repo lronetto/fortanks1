@@ -218,14 +218,14 @@
                             <td>{{ epi.material.nome }}</td>
                             <td>{{ epi.ca_numero or 'Não informado' }}</td>
                             <td>
-                                {% if epi.get_estoque_atual() <= 0 %}
+                                {% if epi.getEstoqueAtual() <= 0 %}
                                 <span class="badge bg-danger">Esgotado</span>
-                                {% elif epi.get_estoque_atual() < epi.estoque_minimo %}
+                                {% elif epi.getEstoqueAtual() < epi.estoque_minimo %}
                                 <span class="badge bg-warning">Crítico</span>
                                 {% else %}
                                 <span class="badge bg-success">Adequado</span>
                                 {% endif %}
-                                <span class="badge bg-secondary">{{ epi.get_estoque_atual() }} un</span>
+                                <span class="badge bg-secondary">{{ epi.getEstoqueAtual() }} un</span>
                             </td>
                             <td>
                                 {% if epi.data_validade %}
