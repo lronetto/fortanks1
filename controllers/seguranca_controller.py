@@ -72,15 +72,17 @@ def epis_index():
     """
     Lista todos os EPIs cadastrados
     """
-    epis = Epi.query.all()
-    
+    epis = Epi.query.options(joinedload(Epi.material)).all()
+
+    epis_ca_vencidos = [e for e in epis if e.status_validade == "Vencido"]
+
     # Classificar por status de estoque e validade
     epis_por_status = {
         "critico": [],
         "atencao": [],
         "normal": []
     }
-    
+
     for epi in epis:
         if epi.status_estoque() == "Esgotado" or epi.status_validade == "Vencido":
             epis_por_status["critico"].append(epi)
@@ -102,6 +104,7 @@ def epis_index():
         'seguranca/epis/index.html',
         resumo_epis=resumo_epis,
         materiais=materiais,
+        epis_ca_vencidos=epis_ca_vencidos,
     )
 
 

@@ -1,0 +1,25 @@
+{% if epis_ca_vencidos %}
+<div class="alert alert-danger alert-dismissible fade show mb-4" role="alert" id="alerta-cas-vencidos">
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    <div class="d-flex align-items-start">
+        <i class="fas fa-certificate fa-lg me-3 mt-1"></i>
+        <div class="flex-grow-1">
+            <h6 class="alert-heading mb-2">
+                {{ epis_ca_vencidos|length }} EPI(s) com CA vencido
+            </h6>
+            <p class="small mb-2">
+                A data de validade do certificado destes itens já passou. Atualize o cadastro, consulte um CA válido ou providencie a substituição dos equipamentos.
+            </p>
+            <ul class="small mb-0 ps-3">
+                {% for epi in epis_ca_vencidos %}
+                <li>
+                    <strong>{% if epi.material %}{{ epi.material.nome }}{% else %}Material #{{ epi.material_id }}{% endif %}</strong>
+                    {% if epi.ca_numero %} — CA {{ epi.ca_numero }}{% endif %}
+                    {% if epi.data_validade %} — validade {{ epi.data_validade.strftime('%d/%m/%Y') }}{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endif %}
