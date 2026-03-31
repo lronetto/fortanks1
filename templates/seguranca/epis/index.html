@@ -479,6 +479,27 @@
                                     <span class="input-group-text">CA</span>
                                     <input type="text" class="form-control" id="editar_ca_numero" name="ca_numero"
                                         placeholder="Número do Certificado de Aprovação">
+                                    <button class="btn btn-outline-secondary" type="button" id="btnConsultarCAEditar">Consultar</button>
+                                </div>
+                                <div class="form-text" id="editar_ca_status"></div>
+                            </div>
+                        </div>
+
+                        <div class="row" id="editar_dadosCA" style="display: none;">
+                            <div class="col-12 mb-3">
+                                <div class="alert alert-info" id="editar_ca_info">
+                                    <h6 class="alert-heading" id="editar_ca_titulo"></h6>
+                                    <p id="editar_ca_descricao" class="mb-2"></p>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <strong>Fabricante:</strong> <span id="editar_ca_fabricante"></span><br>
+                                            <strong>Situação:</strong> <span id="editar_ca_situacao"></span>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <strong>Validade:</strong> <span id="editar_ca_validade_texto"></span><br>
+                                            <strong>Normas:</strong> <span id="editar_ca_normas"></span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -903,7 +924,82 @@
             if ($('#editar_material_id').data('select2')) {
                 $('#editar_material_id').select2('destroy');
             }
+            const ed = document.getElementById('editar_dadosCA');
+            const st = document.getElementById('editar_ca_status');
+            if (ed) ed.style.display = 'none';
+            if (st) st.innerHTML = '';
         });
+
+        // Consulta de CA no modal de edição
+        const btnConsultarCAEditar = document.getElementById('btnConsultarCAEditar');
+        if (btnConsultarCAEditar) {
+            btnConsultarCAEditar.addEventListener('click', function () {
+                const caInput = document.getElementById('editar_ca_numero');
+                const caStatus = document.getElementById('editar_ca_status');
+                const dadosCA = document.getElementById('editar_dadosCA');
+                if (!caInput || !caStatus || !dadosCA) return;
+
+                const numero = caInput.value.trim();
+                if (!numero) {
+                    caStatus.innerHTML = '<span class="text-danger">Informe o número do CA</span>';
+                    return;
+                }
+
+                caStatus.innerHTML = '<span class="text-info">Consultando...</span>';
+                dadosCA.style.display = 'none';
+
+                fetch('/seguranca/epis/consultar-ca?numero=' + encodeURIComponent(numero))
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            if (!response.ok) {
+                                throw new Error(data.erro || 'Erro ao consultar o CA');
+                            }
+                            return data;
+                        });
+                    })
+                    .then(function (data) {
+                        document.getElementById('editar_ca_titulo').textContent = data.equipamento || 'EPI';
+                        document.getElementById('editar_ca_descricao').textContent = data.descricao || '';
+                        document.getElementById('editar_ca_fabricante').textContent = data.fabricante || 'Não informado';
+                        const caSituacao = document.getElementById('editar_ca_situacao');
+                        caSituacao.textContent = data.situacao || 'Não informado';
+                        caSituacao.classList.remove('text-success', 'text-danger', 'text-warning');
+                        if (data.situacao && data.situacao.toLowerCase().includes('válido')) {
+                            caSituacao.classList.add('text-success');
+                        } else if (data.situacao && (data.situacao.toLowerCase().includes('vencido') || data.situacao.toLowerCase().includes('venc'))) {
+                            caSituacao.classList.add('text-danger');
+                        } else {
+                            caSituacao.classList.add('text-warning');
+                        }
+
+                        if (!data.descricao || data.descricao === 'Sem descrição disponível') {
+                            document.getElementById('editar_ca_descricao').innerHTML = '<em class="text-muted">Sem descrição disponível</em>';
+                        }
+
+                        if (data.data_validade) {
+                            const dataFormatada = new Date(data.data_validade).toLocaleDateString('pt-BR');
+                            document.getElementById('editar_ca_validade_texto').textContent = dataFormatada;
+                            document.getElementById('editar_data_validade').value = data.data_validade;
+                        } else {
+                            document.getElementById('editar_ca_validade_texto').innerHTML = '<em class="text-muted">Não informada</em>';
+                        }
+
+                        if (data.normas && data.normas.length > 0) {
+                            document.getElementById('editar_ca_normas').textContent = data.normas.join(', ');
+                        } else {
+                            document.getElementById('editar_ca_normas').innerHTML = '<em class="text-muted">Não informadas</em>';
+                        }
+
+                        dadosCA.style.display = 'flex';
+                        caStatus.innerHTML = '<span class="text-success">CA encontrado!</span>';
+                    })
+                    .catch(function (error) {
+                        console.error('Erro:', error);
+                        caStatus.innerHTML = '<span class="text-danger">' + (error.message || 'Falha na consulta') + '</span>';
+                        dadosCA.style.display = 'none';
+                    });
+            });
+        }
         
         // Função para carregar dados do EPI para edição
         function carregarDadosEPI(epiId) {
@@ -912,6 +1008,10 @@
             // Mostrar loading e esconder formulário
             loadingEditarEpi.style.display = 'block';
             formEditarEpi.style.display = 'none';
+            const edCa = document.getElementById('editar_dadosCA');
+            const stCa = document.getElementById('editar_ca_status');
+            if (edCa) edCa.style.display = 'none';
+            if (stCa) stCa.innerHTML = '';
             
             // Carregar dados do EPI via AJAX
             fetch(`/seguranca/epis/editar/${epiId}`, {

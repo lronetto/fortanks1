@@ -1,7 +1,10 @@
-from flask import Blueprint, render_template, request, send_file,jsonify
+import json
+
+from flask import Blueprint, render_template, request, send_file, jsonify
 from datetime import datetime, timedelta
 from functools import wraps
-from flask_login import login_required
+from flask_login import current_user, login_required
+from flask_wtf.csrf import validate_csrf
 from decimal import Decimal
 
 import pandas as pd
@@ -25,6 +28,48 @@ import time
 
 notas_bp = Blueprint('relatorios_notas', __name__, url_prefix='/relatorios/notas')
 
+
+def _extrair_pagamento_manual_de_texto(dados_adicionais_text):
+    """Lê dados_adicionais (JSON) e retorna (indicado: bool, dict pagamento_manual ou None)."""
+    if not dados_adicionais_text:
+        return False, None
+    try:
+        da = (
+            json.loads(dados_adicionais_text)
+            if isinstance(dados_adicionais_text, str)
+            else dados_adicionais_text
+        )
+    except (json.JSONDecodeError, TypeError):
+        return False, None
+    if not isinstance(da, dict):
+        return False, None
+    pm = da.get("pagamento_manual")
+    if not isinstance(pm, dict):
+        return False, None
+    ind = pm.get("indicado")
+    if ind in (True, 1, "1", "true", "True"):
+        return True, pm
+    return False, pm
+
+
+def _label_pago_manual(pm_info):
+    if not pm_info:
+        return "Pago (manual)"
+    di = pm_info.get("data_indicacao")
+    if not di:
+        return "Pago (manual)"
+    try:
+        s = str(di)
+        if "T" in s:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+            return dt.strftime("%d/%m/%Y") + " (manual)"
+        return s + " (manual)"
+    except (ValueError, TypeError):
+        return "Pago (manual)"
+
+
 def login_required_decorator(f):
     @wraps(f)
     @login_required
@@ -41,19 +86,18 @@ def _processar_notas_fiscais(query):
     - pagamento_column: data de pagamento (datetime.date) ou NULL
     - centro_custo_column: ID do centro de custo ou NULL
     """
-    import json
     # Executar query e obter IDs das notas
     # Resultado da query: (NotaFiscal, pagamento_column, centro_custo_column, upload_column, ...)
     from sqlalchemy.orm import defer
     from models.nota_fiscal import NotaFiscal
-    query = query.options(defer(NotaFiscal.dados_adicionais),defer(NotaFiscal.xml_data))
+    query = query.options(defer(NotaFiscal.xml_data))
     resultados = query.all()
     nf_ids = [resultado[0].id for resultado in resultados]
     
     if not nf_ids:
         return []
-            
-        #print(f'resultado: {resultado}')
+
+
     # Separar notas de material (tipo 0, 1) e notas de serviço (tipo 3)
     notas_material_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo in [0, 1]]
     notas_servico_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo == 3]
@@ -187,8 +231,11 @@ def _processar_notas_fiscais(query):
                 if contrato.prazo_pagamento_mat:
                     data_prevista = nf.data_emissao + timedelta(days=contrato.prazo_pagamento_mat)
         
-       
-        # Usar data_pagamento diretamente da coluna
+        pm_indicado, pm_info = _extrair_pagamento_manual_de_texto(
+            nf.dados_adicionais
+        )
+
+        # Usar data_pagamento diretamente da coluna; senão indicação manual em dados_adicionais
         pago_str = 'Não'
         if data_pagamento:
             if isinstance(data_pagamento, datetime):
@@ -203,9 +250,11 @@ def _processar_notas_fiscais(query):
                         pago_str = data_pagamento_dt.strftime('%d/%m/%Y')
                     else:
                         pago_str = str(data_pagamento)
-                except:
+                except Exception:
                     pago_str = str(data_pagamento) if data_pagamento else 'Não'
-        
+        elif pm_indicado:
+            pago_str = _label_pago_manual(pm_info)
+
         if nf.vencimento and nf.vencimento != 'null':
             data_prevista = datetime.strptime(nf.vencimento, '%Y-%m-%d').strftime('%d/%m/%Y')
         else:
@@ -222,6 +271,7 @@ def _processar_notas_fiscais(query):
             'status': nf.status_processamento,
             'destinatario': nf.nome_destinatario,
             'tipo_nf': nf.tipo,  # Adicionar tipo da nota para separar material e serviço
+            'pagamento_manual_indicado': pm_indicado,
         })
     
     return dados_relatorio
@@ -465,6 +515,67 @@ def api_dados():
         'recordsFiltered': len(dados_relatorio),
         'dados_relatorio_aux': dados_relatorio_aux
     })
+
+
+@notas_bp.route('/api/nota/<int:nota_id>/pagamento-manual', methods=['POST'])
+@login_required_decorator
+def api_pagamento_manual(nota_id):
+    """Grava ou remove indicação de pagamento manual em NotaFiscal.dados_adicionais (JSON)."""
+    payload = request.get_json(silent=True) or {}
+    csrf_token = payload.get('csrf_token') or request.form.get('csrf_token')
+    if not csrf_token:
+        return jsonify({'ok': False, 'error': 'Token CSRF obrigatório.'}), 400
+    try:
+        validate_csrf(csrf_token)
+    except Exception:
+        return jsonify({'ok': False, 'error': 'Token CSRF inválido.'}), 400
+
+    indicado = payload.get('indicado', True)
+    if isinstance(indicado, str):
+        indicado = indicado.lower() in ('1', 'true', 'yes', 'sim')
+
+    nf = NotaFiscal.query.get(nota_id)
+    if not nf:
+        return jsonify({'ok': False, 'error': 'Nota não encontrada.'}), 404
+
+    da = {}
+    if nf.dados_adicionais:
+        try:
+            da = (
+                json.loads(nf.dados_adicionais)
+                if isinstance(nf.dados_adicionais, str)
+                else nf.dados_adicionais
+            )
+        except (json.JSONDecodeError, TypeError):
+            da = {}
+    if not isinstance(da, dict):
+        da = {}
+
+    agora = datetime.now().isoformat()
+    uid = getattr(current_user, 'id', None)
+
+    if indicado:
+        da['pagamento_manual'] = {
+            'indicado': True,
+            'data_indicacao': agora,
+            'usuario_id': uid,
+        }
+    else:
+        da['pagamento_manual'] = {
+            'indicado': False,
+            'data_remocao': agora,
+            'usuario_id': uid,
+        }
+
+    nf.dados_adicionais = json.dumps(da, ensure_ascii=False)
+    nf.save()
+
+    return jsonify({
+        'ok': True,
+        'pagamento_manual': da['pagamento_manual'],
+        'pagamento_manual_indicado': bool(indicado),
+    })
+
 
 @notas_bp.route('/exportar/zip', methods=['GET'])
 @login_required_decorator

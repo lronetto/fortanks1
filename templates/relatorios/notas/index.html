@@ -298,6 +298,7 @@
                     <th>Data Prevista Vencimento</th>
                     <th>Pago em</th>
                     <th>Status</th>
+                    <th class="text-center">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -437,6 +438,12 @@ $(document).ready(function() {
             { 
                 targets: [3], // Coluna de quantidade
                 type: 'num'
+            },
+            {
+                targets: [8],
+                orderable: false,
+                searchable: false,
+                className: 'text-center text-nowrap'
             }
         ],
         serverSide: false, // Usar client-side pois já temos todos os dados
@@ -588,6 +595,9 @@ $(document).ready(function() {
                 data: 'pago',
                 render: function(data, type, row) {
                     if (data && data !== 'Não' && data !== 'Não definido') {
+                        if (typeof data === 'string' && data.indexOf('(manual)') !== -1) {
+                            return '<span class="badge bg-info text-dark">' + data + '</span>';
+                        }
                         return '<span class="badge bg-success">' + data + '</span>';
                     } else {
                         return '<span class="badge bg-warning text-dark">Não Pago</span>';
@@ -602,6 +612,24 @@ $(document).ready(function() {
                     } else {
                         return '<span class="badge bg-primary">Importada</span>';
                     }
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                render: function(data, type, row) {
+                    if (type !== 'display') {
+                        return '';
+                    }
+                    if (row.status === 'cancelada') {
+                        return '<span class="text-muted">—</span>';
+                    }
+                    var indicado = row.pagamento_manual_indicado === true || row.pagamento_manual_indicado === 1;
+                    if (indicado) {
+                        return '<button type="button" class="btn btn-sm btn-outline-warning btn-remover-pagamento-manual" data-id="' + row.id + '" title="Remover indicação de pagamento manual"><i class="fas fa-undo"></i></button>';
+                    }
+                    return '<button type="button" class="btn btn-sm btn-outline-success btn-marcar-pagamento-manual" data-id="' + row.id + '" title="Indicar pagamento manual"><i class="fas fa-hand-holding-usd"></i></button>';
                 }
             }
         ],
@@ -676,6 +704,57 @@ $(document).ready(function() {
         $('#tabela-resumo').show();
     }
     
+    var urlPagamentoManualTpl = "{{ url_for('relatorios_notas.api_pagamento_manual', nota_id=888888888) }}";
+
+    function postPagamentoManual(notaId, indicado) {
+        // CSRFProtect do Flask-WTF exige o token no header ou no form — não lê o JSON body.
+        var token = $('meta[name="csrf-token"]').attr('content')
+            || $('#filtro-relatorio input[name="csrf_token"]').val();
+        if (!token) {
+            alert('Token de segurança não encontrado. Recarregue a página.');
+            return;
+        }
+        var url = urlPagamentoManualTpl.replace('888888888', String(notaId));
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': token
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ csrf_token: token, indicado: indicado })
+        })
+            .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, body: j }; }); })
+            .then(function(res) {
+                if (res.ok && res.body && res.body.ok) {
+                    tableRelatorioNotas.ajax.reload(null, false);
+                } else {
+                    var msg = (res.body && res.body.error) ? res.body.error : 'Não foi possível atualizar.';
+                    alert(msg);
+                }
+            })
+            .catch(function() {
+                alert('Erro de rede ao atualizar pagamento manual.');
+            });
+    }
+
+    $(document).on('click', '.btn-marcar-pagamento-manual', function() {
+        var id = $(this).data('id');
+        if (!confirm('Indicar pagamento manual desta nota? O status passará a constar como pago (manual) nos dados adicionais da NF.')) {
+            return;
+        }
+        postPagamentoManual(id, true);
+    });
+
+    $(document).on('click', '.btn-remover-pagamento-manual', function() {
+        var id = $(this).data('id');
+        if (!confirm('Remover a indicação de pagamento manual desta nota?')) {
+            return;
+        }
+        postPagamentoManual(id, false);
+    });
+
     $('#filtro-relatorio').on('submit', function(e) {
         e.preventDefault();
         tableRelatorioNotas.ajax.reload();

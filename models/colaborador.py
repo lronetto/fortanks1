@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from models.database import db
 
@@ -35,7 +36,7 @@ class Colaborador(db.Model):
     email = db.Column(db.String(100))
     endereco = db.Column(db.String(255))
     observacoes = db.Column(db.Text)
-  
+    dados_adicionais = db.Column(db.Text)
 
     usuario = db.relationship('Usuario', back_populates='colaborador')
     dados_bancarios = db.relationship('DadosBancarios', back_populates='colaborador', uselist=False)
@@ -74,6 +75,15 @@ class Colaborador(db.Model):
         db.session.delete(self)
         db.session.commit()
     
+    def get_dados_adicionais_dict(self):
+        if not self.dados_adicionais:
+            return {}
+        try:
+            raw = self.dados_adicionais
+            return json.loads(raw) if isinstance(raw, str) else (raw if isinstance(raw, dict) else {})
+        except (json.JSONDecodeError, TypeError):
+            return {}
+
     @property
     def esta_ativo(self):
         return self.status == 'Ativo'

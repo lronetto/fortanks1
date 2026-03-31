@@ -19,6 +19,7 @@ except ImportError:
     # Adicionar um log ou aviso se WeasyPrint não estiver instalado
     print("AVISO: WeasyPrint não está instalado. A geração de PDF não funcionará.")
 import zipfile
+import json
 from sqlalchemy.orm import joinedload
 
 from models.database import db
@@ -30,6 +31,33 @@ from models.epi import EpiEntregas, Epi
 from models.concreto import ConcretoUsinagens
 
 colaborador_bp = Blueprint('colaborador', __name__)
+
+
+def _mesclar_matricula_em_dados_adicionais(dados_adicionais_existentes, matricula_raw):
+    """Atualiza a chave `matricula` no JSON de dados_adicionais, preservando demais chaves."""
+    base = {}
+    if dados_adicionais_existentes:
+        try:
+            parsed = (
+                json.loads(dados_adicionais_existentes)
+                if isinstance(dados_adicionais_existentes, str)
+                else dados_adicionais_existentes
+            )
+            if isinstance(parsed, dict):
+                base = dict(parsed)
+        except (json.JSONDecodeError, TypeError):
+            base = {}
+    matricula = (matricula_raw or '').strip()
+    if matricula:
+        base['matricula'] = matricula
+        base.pop('chapa', None)
+    else:
+        base.pop('matricula', None)
+        base.pop('chapa', None)
+    if not base:
+        return None
+    return json.dumps(base, ensure_ascii=False)
+
 
 # Middleware para verificar se o usuário tem permissão
 #@colaborador_bp.before_request
@@ -72,6 +100,7 @@ def novo():
     email = request.form.get('email')
     endereco = request.form.get('endereco')
     observacoes = request.form.get('observacoes')
+    matricula = request.form.get('matricula')
     
     # Validação básica
     if not nome or not data_admissao_str or not cargo_id or not departamento_id:
@@ -84,6 +113,8 @@ def novo():
         if colaborador_existente:
             flash('Já existe um colaborador com este CPF.', 'danger')
             return redirect(url_for('colaborador.index'))
+    
+    dados_adicionais_json = _mesclar_matricula_em_dados_adicionais(None, matricula)
     
     # Tratamento das datas
     data_nascimento = None
@@ -114,7 +145,8 @@ def novo():
         telefone=telefone,
         email=email,
         endereco=endereco,
-        observacoes=observacoes
+        observacoes=observacoes,
+        dados_adicionais=dados_adicionais_json
     )
     
     novo_colaborador.save()
@@ -171,6 +203,7 @@ def editar(id):
     email = request.form.get('email')
     endereco = request.form.get('endereco')
     observacoes = request.form.get('observacoes')
+    matricula = request.form.get('matricula')
     
     # Validação básica
     if not nome or not data_admissao_str or not cargo_id or not departamento_id:
@@ -222,6 +255,9 @@ def editar(id):
     colaborador.email = email
     colaborador.endereco = endereco
     colaborador.observacoes = observacoes
+    colaborador.dados_adicionais = _mesclar_matricula_em_dados_adicionais(
+        colaborador.dados_adicionais, matricula
+    )
     colaborador.atualizado_em = datetime.now()
     
     colaborador.save()

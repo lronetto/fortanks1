@@ -161,7 +161,7 @@ class Epi(db.Model):
         Retorna o estoque atual do EPI no estoque principal
         """
         from models.estoque import Estoque
-        estoque = Estoque.query.filter_by(material_id=self.material_id).first().quantidade
+        estoque = Estoque.query.filter_by(material_id=self.material_id).first().get_saldo_real()
         #print(f"estoque: {estoque} {self.material_id}")
         return estoque
     

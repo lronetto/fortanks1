@@ -22,31 +22,29 @@
                 </div>
             </div>
         </div>
-        <div class="card-body">
+        <div class="card-body py-2 border-bottom">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="chkComparativoOcultarZeros" value="1">
+                    <label class="form-check-label" for="chkComparativoOcultarZeros">Ocultar itens com quantidade 0 (sistema e terceiro)</label>
+                </div>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="chkComparativoZerarSimulacao" value="1">
+                    <label class="form-check-label" for="chkComparativoZerarSimulacao">Zerar simulação na tabela</label>
+                </div>
+            </div>
+        </div>
+        <div class="card-body pt-2">
             <div class="table-responsive">
                 <table id="tabelaComparativo" class="table table-bordered table-striped table-hover" width="100%" cellspacing="0">
+                    {# Cabeçalhos definidos em scripts: TITULOS_TABELA_COMPARATIVO + columns[].title (DataTables) #}
                     <thead>
                         <tr>
-                            <th>Código ERP</th>
-                            <th>Material</th>
-                            <th>Unidade Sistema</th>
-                            <th>Unidade Terceiro</th>
-                            <th class="text-end">Estoque Sistema</th>
-                            <th class="text-end">Estoque Terceiro</th>
-                            <th class="text-end">Valor Unitário</th>
-                            <th class="text-end">Valor Sistema</th>
-                            <th class="text-end">Valor Terceiro</th>
-                            <th class="text-end">Diferença</th>
-                            <th class="text-end">Diferença %</th>
-                            <th class="text-end">Valor da Diferença</th>
-                            <th class="text-end">Consumo Futuro</th>
-                            <th class="text-end">Estoque Futuro</th>
-                            <th class="text-end">Estoque Terceiro Futuro</th>
-                            <th class="text-end">Diferença Futura</th>
-                            <th class="text-end">Valor Estoque Futuro Sistema</th>
-                            <th class="text-end">Valor Estoque Futuro Terceiro</th>
-                            <th class="text-end">Diferença Valor Futuro</th>
-                            <th class="text-end">Diferença Futura (Terceiro Futuro)</th>
+                            <th></th><th></th><th></th><th></th><th class="text-end"></th><th class="text-end"></th>
+                            <th class="text-end"></th><th class="text-end"></th><th class="text-end"></th><th class="text-end"></th>
+                            <th class="text-end"></th><th class="text-end"></th><th class="text-end"></th><th class="text-end"></th>
+                            <th class="text-end"></th><th class="text-end"></th><th class="text-end"></th><th class="text-end"></th>
+                            <th class="text-end"></th><th class="text-end"></th>
                         </tr>
                     </thead>
                     <tbody>

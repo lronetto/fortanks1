@@ -1,11 +1,11 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, current_app
 from flask_login import login_required, current_user
 from models.epi import Epi, EpiEntregas
 from models.material import Materiais
 from models.colaborador import Colaborador
 from models.database import db
 from models.estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
-from utils.ca_scraper import consultar_ca
+from utils.ca_scraper import consultar_ca, baixar_pagina_consultaca
 from datetime import datetime, timedelta, date
 import json
 import logging
@@ -26,6 +26,7 @@ except ImportError:
     # Adicionar um log ou aviso se WeasyPrint não estiver instalado
     print("AVISO: WeasyPrint não está instalado. A geração de PDF não funcionará.")
 import zipfile
+import re
 from sqlalchemy.orm import joinedload
 
 seguranca_bp = Blueprint('seguranca', __name__)
@@ -194,7 +195,7 @@ def epi_editar(id):
             else:
                 vida_util_meses = None
                 
-            estoque_quantidade = epi.get_estoque_atual()
+            estoque_quantidade = epi.getEstoqueAtual()
             if estoque_atual:
                 estoque_atual = int(estoque_atual)
                 # Se o estoque mudou, registrar a diferença como ajuste
@@ -225,7 +226,7 @@ def epi_editar(id):
                         'id': epi.id,
                         'material_nome': epi.material.nome,
                         'ca_numero': epi.ca_numero or 'Não informado',
-                        'estoque_atual': epi.get_estoque_atual(),
+                        'estoque_atual': epi.getEstoqueAtual(),
                         'estoque_minimo': epi.estoque_minimo,
                         'data_validade': epi.data_validade.strftime('%d/%m/%Y') if epi.data_validade else 'Não aplicável',
                         'status_estoque': epi.status_estoque,
@@ -250,7 +251,7 @@ def epi_editar(id):
             'ca_numero': epi.ca_numero or '',
             'data_validade': epi.data_validade.strftime('%Y-%m-%d') if epi.data_validade else '',
             'vida_util_meses': epi.vida_util_meses,
-            'estoque_atual': epi.get_estoque_atual(),
+            'estoque_atual': epi.getEstoqueAtual(),
             'estoque_minimo': epi.estoque_minimo
         })
 
@@ -468,19 +469,14 @@ def consultar_ca_endpoint():
         logger = logging.getLogger(__name__)
         logger.info(f"Consulta CA {numero_ca}: {resultado}")
 
-        # Se modo debug ativado, retornar HTML bruto para análise
+        # Se modo debug ativado, retornar HTML bruto para análise (mesmo fluxo anti-403 do scraper)
         if debug and request.args.get('include_html', '0') == '1':
-            import requests
             url = f"https://consultaca.com/{numero_ca}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
-            try:
-                response = requests.get(url, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    resultado["_html"] = response.text
-            except Exception as e:
-                resultado["_html_error"] = str(e)
+            html_dbg, err_dbg = baixar_pagina_consultaca(url)
+            if html_dbg:
+                resultado["_html"] = html_dbg
+            elif err_dbg:
+                resultado["_html_error"] = err_dbg
 
         return jsonify(resultado)
     except Exception as e:
@@ -646,6 +642,201 @@ def entregas_api_dados():
         })
 
     return jsonify({'data': dados})
+
+
+def _colab_matricula_ou_chapa(col) -> str:
+    """Matrícula ou chapa do colaborador; fallback CPF (só dígitos) ou id."""
+    if not col:
+        return '0'
+    for attr in ('matricula', 'chapa'):
+        v = getattr(col, attr, None)
+        if v is not None and str(v).strip():
+            return str(v).strip()[:50]
+    if col.cpf:
+        return ''.join(c for c in col.cpf if c.isdigit())[:16]
+    return str(col.id)
+
+
+def _sync_epi_data_validade_via_consulta_ca(epi: Epi, log: logging.Logger) -> bool:
+    """
+    Se o EPI não tem data_validade e possui número de CA, consulta consultaca.com
+    e preenche epi.data_validade (objeto em sessão; commit fica a cargo do chamador).
+    """
+    if epi is None or epi.data_validade is not None:
+        return False
+    ca_raw = (epi.ca_numero or '').strip()
+    if not re.sub(r'\D', '', ca_raw):
+        return False
+    res = consultar_ca(ca_raw)
+    if res.get('erro'):
+        log.warning(
+            'Consulta CA para EPI id=%s (CA=%s): %s',
+            epi.id,
+            ca_raw,
+            res.get('erro'),
+        )
+        return False
+    dv = res.get('data_validade')
+    if not dv:
+        return False
+    try:
+        if isinstance(dv, str):
+            epi.data_validade = datetime.strptime(dv.strip()[:10], '%Y-%m-%d').date()
+        elif isinstance(dv, date):
+            epi.data_validade = dv
+        else:
+            return False
+    except (ValueError, TypeError):
+        return False
+    return True
+
+
+def _montar_xlsx_entregas_epi(entregas, cod_coligada: int) -> openpyxl.Workbook:
+    """Monta Excel: aba Cadastro (EPIs distintos) e aba Entradas (linhas por entrega)."""
+    log = logging.getLogger(__name__)
+
+    vistos = set()
+    epis_distintos = []
+    for ent in entregas:
+        if not ent.epi or ent.epi_id in vistos:
+            continue
+        vistos.add(ent.epi_id)
+        epis_distintos.append(ent.epi)
+
+    epis_distintos.sort(key=lambda e: e.id)
+
+    houve_alteracao = False
+    for epi in epis_distintos:
+        if _sync_epi_data_validade_via_consulta_ca(epi, log):
+            houve_alteracao = True
+    if houve_alteracao:
+        db.session.commit()
+
+    wb = openpyxl.Workbook()
+    ws_cad = wb.active
+    ws_cad.title = 'Cadastro'
+    ws_cad.append(['id', 'nome', 'ca', 'data_validade'])
+    for epi in epis_distintos:
+        nome = epi.material.nome if epi.material else ''
+        ws_cad.append(
+            [
+                epi.id,
+                nome,
+                epi.ca_numero or '',
+                epi.data_validade,
+            ]
+        )
+
+    ws_ent = wb.create_sheet('Entradas')
+    ws_ent.append(
+        [
+            'cod_coligada',
+            'id_epi',
+            'id_lote',
+            'data_entrega',
+            'matricula',
+            'quantidade',
+            'ca',
+            'validade_ca',
+            'fixo_0',
+        ]
+    )
+    for ent in entregas:
+        epi = ent.epi
+        ca_linha = ent.ca or (epi.ca_numero if epi else '') or ''
+        validade_ca = epi.data_validade if epi else None
+        ws_ent.append(
+            [
+                cod_coligada,
+                epi.id if epi else 0,
+                0,
+                ent.data_entrega,
+                _colab_matricula_ou_chapa(ent.colaborador),
+                int(ent.quantidade or 0),
+                ca_linha,
+                validade_ca,
+                0,
+            ]
+        )
+    return wb
+
+
+@seguranca_bp.route('/epis/entregas/exportar-esocial', methods=['POST'])
+@login_required
+def entregas_exportar_esocial():
+    """
+    Gera planilha Excel (duas abas: cadastro de EPIs do período e entradas).
+    EPIs sem data de validade são consultados em consultaca.com e atualizados no banco quando possível.
+    Config: RM_CODCOLIGADA (padrão 1) para coluna cod_coligada nas entradas.
+    """
+    wants_json = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    di = (request.form.get('data_inicio') or '').strip()
+    df = (request.form.get('data_fim') or '').strip()
+    if not di or not df:
+        msg = 'Informe a data inicial e a data final.'
+        if wants_json:
+            return jsonify({'success': False, 'message': msg}), 400
+        flash(msg, 'warning')
+        return redirect(url_for('seguranca.entregas_index'))
+    try:
+        data_inicio = datetime.strptime(di, '%Y-%m-%d').date()
+        data_fim = datetime.strptime(df, '%Y-%m-%d').date()
+    except ValueError:
+        msg = 'Formato de data inválido. Use o seletor de datas.'
+        if wants_json:
+            return jsonify({'success': False, 'message': msg}), 400
+        flash(msg, 'danger')
+        return redirect(url_for('seguranca.entregas_index'))
+    if data_inicio > data_fim:
+        msg = 'A data inicial não pode ser maior que a data final.'
+        if wants_json:
+            return jsonify({'success': False, 'message': msg}), 400
+        flash(msg, 'warning')
+        return redirect(url_for('seguranca.entregas_index'))
+
+    query = (
+        EpiEntregas.query.options(
+            joinedload(EpiEntregas.colaborador),
+            joinedload(EpiEntregas.epi).joinedload(Epi.material),
+        )
+        .filter(
+            EpiEntregas.data_entrega >= data_inicio,
+            EpiEntregas.data_entrega <= data_fim,
+        )
+        .order_by(EpiEntregas.data_entrega.asc(), EpiEntregas.id.asc())
+    )
+    entregas = query.all()
+    if not entregas:
+        msg = 'Nenhuma entrega encontrada no período informado.'
+        if wants_json:
+            return jsonify({'success': False, 'message': msg}), 400
+        flash(msg, 'info')
+        return redirect(url_for('seguranca.entregas_index'))
+
+    cod_col = int(current_app.config.get('RM_CODCOLIGADA', 1))
+    try:
+        wb = _montar_xlsx_entregas_epi(entregas, cod_col)
+    except Exception as e:
+        db.session.rollback()
+        log = logging.getLogger(__name__)
+        log.exception('Falha ao montar Excel de entregas EPI: %s', e)
+        msg = 'Erro ao gerar a planilha. Tente novamente.'
+        if wants_json:
+            return jsonify({'success': False, 'message': msg}), 500
+        flash(msg, 'danger')
+        return redirect(url_for('seguranca.entregas_index'))
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    nome = f'entregas_epi_esocial_{ts}.xlsx'
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=nome,
+    )
 
 
 @seguranca_bp.route('/entregas/nova', methods=['GET', 'POST'])

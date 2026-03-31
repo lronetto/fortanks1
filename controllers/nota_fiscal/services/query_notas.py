@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 
 from flask import flash
-from sqlalchemy import Integer, and_, case, exists, func, or_, select
+from sqlalchemy import Integer, and_, case, exists, func, not_, or_, select
 
 from models.centro_custo import CentroCusto
 from models.contrato import Contrato
@@ -242,6 +242,18 @@ def api_get_dados_notas_fiscais(request):
         )
         # JSON reembolso extraído de dados_adicionais (um objeto por nota)
         reembolso_column = func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").label("reembolso")
+        # Indicação de pagamento manual em dados_adicionais.pagamento_manual.indicado
+        pagamento_manual_expr = and_(
+            NotaFiscal.dados_adicionais.isnot(None),
+            or_(
+                func.cast(
+                    func.json_extract(NotaFiscal.dados_adicionais, "$.pagamento_manual.indicado"),
+                    Integer,
+                )
+                == 1,
+                func.json_extract(NotaFiscal.dados_adicionais, "$.pagamento_manual.indicado") == "true",
+            ),
+        )
     query = (
         db.session.query(
             NotaFiscal,
@@ -450,9 +462,11 @@ def api_get_dados_notas_fiscais(request):
 
     if status_pagamento:
         if status_pagamento == "pago":
-            query = query.filter(pagamento_column.isnot(None))
+            query = query.filter(or_(pagamento_column.isnot(None), pagamento_manual_expr))
         elif status_pagamento == "nao_pago":
-            query = query.filter(pagamento_column.is_(None))
+            query = query.filter(
+                and_(pagamento_column.is_(None), not_(pagamento_manual_expr))
+            )
         elif status_pagamento == "com_faturamento":
             query = query.filter(NotaFiscal.vencimento.isnot(None))
         elif status_pagamento == "vencido":
@@ -464,11 +478,16 @@ def api_get_dados_notas_fiscais(request):
                 NotaFiscal.vencimento.isnot(None),
                 NotaFiscal.vencimento < hoje_str,
                 pagamento_column.is_(None),
+                not_(pagamento_manual_expr),
             )
         elif status_pagamento == "apenas_reembolso":
             query = query.filter(upload_reembolso_column == 1)
         elif status_pagamento == "reembolso_e_nao_pago":
-            query = query.filter(upload_reembolso_column == 1, pagamento_column.is_(None))
+            query = query.filter(
+                upload_reembolso_column == 1,
+                pagamento_column.is_(None),
+                not_(pagamento_manual_expr),
+            )
         elif status_pagamento == "selecionados":
             query = query.filter(
                 func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").isnot(None),
@@ -479,6 +498,7 @@ def api_get_dados_notas_fiscais(request):
             query = query.filter(
                 upload_reembolso_column == 1,
                 pagamento_column.is_(None),
+                not_(pagamento_manual_expr),
                 func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None),
             )
 

@@ -18,8 +18,25 @@
     });
     
     // Filtros aplicados no frontend: só redesenha a tabela (sem nova requisição ao backend)
-    $('#filtro_quantidade_zero, #filtro_sem_material_sistema, #filtro_ter_os_dois').on('change', function() {
+    $('#filtro_quantidade_zero').on('change', function() {
+        $('#chkComparativoOcultarZeros').prop('checked', $(this).is(':checked'));
         if (table) table.draw(false);
+    });
+    $('#filtro_sem_material_sistema, #filtro_ter_os_dois').on('change', function() {
+        if (table) table.draw(false);
+    });
+
+    /** Espelho do filtro "quantidade 0", logo acima da tabela comparativa */
+    $('#chkComparativoOcultarZeros').on('change', function() {
+        $('#filtro_quantidade_zero').prop('checked', $(this).is(':checked'));
+        if (table) table.draw(false);
+    });
+
+    /** Atalho: ao marcar, executa a mesma ação de "Limpar simulação" e desmarca em seguida */
+    $('#chkComparativoZerarSimulacao').on('change', function() {
+        if (!$(this).is(':checked')) return;
+        $(this).prop('checked', false);
+        $('#btnLimparSimulacaoManual').trigger('click');
     });
     
     // Botão limpar filtros
@@ -28,10 +45,13 @@
         $('#filtro_sped').prop('checked', false);
         $('#filtro_tipos').val([]);
         $('#filtro_quantidade_zero').prop('checked', false);
+        $('#chkComparativoOcultarZeros').prop('checked', false);
         $('#filtro_sem_material_sistema').prop('checked', false);
         $('#filtro_ter_os_dois').prop('checked', false);
         if (table) table.draw(false);
     });
+
+    $('#chkComparativoOcultarZeros').prop('checked', $('#filtro_quantidade_zero').is(':checked'));
     
     /** Exporta o comparativo exatamente como na tela: filtros do DataTables, ordenação atual e colunas de simulação (consumo/estoques futuros). */
     function exportarComparativoTabelaSimulacaoExcel() {
@@ -43,32 +63,26 @@
             alert('Carregue a tabela comparativa antes de exportar.');
             return;
         }
-        const headers = [
-            'Código ERP','Material','Unidade',
-            'Estoque Fisico', 'Estoque Alterdata', 'Valor Unitário', 'Valor Fisico', 'Valor Alterdata',
-            'Diferença', 'Diferença %', 'Valor da Diferença',
-            'Consumo', 'Estoque Futuro', 'Estoque Alterdata Futuro', 'Diferença Futura',
-            'Valor Estoque Futuro Fisico', 'Valor Estoque Futuro Alterdata', 'Diferença Valor Futuro', 'material_id'
-        ];
+        const headers = TITULOS_TABELA_COMPARATIVO.slice().concat(['material_id']);
         const rows = table.rows({ search: 'applied', order: 'current' }).data().toArray();
         const simAtiva = !!(consumoPorMaterialSimulacao && consumoPorMaterialSimulacaoTerceiro);
         const aoa = [];
-        const valorTotalEstoqueFisico = rows.reduce((acc, row) => acc + parseFloat(row.valor_sistema) || 0, 0);
-        const valorTotalEstoqueAlterdata = rows.reduce((acc, row) => acc + parseFloat(row.valor_terceiro) || 0, 0);
-        const valorTotalDiferenca = valorTotalEstoqueAlterdata - valorTotalEstoqueFisico;
-        const valorTotalDiferencaPercentual = (valorTotalDiferenca / valorTotalEstoqueFisico) * 100;
-        aoa.push(['Valor total de estoque fisico:','','', valorTotalEstoqueFisico]);
-        aoa.push(['Valor total de estoque alterdata:','','', valorTotalEstoqueAlterdata]);
+        const valorTotalEstoqueSistema = rows.reduce((acc, row) => acc + parseFloat(row.valor_sistema) || 0, 0);
+        const valorTotalEstoqueTerceiro = rows.reduce((acc, row) => acc + parseFloat(row.valor_terceiro) || 0, 0);
+        const valorTotalDiferenca = valorTotalEstoqueTerceiro - valorTotalEstoqueSistema;
+        const valorTotalDiferencaPercentual = (valorTotalDiferenca / valorTotalEstoqueSistema) * 100;
+        aoa.push(['Valor total estoque (sistema):', '', '', valorTotalEstoqueSistema]);
+        aoa.push(['Valor total estoque (terceiro):', '', '', valorTotalEstoqueTerceiro]);
         aoa.push(['Valor total de diferença:','','', valorTotalDiferenca]);
         aoa.push(['Percentual diferença:','','', valorTotalDiferencaPercentual]);
 
         aoa.push(headers);
         rows.forEach(function (row) {
             const ut = row.unidade_terceiro != null ? String(row.unidade_terceiro).replace(/<[^>]*>/g, '').trim() : '';
-            const obs = row._linha_apenas_simulacao ? 'Apenas simulação' : '';
             aoa.push([
                 formatarCodigoErpInteiro(row.codigo_erp),
                 row.material_nome != null ? String(row.material_nome) : '',
+                row.unidade_sistema != null ? String(row.unidade_sistema) : '',
                 ut,
                 parseFloat(row.estoque_sistema) || 0,
                 parseFloat(row.estoque_terceiro) || 0,
@@ -85,14 +99,15 @@
                 parseFloat(row.valor_estoque_futuro_sistema) || 0,
                 parseFloat(row.valor_estoque_futuro_terceiro) || 0,
                 parseFloat(row.diferenca_valor_futuro) || 0,
+                parseFloat(row.diferenca_futura_terceiro) || 0,
                 row.material_id != null && row.material_id !== '' ? row.material_id : ''
             ]);
         });
         const ws = XLSX.utils.aoa_to_sheet(aoa);
         const d = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
-        const colsMoeda = [5, 6, 7, 10,15,16, 17];
-        const colsDec4 = [4, 5, 8, 11, 12, 13, 14, 18];
-        const colsDec2Pct = [9];
+        const colsMoeda = [6, 7, 8, 11, 16, 17, 18];
+        const colsDec4 = [4, 5, 9, 12, 13, 14, 15, 19];
+        const colsDec2Pct = [10];
         xlsxAplicarNumFmtCelula(ws, 0, 3, XLSX_FMT_MOEDA_CONTABIL);
         xlsxAplicarNumFmtCelula(ws, 1, 3, XLSX_FMT_MOEDA_CONTABIL);
         xlsxAplicarNumFmtCelula(ws, 2, 3, XLSX_FMT_MOEDA_CONTABIL);

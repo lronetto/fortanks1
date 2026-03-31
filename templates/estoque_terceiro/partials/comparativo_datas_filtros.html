@@ -1,0 +1,40 @@
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+    </div>
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="cd_data_a" class="form-label">Data A (referência)</label>
+                <select id="cd_data_a" class="form-select">
+                    <option value="">Selecione…</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="cd_data_b" class="form-label">Data B (comparar)</label>
+                <select id="cd_data_b" class="form-select">
+                    <option value="">Selecione…</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="cd_filtro_tipos" class="form-label">Tipos (estoque terceiro)</label>
+                <select id="cd_filtro_tipos" class="form-select" multiple>
+                </select>
+                <small class="text-muted">Ctrl para múltiplos. Padrão 10 se vazio.</small>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="cd_filtro_sped" value="1">
+                    <label class="form-check-label" for="cd_filtro_sped">SPED (10, 15, 18)</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="cd_somente_diferencas">
+                    <label class="form-check-label" for="cd_somente_diferencas">Somente linhas com diferença de quantidade</label>
+                </div>
+                <button type="button" class="btn btn-primary w-100" id="cd_btn_aplicar">
+                    <i class="fas fa-sync-alt"></i> Atualizar tabela
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

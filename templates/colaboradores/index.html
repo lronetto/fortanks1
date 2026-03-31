@@ -188,6 +188,13 @@
 
                     <div class="row mb-3">
                         <div class="col-md-6">
+                            <label for="matricula" class="form-label">Matrícula (chapa)</label>
+                            <input type="text" class="form-control" id="matricula" name="matricula" maxlength="80" autocomplete="off" placeholder="Ex.: 12345">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
                             <label for="data_admissao" class="form-label">Data de Admissão *</label>
                             <input type="date" class="form-control" id="data_admissao" name="data_admissao" required>
                             <div class="invalid-feedback">
@@ -304,6 +311,7 @@
             <form method="POST" action="{{ url_for('colaborador.editar', id=colaborador.id) }}" id="editarColaboradorForm{{colaborador.id}}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
+                    {% set da = colaborador.get_dados_adicionais_dict() %}
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="nome{{colaborador.id}}" class="form-label">Nome *</label>
@@ -355,6 +363,14 @@
                             <label for="data_nascimento{{colaborador.id}}" class="form-label">Data de Nascimento</label>
                             <input type="date" class="form-control" id="data_nascimento{{colaborador.id}}" name="data_nascimento" 
                                    value="{{colaborador.data_nascimento.strftime('%Y-%m-%d') if colaborador.data_nascimento else ''}}">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="matricula{{colaborador.id}}" class="form-label">Matrícula (chapa)</label>
+                            <input type="text" class="form-control" id="matricula{{colaborador.id}}" name="matricula" maxlength="80" autocomplete="off" placeholder="Ex.: 12345"
+                                   value="{{ da.get('matricula') or da.get('chapa') or '' }}">
                         </div>
                     </div>
 

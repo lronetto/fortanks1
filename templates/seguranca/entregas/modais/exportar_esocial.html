@@ -1,0 +1,141 @@
+<!-- Modal: exportar entregas de EPI em Excel (cadastro + entradas, e-Social / RM) -->
+<div class="modal fade" id="exportarEsocialModal" tabindex="-1" aria-labelledby="exportarEsocialModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="exportarEsocialModalLabel">
+                    <i class="fas fa-file-excel me-2"></i>Exportar Excel (e-Social / RM)
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Gera planilha <strong>.xlsx</strong> com duas abas: <strong>Cadastro</strong> (EPIs do período: id, nome, CA, data de validade)
+                    e <strong>Entradas</strong> (uma linha por entrega). EPIs sem data de validade serão consultados em consultaca.com
+                    e <strong>atualizados no cadastro</strong> quando houver CA informado.
+                    O período usa a <strong>data de entrega</strong>.
+                </p>
+                <form id="formExportarEsocial" method="post" action="{{ url_for('seguranca.entregas_exportar_esocial') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <div class="mb-3">
+                        <label for="esocial_data_inicio" class="form-label">Data inicial</label>
+                        <input type="date" class="form-control" id="esocial_data_inicio" name="data_inicio" required />
+                    </div>
+                    <div class="mb-3">
+                        <label for="esocial_data_fim" class="form-label">Data final</label>
+                        <input type="date" class="form-control" id="esocial_data_fim" name="data_fim" required />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" form="formExportarEsocial" class="btn btn-success" id="btnConfirmarExportarEsocial">
+                    <i class="fas fa-file-excel me-1"></i>Baixar Excel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const form = document.getElementById('formExportarEsocial');
+    const modalEl = document.getElementById('exportarEsocialModal');
+    const btnExport = document.getElementById('btnConfirmarExportarEsocial');
+    if (!form || !modalEl) return;
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        const prevHtml = btnExport ? btnExport.innerHTML : '';
+        if (btnExport) {
+            btnExport.disabled = true;
+            btnExport.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Gerando...';
+        }
+        try {
+            const fd = new FormData(form);
+            const r = await fetch(form.action, {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            const ct = (r.headers.get('Content-Type') || '').toLowerCase();
+            if (ct.includes('application/json')) {
+                const j = await r.json().catch(function () { return {}; });
+                const msg = j.message || j.error || 'Não foi possível exportar.';
+                if (typeof showToast === 'function') {
+                    showToast('Exportação', msg, r.ok ? 'info' : 'warning');
+                } else {
+                    alert(msg);
+                }
+                return;
+            }
+            if (!r.ok) {
+                if (typeof showToast === 'function') {
+                    showToast('Exportação', 'Falha ao gerar o arquivo.', 'danger');
+                } else {
+                    alert('Falha ao gerar o arquivo.');
+                }
+                return;
+            }
+            const blob = await r.blob();
+            let fname = 'entregas_epi_esocial.xlsx';
+            const disp = r.headers.get('Content-Disposition');
+            if (disp) {
+                const mStar = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(disp);
+                const mPlain = /filename\s*=\s*"?([^";\n]+)"?/i.exec(disp);
+                if (mStar) {
+                    try { fname = decodeURIComponent(mStar[1].trim()); } catch (err) { /* ignore */ }
+                } else if (mPlain) {
+                    fname = mPlain[1].trim();
+                }
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            if (typeof bootstrap !== 'undefined' && modalEl) {
+                const inst = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+                inst.hide();
+            }
+            if (typeof showToast === 'function') {
+                showToast('Exportação', 'Arquivo baixado com sucesso.', 'success');
+            }
+        } catch (err) {
+            if (typeof showToast === 'function') {
+                showToast('Exportação', 'Erro de rede ao exportar.', 'danger');
+            } else {
+                alert('Erro de rede ao exportar.');
+            }
+        } finally {
+            if (btnExport) {
+                btnExport.disabled = false;
+                btnExport.innerHTML = prevHtml;
+            }
+        }
+    });
+
+    modalEl.addEventListener('show.bs.modal', function () {
+        const hoje = new Date();
+        const y = hoje.getFullYear();
+        const m = String(hoje.getMonth() + 1).padStart(2, '0');
+        const d = String(hoje.getDate()).padStart(2, '0');
+        const inicio = document.getElementById('esocial_data_inicio');
+        const fim = document.getElementById('esocial_data_fim');
+        if (inicio && !inicio.value) {
+            inicio.value = y + '-' + m + '-01';
+        }
+        if (fim && !fim.value) {
+            fim.value = y + '-' + m + '-' + d;
+        }
+    });
+})();
+</script>

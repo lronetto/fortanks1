@@ -147,6 +147,9 @@
             <a href="{{ url_for('seguranca.epis_index') }}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left d-none d-md-inline-block me-1"></i>Voltar
             </a>
+            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#exportarEsocialModal" title="Planilha Excel para RM / e-Social (cadastro + entradas)">
+                <i class="fas fa-file-excel d-none d-md-inline-block me-1"></i><span class="d-none d-sm-inline">Exportar Excel</span><span class="d-sm-none">Excel</span>
+            </button>
             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#novaEntregaModal">
                 <i class="fas fa-plus d-none d-md-inline-block me-1"></i>Nova Entrega
             </button>
@@ -449,6 +452,7 @@
     {% include "seguranca/entregas/modais/devolucao.html" %}
     {% include "seguranca/entregas/modais/excluir_entrega.html" %}
     {% include "seguranca/entregas/modais/ficha_epi.html" %}
+    {% include "seguranca/entregas/modais/exportar_esocial.html" %}
 </div>
 {% endblock %}
 

@@ -40,6 +40,194 @@ def index():
     return render_template('estoque_terceiro/index.html')
 
 
+@estoque_terceiro_bp.route('/comparativo-datas')
+@login_required
+def comparativo_datas():
+    """
+    Comparativo lado a lado entre duas datas de estoque de terceiros (importações).
+    """
+    return render_template('estoque_terceiro/comparativo_datas.html')
+
+
+def _tipos_filtro_estoque_terceiro():
+    """Mesma regra do api_comparativo: tipos via querystring ou padrão [10]."""
+    tipos_raw = (request.args.get('tipos') or '').strip()
+    tipos_selecionados = []
+    if tipos_raw:
+        for parte in tipos_raw.split(','):
+            p = (parte or '').strip()
+            if p.isdigit():
+                tipos_selecionados.append(int(p))
+    if not tipos_selecionados:
+        tipos_selecionados = [10]
+    return tipos_selecionados
+
+
+def _agrupar_estoque_terceiro_por_data(data_ref, tipos_selecionados):
+    """
+    Agrega quantidades por (codigo_erp, tipo) em uma data.
+    Retorna dict chave (codigo_erp_int, tipo_int) -> { nome, unidade, quantidade, valor_unitario, valor_total }.
+    """
+    tipo_col = func.coalesce(EstoqueTerceiro.tipo, 0)
+    rows = (
+        db.session.query(
+            EstoqueTerceiro.codigo_erp,
+            tipo_col.label('tipo_ag'),
+            func.max(EstoqueTerceiro.nome).label('nome'),
+            func.max(EstoqueTerceiro.unidade).label('unidade'),
+            func.sum(EstoqueTerceiro.quantidade).label('quantidade'),
+            func.avg(EstoqueTerceiro.ValorUnitario).label('valor_unitario'),
+        )
+        .filter(
+            EstoqueTerceiro.data == data_ref,
+            EstoqueTerceiro.tipo.in_(tipos_selecionados),
+        )
+        .group_by(EstoqueTerceiro.codigo_erp, tipo_col)
+        .all()
+    )
+    out = {}
+    for r in rows:
+        ce = int(r.codigo_erp) if r.codigo_erp is not None else 0
+        tipo_v = int(r.tipo_ag) if r.tipo_ag is not None else 0
+        key = (ce, tipo_v)
+        q = float(r.quantidade or 0)
+        vu = float(r.valor_unitario or 0)
+        out[key] = {
+            'codigo_erp': ce,
+            'tipo': tipo_v,
+            'nome_terceiro': (r.nome or '').strip(),
+            'unidade': (r.unidade or '').strip(),
+            'quantidade': q,
+            'valor_unitario': vu,
+            'valor_total': q * vu,
+        }
+    return out
+
+
+@estoque_terceiro_bp.route('/api/comparativo-entre-datas', methods=['GET'])
+@login_required
+def api_comparativo_entre_datas():
+    """
+    API para DataTables: duas datas de estoque terceiro, colunas lado a lado e diferenças.
+    """
+    draw = int(request.args.get('draw', 1))
+    try:
+        data_a_str = (request.args.get('data_a') or '').strip()
+        data_b_str = (request.args.get('data_b') or '').strip()
+        if not data_a_str or not data_b_str:
+            return jsonify({
+                'draw': draw,
+                'recordsTotal': 0,
+                'recordsFiltered': 0,
+                'data': [],
+                'error': 'Informe data_a e data_b (YYYY-MM-DD).',
+            }), 400
+        data_a = datetime.strptime(data_a_str, '%Y-%m-%d').date()
+        data_b = datetime.strptime(data_b_str, '%Y-%m-%d').date()
+        tipos = _tipos_filtro_estoque_terceiro()
+
+        map_a = _agrupar_estoque_terceiro_por_data(data_a, tipos)
+        map_b = _agrupar_estoque_terceiro_por_data(data_b, tipos)
+        todas_chaves = set(map_a.keys()) | set(map_b.keys())
+
+        codigos = {k[0] for k in todas_chaves if k[0]}
+        nomes_sistema = {}
+        if codigos:
+            lista_codigos = list(codigos)
+            for m in (
+                db.session.query(Materiais.codigo_erp, Materiais.nome)
+                .filter(
+                    Materiais.codigo_erp.isnot(None),
+                    Materiais.codigo_erp != '',
+                    cast(Materiais.codigo_erp, Integer).in_(lista_codigos),
+                )
+                .all()
+            ):
+                try:
+                    c = int(float(str(m.codigo_erp).strip()))
+                    if c not in nomes_sistema:
+                        nomes_sistema[c] = (m.nome or '').strip()
+                except (TypeError, ValueError):
+                    continue
+
+        vazio = {
+            'nome_terceiro': '',
+            'unidade': '',
+            'quantidade': 0.0,
+            'valor_unitario': 0.0,
+            'valor_total': 0.0,
+        }
+
+        data_rows = []
+        for key in sorted(todas_chaves, key=lambda x: (x[0], x[1])):
+            a = map_a.get(key, vazio)
+            b = map_b.get(key, vazio)
+            qa, qb = a['quantidade'], b['quantidade']
+            dif_q = qb - qa
+            va_t, vb_t = a['valor_total'], b['valor_total']
+            dif_v = vb_t - va_t
+            if qa != 0:
+                dif_pct = (dif_q / qa) * 100.0
+            elif qb != 0:
+                dif_pct = 100.0
+            else:
+                dif_pct = 0.0
+
+            ce = key[0]
+            tipo_v = key[1]
+            nome_mat = nomes_sistema.get(ce, '')
+            nome_exibir = nome_mat or a['nome_terceiro'] or b['nome_terceiro'] or str(ce)
+            ua, ub = a['unidade'], b['unidade']
+            if ua and ub and ua != ub:
+                unidade_exibir = f'{ua} / {ub}'
+            else:
+                unidade_exibir = ua or ub or ''
+
+            data_rows.append({
+                'codigo_erp': str(ce),
+                'tipo': str(tipo_v),
+                'material_nome': nome_exibir,
+                'nome_terceiro': a['nome_terceiro'] or b['nome_terceiro'],
+                'unidade': unidade_exibir,
+                'qtd_data_a': qa,
+                'qtd_data_b': qb,
+                'diferenca_qtd': dif_q,
+                'diferenca_percentual': round(dif_pct, 2),
+                'valor_total_a': round(va_t, 2),
+                'valor_total_b': round(vb_t, 2),
+                'diferenca_valor': round(dif_v, 2),
+                'valor_unitario_a': round(a['valor_unitario'], 4),
+                'valor_unitario_b': round(b['valor_unitario'], 4),
+                'label_data_a': data_a.isoformat(),
+                'label_data_b': data_b.isoformat(),
+            })
+
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': len(data_rows),
+            'recordsFiltered': len(data_rows),
+            'data': data_rows,
+        }), 200
+
+    except ValueError as e:
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': f'Data inválida: {e}',
+        }), 400
+    except Exception as e:
+        logger.error(f'Erro api_comparativo_entre_datas: {e}', exc_info=True)
+        return jsonify({
+            'draw': draw,
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
+            'error': str(e),
+        }), 500
+
+
 @estoque_terceiro_bp.route('/importar', methods=['POST'])
 @login_required
 def importar():

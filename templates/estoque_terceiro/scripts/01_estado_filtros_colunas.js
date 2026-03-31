@@ -33,6 +33,33 @@
     const tiposSped = ['10', '15', '18'];
     let tiposSelecionadosAntesSped = [];
 
+    /**
+     * Títulos na ordem exata das colunas do DataTable (comparativo principal).
+     * Fonte única para cabeçalho da tabela, checklist "Colunas" e exportações alinhadas.
+     */
+    const TITULOS_TABELA_COMPARATIVO = [
+        'Código ERP',
+        'Material',
+        'Unidade Sistema',
+        'Unidade Terceiro',
+        'Estoque Sistema',
+        'Estoque Terceiro',
+        'Valor Unitário',
+        'Valor Sistema',
+        'Valor Terceiro',
+        'Diferença',
+        'Diferença %',
+        'Valor da Diferença',
+        'Consumo Futuro',
+        'Estoque Futuro',
+        'Estoque Terceiro Futuro',
+        'Diferença Futura',
+        'Valor Estoque Futuro Sistema',
+        'Valor Estoque Futuro Terceiro',
+        'Diferença Valor Futuro',
+        'Diferença Futura (Terceiro Futuro)'
+    ];
+
     function storageKeyColunas() {
         return 'estoque_terceiro:tabelaComparativo:colunasVisiveis:v1';
     }
@@ -98,10 +125,9 @@
     function renderChecklistColunas(table) {
         const el = $('#colunasChecklist');
         el.empty();
-        const headers = $('#tabelaComparativo thead th').toArray().map(th => ($(th).text() || '').trim());
         table.columns().every(function(idx) {
             const col = this;
-            const titulo = headers[idx] || `Coluna ${idx + 1}`;
+            const titulo = TITULOS_TABELA_COMPARATIVO[idx] || `Coluna ${idx + 1}`;
             const checked = col.visible();
             const id = `chk_col_${idx}`;
             el.append(`

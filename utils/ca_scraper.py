@@ -7,6 +7,102 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
+CONSULTACA_ORIGIN = "https://consultaca.com"
+
+
+def _headers_consultaca_navegador(referer: str | None = None, same_origin: bool = False) -> dict:
+    """Cabeçalhos próximos de um Chrome recente (UA antigo costuma levar 403 em WAF/CDN)."""
+    h = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept": (
+            "text/html,application/xhtml+xml,application/xml;q=0.9,"
+            "image/avif,image/webp,image/apng,*/*;q=0.8"
+        ),
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "no-cache",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin" if same_origin else "none",
+        "Sec-Fetch-User": "?1",
+        'Sec-Ch-Ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        'Sec-Ch-Ua-Platform': '"Windows"',
+    }
+    if referer:
+        h["Referer"] = referer
+    return h
+
+
+def baixar_pagina_consultaca(url: str) -> tuple[str | None, str | None]:
+    """
+    Obtém o HTML de uma URL do consultaca.com.
+    Usa sessão + página inicial (cookies) e, em 403, tenta cloudscraper (Cloudflare/WAF).
+    Retorna (html, None) ou (None, mensagem_erro).
+    """
+    headers_inicial = _headers_consultaca_navegador()
+    session = requests.Session()
+    session.headers.update(headers_inicial)
+
+    try:
+        session.get(
+            f"{CONSULTACA_ORIGIN}/",
+            timeout=15,
+            allow_redirects=True,
+        )
+    except requests.RequestException as e:
+        logger.debug("Warm-up consultaca.com ignorado: %s", e)
+
+    headers_ca = _headers_consultaca_navegador(
+        referer=f"{CONSULTACA_ORIGIN}/",
+        same_origin=True,
+    )
+
+    try:
+        response = session.get(url, headers=headers_ca, timeout=15, allow_redirects=True)
+    except requests.RequestException as e:
+        logger.error("Erro na requisição HTTP (requests): %s", e)
+        return None, f"Erro ao acessar o site: {str(e)}"
+
+    if response.status_code == 200:
+        return response.text, None
+
+    if response.status_code == 403:
+        logger.warning(
+            "consultaca.com retornou 403 com requests; tentando cloudscraper (URL=%s)",
+            url,
+        )
+        try:
+            import cloudscraper  # type: ignore[import-untyped]
+        except ImportError:
+            return None, (
+                "Falha ao acessar o site: 403. Instale cloudscraper (pip install cloudscraper) "
+                "ou atualize dependências do projeto."
+            )
+
+        try:
+            scraper = cloudscraper.create_scraper(
+                browser={"browser": "chrome", "platform": "windows", "mobile": False}
+            )
+            scraper.headers.update(headers_inicial)
+            scraper.get(f"{CONSULTACA_ORIGIN}/", timeout=15, allow_redirects=True)
+            r2 = scraper.get(url, headers=headers_ca, timeout=15, allow_redirects=True)
+        except Exception as e:
+            logger.error("cloudscraper falhou: %s", e, exc_info=True)
+            return None, f"Falha ao acessar o site: 403 ({e})"
+
+        if r2.status_code == 200:
+            return r2.text, None
+        return None, f"Falha ao acessar o site: {r2.status_code}"
+
+    logger.error("Falha ao acessar o site: %s", response.status_code)
+    return None, f"Falha ao acessar o site: {response.status_code}"
+
+
 def consultar_ca(numero_ca):
     """
     Realiza consulta de um CA no site consultaca.com via webscraping
@@ -24,29 +120,13 @@ def consultar_ca(numero_ca):
         if not numero_ca:
             return {"erro": "Número de CA inválido"}
         
-        # URL do site ConsultaCA
-        url = f"https://consultaca.com/{numero_ca}"
-        
-        # Fazendo a requisição
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        
-        logger.info(f"Consultando CA {numero_ca} em {url}")
-        
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            # Verificando se a requisição foi bem-sucedida
-            if response.status_code != 200:
-                logger.error(f"Falha ao acessar o site: {response.status_code}")
-                return {"erro": f"Falha ao acessar o site: {response.status_code}"}
-            
-            # Obtendo o conteúdo HTML
-            html_content = response.text
-        except requests.RequestException as e:
-            logger.error(f"Erro na requisição HTTP: {str(e)}")
-            return {"erro": f"Erro ao acessar o site: {str(e)}"}
+        url = f"{CONSULTACA_ORIGIN}/{numero_ca}"
+
+        logger.info("Consultando CA %s em %s", numero_ca, url)
+
+        html_content, erro_http = baixar_pagina_consultaca(url)
+        if erro_http:
+            return {"erro": erro_http}
         
         # Verificar se o CA não foi encontrado
         if "não foi encontrado" in html_content.lower() or "inválido" in html_content.lower():

@@ -1,4 +1,4 @@
-﻿    
+    
     // Inicializar DataTable (client-side: filtros e ordenação no frontend)
     function inicializarDataTable() {
         table = $('#tabelaComparativo').DataTable({
@@ -79,6 +79,7 @@
             scrollY: false,
             columns: [
                 {
+                    title: TITULOS_TABELA_COMPARATIVO[0],
                     data: 'codigo_erp',
                     name: 'codigo_erp',
                     type: 'num',
@@ -91,8 +92,9 @@
                         return exib !== '' ? exib : '-';
                     }
                 },
-                { data: 'material_nome', name: 'material_nome' },
+                { title: TITULOS_TABELA_COMPARATIVO[1], data: 'material_nome', name: 'material_nome' },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[2],
                     data: 'unidade_sistema', 
                     name: 'unidade_sistema',
                     render: function(data, type, row) {
@@ -100,6 +102,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[3],
                     data: 'unidade_terceiro', 
                     name: 'unidade_terceiro',
                     render: function(data, type, row) {
@@ -115,6 +118,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[4],
                     data: 'estoque_sistema', 
                     name: 'estoque_sistema',
                     className: 'text-end',
@@ -127,6 +131,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[5],
                     data: 'estoque_terceiro', 
                     name: 'estoque_terceiro',
                     className: 'text-end',
@@ -139,6 +144,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[6],
                     data: 'valor_unitario', 
                     name: 'valor_unitario',
                     className: 'text-end',
@@ -151,6 +157,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[7],
                     data: 'valor_sistema', 
                     name: 'valor_sistema',
                     className: 'text-end',
@@ -163,6 +170,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[8],
                     data: 'valor_terceiro', 
                     name: 'valor_terceiro',
                     className: 'text-end',
@@ -175,6 +183,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[9],
                     data: 'diferenca', 
                     name: 'diferenca',
                     className: 'text-end',
@@ -189,6 +198,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[10],
                     data: 'diferenca_percentual', 
                     name: 'diferenca_percentual',
                     className: 'text-end',
@@ -203,6 +213,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[11],
                     data: 'valor_diferenca', 
                     name: 'valor_diferenca',
                     className: 'text-end',
@@ -217,6 +228,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[12],
                     data: 'consumo_futuro', 
                     name: 'consumo_futuro',
                     className: 'text-end',
@@ -230,6 +242,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[13],
                     data: 'estoque_futuro', 
                     name: 'estoque_futuro',
                     className: 'text-end',
@@ -244,6 +257,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[14],
                     data: 'estoque_terceiro_futuro', 
                     name: 'estoque_terceiro_futuro',
                     className: 'text-end',
@@ -258,6 +272,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[15],
                     data: 'diferenca_futura', 
                     name: 'diferenca_futura',
                     className: 'text-end',
@@ -272,6 +287,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[16],
                     data: 'valor_estoque_futuro_sistema', 
                     name: 'valor_estoque_futuro_sistema',
                     className: 'text-end',
@@ -285,6 +301,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[17],
                     data: 'valor_estoque_futuro_terceiro', 
                     name: 'valor_estoque_futuro_terceiro',
                     className: 'text-end',
@@ -298,6 +315,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[18],
                     data: 'diferenca_valor_futuro', 
                     name: 'diferenca_valor_futuro',
                     className: 'text-end',
@@ -312,6 +330,7 @@
                     }
                 },
                 { 
+                    title: TITULOS_TABELA_COMPARATIVO[19],
                     data: 'diferenca_futura_terceiro', 
                     name: 'diferenca_futura_terceiro',
                     className: 'text-end',
