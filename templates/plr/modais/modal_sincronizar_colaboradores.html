@@ -1,0 +1,148 @@
+<!-- Modal: sincronizar efetivo PLR com cadastro de colaboradores (vínculo por CPF) -->
+<div class="modal fade" id="modalSincronizarColaboradores" tabindex="-1" aria-labelledby="modalSincronizarColaboradoresLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalSincronizarColaboradoresLabel">Atualizar colaboradores pelo efetivo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Os dados do <strong>efetivo do período</strong> (ano/mês) serão copiados para o <strong>cadastro de colaboradores</strong> quando o CPF (somente dígitos) coincidir.
+                    <strong>Função</strong> no efetivo deve bater com o <strong>nome de um cargo</strong>; <strong>seção</strong> com o <strong>nome de um departamento</strong> (comparação sem diferenciar maiúsculas).
+                    O <strong>salário</strong> do efetivo grava na tabela <strong>cargo × mês</strong> do período, usando o cargo atual do colaborador (após aplicar a função, se ela estiver entre os campos marcados).
+                </p>
+                <form id="formSincronizarColaboradores">
+                    <input type="hidden" name="csrf_token" id="sync_colab_csrf" value="{{ csrf_token() }}">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="sync_colab_ano" class="form-label">Ano *</label>
+                            <select class="form-select" id="sync_colab_ano" name="ano" required>
+                                {% for a in anos %}
+                                <option value="{{ a }}" {% if a == ano_sugerido %}selected{% endif %}>{{ a }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="sync_colab_mes" class="form-label">Mês *</label>
+                            <select class="form-select" id="sync_colab_mes" name="mes" required>
+                                <option value="1" {% if mes_sugerido == 1 %}selected{% endif %}>Janeiro</option>
+                                <option value="2" {% if mes_sugerido == 2 %}selected{% endif %}>Fevereiro</option>
+                                <option value="3" {% if mes_sugerido == 3 %}selected{% endif %}>Março</option>
+                                <option value="4" {% if mes_sugerido == 4 %}selected{% endif %}>Abril</option>
+                                <option value="5" {% if mes_sugerido == 5 %}selected{% endif %}>Maio</option>
+                                <option value="6" {% if mes_sugerido == 6 %}selected{% endif %}>Junho</option>
+                                <option value="7" {% if mes_sugerido == 7 %}selected{% endif %}>Julho</option>
+                                <option value="8" {% if mes_sugerido == 8 %}selected{% endif %}>Agosto</option>
+                                <option value="9" {% if mes_sugerido == 9 %}selected{% endif %}>Setembro</option>
+                                <option value="10" {% if mes_sugerido == 10 %}selected{% endif %}>Outubro</option>
+                                <option value="11" {% if mes_sugerido == 11 %}selected{% endif %}>Novembro</option>
+                                <option value="12" {% if mes_sugerido == 12 %}selected{% endif %}>Dezembro</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="form-label mb-0">Campos a sincronizar</label>
+                        <div>
+                            <button type="button" class="btn btn-link btn-sm p-0 me-2" id="sync_colab_marcar_todos">Marcar todos</button>
+                            <button type="button" class="btn btn-link btn-sm p-0" id="sync_colab_desmarcar_todos">Desmarcar todos</button>
+                        </div>
+                    </div>
+                    <div class="row row-cols-1 row-cols-md-2 g-2 border rounded p-3 bg-light">
+                        {% for item in campos_sinc_colaborador %}
+                        {% set campo_key = item[0] %}
+                        {% set campo_label = item[1] %}
+                        <div class="col">
+                            <div class="form-check">
+                                <input class="form-check-input sync-colab-campo" type="checkbox" name="campos" value="{{ campo_key }}" id="sync_c_{{ campo_key }}" checked>
+                                <label class="form-check-label" for="sync_c_{{ campo_key }}">{{ campo_label }}</label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </form>
+                <div id="sync_colab_feedback" class="alert d-none mt-3 mb-0" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnExecutarSincColab">
+                    <i class="fas fa-sync-alt"></i> Sincronizar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var form = document.getElementById('formSincronizarColaboradores');
+    var btn = document.getElementById('btnExecutarSincColab');
+    var feedback = document.getElementById('sync_colab_feedback');
+    var urlSync = '{{ url_for("plr.efetivos_sincronizar_colaboradores") }}';
+    if (!form || !btn) return;
+
+    function getMetaCsrf() {
+        var m = document.querySelector('meta[name="csrf-token"]');
+        return m ? m.getAttribute('content') || '' : '';
+    }
+
+    function showFeedback(type, text) {
+        feedback.className = 'alert mt-3 mb-0 alert-' + type;
+        feedback.textContent = text;
+        feedback.classList.remove('d-none');
+    }
+
+    function hideFeedback() {
+        feedback.classList.add('d-none');
+    }
+
+    document.getElementById('sync_colab_marcar_todos').addEventListener('click', function() {
+        form.querySelectorAll('.sync-colab-campo').forEach(function(cb) { cb.checked = true; });
+    });
+    document.getElementById('sync_colab_desmarcar_todos').addEventListener('click', function() {
+        form.querySelectorAll('.sync-colab-campo').forEach(function(cb) { cb.checked = false; });
+    });
+
+    btn.addEventListener('click', function() {
+        hideFeedback();
+        var ano = document.getElementById('sync_colab_ano').value;
+        var mes = document.getElementById('sync_colab_mes').value;
+        var campos = [];
+        form.querySelectorAll('.sync-colab-campo:checked').forEach(function(cb) {
+            campos.push(cb.value);
+        });
+        if (!campos.length) {
+            showFeedback('warning', 'Selecione ao menos um campo.');
+            return;
+        }
+        var fd = new FormData();
+        var csrfInput = document.getElementById('sync_colab_csrf');
+        fd.append('csrf_token', (csrfInput && csrfInput.value) ? csrfInput.value : getMetaCsrf());
+        fd.append('ano', ano);
+        fd.append('mes', mes);
+        campos.forEach(function(c) { fd.append('campos', c); });
+
+        btn.disabled = true;
+        var prevHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Sincronizando...';
+
+        fetch(urlSync, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, status: r.status, body: j }; }); })
+            .then(function(res) {
+                if (res.body && res.body.success) {
+                    showFeedback('success', res.body.message || 'Concluído.');
+                    if (typeof window.dtEfetivosReload === 'function') window.dtEfetivosReload();
+                } else {
+                    var msg = (res.body && res.body.message) ? res.body.message : 'Falha na sincronização.';
+                    showFeedback('danger', msg);
+                }
+            })
+            .catch(function() {
+                showFeedback('danger', 'Erro de rede ou resposta inválida.');
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = prevHtml;
+            });
+    });
+})();
+</script>

@@ -1,99 +1,81 @@
- <!-- Modais para Exclusão -->
- <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
- <div class="modal-dialog">
-     <div class="modal-content">
-         <div class="modal-header">
-             <h5 class="modal-title" id="deleteModalLabel">Confirmar Exclusão</h5>
-             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-         </div>
-         <div class="modal-body">
-             <p>Tem certeza que deseja excluir o EPI <span id="epi_nome"></span>?</p>
-             <p class="text-danger">Esta ação não pode ser desfeita.</p>
-         </div>
-         <div class="modal-footer">
-             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-             <form action="" method="post" id="form_excluir">
-                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                 <button type="submit" class="btn btn-danger">Excluir</button>
-             </form>
-         </div>
-     </div>
- </div>
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o EPI <strong id="epi_nome"></strong>?</p>
+                <p class="text-danger mb-0">Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form action="" method="post" id="form_excluir_epi" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
-{% block script %}
 <script>
-   // ========= EXCLUSÃO DE EPI =========
-        // Os modais já existentes para exclusão podem ser adaptados
-        // para usar o data-epi-id
-        document.querySelectorAll('button[data-bs-target="deleteModal"]').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const epiId = this.getAttribute('data-epi-id');
+document.addEventListener('DOMContentLoaded', function () {
+    var deleteModalEl = document.getElementById('deleteModal');
+    if (!deleteModalEl) return;
+    var deleteModal = bootstrap.Modal.getOrCreateInstance(deleteModalEl);
+    var formExcluir = document.getElementById('form_excluir_epi');
 
-                const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-                fetch(`/seguranca/epis/excluir/${epiId}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        
-                        document.getElementById('epi_nome').textContent = data.epi_nome;
-                        document.getElementById('form_excluir').action = `/seguranca/epis/excluir/${data.epi_id}`;
-                        modal.show();
-                    }
-                })
-               
+    $(document).on('click', '.btn-excluir-epi', function (e) {
+        e.preventDefault();
+        var epiId = this.getAttribute('data-epi-id');
+        if (!epiId) return;
+        fetch('/seguranca/epis/excluir/' + epiId, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    document.getElementById('epi_nome').textContent = data.epi_nome;
+                    formExcluir.action = '/seguranca/epis/excluir/' + data.epi_id;
+                    deleteModal.show();
+                }
+            })
+            .catch(function () {
+                alert('Não foi possível carregar os dados para exclusão.');
             });
-        });
-        document.querySelectorAll('form[action*="excluir"]').forEach(form => {
-            form.addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const epiId = this.action.split('/').pop();
-                const formData = new FormData(this);
-                
-                fetch(`/seguranca/epis/excluir/${epiId}`, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // Exibir mensagem
-                    const alertsDiv = document.querySelector('.alert-container');
+    });
+
+    if (formExcluir) {
+        formExcluir.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var epiId = formExcluir.action.split('/').pop();
+            var formData = new FormData(formExcluir);
+            fetch('/seguranca/epis/excluir/' + epiId, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var alertsDiv = document.querySelector('.alert-container');
                     if (alertsDiv) {
-                        const alert = document.createElement('div');
-                        alert.className = `alert alert-${data.success ? 'success' : 'danger'} alert-dismissible fade show`;
-                        alert.innerHTML = `
-                            ${data.message}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
-                        `;
+                        var alert = document.createElement('div');
+                        alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                        alert.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
                         alertsDiv.appendChild(alert);
                     }
-                    
-                    // Se foi excluído com sucesso, remover linha da tabela
                     if (data.success) {
-                        // Fechar o modal
-                        const modal = bootstrap.Modal.getInstance(document.getElementById('deleteModal' + epiId));
-                        if (modal) modal.hide();
-                        
-                        // Remover linha da tabela ou recarregar página
-                        setTimeout(() => {
-                            location.reload();
-                        }, 1000);
+                        deleteModal.hide();
+                        if (typeof window.reloadEpisDatatable === 'function') window.reloadEpisDatatable();
+                        if (typeof window.refreshEpisResumo === 'function') window.refreshEpisResumo();
                     }
                 })
-                .catch(error => {
-                    console.error('Erro:', error);
+                .catch(function () {
                     alert('Erro ao excluir EPI. Tente novamente.');
                 });
-            });
         });
+    }
+});
 </script>
-{% endblock %}

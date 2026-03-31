@@ -15,9 +15,90 @@ from sqlalchemy import func
 
 from models.database import db
 from models.plr import EfetivoPLR
+from models.colaborador import Colaborador
+from models.cargo_salario import CargoSalario
+from models.cargo import Cargo
+from models.departamento import Departamento
 from utils.utils import valor_para_str
 
 from . import plr_bp
+
+
+# Campos do efetivo que podem ser gravados no cadastro de colaboradores (vínculo por CPF).
+CAMPOS_SINC_EFETIVO_COLAB = [
+    ('nome', 'Nome'),
+    ('funcao', 'Cargo (nome da função no efetivo → cargo)'),
+    ('salario', 'Salário (tabela cargo × mês do período)'),
+    ('data_nascimento', 'Data de nascimento'),
+    ('data_demissao', 'Data de demissão'),
+    ('secao', 'Departamento (nome da seção no efetivo)'),
+    ('data_admissao', 'Data de admissão'),
+    ('chapa', 'Chapa / matrícula (dados adicionais)'),
+]
+
+_CAMPOS_SINC_PERMITIDOS = frozenset(k for k, _ in CAMPOS_SINC_EFETIVO_COLAB)
+
+
+def _cpf_normalizado_efetivo(val):
+    """Somente dígitos, até 11, preenchido com zeros à esquerda (igual importação Excel)."""
+    if val is None:
+        return None
+    dig = re.sub(r'\D', '', str(val).strip() or '')
+    if not dig or len(dig) > 11:
+        return None
+    return dig.zfill(11)
+
+
+def _mesclar_matricula_em_dados_adicionais(dados_adicionais_existentes, matricula_raw):
+    """Igual ao cadastro de colaboradores: atualiza `matricula` no JSON preservando outras chaves."""
+    base = {}
+    if dados_adicionais_existentes:
+        try:
+            parsed = (
+                json.loads(dados_adicionais_existentes)
+                if isinstance(dados_adicionais_existentes, str)
+                else dados_adicionais_existentes
+            )
+            if isinstance(parsed, dict):
+                base = dict(parsed)
+        except (json.JSONDecodeError, TypeError):
+            base = {}
+    matricula = (matricula_raw or '').strip()
+    if matricula:
+        base['matricula'] = matricula
+        base.pop('chapa', None)
+    else:
+        base.pop('matricula', None)
+        base.pop('chapa', None)
+    if not base:
+        return None
+    return json.dumps(base, ensure_ascii=False)
+
+
+def _cargo_id_por_nome_funcao(nome_funcao):
+    nome = (nome_funcao or '').strip()
+    if not nome:
+        return None
+    ln = nome.lower()
+    rows = Cargo.query.filter(func.lower(Cargo.nome) == ln).all()
+    if not rows:
+        return None
+    ativos = [r for r in rows if (r.status or '').strip().lower() == 'ativo']
+    escolhido = ativos[0] if ativos else rows[0]
+    return escolhido.id
+
+
+def _departamento_id_por_secao(nome_secao):
+    nome = (nome_secao or '').strip()
+    if not nome:
+        return None
+    ln = nome.lower()
+    rows = Departamento.query.filter(func.lower(Departamento.nome) == ln).all()
+    if not rows:
+        return None
+    ativos = [r for r in rows if (r.status or '').strip().lower() == 'ativo']
+    escolhido = ativos[0] if ativos else rows[0]
+    return escolhido.id
 
 
 # Ano e mês vêm do formulário (digitados); os demais campos podem ser mapeados do Excel.
@@ -234,8 +315,148 @@ def efetivos_index():
         mes_sugerido=mes_atual,
         anos=anos,
         campos_efetivo=CAMPOS_EFETIVO_PLR,
+        campos_sinc_colaborador=CAMPOS_SINC_EFETIVO_COLAB,
         redirect_after_import=url_for('plr.efetivos_index'),
     )
+
+
+@plr_bp.route('/efetivos/sincronizar-colaboradores', methods=['POST'])
+def efetivos_sincronizar_colaboradores():
+    """
+    Atualiza colaboradores com dados do efetivo do período (ano/mês), vínculo pelo CPF normalizado.
+    Função no efetivo → `cargo_id` (cargo com mesmo nome). Seção → `departamento_id`.
+    Salário → registro em CargoSalario (cargo do colaborador após aplicar função, se também selecionada).
+    """
+    try:
+        ano = int(request.form.get('ano') or 0)
+        mes = int(request.form.get('mes') or 0)
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'Ano e mês inválidos.'}), 400
+    if not (1 <= mes <= 12) or ano < 2000 or ano > 2100:
+        return jsonify({'success': False, 'message': 'Informe ano e mês válidos (mês 1–12).'}), 400
+
+    campos_raw = request.form.getlist('campos')
+    campos = [c for c in campos_raw if c in _CAMPOS_SINC_PERMITIDOS]
+    if not campos:
+        return jsonify({'success': False, 'message': 'Selecione ao menos um campo para sincronizar.'}), 400
+
+    data_ref = date(ano, mes, 1)
+    efetivos = EfetivoPLR.query.filter(EfetivoPLR.data == data_ref).all()
+    if not efetivos:
+        return jsonify({
+            'success': True,
+            'message': 'Não há registros de efetivo neste período. Nada a atualizar.',
+            'atualizados': 0,
+            'sem_colaborador': 0,
+            'sem_alteracao': 0,
+        })
+
+    por_cpf = {}
+    for col in Colaborador.query.all():
+        k = _cpf_normalizado_efetivo(col.cpf)
+        if k:
+            por_cpf[k] = col
+
+    atualizados = 0
+    sem_colaborador = 0
+    sem_alteracao = 0
+    salario_sem_cargo = 0
+    campos_set = set(campos)
+
+    for reg in efetivos:
+        cpf_key = _cpf_normalizado_efetivo(reg.cpf)
+        if not cpf_key:
+            sem_colaborador += 1
+            continue
+        col = por_cpf.get(cpf_key)
+        if not col:
+            sem_colaborador += 1
+            continue
+
+        mudou = False
+
+        if 'nome' in campos_set:
+            v = (reg.nome or '').strip()
+            if v and col.nome != v:
+                col.nome = v
+                mudou = True
+
+        if 'data_nascimento' in campos_set:
+            v = reg.data_nascimento
+            if col.data_nascimento != v:
+                col.data_nascimento = v
+                mudou = True
+
+        if 'data_demissao' in campos_set:
+            v = reg.data_demissao
+            if col.data_demissao != v:
+                col.data_demissao = v
+                mudou = True
+
+        if 'data_admissao' in campos_set:
+            v = reg.data_admissao
+            if v is not None and col.data_admissao != v:
+                col.data_admissao = v
+                mudou = True
+
+        if 'secao' in campos_set:
+            did = _departamento_id_por_secao(reg.secao)
+            if did is not None and col.departamento_id != did:
+                col.departamento_id = did
+                mudou = True
+
+        if 'funcao' in campos_set:
+            cid = _cargo_id_por_nome_funcao(reg.funcao)
+            if cid is not None and col.cargo_id != cid:
+                col.cargo_id = cid
+                mudou = True
+
+        if 'chapa' in campos_set:
+            ch = (reg.chapa or '').strip()
+            novo_json = _mesclar_matricula_em_dados_adicionais(col.dados_adicionais, ch)
+            atual = col.dados_adicionais
+            if atual != novo_json:
+                col.dados_adicionais = novo_json
+                mudou = True
+
+        if 'salario' in campos_set and reg.salario is not None:
+            cargo_id = col.cargo_id
+            if not cargo_id:
+                salario_sem_cargo += 1
+            else:
+                sal_f = float(reg.salario)
+                cs = CargoSalario.query.filter_by(cargo_id=cargo_id, data=data_ref).first()
+                if cs:
+                    if float(cs.salario) != sal_f:
+                        cs.salario = sal_f
+                        mudou = True
+                else:
+                    db.session.add(
+                        CargoSalario(cargo_id=cargo_id, data=data_ref, salario=sal_f)
+                    )
+                    mudou = True
+
+        if mudou:
+            atualizados += 1
+        else:
+            sem_alteracao += 1
+
+    db.session.commit()
+    extra = f' Salário ignorado (colaborador sem cargo): {salario_sem_cargo}.' if salario_sem_cargo else ''
+    msg = (
+        f'Sincronização concluída: {atualizados} colaborador(es) atualizado(s). '
+        f'Efetivo com CPF sem colaborador correspondente: {sem_colaborador}. '
+        f'Sem alteração (já iguais, nome vazio no efetivo ou cargo/departamento não encontrado pelo nome): {sem_alteracao}.'
+        f'{extra}'
+    )
+    return jsonify({
+        'success': True,
+        'message': msg.replace('  ', ' ').strip(),
+        'atualizados': atualizados,
+        'sem_colaborador': sem_colaborador,
+        'sem_alteracao': sem_alteracao,
+        'salario_sem_cargo': salario_sem_cargo,
+    })
 
 
 @plr_bp.route('/efetivos/dados')

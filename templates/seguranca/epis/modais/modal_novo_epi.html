@@ -1,0 +1,216 @@
+<div class="modal fade" id="novoEpiModal" tabindex="-1" aria-labelledby="novoEpiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="novoEpiModalLabel">Cadastrar Novo EPI</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formNovoEpi" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="material_id" class="form-label">Material <span class="text-danger">*</span></label>
+                            <select class="form-select select2-novo-epi" id="material_id" name="material_id" required>
+                                <option value="">Selecione o material</option>
+                                {% for material in materiais %}
+                                <option value="{{ material.id }}">{{ material.codigo }} - {{ material.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback">Por favor, selecione um material.</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="ca_numero" class="form-label">Número do CA</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="ca_numero" name="ca_numero" placeholder="Ex: 12345">
+                                <button class="btn btn-outline-secondary" type="button" id="btnConsultarCA">Consultar</button>
+                            </div>
+                            <div class="form-text" id="ca_status"></div>
+                        </div>
+                    </div>
+                    <div class="row" id="dadosCA" style="display: none;">
+                        <div class="col-12 mb-3">
+                            <div class="alert alert-info" id="ca_info">
+                                <h6 class="alert-heading" id="ca_titulo"></h6>
+                                <p id="ca_descricao" class="mb-2"></p>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Fabricante:</strong> <span id="ca_fabricante"></span><br>
+                                        <strong>Situação:</strong> <span id="ca_situacao"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Validade:</strong> <span id="ca_validade"></span><br>
+                                        <strong>Normas:</strong> <span id="ca_normas"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="data_validade" class="form-label">Data de Validade</label>
+                            <input type="date" class="form-control" id="data_validade" name="data_validade">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="vida_util_meses" class="form-label">Vida Útil (meses)</label>
+                            <input type="number" class="form-control" id="vida_util_meses" name="vida_util_meses" min="0">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="estoque_atual" class="form-label">Estoque Atual</label>
+                            <input type="number" class="form-control" id="estoque_atual" name="estoque_atual" min="0" value="0">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="estoque_minimo" class="form-label">Estoque Mínimo</label>
+                            <input type="number" class="form-control" id="estoque_minimo" name="estoque_minimo" min="0" value="1">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSalvarNovoEpi">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    if (typeof $ === 'undefined') return;
+    var modalSel = '#novoEpiModal';
+
+    function initSelect2Novo() {
+        $(modalSel + ' .select2-novo-epi').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Selecione o material',
+            allowClear: true,
+            dropdownParent: $(modalSel)
+        });
+    }
+
+    $(modalSel).on('shown.bs.modal', function () {
+        initSelect2Novo();
+    });
+    $(modalSel).on('hidden.bs.modal', function () {
+        $(modalSel + ' .select2-novo-epi').each(function () {
+            if ($(this).data('select2')) $(this).select2('destroy');
+        });
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalNovoEpi = document.getElementById('novoEpiModal');
+        if (!modalNovoEpi) return;
+        var modalNovoEpiInstance = bootstrap.Modal.getOrCreateInstance(modalNovoEpi);
+
+        var btnConsultarCA = document.getElementById('btnConsultarCA');
+        var caNumero = document.getElementById('ca_numero');
+        var caStatus = document.getElementById('ca_status');
+        var dadosCA = document.getElementById('dadosCA');
+
+        if (btnConsultarCA) {
+            btnConsultarCA.addEventListener('click', function () {
+                var numero = (caNumero && caNumero.value) ? caNumero.value.trim() : '';
+                if (!numero) {
+                    if (caStatus) caStatus.innerHTML = '<span class="text-danger">Informe o número do CA</span>';
+                    return;
+                }
+                if (caStatus) caStatus.innerHTML = '<span class="text-info">Consultando...</span>';
+                if (dadosCA) dadosCA.style.display = 'none';
+
+                fetch('/seguranca/epis/consultar-ca?numero=' + encodeURIComponent(numero))
+                    .then(function (r) {
+                        if (!r.ok) throw new Error('Erro ao consultar o CA');
+                        return r.json();
+                    })
+                    .then(function (data) {
+                        document.getElementById('ca_titulo').textContent = data.equipamento || 'EPI';
+                        document.getElementById('ca_descricao').textContent = data.descricao || '';
+                        document.getElementById('ca_fabricante').textContent = data.fabricante || 'Não informado';
+                        document.getElementById('ca_situacao').textContent = data.situacao || 'Não informado';
+                        if (!data.descricao || data.descricao === 'Sem descrição disponível') {
+                            document.getElementById('ca_descricao').innerHTML = '<em class="text-muted">Sem descrição disponível</em>';
+                        }
+                        if (data.data_validade) {
+                            document.getElementById('ca_validade').textContent = new Date(data.data_validade).toLocaleDateString('pt-BR');
+                            document.getElementById('data_validade').value = data.data_validade;
+                        } else {
+                            document.getElementById('ca_validade').innerHTML = '<em class="text-muted">Não informada</em>';
+                        }
+                        if (data.normas && data.normas.length > 0) {
+                            document.getElementById('ca_normas').textContent = data.normas.join(', ');
+                        } else {
+                            document.getElementById('ca_normas').innerHTML = '<em class="text-muted">Não informadas</em>';
+                        }
+                        var caSituacao = document.getElementById('ca_situacao');
+                        caSituacao.classList.remove('text-success', 'text-danger', 'text-warning');
+                        if (data.situacao && data.situacao.toLowerCase().includes('válido')) {
+                            caSituacao.classList.add('text-success');
+                        } else if (data.situacao && (data.situacao.toLowerCase().includes('vencido') || data.situacao.toLowerCase().includes('venc'))) {
+                            caSituacao.classList.add('text-danger');
+                        } else {
+                            caSituacao.classList.add('text-warning');
+                        }
+                        if (dadosCA) dadosCA.style.display = 'flex';
+                        if (caStatus) caStatus.innerHTML = '<span class="text-success">CA encontrado!</span>';
+                    })
+                    .catch(function (err) {
+                        console.error(err);
+                        if (caStatus) caStatus.innerHTML = '<span class="text-danger">' + (err.message || 'Erro') + '</span>';
+                        if (dadosCA) dadosCA.style.display = 'none';
+                    });
+            });
+        }
+
+        var formNovoEpi = document.getElementById('formNovoEpi');
+        var btnSalvarNovoEpi = document.getElementById('btnSalvarNovoEpi');
+        if (btnSalvarNovoEpi && formNovoEpi) {
+            btnSalvarNovoEpi.addEventListener('click', function () {
+                if (!formNovoEpi.checkValidity()) {
+                    formNovoEpi.classList.add('was-validated');
+                    return;
+                }
+                btnSalvarNovoEpi.disabled = true;
+                btnSalvarNovoEpi.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Salvando...';
+                var formData = new FormData(formNovoEpi);
+                fetch('/seguranca/epis/novo', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.success) {
+                            var alertsDiv = document.querySelector('.alert-container');
+                            if (alertsDiv) {
+                                var alert = document.createElement('div');
+                                alert.className = 'alert alert-success alert-dismissible fade show';
+                                alert.innerHTML = data.message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                alertsDiv.appendChild(alert);
+                                setTimeout(function () {
+                                    alert.classList.remove('show');
+                                    setTimeout(function () { alert.remove(); }, 150);
+                                }, 5000);
+                            }
+                            modalNovoEpiInstance.hide();
+                            formNovoEpi.reset();
+                            formNovoEpi.classList.remove('was-validated');
+                            if (typeof window.reloadEpisDatatable === 'function') window.reloadEpisDatatable();
+                            if (typeof window.refreshEpisResumo === 'function') window.refreshEpisResumo();
+                        } else {
+                            alert(data.message);
+                        }
+                    })
+                    .catch(function () {
+                        alert('Erro ao cadastrar EPI. Tente novamente.');
+                    })
+                    .finally(function () {
+                        btnSalvarNovoEpi.disabled = false;
+                        btnSalvarNovoEpi.innerHTML = 'Salvar';
+                    });
+            });
+        }
+    });
+})();
+</script>

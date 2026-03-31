@@ -16,6 +16,10 @@
                 <i class="fas fa-file-import"></i>
                 <span class="d-none d-md-inline-block ms-1">Importar efetivo</span>
             </button>
+            <button type="button" class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalSincronizarColaboradores">
+                <i class="fas fa-user-edit"></i>
+                <span class="d-none d-md-inline-block ms-1">Colaboradores ← efetivo</span>
+            </button>
         </div>
     </div>
 
@@ -93,6 +97,7 @@
 </div>
 
 {% include 'plr/modais/modal_importar_efetivo.html' %}
+{% include 'plr/modais/modal_sincronizar_colaboradores.html' %}
 {% include 'plr/modais/modal_editar_efetivo.html' %}
 {% endblock %}
 
@@ -195,6 +200,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     initDataTable();
+
+    window.dtEfetivosReload = function() {
+        if (dtInstance) dtInstance.ajax.reload(null, false);
+    };
 });
 </script>
 {% endblock %}

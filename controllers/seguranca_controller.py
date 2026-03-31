@@ -28,8 +28,33 @@ except ImportError:
 import zipfile
 import re
 from sqlalchemy.orm import joinedload
+from sqlalchemy import or_
 
 seguranca_bp = Blueprint('seguranca', __name__)
+
+
+def _int_from_form(value):
+    """Converte campo de formulário em int (aceita '4959.0000', vírgula decimal)."""
+    if value is None:
+        raise ValueError('Valor numérico ausente')
+    s = str(value).strip()
+    if not s:
+        raise ValueError('Valor numérico vazio')
+    s = s.replace(',', '.')
+    try:
+        f = float(s)
+    except ValueError as e:
+        raise ValueError(f'Número inválido: {value!r}') from e
+    return int(f)
+
+
+def _estoque_as_int(value):
+    """Normaliza saldo (Decimal/float/str) para int, para comparar com o formulário."""
+    try:
+        return int(float(str(value).replace(',', '.')))
+    except (TypeError, ValueError):
+        return 0
+
 
 # Middleware para verificar se o usuário tem permissão
 #
@@ -57,27 +82,120 @@ def epis_index():
     }
     
     for epi in epis:
-        # Verificar estoque atual usando o método get_estoque_atual
-        # que busca a informação do estoque principal
-        if epi.status_estoque == "Esgotado" or epi.status_validade == "Vencido":
+        if epi.status_estoque() == "Esgotado" or epi.status_validade == "Vencido":
             epis_por_status["critico"].append(epi)
-        elif epi.status_estoque == "Crítico" or epi.status_validade == "Próximo ao vencimento":
+        elif epi.status_estoque() == "Crítico" or epi.status_validade == "Próximo ao vencimento":
             epis_por_status["atencao"].append(epi)
         else:
             epis_por_status["normal"].append(epi)
-    
-    # Buscar materiais para o formulário do modal
+
+    resumo_epis = {
+        "total": len(epis),
+        "critico": len(epis_por_status["critico"]),
+        "atencao": len(epis_por_status["atencao"]),
+        "normal": len(epis_por_status["normal"]),
+    }
+
     materiais = Materiais.query.filter(Materiais.categoria == 'EPI').all()
-    
-    # Buscar colaboradores para o modal de entregas
-    colaboradores = Colaborador.query.all()
-    
-    return render_template('seguranca/epis/index.html', 
-                           epis=epis, 
-                           epis_por_status=epis_por_status,
-                           materiais=materiais,
-                           colaboradores=colaboradores,
-                           now1=datetime.now()) 
+
+    return render_template(
+        'seguranca/epis/index.html',
+        resumo_epis=resumo_epis,
+        materiais=materiais,
+    )
+
+
+def _classificar_epis_resumo(epis):
+    epis_por_status = {"critico": [], "atencao": [], "normal": []}
+    for epi in epis:
+        if epi.status_estoque() == "Esgotado" or epi.status_validade == "Vencido":
+            epis_por_status["critico"].append(epi)
+        elif epi.status_estoque() == "Crítico" or epi.status_validade == "Próximo ao vencimento":
+            epis_por_status["atencao"].append(epi)
+        else:
+            epis_por_status["normal"].append(epi)
+    return {
+        "total": len(epis),
+        "critico": len(epis_por_status["critico"]),
+        "atencao": len(epis_por_status["atencao"]),
+        "normal": len(epis_por_status["normal"]),
+    }
+
+
+@seguranca_bp.route('/epis/resumo', methods=['GET'])
+@login_required
+def epis_resumo():
+    """Contadores dos cards da página de EPIs (atualização após AJAX)."""
+    epis = Epi.query.all()
+    return jsonify(_classificar_epis_resumo(epis))
+
+
+@seguranca_bp.route('/epis/datatables', methods=['POST'])
+@login_required
+def epis_datatables():
+    """JSON server-side para DataTables da listagem de EPIs."""
+    draw = int(request.form.get('draw', 1))
+    start = int(request.form.get('start', 0))
+    length = int(request.form.get('length', 25))
+    search_value = (request.form.get('search[value]') or '').strip()
+
+    base = Epi.query.join(Materiais, Epi.material_id == Materiais.id)
+    records_total = Epi.query.count()
+
+    query = base
+    if search_value:
+        term = f'%{search_value}%'
+        clauses = [
+            Materiais.nome.ilike(term),
+            Materiais.codigo.ilike(term),
+            Epi.ca_numero.ilike(term),
+        ]
+        if search_value.isdigit():
+            clauses.append(Epi.id == int(search_value))
+        query = query.filter(or_(*clauses))
+
+    records_filtered = query.count()
+
+    order_col_index = request.form.get('order[0][column]', '0')
+    order_dir = request.form.get('order[0][dir]', 'asc')
+    col_map = {
+        '0': Epi.id,
+        '1': Materiais.nome,
+        '2': Epi.ca_numero,
+        '4': Epi.data_validade,
+        '5': Epi.data_validade,
+    }
+    order_col = col_map.get(str(order_col_index), Epi.id)
+    if order_dir == 'desc':
+        query = query.order_by(order_col.desc())
+    else:
+        query = query.order_by(order_col.asc())
+
+    page_items = query.offset(start).limit(length).all()
+
+    data = []
+    for epi in page_items:
+        est = epi.getEstoqueAtual()
+        st_est = epi.status_estoque()
+        sv = epi.status_validade
+        data.append({
+            'id': epi.id,
+            'material_nome': epi.material.nome if epi.material else '',
+            'ca_numero': epi.ca_numero or 'Não informado',
+            'estoque_atual': est,
+            'estoque_minimo': epi.estoque_minimo,
+            'status_estoque': st_est,
+            'data_validade': epi.data_validade.strftime('%d/%m/%Y') if epi.data_validade else 'Não aplicável',
+            'data_validade_iso': epi.data_validade.isoformat() if epi.data_validade else '',
+            'status_validade': sv or '—',
+        })
+
+    return jsonify({
+        'draw': draw,
+        'recordsTotal': records_total,
+        'recordsFiltered': records_filtered,
+        'data': data,
+    })
 
 @seguranca_bp.route('/epis/novo', methods=['GET', 'POST'])
 @login_required
@@ -121,17 +239,17 @@ def epi_novo():
             epi.data_validade = datetime.strptime(
                 data_validade, '%Y-%m-%d').date()
 
-        if vida_util_meses:
-            epi.vida_util_meses = int(vida_util_meses)
+        if vida_util_meses and str(vida_util_meses).strip():
+            epi.vida_util_meses = _int_from_form(vida_util_meses)
 
         # O campo estoque_atual não é mais usado diretamente,
         # mas será atualizado através do estoque principal
         estoque_quantidade = 0
-        if estoque_atual:
-            estoque_quantidade = int(estoque_atual)
+        if estoque_atual and str(estoque_atual).strip():
+            estoque_quantidade = _int_from_form(estoque_atual)
 
-        if estoque_minimo:
-            epi.estoque_minimo = int(estoque_minimo)
+        if estoque_minimo and str(estoque_minimo).strip():
+            epi.estoque_minimo = _int_from_form(estoque_minimo)
             
         epi.usuario_id = current_user.id
 
@@ -150,10 +268,10 @@ def epi_novo():
                     'id': epi.id,
                     'material_nome': epi.material.nome,
                     'ca_numero': epi.ca_numero or 'Não informado',
-                    'estoque_atual': epi.get_estoque_atual(),
+                    'estoque_atual': epi.getEstoqueAtual(),
                     'estoque_minimo': epi.estoque_minimo,
                     'data_validade': epi.data_validade.strftime('%d/%m/%Y') if epi.data_validade else 'Não aplicável',
-                    'status_estoque': epi.status_estoque,
+                    'status_estoque': epi.status_estoque(),
                     'status_validade': epi.status_validade
                 }
             })
@@ -190,24 +308,24 @@ def epi_editar(id):
             else:
                 data_validade = None
                 
-            if vida_util_meses:
-                vida_util_meses = int(vida_util_meses)
+            if vida_util_meses and str(vida_util_meses).strip():
+                vida_util_meses = _int_from_form(vida_util_meses)
             else:
                 vida_util_meses = None
-                
-            estoque_quantidade = epi.getEstoqueAtual()
-            if estoque_atual:
-                estoque_atual = int(estoque_atual)
-                # Se o estoque mudou, registrar a diferença como ajuste
+
+            estoque_quantidade = _estoque_as_int(epi.getEstoqueAtual())
+
+            if estoque_atual is not None and str(estoque_atual).strip() != '':
+                estoque_atual = _int_from_form(estoque_atual)
                 if estoque_atual != estoque_quantidade:
                     diferenca = estoque_atual - estoque_quantidade
                     if diferenca > 0:
                         epi.adicionar_estoque(diferenca, current_user.id, "Ajuste via edição de EPI")
                     elif diferenca < 0:
-                        epi.remover_estoque(-diferenca, current_user.id, "Ajuste via edição de EPI")
-                
-            if estoque_minimo:
-                estoque_minimo = int(estoque_minimo)
+                        epi.remover_estoque(-diferenca, current_user.id)
+
+            if estoque_minimo is not None and str(estoque_minimo).strip() != '':
+                estoque_minimo = _int_from_form(estoque_minimo)
             else:
                 estoque_minimo = 1
             
@@ -229,7 +347,7 @@ def epi_editar(id):
                         'estoque_atual': epi.getEstoqueAtual(),
                         'estoque_minimo': epi.estoque_minimo,
                         'data_validade': epi.data_validade.strftime('%d/%m/%Y') if epi.data_validade else 'Não aplicável',
-                        'status_estoque': epi.status_estoque,
+                        'status_estoque': epi.status_estoque(),
                         'status_validade': epi.status_validade
                     }
                 })
@@ -251,7 +369,7 @@ def epi_editar(id):
             'ca_numero': epi.ca_numero or '',
             'data_validade': epi.data_validade.strftime('%Y-%m-%d') if epi.data_validade else '',
             'vida_util_meses': epi.vida_util_meses,
-            'estoque_atual': epi.getEstoqueAtual(),
+            'estoque_atual': _estoque_as_int(epi.getEstoqueAtual()),
             'estoque_minimo': epi.estoque_minimo
         })
 
@@ -371,7 +489,7 @@ def epi_ajustar_estoque(id):
         
         elif operacao == 'subtrair':
             
-            epi.remover_estoque(quantidade_ajuste, current_user.id, motivo)
+            epi.remover_estoque(quantidade_ajuste, current_user.id)
             msg = f'{quantidade_ajuste} item(s) removido(s) do estoque com sucesso!'
         else:
             if is_ajax:
@@ -383,8 +501,8 @@ def epi_ajustar_estoque(id):
             return jsonify({
                 'success': True, 
                 'message': msg,
-                'estoque_atual': epi.get_estoque_atual(),
-                'status_estoque': epi.status_estoque
+                'estoque_atual': epi.getEstoqueAtual(),
+                'status_estoque': epi.status_estoque()
             })
         
         flash(msg, 'success')
@@ -1116,7 +1234,7 @@ def relatorios():
         # Usar filter_by para verificar quais EPIs têm estoque zero no sistema principal
         epis_criticos = []
         for epi in Epi.query.all():
-            if epi.get_estoque_atual() <= 0:
+            if epi.getEstoqueAtual() <= 0:
                 epis_criticos.append(epi.id)
         epis_criticos_count = len(epis_criticos)
         

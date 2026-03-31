@@ -170,7 +170,7 @@ class Epi(db.Model):
         """
         Retorna o status do estoque atual
         """
-        estoque_atual = self.get_estoque_atual()
+        estoque_atual = self.getEstoqueAtual()
         if estoque_atual <= 0:
             return "Esgotado"
         elif estoque_atual < self.estoque_minimo:

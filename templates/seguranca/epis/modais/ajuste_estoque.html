@@ -1,158 +1,126 @@
-<div class="modal fade" id="ajustarEstoqueModal" tabindex="-1"
-        aria-labelledby="ajustarEstoqueModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="ajustarEstoqueModalLabel">Ajustar Estoque - <span id="ajustarEstoqueModalEpiNome"></span></h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form id="form-ajustar-estoque" action="" method="post">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="estoque-atual" class="form-label">Estoque Atual</label>
-                            <input type="text" class="form-control" id="estoque-atual"
-                                value="" disabled>
-                        </div>
-                        <div class="mb-3">
-                            <label for="operacao" class="form-label">Operação</label>
-                            <select class="form-select" name="operacao" id="operacao" required>
-                                <option value="adicionar">Adicionar ao Estoque</option>
-                                <option value="subtrair">Subtrair do Estoque</option>
-                                <option value="definir_estoque_real">Definir Estoque Real</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="quantidade" class="form-label" id="labelQuantidade">Quantidade</label>
-                            <input type="number" class="form-control" name="quantidade"
-                                id="aemquantidade" min="1" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="motivo" class="form-label">Motivo</label>
-                            <input type="text" class="form-control" id="motivo" name="motivo">
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Confirmar</button>
-                    </div>
-                </form>
+<div class="modal fade" id="ajustarEstoqueModal" tabindex="-1" aria-labelledby="ajustarEstoqueModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="ajustarEstoqueModalLabel">Ajustar Estoque — <span id="ajustarEstoqueModalEpiNome"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
+            <form id="form-ajustar-estoque" action="" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="estoque-atual" class="form-label">Estoque Atual</label>
+                        <input type="text" class="form-control" id="estoque-atual" value="" disabled>
+                    </div>
+                    <div class="mb-3">
+                        <label for="operacao" class="form-label">Operação</label>
+                        <select class="form-select" name="operacao" id="operacao" required>
+                            <option value="adicionar">Adicionar ao Estoque</option>
+                            <option value="subtrair">Subtrair do Estoque</option>
+                            <option value="definir_estoque_real">Definir Estoque Real</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="aemquantidade" class="form-label" id="labelQuantidade">Quantidade</label>
+                        <input type="number" class="form-control" name="quantidade" id="aemquantidade" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivo" class="form-label">Motivo</label>
+                        <input type="text" class="form-control" id="motivo" name="motivo">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Confirmar</button>
+                </div>
+            </form>
         </div>
     </div>
-{% block script %}
+</div>
 <script>
-    // ========= AJUSTE DE ESTOQUE ========]
+document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('ajustarEstoqueModal');
+    if (!modalEl) return;
+    var ajusteModal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    var formAjuste = document.getElementById('form-ajustar-estoque');
+    var selectOperacao = document.getElementById('operacao');
+    var labelQtd = document.getElementById('labelQuantidade');
+    var inputQtd = document.getElementById('aemquantidade');
 
-    document.querySelectorAll('button[data-bs-target="ajustarEstoqueModal"]').forEach(button => {
-            button.addEventListener('click', function(e) {
-                e.preventDefault();
-                const epiId = this.getAttribute('data-epi-id');
-                const modal = new bootstrap.Modal(document.getElementById('ajustarEstoqueModal'));
-                console.log(epiId);
-                document.getElementById('aemquantidade').value='';
-                fetch(`/seguranca/epis/ajustar-estoque/${epiId}`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        console.log(data);
-                        document.getElementById('ajustarEstoqueModalEpiNome').textContent = data.epi_nome;
-                        document.getElementById(`estoque-atual`).value = data.estoque_atual;
-                        document.getElementById(`form-ajustar-estoque`).setAttribute('action', `/seguranca/epis/ajustar-estoque/${epiId}`);
-                        modal.show();
-                    }
-                })
-                .catch(error => {
-                    console.error('Erro ao ajustar estoque:', error);
-                });
-            });
-        });
-        
-        
-        // Lógica para os modais de Ajustar Estoque
-        document.querySelectorAll('select[name="operacao"]').forEach(selectOperacao => {
-        selectOperacao.addEventListener('change', function() {
-            const epiId = this.id.replace('operacao', ''); // Extrai o ID do EPI do ID do select
-            const labelQuantidade = document.getElementById(`labelQuantidade${epiId}`);
-            const inputQuantidade = document.getElementById(`quantidade${epiId}`);
-
-            if (!labelQuantidade || !inputQuantidade) return;
-
+    if (selectOperacao && labelQtd && inputQtd) {
+        selectOperacao.addEventListener('change', function () {
             if (this.value === 'definir_estoque_real') {
-                labelQuantidade.textContent = 'Nova Quantidade Total em Estoque';
-                inputQuantidade.min = '0';
+                labelQtd.textContent = 'Nova Quantidade Total em Estoque';
+                inputQtd.min = '0';
             } else {
-                labelQuantidade.textContent = 'Quantidade';
-                inputQuantidade.min = '1';
+                labelQtd.textContent = 'Quantidade';
+                inputQtd.min = '1';
             }
         });
+    }
+
+    $(document).on('click', '.btn-ajustar-estoque-epi', function (e) {
+        e.preventDefault();
+        var epiId = this.getAttribute('data-epi-id');
+        if (!epiId) return;
+        document.getElementById('aemquantidade').value = '';
+        fetch('/seguranca/epis/ajustar-estoque/' + epiId, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success) {
+                    document.getElementById('ajustarEstoqueModalEpiNome').textContent = data.epi_nome;
+                    document.getElementById('estoque-atual').value = data.estoque_atual;
+                    formAjuste.setAttribute('action', '/seguranca/epis/ajustar-estoque/' + epiId);
+                    ajusteModal.show();
+                }
+            })
+            .catch(function () {
+                alert('Erro ao carregar dados do estoque.');
+            });
     });
 
-    // Submissão AJAX para os formulários de ajuste de estoque
-    document.querySelectorAll('form[id="form-ajustar-estoque"]').forEach(form => {
-        form.addEventListener('submit', function(event) {
+    if (formAjuste) {
+        formAjuste.addEventListener('submit', function (event) {
             event.preventDefault();
-            const submitButton = form.querySelector('button[type="submit"]');
-            const originalButtonHtml = submitButton.innerHTML;
+            var submitButton = formAjuste.querySelector('button[type="submit"]');
+            var originalButtonHtml = submitButton.innerHTML;
             submitButton.disabled = true;
-            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Salvando...';
-            const formData = new FormData(form);
-            const actionUrl = form.action;
-            console.log(actionUrl); 
-            console.log(formData);
+            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Salvando...';
+            var formData = new FormData(formAjuste);
+            var actionUrl = formAjuste.action;
             fetch(actionUrl, {
                 method: 'POST',
                 body: formData,
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
             })
-            .then(response => response.json())
-            .then(data => {
-                console.log('data',data);
-                if (data.success) {
-                   // showToast('Sucesso', data.message, 'success');
-                    // Atualizar o estoque na interface (se necessário)
-                    const epiId = form.getAttribute('action').split('/').pop(); // Pega o ID do EPI da action
-                    const spanEstoqueAtual = document.getElementById(`modalEstoqueAtual${epiId}`);
-                    const cardEstoqueAtual = document.getElementById(`cardEstoqueAtual${epiId}`); // Span na tabela/card principal
-                    if (spanEstoqueAtual && data.estoque_atual !== undefined) {
-                        spanEstoqueAtual.textContent = data.estoque_atual;
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        ajusteModal.hide();
+                        if (typeof window.reloadEpisDatatable === 'function') window.reloadEpisDatatable();
+                        if (typeof window.refreshEpisResumo === 'function') window.refreshEpisResumo();
+                        var alertsDiv = document.querySelector('.alert-container');
+                        if (alertsDiv && data.message) {
+                            var alert = document.createElement('div');
+                            alert.className = 'alert alert-success alert-dismissible fade show';
+                            alert.innerHTML = data.message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                            alertsDiv.appendChild(alert);
+                        }
+                    } else {
+                        alert(data.message || 'Erro ao ajustar estoque.');
                     }
-                    if (cardEstoqueAtual && data.estoque_atual !== undefined) {
-                        cardEstoqueAtual.textContent = data.estoque_atual;
-                        // Você pode querer atualizar o badge de status do estoque também aqui
-                    }
-                    // Fechar o modal
-                    const modalId = form.closest('.modal').id;
-                    const modalInstance = bootstrap.Modal.getInstance(document.getElementById(modalId));
-                    if (modalInstance) {
-                        modalInstance.hide();
-                    }
-                    // Opcional: Recarregar a página ou apenas atualizar dados dinamicamente
-                     window.location.reload();
-                } else {
-                    throw new Error(data.message || `Erro ${status} ao ajustar estoque.`);
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao ajustar estoque:', error);
-                
-            })
-            .finally(() => {
-                submitButton.disabled = false;
-                submitButton.innerHTML = originalButtonHtml;
-            });
+                })
+                .catch(function () {
+                    alert('Erro ao ajustar estoque.');
+                })
+                .finally(function () {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonHtml;
+                });
         });
-    });
-    // ========= AJUSTE DE ESTOQUE =========
-    // Os modais já existentes para exclusão podem ser adaptados
-    // para usar o data-epi-id
-    
+    }
+});
 </script>
-{% endblock %}

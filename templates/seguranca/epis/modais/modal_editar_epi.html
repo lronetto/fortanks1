@@ -1,0 +1,258 @@
+<div class="modal fade" id="editarEpiModal" tabindex="-1" aria-labelledby="editarEpiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="editarEpiModalLabel">Editar EPI</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="loadingEditarEpi" class="text-center my-4">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                    <p class="mt-2">Carregando dados do EPI...</p>
+                </div>
+                <form id="formEditarEpi" method="POST" style="display: none;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                    <input type="hidden" id="editar_epi_id" name="epi_id" value="">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editar_material_id" class="form-label">Material</label>
+                            <select class="form-select select2-editar-epi" id="editar_material_id" name="material_id" required>
+                                <option value="">Selecione o material</option>
+                                {% for material in materiais %}
+                                <option value="{{ material.id }}">{{ material.codigo }} - {{ material.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editar_ca_numero" class="form-label">Número do CA</label>
+                            <div class="input-group">
+                                <span class="input-group-text">CA</span>
+                                <input type="text" class="form-control" id="editar_ca_numero" name="ca_numero" placeholder="Número do Certificado de Aprovação">
+                                <button class="btn btn-outline-secondary" type="button" id="btnConsultarCAEditar">Consultar</button>
+                            </div>
+                            <div class="form-text" id="editar_ca_status"></div>
+                        </div>
+                    </div>
+                    <div class="row" id="editar_dadosCA" style="display: none;">
+                        <div class="col-12 mb-3">
+                            <div class="alert alert-info" id="editar_ca_info">
+                                <h6 class="alert-heading" id="editar_ca_titulo"></h6>
+                                <p id="editar_ca_descricao" class="mb-2"></p>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <strong>Fabricante:</strong> <span id="editar_ca_fabricante"></span><br>
+                                        <strong>Situação:</strong> <span id="editar_ca_situacao"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <strong>Validade:</strong> <span id="editar_ca_validade_texto"></span><br>
+                                        <strong>Normas:</strong> <span id="editar_ca_normas"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editar_data_validade" class="form-label">Data de Validade</label>
+                            <input type="date" class="form-control" id="editar_data_validade" name="data_validade">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editar_vida_util_meses" class="form-label">Vida Útil (meses)</label>
+                            <input type="number" class="form-control" id="editar_vida_util_meses" name="vida_util_meses" min="1">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="editar_estoque_atual" class="form-label">Estoque Atual <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editar_estoque_atual" name="estoque_atual" min="0" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="editar_estoque_minimo" class="form-label">Estoque Mínimo <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="editar_estoque_minimo" name="estoque_minimo" min="1" required>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info" id="btnSalvarEditarEpi">Atualizar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    if (typeof $ === 'undefined') return;
+    var modalSel = '#editarEpiModal';
+
+    $(modalSel).on('hidden.bs.modal', function () {
+        if ($('#editar_material_id').data('select2')) $('#editar_material_id').select2('destroy');
+        var ed = document.getElementById('editar_dadosCA');
+        var st = document.getElementById('editar_ca_status');
+        if (ed) ed.style.display = 'none';
+        if (st) st.innerHTML = '';
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEditarEpi = document.getElementById('editarEpiModal');
+        if (!modalEditarEpi) return;
+        var modalEditarEpiInstance = bootstrap.Modal.getOrCreateInstance(modalEditarEpi);
+        var formEditarEpi = document.getElementById('formEditarEpi');
+        var loadingEditarEpi = document.getElementById('loadingEditarEpi');
+        var btnSalvarEditarEpi = document.getElementById('btnSalvarEditarEpi');
+
+        function carregarDadosEPI(epiId) {
+            if (!epiId) return;
+            loadingEditarEpi.style.display = 'block';
+            formEditarEpi.style.display = 'none';
+            var edCa = document.getElementById('editar_dadosCA');
+            var stCa = document.getElementById('editar_ca_status');
+            if (edCa) edCa.style.display = 'none';
+            if (stCa) stCa.innerHTML = '';
+
+            fetch('/seguranca/epis/editar/' + epiId, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    document.getElementById('editar_epi_id').value = data.id;
+                    document.getElementById('editar_material_id').value = data.material_id;
+                    document.getElementById('editar_ca_numero').value = data.ca_numero;
+                    document.getElementById('editar_data_validade').value = data.data_validade;
+                    document.getElementById('editar_vida_util_meses').value = data.vida_util_meses;
+                    document.getElementById('editar_estoque_atual').value = data.estoque_atual;
+                    document.getElementById('editar_estoque_minimo').value = data.estoque_minimo;
+                    document.getElementById('editarEpiModalLabel').textContent = 'Editar EPI: ' + data.material_nome;
+                    loadingEditarEpi.style.display = 'none';
+                    formEditarEpi.style.display = 'block';
+                    if ($('#editar_material_id').data('select2')) $('#editar_material_id').select2('destroy');
+                    $('#editar_material_id').select2({
+                        theme: 'bootstrap-5',
+                        width: '100%',
+                        placeholder: 'Selecione o material',
+                        allowClear: true,
+                        dropdownParent: $(modalSel)
+                    });
+                })
+                .catch(function () {
+                    alert('Erro ao carregar dados do EPI. Tente novamente.');
+                    modalEditarEpiInstance.hide();
+                });
+        }
+
+        $(document).on('click', '.btn-editar-epi', function () {
+            var epiId = this.getAttribute('data-id');
+            carregarDadosEPI(epiId);
+            modalEditarEpiInstance.show();
+        });
+
+        var btnConsultarCAEditar = document.getElementById('btnConsultarCAEditar');
+        if (btnConsultarCAEditar) {
+            btnConsultarCAEditar.addEventListener('click', function () {
+                var caInput = document.getElementById('editar_ca_numero');
+                var caStatus = document.getElementById('editar_ca_status');
+                var dadosCA = document.getElementById('editar_dadosCA');
+                if (!caInput || !caStatus || !dadosCA) return;
+                var numero = caInput.value.trim();
+                if (!numero) {
+                    caStatus.innerHTML = '<span class="text-danger">Informe o número do CA</span>';
+                    return;
+                }
+                caStatus.innerHTML = '<span class="text-info">Consultando...</span>';
+                dadosCA.style.display = 'none';
+
+                fetch('/seguranca/epis/consultar-ca?numero=' + encodeURIComponent(numero))
+                    .then(function (response) {
+                        return response.json().then(function (data) {
+                            if (!response.ok) throw new Error(data.erro || 'Erro ao consultar o CA');
+                            return data;
+                        });
+                    })
+                    .then(function (data) {
+                        document.getElementById('editar_ca_titulo').textContent = data.equipamento || 'EPI';
+                        document.getElementById('editar_ca_descricao').textContent = data.descricao || '';
+                        document.getElementById('editar_ca_fabricante').textContent = data.fabricante || 'Não informado';
+                        var caSituacao = document.getElementById('editar_ca_situacao');
+                        caSituacao.textContent = data.situacao || 'Não informado';
+                        caSituacao.classList.remove('text-success', 'text-danger', 'text-warning');
+                        if (data.situacao && data.situacao.toLowerCase().includes('válido')) {
+                            caSituacao.classList.add('text-success');
+                        } else if (data.situacao && (data.situacao.toLowerCase().includes('vencido') || data.situacao.toLowerCase().includes('venc'))) {
+                            caSituacao.classList.add('text-danger');
+                        } else {
+                            caSituacao.classList.add('text-warning');
+                        }
+                        if (!data.descricao || data.descricao === 'Sem descrição disponível') {
+                            document.getElementById('editar_ca_descricao').innerHTML = '<em class="text-muted">Sem descrição disponível</em>';
+                        }
+                        if (data.data_validade) {
+                            document.getElementById('editar_ca_validade_texto').textContent = new Date(data.data_validade).toLocaleDateString('pt-BR');
+                            document.getElementById('editar_data_validade').value = data.data_validade;
+                        } else {
+                            document.getElementById('editar_ca_validade_texto').innerHTML = '<em class="text-muted">Não informada</em>';
+                        }
+                        if (data.normas && data.normas.length > 0) {
+                            document.getElementById('editar_ca_normas').textContent = data.normas.join(', ');
+                        } else {
+                            document.getElementById('editar_ca_normas').innerHTML = '<em class="text-muted">Não informadas</em>';
+                        }
+                        dadosCA.style.display = 'none';
+                        caStatus.innerHTML = '<span class="text-success">CA encontrado!</span>';
+                    })
+                    .catch(function (error) {
+                        console.error(error);
+                        caStatus.innerHTML = '<span class="text-danger">' + (error.message || 'Falha na consulta') + '</span>';
+                        dadosCA.style.display = 'none';
+                    });
+            });
+        }
+
+        if (btnSalvarEditarEpi && formEditarEpi) {
+            btnSalvarEditarEpi.addEventListener('click', function () {
+                if (!formEditarEpi.checkValidity()) {
+                    formEditarEpi.classList.add('was-validated');
+                    return;
+                }
+                btnSalvarEditarEpi.disabled = true;
+                btnSalvarEditarEpi.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Atualizando...';
+                var formData = new FormData(formEditarEpi);
+                var epiId = document.getElementById('editar_epi_id').value;
+                fetch('/seguranca/epis/editar/' + epiId, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        console.log(data);
+                        if (data.success) {
+                            var alertsDiv = document.querySelector('.alert-container');
+                            if (alertsDiv) {
+                                var alert = document.createElement('div');
+                                alert.className = 'alert alert-success alert-dismissible fade show';
+                                alert.innerHTML = data.message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                                alertsDiv.appendChild(alert);
+                                setTimeout(function () {
+                                    alert.classList.remove('show');
+                                    setTimeout(function () { alert.remove(); }, 150);
+                                }, 5000);
+                            }
+                            modalEditarEpiInstance.hide();
+                            if (typeof window.reloadEpisDatatable === 'function') window.reloadEpisDatatable();
+                            if (typeof window.refreshEpisResumo === 'function') window.refreshEpisResumo();
+                        } else {
+                            alert(data.message);
+                        }
+                    })
+                    .catch(function () {
+                        alert('Erro ao atualizar EPI. Tente novamente.');
+                    })
+                    .finally(function () {
+                        btnSalvarEditarEpi.disabled = false;
+                        btnSalvarEditarEpi.innerHTML = 'Atualizar';
+                    });
+            });
+        }
+    });
+})();
+</script>
