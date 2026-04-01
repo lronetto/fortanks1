@@ -266,6 +266,8 @@ def utility_processor():
     """
     Adiciona funções úteis ao contexto dos templates
     """
+    from models.equipamento import EQ_STATUS
+
     def get_current_year():
         return datetime.now().year
 
@@ -287,7 +289,8 @@ def utility_processor():
     return dict(
         get_current_year=get_current_year,
         is_active=is_active,
-        formatcnpj=formatcnpj
+        formatcnpj=formatcnpj,
+        EQ_STATUS=EQ_STATUS,
     )
 
 

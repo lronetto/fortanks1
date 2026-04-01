@@ -439,3 +439,22 @@ main {
         display: block !important;
     }
 }
+
+/* Sugestões de nome (materiais Equipamento/Ferramenta) em modais de equipamento */
+.equipamento-busca-material-wrap {
+    position: relative;
+}
+
+.equipamento-busca-material-wrap .equipamento-busca-material-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 2px;
+    z-index: 2000;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--bs-body-bg, #fff);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.375rem;
+}

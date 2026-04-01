@@ -759,8 +759,8 @@
                                     {% endif %}
                                 </ul>
                             </li>
-                            <!--
-                            <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }}">
+                            
+                            <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
                                 <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
                                     class="dropdown-toggle">
                                     <i class="fas fa-tools"></i> Equipamentos
@@ -769,6 +769,11 @@
                                     <li class="{{ is_active('equipamento') }}">
                                         <a href="{{ url_for('equipamento.index') }}">
                                             <i class="fas fa-tools"></i> Listar Equipamentos
+                                        </a>
+                                    </li>
+                                    <li class="{{ is_active('equipamento.emprestimos') }}">
+                                        <a href="{{ url_for('equipamento.emprestimos') }}">
+                                            <i class="fas fa-people-carry"></i> Empréstimos a colaboradores
                                         </a>
                                     </li>
                                     <li class="{{ is_active('equipamento.checklists') }}">
@@ -788,7 +793,7 @@
                                     </li>
                                 </ul>
                             </li>
-                            -->
+                            
                             <li>
                                 <a href="{{ url_for('acabamento_transporte.index') }}">
                                     <i class="fas fa-paint-roller"></i> <i class="fas fa-truck"></i> Acabamento/Transporte de Peças

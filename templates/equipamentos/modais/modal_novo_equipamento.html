@@ -1,0 +1,181 @@
+<div class="modal fade" id="novoEquipamentoModal" tabindex="-1" aria-labelledby="novoEquipamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="novoEquipamentoModalLabel">Novo Equipamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="novoEquipamentoForm" novalidate>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_eq_nome" class="form-label">Nome *</label>
+                            <div class="equipamento-busca-material-wrap">
+                                <input type="text" class="form-control equipamento-busca-material-input" id="novo_eq_nome" name="nome" required autocomplete="off" placeholder="Digite para buscar material (Equipamento/Ferramenta)" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}">
+                                <div class="invalid-feedback">Por favor, informe o nome do equipamento.</div>
+                                <div class="equipamento-busca-material-dropdown list-group shadow-sm d-none" role="listbox" aria-label="Materiais sugeridos"></div>
+                            </div>
+                            <div class="form-text">Busca cadastros de material com categoria Equipamento ou Ferramenta.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_eq_tipo" class="form-label">Tipo *</label>
+                            <select class="form-select" id="novo_eq_tipo" name="tipo" required>
+                                <option value="">Selecione...</option>
+                                <option value="Veiculos">Veículos</option>
+                                <option value="Maquinas">Máquinas</option>
+                                <option value="Ferramentas">Ferramentas</option>
+                            </select>
+                            <div class="invalid-feedback">Por favor, selecione o tipo do equipamento.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_eq_propriedade" class="form-label">Propriedade *</label>
+                            <select class="form-select" id="novo_eq_propriedade" name="propriedade" required>
+                                <option value="">Selecione...</option>
+                                <option value="Propria">Própria</option>
+                                <option value="Alugada">Alugada</option>
+                            </select>
+                            <div class="invalid-feedback">Por favor, selecione o tipo de propriedade.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_eq_modelo" class="form-label">Modelo *</label>
+                            <input type="text" class="form-control" id="novo_eq_modelo" name="modelo" required>
+                            <div class="invalid-feedback">Por favor, informe o modelo do equipamento.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_eq_numero_serie" class="form-label">Número de Série *</label>
+                            <input type="text" class="form-control" id="novo_eq_numero_serie" name="numero_serie" required>
+                            <div class="invalid-feedback">Por favor, informe o número de série do equipamento.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_eq_patrimonio" class="form-label">Patrimônio</label>
+                            <input type="text" class="form-control" id="novo_eq_patrimonio" name="patrimonio" placeholder="Nº tombamento / patrimônio">
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="novo_eq_checklist_modelo_id" class="form-label">Modelo de checklist padrão</label>
+                            <select class="form-select" id="novo_eq_checklist_modelo_id" name="checklist_modelo_id">
+                                <option value="">Nenhum (escolher ao iniciar checklist)</option>
+                                {% for m in checklist_modelos %}
+                                <option value="{{ m.id }}">{{ m.nome }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Gravado em dados adicionais; pré-selecionado no modal Novo checklist.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_eq_nota_fiscal" class="form-label">Nota Fiscal</label>
+                            <input type="text" class="form-control" id="novo_eq_nota_fiscal" name="nota_fiscal">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_eq_fotos" class="form-label">Fotos</label>
+                            <input type="file" class="form-control" id="novo_eq_fotos" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+                            <div class="form-text">Opcional. JPEG, PNG, WebP ou GIF.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="novo_eq_data_aquisicao" class="form-label">Data de Aquisição *</label>
+                            <input type="date" class="form-control" id="novo_eq_data_aquisicao" name="data_aquisicao" required>
+                            <div class="invalid-feedback">Por favor, informe a data de aquisição do equipamento.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="novo_eq_status" class="form-label">Status *</label>
+                            <select class="form-select" id="novo_eq_status" name="status" required>
+                                <option value="">Selecione...</option>
+                                {% for s in EQ_STATUS %}
+                                <option value="{{ s }}">{{ s }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="invalid-feedback">Por favor, selecione o status do equipamento.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label for="novo_eq_observacoes" class="form-label">Observações</label>
+                            <textarea class="form-control" id="novo_eq_observacoes" name="observacoes" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvarNovoEquipamento">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var form = document.getElementById('novoEquipamentoForm');
+        var modalEl = document.getElementById('novoEquipamentoModal');
+        if (!form || !modalEl) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var urlNovo = "{{ url_for('equipamento.novo') }}";
+
+        var dataAquisicao = document.getElementById('novo_eq_data_aquisicao');
+        if (dataAquisicao) {
+            var hoje = new Date().toISOString().split('T')[0];
+            dataAquisicao.setAttribute('max', hoje);
+        }
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+            var btn = document.getElementById('btnSalvarNovoEquipamento');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Salvando...';
+            }
+            var fd = new FormData(form);
+            fetch(urlNovo, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var alertsDiv = document.querySelector('.alert-container');
+                    if (alertsDiv) {
+                        var alert = document.createElement('div');
+                        alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                        alert.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        alertsDiv.appendChild(alert);
+                    }
+                    if (data.success) {
+                        modal.hide();
+                        form.reset();
+                        form.classList.remove('was-validated');
+                        if (typeof window.reloadEquipamentosDatatable === 'function') {
+                            window.reloadEquipamentosDatatable();
+                        }
+                    }
+                })
+                .catch(function () {
+                    alert('Erro ao cadastrar equipamento. Tente novamente.');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Salvar';
+                    }
+                });
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            form.reset();
+            form.classList.remove('was-validated');
+        });
+    });
+})();
+</script>

@@ -30,14 +30,16 @@ def before_request():
 @login_required
 def index():
     search_term = request.args.get("search", "").strip()
-    category_filter = request.args.get("category", "").strip()
+    category_filters = [
+        c.strip() for c in request.args.getlist("category") if c and str(c).strip()
+    ]
 
     query = Materiais.query
     if search_term:
         search_pattern = f"%{search_term}%"
         query = query.filter(or_(Materiais.nome.ilike(search_pattern), Materiais.codigo.ilike(search_pattern)))
-    if category_filter:
-        query = query.filter(Materiais.categoria == category_filter)
+    if category_filters:
+        query = query.filter(Materiais.categoria.in_(category_filters))
     query = query.order_by(Materiais.nome)
 
     # Retornar todos os resultados filtrados para o DataTables fazer a paginação client-side
@@ -55,7 +57,7 @@ def index():
         unidades=unidades,
         categorias_filtro=categorias_filtro,
         search_term=search_term,
-        category_filter=category_filter,
+        category_filters=category_filters,
     )
 
 

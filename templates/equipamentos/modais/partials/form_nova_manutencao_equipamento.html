@@ -1,0 +1,29 @@
+{# Nova manutenção rápida (modal): início, observações; responsável e status fixos no servidor #}
+<form id="form_nova_manutencao_eq" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="manutencao_modal_rapida" value="1">
+    <div class="mb-3">
+        <span class="text-muted small">Equipamento</span>
+        <p class="fw-semibold mb-0">{{ equipamento.nome }}</p>
+    </div>
+    <div class="mb-3">
+        <span class="text-muted small">Responsável</span>
+        <p class="fw-semibold mb-0">{{ current_user.nome if current_user.is_authenticated else '—' }}</p>
+    </div>
+    <div class="mb-3">
+        <label for="man_nova_data_inicio" class="form-label">Data e hora de início *</label>
+        <input type="datetime-local" class="form-control" id="man_nova_data_inicio" name="data_inicio" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
+        <div class="invalid-feedback">Informe a data e hora de início.</div>
+    </div>
+    <div class="mb-3">
+        <label for="man_nova_observacoes" class="form-label">Observações</label>
+        <textarea class="form-control" id="man_nova_observacoes" name="observacoes" rows="3" placeholder="Detalhes opcionais da manutenção"></textarea>
+    </div>
+    <p class="small text-muted mb-0">Status inicial: <strong>Pendente</strong>. Os demais dados podem ser completados depois na tela de manutenções.</p>
+    <div class="d-flex justify-content-end gap-2 mt-3">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="man_nova_btn_submit">
+            <i class="fas fa-save me-1"></i>Salvar
+        </button>
+    </div>
+</form>

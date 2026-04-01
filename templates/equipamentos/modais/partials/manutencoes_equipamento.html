@@ -1,0 +1,91 @@
+{# Fragmento: histórico de manutenções com detalhe em collapse (sem modal aninhado) #}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <p class="mb-0"><strong>{{ equipamento.nome }}</strong></p>
+    <button type="button" class="btn btn-sm btn-primary btn-nova-manutencao-equipamento" data-id="{{ equipamento.id }}">
+        <i class="fas fa-plus me-1"></i>Nova manutenção
+    </button>
+</div>
+<p class="small text-muted mb-2">Clique em <i class="fas fa-chevron-down"></i> para ver a descrição completa. Use <strong>Nova manutenção</strong> para registrar (abre em modal).</p>
+<div class="table-responsive" style="max-height: 55vh; overflow-y: auto;">
+    <table class="table table-sm table-bordered mb-0">
+        <thead class="table-light sticky-top">
+            <tr>
+                <th class="text-center" style="width:2.5rem;"></th>
+                <th>Início</th>
+                <th>Fim</th>
+                <th>Tipo</th>
+                <th>Status</th>
+                <th>Responsável</th>
+                <th>Custo</th>
+                <th class="text-center text-nowrap">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for manutencao in equipamento.manutencoes|sort(attribute='data_inicio', reverse=true) %}
+            <tr>
+                <td class="text-center p-0 align-middle">
+                    <button class="btn btn-sm btn-link text-secondary py-0" type="button" data-bs-toggle="collapse" data-bs-target="#detManEq{{ equipamento.id }}_{{ manutencao.id }}" aria-expanded="false" title="Detalhes">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </td>
+                <td class="text-nowrap">{{ manutencao.data_inicio.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td class="text-nowrap">{{ manutencao.data_fim.strftime('%d/%m/%Y %H:%M') if manutencao.data_fim else '—' }}</td>
+                <td>{{ manutencao.tipo }}</td>
+                <td>
+                    {% if manutencao.status == 'Concluída' %}
+                    <span class="badge bg-success">Concluída</span>
+                    {% elif manutencao.status == 'Em Andamento' %}
+                    <span class="badge bg-warning text-dark">Em Andamento</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Pendente</span>
+                    {% endif %}
+                </td>
+                <td>{{ manutencao.responsavel }}</td>
+                <td>{{ "R$ {:.2f}".format(manutencao.custo) if manutencao.custo else '—' }}</td>
+                <td class="text-center text-nowrap">
+                    {% if manutencao.status != 'Concluída' %}
+                    <button type="button" class="btn btn-sm btn-success btn-finalizar-manutencao-eq py-0 px-2"
+                        data-equipamento-id="{{ equipamento.id }}" data-manutencao-id="{{ manutencao.id }}"
+                        title="Finalizar (custo, NF, conclusão, status, observações)">
+                        <i class="fas fa-flag-checkered"></i>
+                    </button>
+                    {% endif %}
+                    <button type="button" class="btn btn-sm btn-primary btn-editar-manutencao-eq py-0 px-2{% if manutencao.status != 'Concluída' %} ms-1{% endif %}"
+                        data-equipamento-id="{{ equipamento.id }}" data-manutencao-id="{{ manutencao.id }}"
+                        title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    {% if pode_excluir_manutencao %}
+                    <button type="button" class="btn btn-sm btn-danger btn-excluir-manutencao-eq py-0 px-2 ms-1"
+                        data-equipamento-id="{{ equipamento.id }}" data-manutencao-id="{{ manutencao.id }}"
+                        data-resumo="{{ manutencao.data_inicio.strftime('%d/%m/%Y %H:%M') }} · {{ manutencao.tipo }} · {{ manutencao.status }}"
+                        title="Excluir (apenas administrador)">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            <tr class="collapse" id="detManEq{{ equipamento.id }}_{{ manutencao.id }}">
+                <td colspan="8" class="bg-light small">
+                    <div class="p-2">
+                        <p class="mb-1"><strong>Descrição</strong></p>
+                        <p class="mb-2">{{ manutencao.descricao }}</p>
+                        {% if manutencao.observacoes %}
+                        <p class="mb-1"><strong>Observações</strong></p>
+                        <p class="mb-2">{{ manutencao.observacoes }}</p>
+                        {% endif %}
+                        {% if manutencao.nota_fiscal_ref %}
+                        <p class="mb-1"><strong>Nota fiscal vinculada</strong></p>
+                        <p class="mb-0 small">NF {{ manutencao.nota_fiscal_ref.numero_nf }} — {{ manutencao.nota_fiscal_ref.data_emissao.strftime('%d/%m/%Y') }} — {{ manutencao.nota_fiscal_ref.nome_emitente }}</p>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="text-center text-muted">Nenhuma manutenção registrada.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

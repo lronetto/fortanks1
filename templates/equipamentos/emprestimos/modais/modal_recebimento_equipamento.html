@@ -1,0 +1,65 @@
+<div class="modal fade" id="modalRecebimentoEquipamento" tabindex="-1" aria-labelledby="modalRecebimentoEquipamentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('equipamento.emprestimo_receber') }}" id="form_recebimento_equipamento">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="modalRecebimentoEquipamentoLabel">Registrar recebimento</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    {% if not ativos %}
+                    <p class="text-muted mb-0">Não há empréstimos em aberto para receber.</p>
+                    {% else %}
+                    <div class="mb-3">
+                        <label for="rec_eq_emprestimo" class="form-label">Empréstimo em aberto *</label>
+                        <select class="form-select" id="rec_eq_emprestimo" name="emprestimo_id" required>
+                            <option value="">Selecione...</option>
+                            {% for e in ativos %}
+                            <option value="{{ e.id }}">{{ e.equipamento.nome }} → {{ e.colaborador.nome }} (desde {{ e.data_entrega.strftime('%d/%m/%Y %H:%M') }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="rec_eq_data_recebimento" class="form-label">Data e hora do recebimento *</label>
+                        <input type="datetime-local" class="form-control" id="rec_eq_data_recebimento" name="data_recebimento" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
+                    </div>
+                    <div class="mb-0">
+                        <label for="rec_eq_obs" class="form-label">Observações da devolução</label>
+                        <textarea class="form-control" id="rec_eq_obs" name="observacoes" rows="2" placeholder="Opcional — será anexado ao registro"></textarea>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    {% if ativos %}
+                    <button type="submit" class="btn btn-success">Confirmar recebimento</button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('modalRecebimentoEquipamento');
+        var inp = document.getElementById('rec_eq_data_recebimento');
+        if (modalEl && inp) {
+            var hoje = new Date().toISOString().slice(0, 16);
+            inp.setAttribute('max', hoje);
+        }
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                var f = document.getElementById('form_recebimento_equipamento');
+                if (f) f.reset();
+                if (inp) {
+                    var h = new Date().toISOString().slice(0, 16);
+                    inp.value = h;
+                    inp.setAttribute('max', h);
+                }
+            });
+        }
+    });
+})();
+</script>

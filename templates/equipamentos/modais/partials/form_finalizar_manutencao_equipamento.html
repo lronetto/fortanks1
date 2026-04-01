@@ -1,0 +1,48 @@
+{# Finalizacao rapida: custo, NF, conclusao, status, observacoes #}
+<form id="form_finalizar_manutencao_eq" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3 pb-2 border-bottom small text-muted">
+        <p class="mb-1"><strong class="text-dark">{{ equipamento.nome }}</strong></p>
+        <p class="mb-0">{{ manutencao.tipo }} &middot; inicio {{ manutencao.data_inicio.strftime('%d/%m/%Y %H:%M') }} &middot; {{ manutencao.responsavel }}</p>
+    </div>
+    <div class="mb-3">
+        <label for="man_fin_status" class="form-label">Status *</label>
+        <select class="form-select" id="man_fin_status" name="status" required>
+            <option value="Pendente" {% if manutencao.status == 'Pendente' %}selected{% endif %}>Pendente</option>
+            <option value="Em Andamento" {% if manutencao.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
+            <option value="Concluída" {% if manutencao.status == 'Concluída' %}selected{% endif %}>Concluída</option>
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="man_fin_data_fim" class="form-label">Data e hora de conclusão</label>
+        <input type="datetime-local" class="form-control" id="man_fin_data_fim" name="data_fim"
+               value="{{ manutencao.data_fim.strftime('%Y-%m-%dT%H:%M') if manutencao.data_fim else '' }}">
+        <div class="form-text">Opcional; recomendado ao marcar como concluída.</div>
+    </div>
+    <div class="mb-3">
+        <label for="man_fin_custo" class="form-label">Custo (R$)</label>
+        <input type="number" class="form-control" id="man_fin_custo" name="custo" step="0.01" min="0"
+               value="{% if manutencao.custo is not none %}{{ '%.2f'|format(manutencao.custo) }}{% endif %}">
+    </div>
+    <div class="mb-3">
+        <label for="man_fin_nota_fiscal_id" class="form-label">Nota fiscal</label>
+        <select class="form-select" id="man_fin_nota_fiscal_id" name="nota_fiscal_id">
+            <option value="">Nenhuma</option>
+            {% for nf in notas %}
+            <option value="{{ nf.id }}"{% if manutencao.nota_fiscal_id == nf.id %} selected{% endif %}>
+                NF {{ nf.numero_nf }} - {{ nf.data_emissao.strftime('%d/%m/%Y') }} - R$ {{ nf.valor_total }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="man_fin_observacoes" class="form-label">Observações</label>
+        <textarea class="form-control" id="man_fin_observacoes" name="observacoes" rows="3">{{ manutencao.observacoes or '' }}</textarea>
+    </div>
+    <div class="d-flex justify-content-end gap-2 mt-3">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success" id="man_fin_btn_submit">
+            <i class="fas fa-check me-1"></i>Salvar finalização
+        </button>
+    </div>
+</form>

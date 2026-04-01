@@ -1,0 +1,274 @@
+<div class="modal fade" id="editarEquipamentoModal" tabindex="-1" aria-labelledby="editarEquipamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="formEditarEquipamento" novalidate>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" id="editar_eq_id" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="editarEquipamentoModalLabel">Editar Equipamento</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="loadingEditarEquipamento" class="text-center my-4">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                        <p class="mt-2 mb-0">Carregando dados...</p>
+                    </div>
+                    <div id="editarEquipamentoFormFields" style="display: none;">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_eq_nome" class="form-label">Nome *</label>
+                                <div class="equipamento-busca-material-wrap">
+                                    <input type="text" class="form-control equipamento-busca-material-input" id="editar_eq_nome" name="nome" required autocomplete="off" placeholder="Digite para buscar material (Equipamento/Ferramenta)" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}">
+                                    <div class="invalid-feedback">Informe o nome do equipamento.</div>
+                                    <div class="equipamento-busca-material-dropdown list-group shadow-sm d-none" role="listbox" aria-label="Materiais sugeridos"></div>
+                                </div>
+                                <div class="form-text">Busca cadastros de material com categoria Equipamento ou Ferramenta.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_eq_patrimonio" class="form-label">Patrimônio</label>
+                                <input type="text" class="form-control" id="editar_eq_patrimonio" name="patrimonio" placeholder="Nº tombamento / patrimônio">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-12">
+                                <label for="editar_eq_checklist_modelo_id" class="form-label">Modelo de checklist padrão</label>
+                                <select class="form-select" id="editar_eq_checklist_modelo_id" name="checklist_modelo_id">
+                                    <option value="">Nenhum (escolher ao iniciar checklist)</option>
+                                    {% for m in checklist_modelos %}
+                                    <option value="{{ m.id }}">{{ m.nome }}</option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">Dados adicionais — pré-seleção no Novo checklist.</div>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_eq_tipo" class="form-label">Tipo *</label>
+                                <select class="form-select" id="editar_eq_tipo" name="tipo" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="Veiculos">Veículos</option>
+                                    <option value="Maquinas">Máquinas</option>
+                                    <option value="Ferramentas">Ferramentas</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_eq_propriedade" class="form-label">Propriedade *</label>
+                                <select class="form-select" id="editar_eq_propriedade" name="propriedade" required>
+                                    <option value="">Selecione...</option>
+                                    <option value="Propria">Própria</option>
+                                    <option value="Alugada">Alugada</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_eq_modelo" class="form-label">Modelo</label>
+                                <input type="text" class="form-control" id="editar_eq_modelo" name="modelo">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_eq_numero_serie" class="form-label">Número de Série</label>
+                                <input type="text" class="form-control" id="editar_eq_numero_serie" name="numero_serie">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_eq_nota_fiscal" class="form-label">Nota Fiscal</label>
+                                <input type="text" class="form-control" id="editar_eq_nota_fiscal" name="nota_fiscal">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_eq_data_aquisicao" class="form-label">Data de Aquisição</label>
+                                <input type="date" class="form-control" id="editar_eq_data_aquisicao" name="data_aquisicao">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="editar_eq_status" class="form-label">Status *</label>
+                                <select class="form-select" id="editar_eq_status" name="status" required>
+                                    <option value="">Selecione...</option>
+                                    {% for s in EQ_STATUS %}
+                                    <option value="{{ s }}">{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="editar_eq_fotos" class="form-label">Novas fotos</label>
+                                <input type="file" class="form-control" id="editar_eq_fotos" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+                                <div class="form-text">JPEG, PNG, WebP ou GIF. Múltiplas seleções.</div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fotos atuais</label>
+                            <div id="editar_eq_fotos_container" class="border rounded p-2 bg-light small text-muted">Nenhuma foto.</div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label for="editar_eq_observacoes" class="form-label">Observações</label>
+                                <textarea class="form-control" id="editar_eq_observacoes" name="observacoes" rows="3"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSalvarEditarEquipamento">Atualizar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('editarEquipamentoModal');
+        var form = document.getElementById('formEditarEquipamento');
+        var loading = document.getElementById('loadingEditarEquipamento');
+        var fields = document.getElementById('editarEquipamentoFormFields');
+        var btnSalvar = document.getElementById('btnSalvarEditarEquipamento');
+        if (!modalEl || !form) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var tplEditar = "{{ url_for('equipamento.editar', id=999001) }}";
+
+        function urlEditar(id) {
+            return tplEditar.split('999001').join(String(id));
+        }
+
+        function renderFotosAtuais(fotos) {
+            var fc = document.getElementById('editar_eq_fotos_container');
+            var fi = document.getElementById('editar_eq_fotos');
+            if (fi) fi.value = '';
+            if (!fc) return;
+            fc.innerHTML = '';
+            if (!fotos || !fotos.length) {
+                fc.textContent = 'Nenhuma foto.';
+                fc.classList.add('text-muted');
+                return;
+            }
+            fc.classList.remove('text-muted');
+            fotos.forEach(function (f) {
+                var row = document.createElement('div');
+                row.className = 'd-flex flex-wrap align-items-center gap-2 mb-2 pb-2 border-bottom';
+                row.innerHTML =
+                    '<img src="' + f.preview_url + '" alt="" class="rounded border" style="height:56px;width:56px;object-fit:cover">' +
+                    '<span class="small flex-grow-1 text-truncate" style="min-width:120px" title="' + (f.filename || '') + '">' + (f.filename || '') + '</span>' +
+                    '<div class="form-check mb-0">' +
+                    '<input class="form-check-input" type="checkbox" name="remover_foto" value="' + f.id + '" id="rm_foto_' + f.id + '">' +
+                    '<label class="form-check-label small" for="rm_foto_' + f.id + '">Remover</label></div>';
+                fc.appendChild(row);
+            });
+        }
+
+        function carregarEquipamento(id) {
+            if (!id || !loading || !fields) return;
+            loading.style.display = 'block';
+            fields.style.display = 'none';
+            fetch(urlEditar(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    document.getElementById('editar_eq_id').value = data.id;
+                    document.getElementById('editar_eq_nome').value = data.nome || '';
+                    document.getElementById('editar_eq_patrimonio').value = data.patrimonio || '';
+                    var selChk = document.getElementById('editar_eq_checklist_modelo_id');
+                    if (selChk) {
+                        var cm = data.checklist_modelo_id;
+                        selChk.value = (cm !== null && cm !== undefined && String(cm) !== '') ? String(cm) : '';
+                    }
+                    document.getElementById('editar_eq_tipo').value = data.tipo || '';
+                    document.getElementById('editar_eq_propriedade').value = data.propriedade || '';
+                    document.getElementById('editar_eq_modelo').value = data.modelo || '';
+                    document.getElementById('editar_eq_numero_serie').value = data.numero_serie || '';
+                    document.getElementById('editar_eq_nota_fiscal').value = data.nota_fiscal || '';
+                    document.getElementById('editar_eq_data_aquisicao').value = data.data_aquisicao || '';
+                    var selSt = document.getElementById('editar_eq_status');
+                    var stVal = data.status || '';
+                    if (selSt && stVal) {
+                        var existe = Array.prototype.some.call(selSt.options, function (o) {
+                            return o.value === stVal;
+                        });
+                        if (!existe) {
+                            var optL = document.createElement('option');
+                            optL.value = stVal;
+                            optL.textContent = stVal + ' (legado)';
+                            selSt.appendChild(optL);
+                        }
+                        selSt.value = stVal;
+                    } else if (selSt) {
+                        selSt.value = '';
+                    }
+                    document.getElementById('editar_eq_observacoes').value = data.observacoes || '';
+                    document.getElementById('editarEquipamentoModalLabel').textContent = 'Editar: ' + (data.nome || '');
+                    var da = document.getElementById('editar_eq_data_aquisicao');
+                    if (da) {
+                        var hoje = new Date().toISOString().split('T')[0];
+                        da.setAttribute('max', hoje);
+                    }
+                    renderFotosAtuais(data.fotos || []);
+                    loading.style.display = 'none';
+                    fields.style.display = 'block';
+                    form.classList.remove('was-validated');
+                })
+                .catch(function () {
+                    alert('Erro ao carregar equipamento.');
+                    modal.hide();
+                });
+        }
+
+        $(document).on('click', '.btn-editar-equipamento', function () {
+            var id = this.getAttribute('data-id');
+            carregarEquipamento(id);
+            modal.show();
+        });
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+            var id = document.getElementById('editar_eq_id').value;
+            if (!id) return;
+            if (btnSalvar) {
+                btnSalvar.disabled = true;
+                btnSalvar.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Atualizando...';
+            }
+            var fd = new FormData(form);
+            fetch(urlEditar(id), {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var alertsDiv = document.querySelector('.alert-container');
+                    if (alertsDiv) {
+                        var alert = document.createElement('div');
+                        alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                        alert.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        alertsDiv.appendChild(alert);
+                    }
+                    if (data.success) {
+                        modal.hide();
+                        if (typeof window.reloadEquipamentosDatatable === 'function') {
+                            window.reloadEquipamentosDatatable();
+                        }
+                    } else if (data.message) {
+                        alert(data.message);
+                    }
+                })
+                .catch(function () {
+                    alert('Erro ao atualizar equipamento.');
+                })
+                .finally(function () {
+                    if (btnSalvar) {
+                        btnSalvar.disabled = false;
+                        btnSalvar.innerHTML = 'Atualizar';
+                    }
+                });
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            if (fields) fields.style.display = 'none';
+            if (loading) loading.style.display = 'block';
+        });
+    });
+})();
+</script>

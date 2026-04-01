@@ -48,7 +48,7 @@
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label for="data_inicio" class="form-label">Data de Início *</label>
-                        <input type="datetime-local" class="form-control" id="data_inicio" name="data_inicio" required>
+                        <input type="datetime-local" class="form-control" id="data_inicio" name="data_inicio" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
                         <div class="invalid-feedback">
                             Por favor, informe a data de início.
                         </div>
@@ -62,7 +62,7 @@
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label for="responsavel" class="form-label">Responsável *</label>
-                        <input type="text" class="form-control" id="responsavel" name="responsavel" required>
+                        <input type="text" class="form-control" id="responsavel" name="responsavel" value="{{ current_user.nome if current_user.is_authenticated else '' }}" required>
                         <div class="invalid-feedback">
                             Por favor, informe o responsável pela manutenção.
                         </div>
@@ -70,6 +70,19 @@
                     <div class="col-md-6">
                         <label for="custo" class="form-label">Custo (R$)</label>
                         <input type="number" class="form-control" id="custo" name="custo" step="0.01" min="0">
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="nota_fiscal_id" class="form-label">Nota fiscal (opcional)</label>
+                        <select class="form-select" id="nota_fiscal_id" name="nota_fiscal_id">
+                            <option value="">Nenhuma</option>
+                            {% for nf in notas %}
+                            <option value="{{ nf.id }}">NF {{ nf.numero_nf }} · {{ nf.data_emissao.strftime('%d/%m/%Y') }} · R$ {{ nf.valor_total }} · {{ (nf.nome_emitente or '')[:45] }}{% if nf.nome_emitente and nf.nome_emitente|length > 45 %}…{% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Vincule a nota que comprova peças ou serviços desta manutenção (até 300 notas mais recentes).</div>
                     </div>
                 </div>
 

@@ -39,11 +39,11 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <a href="{{ url_for('equipamento.preencher_checklist', id=checklist.equipamento_id, checklist_id=checklist.id) }}" 
-                                   class="btn btn-sm btn-primary">
+                                <button type="button" class="btn btn-sm btn-primary btn-preencher-checklist"
+                                    data-equipamento-id="{{ checklist.equipamento_id }}" data-checklist-id="{{ checklist.id }}">
                                     <i class="fas fa-clipboard-check"></i>
                                     <span class="d-none d-md-inline-block ms-1">Preencher</span>
-                                </a>
+                                </button>
                             </td>
                         </tr>
                         {% else %}
@@ -57,4 +57,5 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% include 'equipamentos/modais/modal_preencher_checklist_equipamento.html' %}
+{% endblock %}

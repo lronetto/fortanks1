@@ -11,6 +11,7 @@ from sqlalchemy import Text
 #4 - avulso
 #5 - certificado
 #6 - DUA
+#8 - foto equipamento (patrimônio / models.equipamento)
 
 class Upload(db.Model):
     __tablename__ = 'Uploads'

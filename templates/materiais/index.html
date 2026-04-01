@@ -35,7 +35,7 @@
                 <a href="{{ url_for('material.exportar_mega') }}" class="btn btn-warning btn-sm me-2" target="_blank">
                     <i class="fas fa-cloud-download-alt"></i> Exportar para Mega
                 </a>
-                <a href="{{ url_for('material.exportar_excel', search=search_term, category=category_filter) }}" class="btn btn-info btn-sm me-2" target="_blank">
+                <a href="{{ url_for('material.exportar_excel') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-info btn-sm me-2" target="_blank">
                     <i class="fas fa-file-excel"></i> Exportar Excel (Filtrado)
                 </a>
                 <button type="button" class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalImportarMaterial">
@@ -59,11 +59,9 @@
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <select class="form-select" id="categoriaFilter" name="category">
-                            <option value="">Todas as categorias</option>
-                            {# Popular com categorias do backend #}
+                        <select class="form-select" id="categoriaFilter" name="category" multiple="multiple" data-placeholder="Todas as categorias">
                             {% for cat in categorias_filtro %}
-                            <option value="{{ cat }}" {{ 'selected' if cat == category_filter else '' }}>{{ cat }}</option>
+                            <option value="{{ cat }}" {{ 'selected' if cat in category_filters else '' }}>{{ cat }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -167,6 +165,13 @@
 {% block scripts %}
 <script>
     $(document).ready(function() {
+        $('#categoriaFilter').select2({
+            width: '100%',
+            placeholder: $('#categoriaFilter').data('placeholder') || 'Todas as categorias',
+            allowClear: true,
+            closeOnSelect: false
+        });
+
         // Verificar se DataTables está disponível
         if (typeof $.fn.DataTable !== 'undefined') {
             // Inicializar DataTable

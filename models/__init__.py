@@ -22,7 +22,16 @@ from .contrato import Contrato
 from .cliente import Cliente
 from .endereco import Endereco
 from .tanque import Tanques, TanquesGrupos, TanquesProdutoComposto, TanquesPecas
-from .equipamento import Equipamento, Manutencao, ChecklistModelo, ChecklistItem, ChecklistEquipamento, ChecklistResposta
+from .equipamento import (
+    EQ_STATUS,
+    Equipamento,
+    EquipamentoEmprestimo,
+    Manutencao,
+    ChecklistModelo,
+    ChecklistItem,
+    ChecklistEquipamento,
+    ChecklistResposta,
+)
 from .colaborador import Colaborador
 from .solicitacao import Solicitacoes, SolicitacoesItens
 from .cargo import Cargo
@@ -92,7 +101,8 @@ __all__ = [
     'NotaFiscal', 'NotaFiscalItem', 'Protocolo', 'Upload',
     'Cliente', 'Endereco', 
     'Tanques', 'TanquesGrupos', 'TanquesPecas',
-    'Equipamento', 'Manutencao', 
+    'EQ_STATUS',
+    'Equipamento', 'Manutencao',
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
     'ConcretoTracos', 'ConcretoTracosItens', 'ConcretoUsinagens', 'ConcretoUsinagensMateriais', 'ConcretoUsinagensRompimentos',
     'ConcretoConcretagens', 'ConcretoConcretagensTanques',

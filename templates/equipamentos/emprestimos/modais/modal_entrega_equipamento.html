@@ -1,0 +1,73 @@
+<div class="modal fade" id="modalEntregaEquipamento" tabindex="-1" aria-labelledby="modalEntregaEquipamentoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('equipamento.emprestimo_entregar') }}" id="form_entrega_equipamento">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalEntregaEquipamentoLabel">Registrar entrega</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    {% if not equipamentos_disponiveis %}
+                    <p class="text-warning mb-0">Não há equipamentos com status <strong>Ativo</strong> para emprestar.</p>
+                    {% else %}
+                    <div class="mb-3">
+                        <label for="ent_eq_equipamento" class="form-label">Equipamento *</label>
+                        <select class="form-select" id="ent_eq_equipamento" name="equipamento_id" required>
+                            <option value="">Selecione...</option>
+                            {% for eq in equipamentos_disponiveis %}
+                            <option value="{{ eq.id }}">{{ eq.nome }} — {{ eq.modelo or '—' }} ({{ eq.tipo }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ent_eq_colaborador" class="form-label">Colaborador *</label>
+                        <select class="form-select" id="ent_eq_colaborador" name="colaborador_id" required>
+                            <option value="">Selecione...</option>
+                            {% for c in colaboradores %}
+                            <option value="{{ c.id }}">{{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="ent_eq_data_entrega" class="form-label">Data e hora da entrega *</label>
+                        <input type="datetime-local" class="form-control" id="ent_eq_data_entrega" name="data_entrega" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
+                    </div>
+                    <div class="mb-0">
+                        <label for="ent_eq_obs" class="form-label">Observações</label>
+                        <textarea class="form-control" id="ent_eq_obs" name="observacoes" rows="2" placeholder="Opcional"></textarea>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    {% if equipamentos_disponiveis %}
+                    <button type="submit" class="btn btn-primary">Confirmar entrega</button>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('modalEntregaEquipamento');
+        var inp = document.getElementById('ent_eq_data_entrega');
+        if (modalEl && inp) {
+            inp.setAttribute('max', new Date().toISOString().slice(0, 16));
+        }
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                var f = document.getElementById('form_entrega_equipamento');
+                if (f) f.reset();
+                if (inp) {
+                    var h = new Date().toISOString().slice(0, 16);
+                    inp.value = h;
+                    inp.setAttribute('max', h);
+                }
+            });
+        }
+    });
+})();
+</script>

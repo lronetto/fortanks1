@@ -1,0 +1,134 @@
+<div class="modal fade" id="novaManutencaoEquipModal" tabindex="-1" aria-labelledby="novaManutencaoEquipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="novaManutencaoEquipModalLabel">Nova manutenção</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="man_nova_loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="man_nova_body" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('novaManutencaoEquipModal');
+        if (!modalEl) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var loading = document.getElementById('man_nova_loading');
+        var body = document.getElementById('man_nova_body');
+        var titleEl = document.getElementById('novaManutencaoEquipModalLabel');
+        var tplModal = "{{ url_for('equipamento.modal_form_nova_manutencao', id=999001) }}";
+        var tplPost = "{{ url_for('equipamento.nova_manutencao', id=999001) }}";
+        var equipIdAtual = null;
+
+        function urlModal(id) {
+            return tplModal.split('999001').join(String(id));
+        }
+        function urlPost(id) {
+            return tplPost.split('999001').join(String(id));
+        }
+
+        function bindFormHelpers() {
+            var dataInicio = document.getElementById('man_nova_data_inicio');
+            if (!dataInicio) return;
+            var hoje = new Date().toISOString().slice(0, 16);
+            dataInicio.setAttribute('max', hoje);
+        }
+
+        function carregar(id) {
+            equipIdAtual = id;
+            if (!loading || !body) return;
+            loading.style.display = 'block';
+            body.style.display = 'none';
+            body.innerHTML = '';
+            fetch(urlModal(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) {
+                    if (!r.ok) throw new Error();
+                    return r.text();
+                })
+                .then(function (html) {
+                    body.innerHTML = html;
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                    if (titleEl) titleEl.textContent = 'Nova manutenção';
+                    bindFormHelpers();
+                })
+                .catch(function () {
+                    loading.style.display = 'none';
+                    body.innerHTML = '<p class="text-danger mb-0">Não foi possível carregar o formulário.</p>';
+                    body.style.display = 'block';
+                });
+        }
+
+        $(document).on('click', '.btn-nova-manutencao-equipamento', function () {
+            var id = this.getAttribute('data-id');
+            if (!id) return;
+            carregar(id);
+            modal.show();
+        });
+
+        $(document).on('submit', '#form_nova_manutencao_eq', function (e) {
+            e.preventDefault();
+            var form = this;
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+            if (!equipIdAtual) return;
+            var btn = document.getElementById('man_nova_btn_submit');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+            }
+            var fd = new FormData(form);
+            fetch(urlPost(equipIdAtual), {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var alertsDiv = document.querySelector('.alert-container');
+                    if (alertsDiv && data.message) {
+                        var alert = document.createElement('div');
+                        alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                        alert.innerHTML = data.message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        alertsDiv.appendChild(alert);
+                    }
+                    if (data.success) {
+                        modal.hide();
+                        if (typeof window.reloadEquipamentosDatatable === 'function') {
+                            window.reloadEquipamentosDatatable();
+                        }
+                        if (typeof window.recarregarModalManutencoesEquipamento === 'function') {
+                            window.recarregarModalManutencoesEquipamento();
+                        }
+                    } else if (data.message) {
+                        alert(data.message);
+                    }
+                })
+                .catch(function () {
+                    alert('Erro ao salvar manutenção.');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+                    }
+                });
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            equipIdAtual = null;
+            if (body) body.innerHTML = '';
+            if (loading) loading.style.display = 'block';
+        });
+    });
+})();
+</script>

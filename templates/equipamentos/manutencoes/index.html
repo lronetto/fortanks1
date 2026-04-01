@@ -132,6 +132,14 @@
                                             </div>
                                         </div>
                                         {% endif %}
+                                        {% if manutencao.nota_fiscal_ref %}
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <h6 class="font-weight-bold">Nota fiscal vinculada</h6>
+                                                <p class="mb-0">NF {{ manutencao.nota_fiscal_ref.numero_nf }} — {{ manutencao.nota_fiscal_ref.data_emissao.strftime('%d/%m/%Y') }} — {{ manutencao.nota_fiscal_ref.nome_emitente }}</p>
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>

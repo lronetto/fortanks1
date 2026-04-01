@@ -18,7 +18,8 @@
             <h6 class="m-0 font-weight-bold">Dados do Equipamento</h6>
         </div>
         <div class="card-body">
-            <form method="POST" class="needs-validation" novalidate>
+            <form method="POST" class="needs-validation" enctype="multipart/form-data" novalidate>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label for="nome" class="form-label">Nome do Equipamento *</label>
@@ -68,6 +69,51 @@
 
                 <div class="row mb-3">
                     <div class="col-md-6">
+                        <label for="patrimonio" class="form-label">Patrimônio</label>
+                        <input type="text" class="form-control" id="patrimonio" name="patrimonio"
+                            value="{{ extras_editar.patrimonio or '' }}" placeholder="Nº tombamento / patrimônio">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="fotos_novas" class="form-label">Novas fotos</label>
+                        <input type="file" class="form-control" id="fotos_novas" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+                        <div class="form-text">JPEG, PNG, WebP ou GIF.</div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-12">
+                        <label for="checklist_modelo_id" class="form-label">Modelo de checklist padrão (dados adicionais)</label>
+                        <select class="form-select" id="checklist_modelo_id" name="checklist_modelo_id">
+                            <option value="">Nenhum</option>
+                            {% for m in checklist_modelos %}
+                            <option value="{{ m.id }}"{% if extras_editar.checklist_modelo_id == m.id %} selected{% endif %}>{{ m.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                {% if fotos_equipamento %}
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label class="form-label">Fotos atuais</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            {% for u in fotos_equipamento %}
+                            <div class="border rounded p-2 text-center" style="max-width: 140px;">
+                                <img src="{{ url_for('equipamento.equipamento_foto', upload_id=u.id) }}" alt="" class="img-fluid rounded mb-1" style="max-height: 80px; object-fit: cover;">
+                                <div class="small text-truncate" title="{{ u.filename }}">{{ u.filename }}</div>
+                                <div class="form-check mt-1">
+                                    <input class="form-check-input" type="checkbox" name="remover_foto" value="{{ u.id }}" id="rm_{{ u.id }}">
+                                    <label class="form-check-label small" for="rm_{{ u.id }}">Remover</label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
                         <label for="numero_serie" class="form-label">Número de Série</label>
                         <input type="text" class="form-control" id="numero_serie" name="numero_serie"
                             value="{{ equipamento.numero_serie }}">
@@ -89,11 +135,9 @@
                         <label for="status" class="form-label">Status *</label>
                         <select class="form-select" id="status" name="status" required>
                             <option value="">Selecione...</option>
-                            <option value="Ativo" {% if equipamento.status=='Ativo' %}selected{% endif %}>Ativo</option>
-                            <option value="Em Manutenção" {% if equipamento.status=='Em Manutenção' %}selected{% endif
-                                %}>Em Manutenção</option>
-                            <option value="Inativo" {% if equipamento.status=='Inativo' %}selected{% endif %}>Inativo
-                            </option>
+                            {% for s in EQ_STATUS %}
+                            <option value="{{ s }}" {% if equipamento.status == s %}selected{% endif %}>{{ s }}</option>
+                            {% endfor %}
                         </select>
                         <div class="invalid-feedback">
                             Por favor, selecione o status do equipamento.

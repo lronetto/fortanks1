@@ -1,0 +1,35 @@
+{# Formulário novo checklist (injetado no modal) #}
+<form id="chk_eq_form" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-2">
+        <span class="text-muted small">Equipamento</span>
+        <p class="fw-semibold mb-0">{{ equipamento.nome }}</p>
+    </div>
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label for="chk_eq_modelo_id" class="form-label">Modelo de checklist *</label>
+            <select class="form-select" id="chk_eq_modelo_id" name="modelo_id" required>
+                <option value="">Selecione...</option>
+                {% for modelo in modelos %}
+                <option value="{{ modelo.id }}"{% if modelo_padrao_id is not none and modelo_padrao_id == modelo.id %} selected{% endif %}>{{ modelo.nome }}</option>
+                {% endfor %}
+            </select>
+            <div class="invalid-feedback">Selecione um modelo.</div>
+        </div>
+        <div class="col-md-6">
+            <label for="chk_eq_data_checklist" class="form-label">Data do checklist *</label>
+            <input type="datetime-local" class="form-control" id="chk_eq_data_checklist" name="data_checklist" value="{{ now1.strftime('%Y-%m-%dT%H:%M') }}" required>
+            <div class="invalid-feedback">Informe data e hora.</div>
+        </div>
+        <div class="col-12">
+            <label for="chk_eq_observacoes" class="form-label">Observações</label>
+            <textarea class="form-control" id="chk_eq_observacoes" name="observacoes" rows="2"></textarea>
+        </div>
+    </div>
+    <div class="d-flex justify-content-end gap-2 mt-3">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-success" id="chk_eq_btn_submit">
+            <i class="fas fa-play me-1"></i>Iniciar checklist
+        </button>
+    </div>
+</form>

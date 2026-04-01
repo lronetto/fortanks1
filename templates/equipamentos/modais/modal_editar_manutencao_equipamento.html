@@ -1,0 +1,142 @@
+<div class="modal fade" id="editarManutencaoEquipModal" tabindex="-1" aria-labelledby="editarManutencaoEquipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="editarManutencaoEquipModalLabel">Editar manutenção</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="man_ed_loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="man_ed_body" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('editarManutencaoEquipModal');
+        if (!modalEl) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var loading = document.getElementById('man_ed_loading');
+        var body = document.getElementById('man_ed_body');
+        var titleEl = document.getElementById('editarManutencaoEquipModalLabel');
+        var tplModal = "{{ url_for('equipamento.modal_editar_manutencao', id=9000001, manutencao_id=9000002) }}";
+        var tplPost = "{{ url_for('equipamento.editar_manutencao', id=9000001, manutencao_id=9000002) }}";
+        var equipIdAtual = null;
+        var manIdAtual = null;
+
+        function urlsEditar(eid, mid) {
+            return {
+                get: tplModal.replace('9000001', String(eid)).replace('9000002', String(mid)),
+                post: tplPost.replace('9000001', String(eid)).replace('9000002', String(mid))
+            };
+        }
+
+        function bindEditHelpers() {
+            var di = document.getElementById('man_ed_data_inicio');
+            var df = document.getElementById('man_ed_data_fim');
+            var hoje = new Date().toISOString().slice(0, 16);
+            if (di) di.setAttribute('max', hoje);
+            if (df) df.setAttribute('max', hoje);
+        }
+
+        function carregarEditar(eid, mid) {
+            equipIdAtual = eid;
+            manIdAtual = mid;
+            if (!loading || !body) return;
+            loading.style.display = 'block';
+            body.style.display = 'none';
+            body.innerHTML = '';
+            var u = urlsEditar(eid, mid);
+            fetch(u.get, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) {
+                    if (!r.ok) throw new Error();
+                    return r.text();
+                })
+                .then(function (html) {
+                    body.innerHTML = html;
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                    if (titleEl) titleEl.textContent = 'Editar manutenção';
+                    bindEditHelpers();
+                })
+                .catch(function () {
+                    loading.style.display = 'none';
+                    body.innerHTML = '<p class="text-danger mb-0">Não foi possível carregar o formulário.</p>';
+                    body.style.display = 'block';
+                });
+        }
+
+        $(document).on('click', '.btn-editar-manutencao-eq', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var eid = this.getAttribute('data-equipamento-id');
+            var mid = this.getAttribute('data-manutencao-id');
+            if (!eid || !mid) return;
+            carregarEditar(eid, mid);
+            modal.show();
+        });
+
+        $(document).on('submit', '#form_editar_manutencao_eq', function (e) {
+            e.preventDefault();
+            var form = this;
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+            if (!equipIdAtual || !manIdAtual) return;
+            var btn = document.getElementById('man_ed_btn_submit');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Salvando...';
+            }
+            var fd = new FormData(form);
+            fetch(urlsEditar(equipIdAtual, manIdAtual).post, {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var alertsDiv = document.querySelector('.alert-container');
+                    if (alertsDiv && data.message) {
+                        var alert = document.createElement('div');
+                        alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                        alert.innerHTML = data.message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        alertsDiv.appendChild(alert);
+                    }
+                    if (data.success) {
+                        modal.hide();
+                        if (typeof window.reloadEquipamentosDatatable === 'function') {
+                            window.reloadEquipamentosDatatable();
+                        }
+                        if (typeof window.recarregarModalManutencoesEquipamento === 'function') {
+                            window.recarregarModalManutencoesEquipamento();
+                        }
+                    } else if (data.message) {
+                        alert(data.message);
+                    }
+                })
+                .catch(function () {
+                    alert('Erro ao salvar manutenção.');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-save me-1"></i>Salvar';
+                    }
+                });
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            equipIdAtual = null;
+            manIdAtual = null;
+            if (body) body.innerHTML = '';
+            if (loading) loading.style.display = 'block';
+        });
+    });
+})();
+</script>

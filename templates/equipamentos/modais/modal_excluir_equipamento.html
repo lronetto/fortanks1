@@ -1,0 +1,89 @@
+<div class="modal fade" id="excluirEquipamentoModal" tabindex="-1" aria-labelledby="excluirEquipamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="excluirEquipamentoModalLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o equipamento <strong id="excluir_eq_nome"></strong>?</p>
+                <p class="text-danger mb-0">Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="form_excluir_equipamento" class="d-inline" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('excluirEquipamentoModal');
+        var formExcluir = document.getElementById('form_excluir_equipamento');
+        if (!modalEl || !formExcluir) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var tplExcluir = "{{ url_for('equipamento.excluir', id=999001) }}";
+
+        function urlExcluir(id) {
+            return tplExcluir.replace('999001', String(id));
+        }
+
+        $(document).on('click', '.btn-excluir-equipamento', function (e) {
+            e.preventDefault();
+            var eqId = this.getAttribute('data-id');
+            if (!eqId) return;
+            fetch(urlExcluir(eqId), {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        document.getElementById('excluir_eq_nome').textContent = data.equipamento_nome || '';
+                        formExcluir.setAttribute('data-equipamento-id', String(data.equipamento_id));
+                        modal.show();
+                    }
+                })
+                .catch(function () {
+                    alert('Não foi possível carregar os dados para exclusão.');
+                });
+        });
+
+        formExcluir.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var eqId = formExcluir.getAttribute('data-equipamento-id');
+            if (!eqId) return;
+            var fd = new FormData(formExcluir);
+            fetch(urlExcluir(eqId), {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var alertsDiv = document.querySelector('.alert-container');
+                    if (alertsDiv) {
+                        var alert = document.createElement('div');
+                        var cls = data.success ? 'success' : 'danger';
+                        alert.className = 'alert alert-' + cls + ' alert-dismissible fade show';
+                        alert.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                        alertsDiv.appendChild(alert);
+                    }
+                    if (data.success) {
+                        modal.hide();
+                        if (typeof window.reloadEquipamentosDatatable === 'function') {
+                            window.reloadEquipamentosDatatable();
+                        }
+                    }
+                })
+                .catch(function () {
+                    alert('Erro ao excluir equipamento.');
+                });
+        });
+    });
+})();
+</script>

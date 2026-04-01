@@ -1,0 +1,122 @@
+<div class="modal fade" id="novoChecklistEquipModal" tabindex="-1" aria-labelledby="novoChecklistEquipModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="novoChecklistEquipModalLabel">Novo checklist</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="chk_eq_loading" class="text-center py-4">
+                    <div class="spinner-border text-success" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="chk_eq_body" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('novoChecklistEquipModal');
+        if (!modalEl) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var loading = document.getElementById('chk_eq_loading');
+        var body = document.getElementById('chk_eq_body');
+        var titleEl = document.getElementById('novoChecklistEquipModalLabel');
+        var tplModal = "{{ url_for('equipamento.modal_checklist_novo_equipamento', id=999001) }}";
+        var tplPost = "{{ url_for('equipamento.novo_checklist_equipamento', id=999001) }}";
+        var equipIdAtual = null;
+
+        function urlModal(id) {
+            return tplModal.split('999001').join(String(id));
+        }
+        function urlPost(id) {
+            return tplPost.split('999001').join(String(id));
+        }
+
+        function carregar(id) {
+            equipIdAtual = id;
+            if (!loading || !body) return;
+            loading.style.display = 'block';
+            body.style.display = 'none';
+            body.innerHTML = '';
+            fetch(urlModal(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) {
+                    if (!r.ok) throw new Error();
+                    return r.text();
+                })
+                .then(function (html) {
+                    body.innerHTML = html;
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                    if (titleEl) titleEl.textContent = 'Novo checklist';
+                })
+                .catch(function () {
+                    loading.style.display = 'none';
+                    body.innerHTML = '<p class="text-danger mb-0">Não foi possível carregar o formulário.</p>';
+                    body.style.display = 'block';
+                });
+        }
+
+        $(document).on('click', '.btn-novo-checklist-equipamento', function () {
+            var id = this.getAttribute('data-id');
+            if (!id) return;
+            carregar(id);
+            modal.show();
+        });
+
+        $(document).on('submit', '#chk_eq_form', function (e) {
+            e.preventDefault();
+            var form = this;
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+                return;
+            }
+            if (!equipIdAtual) return;
+            var btn = document.getElementById('chk_eq_btn_submit');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+            }
+            var fd = new FormData(form);
+            fetch(urlPost(equipIdAtual), {
+                method: 'POST',
+                body: fd,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.success && data.preencher_equipamento_id && data.preencher_checklist_id) {
+                        modal.hide();
+                        if (typeof window.abrirModalPreencherChecklist === 'function') {
+                            window.abrirModalPreencherChecklist(
+                                data.preencher_equipamento_id,
+                                data.preencher_checklist_id
+                            );
+                        } else {
+                            var base = "{{ url_for('equipamento.visualizar', id=9000001) }}".replace('9000001', String(data.preencher_equipamento_id));
+                            window.location.href = base + '?preencher_checklist=' + encodeURIComponent(String(data.preencher_checklist_id));
+                        }
+                        return;
+                    }
+                    alert(data.message || 'Não foi possível iniciar o checklist.');
+                })
+                .catch(function () {
+                    alert('Erro de rede ao iniciar checklist.');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-play me-1"></i>Iniciar checklist';
+                    }
+                });
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            equipIdAtual = null;
+            if (body) body.innerHTML = '';
+            if (loading) loading.style.display = 'block';
+        });
+    });
+})();
+</script>

@@ -4,7 +4,10 @@
 {% block mobile_title %}{{ equipamento.nome }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid" data-equipamento-visualizar-id="{{ equipamento.id }}">
+    <div class="alert-container mb-3">
+        {% include "common/alerts.html" %}
+    </div>
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0">{{ equipamento.nome }}</h1>
         <div class="btn-group">
@@ -31,13 +34,8 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <h6 class="font-weight-bold">Status</h6>
-                        {% if equipamento.status == 'Ativo' %}
-                        <span class="badge bg-success">Ativo</span>
-                        {% elif equipamento.status == 'Em Manutenção' %}
-                        <span class="badge bg-warning">Em Manutenção</span>
-                        {% else %}
-                        <span class="badge bg-danger">Inativo</span>
-                        {% endif %}
+                        {% set status = equipamento.status %}
+                        {% include 'equipamentos/snippets/status_equipamento_badge.html' %}
                     </div>
                     <div class="mb-3">
                         <h6 class="font-weight-bold">Tipo</h6>
@@ -56,6 +54,10 @@
                         <p>{{ equipamento.numero_serie or 'Não informado' }}</p>
                     </div>
                     <div class="mb-3">
+                        <h6 class="font-weight-bold">Patrimônio</h6>
+                        <p>{{ extras_visualizar.patrimonio or 'Não informado' }}</p>
+                    </div>
+                    <div class="mb-3">
                         <h6 class="font-weight-bold">Nota Fiscal</h6>
                         <p>{{ equipamento.nota_fiscal or 'Não informada' }}</p>
                     </div>
@@ -68,6 +70,18 @@
                         <h6 class="font-weight-bold">Observações</h6>
                         <p>{{ equipamento.observacoes or 'Nenhuma observação' }}</p>
                     </div>
+                    {% if fotos_visualizar %}
+                    <div class="mb-0">
+                        <h6 class="font-weight-bold">Fotos</h6>
+                        <div class="d-flex flex-wrap gap-2 mt-2">
+                            {% for u in fotos_visualizar %}
+                            <a href="{{ url_for('equipamento.equipamento_foto', upload_id=u.id) }}" target="_blank" rel="noopener">
+                                <img src="{{ url_for('equipamento.equipamento_foto', upload_id=u.id) }}" alt="" class="img-thumbnail" style="max-height: 100px; object-fit: cover;">
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -126,11 +140,11 @@
             <div class="card shadow mb-4">
                 <div class="card-header py-3 d-flex justify-content-between align-items-center">
                     <h6 class="m-0 font-weight-bold">Últimos Checklists</h6>
-                    <a href="{{ url_for('equipamento.novo_checklist_equipamento', id=equipamento.id) }}"
-                        class="btn btn-sm btn-success">
+                    <button type="button" class="btn btn-sm btn-success btn-novo-checklist-equipamento"
+                        data-id="{{ equipamento.id }}">
                         <i class="fas fa-clipboard-check"></i>
                         <span class="d-none d-md-inline-block ms-1">Novo Checklist</span>
-                    </a>
+                    </button>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -161,10 +175,11 @@
                                     <td>{{ checklist.responsavel }}</td>
                                     <td class="text-center">
                                         {% if checklist.status != 'Concluído' %}
-                                        <a href="{{ url_for('equipamento.preencher_checklist', id=equipamento.id, checklist_id=checklist.id) }}"
-                                            class="btn btn-sm btn-primary">
+                                        <button type="button" class="btn btn-sm btn-primary btn-preencher-checklist"
+                                            data-equipamento-id="{{ equipamento.id }}" data-checklist-id="{{ checklist.id }}"
+                                            title="Preencher">
                                             <i class="fas fa-edit"></i>
-                                        </a>
+                                        </button>
                                         {% else %}
                                         <a href="#" class="btn btn-sm btn-info" data-bs-toggle="modal"
                                             data-bs-target="#checklistModal{{ checklist.id }}">
@@ -222,4 +237,6 @@
         </div>
     </div>
 </div>
+{% include 'equipamentos/modais/modal_novo_checklist_equipamento.html' %}
+{% include 'equipamentos/modais/modal_preencher_checklist_equipamento.html' %}
 {% endblock %}

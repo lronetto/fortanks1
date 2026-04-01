@@ -1,0 +1,79 @@
+<div class="modal fade" id="manutencoesEquipamentoModal" tabindex="-1" aria-labelledby="manutencoesEquipamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="manutencoesEquipamentoModalLabel">Manutenções</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="man_eq_loading" class="text-center py-4">
+                    <div class="spinner-border text-warning" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="man_eq_body" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('manutencoesEquipamentoModal');
+        if (!modalEl) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var loading = document.getElementById('man_eq_loading');
+        var body = document.getElementById('man_eq_body');
+        var titleEl = document.getElementById('manutencoesEquipamentoModalLabel');
+        var tpl = "{{ url_for('equipamento.modal_manutencoes_equipamento', id=999001) }}";
+
+        function urlModal(id) {
+            return tpl.split('999001').join(String(id));
+        }
+
+        function carregar(id) {
+            window._manutencoesEquipIdAtual = id;
+            if (!loading || !body) return;
+            loading.style.display = 'block';
+            body.style.display = 'none';
+            body.innerHTML = '';
+            fetch(urlModal(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) {
+                    if (!r.ok) throw new Error();
+                    return r.text();
+                })
+                .then(function (html) {
+                    body.innerHTML = html;
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                    if (titleEl) titleEl.textContent = 'Manutenções — equipamento #' + id;
+                })
+                .catch(function () {
+                    loading.style.display = 'none';
+                    body.innerHTML = '<p class="text-danger mb-0">Não foi possível carregar o histórico.</p>';
+                    body.style.display = 'block';
+                });
+        }
+
+        $(document).on('click', '.btn-manutencoes-equipamento', function () {
+            var id = this.getAttribute('data-id');
+            if (!id) return;
+            carregar(id);
+            modal.show();
+        });
+
+        window.recarregarModalManutencoesEquipamento = function () {
+            var id = window._manutencoesEquipIdAtual;
+            if (id) {
+                carregar(id);
+            }
+        };
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            window._manutencoesEquipIdAtual = null;
+            if (body) body.innerHTML = '';
+        });
+    });
+})();
+</script>

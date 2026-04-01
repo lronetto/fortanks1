@@ -813,21 +813,17 @@ def _sync_epi_data_validade_via_consulta_ca(epi: Epi, log: logging.Logger) -> bo
 
 
 def _montar_xlsx_entregas_epi(entregas, cod_coligada: int) -> openpyxl.Workbook:
-    """Monta Excel: aba Cadastro (EPIs distintos) e aba Entradas (linhas por entrega)."""
+    """Monta Excel: aba Cadastro (todos os EPIs cadastrados) e aba Entradas (entregas do período)."""
     log = logging.getLogger(__name__)
 
-    vistos = set()
-    epis_distintos = []
-    for ent in entregas:
-        if not ent.epi or ent.epi_id in vistos:
-            continue
-        vistos.add(ent.epi_id)
-        epis_distintos.append(ent.epi)
-
-    epis_distintos.sort(key=lambda e: e.id)
+    todos_epis = (
+        Epi.query.options(joinedload(Epi.material))
+        .order_by(Epi.id.asc())
+        .all()
+    )
 
     houve_alteracao = False
-    for epi in epis_distintos:
+    for epi in todos_epis:
         if _sync_epi_data_validade_via_consulta_ca(epi, log):
             houve_alteracao = True
     if houve_alteracao:
@@ -837,7 +833,7 @@ def _montar_xlsx_entregas_epi(entregas, cod_coligada: int) -> openpyxl.Workbook:
     ws_cad = wb.active
     ws_cad.title = 'Cadastro'
     ws_cad.append(['id', 'nome', 'ca', 'data_validade'])
-    for epi in epis_distintos:
+    for epi in todos_epis:
         nome = epi.material.nome if epi.material else ''
         ws_cad.append(
             [
@@ -872,7 +868,7 @@ def _montar_xlsx_entregas_epi(entregas, cod_coligada: int) -> openpyxl.Workbook:
                 epi.id if epi else 0,
                 0,
                 ent.data_entrega,
-                _colab_matricula_ou_chapa(ent.colaborador),
+                ent.colaborador.get_dados_adicionais_dict().get('matricula'),
                 int(ent.quantidade or 0),
                 ca_linha,
                 validade_ca,
@@ -886,7 +882,7 @@ def _montar_xlsx_entregas_epi(entregas, cod_coligada: int) -> openpyxl.Workbook:
 @login_required
 def entregas_exportar_esocial():
     """
-    Gera planilha Excel (duas abas: cadastro de EPIs do período e entradas).
+    Gera planilha Excel (aba Cadastro com todos os EPIs cadastrados; aba Entradas só no período).
     EPIs sem data de validade são consultados em consultaca.com e atualizados no banco quando possível.
     Config: RM_CODCOLIGADA (padrão 1) para coluna cod_coligada nas entradas.
     """

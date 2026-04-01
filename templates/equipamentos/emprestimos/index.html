@@ -1,0 +1,148 @@
+{% extends "common/base.html" %}
+
+{% block title %}Empréstimos de equipamentos - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Empréstimos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0">Empréstimos para colaboradores</h1>
+        <div class="btn-group flex-wrap gap-1">
+            <a href="{{ url_for('equipamento.index') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline ms-1">Equipamentos</span>
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEntregaEquipamento">
+                <i class="fas fa-hand-holding me-1"></i>Registrar entrega
+            </button>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalRecebimentoEquipamento"{% if not ativos %} disabled title="Não há empréstimos em aberto"{% endif %}>
+                <i class="fas fa-undo-alt me-1"></i>Registrar recebimento
+            </button>
+        </div>
+    </div>
+
+    <div class="alert-container mb-3">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <div class="card shadow mb-4 border-0">
+        <div class="card-header bg-primary text-white py-3">
+            <h6 class="m-0 fw-bold"><i class="fas fa-chart-pie me-2"></i>Quantitativos resumidos</h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-3 text-center">
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="p-3 rounded bg-light border h-100">
+                        <div class="fs-3 fw-bold text-primary">{{ em_posse }}</div>
+                        <div class="small text-muted">Em posse (em aberto)</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="p-3 rounded bg-light border h-100">
+                        <div class="fs-3 fw-bold text-info">{{ colab_distintos }}</div>
+                        <div class="small text-muted">Colaboradores com equipamento</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="p-3 rounded bg-light border h-100">
+                        <div class="fs-3 fw-bold text-success">{{ qtd_disponiveis }}</div>
+                        <div class="small text-muted">Equipamentos disponíveis (Ativo)</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="p-3 rounded bg-light border h-100">
+                        <div class="fs-3 fw-bold text-warning">{{ equip_status_emprestado }}</div>
+                        <div class="small text-muted">Cadastro status Emprestado</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="p-3 rounded bg-light border h-100">
+                        <div class="fs-3 fw-bold text-secondary">{{ total_devolvido }}</div>
+                        <div class="small text-muted">Registros já devolvidos</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="p-3 rounded bg-light border h-100">
+                        <div class="fs-3 fw-bold text-dark">{{ total_historico }}</div>
+                        <div class="small text-muted">Total de movimentações</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 fw-bold text-warning">Empréstimos em aberto</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Equipamento</th>
+                                    <th>Colaborador</th>
+                                    <th>Entrega</th>
+                                    <th>Obs.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for e in ativos %}
+                                <tr>
+                                    <td>{{ e.equipamento.nome }}</td>
+                                    <td>{{ e.colaborador.nome }}</td>
+                                    <td class="text-nowrap">{{ e.data_entrega.strftime('%d/%m/%Y %H:%M') }}</td>
+                                    <td class="small text-muted">{{ (e.observacoes or '')[:80] }}{% if e.observacoes and e.observacoes|length > 80 %}…{% endif %}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center text-muted py-4">Nenhum empréstimo em aberto.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 fw-bold text-success">Últimas devoluções</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Equipamento</th>
+                                    <th>Colaborador</th>
+                                    <th>Devolvido</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for e in recentes_devolvidos %}
+                                <tr>
+                                    <td>{{ e.equipamento.nome }}</td>
+                                    <td>{{ e.colaborador.nome }}</td>
+                                    <td class="text-nowrap small">{{ e.data_recebimento.strftime('%d/%m/%Y %H:%M') }}</td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">Ainda não há devoluções registradas.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'equipamentos/emprestimos/modais/modal_entrega_equipamento.html' %}
+{% include 'equipamentos/emprestimos/modais/modal_recebimento_equipamento.html' %}
+{% endblock %}

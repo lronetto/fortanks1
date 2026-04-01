@@ -1,0 +1,72 @@
+<div class="modal fade" id="visualizarEquipamentoModal" tabindex="-1" aria-labelledby="visualizarEquipamentoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="visualizarEquipamentoModalLabel">Visualizar equipamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div id="vis_eq_loading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="vis_eq_body" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('visualizarEquipamentoModal');
+        if (!modalEl) return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var loading = document.getElementById('vis_eq_loading');
+        var body = document.getElementById('vis_eq_body');
+        var titleEl = document.getElementById('visualizarEquipamentoModalLabel');
+        var tpl = "{{ url_for('equipamento.modal_visualizar_equipamento', id=999001) }}";
+
+        function urlModal(id) {
+            return tpl.split('999001').join(String(id));
+        }
+
+        function carregar(id) {
+            if (!loading || !body) return;
+            loading.style.display = 'block';
+            body.style.display = 'none';
+            body.innerHTML = '';
+            fetch(urlModal(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(function (r) {
+                    if (!r.ok) throw new Error();
+                    return r.text();
+                })
+                .then(function (html) {
+                    body.innerHTML = html;
+                    loading.style.display = 'none';
+                    body.style.display = 'block';
+                    var meta = body.querySelector('#vis_eq_meta');
+                    var nome = meta ? meta.getAttribute('data-equip-nome') : '';
+                    if (titleEl) titleEl.textContent = nome ? nome : ('Equipamento #' + id);
+                })
+                .catch(function () {
+                    loading.style.display = 'none';
+                    body.innerHTML = '<p class="text-danger mb-0">Não foi possível carregar os dados.</p>';
+                    body.style.display = 'block';
+                });
+        }
+
+        $(document).on('click', '.btn-visualizar-equipamento', function () {
+            var id = this.getAttribute('data-id');
+            if (!id) return;
+            carregar(id);
+            modal.show();
+        });
+
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            if (body) body.innerHTML = '';
+        });
+    });
+})();
+</script>

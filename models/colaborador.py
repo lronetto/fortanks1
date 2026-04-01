@@ -36,7 +36,7 @@ class Colaborador(db.Model):
     email = db.Column(db.String(100))
     endereco = db.Column(db.String(255))
     observacoes = db.Column(db.Text)
-    dados_adicionais = db.Column(db.Text)
+    dados_adicionais = db.Column(db.JSON)
 
     usuario = db.relationship('Usuario', back_populates='colaborador')
     dados_bancarios = db.relationship('DadosBancarios', back_populates='colaborador', uselist=False)

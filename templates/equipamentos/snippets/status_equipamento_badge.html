@@ -1,0 +1,14 @@
+{# Variável: status (string do equipamento) #}
+{% if status == 'Ativo' %}
+<span class="badge bg-success">Ativo</span>
+{% elif status == 'Em Manutenção' %}
+<span class="badge bg-warning text-dark">Em Manutenção</span>
+{% elif status == 'Aguardando Reparo' %}
+<span class="badge bg-warning text-dark">Aguardando Reparo</span>
+{% elif status == 'Emprestado' %}
+<span class="badge bg-info text-dark">Emprestado</span>
+{% elif status == 'Inativo' %}
+<span class="badge bg-danger">Inativo</span>
+{% else %}
+<span class="badge bg-secondary">{{ status or '—' }}</span>
+{% endif %}

@@ -1,0 +1,74 @@
+{# Formulário de preenchimento (injetado no modal) #}
+<form id="preencher_chk_form" novalidate
+      data-post-url="{{ url_for('equipamento.preencher_checklist', id=equipamento.id, checklist_id=checklist.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="row g-2 mb-3 small text-muted border-bottom pb-2">
+        <div class="col-md-4">
+            <span class="d-block fw-semibold text-dark">Equipamento</span>
+            {{ equipamento.nome }}
+        </div>
+        <div class="col-md-4">
+            <span class="d-block fw-semibold text-dark">Modelo</span>
+            {{ checklist.modelo.nome }}
+        </div>
+        <div class="col-md-4">
+            <span class="d-block fw-semibold text-dark">Data</span>
+            {{ checklist.data_checklist.strftime('%d/%m/%Y %H:%M') }}
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <h6 class="fw-bold mb-3">Itens do checklist</h6>
+        {% for resposta in checklist.respostas|sort(attribute='item.ordem') %}
+        <div class="card mb-3">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="fw-semibold">{{ resposta.item.descricao }}</span>
+                    {% if resposta.item.obrigatorio %}
+                    <span class="badge bg-danger">Obrigatório</span>
+                    {% endif %}
+                </div>
+
+                {% if resposta.item.tipo == 'text' %}
+                <div class="mb-2">
+                    <textarea class="form-control" name="resposta_{{ resposta.id }}"
+                              rows="2" {% if resposta.item.obrigatorio %}required{% endif %}>{{ resposta.resposta or '' }}</textarea>
+                </div>
+                {% elif resposta.item.tipo == 'checkbox' %}
+                <div class="mb-2">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="resposta_{{ resposta.id }}"
+                               value="1" id="resp_cb_{{ resposta.id }}"
+                               {% if resposta.resposta == '1' %}checked{% endif %}
+                               {% if resposta.item.obrigatorio %}required{% endif %}>
+                        <label class="form-check-label" for="resp_cb_{{ resposta.id }}">Conforme</label>
+                    </div>
+                </div>
+                {% elif resposta.item.tipo == 'select' %}
+                <div class="mb-2">
+                    <select class="form-select" name="resposta_{{ resposta.id }}"
+                            {% if resposta.item.obrigatorio %}required{% endif %}>
+                        <option value="">Selecione...</option>
+                        <option value="conforme" {% if resposta.resposta == 'conforme' %}selected{% endif %}>Conforme</option>
+                        <option value="nao_conforme" {% if resposta.resposta == 'nao_conforme' %}selected{% endif %}>Não conforme</option>
+                        <option value="nao_aplicavel" {% if resposta.resposta == 'nao_aplicavel' %}selected{% endif %}>Não aplicável</option>
+                    </select>
+                </div>
+                {% endif %}
+
+                <div class="mb-0">
+                    <label class="form-label small mb-1">Observação</label>
+                    <textarea class="form-control form-control-sm" name="observacao_{{ resposta.id }}" rows="1">{{ resposta.observacao or '' }}</textarea>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 pt-2 border-top">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="preencher_chk_btn_submit">
+            <i class="fas fa-save me-1"></i>Salvar e concluir
+        </button>
+    </div>
+</form>

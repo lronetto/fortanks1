@@ -6,13 +6,14 @@ from datetime import datetime
 
 import openpyxl
 import pandas as pd
-from flask import flash, redirect, send_file, url_for
+from flask import flash, redirect, request, send_file, url_for
 from flask_login import login_required
 
 from models.estoque import Estoque
 from models.material import Materiais
 from models.nota_fiscal import NotaFiscalItem
 from models.database import db
+from sqlalchemy import or_
 
 from .. import material_bp
 
@@ -32,7 +33,19 @@ def exportar_excel():
     Exportação completa (legada). Mantida em formato reduzido.
     """
     try:
-        materiais = Materiais.query.all()
+        search_term = request.args.get("search", "").strip()
+        category_filters = [
+            c.strip() for c in request.args.getlist("category") if c and str(c).strip()
+        ]
+        query = Materiais.query
+        if search_term:
+            search_pattern = f"%{search_term}%"
+            query = query.filter(
+                or_(Materiais.nome.ilike(search_pattern), Materiais.codigo.ilike(search_pattern))
+            )
+        if category_filters:
+            query = query.filter(Materiais.categoria.in_(category_filters))
+        materiais = query.all()
         dados_exportacao = []
         for mat in materiais:
             itens = NotaFiscalItem.query.filter_by(material_id=mat.id).all()
