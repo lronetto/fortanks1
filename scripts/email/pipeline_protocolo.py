@@ -189,9 +189,9 @@ def upload_pdf_listagem_protocolo(anexo, filename: str, payload: bytes, tipo: in
         logging.error(f"Erro ao vincular PDF de listagem ao protocolo: {e}")
         return False
     dados = json.dumps({"protocolo_id": prot.id})
-    up = Upload("NotaFiscal", 0, tipo, filename, "application/pdf", dados_adicionais=dados)
-    if not up.id:
-        Upload("NotaFiscal", 0, tipo, filename, "application/pdf", payload, dados_adicionais=dados)
-        logging.info(f"Upload de PDF de listagem do protocolo {mlist.group(1)}")
+    # Uma única chamada com blob: o modelo Upload ignora segunda inserção com o mesmo
+    # (pai, pai_id, tipo, filename, mimetype), então gravar só metadados primeiro deixa o PDF vazio.
+    Upload("NotaFiscal", 0, tipo, filename, "application/pdf", payload, dados_adicionais=dados)
+    logging.info(f"Upload de PDF de listagem do protocolo {mlist.group(1)}")
     anexo["upload"] = True
     return True

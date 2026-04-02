@@ -1022,6 +1022,41 @@ def preencher_checklist(id, checklist_id):
     )
 
 
+@equipamento_bp.route('/<int:id>/checklist/<int:checklist_id>/excluir', methods=['POST'])
+@login_required
+def excluir_checklist_equipamento(id, checklist_id):
+    """Exclui registro de checklist do equipamento (apenas gerente/admin)."""
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    if not current_user.is_gerente_ou_superior:
+        msg = 'Você não tem permissão para excluir checklists.'
+        if is_ajax:
+            return jsonify({'success': False, 'message': msg}), 403
+        flash(msg, 'danger')
+        return redirect(url_for('equipamento.index'))
+
+    checklist = ChecklistEquipamento.query.get_or_404(checklist_id)
+    if checklist.equipamento_id != id:
+        abort(404)
+
+    try:
+        for resposta in list(checklist.respostas):
+            db.session.delete(resposta)
+        db.session.delete(checklist)
+        db.session.commit()
+        msg = 'Checklist excluído com sucesso.'
+        if is_ajax:
+            return jsonify({'success': True, 'message': msg})
+        flash(msg, 'success')
+    except Exception as e:
+        db.session.rollback()
+        msg = f'Erro ao excluir checklist: {str(e)}'
+        if is_ajax:
+            return jsonify({'success': False, 'message': msg}), 500
+        flash(msg, 'danger')
+
+    return redirect(url_for('equipamento.index'))
+
+
 @equipamento_bp.route('/checklists/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
 def editar_checklist(id):
@@ -1063,6 +1098,40 @@ def editar_checklist(id):
             flash('Erro ao atualizar modelo de checklist!', 'danger')
             db.session.rollback()
     return render_template('equipamentos/checklists/editar.html', modelo=modelo)
+
+
+@equipamento_bp.route('/checklists/<int:id>/excluir', methods=['POST'])
+@login_required
+def excluir_checklist_modelo(id):
+    """Remove modelo de checklist (apenas gerente/admin)."""
+    if not current_user.is_gerente_ou_superior:
+        flash('Você não tem permissão para excluir modelos de checklist.', 'danger')
+        return redirect(url_for('equipamento.checklists'))
+
+    modelo = ChecklistModelo.query.get_or_404(id)
+    if ChecklistEquipamento.query.filter_by(modelo_id=id).first():
+        flash(
+            'Não é possível excluir: existem registros de checklist vinculados a este modelo.',
+            'danger',
+        )
+        return redirect(url_for('equipamento.checklists'))
+
+    try:
+        item_ids = [i.id for i in modelo.itens]
+        if item_ids:
+            ChecklistResposta.query.filter(
+                ChecklistResposta.item_id.in_(item_ids)
+            ).delete(synchronize_session=False)
+        for item in list(modelo.itens):
+            db.session.delete(item)
+        db.session.delete(modelo)
+        db.session.commit()
+        flash('Modelo de checklist excluído com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir modelo de checklist: {str(e)}', 'danger')
+
+    return redirect(url_for('equipamento.checklists'))
 
 
 @equipamento_bp.route('/checklists/pendentes', methods=['GET'])

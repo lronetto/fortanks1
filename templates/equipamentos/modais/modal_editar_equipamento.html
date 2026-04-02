@@ -1,14 +1,14 @@
 <div class="modal fade" id="editarEquipamentoModal" tabindex="-1" aria-labelledby="editarEquipamentoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
-            <form id="formEditarEquipamento" novalidate>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="editarEquipamentoModalLabel">Editar Equipamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formEditarEquipamento" class="modal-editar-equipamento-form d-flex flex-column flex-grow-1 overflow-hidden" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" id="editar_eq_id" value="">
-                <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title" id="editarEquipamentoModalLabel">Editar Equipamento</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
-                </div>
-                <div class="modal-body">
+                <div class="modal-body flex-grow-1 overflow-auto">
                     <div id="loadingEditarEquipamento" class="text-center my-4">
                         <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
                         <p class="mt-2 mb-0">Carregando dados...</p>
@@ -108,11 +108,11 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btnSalvarEditarEquipamento">Atualizar</button>
-                </div>
             </form>
+            <div class="modal-footer flex-shrink-0 border-top">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary" id="btnSalvarEditarEquipamento" form="formEditarEquipamento">Atualizar</button>
+            </div>
         </div>
     </div>
 </div>

@@ -39,9 +39,12 @@
                     </div>
                     {% endif %}
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer flex-wrap gap-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     {% if equipamentos_disponiveis %}
+                    <button type="button" class="btn btn-outline-success" id="btn_entrega_preencher_checklist" title="Abre o fluxo de novo checklist para o equipamento selecionado">
+                        <i class="fas fa-clipboard-check me-1"></i>Preencher checklist
+                    </button>
                     <button type="submit" class="btn btn-primary">Confirmar entrega</button>
                     {% endif %}
                 </div>
@@ -66,6 +69,30 @@
                     inp.value = h;
                     inp.setAttribute('max', h);
                 }
+            });
+        }
+
+        var btnChk = document.getElementById('btn_entrega_preencher_checklist');
+        if (btnChk && modalEl) {
+            btnChk.addEventListener('click', function () {
+                var sel = document.getElementById('ent_eq_equipamento');
+                var eqId = sel && sel.value;
+                if (!eqId) {
+                    alert('Selecione o equipamento para abrir o checklist.');
+                    if (sel) {
+                        sel.focus();
+                    }
+                    return;
+                }
+                if (typeof window.abrirNovoChecklistEquipamento !== 'function') {
+                    window.location.href = '{{ url_for("equipamento.realizar_checklist") }}';
+                    return;
+                }
+                var inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) {
+                    inst.hide();
+                }
+                window.abrirNovoChecklistEquipamento(eqId);
             });
         }
     });

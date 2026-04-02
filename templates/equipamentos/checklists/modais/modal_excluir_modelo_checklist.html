@@ -1,0 +1,43 @@
+<div class="modal fade" id="excluirModeloChecklistModal" tabindex="-1" aria-labelledby="excluirModeloChecklistModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-danger">
+                <h5 class="modal-title" id="excluirModeloChecklistModalLabel">Excluir modelo de checklist</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form method="post" id="form_excluir_modelo_checklist" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <p class="mb-2">Tem certeza que deseja excluir o modelo <strong id="excluir_modelo_chk_nome"></strong>?</p>
+                    <p class="text-danger small mb-0">Esta ação não pode ser desfeita. Só é permitida se não houver checklists registrados com este modelo.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var modalEl = document.getElementById('excluirModeloChecklistModal');
+        var form = document.getElementById('form_excluir_modelo_checklist');
+        var nomeEl = document.getElementById('excluir_modelo_chk_nome');
+        if (!modalEl || !form) return;
+        var tplAction = "{{ url_for('equipamento.excluir_checklist_modelo', id=999001) }}";
+
+        document.querySelectorAll('.btn-excluir-modelo-checklist').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = this.getAttribute('data-id');
+                var nome = this.getAttribute('data-nome') || '';
+                if (!id) return;
+                form.setAttribute('action', tplAction.replace('999001', String(id)));
+                if (nomeEl) nomeEl.textContent = nome;
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            });
+        });
+    });
+})();
+</script>

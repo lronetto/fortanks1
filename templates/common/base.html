@@ -184,9 +184,8 @@
                        $('#concretagemSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
    
-                   // Auto-abrir o menu Operacional se estiver na página de concretagem ou equipamentos
-                   if (window.location.pathname.includes('/concretagens') || 
-                       window.location.pathname.includes('/equipamentos') ||
+                   // Auto-abrir o menu Operacional (concretagem / tanques — equipamentos ficam no menu principal)
+                   if (window.location.pathname.includes('/concretagens') ||
                        window.location.pathname.includes('/tanques')) {
                        $('#operacionalSubmenu').addClass('show');
                        $('#operacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
@@ -724,6 +723,43 @@
                     </ul>
                 </li>
 
+                <!-- Equipamentos (menu principal) -->
+                {% if current_user.is_permissao('equipamentos') %}
+                <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
+                    <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-tools"></i> Equipamentos
+                    </a>
+                    <ul class="collapse list-unstyled" id="equipamentosSubmenu">
+                        <li class="{{ is_active('equipamento') }}">
+                            <a href="{{ url_for('equipamento.index') }}">
+                                <i class="fas fa-tools"></i> Listar Equipamentos
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.emprestimos') }}">
+                            <a href="{{ url_for('equipamento.emprestimos') }}">
+                                <i class="fas fa-people-carry"></i> Empréstimos a colaboradores
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.checklists') }}">
+                            <a href="{{ url_for('equipamento.checklists') }}">
+                                <i class="fas fa-list-alt"></i> Modelos de Checklist
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.checklists_pendentes') }}">
+                            <a href="{{ url_for('equipamento.checklists_pendentes') }}">
+                                <i class="fas fa-clipboard-check"></i> Checklists Pendentes
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.realizar_checklist') }}">
+                            <a href="{{ url_for('equipamento.realizar_checklist') }}">
+                                <i class="fas fa-tasks"></i> Realizar Novo Checklist
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Módulo Operacional -->
                 {% if current_user.is_permissao('operacional') %}
                     <li class="{{ is_active('operacional') }}">
@@ -757,40 +793,6 @@
                                     </li>
 
                                     {% endif %}
-                                </ul>
-                            </li>
-                            
-                            <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
-                                <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                                    class="dropdown-toggle">
-                                    <i class="fas fa-tools"></i> Equipamentos
-                                </a>
-                                <ul class="collapse list-unstyled" id="equipamentosSubmenu">
-                                    <li class="{{ is_active('equipamento') }}">
-                                        <a href="{{ url_for('equipamento.index') }}">
-                                            <i class="fas fa-tools"></i> Listar Equipamentos
-                                        </a>
-                                    </li>
-                                    <li class="{{ is_active('equipamento.emprestimos') }}">
-                                        <a href="{{ url_for('equipamento.emprestimos') }}">
-                                            <i class="fas fa-people-carry"></i> Empréstimos a colaboradores
-                                        </a>
-                                    </li>
-                                    <li class="{{ is_active('equipamento.checklists') }}">
-                                        <a href="{{ url_for('equipamento.checklists') }}">
-                                            <i class="fas fa-list-alt"></i> Modelos de Checklist
-                                        </a>
-                                    </li>
-                                    <li class="{{ is_active('equipamento.checklists_pendentes') }}">
-                                        <a href="{{ url_for('equipamento.checklists_pendentes') }}">
-                                            <i class="fas fa-clipboard-check"></i> Checklists Pendentes
-                                        </a>
-                                    </li>
-                                    <li class="{{ is_active('equipamento.realizar_checklist') }}">
-                                        <a href="{{ url_for('equipamento.realizar_checklist') }}">
-                                            <i class="fas fa-tasks"></i> Realizar Novo Checklist
-                                        </a>
-                                    </li>
                                 </ul>
                             </li>
                             

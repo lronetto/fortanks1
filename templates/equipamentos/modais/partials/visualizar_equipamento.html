@@ -122,14 +122,21 @@
                         {% endif %}
                     </td>
                     <td>{{ checklist.responsavel }}</td>
-                    <td class="text-center">
+                    <td class="text-center text-nowrap">
                         {% if checklist.status != 'Concluído' %}
                         <button type="button" class="btn btn-sm btn-primary py-0 px-2 btn-preencher-checklist"
                             data-equipamento-id="{{ equipamento.id }}" data-checklist-id="{{ checklist.id }}" title="Preencher">
                             <i class="fas fa-edit"></i>
                         </button>
-                        {% else %}
+                        {% elif not current_user.is_admin %}
                         <span class="text-muted small">—</span>
+                        {% endif %}
+                        {% if current_user.is_admin %}
+                        <button type="button" class="btn btn-sm btn-danger py-0 px-2 ms-1 btn-excluir-checklist-equipamento-viz"
+                            data-equipamento-id="{{ equipamento.id }}" data-checklist-id="{{ checklist.id }}"
+                            title="Excluir registro de checklist">
+                            <i class="fas fa-trash"></i>
+                        </button>
                         {% endif %}
                     </td>
                 </tr>

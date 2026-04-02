@@ -58,11 +58,22 @@
                 });
         }
 
+        window.abrirNovoChecklistEquipamento = function (equipId) {
+            if (equipId == null || equipId === '') {
+                return;
+            }
+            var id = parseInt(String(equipId), 10);
+            if (isNaN(id) || id < 1) {
+                return;
+            }
+            carregar(id);
+            modal.show();
+        };
+
         $(document).on('click', '.btn-novo-checklist-equipamento', function () {
             var id = this.getAttribute('data-id');
             if (!id) return;
-            carregar(id);
-            modal.show();
+            window.abrirNovoChecklistEquipamento(id);
         });
 
         $(document).on('submit', '#chk_eq_form', function (e) {

@@ -445,6 +445,18 @@ main {
     position: relative;
 }
 
+/* Modal editar equipamento: scroll no body (form não pode envolver header/footer) */
+#editarEquipamentoModal.modal .modal-dialog-scrollable .modal-content {
+    min-height: 0;
+}
+#editarEquipamentoModal .modal-editar-equipamento-form {
+    min-height: 0;
+    flex: 1 1 auto;
+}
+#editarEquipamentoModal .modal-dialog-scrollable .modal-body {
+    min-height: 0;
+}
+
 .equipamento-busca-material-wrap .equipamento-busca-material-dropdown {
     position: absolute;
     left: 0;
