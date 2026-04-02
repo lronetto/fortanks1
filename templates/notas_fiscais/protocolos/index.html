@@ -28,6 +28,22 @@
             <h6 class="m-0 font-weight-bold text-primary">Protocolos cadastrados</h6>
         </div>
         <div class="card-body">
+            <div class="row g-2 align-items-end mb-3">
+                <div class="col-auto">
+                    <label for="filtroNotaReferenciada" class="form-label small mb-0">NF referenciada</label>
+                    <input type="text" class="form-control form-control-sm" id="filtroNotaReferenciada"
+                           placeholder="Nº da nota" autocomplete="off" style="min-width: 160px;">
+                </div>
+                <div class="col-auto">
+                    <label for="filtroNomeArquivoProtocolo" class="form-label small mb-0">Nome do arquivo</label>
+                    <input type="text" class="form-control form-control-sm" id="filtroNomeArquivoProtocolo"
+                           placeholder="Ex.: chave ou parte do nome" autocomplete="off" style="min-width: 200px;">
+                </div>
+                <div class="col-auto">
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="btnFiltrarProtocolosNotaRef">Filtrar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimparFiltroNotaRef">Limpar</button>
+                </div>
+            </div>
             <div class="table-responsive">
                 <table class="table table-bordered" id="tabelaProtocolos" width="100%" cellspacing="0">
                     <thead>
@@ -62,6 +78,10 @@ $(document).ready(function() {
         ajax: {
             url: baseUrl + '/protocolos/api/datatables',
             type: 'GET',
+            data: function(d) {
+                d.nota_referenciada = ($('#filtroNotaReferenciada').val() || '').trim();
+                d.nome_arquivo = ($('#filtroNomeArquivoProtocolo').val() || '').trim();
+            },
             dataSrc: function(json) {
                 if (json.error) {
                     console.error('Erro ao carregar protocolos:', json.error);
@@ -95,6 +115,21 @@ $(document).ready(function() {
                 }
             }
         ]
+    });
+
+    $('#btnFiltrarProtocolosNotaRef').on('click', function() {
+        table.ajax.reload();
+    });
+    $('#btnLimparFiltroNotaRef').on('click', function() {
+        $('#filtroNotaReferenciada').val('');
+        $('#filtroNomeArquivoProtocolo').val('');
+        table.ajax.reload();
+    });
+    $('#filtroNotaReferenciada, #filtroNomeArquivoProtocolo').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            table.ajax.reload();
+        }
     });
 
     $('#btnNovoProtocolo').on('click', function() {

@@ -57,7 +57,7 @@ from app import app
 from models.nota_fiscal import NotaFiscal
 from models.usuario import Usuario
 from models.logs import Logs
-from scripts.processar_email1 import processar_emails
+from scripts.email import processar_emails
 from scripts.importador_dados_analiticos import executar_importacao_async
 from controllers.relatorios.script_email import relatorio_semanal
 

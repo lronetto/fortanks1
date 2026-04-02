@@ -18,12 +18,12 @@ from models.logs import Logs
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.upload import Upload
 from models.arquivei import Arquivei
-from scripts.processar_email1 import processar_emails
+from scripts.email import processar_emails
 
 from .. import nota_fiscal_bp
 from utils.utils import json_dumps_safe
 logger = logging.getLogger(__name__)
-from scripts.processar_email1 import processar_anexo_pdf_pagina
+from scripts.email import processar_anexo_pdf_pagina
 
 
 

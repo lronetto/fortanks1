@@ -10,10 +10,11 @@ from datetime import datetime
 
 from flask import jsonify, render_template, request
 from flask_login import login_required
-from sqlalchemy import func
+from sqlalchemy import Integer, cast, func
 from sqlalchemy.orm import defer
 
 from models.database import db
+from models.nota_fiscal import NotaFiscal
 from models.protocolo import Protocolo
 from models.upload import Upload
 
@@ -54,10 +55,51 @@ def protocolos_datatables():
         start = request.args.get("start", 0, type=int)
         length = request.args.get("length", 25, type=int)
         search_value = request.args.get("search[value]", "").strip()
+        nota_referenciada = request.args.get("nota_referenciada", "").strip()
+        nome_arquivo = request.args.get("nome_arquivo", "").strip()
         order_col = request.args.get("order[0][column]", "0", type=str)
         order_dir = request.args.get("order[0][dir]", "desc")
 
         query = Protocolo.query
+
+        pid_col = cast(func.json_extract(Upload.dados_adicionais, "$.protocolo_id"), Integer)
+        allowed: set | None = None
+
+        if nota_referenciada:
+            rows = (
+                db.session.query(pid_col)
+                .select_from(Upload)
+                .join(
+                    NotaFiscal,
+                    db.and_(Upload.pai == "NotaFiscal", Upload.pai_id == NotaFiscal.id),
+                )
+                .filter(Upload.tipo == TIPO_UPLOAD_PROTOCOLO)
+                .filter(Upload.dados_adicionais.isnot(None))
+                .filter(Upload.pai_id > 0)
+                .filter(NotaFiscal.numero_nf.ilike(f"%{nota_referenciada}%"))
+                .distinct()
+                .all()
+            )
+            allowed = {r[0] for r in rows if r[0] is not None}
+
+        if nome_arquivo:
+            rows = (
+                db.session.query(pid_col)
+                .select_from(Upload)
+                .filter(Upload.tipo == TIPO_UPLOAD_PROTOCOLO)
+                .filter(Upload.dados_adicionais.isnot(None))
+                .filter(Upload.filename.ilike(f"%{nome_arquivo}%"))
+                .distinct()
+                .all()
+            )
+            pids_fn = {r[0] for r in rows if r[0] is not None}
+            allowed = pids_fn if allowed is None else (allowed & pids_fn)
+
+        if allowed is not None:
+            if not allowed:
+                query = query.filter(Protocolo.id < 0)
+            else:
+                query = query.filter(Protocolo.id.in_(allowed))
 
         if search_value:
             query = query.filter(
@@ -241,14 +283,24 @@ def protocolos_listar_arquivos(protocolo_id):
     try:
         protocolo = Protocolo.query.get_or_404(protocolo_id)
         uploads = _uploads_do_protocolo(protocolo_id)
-        lista = [
-            {
+        ids_nf = [u.pai_id for u in uploads if u.pai == "NotaFiscal" and u.pai_id]
+        notas_por_id = {}
+        if ids_nf:
+            notas_por_id = {
+                n.id: n.numero_nf
+                for n in NotaFiscal.query.filter(NotaFiscal.id.in_(ids_nf)).all()
+            }
+        lista = []
+        for u in uploads:
+            num_ref = ""
+            if u.pai == "NotaFiscal" and u.pai_id:
+                num_ref = notas_por_id.get(u.pai_id) or ""
+            lista.append({
                 "id": u.id,
                 "filename": u.filename or "",
                 "uploaded_at": u.uploaded_at.isoformat() if u.uploaded_at else None,
-            }
-            for u in uploads
-        ]
+                "nota_referenciada": num_ref,
+            })
         return jsonify({
             "success": True,
             "protocolo_numero": protocolo.numero,

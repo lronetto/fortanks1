@@ -1,6 +1,6 @@
 <!-- Modal Visualizar/Editar Arquivos do Protocolo -->
 <div class="modal fade" id="modalProtocoloArquivos" tabindex="-1" aria-labelledby="modalProtocoloArquivosLabel" aria-hidden="true" data-protocolo-id="" data-base-url="{{ request.script_root or '' }}/notas-fiscais">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalProtocoloArquivosLabel">
@@ -20,7 +20,8 @@
                             <thead>
                                 <tr>
                                     <th>Nome do arquivo</th>
-                                    <th style="width: 180px;">Ações</th>
+                                    <th style="width: 120px;">NF referenciada</th>
+                                    <th style="width: 200px;">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="protocoloArquivosTbody"></tbody>
@@ -71,6 +72,8 @@
                     var tr = document.createElement('tr');
                     var nomeEsc = (arq.filename || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                     var nomeSemExt = (arq.filename || '').replace(/\.pdf$/i, '');
+                    var nfRef = (arq.nota_referenciada || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    if (!nfRef) nfRef = '—';
                     tr.innerHTML =
                         '<td class="align-middle">' +
                         '<span class="nome-arquivo-texto">' + nomeEsc + '</span>' +
@@ -79,6 +82,7 @@
                         '<button type="button" class="btn btn-outline-primary btn-salvar-nome" data-upload-id="' + arq.id + '"><i class="fas fa-check"></i></button>' +
                         '</div>' +
                         '</td>' +
+                        '<td class="align-middle text-muted small">' + nfRef + '</td>' +
                         '<td class="align-middle">' +
                         '<a href="' + pdfBase + arq.id + '" target="_blank" class="btn btn-sm btn-outline-secondary me-1" title="Visualizar"><i class="fas fa-eye"></i> Visualizar</a>' +
                         '<button type="button" class="btn btn-sm btn-outline-primary btn-editar-nome-arquivo" title="Editar nome"><i class="fas fa-edit"></i> Editar</button>' +

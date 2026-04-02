@@ -7,7 +7,7 @@ from sqlalchemy import text, inspect
 from controllers.admin import admin_bp, PERMISSOES_DISPONIVEL
 from models.database import db
 from models.logs import Logs
-from scripts.processar_email1 import processar_emails
+from scripts.email import processar_emails
 
 logger = logging.getLogger(__name__)
 
