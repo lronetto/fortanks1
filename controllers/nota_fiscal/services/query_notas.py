@@ -37,13 +37,13 @@ def api_get_dados_notas_fiscais(request):
         json_filtros = request.args
     else:
         json_filtros = request
-    
     busca = json_filtros.get("busca", "")
     item_nome = json_filtros.get("item_nome", "")
     status_importacao = json_filtros.get("status_importacao", "")
     emitente = json_filtros.get("emitente", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     destinatario = json_filtros.get("destinatario", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     status_pagamento = json_filtros.get("status_pagamento", "")
+    print(f'status_pagamento: {status_pagamento}')
     pagamento_5percent = json_filtros.get("pagamento_5percent", False)
     data_emissao_inicio = json_filtros.get("data_emissao_inicio", "")
     data_emissao_fim = json_filtros.get("data_emissao_fim", "")
@@ -462,10 +462,10 @@ def api_get_dados_notas_fiscais(request):
 
     if status_pagamento:
         if status_pagamento == "pago":
-            query = query.filter(or_(pagamento_column.isnot(None), pagamento_manual_expr))
+            query = query.filter(or_(pagamento_column.isnot(None)))
         elif status_pagamento == "nao_pago":
             query = query.filter(
-                and_(pagamento_column.is_(None), not_(pagamento_manual_expr))
+                and_(pagamento_column.is_(None))
             )
         elif status_pagamento == "com_faturamento":
             query = query.filter(NotaFiscal.vencimento.isnot(None))

@@ -180,8 +180,8 @@ def register(nota_fiscal_bp):
                         status_html += ' <span class="badge bg-info ms-1" title="reembolso"><i class="fas fa-paperclip" style="color: red;"></i></span>'
 
                 pagamento = getattr(nota, "pagamento", 0)
-                if pagamento == 1:
-                    status_html += ' <span class="badge bg-success ms-1" title="Pago"><i class="fas fa-check"></i></span>'
+                if pagamento is not None :
+                    status_html += ' <span class="badge bg-success ms-1" title="Pago '+pagamento.strftime("%d/%m/%Y")+'"><i class="fas fa-check"></i></span>'
 
             # Status de liberação para o botão
             liberada = getattr(nota, "liberada", 0) if hasattr(nota, "liberada") else 0

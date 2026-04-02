@@ -10,6 +10,8 @@ from models.logs import Logs
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 
 ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
 ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
@@ -102,18 +104,58 @@ class Arquivei:
         if self.tipo == 'cte':
             url = f"https://api.arquivei.com.br/v2/cte/events?access_key[]={self.chave_acesso}"
         elif self.tipo == 'nfe':
-            url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"    
+            url = f"https://api.arquivei.com.br/v2/nfe/events?access_key={self.chave_acesso}"
         elif self.tipo == 'nfse':
             url = f"https://api.arquivei.com.br/v1/nfse/events?access_key={self.chave_acesso}"
-        response = requests.get(url, headers=headers)
-        response=response.json()
-        if response.get('status').get('code') == 200:
-            #print(f'response: {response}')
-            if response.get('data'):
-                for event in response.get('data'):
-                    if event.get('type') == '110111' or \
-                    (event.get('type') == '101101' and  self.tipo == 'nfse'):
-                        return True
+        else:
+            logger.warning(
+                'cancelamento Arquivei: tipo desconhecido %r para chave %s',
+                self.tipo,
+                (self.chave_acesso or '')[:12],
+            )
+            return False
+        try:
+            response = requests.get(url, headers=headers, timeout=60)
+        except requests.RequestException as exc:
+            logger.warning(
+                'cancelamento Arquivei: falha na requisição: %s (chave %s...)',
+                exc,
+                (self.chave_acesso or '')[:12],
+            )
+            return False
+        if response.status_code != 200:
+            logger.warning(
+                'cancelamento Arquivei: HTTP %s (chave %s...), corpo: %s',
+                response.status_code,
+                (self.chave_acesso or '')[:12],
+                (response.text or '')[:400],
+            )
+            return False
+        body = (response.text or '').strip()
+        if not body:
+            logger.warning(
+                'cancelamento Arquivei: resposta vazia (chave %s...)',
+                (self.chave_acesso or '')[:12],
+            )
+            return False
+        try:
+            data = response.json()
+        except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+            logger.warning(
+                'cancelamento Arquivei: corpo não é JSON (%s), início: %s',
+                exc,
+                body[:400],
+            )
+            return False
+        status = data.get('status') if isinstance(data, dict) else None
+        if not isinstance(status, dict) or status.get('code') != 200:
+            return False
+        if data.get('data'):
+            for event in data.get('data'):
+                if event.get('type') == '110111' or (
+                    event.get('type') == '101101' and self.tipo == 'nfse'
+                ):
+                    return True
         return False
     
     def processar_arquivei(self,send=False):
