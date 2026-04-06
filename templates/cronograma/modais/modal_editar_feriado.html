@@ -1,0 +1,64 @@
+<div class="modal fade" id="modalEditarFeriado" tabindex="-1" aria-labelledby="modalEditarFeriadoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" id="formEditarFeriado" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" id="ef_id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarFeriadoLabel">Editar feriado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Data</label>
+                            <input type="date" class="form-control" name="data" id="ef_data" required>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Nome</label>
+                            <input type="text" class="form-control" name="nome" id="ef_nome" required maxlength="200">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" name="tipo" id="ef_tipo">
+                                <option value="nacional">Nacional</option>
+                                <option value="estadual">Estadual</option>
+                                <option value="municipal">Municipal</option>
+                                <option value="facultativo">Facultativo</option>
+                                <option value="ponto_facultativo">Ponto facultativo</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">UF</label>
+                            <input type="text" class="form-control" name="uf" id="ef_uf" maxlength="2">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Município</label>
+                            <input type="text" class="form-control" name="municipio" id="ef_municipio" maxlength="120">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" name="recorrente" id="ef_recorrente" value="on">
+                                <label class="form-check-label" for="ef_recorrente">Recorrente (anual)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" name="ativo" id="ef_ativo" value="on">
+                                <label class="form-check-label" for="ef_ativo">Ativo</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observação</label>
+                            <textarea class="form-control" name="observacao" id="ef_observacao" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

@@ -61,19 +61,20 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('view_codigo_erp').textContent = data.codigo_erp || '-';
         document.getElementById('view_nome').textContent = data.nome || '-';
         document.getElementById('view_categoria').textContent = data.categoria || '-';
-        document.getElementById('view_unidade').textContent = data.unidade || '-';
-        document.getElementById('view_plano_conta').textContent = data.plano_conta || '-';
+        document.getElementById('view_unidade').textContent = data.unidadeNome || data.unidade || '-';
+        document.getElementById('view_plano_conta').textContent = data.planoDescricao || data.plano_conta || '-';
         document.getElementById('view_descricao').textContent = data.descricao || '-';
     }
-    // Modal de Visualização
-    const modalVisualizacao = new bootstrap.Modal(document.getElementById('modalVisualizarMaterial'));
-    // Event listener para botões de visualização
-    document.querySelectorAll('.btn-visualizar').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            preencherModalVisualizacao(this);
-            modalVisualizacao.show();
-        });
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-visualizar');
+        var tbl = document.getElementById('dataTable');
+        if (!btn || !tbl || !tbl.contains(btn)) return;
+        e.preventDefault();
+        preencherModalVisualizacao(btn);
+        var el = document.getElementById('modalVisualizarMaterial');
+        if (el && window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
     });
 });
 </script>

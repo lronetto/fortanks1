@@ -445,15 +445,23 @@ main {
     position: relative;
 }
 
+/* Select2 dentro de modais Bootstrap 5 */
+.modal .select2-container--bootstrap4 {
+    z-index: 2055;
+}
+
 /* Modal editar equipamento: scroll no body (form não pode envolver header/footer) */
-#editarEquipamentoModal.modal .modal-dialog-scrollable .modal-content {
+#editarEquipamentoModal.modal .modal-dialog-scrollable .modal-content,
+#novoEquipamentoModal.modal .modal-dialog-scrollable .modal-content {
     min-height: 0;
 }
-#editarEquipamentoModal .modal-editar-equipamento-form {
+#editarEquipamentoModal .modal-editar-equipamento-form,
+#novoEquipamentoModal .modal-novo-equipamento-form {
     min-height: 0;
     flex: 1 1 auto;
 }
-#editarEquipamentoModal .modal-dialog-scrollable .modal-body {
+#editarEquipamentoModal .modal-dialog-scrollable .modal-body,
+#novoEquipamentoModal .modal-dialog-scrollable .modal-body {
     min-height: 0;
 }
 

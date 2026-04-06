@@ -72,8 +72,11 @@
                         </div>
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label for="editar_eq_nota_fiscal" class="form-label">Nota Fiscal</label>
-                                <input type="text" class="form-control" id="editar_eq_nota_fiscal" name="nota_fiscal">
+                                <label for="editar_eq_nota_fiscal_id" class="form-label">Nota fiscal</label>
+                                <select class="form-select equipamento-select-nota-fiscal" id="editar_eq_nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}">
+                                    <option value=""></option>
+                                </select>
+                                <div class="form-text">Número no cadastro do equipamento; ID da nota em dados adicionais.</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="editar_eq_data_aquisicao" class="form-label">Data de Aquisição</label>
@@ -176,7 +179,15 @@
                     document.getElementById('editar_eq_propriedade').value = data.propriedade || '';
                     document.getElementById('editar_eq_modelo').value = data.modelo || '';
                     document.getElementById('editar_eq_numero_serie').value = data.numero_serie || '';
-                    document.getElementById('editar_eq_nota_fiscal').value = data.nota_fiscal || '';
+                    var $nf = window.jQuery && window.jQuery('#editar_eq_nota_fiscal_id');
+                    if ($nf && $nf.length) {
+                        $nf.empty().append(new Option('', '', false, false));
+                        if (data.nota_fiscal_id) {
+                            var lbl = data.nota_fiscal || ('NF #' + data.nota_fiscal_id);
+                            $nf.append(new Option(lbl, String(data.nota_fiscal_id), true, true));
+                        }
+                        $nf.trigger('change');
+                    }
                     document.getElementById('editar_eq_data_aquisicao').value = data.data_aquisicao || '';
                     var selSt = document.getElementById('editar_eq_status');
                     var stVal = data.status || '';
@@ -268,6 +279,10 @@
         modalEl.addEventListener('hidden.bs.modal', function () {
             if (fields) fields.style.display = 'none';
             if (loading) loading.style.display = 'block';
+            var $nf = window.jQuery && window.jQuery('#editar_eq_nota_fiscal_id');
+            if ($nf && $nf.length && $nf.data('select2')) {
+                $nf.empty().append(new Option('', '', false, false)).val(null).trigger('change');
+            }
         });
     });
 })();

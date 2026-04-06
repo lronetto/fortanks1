@@ -1,0 +1,42 @@
+<div class="modal fade" id="modalTanqueCronograma" tabindex="-1" aria-labelledby="modalTanqueCronogramaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form id="formTanqueCronograma">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tanque_id" id="mtc_tanque_id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTanqueCronogramaLabel">Datas do tanque — <span id="mtc_titulo"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Início previsto</label>
+                            <input type="date" class="form-control" name="data_inicio_prevista" id="mtc_data_inicio_prevista">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fim previsto</label>
+                            <input type="date" class="form-control" name="data_fim_prevista" id="mtc_data_fim_prevista">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Início real</label>
+                            <input type="date" class="form-control" name="data_inicio_real" id="mtc_data_inicio_real">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Fim real</label>
+                            <input type="date" class="form-control" name="data_fim_real" id="mtc_data_fim_real">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observação</label>
+                            <textarea class="form-control" name="observacao" id="mtc_observacao" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

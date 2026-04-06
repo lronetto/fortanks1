@@ -1,13 +1,23 @@
-import json
+import binascii
 import logging
 from datetime import datetime
 
-from flask import jsonify, request, url_for
+from flask import abort, jsonify, make_response, request, url_for
 from flask_login import current_user, login_required
 
 from models.database import db
 from models.material import Materiais
+from models.upload import Upload
 from models.unidade import Unidades
+from utils.material_imagem_upload import (
+    PAI_MATERIAL,
+    TIPO_IMAGEM_MATERIAL,
+    get_imagem_upload_id,
+    guess_image_mime_from_bytes,
+    remover_upload_material_se_existir,
+    salvar_imagem_material,
+    set_imagem_upload_id,
+)
 from models.estoque import Estoque, EstoqueMovimentacoes
 
 logger = logging.getLogger(__name__)
@@ -18,6 +28,34 @@ def register(material_bp):
     Registra endpoints de API (JSON/AJAX) do domínio Material no blueprint `material_bp`.
     Mantém as URLs originais para não quebrar o front.
     """
+
+    @material_bp.route("/upload/<int:upload_id>/imagem")
+    @login_required
+    def material_imagem_inline(upload_id):
+        """
+        Exibe imagem em Upload. Usa mimetype do registro; se não for image/* (ex.: colagem
+        com application/octet-stream), infere JPEG/PNG/WebP/GIF pelos primeiros bytes.
+        """
+        u = Upload.query.get_or_404(upload_id)
+        try:
+            data = u.get_blob()
+        except (binascii.Error, ValueError, TypeError) as e:
+            logger.warning("Upload %s: blob inválido: %s", upload_id, e)
+            abort(404)
+        if not data:
+            abort(404)
+        mt = (u.mimetype or "").strip().lower()
+        if mt.startswith("image/"):
+            content_type = u.mimetype or "image/jpeg"
+        else:
+            guessed = guess_image_mime_from_bytes(data[:64])
+            if not guessed:
+                abort(404)
+            content_type = guessed
+        resp = make_response(data)
+        resp.headers["Content-Type"] = content_type
+        resp.headers["Content-Disposition"] = f'inline; filename="{u.filename}"'
+        return resp
 
     @material_bp.route("/listar-json")
     @login_required
@@ -282,6 +320,21 @@ def register(material_bp):
                 material.data_atualizacao = datetime.now()
                 if hasattr(current_user, "id"):
                     material.usuario_id = current_user.id
+
+                remover_img = data.get("remover_imagem_material") == "1"
+                arquivo_img = request.files.get("imagem_material")
+                if remover_img:
+                    old_uid = get_imagem_upload_id(material.dados_adicionais)
+                    if old_uid:
+                        remover_upload_material_se_existir(old_uid, material.id)
+                    material.dados_adicionais = set_imagem_upload_id(material.dados_adicionais, None)
+                elif arquivo_img and arquivo_img.filename:
+                    old_uid = get_imagem_upload_id(material.dados_adicionais)
+                    new_uid = salvar_imagem_material(material.id, arquivo_img)
+                    if new_uid:
+                        if old_uid and old_uid != new_uid:
+                            remover_upload_material_se_existir(old_uid, material.id)
+                        material.dados_adicionais = set_imagem_upload_id(material.dados_adicionais, new_uid)
                 
                 # Atualizar ou criar estoque
                 from decimal import Decimal
@@ -331,6 +384,7 @@ def register(material_bp):
                 logger.error(f"Erro ao salvar material: {str(db_error)}", exc_info=True)
                 return jsonify({"success": False, "message": f"Erro ao salvar material: {str(db_error)}"})
 
+        img_id = get_imagem_upload_id(material.dados_adicionais)
         return jsonify(
             {
                 "id": material.id,
@@ -343,6 +397,7 @@ def register(material_bp):
                 "unidade": material.unidade_obj.nome if material.unidade_obj else "",
                 "mascara": material.mascara or "",
                 "formula_calculo": material.formula_calculo or "",
+                "imagem_upload_id": img_id,
             }
         )
 
@@ -352,6 +407,7 @@ def register(material_bp):
         material = Materiais.query.get(id)
         if not material:
             return jsonify({"success": False, "error": "Material não encontrado"})
+        img_id = get_imagem_upload_id(material.dados_adicionais)
         response = jsonify(
             {
                 "success": True,
@@ -366,6 +422,7 @@ def register(material_bp):
                     "unidade": material.unidade or "",
                     "mascara": material.mascara or "",
                     "formula_calculo": material.formula_calculo or "",
+                    "imagem_upload_id": img_id,
                 },
             }
         )
@@ -381,6 +438,7 @@ def register(material_bp):
             response.headers["Content-Type"] = "application/json; charset=utf-8"
             return response
 
+        img_id = get_imagem_upload_id(material.dados_adicionais)
         response = jsonify(
             {
                 "success": True,
@@ -395,6 +453,7 @@ def register(material_bp):
                     "unidade": material.unidade or "",
                     "mascara": material.mascara or "",
                     "formula_calculo": material.formula_calculo or "",
+                    "imagem_upload_id": img_id,
                 },
             }
         )

@@ -1282,7 +1282,7 @@ def api_estoque_por_material(material_id):
                 'id': estoque.id,
                 'material_id': estoque.material_id,
                 'material_nome': material.nome if material else None,
-                'material_unidade': material.unidade if material else None,
+                'material_unidade': material.unidade_obj.nome if material and material.unidade_obj else None,
                 'quantidade': float(estoque.quantidade),
                 'quantidade_minima': float(estoque.quantidade_minima),
                 'quantidade_maxima': float(estoque.quantidade_maxima),

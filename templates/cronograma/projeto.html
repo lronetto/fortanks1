@@ -1,0 +1,163 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Cronograma — {{ contrato.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('cronograma.index') }}">Cronograma</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ contrato.nome }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-calendar-week"></i> {{ contrato.nome }}</h1>
+    <p class="text-muted mb-4">Planejamento por tanque. Utilize feriados cadastrados para evitar datas inadequadas.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category in ['success', 'warning', 'danger', 'info'] else 'secondary' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h6 class="m-0 font-weight-bold text-primary">Tanques do projeto</h6>
+            <div>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLinhaBase">
+                    <i class="fas fa-camera"></i> Salvar linha de base
+                </button>
+                <a href="{{ url_for('cronograma.feriados') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-umbrella-beach"></i> Feriados
+                </a>
+                <a href="{{ url_for('cronograma.linhas_base') }}?contrato_id={{ contrato.id }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-history"></i> Linhas de base
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="tabelaTanques" width="100%">
+                    <thead>
+                        <tr>
+                            <th>UN</th>
+                            <th>Nome</th>
+                            <th>Sistema</th>
+                            <th>Início prev.</th>
+                            <th>Fim prev.</th>
+                            <th>Início real</th>
+                            <th>Fim real</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'cronograma/modais/modal_tanque_cronograma.html' %}
+{% include 'cronograma/modais/modal_linha_base.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var contratoId = {{ contrato.id }};
+    var urlDt = "{{ url_for('cronograma.api_projeto_tanques_datatables', contrato_id=contrato.id) }}";
+    var urlSalvar = "{{ url_for('cronograma.projeto_tanque_salvar', contrato_id=contrato.id) }}";
+    var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    function escAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
+    function fmt(d) {
+        if (!d) return '—';
+        var p = d.split('-');
+        if (p.length !== 3) return d;
+        return p[2] + '/' + p[1] + '/' + p[0];
+    }
+
+    var table = $('#tabelaTanques').DataTable({
+        processing: true,
+        serverSide: true,
+        searching: true,
+        ajax: { url: urlDt, type: 'GET' },
+        language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+        order: [[1, 'asc']],
+        pageLength: 50,
+        responsive: true,
+        columns: [
+            { data: 'un' },
+            { data: 'nome' },
+            { data: 'sistema' },
+            { data: 'data_inicio_prevista', render: function(d) { return fmt(d); } },
+            { data: 'data_fim_prevista', render: function(d) { return fmt(d); } },
+            { data: 'data_inicio_real', render: function(d) { return fmt(d); } },
+            { data: 'data_fim_real', render: function(d) { return fmt(d); } },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(_d, _t, row) {
+                    return '<button type="button" class="btn btn-sm btn-primary btn-editar-cron-tanque" ' +
+                        'data-tanque-id="' + row.tanque_id + '" ' +
+                        'data-un="' + escAttr(row.un) + '" ' +
+                        'data-nome="' + escAttr(row.nome) + '" ' +
+                        'data-inicio-prev="' + escAttr(row.data_inicio_prevista) + '" ' +
+                        'data-fim-prev="' + escAttr(row.data_fim_prevista) + '" ' +
+                        'data-inicio-real="' + escAttr(row.data_inicio_real) + '" ' +
+                        'data-fim-real="' + escAttr(row.data_fim_real) + '" ' +
+                        'data-obs="' + escAttr(row.observacao) + '">' +
+                        '<i class="fas fa-edit"></i></button>';
+                }
+            }
+        ]
+    });
+
+    $(document).on('click', '.btn-editar-cron-tanque', function() {
+        var $btn = $(this);
+        $('#mtc_tanque_id').val($btn.attr('data-tanque-id'));
+        $('#mtc_titulo').text($btn.attr('data-nome') + ' (' + $btn.attr('data-un') + ')');
+        $('#mtc_data_inicio_prevista').val($btn.attr('data-inicio-prev') || '');
+        $('#mtc_data_fim_prevista').val($btn.attr('data-fim-prev') || '');
+        $('#mtc_data_inicio_real').val($btn.attr('data-inicio-real') || '');
+        $('#mtc_data_fim_real').val($btn.attr('data-fim-real') || '');
+        $('#mtc_observacao').val($btn.attr('data-obs') || '');
+        var modal = new bootstrap.Modal(document.getElementById('modalTanqueCronograma'));
+        modal.show();
+    });
+
+    $('#formTanqueCronograma').on('submit', function(e) {
+        e.preventDefault();
+        var fd = new FormData(this);
+        fetch(urlSalvar, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalTanqueCronograma')).hide();
+                table.ajax.reload(null, false);
+            } else {
+                alert(j.message || 'Não foi possível salvar.');
+            }
+        }).catch(function() {
+            alert('Erro de rede ao salvar.');
+        });
+    });
+})();
+</script>
+{% endblock %}

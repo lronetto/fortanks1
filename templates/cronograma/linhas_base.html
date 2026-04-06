@@ -1,0 +1,156 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Cronograma — Linhas de base{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('cronograma.index') }}">Cronograma</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Linhas de base</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-history"></i> Linhas de base</h1>
+    <p class="mb-4">Snapshots nomeados do cronograma (datas previstas por tanque no momento da gravação).</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category in ['success', 'warning', 'danger', 'info'] else 'secondary' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                    <label class="form-label mb-0">Filtrar por projeto</label>
+                    <select class="form-select" id="filtroContratoLb">
+                        <option value="">Todos</option>
+                        {% for c in contratos %}
+                        <option value="{{ c.id }}">{{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <a href="{{ url_for('cronograma.index') }}" class="btn btn-sm btn-outline-secondary mt-2 mt-md-0">
+                        <i class="fas fa-arrow-left"></i> Voltar aos projetos
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="tabelaLinhasBase" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Projeto</th>
+                            <th>Nome</th>
+                            <th>Data snapshot</th>
+                            <th>Usuário</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'cronograma/modais/modal_detalhe_linha_base.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var urlDt = "{{ url_for('cronograma.api_linhas_base_datatables') }}";
+    var urlDet = "{{ url_for('cronograma.api_linha_base_detalhes', linha_base_id=999999999) }}";
+    var urlExcluirTpl = "{{ url_for('cronograma.linhas_base_excluir', linha_base_id=999999999) }}";
+    var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    var params = new URLSearchParams(window.location.search);
+    var preContrato = params.get('contrato_id');
+    if (preContrato) {
+        $('#filtroContratoLb').val(preContrato);
+    }
+
+    var table = $('#tabelaLinhasBase').DataTable({
+        processing: true,
+        serverSide: true,
+        searching: true,
+        ajax: {
+            url: urlDt,
+            type: 'GET',
+            data: function(d) {
+                d.contrato_id = $('#filtroContratoLb').val() || '';
+            }
+        },
+        language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+        order: [[2, 'desc']],
+        pageLength: 25,
+        responsive: true,
+        columns: [
+            { data: 'contrato' },
+            { data: 'nome' },
+            { data: 'data_snapshot' },
+            { data: 'usuario' },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(_d, _t, row) {
+                    return '<a href="' + row.url_projeto + '" class="btn btn-sm btn-outline-secondary me-1" title="Abrir projeto"><i class="fas fa-external-link-alt"></i></a>' +
+                        '<button type="button" class="btn btn-sm btn-info btn-ver-linha-base me-1" data-id="' + row.id + '"><i class="fas fa-eye"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-danger btn-excluir-linha-base" data-id="' + row.id + '"><i class="fas fa-trash"></i></button>';
+                }
+            }
+        ]
+    });
+
+    $('#filtroContratoLb').on('change', function() {
+        table.ajax.reload();
+    });
+
+    $('#tabelaLinhasBase').on('click', '.btn-ver-linha-base', function() {
+        var id = $(this).data('id');
+        fetch(urlDet.replace('999999999', String(id)), { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(j) {
+                if (!j.ok) return;
+                $('#dlb_titulo').text(j.linha_base.nome);
+                $('#dlb_meta').text(j.linha_base.contrato + ' — ' + j.linha_base.data_snapshot);
+                $('#dlb_desc').text(j.linha_base.descricao || '—');
+                var tbody = $('#dlb_tbody').empty();
+                (j.itens || []).forEach(function(it) {
+                    var a = it.data_inicio_prevista ? it.data_inicio_prevista.split('-').reverse().join('/') : '—';
+                    var b = it.data_fim_prevista ? it.data_fim_prevista.split('-').reverse().join('/') : '—';
+                    tbody.append('<tr><td>' + (it.un || '') + '</td><td>' + (it.nome || '') + '</td><td>' + a + '</td><td>' + b + '</td></tr>');
+                });
+                new bootstrap.Modal(document.getElementById('modalDetalheLinhaBase')).show();
+            });
+    });
+
+    $('#tabelaLinhasBase').on('click', '.btn-excluir-linha-base', function() {
+        if (!confirm('Excluir esta linha de base?')) return;
+        var id = $(this).data('id');
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = urlExcluirTpl.replace('999999999', String(id));
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'csrf_token';
+        inp.value = csrf;
+        f.appendChild(inp);
+        document.body.appendChild(f);
+        f.submit();
+    });
+})();
+</script>
+{% endblock %}

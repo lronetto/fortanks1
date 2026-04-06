@@ -3,7 +3,7 @@ from datetime import datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app
 from flask_login import current_user, login_required
-from sqlalchemy import or_, text
+from sqlalchemy import text
 
 from models.database import db
 from models.material import Materiais, MateriaisGrupos
@@ -34,17 +34,6 @@ def index():
         c.strip() for c in request.args.getlist("category") if c and str(c).strip()
     ]
 
-    query = Materiais.query
-    if search_term:
-        search_pattern = f"%{search_term}%"
-        query = query.filter(or_(Materiais.nome.ilike(search_pattern), Materiais.codigo.ilike(search_pattern)))
-    if category_filters:
-        query = query.filter(Materiais.categoria.in_(category_filters))
-    query = query.order_by(Materiais.nome)
-
-    # Retornar todos os resultados filtrados para o DataTables fazer a paginação client-side
-    materiais = query.all()
-
     planos_conta = PlanoConta.query.filter_by(ativo=True).all()
     unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
     todas_categorias = db.session.query(Materiais.categoria).distinct().order_by(Materiais.categoria).all()
@@ -52,7 +41,6 @@ def index():
 
     return render_template(
         "materiais/index.html",
-        materiais=materiais,
         planos_conta=planos_conta,
         unidades=unidades,
         categorias_filtro=categorias_filtro,
@@ -115,6 +103,17 @@ def novo():
         )
         material.usuario_id = current_user.id
         material.save()
+
+        arquivo_img = request.files.get("imagem_material")
+        if arquivo_img and arquivo_img.filename:
+            from utils.material_imagem_upload import salvar_imagem_material, set_imagem_upload_id
+
+            uid = salvar_imagem_material(material.id, arquivo_img)
+            if uid:
+                material.dados_adicionais = set_imagem_upload_id(material.dados_adicionais, uid)
+                db.session.add(material)
+                db.session.commit()
+
         flash("Material cadastrado com sucesso!", "success")
         return redirect(url_for("material.index"))
     except Exception as e:

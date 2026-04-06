@@ -23,10 +23,24 @@ ALLOWED_PHOTO_MT = frozenset({
 
 
 def _extras_vazios() -> Dict[str, Any]:
-    return {"patrimonio": "", "fotos": [], "checklist_modelo_id": None}
+    return {
+        "patrimonio": "",
+        "fotos": [],
+        "checklist_modelo_id": None,
+        "nota_fiscal_id": None,
+    }
 
 
 def _normaliza_checklist_modelo_id(val: Any) -> int | None:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s.isdigit():
+        return None
+    return int(s)
+
+
+def _normaliza_nota_fiscal_id(val: Any) -> int | None:
     if val is None:
         return None
     s = str(val).strip()
@@ -59,6 +73,7 @@ def parse_extras(text: str | None) -> Dict[str, Any]:
         out["checklist_modelo_id"] = _normaliza_checklist_modelo_id(
             out.get("checklist_modelo_id")
         )
+        out["nota_fiscal_id"] = _normaliza_nota_fiscal_id(out.get("nota_fiscal_id"))
         return out
     except (json.JSONDecodeError, TypeError):
         return _extras_vazios()
@@ -80,6 +95,11 @@ def dump_extras(data: Dict[str, Any]) -> str:
         base["checklist_modelo_id"] = cm
     else:
         base.pop("checklist_modelo_id", None)
+    nf = _normaliza_nota_fiscal_id(base.get("nota_fiscal_id"))
+    if nf is not None:
+        base["nota_fiscal_id"] = nf
+    else:
+        base.pop("nota_fiscal_id", None)
     return json.dumps(base, ensure_ascii=False)
 
 

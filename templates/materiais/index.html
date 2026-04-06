@@ -4,7 +4,6 @@
 
 {% block head %}
     {{ super() }}
-    <!-- Garantir que o jQuery e Bootstrap estejam disponíveis -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -16,7 +15,6 @@
     <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-boxes"></i> Materiais</h1>
     <p class="mb-4">Gerenciamento de materiais para solicitações e pedidos</p>
     
-    {# Lógica inline para exibir mensagens flash #}
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -32,10 +30,10 @@
         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
             <h6 class="m-0 font-weight-bold text-primary">Lista de Materiais</h6>
             <div>
-                <a href="{{ url_for('material.exportar_mega') }}" class="btn btn-warning btn-sm me-2" target="_blank">
+                <a href="{{ url_for('material.exportar_mega') }}" class="btn btn-warning btn-sm me-2" id="linkExportarMega" target="_blank">
                     <i class="fas fa-cloud-download-alt"></i> Exportar para Mega
                 </a>
-                <a href="{{ url_for('material.exportar_excel') }}{% if request.query_string %}?{{ request.query_string.decode() }}{% endif %}" class="btn btn-info btn-sm me-2" target="_blank">
+                <a href="{{ url_for('material.exportar_excel') }}" class="btn btn-info btn-sm me-2" id="linkExportarExcel" target="_blank">
                     <i class="fas fa-file-excel"></i> Exportar Excel (Filtrado)
                 </a>
                 <button type="button" class="btn btn-success btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalImportarMaterial">
@@ -47,7 +45,6 @@
             </div>
         </div>
         <div class="card-body">
-            <!-- Formulário de busca e filtro (Backend) -->
             <form method="GET" action="{{ url_for('material.index') }}" id="filterForm" class="mb-3">
                 <div class="row g-2 align-items-center">
                     <div class="col-md-5">
@@ -55,7 +52,7 @@
                             <span class="input-group-text">
                                 <i class="fas fa-search"></i>
                             </span>
-                            <input type="text" class="form-control" id="searchInput" name="search" placeholder="Buscar por código ou nome..." value="{{ search_term }}">
+                            <input type="text" class="form-control" id="searchInput" name="search" placeholder="Buscar por código, nome, máscara ou ID..." value="{{ search_term }}">
                         </div>
                     </div>
                     <div class="col-md-4">
@@ -66,7 +63,7 @@
                         </select>
                     </div>
                     <div class="col-md-auto">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="btnFiltrarMateriais">
                            <i class="fas fa-filter"></i> Filtrar
                         </button>
                          <a href="{{ url_for('material.index') }}" class="btn btn-secondary ms-1" title="Limpar Filtros">
@@ -80,6 +77,7 @@
                 <table class="table table-bordered table-sm" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
+                            <th class="text-center" style="width:72px;">Imagem</th>
                             <th>ID</th>
                             <th>Máscara</th>
                             <th>Código Alterdata</th>
@@ -91,62 +89,7 @@
                             <th class="text-center">Ações</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for material in materiais %}
-                        <tr>
-                            <td>{{ material.id }}</td>
-                            <td>{{ material.mascara or '-' }}</td>
-                            <td>{{ material.codigo_erp or '-' }}</td>
-                            <td>{{ material.nome }}</td>
-                            <td>{{ material.categoria }}</td>
-                            <td>{{ material.unidade_obj.nome or '-' }}</td>
-                            <td>{{ material.plano_conta_obj.descricao or '-' }}</td>
-                            <td>{{ material.data_criacao.strftime('%d/%m/%Y') }}</td>
-                            <td class="text-center">
-                                <button type="button" class="btn btn-info btn-sm btn-visualizar"
-                                    data-id="{{ material.id }}" 
-                                    data-codigo="{{ material.codigo or '' }}"
-                                    data-codigo_erp="{{ material.codigo_erp or '' }}" 
-                                    data-nome="{{ material.nome }}"
-                                    data-categoria="{{ material.categoria }}"
-                                    data-unidade="{{ material.unidade_obj.id or '' }}"
-                                    data-plano_conta="{{ material.plano_conta or '' }}"
-                                    data-descricao="{{ material.descricao or '' }}"
-                                    title="Visualizar">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button type="button" class="btn btn-primary btn-sm btn-editar" 
-                                    data-id="{{ material.id }}" 
-                                    data-codigo="{{ material.codigo or '' }}"
-                                    data-codigo-erp="{{ material.codigo_erp or '' }}" 
-                                    data-nome="{{ material.nome }}"
-                                    data-categoria="{{ material.categoria }}"
-                                    data-plano-conta="{{ material.plano_conta or '' }}"
-                                    data-descricao="{{ material.descricao or '' }}"
-                                    data-unidade="{{ material.unidade_obj.id or '' }}"
-                                    data-mascara="{{ material.mascara or '' }}"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalEditarMaterial"
-                                    title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <form action="{{ url_for('material.excluir', id=material.id) }}" method="POST"
-                                    class="d-inline form-excluir">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-danger btn-sm" {% if material.solicitacoes_itens|length > 0
-                                        %}disabled{% endif %}
-                                        title="{% if material.solicitacoes_itens|length > 0 %}Material em uso{% else %}Excluir{% endif %}">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="8" class="text-center">Nenhum material encontrado.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                    <tbody></tbody>
                 </table>
             </div>
 
@@ -155,6 +98,7 @@
     </div>
 </div>
 
+{% include 'materiais/modais/modal_imagem_material_ampliada.html' %}
 {% include 'materiais/modais/editar_material.html' %}
 {% include 'materiais/modais/visualizar_material.html' %}
 {% include 'materiais/modais/novo_material.html' %}
@@ -164,6 +108,38 @@
 
 {% block scripts %}
 <script>
+(function() {
+    var urlDatatables = "{{ url_for('material.materiais_datatables') }}";
+    var csrf = "{{ csrf_token() }}";
+    var urlExcluirTpl = "{{ url_for('material.excluir', id=999999999) }}".replace('999999999', '');
+    var urlTplImagemMaterial = "{{ url_for('material.material_imagem_inline', upload_id=999999999) }}";
+
+    function escAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;');
+    }
+
+    function montarQueryExportacao() {
+        var params = new URLSearchParams();
+        var s = ($('#searchInput').val() || '').trim();
+        if (s) params.set('search', s);
+        var cats = $('#categoriaFilter').val() || [];
+        cats.forEach(function(c) {
+            if (c) params.append('category', c);
+        });
+        var q = params.toString();
+        return q ? ('?' + q) : '';
+    }
+
+    window.recarregarMateriaisDatatable = function() {
+        if (window.dtMateriais) {
+            window.dtMateriais.ajax.reload(null, false);
+        }
+    };
+
     $(document).ready(function() {
         $('#categoriaFilter').select2({
             width: '100%',
@@ -172,35 +148,129 @@
             closeOnSelect: false
         });
 
-        // Verificar se DataTables está disponível
-        if (typeof $.fn.DataTable !== 'undefined') {
-            // Inicializar DataTable
-            $('#dataTable').DataTable({
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json'
-                },
-                order: [[3, 'asc']], // Ordenar por nome (coluna 3)
-                pageLength: 25,
-                lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
-                responsive: true,
-                autoWidth: false,
-                columnDefs: [
-                    { 
-                        orderable: false, 
-                        targets: 8 // Desabilitar ordenação na coluna de ações
-                    },
-                    {
-                        type: 'date',
-                        targets: 7 // Coluna de data (Criado em)
-                    }
-                ],
-                dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
-                     "<'row'<'col-sm-12'tr>>" +
-                     "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
-            });
-        } else {
+        $('#linkExportarExcel, #linkExportarMega').on('click', function() {
+            var base = $(this).attr('href').split('?')[0];
+            $(this).attr('href', base + montarQueryExportacao());
+        });
+
+        $('#filterForm').on('submit', function(e) {
+            e.preventDefault();
+            if (window.dtMateriais) {
+                window.dtMateriais.ajax.reload();
+            }
+        });
+
+        if (typeof $.fn.DataTable === 'undefined') {
             console.warn('DataTables não está disponível');
+            return;
         }
+
+        window.dtMateriais = $('#dataTable').DataTable({
+            processing: true,
+            serverSide: true,
+            searching: false,
+            ajax: {
+                url: urlDatatables,
+                type: 'POST',
+                headers: { 'X-CSRFToken': csrf },
+                data: function(d) {
+                    d.csrf_token = csrf;
+                    d.search = d.search || {};
+                    d.search.value = ($('#searchInput').val() || '').trim();
+                    var cats = $('#categoriaFilter').val() || [];
+                    d.filtro_categorias_csv = (cats && cats.length) ? cats.join(',') : '';
+                },
+                error: function(xhr) {
+                    console.error('Erro DataTables materiais', xhr);
+                    alert('Erro ao carregar a lista de materiais.');
+                }
+            },
+            language: {
+                url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}'
+            },
+            order: [[4, 'asc']],
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
+            responsive: true,
+            autoWidth: false,
+            columns: [
+                {
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center align-middle',
+                    render: function(_d, type, row) {
+                        if (type !== 'display') return '';
+                        var iid = row.imagem_upload_id;
+                        if (!iid) {
+                            return '<span class="text-muted small">—</span>';
+                        }
+                        var src = urlTplImagemMaterial.replace('999999999', String(iid));
+                        return '<img src="' + escAttr(src) + '" alt="" role="button" tabindex="0" title="Clique para ampliar" ' +
+                            'class="img-thumbnail rounded materiais-thumb-img materiais-thumb-ampliar" ' +
+                            'data-full-src="' + escAttr(src) + '" data-nome-material="' + escAttr(row.nome) + '" ' +
+                            'style="width:56px;height:56px;object-fit:cover;cursor:zoom-in;">';
+                    }
+                },
+                { data: 'id', className: 'text-center' },
+                { data: 'mascara', defaultContent: '-', render: function(d) { return d || '-'; } },
+                { data: 'codigo_erp', defaultContent: '-', render: function(d) { return d || '-'; } },
+                { data: 'nome' },
+                { data: 'categoria', defaultContent: '' },
+                { data: 'unidade_nome', defaultContent: '-', render: function(d) { return d || '-'; } },
+                { data: 'plano_conta_descricao', defaultContent: '-' },
+                { data: 'criado_em' },
+                {
+                    data: null,
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center text-nowrap',
+                    render: function(_d, _t, row) {
+                        var id = row.id;
+                        var excluirUrl = urlExcluirTpl + id;
+                        var dis = row.em_uso ? 'disabled' : '';
+                        var titleEx = row.em_uso ? 'Material em uso' : 'Excluir';
+                        var html = '';
+                        html += '<button type="button" class="btn btn-info btn-sm btn-visualizar me-1" ';
+                        html += 'data-id="' + id + '" data-codigo="' + escAttr(row.codigo) + '" data-codigo_erp="' + escAttr(row.codigo_erp) + '" ';
+                        html += 'data-nome="' + escAttr(row.nome) + '" data-categoria="' + escAttr(row.categoria) + '" ';
+                        html += 'data-unidade="' + escAttr(row.unidade_id) + '" data-unidade-nome="' + escAttr(row.unidade_nome) + '" ';
+                        html += 'data-plano_conta="' + escAttr(row.plano_conta) + '" data-plano-descricao="' + escAttr(row.plano_conta_descricao) + '" data-descricao="' + escAttr(row.descricao) + '" ';
+                        html += 'title="Visualizar"><i class="fas fa-eye"></i></button>';
+
+                        html += '<button type="button" class="btn btn-primary btn-sm btn-editar me-1" ';
+                        html += 'data-id="' + id + '" data-codigo="' + escAttr(row.codigo) + '" data-codigo-erp="' + escAttr(row.codigo_erp) + '" ';
+                        html += 'data-nome="' + escAttr(row.nome) + '" data-categoria="' + escAttr(row.categoria) + '" ';
+                        html += 'data-plano-conta="' + escAttr(row.plano_conta) + '" data-descricao="' + escAttr(row.descricao) + '" ';
+                        html += 'data-unidade="' + escAttr(row.unidade_id) + '" data-mascara="' + escAttr(row.mascara) + '" ';
+                        html += 'data-formula-calculo="' + escAttr(row.formula_calculo) + '" ';
+                        html += 'data-imagem-upload-id="' + escAttr(row.imagem_upload_id != null ? row.imagem_upload_id : '') + '" ';
+                        html += 'title="Editar"><i class="fas fa-edit"></i></button>';
+
+                        html += '<form action="' + escAttr(excluirUrl) + '" method="POST" class="d-inline form-excluir">';
+                        html += '<input type="hidden" name="csrf_token" value="' + escAttr(csrf) + '">';
+                        html += '<button type="submit" class="btn btn-danger btn-sm" ' + dis + ' title="' + escAttr(titleEx) + '"><i class="fas fa-trash"></i></button>';
+                        html += '</form>';
+                        return html;
+                    }
+                }
+            ],
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
+            drawCallback: function() {
+                $('#dataTable .materiais-thumb-img').off('error.dtThumb').on('error.dtThumb', function() {
+                    $(this).replaceWith($('<span class="text-muted small">—</span>'));
+                });
+            }
+        });
+
+        $(document).on('submit', '#dataTable .form-excluir', function(e) {
+            if (!window.confirm('Tem certeza que deseja excluir este item?')) {
+                e.preventDefault();
+            }
+        });
     });
+})();
 </script>
 {% endblock %}

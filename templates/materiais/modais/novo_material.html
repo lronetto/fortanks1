@@ -7,7 +7,7 @@
                 <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                <form method="POST" action="{{ url_for('material.novo') }}" id="form-novo-material">
+                <form method="POST" action="{{ url_for('material.novo') }}" id="form-novo-material" enctype="multipart/form-data">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="row">
                         <div class="col-md-4 mb-3">
@@ -104,6 +104,28 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label">Imagem do material</label>
+                            <div id="zona_paste_novo" class="border rounded p-3 bg-light material-imagem-dropzone" tabindex="0"
+                                 style="min-height: 120px; cursor: default;"
+                                 title="Clique para focar e cole com Ctrl+V. Para arquivo do disco use o botão Escolher arquivo.">
+                                <p class="small text-muted mb-2 mb-0">
+                                    <strong>Arquivo do disco:</strong> use o botão <em>Escolher arquivo</em>. <strong>Colar:</strong> clique nesta área para focar e use <strong>Ctrl+V</strong> (JPEG, PNG, WebP, GIF).
+                                </p>
+                                <input type="file" class="form-control form-control-sm d-none" id="imagem_material_novo" name="imagem_material"
+                                       accept="image/jpeg,image/png,image/webp,image/gif">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn_escolher_imagem_novo">Escolher arquivo</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn_limpar_imagem_novo">Remover imagem</button>
+                                </div>
+                                <div class="mt-2">
+                                    <img id="preview_imagem_material_novo" src="" alt="Pré-visualização" class="img-thumbnail" style="max-height: 160px; display: none;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                         <button type="submit" class="btn btn-primary">
@@ -142,6 +164,65 @@ document.addEventListener('DOMContentLoaded', function() {
     $('#nome').on('input', function() {
         $(this).val($(this).val().toUpperCase());
     });
+
+    (function materialImagemNovo() {
+        const modal = document.getElementById('modalNovoMaterial');
+        const zona = document.getElementById('zona_paste_novo');
+        const input = document.getElementById('imagem_material_novo');
+        const preview = document.getElementById('preview_imagem_material_novo');
+        const btnEscolher = document.getElementById('btn_escolher_imagem_novo');
+        const btnLimpar = document.getElementById('btn_limpar_imagem_novo');
+        if (!modal || !zona || !input || !preview) return;
+
+        function mostrarPreviewDeFile(file) {
+            if (!file) return;
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+        }
+
+        function limpar() {
+            input.value = '';
+            preview.removeAttribute('src');
+            preview.style.display = 'none';
+        }
+
+        btnEscolher && btnEscolher.addEventListener('click', function(e) {
+            e.stopPropagation();
+            input.click();
+        });
+        zona.addEventListener('click', function(e) {
+            if (e.target === btnEscolher || e.target === btnLimpar || e.target.closest('button')) return;
+            zona.focus();
+        });
+        input.addEventListener('change', function() {
+            const f = input.files && input.files[0];
+            if (f) mostrarPreviewDeFile(f);
+        });
+        btnLimpar && btnLimpar.addEventListener('click', function(e) {
+            e.stopPropagation();
+            limpar();
+        });
+        zona.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const items = (e.clipboardData && e.clipboardData.items) ? e.clipboardData.items : [];
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type && items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    if (!blob) continue;
+                    const ext = (blob.type && blob.type.split('/')[1]) ? blob.type.split('/')[1] : 'png';
+                    const nome = 'clipboard.' + ext.replace('jpeg', 'jpg');
+                    const file = blob instanceof File ? blob : new File([blob], nome, { type: blob.type || 'image/png' });
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    mostrarPreviewDeFile(file);
+                    break;
+                }
+            }
+        });
+        modal.addEventListener('hidden.bs.modal', limpar);
+    })();
+
     // Validação do formulário de novo material
     $('#form-novo-material').submit(function(e) {
         const nome = $('#nome').val().trim();

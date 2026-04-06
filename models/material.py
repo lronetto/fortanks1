@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from models.database import db
 from sqlalchemy.orm import relationship
@@ -67,6 +68,22 @@ class Materiais(db.Model):
         Retorna a data de criação do material (para compatibilidade com código existente)
         """
         return self.criado_em
+
+    @property
+    def imagem_upload_id(self):
+        """ID em Upload (tipo imagem material) gravado em dados_adicionais."""
+        if not self.dados_adicionais or not str(self.dados_adicionais).strip():
+            return None
+        try:
+            d = json.loads(self.dados_adicionais)
+            if not isinstance(d, dict):
+                return None
+            v = d.get("imagem_upload_id")
+            if v is None or v == "":
+                return None
+            return int(v)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return None
     
     def __repr__(self):
         """

@@ -40,6 +40,27 @@ from utils.equipamento_dados_adicionais import (
 equipamento_bp = Blueprint('equipamento', __name__, url_prefix='/equipamentos')
 
 
+def _sync_equipamento_nota_fiscal_form(
+    form,
+    extras: dict,
+    *,
+    tinha_vinculo_nota: bool,
+) -> str | None:
+    """Grava nota_fiscal_id em extras. Retorna str para coluna nota_fiscal ou None para manter valor atual (legado)."""
+    from models.nota_fiscal import NotaFiscal
+
+    raw = (form.get('nota_fiscal_id') or '').strip()
+    if raw.isdigit():
+        nf = NotaFiscal.query.get(int(raw))
+        if nf:
+            extras['nota_fiscal_id'] = nf.id
+            return (nf.numero_nf or '').strip()
+    extras.pop('nota_fiscal_id', None)
+    if tinha_vinculo_nota:
+        return ''
+    return None
+
+
 def _status_equipamento_validado(valor):
     if not valor or valor not in EQ_STATUS:
         raise ValueError('Status do equipamento inválido.')
@@ -87,6 +108,7 @@ def equipamentos_datatables():
         clauses = [
             Equipamento.nome.ilike(term),
             Equipamento.modelo.ilike(term),
+            Equipamento.nota_fiscal.ilike(term),
             Equipamento.status.ilike(term),
             Equipamento.dados_adicionais.ilike(term),
         ]
@@ -103,7 +125,8 @@ def equipamentos_datatables():
         '0': Equipamento.nome,
         '1': Equipamento.modelo,
         '2': Equipamento.nome,
-        '3': Equipamento.status,
+        '3': Equipamento.nota_fiscal,
+        '4': Equipamento.status,
     }
     order_col = col_map.get(str(order_col_index), Equipamento.nome)
     if order_dir == 'desc':
@@ -121,6 +144,7 @@ def equipamentos_datatables():
             'nome': eq.nome or '',
             'modelo': eq.modelo or '',
             'patrimonio': ex.get('patrimonio') or '',
+            'nota_fiscal': (eq.nota_fiscal or '').strip(),
             'status': eq.status or '',
         })
 
@@ -166,6 +190,40 @@ def busca_materiais_equipamento():
     })
 
 
+@equipamento_bp.route('/busca-notas-fiscais', methods=['GET'])
+@login_required
+def busca_notas_fiscais_equipamento():
+    """Select2 / autocomplete: notas fiscais por número (e emitente)."""
+    from models.nota_fiscal import NotaFiscal
+
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify({'results': []})
+    term = f'%{q}%'
+    rows = (
+        NotaFiscal.query.filter(
+            or_(
+                NotaFiscal.numero_nf.ilike(term),
+                NotaFiscal.nome_emitente.ilike(term),
+            )
+        )
+        .order_by(NotaFiscal.data_emissao.desc())
+        .limit(30)
+        .all()
+    )
+    results = []
+    for nf in rows:
+        emi = (nf.nome_emitente or '')[:45]
+        if len(nf.nome_emitente or '') > 45:
+            emi += '…'
+        results.append({
+            'id': nf.id,
+            'text': f'{nf.numero_nf} — {emi}',
+            'numero_nf': nf.numero_nf or '',
+        })
+    return jsonify({'results': results})
+
+
 @equipamento_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
 def novo():
@@ -181,13 +239,16 @@ def novo():
             extras_novo['checklist_modelo_id'] = (
                 int(cm_novo) if cm_novo.isdigit() else None
             )
+            nf_numero = _sync_equipamento_nota_fiscal_form(
+                request.form, extras_novo, tinha_vinculo_nota=False
+            )
             equipamento = Equipamento(
                 nome=request.form['nome'],
                 tipo=request.form['tipo'],
                 propriedade=request.form['propriedade'],
                 modelo=request.form['modelo'],
                 numero_serie=request.form['numero_serie'],
-                nota_fiscal=request.form.get('nota_fiscal', ''),
+                nota_fiscal='' if nf_numero is None else nf_numero,
                 data_aquisicao=datetime.strptime(
                     request.form['data_aquisicao'], '%Y-%m-%d').date(),
                 status=st_eq,
@@ -220,6 +281,62 @@ def novo():
     return redirect(url_for('equipamento.index'))
 
 
+@equipamento_bp.route('/<int:id>/duplicar', methods=['POST'])
+@login_required
+def duplicar_equipamento(id):
+    """Cria cópia do equipamento (sem fotos, sem patrimônio/série; status Ativo)."""
+    if not current_user.is_gerente_ou_superior:
+        return jsonify({'success': False, 'message': 'Sem permissão para duplicar equipamentos.'}), 403
+
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    try:
+        orig = Equipamento.query.get_or_404(id)
+        ex = parse_extras(orig.dados_adicionais)
+        extras_novo = parse_extras(None)
+        extras_novo['patrimonio'] = ''
+        extras_novo['fotos'] = []
+        extras_novo['checklist_modelo_id'] = ex.get('checklist_modelo_id')
+        if ex.get('nota_fiscal_id'):
+            extras_novo['nota_fiscal_id'] = ex['nota_fiscal_id']
+
+        nome_base = (orig.nome or 'Equipamento').strip()
+        if len(nome_base) > 88:
+            nome_base = nome_base[:88]
+        nome_novo = f'{nome_base} (cópia)'
+
+        equipamento = Equipamento(
+            nome=nome_novo,
+            tipo=orig.tipo,
+            propriedade=orig.propriedade,
+            modelo=orig.modelo or '',
+            numero_serie='',
+            nota_fiscal=orig.nota_fiscal or '',
+            data_aquisicao=orig.data_aquisicao,
+            status='Ativo',
+            observacoes=orig.observacoes or '',
+            dados_adicionais=dump_extras(extras_novo),
+        )
+        db.session.add(equipamento)
+        db.session.commit()
+        if is_ajax:
+            return jsonify({
+                'success': True,
+                'message': 'Equipamento duplicado com sucesso.',
+                'id': equipamento.id,
+            })
+        flash('Equipamento duplicado com sucesso.', 'success')
+        return redirect(url_for('equipamento.index'))
+    except Exception as e:
+        db.session.rollback()
+        if is_ajax:
+            return jsonify({
+                'success': False,
+                'message': f'Erro ao duplicar: {str(e)}',
+            })
+        flash(f'Erro ao duplicar equipamento: {str(e)}', 'danger')
+        return redirect(url_for('equipamento.index'))
+
+
 @equipamento_bp.route('/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
 def editar(id):
@@ -230,6 +347,7 @@ def editar(id):
         try:
             patrimonio = (request.form.get('patrimonio') or '').strip()
             extras = parse_extras(equipamento.dados_adicionais)
+            tinha_nf_vinculada = extras.get('nota_fiscal_id') is not None
             ids_atuais = list(extras['fotos'])
             remover = {
                 int(x) for x in request.form.getlist('remover_foto')
@@ -254,6 +372,9 @@ def editar(id):
             extras['checklist_modelo_id'] = (
                 int(cm_ed) if cm_ed.isdigit() else None
             )
+            nf_numero = _sync_equipamento_nota_fiscal_form(
+                request.form, extras, tinha_vinculo_nota=tinha_nf_vinculada
+            )
             equipamento.dados_adicionais = dump_extras(extras)
 
             equipamento.nome = request.form['nome']
@@ -261,7 +382,8 @@ def editar(id):
             equipamento.propriedade = request.form['propriedade']
             equipamento.modelo = request.form['modelo']
             equipamento.numero_serie = request.form.get('numero_serie') or ''
-            equipamento.nota_fiscal = request.form.get('nota_fiscal') or ''
+            if nf_numero is not None:
+                equipamento.nota_fiscal = nf_numero
             da = request.form.get('data_aquisicao')
             if da:
                 equipamento.data_aquisicao = datetime.strptime(
@@ -315,6 +437,7 @@ def editar(id):
             'modelo': equipamento.modelo or '',
             'numero_serie': equipamento.numero_serie or '',
             'nota_fiscal': equipamento.nota_fiscal or '',
+            'nota_fiscal_id': ex.get('nota_fiscal_id'),
             'data_aquisicao': equipamento.data_aquisicao.strftime('%Y-%m-%d')
             if equipamento.data_aquisicao else '',
             'status': equipamento.status,

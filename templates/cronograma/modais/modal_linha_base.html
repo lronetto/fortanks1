@@ -1,0 +1,28 @@
+<div class="modal fade" id="modalLinhaBase" tabindex="-1" aria-labelledby="modalLinhaBaseLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('cronograma.projeto_linha_base_salvar', contrato_id=contrato.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalLinhaBaseLabel">Salvar linha de base</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Será criado um snapshot com as datas <strong>previstas atuais</strong> de todos os tanques deste projeto.</p>
+                    <div class="mb-3">
+                        <label class="form-label">Nome da linha de base</label>
+                        <input type="text" class="form-control" name="nome" required maxlength="200" placeholder="Ex.: Baseline aprovada — março/2026">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Descrição (opcional)</label>
+                        <textarea class="form-control" name="descricao" rows="2" placeholder="Notas internas"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-camera"></i> Gravar linha de base</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

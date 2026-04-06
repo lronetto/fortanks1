@@ -3,6 +3,17 @@ from models.database import db
 import base64
 from sqlalchemy import Text
 
+TIPOS_UPLOAD = {
+    0: 'nao definido',
+    1: 'arquivei',
+    2: 'protocolo',
+    3: 'reembolso',
+    4: 'avulso',
+    5: 'certificado',
+    6: 'DUA',
+    8: 'foto equipamento',
+    9: 'imagem material',
+}
 #tipo
 #0 - nao definido
 #1 - arquivei
@@ -12,6 +23,7 @@ from sqlalchemy import Text
 #5 - certificado
 #6 - DUA
 #8 - foto equipamento (patrimônio / models.equipamento)
+#9 - imagem de cadastro de material (Materiais.dados_adicionais.imagem_upload_id)
 
 class Upload(db.Model):
     __tablename__ = 'Uploads'

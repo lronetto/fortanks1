@@ -16,6 +16,7 @@ _register_material_api(material_bp)
 
 # Registrar rotas de página
 from .routes.core import *  # noqa: E402,F401,F403
+from .routes.datatables import *  # noqa: E402,F401,F403
 from .routes.importacao import *  # noqa: E402,F401,F403
 from .routes.exportacoes import *  # noqa: E402,F401,F403
 

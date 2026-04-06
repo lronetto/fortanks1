@@ -37,6 +37,7 @@
                             <th>Nome</th>
                             <th>Modelo</th>
                             <th>Patrimônio</th>
+                            <th>Nota fiscal</th>
                             <th>Status</th>
                             <th class="text-center">Ações</th>
                         </tr>
@@ -63,9 +64,11 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/equipamento_busca_material_nome.js') }}"></script>
+<script src="{{ url_for('static', filename='js/equipamento_nota_fiscal_select2.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var urlDatatables = "{{ url_for('equipamento.equipamentos_datatables') }}";
+    var tplDuplicar = "{{ url_for('equipamento.duplicar_equipamento', id=999001) }}";
     var csrf = "{{ csrf_token() }}";
     var podeGerenciar = {{ current_user.is_gerente_ou_superior | tojson }};
     function renderStatus(status) {
@@ -115,6 +118,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 },
                 {
+                    data: 'nota_fiscal',
+                    defaultContent: '',
+                    className: 'text-nowrap',
+                    render: function (data) {
+                        return data ? $('<div>').text(data).html() : '<span class="text-muted">—</span>';
+                    }
+                },
+                {
                     data: 'status',
                     className: 'text-nowrap',
                     render: function (data) {
@@ -134,6 +145,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         html += '<button type="button" class="btn btn-sm btn-secondary btn-nova-manutencao-equipamento" data-id="' + id + '" title="Nova manutenção"><i class="fas fa-wrench"></i></button> ';
                         html += '<button type="button" class="btn btn-sm btn-success btn-novo-checklist-equipamento" data-id="' + id + '" title="Novo Checklist"><i class="fas fa-clipboard-check"></i></button>';
                         if (podeGerenciar) {
+                            html += ' <button type="button" class="btn btn-sm btn-outline-secondary btn-duplicar-equipamento" data-id="' + id + '" title="Duplicar"><i class="fas fa-copy"></i></button>';
                             html += ' <button type="button" class="btn btn-sm btn-primary btn-editar-equipamento" data-id="' + id + '" title="Editar"><i class="fas fa-edit"></i></button>';
                             html += ' <button type="button" class="btn btn-sm btn-danger btn-excluir-equipamento" data-id="' + id + '" title="Excluir"><i class="fas fa-trash"></i></button>';
                         }
@@ -150,13 +162,44 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         };
     }
-    window.onPreencherChecklistSucesso = function () {
+        window.onPreencherChecklistSucesso = function () {
         if (typeof window.reloadEquipamentosDatatable === 'function') {
             window.reloadEquipamentosDatatable();
         } else {
             window.location.reload();
         }
     };
+
+    $(document).on('click', '.btn-duplicar-equipamento', function () {
+        var id = this.getAttribute('data-id');
+        if (!id || !window.confirm('Duplicar este equipamento? Será criada uma cópia com nome "(cópia)", sem patrimônio e sem número de série.')) {
+            return;
+        }
+        var fd = new FormData();
+        fd.append('csrf_token', csrf);
+        var url = tplDuplicar.replace('999001', String(id));
+        fetch(url, {
+            method: 'POST',
+            body: fd,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var alertsDiv = document.querySelector('.alert-container');
+                if (alertsDiv) {
+                    var alert = document.createElement('div');
+                    alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                    alert.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                    alertsDiv.appendChild(alert);
+                }
+                if (data.success && typeof window.reloadEquipamentosDatatable === 'function') {
+                    window.reloadEquipamentosDatatable();
+                }
+            })
+            .catch(function () {
+                window.alert('Erro ao duplicar equipamento.');
+            });
+    });
 });
 </script>
 {% endblock %}

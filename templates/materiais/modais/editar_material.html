@@ -8,9 +8,10 @@
                 <button type="button" class="btn-close bg-light" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                <form id="form-editar-material" method="POST">
+                <form id="form-editar-material" method="POST" enctype="multipart/form-data">
                     <input type="hidden" id="edit_id" name="material_id">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="remover_imagem_material" id="edit_remover_imagem_material" value="0">
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label for="edit_codigo" class="form-label">Código SOX</label>
@@ -95,6 +96,28 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label">Imagem do material</label>
+                            <div id="zona_paste_editar" class="border rounded p-3 bg-light material-imagem-dropzone" tabindex="0"
+                                 style="min-height: 120px; cursor: default;"
+                                 title="Clique para focar e cole com Ctrl+V. Para arquivo do disco use o botão Escolher arquivo.">
+                                <p class="small text-muted mb-2 mb-0">
+                                    <strong>Arquivo do disco:</strong> use o botão <em>Escolher arquivo</em>. <strong>Colar:</strong> clique nesta área para focar e use <strong>Ctrl+V</strong> (JPEG, PNG, WebP, GIF).
+                                </p>
+                                <input type="file" class="form-control form-control-sm d-none" id="imagem_material_editar" name="imagem_material"
+                                       accept="image/jpeg,image/png,image/webp,image/gif">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="btn_escolher_imagem_editar">Escolher arquivo</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btn_limpar_imagem_editar">Remover imagem</button>
+                                </div>
+                                <div class="mt-2">
+                                    <img id="preview_imagem_material_editar" src="" alt="Pré-visualização" class="img-thumbnail" style="max-height: 160px; display: none;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <hr class="my-4">
                     <h6 class="mb-3"><i class="fas fa-boxes"></i> Informações de Estoque</h6>
                     <div class="row">
@@ -131,6 +154,9 @@
 </div> 
 {% block scripts %}
 <script>
+var URL_EDITAR_MATERIAL_AJAX = "{{ url_for('material.editar_material_ajax', id=999999999) }}";
+var URL_IMAGEM_MATERIAL_INLINE = "{{ url_for('material.material_imagem_inline', upload_id=999999999) }}";
+var URL_API_ESTOQUE_MATERIAL = "{{ url_for('estoque.api_estoque_por_material', material_id=999999999) }}";
 document.addEventListener('DOMContentLoaded', function() {
     // Configurar o botão de alternar unidade
     const btnAlternarUnidade = document.getElementById('btn-alternar-unidade');
@@ -152,8 +178,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Manipulação do Modal de Edição
-    const modal = new bootstrap.Modal(document.getElementById('modalEditarMaterial'));
     // Preencher o modal com os dados do material
     function preencherModal(material) {
         if (!material) {
@@ -190,6 +214,23 @@ document.addEventListener('DOMContentLoaded', function() {
             if (material.quantidade_maxima !== undefined) {
                 document.getElementById('edit_quantidade_maxima').value = material.quantidade_maxima || '0';
             }
+
+            const hidRemover = document.getElementById('edit_remover_imagem_material');
+            const inpImg = document.getElementById('imagem_material_editar');
+            const prevImg = document.getElementById('preview_imagem_material_editar');
+            if (hidRemover) hidRemover.value = '0';
+            if (inpImg) inpImg.value = '';
+            const iid = material.imagem_upload_id != null && String(material.imagem_upload_id).trim() !== ''
+                ? String(material.imagem_upload_id).trim() : '';
+            if (prevImg) {
+                if (iid) {
+                    prevImg.src = URL_IMAGEM_MATERIAL_INLINE.replace('999999999', String(iid)) + '?t=' + Date.now();
+                    prevImg.style.display = 'block';
+                } else {
+                    prevImg.removeAttribute('src');
+                    prevImg.style.display = 'none';
+                }
+            }
             
         } catch (error) {
             console.error('Erro ao preencher o modal:', error);
@@ -200,7 +241,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function buscarEstoque(materialId) {
         if (!materialId) return;
         
-        fetch(`/estoque/api/estoque-por-material/${materialId}`, {
+        fetch(URL_API_ESTOQUE_MATERIAL.replace('999999999', String(materialId)), {
             method: 'GET',
             headers: {
                 'Accept': 'application/json',
@@ -229,67 +270,90 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_quantidade_maxima').value = '0';
         });
     }
-    // Adicionar evento para o botão de editar
-    const editButtons = document.querySelectorAll('.btn-editar');
-    editButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            try {
-                const materialId = this.getAttribute('data-id');
-                if (this.dataset) {
-                    const material = {
-                        id: this.dataset.id,
-                        codigo: this.dataset.codigo || '',
-                        codigo_erp: this.dataset.codigoErp || '',
-                        nome: this.dataset.nome || '',
-                        descricao: this.dataset.descricao || '',
-                        categoria: this.dataset.categoria || '',
-                        plano_conta: this.dataset.planoConta || '',
-                        unidade: this.dataset.unidade || '',
-                        mascara: this.dataset.mascara || '',
-                        formula_calculo: this.dataset.formulaCalculo || ''
-                    };
-                    preencherModal(material);
-                    // Buscar dados de estoque após preencher o modal
-                    buscarEstoque(material.id);
-                    return;
+    $(document).on('click', '#dataTable .btn-editar', function(e) {
+        e.preventDefault();
+        try {
+            var btn = this;
+            var material = {
+                id: btn.dataset.id,
+                codigo: btn.dataset.codigo || '',
+                codigo_erp: btn.dataset.codigoErp || '',
+                nome: btn.dataset.nome || '',
+                descricao: btn.dataset.descricao || '',
+                categoria: btn.dataset.categoria || '',
+                plano_conta: btn.dataset.planoConta || '',
+                unidade: btn.dataset.unidade || '',
+                mascara: btn.dataset.mascara || '',
+                formula_calculo: btn.dataset.formulaCalculo || '',
+                imagem_upload_id: btn.dataset.imagemUploadId || ''
+            };
+            preencherModal(material);
+            buscarEstoque(material.id);
+            var modalEl = document.getElementById('modalEditarMaterial');
+            if (modalEl && window.bootstrap) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
+            }
+        } catch (err) {
+            alert('Ocorreu um erro ao processar sua solicitação');
+        }
+    });
+
+    (function materialImagemEditar() {
+        const modal = document.getElementById('modalEditarMaterial');
+        const zona = document.getElementById('zona_paste_editar');
+        const input = document.getElementById('imagem_material_editar');
+        const preview = document.getElementById('preview_imagem_material_editar');
+        const btnEscolher = document.getElementById('btn_escolher_imagem_editar');
+        const btnLimpar = document.getElementById('btn_limpar_imagem_editar');
+        const hidRemover = document.getElementById('edit_remover_imagem_material');
+        if (!modal || !zona || !input || !preview) return;
+
+        function mostrarPreviewDeFile(file) {
+            if (!file) return;
+            if (hidRemover) hidRemover.value = '0';
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+        }
+
+        btnEscolher && btnEscolher.addEventListener('click', function(e) {
+            e.stopPropagation();
+            input.click();
+        });
+        zona.addEventListener('click', function(e) {
+            if (e.target === btnEscolher || e.target === btnLimpar || e.target.closest('button')) return;
+            zona.focus();
+        });
+        input.addEventListener('change', function() {
+            const f = input.files && input.files[0];
+            if (f) mostrarPreviewDeFile(f);
+        });
+        btnLimpar && btnLimpar.addEventListener('click', function(e) {
+            e.stopPropagation();
+            input.value = '';
+            preview.removeAttribute('src');
+            preview.style.display = 'none';
+            if (hidRemover) hidRemover.value = '1';
+        });
+        zona.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const items = (e.clipboardData && e.clipboardData.items) ? e.clipboardData.items : [];
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type && items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    if (!blob) continue;
+                    const ext = (blob.type && blob.type.split('/')[1]) ? blob.type.split('/')[1] : 'png';
+                    const nome = 'clipboard.' + ext.replace('jpeg', 'jpg');
+                    const file = blob instanceof File ? blob : new File([blob], nome, { type: blob.type || 'image/png' });
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    mostrarPreviewDeFile(file);
+                    break;
                 }
-                const url = `/materiais/obter-ajax/${materialId}`;
-                fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => {
-                    if (response.headers.get('content-type').includes('application/json')) {
-                        return response.json();
-                    } else {
-                        return response.text().then(text => { throw new Error('Resposta do servidor não é JSON válido'); });
-                    }
-                })
-                .then(data => {
-                    if (data.success) {
-                        preencherModal(data.material);
-                        // Buscar dados de estoque após preencher o modal
-                        buscarEstoque(data.material.id);
-                    } else if (data.id) {
-                        // Se retornar diretamente os dados (sem success)
-                        preencherModal(data);
-                        // Buscar dados de estoque após preencher o modal
-                        buscarEstoque(data.id);
-                    } else {
-                        alert('Erro ao carregar os dados do material: ' + (data.error || 'Erro desconhecido'));
-                    }
-                })
-                .catch(error => {
-                    alert('Erro ao carregar os dados do material: ' + error.message);
-                });
-            } catch (error) {
-                alert('Ocorreu um erro ao processar sua solicitação');
             }
         });
-    });
+    })();
+
     // Adicionar evento para o botão de salvar edição
     const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
     if (btnSalvarEdicao) {
@@ -329,7 +393,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     formData.set('edit_quantidade_maxima', '0');
                 }
                 
-                const url = `/material/editar-material-ajax/${materialId}`;
+                const url = URL_EDITAR_MATERIAL_AJAX.replace('999999999', String(materialId));
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', url, true);
                 xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
@@ -339,7 +403,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             try {
                                 const resposta = JSON.parse(xhr.responseText);
                                 if (resposta.success) {
-                                    window.location.reload();
+                                    var modalEl = document.getElementById('modalEditarMaterial');
+                                    if (modalEl && window.bootstrap) {
+                                        var m = bootstrap.Modal.getInstance(modalEl);
+                                        if (m) m.hide();
+                                    }
+                                    if (typeof window.recarregarMateriaisDatatable === 'function') {
+                                        window.recarregarMateriaisDatatable();
+                                    } else {
+                                        window.location.reload();
+                                    }
                                 } else {
                                     alert(resposta.message || resposta.error || 'Erro ao salvar o material.');
                                 }

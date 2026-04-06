@@ -18,7 +18,8 @@
             <h6 class="m-0 font-weight-bold">Cadastro de Equipamento</h6>
         </div>
         <div class="card-body">
-            <form method="POST" class="needs-validation" novalidate>
+            <form method="POST" action="{{ url_for('equipamento.novo') }}" class="needs-validation" novalidate>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <label for="nome" class="form-label">Nome do Equipamento *</label>
@@ -69,8 +70,11 @@
                         <input type="text" class="form-control" id="numero_serie" name="numero_serie">
                     </div>
                     <div class="col-md-6">
-                        <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
-                        <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal">
+                        <label for="nota_fiscal_id" class="form-label">Nota fiscal</label>
+                        <select class="form-select equipamento-select-nota-fiscal" id="nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}">
+                            <option value=""></option>
+                        </select>
+                        <div class="form-text">Número gravado no equipamento; ID da nota em dados adicionais.</div>
                     </div>
                 </div>
 
@@ -118,6 +122,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/equipamento_busca_material_nome.js') }}"></script>
+<script src="{{ url_for('static', filename='js/equipamento_nota_fiscal_select2.js') }}"></script>
 <script>
     // Validação do formulário
     document.addEventListener('DOMContentLoaded', function () {

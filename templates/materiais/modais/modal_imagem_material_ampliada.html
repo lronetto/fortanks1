@@ -1,0 +1,53 @@
+<!-- Ampliar miniatura da listagem de materiais -->
+<div class="modal fade" id="modalImagemMaterialAmpliada" tabindex="-1" aria-labelledby="modalImagemMaterialAmpliadaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h5 class="modal-title" id="modalImagemMaterialAmpliadaLabel">Imagem do material</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body text-center p-2 bg-dark">
+                <img id="imagemMaterialAmpliada" src="" alt="" class="img-fluid rounded shadow"
+                     style="max-height: min(85vh, 900px); width: auto; max-width: 100%; object-fit: contain;">
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var modalEl = document.getElementById('modalImagemMaterialAmpliada');
+    var imgAmpliada = document.getElementById('imagemMaterialAmpliada');
+    var tituloEl = document.getElementById('modalImagemMaterialAmpliadaLabel');
+    if (!modalEl || !imgAmpliada || typeof jQuery === 'undefined') return;
+
+    function abrirAmpliada($img) {
+        var src = $img.attr('data-full-src') || $img.attr('src');
+        if (!src) return;
+        var nome = $img.attr('data-nome-material') || '';
+        tituloEl.textContent = nome ? ('Imagem — ' + nome) : 'Imagem do material';
+        imgAmpliada.setAttribute('src', src);
+        imgAmpliada.setAttribute('alt', nome || 'Imagem do material');
+        if (window.bootstrap && modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    jQuery(document).on('click', '#dataTable .materiais-thumb-ampliar', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        abrirAmpliada(jQuery(this));
+    });
+
+    jQuery(document).on('keydown', '#dataTable .materiais-thumb-ampliar', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            abrirAmpliada(jQuery(this));
+        }
+    });
+
+    modalEl.addEventListener('hidden.bs.modal', function() {
+        imgAmpliada.removeAttribute('src');
+    });
+});
+</script>

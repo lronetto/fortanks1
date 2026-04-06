@@ -31,6 +31,7 @@ from controllers.plr import plr_bp
 from controllers.acabamento_transporte_controller import acabamento_transporte_bp
 from controllers.grupo_material_controller import grupo_material_bp
 from controllers.certificado_controller import certificado_bp
+from controllers.cronograma import cronograma_bp
 from models.usuario import Usuario
 from models.arquivei import Arquivei
 from models.nota_fiscal import NotaFiscal
@@ -215,6 +216,7 @@ app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
 app.register_blueprint(reembolso_bp, url_prefix='/reembolsos')
 app.register_blueprint(plr_bp)
 app.register_blueprint(certificado_bp, url_prefix='/certificados')
+app.register_blueprint(cronograma_bp, url_prefix='/cronograma')
 app.register_blueprint(relatorio_bp, url_prefix='/relatorios')
 app.register_blueprint(acabamento_pecas_bp)
 app.register_blueprint(concretagem_pecas_bp)

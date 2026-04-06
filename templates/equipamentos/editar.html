@@ -119,9 +119,14 @@
                             value="{{ equipamento.numero_serie }}">
                     </div>
                     <div class="col-md-6">
-                        <label for="nota_fiscal" class="form-label">Nota Fiscal</label>
-                        <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal"
-                            value="{{ equipamento.nota_fiscal }}">
+                        <label for="nota_fiscal_id" class="form-label">Nota fiscal</label>
+                        <select class="form-select equipamento-select-nota-fiscal" id="nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}">
+                            <option value=""></option>
+                            {% if extras_editar.nota_fiscal_id %}
+                            <option value="{{ extras_editar.nota_fiscal_id }}" selected>{{ equipamento.nota_fiscal or ('NF #' ~ extras_editar.nota_fiscal_id) }}</option>
+                            {% endif %}
+                        </select>
+                        <div class="form-text">Número gravado no equipamento; ID da nota em dados adicionais.</div>
                     </div>
                 </div>
 
@@ -170,6 +175,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/equipamento_nota_fiscal_select2.js') }}"></script>
 <script>
     // Validação do formulário
     document.addEventListener('DOMContentLoaded', function () {

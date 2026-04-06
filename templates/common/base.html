@@ -760,6 +760,32 @@
                 </li>
                 {% endif %}
 
+                {% if current_user.is_permissao('cronograma') %}
+                <li class="{{ is_active('cronograma') }}">
+                    <a href="#cronogramaSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                        class="dropdown-toggle">
+                        <i class="fas fa-calendar-alt"></i> Cronograma
+                    </a>
+                    <ul class="collapse list-unstyled" id="cronogramaSubmenu">
+                        <li>
+                            <a href="{{ url_for('cronograma.index') }}">
+                                <i class="fas fa-project-diagram"></i> Por projeto
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('cronograma.feriados') }}">
+                                <i class="fas fa-umbrella-beach"></i> Feriados
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('cronograma.linhas_base') }}">
+                                <i class="fas fa-history"></i> Linhas de base
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Módulo Operacional -->
                 {% if current_user.is_permissao('operacional') %}
                     <li class="{{ is_active('operacional') }}">
